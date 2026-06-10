@@ -12,13 +12,18 @@ const MAX_IN_MEMORY_FILE_SIZE = 2 * 1024 * 1024
 export default class FormDataPart {
   logger = new Logger(this, {debug: false})
 
-  /** @type {Record<string, import("./header.js").default>} */
+  /**
+ * Headers.
+ * @type {Record<string, import("./header.js").default>} */
   headers = {}
 
-  /** @type {number[]} */
+  /**
+ * Body.
+ * @type {number[]} */
   body = []
 
   /**
+ * Runs add header.
    * @param {import("./header.js").default} header - Header value.
    */
   addHeader(header) {
@@ -57,10 +62,12 @@ export default class FormDataPart {
   }
 
   /**
+ * Documents this API.
    * @param {Buffer} buffer - File buffer.
    * @returns {import("../uploaded-file/memory-uploaded-file.js").default | import("../uploaded-file/temporary-uploaded-file.js").default} - Uploaded file wrapper.
    */
   /**
+ * Runs build uploaded file.
    * @param {Buffer} buffer - File buffer.
    * @returns {import("../uploaded-file/memory-uploaded-file.js").default | import("../uploaded-file/temporary-uploaded-file.js").default} - Uploaded file wrapper.
    */
@@ -84,6 +91,7 @@ export default class FormDataPart {
   }
 
   /**
+ * Runs create temp file.
    * @param {Buffer} buffer - Buffer.
    * @param {string} filename - Filename.
    * @returns {string} - The temp file.
@@ -127,6 +135,7 @@ export default class FormDataPart {
   isFile() { return Boolean(this.filename) }
 
   /**
+ * Runs remove from body.
    * @param {string} text - Text.
    */
   removeFromBody(text) {

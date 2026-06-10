@@ -3,6 +3,7 @@
 import UploadedFile from "../../../http-server/client/uploaded-file/uploaded-file.js"
 
 /**
+ * Runs base name.
  * @param {string} value - Path-like value.
  * @returns {string} - Basename-like filename.
  */
@@ -18,6 +19,7 @@ function baseName(value) {
 }
 
 /**
+ * Runs is plain object.
  * @param {?} value - Candidate value.
  * @returns {value is Record<string, ?>} - Whether value is a plain object.
  */
@@ -30,6 +32,7 @@ function isPlainObject(value) {
 }
 
 /**
+ * Runs is uint8 array.
  * @param {?} value - Candidate value.
  * @returns {value is Uint8Array} - Whether value is a byte array.
  */
@@ -38,6 +41,7 @@ function isUint8Array(value) {
 }
 
 /**
+ * Runs is array buffer.
  * @param {?} value - Candidate value.
  * @returns {value is ArrayBuffer} - Whether value is array buffer.
  */
@@ -46,14 +50,18 @@ function isArrayBuffer(value) {
 }
 
 /**
+ * Runs is array buffer like.
  * @param {?} value - Candidate value.
  * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether value supports arrayBuffer().
  */
 function isArrayBufferLike(value) {
-  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).arrayBuffer === "function")
+  return Boolean(value && typeof value === "object" && typeof /**
+ * Documents this API.
+ * @type {?} */ (value).arrayBuffer === "function")
 }
 
 /**
+ * Runs to buffer.
  * @param {Uint8Array | Buffer | ArrayBuffer | string} value - Value.
  * @returns {Buffer} - Buffer value.
  */
@@ -67,16 +75,21 @@ function toBuffer(value) {
 }
 
 /**
+ * Runs uploaded file buffer.
  * @param {UploadedFile} uploadedFile - Uploaded file.
  * @param {import("../../../environment-handlers/base.js").default | undefined} environmentHandler - Environment handler.
  * @returns {Promise<Buffer>} - File content buffer.
  */
 async function uploadedFileBuffer(uploadedFile, environmentHandler) {
-  const memoryBuffer = /** @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
+  const memoryBuffer = /**
+ * Documents this API.
+ * @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
 
   if (Buffer.isBuffer(memoryBuffer)) return memoryBuffer
 
-  const tempPath = /** @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
+  const tempPath = /**
+ * Documents this API.
+ * @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
 
   if (typeof tempPath === "string" && tempPath.length > 0) {
     if (!environmentHandler || typeof environmentHandler.readAttachmentInputFile !== "function") {
@@ -90,6 +103,7 @@ async function uploadedFileBuffer(uploadedFile, environmentHandler) {
 }
 
 /**
+ * NormalizedAttachmentInput type.
  * @typedef {object} NormalizedAttachmentInput
  * @property {number} byteSize - File size in bytes.
  * @property {Buffer} contentBuffer - Raw content bytes.
@@ -99,6 +113,7 @@ async function uploadedFileBuffer(uploadedFile, environmentHandler) {
  */
 
 /**
+ * Runs normalize record attachment input.
  * @param {?} input - Attachment input.
  * @param {object} [args] - Options.
  * @param {boolean} [args.allowPathInput] - Whether `{path: ...}` input is allowed.
@@ -110,11 +125,17 @@ async function uploadedFileBuffer(uploadedFile, environmentHandler) {
 export default async function normalizeRecordAttachmentInput(input, args = {}) {
   const defaultFilename = args.defaultFilename || "attachment.bin"
   const environmentHandler = args.environmentHandler
-  /** @type {Buffer} */
+  /**
+ * Documents this API.
+ * @type {Buffer} */
   let buffer
-  /** @type {string | null} */
+  /**
+ * Content type.
+ * @type {string | null} */
   let contentType = null
-  /** @type {string | undefined} */
+  /**
+ * Documents this API.
+ * @type {string | undefined} */
   let filename
 
   if (input instanceof UploadedFile) {
@@ -153,11 +174,23 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     const arrayBuffer = await input.arrayBuffer()
 
     buffer = Buffer.from(arrayBuffer)
-    filename = typeof /** @type {?} */ (input).name === "string" && /** @type {?} */ (input).name.length > 0
-      ? /** @type {?} */ (input).name
+    filename = typeof /**
+ * Documents this API.
+ * @type {?} */ (input).name === "string" && /**
+ * Documents this API.
+ * @type {?} */ (input).name.length > 0
+      ? /**
+ * Documents this API.
+ * @type {?} */ (input).name
       : defaultFilename
-    contentType = typeof /** @type {?} */ (input).type === "string" && /** @type {?} */ (input).type.length > 0
-      ? /** @type {?} */ (input).type
+    contentType = typeof /**
+ * Documents this API.
+ * @type {?} */ (input).type === "string" && /**
+ * Documents this API.
+ * @type {?} */ (input).type.length > 0
+      ? /**
+ * Documents this API.
+ * @type {?} */ (input).type
       : null
   } else if (typeof input === "string" || Buffer.isBuffer(input) || isArrayBuffer(input) || isUint8Array(input)) {
     buffer = toBuffer(input)

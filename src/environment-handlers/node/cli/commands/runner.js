@@ -2,12 +2,15 @@ import BaseCommand from "../../../../cli/base-command.js"
 import buildCliCommandContext from "./cli-command-context.js"
 
 /**
+ * RunnerContext type.
  * @typedef {import("./cli-command-context.js").CliCommandContext} RunnerContext
  */
 
 /** Node command for evaluating inline JavaScript in initialized app/DB context. */
 export default class RunnerCommand extends BaseCommand {
-  /** @returns {Promise<?>} - Resolves with the evaluated code result. */
+  /**
+ * Runs execute.
+ * @returns {Promise<?>} - Resolves with the evaluated code result. */
   async execute() {
     const configuration = this.getConfiguration()
     const code = this.runnerCode()
@@ -23,7 +26,9 @@ export default class RunnerCommand extends BaseCommand {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves when runtime initialization is complete. */
+  /**
+ * Runs initialize runtime.
+ * @returns {Promise<void>} - Resolves when runtime initialization is complete. */
   async initializeRuntime() {
     const configuration = this.getConfiguration()
 
@@ -34,7 +39,9 @@ export default class RunnerCommand extends BaseCommand {
     }
   }
 
-  /** @returns {string} - Inline JavaScript code to evaluate. */
+  /**
+ * Runs runner code.
+ * @returns {string} - Inline JavaScript code to evaluate. */
   runnerCode() {
     const code = (this.processArgs || []).slice(1).join(" ").trim()
 
@@ -45,12 +52,15 @@ export default class RunnerCommand extends BaseCommand {
     return code
   }
 
-  /** @returns {RunnerContext} - Runtime context passed to evaluated code. */
+  /**
+ * Runs build runner context.
+ * @returns {RunnerContext} - Runtime context passed to evaluated code. */
   buildRunnerContext() {
     return buildCliCommandContext(this, 2)
   }
 
   /**
+ * Runs evaluate code.
    * @param {string} code - JavaScript code to evaluate.
    * @returns {Promise<?>} - Evaluated code result.
    */

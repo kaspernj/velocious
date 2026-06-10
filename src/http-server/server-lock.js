@@ -54,7 +54,9 @@ export default class VelociousHttpServerLock {
     try {
       await fs.mkdir(this.lockPath)
     } catch (error) {
-      if (/** @type {{code?: string}} */ (error).code === "EEXIST") return false
+      if (/**
+ * Documents this API.
+ * @type {{code?: string}} */ (error).code === "EEXIST") return false
       throw error
     }
 
@@ -103,10 +105,13 @@ export default class VelociousHttpServerLock {
 
     if (!this.isLocalProcessOwner(owner)) return false
 
-    return this.processIsDead(/** @type {{pid: number}} */ (owner).pid)
+    return this.processIsDead(/**
+ * Documents this API.
+ * @type {{pid: number}} */ (owner).pid)
   }
 
   /**
+ * Runs is local process owner.
    * @param {Record<string, ?> | null} owner - Existing lock owner metadata.
    * @returns {boolean} - Whether owner metadata names a local process.
    */
@@ -118,6 +123,7 @@ export default class VelociousHttpServerLock {
   }
 
   /**
+ * Runs owner hostname matches.
    * @param {Record<string, ?>} owner - Existing lock owner metadata.
    * @returns {boolean} - Whether the owner hostname is local or absent.
    */
@@ -129,6 +135,7 @@ export default class VelociousHttpServerLock {
   }
 
   /**
+ * Runs process is dead.
    * @param {number} pid - Process id.
    * @returns {boolean} - Whether the process no longer exists.
    */
@@ -138,7 +145,7 @@ export default class VelociousHttpServerLock {
 
       return false
     } catch (error) {
-      return /** @type {{code?: string}} */ (error).code === "ESRCH"
+      return /** Documents this API. @type {{code?: string}} */ (error).code === "ESRCH"
     }
   }
 
@@ -150,7 +157,7 @@ export default class VelociousHttpServerLock {
     try {
       const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
 
-      return /** @type {Record<string, ?>} */ (JSON.parse(rawOwner))
+      return /** Documents this API. @type {Record<string, ?>} */ (JSON.parse(rawOwner))
     } catch {
       return null
     }

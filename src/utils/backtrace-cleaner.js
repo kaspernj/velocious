@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs escape reg exp.
  * @param {string} value - Value to escape.
  * @returns {string} - Escaped value for a RegExp pattern.
  */
@@ -9,6 +10,7 @@ function escapeRegExp(value) {
 }
 
 /**
+ * ParsedStackFrame type.
  * @typedef {object} ParsedStackFrame
  * @property {string | undefined} methodName - Method/function name from the stack frame.
  * @property {string} sourcePath - File or URL path from the stack frame.
@@ -17,6 +19,7 @@ function escapeRegExp(value) {
  */
 
 /**
+ * Runs normalize path.
  * @param {string | undefined} value - Path or file URL.
  * @returns {string | undefined} - Normalized path.
  */
@@ -43,6 +46,7 @@ function normalizePath(value) {
 }
 
 /**
+ * Runs normalize directory.
  * @param {string | undefined} value - Directory path.
  * @returns {string | undefined} - Normalized directory path ending with slash.
  */
@@ -55,6 +59,7 @@ function normalizeDirectory(value) {
 }
 
 /**
+ * Runs parse stack frame.
  * @param {string} line - Stack line.
  * @returns {ParsedStackFrame | undefined} - Parsed frame when possible.
  */
@@ -86,6 +91,7 @@ function parseStackFrame(line) {
 }
 
 /**
+ * Runs relative application path.
  * @param {string} sourcePath - Source path.
  * @param {string} applicationDirectory - Application directory.
  * @returns {string} - Path relative to the application directory when possible.
@@ -99,10 +105,13 @@ function relativeApplicationPath(sourcePath, applicationDirectory) {
 }
 
 export default class BacktraceCleaner {
-  /** @type {string | undefined} */
+  /**
+ * Framework source directory.
+ * @type {string | undefined} */
   frameworkSourceDirectory = undefined
 
   /**
+ * Runs get cleaned stack.
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
    * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
@@ -114,6 +123,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs get application source line.
    * @param {Error} error - Error instance.
    * @param {object} args - Options object.
    * @param {string} args.applicationDirectory - Application directory.
@@ -125,6 +135,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs constructor.
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
    * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
@@ -135,6 +146,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs get cleaned stack.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.includeErrorHeader] - Whether to include the `Error: ...` header line.
    * @returns {string | undefined} - The cleaned stack.
@@ -155,6 +167,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs get cleaned stack lines.
    * @returns {string[] | undefined} - Filtered stack lines.
    */
   getCleanedStackLines() {
@@ -164,6 +177,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs get application source line.
    * @param {object} args - Options object.
    * @param {string} args.applicationDirectory - Application directory.
    * @returns {string | undefined} - Source line for the first application frame.
@@ -184,6 +198,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs is error header line.
    * @param {string | undefined} line - Backtrace line.
    * @returns {boolean} - True when the line is an error header.
    */
@@ -202,6 +217,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs first application frame.
    * @param {string} applicationDirectory - Normalized application directory.
    * @returns {ParsedStackFrame | undefined} - First app-owned frame.
    */
@@ -224,6 +240,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs framework source path.
    * @param {string} sourcePath - Source path.
    * @returns {boolean} - Whether the path belongs to Velocious internals.
    */
@@ -234,6 +251,7 @@ export default class BacktraceCleaner {
   }
 
   /**
+ * Runs should keep stack line.
    * @param {string} line - Stack line.
    * @returns {boolean} - Whether to keep the stack line.
    */

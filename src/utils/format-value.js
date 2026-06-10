@@ -3,6 +3,7 @@
 const MAX_STRINGIFY_DEPTH = 5
 
 /**
+ * Runs is plain object.
  * @param {?} value - Value to use.
  * @returns {boolean} - Whether plain object.
  */
@@ -23,6 +24,7 @@ function minifiedStringify(value) {
   const seen = new WeakSet()
 
   /**
+ * Runs serialize.
    * @param {?} current - Current.
    * @param {number} depth - Depth.
    * @returns {?} - The serialize.
@@ -47,7 +49,9 @@ function minifiedStringify(value) {
       return current.map(value => serialize(value, depth + 1))
     }
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Output.
+ * @type {Record<string, ?>} */
     const output = {}
 
     for (const key of Object.keys(current)) {
@@ -65,6 +69,7 @@ function minifiedStringify(value) {
 }
 
 /**
+ * Runs format value.
  * @param {?} value - Value to use.
  * @returns {string} - The value.
  */

@@ -3,6 +3,7 @@
 import OrderBase from "./order-base.js"
 
 /**
+ * OrderColumnInput type.
  * @typedef {object} OrderColumnInput
  * @property {string} column - Column name.
  * @property {"ASC" | "DESC" | "asc" | "desc"} [direction] - Sort direction.
@@ -10,6 +11,7 @@ import OrderBase from "./order-base.js"
  */
 
 /**
+ * Runs normalize direction.
  * @param {string | undefined} direction - Direction input.
  * @returns {"ASC" | "DESC"} - Normalized direction.
  */
@@ -23,6 +25,7 @@ function normalizeDirection(direction) {
 }
 
 /**
+ * Runs reverse direction.
  * @param {"ASC" | "DESC"} direction - Direction.
  * @returns {"ASC" | "DESC"} - Reversed direction.
  */
@@ -32,6 +35,7 @@ function reverseDirection(direction) {
 
 export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
   /**
+ * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    * @param {OrderColumnInput} input - Column order input.
    */
@@ -47,6 +51,7 @@ export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
   }
 
   /**
+ * Runs set reverse order.
    * @param {boolean} [reverseOrder] - Whether to reverse the order.
    * @returns {void}
    */
@@ -54,7 +59,9 @@ export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
     this.reverseOrder = reverseOrder
   }
 
-  /** @returns {string} - SQL string. */
+  /**
+ * Runs to sql.
+ * @returns {string} - SQL string. */
   toSql() {
     const options = this.getOptions()
     const direction = this.reverseOrder ? reverseDirection(this.direction) : this.direction

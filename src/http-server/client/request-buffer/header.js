@@ -2,6 +2,7 @@
 
 export default class Header {
   /**
+ * Runs constructor.
    * @param {string} name - Name.
    * @param {string} value - Value to use.
    */

@@ -3,16 +3,19 @@
 import {isPlainObject} from "is-plain-object"
 
 /**
+ * QueryDataEntry type.
  * @typedef {Object} QueryDataEntry
  * @property {string[]} chain - Relationship chain from the root model to the model that declares the fn. Empty for a root-level entry.
  * @property {string} fnName - Identifier under which the fn is registered on the declaring model.
  */
 
 /**
+ * Documents this API.
  * @typedef {string | Array<string | Record<string, ?>> | {[key: string]: true | false | string | string[] | Record<string, ?>}} QueryDataSpec
  */
 
 /**
+ * QueryDataCallbackArgs type.
  * @typedef {Object} QueryDataCallbackArgs
  * @property {string} attributeName - Name under which the fn was registered. Convenient when a fn is reused across aliases.
  * @property {import("../drivers/base.js").default} driver - Active database driver, for quoting helpers and type-specific SQL.
@@ -23,6 +26,7 @@ import {isPlainObject} from "is-plain-object"
  */
 
 /**
+ * QueryDataFn type.
  * @typedef {(args: QueryDataCallbackArgs) => void | import("./model-class-query.js").default} QueryDataFn
  */
 
@@ -54,7 +58,9 @@ export function normalizeQueryDataSpec(spec, chain = []) {
   }
 
   if (Array.isArray(spec)) {
-    /** @type {QueryDataEntry[]} */
+    /**
+ * Entries.
+ * @type {QueryDataEntry[]} */
     const entries = []
 
     for (const item of spec) {
@@ -64,7 +70,9 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       }
 
       if (isPlainObject(item)) {
-        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (item), chain)) {
+        for (const nested of normalizeQueryDataSpec(/**
+ * Documents this API.
+ * @type {?} */ (item), chain)) {
           entries.push(nested)
         }
         continue
@@ -77,7 +85,9 @@ export function normalizeQueryDataSpec(spec, chain = []) {
   }
 
   if (isPlainObject(spec)) {
-    /** @type {QueryDataEntry[]} */
+    /**
+ * Entries.
+ * @type {QueryDataEntry[]} */
     const entries = []
 
     for (const [key, value] of Object.entries(spec)) {
@@ -89,7 +99,9 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       if (value === false) continue
 
       if (typeof value === "string" || Array.isArray(value) || isPlainObject(value)) {
-        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (value), [...chain, key])) {
+        for (const nested of normalizeQueryDataSpec(/**
+ * Documents this API.
+ * @type {?} */ (value), [...chain, key])) {
           entries.push(nested)
         }
         continue
@@ -116,7 +128,9 @@ export function normalizeQueryDataSpec(spec, chain = []) {
 function buildNestedJoinDescriptor(chain) {
   if (chain.length === 0) return true
 
-  /** @type {Record<string, ?>} */
+  /**
+ * Obj.
+ * @type {Record<string, ?>} */
   const obj = {}
   let cursor = obj
 
@@ -183,7 +197,9 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
   if (rootModels.length === 0 || entries.length === 0) return
 
   const primaryKey = rootModelClass.primaryKey()
-  const rootIds = rootModels.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
+  const rootIds = rootModels.map((model) => /**
+ * Documents this API.
+ * @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     await runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels})
@@ -191,6 +207,7 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
 }
 
 /**
+ * Runs run entry.
  * @param {object} args - Options.
  * @param {QueryDataEntry} args.entry - Entry being evaluated.
  * @param {string} args.primaryKey - Root model primary key column.
@@ -224,7 +241,9 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   const rootTable = rootModelClass.tableName()
   const rootPkSql = `${driver.quoteTable(rootTable)}.${driver.quoteColumn(primaryKey)}`
 
-  /** @type {Record<string, ?>} */
+  /**
+ * Root where.
+ * @type {Record<string, ?>} */
   const rootWhere = {}
   rootWhere[primaryKey] = rootIds
   query.where(rootWhere)
@@ -255,7 +274,9 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
     tableName: targetTableRef
   })
 
-  const rows = /** @type {Array<Record<string, ?>>} */ (await query._executeQuery())
+  const rows = /**
+ * Documents this API.
+ * @type {Array<Record<string, ?>>} */ (await query._executeQuery())
   const byParent = new Map()
 
   for (const row of rows) {
@@ -267,7 +288,9 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   }
 
   for (const model of rootModels) {
-    const modelId = /** @type {string | number} */ (model.readColumn(primaryKey))
+    const modelId = /**
+ * Documents this API.
+ * @type {string | number} */ (model.readColumn(primaryKey))
     // Driver-type tolerance: MySQL can return PKs as strings even when
     // the column is numeric. Fall back to a string lookup so results
     // still land on the right model.

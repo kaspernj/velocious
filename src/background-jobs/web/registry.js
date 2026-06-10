@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * JobsMountOptions type.
  * @typedef {object} JobsMountOptions
  * @property {(args: {request: import("../../http-server/client/request.js").default, ability: (import("../../authorization/ability.js").default | undefined), token: (string | null), configuration: import("../../configuration.js").default}) => (boolean | void | Promise<boolean | void>)} [authorize] - Authorization callback. Return true to allow the request.
  * @property {string[]} [accessTokens] - Bearer tokens accepted for cross-origin/native access.
@@ -20,6 +21,7 @@
 const registry = new WeakMap()
 
 /**
+ * Documents this API.
  * @param {import("../../configuration.js").default} configuration - Configuration instance.
  * @param {string} at - Normalized mount path.
  * @param {JobsMountOptions} options - Mount options.
@@ -37,6 +39,7 @@ export function registerJobsMount(configuration, at, options) {
 }
 
 /**
+ * Documents this API.
  * @param {import("../../configuration.js").default} configuration - Configuration instance.
  * @param {string} at - Normalized mount path.
  * @returns {JobsMountOptions | undefined} - Mount options if registered.

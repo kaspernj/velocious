@@ -1,10 +1,12 @@
 // @ts-check
 
 /**
+ * WithConnectionsCallbackType type.
  * @template T
  * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<T>} WithConnectionsCallbackType
  */
 /**
+ * WithConnectionsOptionsType type.
  * @typedef {object} WithConnectionsOptionsType
  * @property {string} [name] - Human-readable name for the checked-out database connections.
  */
@@ -24,10 +26,13 @@ import {withTrackedStack} from "./utils/with-tracked-stack.js"
 export {CurrentConfigurationNotSetError}
 
 /**
+ * Runs current working directory.
  * @returns {string | undefined} - Current working directory when the runtime exposes one.
  */
 function currentWorkingDirectory() {
-  const processObject = /** @type {{cwd?: ?} | undefined} */ (globalThis.process)
+  const processObject = /**
+ * Documents this API.
+ * @type {{cwd?: ?} | undefined} */ (globalThis.process)
 
   if (typeof processObject?.cwd !== "function") return undefined
 
@@ -35,6 +40,7 @@ function currentWorkingDirectory() {
 }
 
 /**
+ * Runs canonical debug snapshot value.
  * @param {?} value - Snapshot value to canonicalize.
  * @returns {?} Snapshot value with object keys sorted recursively.
  */
@@ -43,12 +49,17 @@ function canonicalDebugSnapshotValue(value) {
   if (Array.isArray(value)) return value.map((entry) => canonicalDebugSnapshotValue(entry))
 
   return Object.keys(value).sort().reduce((result, key) => {
-    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, ?>} */ (value)[key])
+    result[key] = canonicalDebugSnapshotValue(/**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (value)[key])
     return result
-  }, /** @type {Record<string, ?>} */ ({}))
+  }, /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ ({}))
 }
 
 /**
+ * Runs merge database configuration.
  * @param {import("./configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Base database configuration.
  * @param {import("./configuration-types.js").DatabaseConfigurationType | Partial<import("./configuration-types.js").DatabaseConfigurationType> | void} overrideConfiguration - Tenant override configuration.
  * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Merged database configuration.
@@ -82,14 +93,20 @@ function resolveBeaconUnreachableReportMs(value) {
 }
 
 export default class VelociousConfiguration {
-  /** @type {Promise<void> | null} */
+  /**
+ * Close database connections promise.
+ * @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
-  /** @returns {VelociousConfiguration} - The current.  */
+  /**
+ * Runs current.
+ * @returns {VelociousConfiguration} - The current.  */
   static current() {
     return currentConfiguration()
   }
 
-  /** @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
+  /**
+ * Runs constructor.
+ * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments. */
   constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -98,15 +115,25 @@ export default class VelociousConfiguration {
     this._autoload = autoload
     this._backgroundJobs = backgroundJobs
     this._beacon = beacon
-    /** @type {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} */
+    /**
+ * Documents this API.
+ * @type {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
-    /** @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
+    /**
+ * Documents this API.
+ * @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
     this._beaconConnectPromise = undefined
-    /** @type {ReturnType<typeof setTimeout> | undefined} - Pending "beacon still unreachable" report timer. */
+    /**
+ * Documents this API.
+ * @type {ReturnType<typeof setTimeout> | undefined} - Pending "beacon still unreachable" report timer. */
     this._beaconReportTimer = undefined
-    /** @type {boolean} - Whether the current beacon outage has already been reported. */
+    /**
+ * Documents this API.
+ * @type {boolean} - Whether the current beacon outage has already been reported. */
     this._beaconOutageReported = false
-    /** @type {{stage: "beacon-connect" | "beacon-disconnect", error: Error} | undefined} - Latest beacon-down details, reported only if the outage is sustained. */
+    /**
+ * Documents this API.
+ * @type {{stage: "beacon-connect" | "beacon-disconnect", error: Error} | undefined} - Latest beacon-down details, reported only if the outage is sustained. */
     this._beaconLastDownError = undefined
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
@@ -124,7 +151,9 @@ export default class VelociousConfiguration {
     this._initializeModels = initializeModels
     this._isInitialized = false
     this.httpServer = httpServer || {}
-    /** @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
+    /**
+ * Documents this API.
+ * @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
     this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
@@ -139,23 +168,35 @@ export default class VelociousConfiguration {
     this._tenantDatabaseResolver = tenantDatabaseResolver
     this._tenantResolver = tenantResolver
     this._websocketEvents = undefined
-    /** @type {VelociousWebsocketChannelSubscribers | undefined} */
+    /**
+ * Documents this API.
+ * @type {VelociousWebsocketChannelSubscribers | undefined} */
     this._websocketChannelSubscribers = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
-    /** @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
+    /**
+ * Documents this API.
+ * @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
     this._websocketConnectionClasses = new Map()
 
-    /** @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
+    /**
+ * Documents this API.
+ * @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
     this._websocketChannelClasses = new Map()
 
-    /** @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions. */
+    /**
+ * Documents this API.
+ * @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions. */
     this._websocketChannelSubscriptions = new Map()
 
-    /** @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window. */
+    /**
+ * Documents this API.
+ * @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window. */
     this._websocketSessions = new Set()
 
-    /** @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
+    /**
+ * Documents this API.
+ * @type {Map<string, {session: import("./http-server/client/websocket-session.js").default, graceTimer: ReturnType<typeof setTimeout>, pausedAt: number}>} - sessionId → paused session awaiting resume. */
     this._pausedWebsocketSessions = new Map()
 
     /** Grace period for paused WebSocket sessions before permanent teardown. */
@@ -170,39 +211,57 @@ export default class VelociousConfiguration {
      */
     this._websocketAroundRequest = null
 
-    /** @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
+    /**
+ * Documents this API.
+ * @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
     this._aroundAction = null
 
-    /** @type {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
+    /**
+ * Documents this API.
+ * @type {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
     this._websocketSessionIdentityResolver = null
     this._logging = logging
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
     this._addDebugEndpointRouteHook()
 
-    /** @type {WeakSet<object>} */
+    /**
+ * Documents this API.
+ * @type {WeakSet<object>} */
     this._appliedRouteMounts = new WeakSet()
     this._errorEvents = new EventEmitter()
 
-    /** @type {{[key: string]: import("./database/pool/base.js").default}} */
+    /**
+ * Documents this API.
+ * @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
 
-    /** @type {{[key: string]: typeof import("./database/record/index.js").default}} */
+    /**
+ * Documents this API.
+ * @type {{[key: string]: typeof import("./database/record/index.js").default}} */
     this.modelClasses = {}
 
     this.getEnvironmentHandler().setConfiguration(this)
   }
 
-  /** @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
+  /**
+ * Runs get autoload.
+ * @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
   getAutoload() { return this._autoload }
 
-  /** @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
+  /**
+ * Runs get expose internal errors to clients.
+ * @returns {boolean} Whether unexpected internal error details may be returned to API clients. */
   getExposeInternalErrorsToClients() { return this._exposeInternalErrorsToClients === true }
 
-  /** @returns {{enabled: boolean, path: string, token: string | null}} - Debug endpoint configuration. */
+  /**
+ * Runs get debug endpoint.
+ * @returns {{enabled: boolean, path: string, token: string | null}} - Debug endpoint configuration. */
   getDebugEndpoint() { return this._debugEndpoint }
 
-  /** @returns {{enabled: boolean, path: string, tokenConfigured: boolean}} - Debug endpoint config for the snapshot, with the token redacted. */
+  /**
+ * Runs debug endpoint snapshot.
+ * @returns {{enabled: boolean, path: string, tokenConfigured: boolean}} - Debug endpoint config for the snapshot, with the token redacted. */
   _debugEndpointSnapshot() {
     return {
       enabled: this._debugEndpoint.enabled,
@@ -212,6 +271,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs normalize debug endpoint.
    * @param {boolean | {path?: string, token?: string}} value - Debug endpoint configuration.
    * @returns {{enabled: boolean, path: string, token: string | null}} - Normalized debug endpoint configuration.
    */
@@ -238,7 +298,9 @@ export default class VelociousConfiguration {
     return {enabled: true, path, token: token === null ? null : token.trim()}
   }
 
-  /** @returns {void} - No return value. */
+  /**
+ * Runs add debug endpoint route hook.
+ * @returns {void} - No return value. */
   _addDebugEndpointRouteHook() {
     if (!this._debugEndpoint.enabled) return
 
@@ -263,22 +325,29 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set autoload.
    * @param {boolean} newValue - Whether auto-batch-preload of relationships is enabled.
    * @returns {void}
    */
   setAutoload(newValue) { this._autoload = newValue }
 
-  /** @returns {import("./configuration-types.js").CorsType | undefined} - The cors.  */
+  /**
+ * Runs get cors.
+ * @returns {import("./configuration-types.js").CorsType | undefined} - The cors.  */
   getCors() {
     return this.cors
   }
 
-  /** @returns {string | undefined} - Cookie secret. */
+  /**
+ * Runs get cookie secret.
+ * @returns {string | undefined} - Cookie secret. */
   getCookieSecret() {
     return this._cookieSecret
   }
 
-  /** @returns {Record<string, import("./configuration-types.js").DatabaseConfigurationType>} - The database configuration.  */
+  /**
+ * Runs get database configuration.
+ * @returns {Record<string, import("./configuration-types.js").DatabaseConfigurationType>} - The database configuration.  */
   getDatabaseConfiguration() {
     if (!this.database) throw new Error("No database configuration")
 
@@ -290,6 +359,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs resolve database configuration.
    * @param {string} identifier - Identifier.
    * @param {?} [tenant] - Tenant override.
    * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Resolved database configuration for the identifier.
@@ -315,7 +385,9 @@ export default class VelociousConfiguration {
     return mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration)
   }
 
-  /** @returns {Set<string>} - Disabled database identifiers from env flags. */
+  /**
+ * Runs get disabled database identifiers.
+ * @returns {Set<string>} - Disabled database identifiers from env flags. */
   getDisabledDatabaseIdentifiers() {
     const disabledIdentifiers = new Set()
     const disabledIdentifiersRaw = process.env.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
@@ -336,6 +408,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs is database identifier active.
    * @param {string} identifier - Database identifier.
    * @param {?} [tenant] - Tenant override.
    * @returns {boolean} - Whether this database identifier is active in the current tenant context.
@@ -360,7 +433,9 @@ export default class VelociousConfiguration {
     return Boolean(overrideConfiguration)
   }
 
-  /** @returns {Array<string>} - The database identifiers.  */
+  /**
+ * Runs get database identifiers.
+ * @returns {Array<string>} - The database identifiers.  */
   getDatabaseIdentifiers() {
     const identifiers = Object.keys(this.getDatabaseConfiguration())
     const disabledIdentifiers = this.getDisabledDatabaseIdentifiers()
@@ -368,7 +443,9 @@ export default class VelociousConfiguration {
     return identifiers.filter((identifier) => !disabledIdentifiers.has(identifier) && this.isDatabaseIdentifierActive(identifier))
   }
 
-  /** @returns {Promise<Record<string, ?>>} - Human-readable server diagnostics. */
+  /**
+ * Runs get debug snapshot.
+ * @returns {Promise<Record<string, ?>>} - Human-readable server diagnostics. */
   async getDebugSnapshot() {
     const localSnapshot = this.getLocalDebugSnapshot()
 
@@ -378,7 +455,9 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, ?>} - Human-readable diagnostics for this process only. */
+  /**
+ * Runs get local debug snapshot.
+ * @returns {Record<string, ?>} - Human-readable diagnostics for this process only. */
   getLocalDebugSnapshot() {
     return {
       backgroundJobs: this._debugBackgroundJobsSnapshot(),
@@ -390,9 +469,13 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics. */
+  /**
+ * Runs debug http server snapshot.
+ * @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics. */
   async _debugHttpServerSnapshot() {
-    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
+    const httpServer = /**
+ * Documents this API.
+ * @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
 
     if (!httpServer?.getDebugSnapshot) {
       return {configured: Boolean(this.httpServer), active: false}
@@ -401,7 +484,9 @@ export default class VelociousConfiguration {
     return await httpServer.getDebugSnapshot()
   }
 
-  /** @returns {Record<string, ?>} - Server runtime diagnostics. */
+  /**
+ * Runs debug server snapshot.
+ * @returns {Record<string, ?>} - Server runtime diagnostics. */
   _debugServerSnapshot() {
     const nodeProcess = typeof process === "undefined" ? undefined : process
 
@@ -415,7 +500,9 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, ?>} - Configuration diagnostics. */
+  /**
+ * Runs debug configuration snapshot.
+ * @returns {Record<string, ?>} - Configuration diagnostics. */
   _debugConfigurationSnapshot() {
     return {
       autoload: this.getAutoload(),
@@ -431,7 +518,9 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, ?>} - Background job diagnostics. */
+  /**
+ * Runs debug background jobs snapshot.
+ * @returns {Record<string, ?>} - Background job diagnostics. */
   _debugBackgroundJobsSnapshot() {
     return {
       configured: Boolean(this._backgroundJobs),
@@ -439,9 +528,13 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, ?>} - Database diagnostics. */
+  /**
+ * Runs debug database snapshot.
+ * @returns {Record<string, ?>} - Database diagnostics. */
   _debugDatabaseSnapshot() {
-    /** @type {Record<string, import("./database/pool/base.js").DatabasePoolDebugSnapshot>} */
+    /**
+ * Database pools.
+ * @type {Record<string, import("./database/pool/base.js").DatabasePoolDebugSnapshot>} */
     const databasePools = {}
     const activeIdentifiers = this.getDatabaseIdentifiers()
 
@@ -457,18 +550,28 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Record<string, ?>} - WebSocket diagnostics. */
+  /**
+ * Runs debug websocket snapshot.
+ * @returns {Record<string, ?>} - WebSocket diagnostics. */
   _debugWebsocketSnapshot() {
-    /** @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
+    /**
+ * Session buckets.
+ * @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
     const sessionBuckets = new Map()
-    /** @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
+    /**
+ * Session details.
+ * @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
     const sessionDetails = []
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
-      /** @type {Map<string, {count: number, details: Record<string, ?>}>} */
+      /**
+ * Details buckets.
+ * @type {Map<string, {count: number, details: Record<string, ?>}>} */
       const detailsBuckets = new Map()
 
       for (const subscription of channelSubscriptions) {
-        const details = /** @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
+        const details = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
         const key = JSON.stringify(details)
         const existingBucket = detailsBuckets.get(key)
 
@@ -487,11 +590,15 @@ export default class VelociousConfiguration {
     })
 
     for (const session of this._websocketSessions) {
-      /** @type {Map<string, {channelType: string, count: number, model: string | null}>} */
+      /**
+ * Channel subscription buckets.
+ * @type {Map<string, {channelType: string, count: number, model: string | null}>} */
       const channelSubscriptionBuckets = new Map()
 
       for (const {channelType, subscription} of session._channelSubscriptions.values()) {
-        const details = /** @type {Record<string, ?>} */ (subscription.debugSnapshot())
+        const details = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (subscription.debugSnapshot())
         const model = typeof details.model === "string" ? details.model : null
         const key = JSON.stringify({channelType, model})
         const existingBucket = channelSubscriptionBuckets.get(key)
@@ -551,6 +658,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get database pool.
    * @param {string} identifier - Identifier.
    * @returns {import("./database/pool/base.js").default} - The database pool.
    */
@@ -563,6 +671,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get database identifier.
    * @param {string} identifier - Identifier.
    * @returns {import("./configuration-types.js").DatabaseConfigurationType})
    */
@@ -587,6 +696,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get database pool type.
    * @param {string} identifier - Identifier.
    * @returns {typeof import("./database/pool/base.js").default} - The database pool type.
    */
@@ -609,6 +719,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get directory.
    * @returns {string} - The directory.
    */
   getDirectory() {
@@ -620,6 +731,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get directory if available.
    * @returns {string | undefined} - The directory when the runtime can resolve one.
    */
   getDirectoryIfAvailable() {
@@ -631,35 +743,50 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get backend projects.
    * @returns {import("./configuration-types.js").BackendProjectConfiguration[]} - Backend projects.
    */
   getBackendProjects() { return this._backendProjects }
 
-  /** @returns {import("./configuration-types.js").AbilityResourceClassType[]} - Ability resource classes. */
+  /**
+ * Runs get ability resources.
+ * @returns {import("./configuration-types.js").AbilityResourceClassType[]} - Ability resource classes. */
   getAbilityResources() { return this._abilityResources }
 
   /**
+ * Runs set ability resources.
    * @param {import("./configuration-types.js").AbilityResourceClassType[]} resources - Ability resource classes.
    * @returns {void} - No return value.
    */
   setAbilityResources(resources) { this._abilityResources = resources }
 
-  /** @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver. */
+  /**
+ * Runs get ability resolver.
+ * @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver. */
   getAbilityResolver() { return this._abilityResolver }
 
-  /** @returns {import("./configuration-types.js").TenantResolverType | undefined} - Tenant resolver. */
+  /**
+ * Runs get tenant resolver.
+ * @returns {import("./configuration-types.js").TenantResolverType | undefined} - Tenant resolver. */
   getTenantResolver() { return this._tenantResolver }
 
-  /** @returns {import("./configuration-types.js").TenantDatabaseResolverType | undefined} - Tenant database resolver. */
+  /**
+ * Runs get tenant database resolver.
+ * @returns {import("./configuration-types.js").TenantDatabaseResolverType | undefined} - Tenant database resolver. */
   getTenantDatabaseResolver() { return this._tenantDatabaseResolver }
 
-  /** @returns {boolean} - Whether tenant-switched models require a resolved tenant database identifier. */
+  /**
+ * Runs get enforce tenant database scopes.
+ * @returns {boolean} - Whether tenant-switched models require a resolved tenant database identifier. */
   getEnforceTenantDatabaseScopes() { return this._enforceTenantDatabaseScopes }
 
-  /** @returns {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} - Tenant database lifecycle providers. */
+  /**
+ * Runs get tenant database providers.
+ * @returns {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} - Tenant database lifecycle providers. */
   getTenantDatabaseProviders() { return this._tenantDatabaseProviders }
 
   /**
+ * Runs get tenant database provider.
    * @param {string} identifier - Database identifier.
    * @returns {import("./configuration-types.js").TenantDatabaseProviderType} - Tenant database lifecycle provider.
    */
@@ -673,13 +800,18 @@ export default class VelociousConfiguration {
     return provider
   }
 
-  /** @returns {import("./configuration-types.js").AttachmentsConfiguration} - Attachments configuration. */
+  /**
+ * Runs get attachments configuration.
+ * @returns {import("./configuration-types.js").AttachmentsConfiguration} - Attachments configuration. */
   getAttachmentsConfiguration() { return this._attachments || {} }
 
-  /** @returns {import("./configuration-types.js").RouteResolverHookType[]} - Route resolver hooks. */
+  /**
+ * Runs get route resolver hooks.
+ * @returns {import("./configuration-types.js").RouteResolverHookType[]} - Route resolver hooks. */
   getRouteResolverHooks() { return this._routeResolverHooks }
 
   /**
+ * Runs add route resolver hook.
    * @param {import("./configuration-types.js").RouteResolverHookType} hook - Route resolver hook.
    * @returns {void} - No return value.
    */
@@ -688,41 +820,48 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set ability resolver.
    * @param {import("./configuration-types.js").AbilityResolverType | undefined} resolver - Ability resolver.
    * @returns {void} - No return value.
    */
   setAbilityResolver(resolver) { this._abilityResolver = resolver }
 
   /**
+ * Runs set tenant resolver.
    * @param {import("./configuration-types.js").TenantResolverType | undefined} resolver - Tenant resolver.
    * @returns {void} - No return value.
    */
   setTenantResolver(resolver) { this._tenantResolver = resolver }
 
   /**
+ * Runs set tenant database resolver.
    * @param {import("./configuration-types.js").TenantDatabaseResolverType | undefined} resolver - Tenant database resolver.
    * @returns {void} - No return value.
    */
   setTenantDatabaseResolver(resolver) { this._tenantDatabaseResolver = resolver }
 
   /**
+ * Runs set enforce tenant database scopes.
    * @param {boolean} newValue - Whether tenant-switched models require a resolved tenant database identifier.
    * @returns {void} - No return value.
    */
   setEnforceTenantDatabaseScopes(newValue) { this._enforceTenantDatabaseScopes = newValue }
 
   /**
+ * Runs set tenant database providers.
    * @param {Record<string, import("./configuration-types.js").TenantDatabaseProviderType>} providers - Tenant database lifecycle providers.
    * @returns {void} - No return value.
    */
   setTenantDatabaseProviders(providers) { this._tenantDatabaseProviders = providers }
 
   /**
+ * Runs get environment.
    * @returns {string} - The environment.
    */
   getEnvironment() { return digg(this, "_environment") }
 
   /**
+ * Runs get request timeout ms.
    * @returns {number} - Request timeout in seconds.
    */
   getRequestTimeoutMs() {
@@ -738,6 +877,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs parse request timeout seconds.
    * @param {string | undefined} rawValue - Env value.
    * @returns {number | undefined} - Timeout in seconds.
    */
@@ -768,12 +908,14 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set environment.
    * @param {string} newEnvironment - New environment.
    * @returns {void} - No return value.
    */
   setEnvironment(newEnvironment) { this._environment = newEnvironment }
 
   /**
+ * Runs get logging configuration.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.defaultConsole] - Whether default console.
    * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Pick<import("./configuration-types.js").LoggingConfiguration, "directory" | "filePath"> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "outputs" | "loggers">>} - The logging configuration.
@@ -793,7 +935,9 @@ export default class VelociousConfiguration {
     const consoleDefault = defaultConsole !== undefined ? defaultConsole : true
     const consoleLogging = consoleOverride !== undefined ? consoleOverride : consoleDefault
 
-    /** @type {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} */
+    /**
+ * Default levels.
+ * @type {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} */
     const defaultLevels = ["info", "warn", "error"]
 
     if (includeLowLevelDebug) defaultLevels.unshift("debug-low-level")
@@ -812,6 +956,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get query logging enabled.
    * @returns {boolean} - Whether database query logging is enabled.
    */
   getQueryLoggingEnabled() {
@@ -821,6 +966,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get background jobs config.
    * @returns {Required<import("./configuration-types.js").BackgroundJobsConfiguration>} - Background jobs configuration.
    */
   getBackgroundJobsConfig() {
@@ -857,6 +1003,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set background jobs config.
    * @param {import("./configuration-types.js").BackgroundJobsConfiguration} backgroundJobs - Background jobs config.
    * @returns {void}
    */
@@ -904,6 +1051,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set beacon config.
    * @param {import("./configuration-types.js").BeaconConfiguration} beacon - Beacon config.
    * @returns {void}
    */
@@ -912,6 +1060,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get beacon client.
    * @returns {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} - The active Beacon client, if connected.
    */
   getBeaconClient() {
@@ -1170,7 +1319,9 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   _deliverBroadcastFromBeacon(message) {
-    /** @type {?} */
+    /**
+ * Websocket events.
+ * @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -1186,6 +1337,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get scheduled background jobs config.
    * @returns {Promise<import("./configuration-types.js").ScheduledBackgroundJobsConfiguration | undefined>} - Scheduled background jobs configuration.
    */
   async getScheduledBackgroundJobsConfig() {
@@ -1201,6 +1353,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set scheduled background jobs config.
    * @param {import("./configuration-types.js").ScheduledBackgroundJobsConfiguration | import("./configuration-types.js").ScheduledBackgroundJobsLoaderType | undefined} scheduledBackgroundJobs - Scheduled background jobs configuration.
    * @returns {void}
    */
@@ -1209,6 +1362,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get mailer backend.
    * @returns {import("./configuration-types.js").MailerBackend | undefined} - Mailer backend.
    */
   getMailerBackend() {
@@ -1216,6 +1370,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set mailer backend.
    * @param {import("./configuration-types.js").MailerBackend} mailerBackend - Mailer backend.
    * @returns {void} - No return value.
    */
@@ -1232,6 +1387,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get environment handler.
    * @returns {import("./environment-handlers/base.js").default} - The environment handler.
    */
   getEnvironmentHandler() {
@@ -1241,20 +1397,25 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get locale fallbacks.
    * @returns {import("./configuration-types.js").LocaleFallbacksType | undefined} - The locale fallbacks.
    */
   getLocaleFallbacks() { return this.localeFallbacks }
 
   /**
+ * Runs set locale fallbacks.
    * @param {import("./configuration-types.js").LocaleFallbacksType} newLocaleFallbacks - New locale fallbacks.
    * @returns {void} - No return value.
    */
   setLocaleFallbacks(newLocaleFallbacks) { this.localeFallbacks = newLocaleFallbacks }
 
-  /** @returns {import("./configuration-types.js").StructureSqlConfiguration | undefined} - Structure SQL config. */
+  /**
+ * Runs get structure sql config.
+ * @returns {import("./configuration-types.js").StructureSqlConfiguration | undefined} - Structure SQL config. */
   getStructureSqlConfig() { return this._structureSql }
 
   /**
+ * Runs should write structure sql.
    * @param {{reason?: "migration" | "schemaDump"}} [args] - Call context for the structure sql write decision.
    * @returns {boolean} - Whether structure SQL files should be generated for the current environment.
    */
@@ -1284,6 +1445,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set structure sql config.
    * @param {import("./configuration-types.js").StructureSqlConfiguration} structureSql - Structure SQL config.
    * @returns {void} - No return value.
    */
@@ -1292,6 +1454,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get locale.
    * @returns {string} - The locale.
    */
   getLocale() {
@@ -1304,10 +1467,13 @@ export default class VelociousConfiguration {
     }
   }
 
-  /** @returns {Array<string>} - The locales.  */
+  /**
+ * Runs get locales.
+ * @returns {Array<string>} - The locales.  */
   getLocales() { return digg(this, "locales") }
 
   /**
+ * Runs get model class.
    * @param {string} name - Name.
    * @returns {typeof import("./database/record/index.js").default} - The model class.
    */
@@ -1320,25 +1486,32 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get model classes.
    * @returns {Record<string, typeof import("./database/record/index.js").default>} A hash of all model classes, keyed by model name, as they were defined in the configuration. This is a direct reference to the model classes, not a copy.
    */
   getModelClasses() {
     return this.modelClasses
   }
 
-  /** @returns {string | undefined} The path to a config file that should be used for testing. */
+  /**
+ * Runs get testing.
+ * @returns {string | undefined} The path to a config file that should be used for testing. */
   getTesting() { return this._testing }
 
-  /** @returns {string | string[] | undefined} Trusted reverse proxy address ranges. */
+  /**
+ * Runs get trusted proxies.
+ * @returns {string | string[] | undefined} Trusted reverse proxy address ranges. */
   getTrustedProxies() { return this._trustedProxies }
 
   /**
+ * Runs set trusted proxies.
    * @param {string | string[] | undefined} trustedProxies - Trusted reverse proxy address ranges.
    * @returns {void}
    */
   setTrustedProxies(trustedProxies) { this._trustedProxies = trustedProxies }
 
   /**
+ * Runs initialize database pool.
    * @param {string} [identifier] - Database identifier to initialize.
    * @returns {void} - No return value.
    */
@@ -1353,15 +1526,19 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs is database pool initialized.
    * @param {string} [identifier] - Database identifier to check.
    * @returns {boolean} - Whether database pool initialized.
    */
   isDatabasePoolInitialized(identifier = "default") { return Boolean(this.databasePools[identifier]) }
 
-  /** @returns {boolean} - Whether initialized.  */
+  /**
+ * Runs is initialized.
+ * @returns {boolean} - Whether initialized.  */
   isInitialized() { return this._isInitialized }
 
   /**
+ * Runs initialize models.
    * @param {object} args - Options object.
    * @param {string} args.type - Type identifier.
    * @returns {Promise<void>} - Resolves when complete.
@@ -1400,6 +1577,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs initialize.
    * @param {object} args - Options object.
    * @param {string} args.type - Type identifier.
    * @returns {Promise<void>} - Resolves when complete.
@@ -1449,7 +1627,9 @@ export default class VelociousConfiguration {
           throw new Error(`Resource for ${modelName} defines relationships as an object. Use an array instead: static relationships = ${JSON.stringify(Object.keys(resourceConfig.relationships))}`)
         }
 
-        const modelClass = /** @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
+        const modelClass = /**
+ * Documents this API.
+ * @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
 
         if (!modelClass) continue
 
@@ -1468,6 +1648,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs register model class.
    * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
    * @returns {void} - No return value.
    */
@@ -1475,15 +1656,20 @@ export default class VelociousConfiguration {
     this.modelClasses[modelClass.getModelName()] = modelClass
   }
 
-  /** @returns {void} - No return value.  */
+  /**
+ * Runs set current.
+ * @returns {void} - No return value.  */
   setCurrent() {
     setCurrentConfiguration(this)
   }
 
-  /** @returns {import("./routes/index.js").default | undefined} - The routes.  */
+  /**
+ * Runs get routes.
+ * @returns {import("./routes/index.js").default | undefined} - The routes.  */
   getRoutes() { return this._routes }
 
   /**
+ * Runs set routes.
    * @param {import("./routes/index.js").default} newRoutes - New routes.
    * @returns {void} - No return value.
    */
@@ -1523,12 +1709,14 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set translator.
    * @param {function(string, Record<string, ?> | undefined) : string} callback - Translator callback.
    * @returns {void} - No return value.
    */
   setTranslator(callback) { this._translator = callback }
 
   /**
+ * Runs default translator.
    * @param {string} msgID - Msg id.
    * @param {Record<string, ?>} [args] - Translator options and variables.
    * @returns {string} - The default translator.
@@ -1556,7 +1744,9 @@ export default class VelociousConfiguration {
     return message
   }
 
-  /** @returns {(msgID: string, args?: Record<string, ?>) => string} */
+  /**
+ * Runs get translator.
+ * @returns {(msgID: string, args?: Record<string, ?>) => string} */
   getTranslator() {
     if (this._translator) return this._translator
 
@@ -1567,7 +1757,9 @@ export default class VelociousConfiguration {
     return this._defaultTranslatorBound
   }
 
-  /** @returns {void} - Configure gettext defaults for this configuration. */
+  /**
+ * Runs configure default translator.
+ * @returns {void} - Configure gettext defaults for this configuration. */
   _configureDefaultTranslator() {
     const locale = this.getLocale()
 
@@ -1579,6 +1771,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get timezone offset minutes.
    * @returns {number | undefined} - The timezone offset in minutes.
    */
   getTimezoneOffsetMinutes() {
@@ -1595,12 +1788,15 @@ export default class VelociousConfiguration {
     return new Date().getTimezoneOffset()
   }
 
-  /** @returns {import("./http-server/websocket-events.js").default | undefined} - The websocket events.  */
+  /**
+ * Runs get websocket events.
+ * @returns {import("./http-server/websocket-events.js").default | undefined} - The websocket events.  */
   getWebsocketEvents() {
     return this._websocketEvents
   }
 
   /**
+ * Runs set websocket events.
    * @param {import("./http-server/websocket-events.js").default} websocketEvents - Websocket events.
    * @returns {void} - No return value.
    */
@@ -1622,7 +1818,9 @@ export default class VelociousConfiguration {
     return this._websocketChannelSubscribers
   }
 
-  /** @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
+  /**
+ * Runs get websocket channel resolver.
+ * @returns {import("./configuration-types.js").WebsocketChannelResolverType | undefined} - The websocket channel resolver. */
   getWebsocketChannelResolver() {
     return this._websocketChannelResolver
   }
@@ -1643,6 +1841,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get websocket connection class.
    * @param {string} name
    * @returns {typeof import("./http-server/websocket-connection.js").default | undefined}
    */
@@ -1665,6 +1864,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get websocket channel class.
    * @param {string} name
    * @returns {typeof import("./http-server/websocket-channel.js").default | undefined}
    */
@@ -1693,6 +1893,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs unregister websocket channel subscription.
    * @param {string} name
    * @param {import("./http-server/websocket-channel.js").default} subscription
    * @returns {void}
@@ -1722,6 +1923,7 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   /**
+ * Runs get websocket session grace seconds.
    * @returns {number} - Grace period (seconds) before a paused WS session is torn down.
    */
   getWebsocketSessionGraceSeconds() { return this._websocketSessionGraceSeconds }
@@ -1740,6 +1942,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get websocket around request.
    * @returns {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
    */
   getWebsocketAroundRequest() {
@@ -1760,6 +1963,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get around action.
    * @returns {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null}
    */
   getAroundAction() {
@@ -1787,12 +1991,15 @@ export default class VelociousConfiguration {
     this._websocketSessionIdentityResolver = resolver
   }
 
-  /** @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
+  /**
+ * Runs get websocket session identity resolver.
+ * @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
   getWebsocketSessionIdentityResolver() {
     return this._websocketSessionIdentityResolver
   }
 
   /**
+ * Runs set websocket session grace seconds.
    * @param {number} seconds
    * @returns {void}
    */
@@ -1876,6 +2083,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs broadcast to channel.
    * @param {string} name
    * @param {Record<string, ?>} broadcastParams
    * @param {?} body
@@ -1905,7 +2113,9 @@ export default class VelociousConfiguration {
     //
     // In-process mode doesn't install a websocket-events transport,
     // so fall through to the local dispatch.
-    /** @type {?} */
+    /**
+ * Websocket events.
+ * @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -1930,7 +2140,9 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>}
    */
   async awaitPendingBroadcasts() {
-    /** @type {?} */
+    /**
+ * Websocket events.
+ * @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
@@ -1982,6 +2194,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs deliver websocket channel broadcast.
    * @param {import("./http-server/websocket-channel.js").default} subscription - Channel subscription.
    * @param {import("./http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
    * @param {{eventId?: string}} meta - Broadcast metadata.
@@ -1995,12 +2208,15 @@ export default class VelociousConfiguration {
     return subscription.sendMessage(body, meta)
   }
 
-  /** @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */
+  /**
+ * Runs get websocket message handler resolver.
+ * @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver. */
   getWebsocketMessageHandlerResolver() {
     return this._websocketMessageHandlerResolver
   }
 
   /**
+ * Runs set websocket channel resolver.
    * @param {import("./configuration-types.js").WebsocketChannelResolverType} resolver - Resolver.
    * @returns {void} - No return value.
    */
@@ -2009,6 +2225,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs set websocket message handler resolver.
    * @param {import("./configuration-types.js").WebsocketMessageHandlerResolverType} resolver - Resolver.
    * @returns {void} - No return value.
    */
@@ -2017,6 +2234,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs resolve ability.
    * @param {object} args - Ability resolver args.
    * @param {Record<string, ?>} args.params - Request params.
    * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} args.request - Request object.
@@ -2043,6 +2261,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs run with ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability instance.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -2052,6 +2271,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs run with request timing.
    * @param {import("./http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -2061,6 +2281,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get current ability.
    * @returns {import("./authorization/ability.js").default | undefined} - Current ability from context.
    */
   getCurrentAbility() {
@@ -2068,6 +2289,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get current request timing.
    * @returns {import("./http-server/client/request-timing.js").default | undefined} - Current request timing collector.
    */
   getCurrentRequestTiming() {
@@ -2075,6 +2297,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs get current tenant.
    * @returns {?} - Current tenant from context.
    */
   getCurrentTenant() {
@@ -2082,6 +2305,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs run with tenant.
    * @param {?} tenant - Tenant.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -2091,6 +2315,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs resolve tenant.
    * @param {object} args - Tenant resolver args.
    * @param {Record<string, ?>} args.params - Request params.
    * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined} args.request - Request object.
@@ -2112,12 +2337,15 @@ export default class VelociousConfiguration {
     })
   }
 
-  /** @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
+  /**
+ * Runs get error events.
+ * @returns {import("eventemitter3").EventEmitter} - Framework error events emitter. */
   getErrorEvents() {
     return this._errorEvents
   }
 
   /**
+ * Runs with connections.
    * @template T
    * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
    * @param {WithConnectionsCallbackType<T>} [callback] - Callback function.
@@ -2125,12 +2353,18 @@ export default class VelociousConfiguration {
    */
   async withConnections(optionsOrCallback, callback) {
     const name = typeof optionsOrCallback == "function" ? "Configuration.withConnections" : (optionsOrCallback.name || "Configuration.withConnections")
-    /** @type {WithConnectionsCallbackType<T> | undefined} */
-    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /** @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+    /**
+ * Actual with connections callback.
+ * @type {WithConnectionsCallbackType<T> | undefined} */
+    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /**
+ * Documents this API.
+ * @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
 
     if (!actualWithConnectionsCallback) throw new Error("withConnections requires a callback")
 
-    /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
+    /**
+ * Dbs.
+ * @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
     const stack = Error().stack
@@ -2140,7 +2374,9 @@ export default class VelociousConfiguration {
       })
     }
 
-    /** @type {() => Promise<T>} */
+    /**
+ * Run request.
+ * @type {() => Promise<T>} */
     let runRequest = actualCallback
 
     for (const identifier of this.getDatabaseIdentifiers()) {
@@ -2160,9 +2396,13 @@ export default class VelociousConfiguration {
     return await runRequest()
   }
 
-  /** @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key */
+  /**
+ * Runs get current connections.
+ * @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key */
   getCurrentConnections() {
-    /** @type {{[key: string]: import("./database/drivers/base.js").default}} */
+    /**
+ * Dbs.
+ * @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
     for (const identifier of this.getDatabaseIdentifiers()) {
@@ -2186,6 +2426,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs without current connection contexts.
    * @template T
    * @param {() => T} callback - Callback to run without inherited DB connection contexts.
    * @returns {T} - Callback result.
@@ -2204,6 +2445,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs is missing current connection error.
    * @param {?} error - Error thrown while looking up the current connection.
    * @returns {boolean} - Whether the error means no current connection is available.
    */
@@ -2217,6 +2459,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs ensure connections.
    * @template T
    * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
    * @param {WithConnectionsCallbackType<T>} [callback] - Callback function.
@@ -2224,8 +2467,12 @@ export default class VelociousConfiguration {
    */
   async ensureConnections(optionsOrCallback, callback) {
     const name = typeof optionsOrCallback == "function" ? "Configuration.ensureConnections" : (optionsOrCallback.name || "Configuration.ensureConnections")
-    /** @type {WithConnectionsCallbackType<T> | undefined} */
-    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /** @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+    /**
+ * Actual with connections callback.
+ * @type {WithConnectionsCallbackType<T> | undefined} */
+    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /**
+ * Documents this API.
+ * @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
 
     if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
 
@@ -2260,7 +2507,9 @@ export default class VelociousConfiguration {
           await pool.closeAll()
         }
 
-        const poolConstructor = /** @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
+        const poolConstructor = /**
+ * Documents this API.
+ * @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
 
         if (typeof poolConstructor?.clearGlobalConnections === "function") {
           constructors.add(poolConstructor)
@@ -2283,6 +2532,7 @@ export default class VelociousConfiguration {
   }
 
   /**
+ * Runs debug endpoint request authorized.
    * @param {{header: (name: string) => string | null | undefined}} request - Incoming request.
    * @param {string} expectedToken - Configured debug-endpoint token.
    * @returns {boolean} - Whether the request carries the expected bearer token.

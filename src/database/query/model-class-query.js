@@ -21,6 +21,7 @@ import JoinsParser from "../query-parser/joins-parser.js"
 import WhereParser from "../query-parser/where-parser.js"
 
 /**
+ * Runs unquote sql identifier.
  * @param {string} value - Potentially quoted SQL identifier.
  * @returns {string} - Unquoted identifier.
  */
@@ -39,6 +40,7 @@ function unquoteSqlIdentifier(value) {
 }
 
 /**
+ * Runs parse from plain table reference.
  * @param {string} fromPlain - FROM clause source.
  * @returns {string | null} - Parsed table reference or null when unsupported.
  */
@@ -55,6 +57,7 @@ function parseFromPlainTableReference(fromPlain) {
 }
 
 /**
+ * Runs normalize scope path.
  * @param {string | string[]} path - Scope path input.
  * @returns {string[]} - Normalized path.
  */
@@ -85,7 +88,9 @@ function normalizeScopePath(path) {
  * @returns {Record<string, string[]>} - A copy with independent arrays.
  */
 function clonePreloadSelectMap(map) {
-  /** @type {Record<string, string[]>} */
+  /**
+ * Result.
+ * @type {Record<string, string[]>} */
   const result = {}
 
   for (const [modelName, attributes] of Object.entries(map)) {
@@ -96,6 +101,7 @@ function clonePreloadSelectMap(map) {
 }
 
 /**
+ * Runs normalize preload record.
  * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} preload - Preload data in shorthand or nested form.
  * @returns {import("./index.js").NestedPreloadRecord} - Normalized preload record.
  */
@@ -107,7 +113,9 @@ function normalizePreloadRecord(preload) {
   }
 
   if (Array.isArray(preload)) {
-    /** @type {import("./index.js").NestedPreloadRecord} */
+    /**
+ * Result.
+ * @type {import("./index.js").NestedPreloadRecord} */
     const result = {}
 
     for (const entry of preload) {
@@ -131,7 +139,9 @@ function normalizePreloadRecord(preload) {
     throw new Error(`Invalid preload type: ${typeof preload}`)
   }
 
-  /** @type {import("./index.js").NestedPreloadRecord} */
+  /**
+ * Result.
+ * @type {import("./index.js").NestedPreloadRecord} */
   const result = {}
 
   for (const [key, value] of Object.entries(preload)) {
@@ -152,9 +162,11 @@ function normalizePreloadRecord(preload) {
 }
 
 /**
+ * Documents this API.
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
  */
 /**
+ * Documents this API.
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
  * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[], queryData?: import("./query-data.js").QueryDataEntry[]}} ModelClassQueryArgsType
  */
@@ -164,7 +176,9 @@ function normalizePreloadRecord(preload) {
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
  */
 export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery {
-  /** @param {ModelClassQueryArgsType<MC>} args - Query constructor arguments. */
+  /**
+ * Runs constructor.
+ * @param {ModelClassQueryArgsType<MC>} args - Query constructor arguments. */
   constructor(args) {
     const {modelClass} = args
 
@@ -173,24 +187,36 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     super(args)
     this.logger = new Logger(this)
 
-    /** @type {MC} */
+    /**
+ * Documents this API.
+ * @type {MC} */
     this.modelClass = modelClass
 
-    /** @type {string[]} */
+    /**
+ * Documents this API.
+ * @type {string[]} */
     this._joinBasePath = args.joinBasePath || []
     this._joinTracker = args.joinTracker || new JoinTracker({modelClass: this.modelClass})
     this._forceQualifyBaseTable = Boolean(args.forceQualifyBaseTable)
 
-    /** @type {import("./with-count.js").WithCountEntry[]} */
+    /**
+ * Documents this API.
+ * @type {import("./with-count.js").WithCountEntry[]} */
     this._withCount = args.withCount ? [...args.withCount] : []
 
-    /** @type {import("./query-data.js").QueryDataEntry[]} */
+    /**
+ * Documents this API.
+ * @type {import("./query-data.js").QueryDataEntry[]} */
     this._queryData = args.queryData ? [...args.queryData] : []
   }
 
-  /** @returns {this} - The clone.  */
+  /**
+ * Runs clone.
+ * @returns {this} - The clone.  */
   clone() {
-    const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (new VelociousDatabaseQueryModelClassQuery({
+    const newQuery = /**
+ * Documents this API.
+ * @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (new VelociousDatabaseQueryModelClassQuery({
       driver: this._driverFn,
       froms: [...this._froms],
       handler: this.handler.clone(),
@@ -271,7 +297,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return this.getTableReferenceForJoin(...path)
   }
 
-  /** @returns {Promise<number>} - Resolves with the count.  */
+  /**
+ * Runs count.
+ * @returns {Promise<number>} - Resolves with the count.  */
   async count() {
     if (this._limit !== null || this._offset !== null) {
       return await this.paginatedCount()
@@ -294,7 +322,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     countQuery._selects = []
     countQuery.select(sql)
 
-    const results = /** @type {{count: number}[]} */ (await countQuery._executeQuery({
+    const results = /**
+ * Documents this API.
+ * @type {{count: number}[]} */ (await countQuery._executeQuery({
       logName: countQuery.queryLogName("Count")
     }))
 
@@ -317,7 +347,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return countResult
   }
 
-  /** @returns {Promise<number>} - Resolves with the count after pagination is applied. */
+  /**
+ * Runs paginated count.
+ * @returns {Promise<number>} - Resolves with the count after pagination is applied. */
   async paginatedCount() {
     const countQuery = this.clone()
     const countSql = this.driver.getType() == "pgsql" ? "COUNT(*)::int" : "COUNT(*)"
@@ -325,7 +357,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       `SELECT ${countSql} AS ${this.driver.quoteColumn("count")}`,
       `FROM (${countQuery.toSql()}) AS ${this.driver.quoteTable("paginated_count_rows")}`
     ].join(" ")
-    const results = /** @type {{count: number}[]} */ (await this.driver.query(
+    const results = /**
+ * Documents this API.
+ * @type {{count: number}[]} */ (await this.driver.query(
       sql,
       {logName: this.queryLogName("Count")}
     ))
@@ -338,6 +372,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs select.
    * @param {import("./index.js").SelectArgumentType} select - Select.
    * @returns {this} - The select.
    */
@@ -411,18 +446,25 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs root table reference.
    * @returns {string} - Root table reference for query select qualification.
    */
   rootTableReference() {
     const froms = this.getFroms()
     const lastFrom = froms[froms.length - 1]
 
-    if (lastFrom && typeof /** @type {?} */ (lastFrom).tableName === "string") {
-      return /** @type {?} */ (lastFrom).tableName
+    if (lastFrom && typeof /**
+ * Documents this API.
+ * @type {?} */ (lastFrom).tableName === "string") {
+      return /** Documents this API. @type {?} */ (lastFrom).tableName
     }
 
-    if (lastFrom && typeof /** @type {?} */ (lastFrom).plain === "string") {
-      const parsedReference = parseFromPlainTableReference(/** @type {?} */ (lastFrom).plain)
+    if (lastFrom && typeof /**
+ * Documents this API.
+ * @type {?} */ (lastFrom).plain === "string") {
+      const parsedReference = parseFromPlainTableReference(/**
+ * Documents this API.
+ * @type {?} */ (lastFrom).plain)
 
       if (parsedReference) return parsedReference
     }
@@ -430,29 +472,38 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return this.getTableReferenceForJoin()
   }
 
-  /** @returns {MC} - The model class.  */
+  /**
+ * Runs get model class.
+ * @returns {MC} - The model class.  */
   getModelClass() {
     if (!this.modelClass) throw new Error("modelClass not set")
 
     return this.modelClass
   }
 
-  /** @returns {string[]} - The join base path. */
+  /**
+ * Runs get join base path.
+ * @returns {string[]} - The join base path. */
   getJoinBasePath() {
     return this._joinBasePath
   }
 
-  /** @returns {import("./join-tracker.js").default} - The join tracker. */
+  /**
+ * Runs get join tracker.
+ * @returns {import("./join-tracker.js").default} - The join tracker. */
   getJoinTracker() {
     return this._joinTracker
   }
 
-  /** @returns {boolean} - Whether to qualify base table. */
+  /**
+ * Runs get force qualify base table.
+ * @returns {boolean} - Whether to qualify base table. */
   getForceQualifyBaseTable() {
     return this._forceQualifyBaseTable
   }
 
   /**
+ * Runs set join base path.
    * @param {string[]} joinBasePath - Join base path.
    * @returns {this} - The query with updated base path.
    */
@@ -462,11 +513,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs with join path.
    * @param {string[]} joinBasePath - Join base path.
    * @returns {VelociousDatabaseQueryModelClassQuery<MC>} - The scoped query.
    */
   withJoinPath(joinBasePath) {
-    const scopedQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
+    const scopedQuery = /**
+ * Documents this API.
+ * @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
     scopedQuery._joinBasePath = joinBasePath
     scopedQuery._joinTracker = this._joinTracker
@@ -475,6 +529,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs resolve table name for join path.
    * @param {string[]} path - Join path.
    * @returns {string} - Table name for path.
    */
@@ -483,6 +538,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs resolve model class for join path.
    * @param {string[]} path - Join path.
    * @returns {typeof import("../record/index.js").default} - Target model class.
    */
@@ -504,6 +560,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs register join path.
    * @param {string[]} path - Join path.
    * @returns {{tableName: string, alias: string | undefined}} - The entry.
    */
@@ -514,6 +571,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs get join table reference.
    * @param {string[]} path - Join path.
    * @returns {string} - Unquoted table reference (alias or table name).
    */
@@ -524,6 +582,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs get table reference for join.
    * @param {...string} path - Join path segments.
    * @returns {string} - Unquoted table reference (alias or table name).
    */
@@ -534,6 +593,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs get table for join.
    * @param {...string} path - Join path segments.
    * @returns {string} - Quoted table name for join path.
    */
@@ -542,6 +602,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs scope.
    * @param {import("../../utils/model-scope.js").ModelScopeDescriptor | string | string[]} pathOrScopeDescriptor - Scope descriptor or join path.
    * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} [maybeScopeDescriptor] - Scope descriptor when path is given.
    * @returns {this} - Scoped query.
@@ -556,12 +617,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     }
 
     return this._applyJoinPathScope({
-      joinPath: normalizeScopePath(/** @type {string | string[]} */ (pathOrScopeDescriptor)),
+      joinPath: normalizeScopePath(/**
+ * Documents this API.
+ * @type {string | string[]} */ (pathOrScopeDescriptor)),
       scopeDescriptor: maybeScopeDescriptor
     })
   }
 
   /**
+ * Runs apply root scope.
    * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} scopeDescriptor - Scope descriptor.
    * @returns {this} - Scoped query.
    */
@@ -574,7 +638,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to ${this.getModelClass().name} query`)
     }
 
-    const scopedQuery = /** @type {this | void} */ (scopeDescriptor.callback({
+    const scopedQuery = /**
+ * Documents this API.
+ * @type {this | void} */ (scopeDescriptor.callback({
       driver: this.driver,
       modelClass: this.getModelClass(),
       query: this,
@@ -585,6 +651,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs apply join path scope.
    * @param {object} args - Join-path scope options.
    * @param {string[]} args.joinPath - Join path relative to the current query.
    * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} args.scopeDescriptor - Scope descriptor.
@@ -605,7 +672,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const scopedQuery = this.buildJoinScopeQuery(targetModelClass, fullJoinPath)
     const originalJoinCount = scopedQuery._joins.length
     const originalWhereCount = scopedQuery._wheres.length
-    const appliedQuery = /** @type {typeof scopedQuery | void} */ (scopeDescriptor.callback({
+    const appliedQuery = /**
+ * Documents this API.
+ * @type {typeof scopedQuery | void} */ (scopeDescriptor.callback({
       driver: scopedQuery.driver,
       modelClass: targetModelClass,
       path: [...fullJoinPath],
@@ -646,12 +715,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs build join scope query.
    * @param {typeof import("../record/index.js").default} targetModelClass - Target model class.
    * @param {string[]} joinPath - Join path.
    * @returns {VelociousDatabaseQueryModelClassQuery<MC>} - The scoped join query.
    */
   buildJoinScopeQuery(targetModelClass, joinPath) {
-    const scopedQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (targetModelClass._newQuery())
+    const scopedQuery = /**
+ * Documents this API.
+ * @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (targetModelClass._newQuery())
 
     scopedQuery._joinTracker = this._joinTracker
     scopedQuery._joinBasePath = joinPath
@@ -660,7 +732,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return scopedQuery
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs destroy all.
+ * @returns {Promise<void>} - Resolves when complete.  */
   async destroyAll() {
     const records = await this.toArray()
 
@@ -709,16 +783,21 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs find.
    * @param {number|string} recordId - Record id.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   async find(recordId) {
-    /** @type {{[key: string]: number | string}} */
+    /**
+ * Conditions.
+ * @type {{[key: string]: number | string}} */
     const conditions = {}
 
     conditions[this.getModelClass().primaryKey()] = recordId
 
-    const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
+    const newQuery = /**
+ * Documents this API.
+ * @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
     newQuery.where(conditions)
 
@@ -732,11 +811,14 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs find by.
    * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
-    const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
+    const newQuery = /**
+ * Documents this API.
+ * @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
     newQuery.where(conditions)
 
@@ -744,6 +826,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs find or create by.
    * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
    * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
@@ -759,6 +842,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs find by or fail.
    * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the by or fail.
    */
@@ -773,6 +857,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs find or initialize by.
    * @param {Record<string, ?>} conditions - Conditions.
    * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
@@ -783,7 +868,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     if (record) return record
 
     const ModelClass = this.getModelClass()
-    const newRecord = /** @type {InstanceType<MC>} */ (new ModelClass(conditions))
+    const newRecord = /**
+ * Documents this API.
+ * @type {InstanceType<MC>} */ (new ModelClass(conditions))
 
     if (callback) {
       callback(newRecord)
@@ -792,7 +879,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return newRecord
   }
 
-  /** @returns {Promise<InstanceType<MC> | null>} - Resolves with the first.  */
+  /**
+ * Runs first.
+ * @returns {Promise<InstanceType<MC> | null>} - Resolves with the first.  */
   async first() {
     const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
     const results = await newQuery.toArray()
@@ -800,7 +889,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     return results[0] || null
   }
 
-  /** @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.  */
+  /**
+ * Runs last.
+ * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.  */
   async last() {
     const primaryKey = this.getModelClass().primaryKey()
     const tableName = this.getModelClass().tableName()
@@ -810,6 +901,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs preload.
    * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} data - Data payload.
    * @returns {this} - The preload.
    */
@@ -829,7 +921,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     for (const result of results) {
       const ModelClass = this.getModelClass()
-      const model = /** @type {InstanceType<MC>} */ (new ModelClass())
+      const model = /**
+ * Documents this API.
+ * @type {InstanceType<MC>} */ (new ModelClass())
 
       model.loadExistingRecord(result)
       models.push(model)
@@ -895,7 +989,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const attributeMap = modelClass.getAttributeNameToColumnNameMap()
     const columnNames = flatColumns.map((column) => attributeMap[column] || column)
 
-    const query = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
+    const query = /**
+ * Documents this API.
+ * @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
     query._preload = {}
     query._selects = []
@@ -910,17 +1006,22 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     if (columnNames.length === 1) {
       const [columnName] = columnNames
-      return rows.map((row) => /** @type {Record<string, ?>} */ (row)[columnName])
+      return rows.map((row) => /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (row)[columnName])
     }
 
     return rows.map((row) => {
-      const rowHash = /** @type {Record<string, ?>} */ (row)
+      const rowHash = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (row)
 
       return columnNames.map((columnName) => rowHash[columnName])
     })
   }
 
   /**
+ * Runs where.
    * @param {import("./index.js").WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
@@ -958,6 +1059,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs ransack.
    * @param {Record<string, ?>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
    * @returns {this} - Query with Ransack filters and sort applied.
    */
@@ -979,6 +1081,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs where not.
    * @param {import("./index.js").WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
@@ -1016,6 +1119,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+ * Runs query log name.
    * @param {string} operation - Query operation.
    * @returns {string} - Query log name.
    */
@@ -1025,6 +1129,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 }
 
 /**
+ * Runs apply ransack group.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
  * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
@@ -1039,13 +1144,16 @@ function applyRansackGroup({group, query}) {
 }
 
 /**
+ * Runs build ransack group where.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
  * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
  * @returns {import("./where-base.js").default | null} - Combined where clause.
  */
 function buildRansackGroupWhere({group, query}) {
-  /** @type {import("./where-base.js").default[]} */
+  /**
+ * Wheres.
+ * @type {import("./where-base.js").default[]} */
   const wheres = []
 
   for (const condition of group.conditions) {
@@ -1071,13 +1179,16 @@ function buildRansackGroupWhere({group, query}) {
 }
 
 /**
+ * Runs build ransack condition where.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
  * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
  * @returns {import("./where-base.js").default | null} - Condition where clause.
  */
 function buildRansackConditionWhere({condition, query}) {
-  /** @type {import("./where-base.js").default[]} */
+  /**
+ * Wheres.
+ * @type {import("./where-base.js").default[]} */
   const wheres = []
 
   for (const attribute of condition.attributes) {
@@ -1095,6 +1206,7 @@ function buildRansackConditionWhere({condition, query}) {
 }
 
 /**
+ * Runs build ransack attribute where.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
@@ -1128,6 +1240,7 @@ function buildRansackAttributeWhere({attribute, condition, query}) {
 }
 
 /**
+ * Runs build ransack attribute hash.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
@@ -1150,13 +1263,16 @@ function buildRansackAttributeHash({attribute, condition}) {
 }
 
 /**
+ * Runs build nested ransack hash.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {?} args.value - Final value.
  * @returns {Record<string, ?>} - Nested hash suitable for query where nodes.
  */
 function buildNestedRansackHash({attribute, value}) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Hash.
+ * @type {Record<string, ?>} */
   let hash = {[attribute.attributeName]: value}
 
   for (let index = attribute.path.length - 1; index >= 0; index -= 1) {
@@ -1167,6 +1283,7 @@ function buildNestedRansackHash({attribute, value}) {
 }
 
 /**
+ * Runs build nested ransack tuple hash.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {"gt" | "gteq" | "lt" | "lteq" | "like"} args.operator - Tuple operator.
@@ -1174,7 +1291,9 @@ function buildNestedRansackHash({attribute, value}) {
  * @returns {Record<string, ?>} - Nested tuple hash suitable for query.where.
  */
 function buildNestedRansackTupleHash({attribute, operator, value}) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Hash.
+ * @type {Record<string, ?>} */
   let hash = {
     [attribute.attributeName]: [[attribute.attributeName, operator, value]]
   }
@@ -1187,6 +1306,7 @@ function buildNestedRansackTupleHash({attribute, operator, value}) {
 }
 
 /**
+ * Runs ransack tuple operator.
  * @param {import("../../utils/ransack.js").RansackPredicate} predicate - Ransack predicate.
  * @returns {"gt" | "gteq" | "lt" | "lteq" | "like"} - Query tuple operator.
  */
@@ -1199,6 +1319,7 @@ function ransackTupleOperator(predicate) {
 }
 
 /**
+ * Runs ransack tuple value.
  * @param {import("../../utils/ransack.js").RansackCondition} condition - Ransack condition.
  * @returns {?} - Query tuple value.
  */
@@ -1211,6 +1332,7 @@ function ransackTupleValue(condition) {
 }
 
 /**
+ * Runs get relationship by name.
  * @param {typeof import("../record/index.js").default} modelClass - Model class.
  * @param {string} relationshipName - Relationship name.
  * @returns {import("../record/relationships/base.js").default | undefined} - The relationship.
@@ -1220,6 +1342,7 @@ function getRelationshipByName(modelClass, relationshipName) {
 }
 
 /**
+ * Runs resolve column name.
  * @param {typeof import("../record/index.js").default} modelClass - Model class.
  * @param {string} key - Attribute or column name.
  * @returns {string | undefined} - The resolved column name.
@@ -1236,15 +1359,20 @@ function resolveColumnName(modelClass, key) {
 }
 
 /**
+ * Runs split where hash.
  * @param {object} args - Options.
  * @param {Record<string, ?>} args.hash - Where hash.
  * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
  * @returns {{resolvedHash: Record<string, ?>, fallbackHash: Record<string, ?>}} - Split hashes.
  */
 function splitWhereHash({hash, modelClass}) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Resolved hash.
+ * @type {Record<string, ?>} */
   const resolvedHash = {}
-  /** @type {Record<string, ?>} */
+  /**
+ * Fallback hash.
+ * @type {Record<string, ?>} */
   const fallbackHash = {}
 
   for (const key in hash) {
@@ -1293,13 +1421,16 @@ function splitWhereHash({hash, modelClass}) {
 }
 
 /**
+ * Runs build join object from where hash.
  * @param {object} args - Options.
  * @param {Record<string, ?>} args.hash - Where hash.
  * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
  * @returns {Record<string, ?>} - Join object.
  */
 function buildJoinObjectFromWhereHash({hash, modelClass}) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Join object.
+ * @type {Record<string, ?>} */
   const joinObject = {}
 
   for (const key in hash) {
@@ -1328,6 +1459,7 @@ function buildJoinObjectFromWhereHash({hash, modelClass}) {
 const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like", ">", ">=", "<", "<="])
 
 /**
+ * Runs normalize relationship where operator.
  * @param {string} operator - Raw relationship where operator.
  * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} - Normalized operator.
  */
@@ -1339,12 +1471,15 @@ function normalizeRelationshipWhereOperator(operator) {
     ">=": "gteq"
   }
 
-  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
-    operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  return /** Documents this API. @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+    operatorAliases[/**
+ * Documents this API.
+ * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   )
 }
 
 /**
+ * Runs is relationship where operator tuple.
  * @param {?} tupleValue - Candidate tuple.
  * @returns {boolean} - Whether this is a relationship where tuple.
  */
@@ -1359,6 +1494,7 @@ function isRelationshipWhereOperatorTuple(tupleValue) {
 }
 
 /**
+ * Runs normalize relationship where operator tuples.
  * @param {?} value - Candidate value.
  * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
  */
@@ -1367,12 +1503,18 @@ function normalizeRelationshipWhereOperatorTuples(value) {
     throw new Error(`Invalid relationship where tuple container type: ${typeof value}`)
   }
 
-  /** @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
+  /**
+ * Normalized.
+ * @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
   const normalized = []
-    /** @param {?} conditionValue - Candidate nested condition. */
+    /**
+ * Add condition.
+ * @param {?} conditionValue - Candidate nested condition. */
     const addCondition = (conditionValue) => {
       if (isRelationshipWhereOperatorTuple(conditionValue)) {
-        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
+        const tuple = /**
+ * Documents this API.
+ * @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
         const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
@@ -1394,7 +1536,9 @@ function normalizeRelationshipWhereOperatorTuples(value) {
       throw new Error("Relationship where conditions must be tuples")
     }
 
-    /** @type {Array<?>} */ (conditionValue).forEach((nestedConditionValue) => {
+    /**
+ * Documents this API.
+ * @type {Array<?>} */ (conditionValue).forEach((nestedConditionValue) => {
       addCondition(nestedConditionValue)
     })
   }
@@ -1409,6 +1553,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
 }
 
 /**
+ * Runs has relationship where operator tuples.
  * @param {?} value - Candidate relationship where value.
  * @returns {boolean} - Whether value can be normalized to relationship tuples.
  */

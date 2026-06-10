@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs rest args error.
  * @param {object} restArgs - Rest args.
  * @returns {void} - No return value.
  */

@@ -3,6 +3,7 @@
 import QueryBase from "./base.js"
 
 /**
+ * CreateIndexBaseArgsType type.
  * @typedef {object} CreateIndexBaseArgsType
  * @property {Array<string | import("./../table-data/table-column.js").default>} columns - Columns to include in the index.
  * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
@@ -14,6 +15,7 @@ import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   /**
+ * Runs constructor.
    * @param {CreateIndexBaseArgsType} args - Options object.
    */
   constructor({columns, driver, ifNotExists, name, unique, tableName}) {
@@ -52,6 +54,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
   }
 
   /**
+ * Runs to sqls.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {

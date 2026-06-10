@@ -2,17 +2,25 @@
 
 import {AsyncLocalStorage} from "node:async_hooks"
 
-/** @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
+/**
+ * Documents this API.
+ * @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
 let asyncLocalStorage
 
-/** @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
-const trackedStackGlobal = /** @type {?} */ (globalThis)
+/**
+ * Tracked stack global.
+ * @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
+const trackedStackGlobal = /**
+ * Documents this API.
+ * @type {?} */ (globalThis)
 
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
 }
 
-/** @param {Error} error - Error to annotate with a tracked stack. */
+/**
+ * Runs add tracked stack to error.
+ * @param {Error} error - Error to annotate with a tracked stack. */
 function addTrackedStackToError(error) {
   // Not supported
   if (!asyncLocalStorage) return
@@ -31,23 +39,32 @@ function addTrackedStackToError(error) {
 }
 
 /**
+ * Runs with tracked stack.
  *
  * @param {(() => Promise<?>) | string} arg1 - Arg1.
  * @param {(() => Promise<?>) | Error} [arg2] - Arg2.
  * @returns {Promise<?>} - Resolves with the callback result.
  */
 async function withTrackedStack(arg1, arg2) {
-  /** @type {() => Promise<?>} */
+  /**
+ * Documents this API.
+ * @type {() => Promise<?>} */
   let callback
 
-  /** @type {string} */
+  /**
+ * Documents this API.
+ * @type {string} */
   let stack
 
   if (typeof arg2 == "function" && typeof arg1 == "string") {
-    callback = /** @type {() => Promise<?>} */ (arg2)
+    callback = /**
+ * Documents this API.
+ * @type {() => Promise<?>} */ (arg2)
     stack = arg1
   } else {
-    callback = /** @type {() => Promise<?>} */ (arg1)
+    callback = /**
+ * Documents this API.
+ * @type {() => Promise<?>} */ (arg1)
     stack = Error().stack || ""
   }
 

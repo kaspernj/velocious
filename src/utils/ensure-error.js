@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs ensure error.
  * @param {?} error - Error instance.
  * @returns {Error} - The error.
  */

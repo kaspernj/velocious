@@ -5,18 +5,22 @@ import runJobPayload from "./job-runner.js"
 let finishing = false
 
 /**
+ * Runs is job message.
  * @param {?} message - IPC message.
  * @returns {message is {type: "job", payload: import("./types.js").BackgroundJobPayload}} - Whether this is a job message.
  */
 function isJobMessage(message) {
   if (!message || typeof message !== "object") return false
 
-  const messageRecord = /** @type {{type?: ?, payload?: ?}} */ (message)
+  const messageRecord = /**
+ * Documents this API.
+ * @type {{type?: ?, payload?: ?}} */ (message)
 
   return messageRecord.type === "job" && Object.hasOwn(messageRecord, "payload")
 }
 
 /**
+ * Runs finish.
  * @param {number} exitCode - Process exit code.
  * @returns {void}
  */
@@ -32,6 +36,7 @@ function finish(exitCode) {
 }
 
 /**
+ * Runs report job finished.
  * @returns {void}
  */
 function reportJobFinished() {
@@ -39,6 +44,7 @@ function reportJobFinished() {
 }
 
 /**
+ * Runs run job message.
  * @param {?} message - IPC message.
  * @returns {Promise<void>} - Resolves after the payload has run.
  */
@@ -51,6 +57,7 @@ async function runJobMessage(message) {
 }
 
 /**
+ * Runs handle job message.
  * @param {?} message - IPC message.
  * @returns {Promise<void>} - Resolves after completion is reported.
  */

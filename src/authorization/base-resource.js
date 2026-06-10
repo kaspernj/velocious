@@ -2,10 +2,13 @@
 
 /** Base class for authorization resources defining abilities for a model. */
 export default class AuthorizationBaseResource {
-  /** @type {typeof import("../database/record/index.js").default | undefined} */
+  /**
+ * Model class.
+ * @type {typeof import("../database/record/index.js").default | undefined} */
   static ModelClass = undefined
 
   /**
+ * Runs constructor.
    * @param {object} args - Resource args.
    * @param {import("./ability.js").default} [args.ability] - Ability instance.
    * @param {Record<string, ?>} [args.context] - Ability context.
@@ -18,6 +21,7 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+ * Runs model class.
    * @returns {typeof import("../database/record/index.js").default | undefined} - Model class handled by this resource.
    */
   static modelClass() {
@@ -25,6 +29,7 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+ * Runs can.
    * @param {string | string[]} actions - Ability action(s).
    * @param {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} [conditions] - Conditions.
    * @returns {void} - No return value.
@@ -35,6 +40,7 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+ * Runs cannot.
    * @param {string | string[]} actions - Ability action(s).
    * @param {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} [conditions] - Conditions.
    * @returns {void} - No return value.
@@ -45,6 +51,7 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+ * Runs required ability.
    * @returns {import("./ability.js").default} - Ability instance.
    */
   requiredAbility() {
@@ -56,10 +63,13 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+ * Runs required model class.
    * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
    */
   requiredModelClass() {
-    const modelClass = /** @type {typeof AuthorizationBaseResource} */ (this.constructor).modelClass()
+    const modelClass = /**
+ * Documents this API.
+ * @type {typeof AuthorizationBaseResource} */ (this.constructor).modelClass()
 
     if (!modelClass) {
       throw new Error(`${this.constructor.name} must define static ModelClass before calling ability helpers.`)
@@ -69,6 +79,7 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+ * Runs assert resource conditions signature.
    * @param {object} args - Signature args.
    * @param {?} args.conditions - Conditions value.
    * @param {"can" | "cannot"} args.methodName - Method name.
@@ -80,32 +91,44 @@ export default class AuthorizationBaseResource {
     }
   }
 
-  /** @returns {Record<string, ?>} - Ability context. */
+  /**
+ * Runs get context.
+ * @returns {Record<string, ?>} - Ability context. */
   getContext() {
     return this.context
   }
 
-  /** @returns {Record<string, ?>} - Ability locals. */
+  /**
+ * Runs get locals.
+ * @returns {Record<string, ?>} - Ability locals. */
   getLocals() {
     return this.locals
   }
 
-  /** @returns {?} - Current user from context. */
+  /**
+ * Runs current user.
+ * @returns {?} - Current user from context. */
   currentUser() {
     return this.context.currentUser
   }
 
-  /** @returns {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default | undefined} - Request from context. */
+  /**
+ * Runs request.
+ * @returns {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default | undefined} - Request from context. */
   request() {
     return this.context.request
   }
 
-  /** @returns {Record<string, ?> | undefined} - Params from context. */
+  /**
+ * Runs params.
+ * @returns {Record<string, ?> | undefined} - Params from context. */
   params() {
     return this.context.params
   }
 
-  /** @returns {void} - Implement in subclasses to define abilities. */
+  /**
+ * Runs abilities.
+ * @returns {void} - Implement in subclasses to define abilities. */
   abilities() {
     // No-op by default.
   }

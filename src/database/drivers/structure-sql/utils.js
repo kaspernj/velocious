@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Documents this API.
  * @param {string} statement - Statement.
  * @returns {string} - SQL string.
  */
@@ -15,6 +16,7 @@ export function normalizeSqlStatement(statement) {
 }
 
 /**
+ * Documents this API.
  * @param {object} args - Options object.
  * @param {import("../base.js").default} args.db - Database connection.
  * @param {string} args.objectName - Object name.

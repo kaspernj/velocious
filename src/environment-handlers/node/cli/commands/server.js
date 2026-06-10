@@ -2,12 +2,14 @@ import Application from "../../../../application.js"
 import BaseCommand from "../../../../cli/base-command.js"
 
 /**
+ * SignalProcess type.
  * @typedef {object} SignalProcess
  * @property {(event: "SIGINT" | "SIGTERM", listener: () => void) => SignalProcess} once - Register one signal listener.
  * @property {(event: "SIGINT" | "SIGTERM", listener: () => void) => SignalProcess} removeListener - Remove one signal listener.
  */
 
 /**
+ * SignalShutdownApplication type.
  * @typedef {object} SignalShutdownApplication
  * @property {() => Promise<void>} stop - Stop the application gracefully.
  * @property {() => Promise<void>} wait - Wait until the application closes.
@@ -26,7 +28,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
     let finished = false
     let stopping = false
 
-    /** @returns {void} - Remove installed signal handlers. */
+    /**
+ * Cleanup.
+ * @returns {void} - Remove installed signal handlers. */
     const cleanup = () => {
       processObject.removeListener("SIGINT", onSignal)
       processObject.removeListener("SIGTERM", onSignal)
@@ -50,7 +54,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
       }
     }
 
-    /** @returns {Promise<void>} - Stops the application once. */
+    /**
+ * Stop application.
+ * @returns {Promise<void>} - Stops the application once. */
     const stopApplication = async () => {
       if (stopping || finished) return
 
@@ -63,7 +69,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
       }
     }
 
-    /** @returns {void} - Handles one shutdown signal. */
+    /**
+ * On signal.
+ * @returns {void} - Handles one shutdown signal. */
     const onSignal = () => {
       void stopApplication()
     }
@@ -76,6 +84,7 @@ export function waitForApplicationWithSignalShutdown({application, processObject
 }
 
 /**
+ * Runs first configured value.
  * @template T
  * @param {...(T | undefined)} values - Candidate values in priority order.
  * @returns {T | undefined} - First configured value.
@@ -85,6 +94,7 @@ function firstConfiguredValue(...values) {
 }
 
 /**
+ * Runs http server workers from arg.
  * @param {string | number | boolean | undefined} workersArg - Worker count argument.
  * @returns {number | undefined} - Normalized worker count.
  */
@@ -100,6 +110,7 @@ function httpServerWorkersFromArg(workersArg) {
 }
 
 /**
+ * Documents this API.
  * @param {Record<string, string | number | boolean | undefined>} parsedProcessArgs - Parsed CLI args.
  * @param {import("../../../../configuration-types.js").HttpServerConfiguration} [defaults] - Default HTTP server config.
  * @returns {{host: string, port: number, workers?: number}} - HTTP server config.
@@ -114,7 +125,9 @@ export function httpServerConfigFromParsedArgs(parsedProcessArgs = {}, defaults 
 }
 
 export default class VelociousCliCommandsServer extends BaseCommand{
-  /** @returns {Promise<void>} - Starts the HTTP server and waits until it stops. */
+  /**
+ * Runs execute.
+ * @returns {Promise<void>} - Starts the HTTP server and waits until it stops. */
   async execute() {
     const parsedProcessArgs = this.args?.parsedProcessArgs || {}
     const configuration = this.getConfiguration()

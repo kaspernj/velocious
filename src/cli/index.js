@@ -2,6 +2,7 @@
 
 export default class VelociousCli {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration instance.
    * @param {string} [args.directory] - Directory path.
@@ -22,6 +23,7 @@ export default class VelociousCli {
   }
 
   /**
+ * Runs execute.
    * @returns {Promise<?>} - Resolves with the final command result.
    */
   async execute() {
@@ -44,6 +46,7 @@ export default class VelociousCli {
   }
 
   /**
+ * Runs execute command.
    * @param {string[]} processArgs - Process args for a single command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -76,15 +79,20 @@ export default class VelociousCli {
   }
 
   /**
+ * Runs command groups.
    * @returns {Promise<string[][]>} - Command groups with process args for each command.
    */
   async commandGroups() {
     const processArgs = this.args.processArgs || []
     const commands = await this.environmentHandler.findCommands()
     const commandNames = new Set(commands.map((command) => command.name))
-    /** @type {string[][]} */
+    /**
+ * Groups.
+ * @type {string[][]} */
     const groups = []
-    /** @type {string[]} */
+    /**
+ * Current group.
+ * @type {string[]} */
     let currentGroup = []
 
     for (const processArg of processArgs) {
@@ -114,10 +122,14 @@ export default class VelociousCli {
     return groups
   }
 
-  /** @returns {import("../configuration.js").default} configuration */
+  /**
+ * Runs get configuration.
+ * @returns {import("../configuration.js").default} configuration */
   getConfiguration() { return this.configuration }
 
-  /** @returns {boolean} - Whether the current async context already has database connections. */
+  /**
+ * Runs has current database connections.
+ * @returns {boolean} - Whether the current async context already has database connections. */
   hasCurrentDatabaseConnections() {
     try {
       return Object.keys(this.getConfiguration().getCurrentConnections()).length > 0
@@ -128,7 +140,9 @@ export default class VelociousCli {
     }
   }
 
-  /** @returns {boolean} - Whether testing.  */
+  /**
+ * Runs get testing.
+ * @returns {boolean} - Whether testing.  */
   getTesting() {
     return this.args.testing || false
   }

@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * DropDatabaseArgsType type.
  * @typedef {object} DropDatabaseArgsType
  * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
  * @property {string} databaseName - Name of the database to drop.
@@ -11,6 +12,7 @@ import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryDropDatabaseBase extends QueryBase {
   /**
+ * Runs constructor.
    * @param {DropDatabaseArgsType} args - Options object.
    */
   constructor({driver, databaseName, ifExists}) {
@@ -20,6 +22,7 @@ export default class VelociousDatabaseQueryDropDatabaseBase extends QueryBase {
   }
 
   /**
+ * Runs to sql.
    * @returns {string[]} - SQL statements.
    */
   toSql() {

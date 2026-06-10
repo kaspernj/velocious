@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * WithCountEntry type.
  * @typedef {Object} WithCountEntry
  * @property {string} attributeName - Attribute to set on each parent record holding the count.
  * @property {string} relationshipName - Has-many relationship whose rows are counted.
@@ -8,6 +9,7 @@
  */
 
 /**
+ * Documents this API.
  * @typedef {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} WithCountSpec
  */
 
@@ -44,7 +46,9 @@ export function normalizeWithCount(spec) {
   }
 
   if (typeof spec === "object") {
-    /** @type {WithCountEntry[]} */
+    /**
+ * Entries.
+ * @type {WithCountEntry[]} */
     const entries = []
 
     for (const [key, value] of Object.entries(spec)) {
@@ -58,7 +62,9 @@ export function normalizeWithCount(spec) {
       }
 
       if (typeof value === "object" && value !== null) {
-        /** @type {{relationship?: string, where?: Record<string, ?>}} */
+        /**
+ * Options.
+ * @type {{relationship?: string, where?: Record<string, ?>}} */
         const options = value
         entries.push({
           attributeName: key,
@@ -78,6 +84,7 @@ export function normalizeWithCount(spec) {
 }
 
 /**
+ * Runs entry from name.
  * @param {string} name - Relationship name (attribute name is derived by appending "Count").
  * @returns {WithCountEntry}
  */
@@ -105,18 +112,24 @@ export async function runWithCount({models, modelClass, entries}) {
   if (models.length === 0 || entries.length === 0) return
 
   const primaryKey = modelClass.primaryKey()
-  const parentIds = models.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
+  const parentIds = models.map((model) => /**
+ * Documents this API.
+ * @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     const counts = await countForEntry({entries, entry, modelClass, parentIds})
 
     for (const model of models) {
-      const modelPrimaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
+      const modelPrimaryKeyValue = /**
+ * Documents this API.
+ * @type {string | number} */ (model.readColumn(primaryKey))
       // Tolerate driver differences in numeric return types: SQLite
       // returns integers as JS numbers, but MySQL's raw driver can
       // return count primary keys as strings. Try both.
       const resolvedCount = counts.has(modelPrimaryKeyValue)
-        ? /** @type {number} */ (counts.get(modelPrimaryKeyValue))
+        ? /**
+ * Documents this API.
+ * @type {number} */ (counts.get(modelPrimaryKeyValue))
         : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
 
       // Counts go on the record's dedicated association-count map,
@@ -129,6 +142,7 @@ export async function runWithCount({models, modelClass, entries}) {
 }
 
 /**
+ * Runs count for entry.
  * @param {object} args - Options.
  * @param {WithCountEntry[]} args.entries - All entries, used for error context only.
  * @param {WithCountEntry} args.entry - Entry being evaluated.
@@ -156,7 +170,9 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   }
 
   const foreignKey = relationship.getForeignKey()
-  /** @type {Record<string, ?>} */
+  /**
+ * Where conditions.
+ * @type {Record<string, ?>} */
   const whereConditions = {[foreignKey]: parentIds}
 
   if (relationship.getPolymorphic && relationship.getPolymorphic()) {
@@ -182,15 +198,21 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   countQuery.select(`${quotedTable}.${quotedFk} AS parent_id`)
   countQuery.select("COUNT(*) AS count_value")
 
-  const rows = /** @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
+  const rows = /**
+ * Documents this API.
+ * @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
     await countQuery._executeQuery()
   )
 
-  /** @type {Map<string | number, number>} */
+  /**
+ * Counts.
+ * @type {Map<string | number, number>} */
   const counts = new Map()
 
   for (const row of rows) {
-    const parentId = /** @type {string | number} */ (row.parent_id)
+    const parentId = /**
+ * Documents this API.
+ * @type {string | number} */ (row.parent_id)
     const countValue = Number(row.count_value) || 0
     counts.set(parentId, countValue)
   }

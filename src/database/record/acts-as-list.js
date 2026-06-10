@@ -1,13 +1,16 @@
 // @ts-check
 
-/** @file Registers gap-less positional list callbacks on a model class. */
+/**
+ * Documents this API. @file Registers gap-less positional list callbacks on a model class. */
 
 import * as inflection from "inflection"
 
-/** @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks. */
+/**
+ * Acts as list shifting. @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks. */
 const ACTS_AS_LIST_SHIFTING = Symbol("actsAsListShifting")
 
 /**
+ * Runs set shifting flag.
  * @param {import("./index.js").default} record - Model instance.
  * @param {boolean} value - Flag value.
  */
@@ -17,6 +20,7 @@ function setShiftingFlag(record, value) {
 }
 
 /**
+ * Runs is shifting.
  * @param {import("./index.js").default} record - Model instance.
  * @returns {boolean}
  */
@@ -62,17 +66,27 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 
     const posColumn = inflection.underscore(positionColumn)
     const scopeCol = inflection.underscore(scope)
-    const rawAttributes = /** @type {Record<string, ?>} */ (record._attributes || {})
-    const changes = /** @type {Record<string, ?>} */ (record._changes || {})
+    const rawAttributes = /**
+ * Documents this API. @type {Record<string, ?>} */ (record._attributes || {})
+    const changes = /**
+ * Documents this API. @type {Record<string, ?>} */ (record._changes || {})
     const posChanged = posColumn in changes
     const scopeChanged = scopeCol in changes
 
     if (!posChanged && !scopeChanged) return
 
-    const oldPosition = posChanged ? /** @type {number} */ (rawAttributes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
-    const newPosition = posChanged ? /** @type {number} */ (changes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
-    const oldScopeValue = scopeChanged ? /** @type {number} */ (rawAttributes[scopeCol]) : /** @type {number} */ (record.readAttribute(scope))
-    const newScopeValue = scopeChanged ? /** @type {number} */ (changes[scopeCol]) : /** @type {number} */ (record.readAttribute(scope))
+    const oldPosition = posChanged ? /**
+ * Documents this API. @type {number} */ (rawAttributes[posColumn]) : /**
+ * Documents this API. @type {number} */ (record.readAttribute(positionColumn))
+    const newPosition = posChanged ? /**
+ * Documents this API. @type {number} */ (changes[posColumn]) : /**
+ * Documents this API. @type {number} */ (record.readAttribute(positionColumn))
+    const oldScopeValue = scopeChanged ? /**
+ * Documents this API. @type {number} */ (rawAttributes[scopeCol]) : /**
+ * Documents this API. @type {number} */ (record.readAttribute(scope))
+    const newScopeValue = scopeChanged ? /**
+ * Documents this API. @type {number} */ (changes[scopeCol]) : /**
+ * Documents this API. @type {number} */ (record.readAttribute(scope))
 
     if (oldPosition == null || newPosition == null) return
     if (newPosition === oldPosition && newScopeValue === oldScopeValue) return
@@ -135,7 +149,8 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
  * @returns {Promise<void>}
  */
 async function shiftPositionsUp({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+ * Documents this API. @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
@@ -192,7 +207,8 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
  * @returns {Promise<void>}
  */
 async function shiftPositionsDown({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+ * Documents this API. @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
@@ -245,7 +261,8 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
  * @returns {Promise<number>} - Highest position in scope, or 0 when scope is empty.
  */
 async function highestPositionInScope({record, positionColumn, scope, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+ * Documents this API. @type {typeof import("./index.js").default} */ (record.constructor)
   const scopeUnderscore = inflection.underscore(scope)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
@@ -276,9 +293,11 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
 function resolveScopeValue(record, scope) {
   const attrValue = record.readAttribute(scope)
 
-  if (attrValue != null) return /** @type {string | number} */ (attrValue)
+  if (attrValue != null) return /**
+ * Documents this API. @type {string | number} */ (attrValue)
 
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+ * Documents this API. @type {typeof import("./index.js").default} */ (record.constructor)
   const relationships = modelClass.getRelationshipsMap()
 
   for (const relationshipName in relationships) {
@@ -313,7 +332,8 @@ function resolveScopeValue(record, scope) {
  * @returns {Promise<void>}
  */
 async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+ * Documents this API. @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)

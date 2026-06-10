@@ -6,6 +6,7 @@ import BaseRoute from "./base-route.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
+ * Runs assign action and controller.
  * @param {Record<string, ?>} params - Route params object.
  * @param {string} name - Route name.
  * @returns {void} - No return value.
@@ -28,6 +29,7 @@ function assignActionAndController(params, name) {
 
 class VelociousRouteGetRoute extends BaseRoute {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -45,6 +47,7 @@ class VelociousRouteGetRoute extends BaseRoute {
   }
 
   /**
+ * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.

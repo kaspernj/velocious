@@ -5,6 +5,7 @@ import BaseColumn from "../base-column.js"
 
 export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.column - Column.
    * @param {import("../base.js").default} args.driver - Database driver instance.

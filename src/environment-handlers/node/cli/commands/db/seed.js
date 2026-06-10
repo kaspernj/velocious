@@ -4,10 +4,12 @@ import path from "node:path"
 import toImportSpecifier from "../../../../../utils/to-import-specifier.js"
 
 /**
+ * RunnerContext type.
  * @typedef {import("../cli-command-context.js").CliCommandContext} RunnerContext
  */
 
 /**
+ * Runs import runner function.
  * @param {string} filePath - Absolute path to script file.
  * @returns {Promise<(context: RunnerContext) => Promise<?>>} - The default-exported async function.
  */
@@ -24,7 +26,9 @@ async function importRunnerFunction(filePath) {
 
 /** Node command for running project database seeds from src/db/seed.js. */
 export default class DbSeed extends BaseCommand {
-  /** @returns {Promise<?>} - Resolves with the seed function result. */
+  /**
+ * Runs execute.
+ * @returns {Promise<?>} - Resolves with the seed function result. */
   async execute() {
     const configuration = this.getConfiguration()
 
@@ -42,7 +46,9 @@ export default class DbSeed extends BaseCommand {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves when runtime initialization is complete. */
+  /**
+ * Runs initialize runtime.
+ * @returns {Promise<void>} - Resolves when runtime initialization is complete. */
   async initializeRuntime() {
     const configuration = this.getConfiguration()
 
@@ -53,12 +59,16 @@ export default class DbSeed extends BaseCommand {
     }
   }
 
-  /** @returns {string} - Absolute path to src/db/seed.js. */
+  /**
+ * Runs seed file path.
+ * @returns {string} - Absolute path to src/db/seed.js. */
   seedFilePath() {
     return path.join(this.directory(), "src", "db", "seed.js")
   }
 
-  /** @returns {RunnerContext} - Runtime context passed to the script function. */
+  /**
+ * Runs build runner context.
+ * @returns {RunnerContext} - Runtime context passed to the script function. */
   buildRunnerContext() {
     return buildCliCommandContext(this, 1)
   }

@@ -2,12 +2,15 @@
 
 import useEnvSense from "env-sense/build/use-env-sense.js"
 
-/** @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+/**
+ * LoggingOutputPayload type.
+ * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 const {isBrowser} = useEnvSense()
 const isNodeRuntime = typeof process !== "undefined" && Boolean(process.versions?.node)
 
 /**
+ * Runs write to stream.
  * @param {import("node:stream").Writable | undefined} stream - Stream to write to.
  * @param {string} message - Message to write.
  * @returns {Promise<void>} - Resolves when complete.
@@ -25,7 +28,9 @@ function writeToStream(stream, message) {
 
 /** Logger stdout/stderr output. */
 export default class LoggerStdoutOutput {
-  /** @param {LoggingOutputPayload} payload - Log payload. */
+  /**
+ * Runs write.
+ * @param {LoggingOutputPayload} payload - Log payload. */
   async write({level, message}) {
     if (!isBrowser && isNodeRuntime) {
       if (level === "warn" || level === "error") {

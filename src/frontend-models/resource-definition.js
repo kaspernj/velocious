@@ -6,6 +6,7 @@ import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
 
 /**
+ * Documents this API.
  * @param {import("../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
  * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
  */
@@ -24,6 +25,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
 }
 
 /**
+ * Documents this API.
  * @param {?} value - Candidate resource definition.
  * @returns {value is typeof FrontendModelBaseResource} - Whether value is a resource class.
  */
@@ -32,6 +34,7 @@ export function frontendModelResourceDefinitionIsClass(value) {
 }
 
 /**
+ * Documents this API.
  * @param {?} resourceDefinition - Resource definition.
  * @returns {typeof FrontendModelBaseResource | null} - Resource class when definition is class-based.
  */
@@ -40,6 +43,7 @@ export function frontendModelResourceClassFromDefinition(resourceDefinition) {
 }
 
 /**
+ * Documents this API.
  * @param {?} resourceDefinition - Resource definition.
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} - Normalized resource configuration.
  */
@@ -50,11 +54,14 @@ export function frontendModelResourceConfigurationFromDefinition(resourceDefinit
 }
 
 /**
+ * Runs normalize frontend model resource configuration.
  * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} - Normalized resource configuration.
  */
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
-  const restArgs = /** @type {Record<string, ?>} */ ({...resourceConfiguration})
+  const restArgs = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ ({...resourceConfiguration})
 
   for (const key of [
     "abilities",
@@ -88,6 +95,7 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
 }
 
 /**
+ * Runs normalize frontend model resource abilities.
  * @param {string[] | undefined} abilities - Resource abilities config (camelCase action list).
  * @returns {Record<string, string>} - Normalized abilities config.
  */
@@ -110,7 +118,9 @@ function normalizeFrontendModelResourceAbilities(abilities) {
     }
   }
 
-  /** @type {Record<string, string>} */
+  /**
+ * Normalized.
+ * @type {Record<string, string>} */
   const normalized = {}
 
   if (abilities.includes("create")) normalized.create = "create"
@@ -124,7 +134,9 @@ function normalizeFrontendModelResourceAbilities(abilities) {
   return normalized
 }
 
-/** @returns {Record<string, string>} - Default CRUD ability map. */
+/**
+ * Runs default crud abilities.
+ * @returns {Record<string, string>} - Default CRUD ability map. */
 function defaultCrudAbilities() {
   return {
     create: "create",
@@ -136,6 +148,7 @@ function defaultCrudAbilities() {
 }
 
 /**
+ * Runs normalize frontend model resource commands.
  * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
  * @returns {{builtInCollectionCommands: Record<string, string>, builtInMemberCommands: Record<string, string>, collectionCommands: Record<string, string>, memberCommands: Record<string, string>}} - Normalized command configuration.
  */
@@ -174,6 +187,7 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
 }
 
 /**
+ * Runs normalize frontend model built in commands.
  * @param {object} args - Arguments.
  * @param {Record<string, string>} args.commandDefaults - Built-in default command names.
  * @param {string[] | undefined} args.commandsConfig - Built-in commands config (camelCase command type list).
@@ -189,7 +203,9 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
     throw new Error(`${modelName} configuration must use the array form. Object form is no longer supported.`)
   }
 
-  /** @type {Record<string, string>} */
+  /**
+ * Normalized commands.
+ * @type {Record<string, string>} */
   const normalizedCommands = {}
 
   for (const commandType of commandsConfig) {
@@ -210,6 +226,7 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
 }
 
 /**
+ * Runs normalize frontend model custom commands.
  * @param {object} args - Arguments.
  * @param {string[] | undefined} args.commandsConfig - Custom commands config (camelCase method-name list).
  * @param {string} args.modelName - Diagnostic model name.
@@ -224,7 +241,9 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
     throw new Error(`${modelName} configuration must use the array form. Object form is no longer supported.`)
   }
 
-  /** @type {Record<string, string>} */
+  /**
+ * Normalized commands.
+ * @type {Record<string, string>} */
   const normalizedCommands = {}
 
   for (const methodName of commandsConfig) {
@@ -242,6 +261,7 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
 }
 
 /**
+ * Documents this API.
  * @param {string} modelName - Model class name.
  * @param {?} resourceDefinition - Resource definition.
  * @returns {string} - Normalized resource path.
@@ -257,6 +277,7 @@ export function frontendModelResourcePath(modelName, resourceDefinition) {
 }
 
 /**
+ * Documents this API.
  * @param {object} args - Arguments.
  * @param {string} args.commandName - Command path segment.
  * @param {string} args.modelName - Model class name.
@@ -278,12 +299,14 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
 
     const validatedCommandName = validateFrontendModelResourceCommandName({
       commandName: configuredCommandName,
-      commandType: /** @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
+      commandType: /**
+ * Documents this API.
+ * @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
       modelName
     })
 
     if (commandName === validatedCommandName) {
-      return /** @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
+      return /** Documents this API. @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
     }
   }
 
@@ -291,6 +314,7 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
 }
 
 /**
+ * Documents this API.
  * @param {object} args - Arguments.
  * @param {import("../configuration-types.js").BackendProjectConfiguration[]} args.backendProjects - Backend projects to scan.
  * @param {string} args.currentPath - Request path without query.
@@ -359,6 +383,7 @@ export function frontendModelCustomCommandForPath({backendProjects, currentPath}
 }
 
 /**
+ * Runs normalize frontend model resource path for match.
  * @param {string} path - Path value.
  * @returns {string} - Normalized path with leading slash and no trailing slash.
  */

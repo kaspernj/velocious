@@ -7,6 +7,7 @@ import BackgroundJobsStatusReporter from "./status-reporter.js"
 const BEACON_READY_TIMEOUT_MS = 5000
 
 /**
+ * Runs report beacon ready error.
  * @param {import("../configuration.js").default} configuration - Configuration.
  * @param {?} error - Beacon readiness error.
  * @returns {void}
@@ -30,6 +31,7 @@ function reportBeaconReadyError(configuration, error) {
 }
 
 /**
+ * Runs connect beacon.
  * @param {import("../configuration.js").default} configuration - Configuration.
  * @returns {Promise<void>}
  */
@@ -46,6 +48,7 @@ async function connectBeacon(configuration) {
 }
 
 /**
+ * Runs run job payload.
  * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
  * @returns {Promise<void>} - Resolves when complete.
  */
@@ -60,7 +63,9 @@ export default async function runJobPayload(payload) {
   await registry.load()
   const JobClass = registry.getJobByName(payload.jobName)
   const jobInstance = new JobClass()
-  /** @type {(...args: Array<?>) => Promise<void>} */
+  /**
+ * Perform.
+ * @type {(...args: Array<?>) => Promise<void>} */
   const perform = jobInstance.perform
 
   try {

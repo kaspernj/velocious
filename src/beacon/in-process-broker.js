@@ -18,9 +18,13 @@
  *      `broadcastToChannel` ergonomics without running the daemon.
  */
 
-/** @typedef {{_receiveBroadcast: (message: import("./types.js").BeaconBroadcastMessage) => void}} InProcessPeer */
+/**
+ * Documents this API.
+ * @typedef {{_receiveBroadcast: (message: import("./types.js").BeaconBroadcastMessage) => void}} InProcessPeer */
 
-/** @type {Set<InProcessPeer>} */
+/**
+ * Peers.
+ * @type {Set<InProcessPeer>} */
 const peers = new Set()
 
 /**
@@ -59,6 +63,7 @@ export function publishToInProcessPeers(message) {
 }
 
 /**
+ * Documents this API.
  * @returns {number} - Current peer count. Exposed for diagnostics and tests.
  */
 export function getInProcessPeerCount() {

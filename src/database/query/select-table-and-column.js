@@ -4,6 +4,7 @@ import SelectBase from "./select-base.js"
 
 export default class VelociousDatabaseQuerySelectTableAndColumn extends SelectBase {
   /**
+ * Runs constructor.
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    */

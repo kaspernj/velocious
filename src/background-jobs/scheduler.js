@@ -21,9 +21,12 @@ const DURATION_MULTIPLIERS = {
   week: 7 * 24 * 60 * 60 * 1000,
   weeks: 7 * 24 * 60 * 60 * 1000
 }
-/** @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
+/**
+ * DurationUnit type.
+ * @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
 
 /**
+ * Documents this API.
  * @param {number | string} value - Duration value.
  * @param {string} fieldName - Field name for errors.
  * @returns {number} - Duration in milliseconds.
@@ -49,7 +52,9 @@ export function parseScheduledDuration(value, fieldName) {
   }
 
   const numericValue = Number(match[1])
-  const multiplier = DURATION_MULTIPLIERS[/** @type {DurationUnit} */ (match[2])]
+  const multiplier = DURATION_MULTIPLIERS[/**
+ * Documents this API.
+ * @type {DurationUnit} */ (match[2])]
 
   if (!multiplier) {
     throw new Error(`Invalid scheduled background job ${fieldName}: ${value}`)
@@ -61,6 +66,7 @@ export function parseScheduledDuration(value, fieldName) {
 /** Runs configured recurring background job schedules. */
 export default class BackgroundJobsScheduler {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {function({args: Array<?>, jobClass: typeof import("./job.js").default, jobKey: string, options: import("./types.js").BackgroundJobOptions}) : Promise<void>} args.enqueueJob - Enqueue callback.
@@ -69,15 +75,23 @@ export default class BackgroundJobsScheduler {
     this.configuration = configuration
     this.enqueueJob = enqueueJob
     this.logger = new Logger(this)
-    /** @type {Array<ReturnType<typeof setInterval>>} */
+    /**
+ * Documents this API.
+ * @type {Array<ReturnType<typeof setInterval>>} */
     this.intervalIds = []
-    /** @type {Array<ReturnType<typeof setTimeout>>} */
+    /**
+ * Documents this API.
+ * @type {Array<ReturnType<typeof setTimeout>>} */
     this.timeoutIds = []
-    /** @type {boolean} - True between stop() and the next start(); cron self-rescheduler checks this so a stop() during an in-flight enqueue doesn't immediately re-arm. */
+    /**
+ * Documents this API.
+ * @type {boolean} - True between stop() and the next start(); cron self-rescheduler checks this so a stop() during an in-flight enqueue doesn't immediately re-arm. */
     this.stopped = false
   }
 
-  /** @returns {Promise<void>} */
+  /**
+ * Runs start.
+ * @returns {Promise<void>} */
   async start() {
     this.stopped = false
 
@@ -98,7 +112,9 @@ export default class BackgroundJobsScheduler {
     }
   }
 
-  /** @returns {void} */
+  /**
+ * Runs stop.
+ * @returns {void} */
   stop() {
     this.stopped = true
 
@@ -115,6 +131,7 @@ export default class BackgroundJobsScheduler {
   }
 
   /**
+ * Runs schedule job.
    * @param {object} args - Options.
    * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration} args.jobConfiguration - Job configuration.
    * @param {string} args.jobKey - Job key.
@@ -143,13 +160,16 @@ export default class BackgroundJobsScheduler {
   }
 
   /**
+ * Runs schedule every job.
    * @param {object} args - Options.
    * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration} args.jobConfiguration - Job configuration.
    * @param {string} args.jobKey - Job key.
    * @returns {void}
    */
   scheduleEveryJob({jobConfiguration, jobKey}) {
-    const everyConfig = /** @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
+    const everyConfig = /**
+ * Documents this API.
+ * @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
     const {everyValue, firstInValue} = this.normalizeEvery(everyConfig)
     const intervalMs = parseScheduledDuration(everyValue, `${jobKey}.every`)
     const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.first_in`) : intervalMs
@@ -214,6 +234,7 @@ export default class BackgroundJobsScheduler {
   }
 
   /**
+ * Runs enqueue scheduled job.
    * @param {object} args - Options.
    * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration} args.jobConfiguration - Job configuration.
    * @param {string} args.jobKey - Job key.
@@ -233,6 +254,7 @@ export default class BackgroundJobsScheduler {
   }
 
   /**
+ * Runs normalize every.
    * @param {NonNullable<import("../configuration-types.js").ScheduledBackgroundJobConfiguration["every"]>} every - Every config (caller must guarantee not undefined).
    * @returns {{everyValue: number | string, firstInValue?: number | string}} - Normalized interval and first-run delay values.
    */

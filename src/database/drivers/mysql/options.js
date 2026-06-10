@@ -4,6 +4,7 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversMysqlOptions extends QueryParserOptions {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    */
@@ -20,6 +21,7 @@ export default class VelociousDatabaseDriversMysqlOptions extends QueryParserOpt
   }
 
   /**
+ * Runs quote.
    * @param {?} string - String.
    * @returns {number | string} - The quote.
    */

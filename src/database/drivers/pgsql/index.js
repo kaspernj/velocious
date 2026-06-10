@@ -41,7 +41,9 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     const args = this.getArgs()
     const forward = ["database", "host", "password", "port"]
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Connect args.
+ * @type {Record<string, ?>} */
     const connectArgs = {}
 
     for (const forwardValue of forward) {
@@ -60,6 +62,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs set connection checkout name.
    * @param {string | undefined} name - Human-readable name for this active checkout.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -73,13 +76,16 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     await super.setConnectionCheckoutName(name)
   }
 
-  /** @returns {Promise<void>} - Resolves when complete. */
+  /**
+ * Runs clear connection checkout name.
+ * @returns {Promise<void>} - Resolves when complete. */
   async clearConnectionCheckoutName() {
     await this.query("RESET application_name", {logName: "Clear Connection Checkout Name", processListComment: false})
     await super.clearConnectionCheckoutName()
   }
 
   /**
+ * Runs alter table sqls.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -91,6 +97,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs create database sql.
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifNotExists] - Whether if not exists.
@@ -104,6 +111,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs drop database sql.
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifExists] - Whether if exists.
@@ -117,6 +125,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs create index sqls.
    * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -128,6 +137,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs create table sql.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -153,6 +163,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs drop table sqls.
    * @param {string} tableName - Table name.
    * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
@@ -168,6 +179,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   primaryKeyType() { return "bigint" }
 
   /**
+ * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
@@ -191,6 +203,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
    */
@@ -199,6 +212,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
+ * Runs convert value.
    * @param {?} value - Value to use.
    * @returns {?} - The converted value.
    */
@@ -211,6 +225,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs escape.
    * @param {?} value - Value to use.
    * @returns {?} - The escape.
    */
@@ -224,6 +239,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs quote.
    * @param {?} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
@@ -235,6 +251,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs delete sql.
    * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -245,6 +262,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs insert sql.
    * @abstract
    * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
@@ -262,7 +280,9 @@ export default class VelociousDatabaseDriversPgsql extends Base{
       const tables = []
 
       for (const row of result) {
-        const table = new Table(this, /** @type {Record<string, string>} */ (row))
+        const table = new Table(this, /**
+ * Documents this API.
+ * @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }
@@ -288,6 +308,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs update sql.
    * @abstract
    * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
@@ -299,6 +320,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs upsert sql.
    * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -309,6 +331,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs structure sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
@@ -377,6 +400,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs try acquire advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
@@ -389,6 +413,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs release advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
@@ -401,6 +426,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+ * Runs is advisory lock held.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any session currently holds the lock.
    */

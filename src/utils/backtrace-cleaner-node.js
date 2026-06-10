@@ -3,6 +3,7 @@
 import BacktraceCleaner from "./backtrace-cleaner.js"
 
 /**
+ * Runs normalize path.
  * @param {string | undefined} value - Path or file URL.
  * @returns {string | undefined} - Normalized path.
  */
@@ -29,6 +30,7 @@ function normalizePath(value) {
 }
 
 /**
+ * Runs framework source directory.
  * @returns {string | undefined} - The Velocious source directory for Node runtimes.
  */
 function frameworkSourceDirectory() {
@@ -47,6 +49,7 @@ export const FRAMEWORK_SOURCE_DIRECTORY = frameworkSourceDirectory()
 
 export default class NodeBacktraceCleaner extends BacktraceCleaner {
   /**
+ * Runs get cleaned stack.
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
    * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
@@ -58,6 +61,7 @@ export default class NodeBacktraceCleaner extends BacktraceCleaner {
   }
 
   /**
+ * Runs get application source line.
    * @param {Error} error - Error instance.
    * @param {object} args - Options object.
    * @param {string} args.applicationDirectory - Application directory.
@@ -69,6 +73,7 @@ export default class NodeBacktraceCleaner extends BacktraceCleaner {
   }
 
   /**
+ * Runs constructor.
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
    * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.

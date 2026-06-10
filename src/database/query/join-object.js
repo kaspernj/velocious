@@ -5,12 +5,14 @@ import WhereHash from "./where-hash.js"
 import WhereNot from "./where-not.js"
 
 /**
+ * VelociousDatabaseQueryJoinObject class.
  * @typedef {{[key: string]: boolean | string | string[] | JoinObjectInput}} JoinObjectInput
  * @typedef {{[key: string]: boolean | JoinObject}} JoinObject
  */
 
 export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   /**
+ * Runs constructor.
    * @param {JoinObject} object - Object.
    * @param {string[]} [basePath] - Join base path relative to the root query.
    */
@@ -27,8 +29,12 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
       throw new Error(`Query has to be a ModelClassQuery but was a ${query.constructor.name}`)
     }
 
-    const modelQuery = /** @type {import("./model-class-query.js").default} */ (query)
-    const ModelClass = /** @type {typeof import("../record/index.js").default} */ (
+    const modelQuery = /**
+ * Documents this API.
+ * @type {import("./model-class-query.js").default} */ (query)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof import("../record/index.js").default} */ (
       this.basePath.length > 0 ? modelQuery._resolveModelClassForJoinPath(this.basePath) : modelQuery.modelClass
     )
 
@@ -36,6 +42,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
+ * Runs join object.
    * @param {JoinObject} join - Join.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string} sql - SQL string.
@@ -46,7 +53,9 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   joinObject(join, modelClass, sql, joinsCount, path) {
     const pretty = this.pretty
     const conn = this.getQuery().driver
-    const query = /** @type {import("./model-class-query.js").default} */ (this.getQuery())
+    const query = /**
+ * Documents this API.
+ * @type {import("./model-class-query.js").default} */ (this.getQuery())
 
     for (const joinKey in join) {
       const joinValue = join[joinKey]
@@ -100,6 +109,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
+ * Runs scope sql.
    * @param {object} args - Options object.
    * @param {import("../record/relationships/base.js").default} args.relationship - Relationship definition.
    * @param {import("./model-class-query.js").default} args.query - Model class query.
@@ -127,6 +137,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
+ * Runs scope sql for where.
    * @param {import("./where-base.js").default} where - Where.
    * @param {string} targetTableRef - Target table reference.
    * @returns {string} - Scope where SQL.

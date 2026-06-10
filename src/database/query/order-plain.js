@@ -4,6 +4,7 @@ import OrderBase from "./order-base.js"
 
 export default class VelociousDatabaseQueryOrderPlain extends OrderBase {
   /**
+ * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    * @param {string} plain - Plain.
    */

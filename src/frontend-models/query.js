@@ -6,6 +6,7 @@ import {isModelScopeDescriptor} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
 
 /**
+ * FrontendModelSearch type.
  * @typedef {object} FrontendModelSearch
  * @property {string} column - Attribute name to search.
  * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
@@ -13,15 +14,19 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {?} value - Search value.
  */
 /**
+ * FrontendModelTransportValue type.
  * @typedef {null | boolean | number | string | object} FrontendModelTransportValue
  */
 /**
+ * Documents this API.
  * @typedef {{attributeName: string, relationshipName: string, where?: Record<string, FrontendModelTransportValue>}} FrontendModelWithCountPayloadEntry
  */
 /**
+ * Documents this API.
  * @typedef {{modelName: string, actions: string[]}} FrontendModelAbilitiesPayloadEntry
  */
 /**
+ * FrontendModelProjectionOptions type.
  * @typedef {object} FrontendModelProjectionOptions
  * @property {Record<string, string[] | string> | string | string[]} [select] - Model-aware attribute select map or root-model shorthand.
  * @property {Record<string, string[] | string> | string | string[]} [selectsExtra] - Extra attributes to load in addition to the defaults, keyed by model name or root-model shorthand.
@@ -31,12 +36,15 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {string | Array<string | Record<string, FrontendModelTransportValue>> | Record<string, FrontendModelTransportValue>} [queryData] - Backend query data names/spec.
  */
 /**
+ * Documents this API.
  * @typedef {FrontendModelProjectionOptions & {query?: FrontendModelQuery<typeof import("./base.js").default>}} FrontendModelEventOptionsObject
  */
 /**
+ * FrontendModelEventOptions type.
  * @typedef {FrontendModelEventOptionsObject | FrontendModelQuery<typeof import("./base.js").default>} FrontendModelEventOptions
  */
 /**
+ * FrontendModelProjectionPayload type.
  * @typedef {object} FrontendModelProjectionPayload
  * @property {Record<string, string[]>} [select] - Normalized select map.
  * @property {Record<string, string[]>} [selectsExtra] - Normalized extra select map.
@@ -46,15 +54,18 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {FrontendModelTransportValue} [queryData] - Normalized queryData spec.
  */
 /**
+ * FrontendModelEventFilterPayload type.
  * @typedef {object} FrontendModelEventFilterPayload
  * @property {Record<string, FrontendModelTransportValue>} [joins] - Relationship joins needed for matching.
  * @property {FrontendModelSearch[]} [searches] - Search predicates needed for matching.
  * @property {Record<string, FrontendModelTransportValue>} [where] - Structured where predicates needed for matching.
  */
 /**
+ * Documents this API.
  * @typedef {FrontendModelEventFilterPayload & {key: string}} FrontendModelEventFilterPayloadEntry
  */
 /**
+ * FrontendModelEventOptionsPayload type.
  * @typedef {object} FrontendModelEventOptionsPayload
  * @property {string | null} eventFilterKey - Stable event filter key, or null when no filter is present.
  * @property {FrontendModelEventFilterPayload | null} eventFilterPayload - Normalized event filter payload, or null when unfiltered.
@@ -62,6 +73,7 @@ import isPlainObject from "../utils/plain-object.js"
  */
 
 /**
+ * Documents this API.
  * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord> | boolean | undefined | null} preload - Preload shorthand.
  * @returns {import("../database/query/index.js").NestedPreloadRecord} - Normalized preload.
  */
@@ -75,7 +87,9 @@ export function normalizePreload(preload) {
   }
 
   if (Array.isArray(preload)) {
-    /** @type {import("../database/query/index.js").NestedPreloadRecord} */
+    /**
+ * Normalized.
+ * @type {import("../database/query/index.js").NestedPreloadRecord} */
     const normalized = {}
 
     for (const entry of preload) {
@@ -99,7 +113,9 @@ export function normalizePreload(preload) {
     throw new Error(`Invalid preload type: ${typeof preload}`)
   }
 
-  /** @type {import("../database/query/index.js").NestedPreloadRecord} */
+  /**
+ * Normalized.
+ * @type {import("../database/query/index.js").NestedPreloadRecord} */
   const normalized = {}
 
   for (const [relationshipName, relationshipPreload] of Object.entries(preload)) {
@@ -160,7 +176,9 @@ function normalizeWithCountFrontend(spec) {
     if (value === false) continue
 
     if (isPlainObject(value)) {
-      const options = /** @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
+      const options = /**
+ * Documents this API.
+ * @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
       entries.push({
         attributeName: key,
         relationshipName: options.relationship || key,
@@ -210,7 +228,9 @@ function normalizeAbilitiesSpec(spec, rootModelClass) {
     throw new Error(`Invalid abilities spec: ${typeof spec}`)
   }
 
-  /** @type {Array<{modelName: string, actions: string[]}>} */
+  /**
+ * Entries.
+ * @type {Array<{modelName: string, actions: string[]}>} */
   const entries = []
 
   for (const [modelName, actions] of Object.entries(spec)) {
@@ -233,6 +253,7 @@ function normalizeAbilitiesSpec(spec, rootModelClass) {
 }
 
 /**
+ * Runs merge preload record.
  * @param {import("../database/query/index.js").NestedPreloadRecord} targetPreload - Existing preload data.
  * @param {import("../database/query/index.js").NestedPreloadRecord} incomingPreload - New preload data.
  * @returns {void}
@@ -259,8 +280,12 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
 
     if (isPlainObject(existingValue)) {
       mergePreloadRecord(
-        /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
-        /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
+        /**
+ * Documents this API.
+ * @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
+        /**
+ * Documents this API.
+ * @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
       )
       continue
     }
@@ -270,6 +295,7 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
 }
 
 /**
+ * Runs normalize select.
  * @param {?} select - Select payload.
  * @param {string | null} [rootModelName] - Optional root model name for shorthand select payloads.
  * @returns {Record<string, string[]>} - Normalized model-name keyed select record.
@@ -299,7 +325,9 @@ function normalizeSelect(select, rootModelName = null) {
     throw new Error(`Invalid select type: ${typeof select}`)
   }
 
-  /** @type {Record<string, string[]>} */
+  /**
+ * Normalized.
+ * @type {Record<string, string[]>} */
   const normalized = {}
 
   for (const [modelName, selection] of Object.entries(select)) {
@@ -325,6 +353,7 @@ function normalizeSelect(select, rootModelName = null) {
 }
 
 /**
+ * Runs merge select record.
  * @param {Record<string, string[]>} targetSelect - Existing select record.
  * @param {Record<string, string[]>} incomingSelect - Incoming select record.
  * @returns {void}
@@ -338,6 +367,7 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
 }
 
 /**
+ * Documents this API.
  * @param {string} operator - Raw search operator.
  * @returns {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} - Normalized operator.
  */
@@ -348,17 +378,20 @@ export function normalizeSearchOperator(operator) {
     ">": "gt",
     ">=": "gteq"
   }
-  const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  const normalizedOperator = operatorAliases[/**
+ * Documents this API.
+ * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   if (!supportedOperators.has(normalizedOperator)) {
     throw new Error(`search operator must be one of: eq, like, notEq, gt, gteq, lt, lteq, >, >=, <, <= (got: ${operator})`)
   }
 
-  return /** @type {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
+  return /** Documents this API. @type {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
 }
 
 /**
+ * Runs merge join record.
  * @param {Record<string, ?>} targetJoins - Existing join record.
  * @param {Record<string, ?>} incomingJoins - Incoming join record.
  * @returns {void}
@@ -393,6 +426,7 @@ function mergeJoinRecord(targetJoins, incomingJoins) {
 }
 
 /**
+ * Documents this API.
  * @param {?} joins - Join payload.
  * @returns {Record<string, ?>} - Normalized relationship descriptor joins.
  */
@@ -400,7 +434,9 @@ export function normalizeJoins(joins) {
   if (!joins) return {}
 
   if (Array.isArray(joins)) {
-    /** @type {Record<string, ?>} */
+    /**
+ * Normalized.
+ * @type {Record<string, ?>} */
     const normalized = {}
 
     for (const joinEntry of joins) {
@@ -418,7 +454,9 @@ export function normalizeJoins(joins) {
     throw new Error(`Invalid joins type: ${typeof joins}`)
   }
 
-  /** @type {Record<string, ?>} */
+  /**
+ * Normalized.
+ * @type {Record<string, ?>} */
   const normalized = {}
 
   for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
@@ -439,6 +477,7 @@ export function normalizeJoins(joins) {
 }
 
 /**
+ * FrontendModelSort type.
  * @typedef {object} FrontendModelSort
  * @property {string} column - Attribute name to sort by.
  * @property {"asc" | "desc"} direction - Sort direction.
@@ -446,18 +485,21 @@ export function normalizeJoins(joins) {
  */
 
 /**
+ * FrontendModelGroup type.
  * @typedef {object} FrontendModelGroup
  * @property {string} column - Attribute name to group by.
  * @property {string[]} path - Relationship path from root model.
  */
 
 /**
+ * FrontendModelPluck type.
  * @typedef {object} FrontendModelPluck
  * @property {string} column - Attribute name to pluck.
  * @property {string[]} path - Relationship path from root model.
  */
 
 /**
+ * Runs normalize sort direction.
  * @param {?} direction - Direction value.
  * @returns {"asc" | "desc"} - Normalized direction.
  */
@@ -585,7 +627,9 @@ function parseSortTuple(sortValue, path = []) {
  * @returns {FrontendModelSort[]} - Normalized sort descriptors.
  */
 function normalizeSortObject(sortValue, path) {
-  /** @type {FrontendModelSort[]} */
+  /**
+ * Normalized sorts.
+ * @type {FrontendModelSort[]} */
   const normalizedSorts = []
 
   for (const [sortKey, sortEntry] of Object.entries(sortValue)) {
@@ -658,7 +702,9 @@ export function normalizeSort(sort) {
   }
 
   if (Array.isArray(sort)) {
-    /** @type {FrontendModelSort[]} */
+    /**
+ * Normalized.
+ * @type {FrontendModelSort[]} */
     const normalized = []
 
     for (const sortEntry of sort) {
@@ -738,7 +784,9 @@ function columnPathDescriptor(value) {
  * @returns {T[]} - Normalized projection descriptors.
  */
 function normalizeColumnProjectionObject(value, path, parseString, label) {
-  /** @type {T[]} */
+  /**
+ * Normalized.
+ * @type {T[]} */
   const normalized = []
 
   for (const [projectionKey, projectionEntry] of Object.entries(value)) {
@@ -798,7 +846,9 @@ export function normalizeGroup(group) {
   }
 
   if (Array.isArray(group)) {
-    /** @type {FrontendModelGroup[]} */
+    /**
+ * Normalized.
+ * @type {FrontendModelGroup[]} */
     const normalized = []
 
     for (const groupEntry of group) {
@@ -872,7 +922,9 @@ export function normalizePluck(pluck) {
   }
 
   if (Array.isArray(pluck)) {
-    /** @type {FrontendModelPluck[]} */
+    /**
+ * Normalized.
+ * @type {FrontendModelPluck[]} */
     const normalized = []
 
     for (const pluckEntry of pluck) {
@@ -904,11 +956,14 @@ export function normalizePluck(pluck) {
 }
 
 /**
+ * Runs frontend model resource attributes.
  * @param {typeof import("./base.js").default} modelClass - Model class.
  * @returns {Set<string>} - Resource attribute names.
  */
 function frontendModelResourceAttributes(modelClass) {
-  const resourceConfig = /** @type {Record<string, ?>} */ (modelClass.resourceConfig())
+  const resourceConfig = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (modelClass.resourceConfig())
   const attributes = resourceConfig.attributes
 
   if (Array.isArray(attributes)) {
@@ -923,6 +978,7 @@ function frontendModelResourceAttributes(modelClass) {
 }
 
 /**
+ * Runs frontend model pluck target model class.
  * @param {typeof import("./base.js").default} modelClass - Root model class.
  * @param {string[]} path - Relationship path.
  * @returns {typeof import("./base.js").default} - Target model class for path.
@@ -955,6 +1011,7 @@ function frontendModelPluckTargetModelClass(modelClass, path) {
 }
 
 /**
+ * Runs validate pluck definitions.
  * @param {object} args - Pluck validation args.
  * @param {typeof import("./base.js").default} args.modelClass - Root model class.
  * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
@@ -977,6 +1034,7 @@ function validatePluckDefinitions({modelClass, pluck}) {
 }
 
 /**
+ * Runs serialize find conditions.
  * @param {Record<string, ?>} conditions - findBy conditions.
  * @returns {string} - Serialized conditions for error messages.
  */
@@ -989,6 +1047,7 @@ function serializeFindConditions(conditions) {
 }
 
 /**
+ * Runs normalize integer argument.
  * @param {?} value - Candidate integer value.
  * @param {string} argumentName - Argument name for errors.
  * @param {object} options - Validation options.
@@ -1008,6 +1067,7 @@ function normalizeIntegerArgument(value, argumentName, {min}) {
 }
 
 /**
+ * Runs reverse sort direction.
  * @param {"asc" | "desc"} direction - Current sort direction.
  * @returns {"asc" | "desc"} - Reversed direction.
  */
@@ -1020,16 +1080,25 @@ function reverseSortDirection(direction) {
  * @template {typeof import("./base.js").default} T
  */
 export default class FrontendModelQuery {
-  /** @type {Record<string, ?>[]} */
+  /**
+ * Ransack.
+ * @type {Record<string, ?>[]} */
   _ransack = []
-  /** @type {FrontendModelSearch[]} */
+  /**
+ * Searches.
+ * @type {FrontendModelSearch[]} */
   _searches = []
-  /** @type {FrontendModelSort[]} */
+  /**
+ * Sort.
+ * @type {FrontendModelSort[]} */
   _sort = []
-  /** @type {FrontendModelGroup[]} */
+  /**
+ * Group.
+ * @type {FrontendModelGroup[]} */
   _group = []
 
   /**
+ * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {T} args.modelClass - Frontend model class.
    * @param {import("../database/query/index.js").NestedPreloadRecord} [args.preload] - Preload map.
@@ -1040,9 +1109,13 @@ export default class FrontendModelQuery {
     this._joins = {}
     this._where = {}
     this._searches = []
-    /** @type {Record<string, string[]>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, string[]>} */
     this._select = {}
-    /** @type {Record<string, string[]>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, string[]>} */
     this._selectsExtra = {}
     this._sort = []
     this._group = []
@@ -1051,9 +1124,13 @@ export default class FrontendModelQuery {
     this._offset = null
     this._page = null
     this._perPage = null
-    /** @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} */
+    /**
+ * Documents this API.
+ * @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} */
     this._withCount = []
-    /** @type {Array<string | Record<string, ?>>} */
+    /**
+ * Documents this API.
+ * @type {Array<string | Record<string, ?>>} */
     this._queryData = []
     /**
      * Per-record ability spec. Normalized to a list of
@@ -1109,6 +1186,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs merge ability entry.
    * @param {{modelName: string, actions: string[]}} entry
    * @returns {void}
    */
@@ -1156,12 +1234,15 @@ export default class FrontendModelQuery {
   queryData(spec) {
     if (spec == null) return this
 
-    this._queryData.push(/** @type {?} */ (spec))
+    this._queryData.push(/**
+ * Documents this API.
+ * @type {?} */ (spec))
 
     return this
   }
 
   /**
+ * Runs where.
    * @param {Record<string, ?>} conditions - Root-model where conditions.
    * @returns {this} - Query with merged where conditions.
    */
@@ -1177,6 +1258,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs scope.
    * @param {import("../utils/model-scope.js").ModelScopeDescriptor} scopeDescriptor - Scope descriptor.
    * @returns {this} - Scoped query.
    */
@@ -1189,7 +1271,9 @@ export default class FrontendModelQuery {
       throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to ${this.modelClass.name} query`)
     }
 
-    const scopedQuery = /** @type {this | void} */ (scopeDescriptor.callback({
+    const scopedQuery = /**
+ * Documents this API.
+ * @type {this | void} */ (scopeDescriptor.callback({
       driver: null,
       modelClass: this.modelClass,
       query: this,
@@ -1200,6 +1284,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs ransack.
    * @param {Record<string, ?>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
    * @returns {this} - Query with Ransack filters and sort applied.
    */
@@ -1224,12 +1309,15 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs select with required root attributes.
    * @param {string[]} [requiredAttributes] - Extra required attributes for the root model.
    * @returns {Record<string, string[]>} - Select map with required root attributes merged when root select exists.
    */
   selectWithRequiredRootAttributes(requiredAttributes = []) {
     const rootModelName = this.modelClass.getModelName()
-    const selectMap = /** @type {Record<string, string[]>} */ (this._select)
+    const selectMap = /**
+ * Documents this API.
+ * @type {Record<string, string[]>} */ (this._select)
     const existingRootAttributes = selectMap[rootModelName]
 
     if (!existingRootAttributes) {
@@ -1245,6 +1333,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs preload.
    * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} preload - Preload to merge.
    * @returns {this} - Query with merged preloads.
    */
@@ -1255,6 +1344,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs select.
    * @param {Record<string, string[] | string> | string | string[]} select - Model-aware attribute select map or root-model shorthand.
    * @returns {this} - Query with merged selected attributes.
    */
@@ -1278,6 +1368,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs joins.
    * @param {Record<string, ?> | Array<Record<string, ?>>} joins - Relationship descriptor joins.
    * @returns {this} - Query with merged joins.
    */
@@ -1288,6 +1379,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Documents this API.
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
    * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
@@ -1327,6 +1419,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs sort.
    * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
@@ -1337,6 +1430,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs order.
    * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} order - Order definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
@@ -1345,6 +1439,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs group.
    * @param {string | string[] | Record<string, ?> | Array<Record<string, ?>>} group - Group definition(s).
    * @returns {this} - Query with appended group definitions.
    */
@@ -1355,6 +1450,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs distinct.
    * @param {boolean} [value] - Whether to request distinct rows.
    * @returns {this} - Query with distinct flag.
    */
@@ -1369,6 +1465,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Documents this API.
    * @param {number} value - Maximum number of records.
    * @returns {this} - Query with limit.
    */
@@ -1381,6 +1478,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs offset.
    * @param {number} value - Number of records to skip.
    * @returns {this} - Query with offset.
    */
@@ -1392,6 +1490,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs page.
    * @param {number} pageNumber - 1-based page number.
    * @returns {this} - Query with page applied.
    */
@@ -1406,6 +1505,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs per page.
    * @param {number} perPage - Page size.
    * @returns {this} - Query with per-page applied.
    */
@@ -1421,10 +1521,13 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs clone.
    * @returns {FrontendModelQuery<T>} - Cloned query instance.
    */
   clone() {
-    const newQuery = /** @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
+    const newQuery = /**
+ * Documents this API.
+ * @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
       modelClass: this.modelClass,
       preload: normalizePreload(this._preload)
     }))
@@ -1470,12 +1573,15 @@ export default class FrontendModelQuery {
     return newQuery
   }
 
-  /** @returns {T} - Root model class. */
+  /**
+ * Runs get model class.
+ * @returns {T} - Root model class. */
   getModelClass() {
     return this.modelClass
   }
 
   /**
+ * Runs preload payload.
    * @returns {Record<string, ?>} - Payload preload hash when present.
    */
   preloadPayload() {
@@ -1485,6 +1591,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs with count payload.
    * @returns {Record<string, ?>} - Payload withCount array when present.
    */
   withCountPayload() {
@@ -1500,6 +1607,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs abilities payload.
    * @returns {Record<string, ?>} - Payload abilities array when present.
    */
   abilitiesPayload() {
@@ -1514,6 +1622,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs query data payload.
    * @returns {Record<string, ?>} - Payload queryData spec when present.
    */
   queryDataPayload() {
@@ -1528,6 +1637,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs select payload.
    * @param {string[]} [requiredAttributes] - Extra required attributes for root model selection.
    * @returns {Record<string, ?>} - Payload select hash when present.
    */
@@ -1540,6 +1650,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs selects extra payload.
    * @returns {Record<string, ?>} - Payload selectsExtra hash when present.
    */
   selectsExtraPayload() {
@@ -1549,6 +1660,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs search payload.
    * @returns {Record<string, ?>} - Payload searches array when present.
    */
   searchPayload() {
@@ -1565,6 +1677,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs ransack payload.
    * @returns {Record<string, ?>} - Payload ransack hash when present.
    */
   ransackPayload() {
@@ -1583,6 +1696,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs joins payload.
    * @returns {Record<string, ?>} - Payload joins hash when present.
    */
   joinsPayload() {
@@ -1594,6 +1708,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs sort payload.
    * @returns {Record<string, ?>} - Payload sort array when present.
    */
   sortPayload() {
@@ -1609,6 +1724,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs group payload.
    * @returns {Record<string, ?>} - Payload group array when present.
    */
   groupPayload() {
@@ -1623,6 +1739,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs distinct payload.
    * @returns {Record<string, ?>} - Payload distinct flag when enabled.
    */
   distinctPayload() {
@@ -1634,6 +1751,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs where payload.
    * @returns {Record<string, ?>} - Payload where hash when present.
    */
   wherePayload() {
@@ -1645,10 +1763,13 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs pagination payload.
    * @returns {Record<string, ?>} - Payload pagination params when present.
    */
   paginationPayload() {
-    /** @type {Record<string, ?>} */
+    /**
+ * Payload.
+ * @type {Record<string, ?>} */
     const payload = {}
 
     if (this._limit !== null) payload.limit = this._limit
@@ -1660,11 +1781,14 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs assert event query supported.
    * @returns {void}
    * @throws {Error} When the query contains list-only options that cannot filter a single lifecycle event.
    */
   assertEventQuerySupported() {
-    /** @type {string[]} */
+    /**
+ * Unsupported options.
+ * @type {string[]} */
     const unsupportedOptions = []
 
     if (this._sort.length > 0) unsupportedOptions.push("sort")
@@ -1679,6 +1803,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs event projection payload.
    * @returns {FrontendModelProjectionPayload} - Projection payload used when serializing lifecycle events.
    */
   eventProjectionPayload() {
@@ -1695,6 +1820,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs event filter payload.
    * @returns {FrontendModelEventFilterPayload | null} - Query pieces used to match lifecycle events.
    */
   eventFilterPayload() {
@@ -1710,6 +1836,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Documents this API.
    * @returns {FrontendModelEventOptionsPayload} - Combined event filter and projection payload.
    */
   // fallow-ignore-next-line unused-class-member
@@ -1724,6 +1851,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs load.
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async load() {
@@ -1749,20 +1877,25 @@ export default class FrontendModelQuery {
     }
 
     const modelsData = Array.isArray(response.models) ? response.models : []
-    /** @type {InstanceType<T>[]} */
+    /**
+ * Models.
+ * @type {InstanceType<T>[]} */
     const models = modelsData.map((model) => this.modelClass.instantiateFromResponse(model))
 
     // Share a single cohort reference across every sibling so auto-batch-preload
     // can batch lazy relationship access later. Single-record lookups still flow
     // through here (with a cohort of one) and degrade cleanly to per-record load.
     for (const model of models) {
-      /** @type {?} */ (model)._loadCohort = models
+      /**
+ * Documents this API.
+ * @type {?} */ (model)._loadCohort = models
     }
 
     return models
   }
 
   /**
+ * Runs to array.
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
   async toArray() {
@@ -1770,6 +1903,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs count.
    * @returns {Promise<number>} - Number of loaded model instances.
    */
   async count() {
@@ -1796,6 +1930,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs first.
    * @returns {Promise<InstanceType<T> | null>} - First model matching query.
    */
   async first() {
@@ -1813,6 +1948,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs last.
    * @returns {Promise<InstanceType<T> | null>} - Last model matching query.
    */
   async last() {
@@ -1844,6 +1980,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs pluck.
    * @param {...(string | string[] | Record<string, ?> | Array<Record<string, ?>>)} columns - Pluck definition(s).
    * @returns {Promise<Array<?>>} - Plucked values.
    */
@@ -1880,6 +2017,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs find.
    * @param {number | string} id - Record id.
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
@@ -1895,6 +2033,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs find by.
    * @param {Record<string, ?>} conditions - Conditions.
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
@@ -1937,6 +2076,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs find by or fail.
    * @param {Record<string, ?>} conditions - Conditions.
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
@@ -1951,6 +2091,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs find or initialize by.
    * @param {Record<string, ?>} conditions - Conditions.
    * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
    */
@@ -1960,10 +2101,11 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    return /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+    return /** Documents this API. @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
   }
 
   /**
+ * Runs find or create by.
    * @param {Record<string, ?>} conditions - Conditions.
    * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save.
    * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
@@ -1974,7 +2116,9 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    const newModel = /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+    const newModel = /**
+ * Documents this API.
+ * @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
 
     if (callback) {
       await callback(newModel)
@@ -1986,6 +2130,7 @@ export default class FrontendModelQuery {
   }
 
   /**
+ * Runs validated structured conditions.
    * @param {Record<string, ?>} conditions - Candidate structured conditions.
    * @returns {Record<string, ?>} - Validated conditions.
    */
@@ -1997,6 +2142,7 @@ export default class FrontendModelQuery {
 }
 
 /**
+ * Runs frontend model event filter key.
  * @param {FrontendModelEventFilterPayload} payload - Event filter payload.
  * @returns {string} - Stable key for event filter matching.
  */
@@ -2005,6 +2151,7 @@ function frontendModelEventFilterKey(payload) {
 }
 
 /**
+ * Runs apply frontend model projection options.
  * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Query receiving projection options.
  * @param {FrontendModelProjectionOptions} options - Projection options.
  * @returns {void}
@@ -2019,6 +2166,7 @@ function applyFrontendModelProjectionOptions(query, options) {
 }
 
 /**
+ * Runs assert frontend model event query class.
  * @param {typeof import("./base.js").default} modelClass - Expected frontend model class.
  * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
  * @returns {void}
@@ -2030,6 +2178,7 @@ function assertFrontendModelEventQueryClass(modelClass, query) {
 }
 
 /**
+ * Runs assert frontend model event options object.
  * @param {FrontendModelEventOptions} options - Candidate event options.
  * @returns {void}
  */
@@ -2040,6 +2189,7 @@ function assertFrontendModelEventOptionsObject(options) {
 }
 
 /**
+ * Runs cloned frontend model event query.
  * @param {typeof import("./base.js").default} modelClass - Frontend model class.
  * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
  * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Cloned query used by event subscriptions.
@@ -2051,6 +2201,7 @@ function clonedFrontendModelEventQuery(modelClass, query) {
 }
 
 /**
+ * Runs frontend model event query from options object.
  * @param {typeof import("./base.js").default} modelClass - Frontend model class.
  * @param {FrontendModelEventOptionsObject} options - Event options object.
  * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Query used by event subscriptions.
@@ -2070,6 +2221,7 @@ function frontendModelEventQueryFromOptionsObject(modelClass, options) {
 }
 
 /**
+ * Runs frontend model event query.
  * @param {typeof import("./base.js").default} modelClass - Frontend model class.
  * @param {FrontendModelEventOptions} [options] - Event query or projection options.
  * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Normalized query used by event subscriptions.
@@ -2079,7 +2231,9 @@ function frontendModelEventQuery(modelClass, options = {}) {
 
   assertFrontendModelEventOptionsObject(options)
 
-  const optionsObject = /** @type {FrontendModelEventOptionsObject} */ (options)
+  const optionsObject = /**
+ * Documents this API.
+ * @type {FrontendModelEventOptionsObject} */ (options)
   const query = frontendModelEventQueryFromOptionsObject(modelClass, optionsObject)
 
   applyFrontendModelProjectionOptions(query, optionsObject)
@@ -2088,6 +2242,7 @@ function frontendModelEventQuery(modelClass, options = {}) {
 }
 
 /**
+ * Documents this API.
  * @param {typeof import("./base.js").default} modelClass - Frontend model class.
  * @param {FrontendModelEventOptions} [options] - Event query or projection options.
  * @returns {FrontendModelEventOptionsPayload} - Normalized event subscription payload.

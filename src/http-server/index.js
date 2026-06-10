@@ -9,10 +9,15 @@ import Net from "net"
 import ServerClient from "./server-client.js"
 import WorkerHandler from "./worker-handler/index.js"
 
-/** @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
-/** @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
+/**
+ * Documents this API.
+ * @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
+/**
+ * Documents this API.
+ * @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
 
 /**
+ * Runs normalize worker count.
  * @param {object} args - Options object.
  * @param {number} [args.maxWorkers] - Backward-compatible worker count alias.
  * @param {number} [args.workers] - Configured worker count.
@@ -32,31 +37,46 @@ export default class VelociousHttpServer {
   clientCount = 0
   _starting = false
 
-  /** @type {DevelopmentReloader | DevelopmentReloaderLike | undefined} */
+  /**
+ * Documents this API.
+ * @type {DevelopmentReloader | DevelopmentReloaderLike | undefined} */
   developmentReloader
 
-  /** @type {import("net").Server | undefined} */
+  /**
+ * Documents this API.
+ * @type {import("net").Server | undefined} */
   netServer
 
-  /** @type {WorkerHandlerFactory | undefined} */
+  /**
+ * Documents this API.
+ * @type {WorkerHandlerFactory | undefined} */
   workerHandlerFactory
 
-  /** @type {Record<string, ServerClient>}  */
+  /**
+ * Clients.
+ * @type {Record<string, ServerClient>}  */
   clients = {}
 
-  /** @type {Set<import("net").Socket>} */
+  /**
+ * Active sockets.
+ * @type {Set<import("net").Socket>} */
   _activeSockets = new Set()
 
   events = new EventEmitter()
   workerCount = 0
 
-  /** @type {Array<WorkerHandler | InProcessHandler>} */
+  /**
+ * Worker handlers.
+ * @type {Array<WorkerHandler | InProcessHandler>} */
   workerHandlers = []
   nextWorkerHandlerIndex = 0
-  /** @type {Map<string, WorkerHandler | InProcessHandler>} */
+  /**
+ * Sticky worker handlers.
+ * @type {Map<string, WorkerHandler | InProcessHandler>} */
   stickyWorkerHandlers = new Map()
 
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string} [args.host] - Host.
@@ -78,7 +98,9 @@ export default class VelociousHttpServer {
     this.workers = normalizeWorkerCount({maxWorkers, workers})
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs start.
+ * @returns {Promise<void>} - Resolves when complete.  */
   async start() {
     if (this._starting) throw new Error("Velocious HTTP server is already starting")
     if (this.isActive()) throw new Error("Velocious HTTP server is already running")
@@ -89,7 +111,9 @@ export default class VelociousHttpServer {
     try {
       await this._ensureWorkers()
       await this._startDevelopmentReloader()
-      /** @type {import("net").Server} */
+      /**
+ * Net server.
+ * @type {import("net").Server} */
       const netServer = new Net.Server()
       this.netServer = netServer
       netServer.on("close", this.onClose)
@@ -104,7 +128,9 @@ export default class VelociousHttpServer {
     }
   }
 
-  /** @returns {{developmentReloader: DevelopmentReloader | DevelopmentReloaderLike | undefined, netServer: import("net").Server | undefined, workerHandlers: Array<WorkerHandler | InProcessHandler>}} - Startup state. */
+  /**
+ * Runs capture startup state.
+ * @returns {{developmentReloader: DevelopmentReloader | DevelopmentReloaderLike | undefined, netServer: import("net").Server | undefined, workerHandlers: Array<WorkerHandler | InProcessHandler>}} - Startup state. */
   _captureStartupState() {
     return {
       developmentReloader: this.developmentReloader,
@@ -114,11 +140,14 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * Runs stop startup resources.
    * @param {ReturnType<VelociousHttpServer["_captureStartupState"]>} startupState - State captured before startup.
    * @returns {Promise<void>} - Resolves when cleanup is complete.
    */
   async _stopStartupResources(startupState) {
-    /** @type {import("net").Server | undefined} */
+    /**
+ * Startup net server.
+ * @type {import("net").Server | undefined} */
     const startupNetServer = this.netServer
 
     if (this.developmentReloader && this.developmentReloader !== startupState.developmentReloader) {
@@ -139,12 +168,16 @@ export default class VelociousHttpServer {
     this.stickyWorkerHandlers.clear()
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs net server listen.
+ * @returns {Promise<void>} - Resolves when complete.  */
   _netServerListen() {
     return new Promise((resolve, reject) => {
       if (!this.netServer) throw new Error("No netServer")
 
-      /** @param {Error} error - Listen error. */
+      /**
+ * On listen error.
+ * @param {Error} error - Listen error. */
       const onListenError = (error) => {
         this.netServer?.off("error", onListenError)
         reject(error)
@@ -163,14 +196,18 @@ export default class VelociousHttpServer {
     })
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs ensure workers.
+ * @returns {Promise<void>} - Resolves when complete.  */
   async _ensureWorkers() {
     while (this.workerHandlers.length < this.workers) {
       await this.spawnWorker()
     }
   }
 
-  /** @returns {boolean} - Whether active.  */
+  /**
+ * Runs is active.
+ * @returns {boolean} - Whether active.  */
   isActive() {
     if (this.netServer) {
       return this.netServer.listening
@@ -179,7 +216,9 @@ export default class VelociousHttpServer {
     return false
   }
 
-  /** @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics. */
+  /**
+ * Runs get debug snapshot.
+ * @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics. */
   async getDebugSnapshot() {
     return {
       active: this.isActive(),
@@ -193,6 +232,7 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * Runs worker debug snapshot.
    * @param {WorkerHandler | InProcessHandler} workerHandler - Worker handler to inspect.
    * @returns {Promise<Record<string, ?>>} Worker debug snapshot.
    */
@@ -204,6 +244,7 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * Runs in process worker debug snapshot.
    * @param {InProcessHandler} workerHandler - In-process worker handler to inspect.
    * @returns {Record<string, ?>} Worker debug snapshot.
    */
@@ -216,7 +257,9 @@ export default class VelociousHttpServer {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs stop clients.
+ * @returns {Promise<void>} - Resolves when complete.  */
   async stopClients() {
     const promises = []
 
@@ -230,6 +273,7 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * Runs stop server.
    * @param {import("net").Server | undefined} [netServer] - Server to stop.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -261,7 +305,9 @@ export default class VelociousHttpServer {
     })
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs stop.
+ * @returns {Promise<void>} - Resolves when complete.  */
   async stop() {
     this._stopping = true
     await this.developmentReloader?.stop()
@@ -275,12 +321,15 @@ export default class VelociousHttpServer {
     this.stickyWorkerHandlers.clear()
   }
 
-  /** @returns {void} - No return value.  */
+  /**
+ * On close.
+ * @returns {void} - No return value.  */
   onClose = () => {
     this.events.emit("close")
   }
 
   /**
+ * On server error.
    * @param {Error} error - Server socket error.
    * @returns {void} - No return value.
    */
@@ -289,6 +338,7 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * On connection.
    * @param {import("net").Socket} socket - Socket instance.
    * @returns {void} - No return value.
    */
@@ -328,6 +378,7 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * On client close.
    * @param {ServerClient} client - Client instance.
    * @returns {void} - No return value.
    */
@@ -344,16 +395,22 @@ export default class VelociousHttpServer {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs spawn worker.
+ * @returns {Promise<void>} - Resolves when complete.  */
   async spawnWorker() {
     const workerHandler = await this._buildWorkerHandler()
 
     this.workerHandlers.push(workerHandler)
   }
 
-  /** @returns {Promise<Array<WorkerHandler | InProcessHandler>>} - Started worker handlers. */
+  /**
+ * Runs build worker handlers.
+ * @returns {Promise<Array<WorkerHandler | InProcessHandler>>} - Started worker handlers. */
   async _buildWorkerHandlers() {
-    /** @type {Array<WorkerHandler | InProcessHandler>} */
+    /**
+ * Worker handlers.
+ * @type {Array<WorkerHandler | InProcessHandler>} */
     const workerHandlers = []
 
     for (let index = 0; index < this.workers; index += 1) {
@@ -363,7 +420,9 @@ export default class VelociousHttpServer {
     return workerHandlers
   }
 
-  /** @returns {Promise<WorkerHandler | InProcessHandler>} - Started worker handler. */
+  /**
+ * Runs build worker handler.
+ * @returns {Promise<WorkerHandler | InProcessHandler>} - Started worker handler. */
   async _buildWorkerHandler() {
     const workerCount = this.workerCount
 
@@ -383,6 +442,7 @@ export default class VelociousHttpServer {
   }
 
   /**
+ * Runs worker handler to use.
    * @param {object} [args] - Options object.
    * @param {string} [args.stickyKey] - Stable key that must keep routing to the same worker.
    * @returns {WorkerHandler | InProcessHandler} - The worker handler to use.
@@ -405,7 +465,9 @@ export default class VelociousHttpServer {
     return this._nextRoundRobinWorkerHandler()
   }
 
-  /** @returns {WorkerHandler | InProcessHandler} - The next round-robin worker handler. */
+  /**
+ * Runs next round robin worker handler.
+ * @returns {WorkerHandler | InProcessHandler} - The next round-robin worker handler. */
   _nextRoundRobinWorkerHandler() {
     this.logger.debug(`Worker handlers length: ${this.workerHandlers.length}`)
 
@@ -421,12 +483,16 @@ export default class VelociousHttpServer {
     return workerHandler
   }
 
-  /** @returns {boolean} - Whether development worker hot reload should run. */
+  /**
+ * Runs should use development hot reload.
+ * @returns {boolean} - Whether development worker hot reload should run. */
   shouldUseDevelopmentHotReload() {
     return !this.inProcess && this.configuration.getEnvironment() === "development"
   }
 
-  /** @returns {Promise<void>} - Resolves when watcher setup finishes. */
+  /**
+ * Runs start development reloader.
+ * @returns {Promise<void>} - Resolves when watcher setup finishes. */
   async _startDevelopmentReloader() {
     if (!this.shouldUseDevelopmentHotReload()) return
     if (this.developmentReloader) return
@@ -445,7 +511,9 @@ export default class VelociousHttpServer {
     await this.developmentReloader.start()
   }
 
-  /** @returns {Promise<void>} - Resolves when workers have been refreshed. */
+  /**
+ * Runs reload workers for development.
+ * @returns {Promise<void>} - Resolves when workers have been refreshed. */
   async reloadWorkersForDevelopment() {
     if (this._stopping) return
 

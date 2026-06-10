@@ -2,6 +2,7 @@
 
 export default class VelociousDatabaseRecordValidatorsBase {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.attributeName - Attribute name.
    * @param {Record<string, ?>} args.args - Options object.
@@ -12,6 +13,7 @@ export default class VelociousDatabaseRecordValidatorsBase {
   }
 
   /**
+ * Runs validate.
    * @abstract
    * @param {object} args - Options object.
    * @param {import("../index.js").default} args.model - Model instance.

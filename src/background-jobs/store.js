@@ -13,7 +13,9 @@ const EXECUTION_MODE_BACKFILL_MIGRATION_VERSION = "20260607131010"
 const JOBS_TABLE = "background_jobs"
 const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
-/** @type {import("./types.js").BackgroundJobExecutionMode[]} */
+/**
+ * Execution modes.
+ * @type {import("./types.js").BackgroundJobExecutionMode[]} */
 const EXECUTION_MODES = ["inline", "forked", "spawned"]
 const DEFAULT_EXECUTION_MODE = "forked"
 
@@ -34,6 +36,7 @@ const SORTABLE_COLUMNS = {
 
 export default class BackgroundJobsStore {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.databaseIdentifier] - Database identifier.
@@ -46,6 +49,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs get database identifier.
    * @returns {string} - Database identifier.
    */
   getDatabaseIdentifier() {
@@ -55,6 +59,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs ensure ready.
    * @returns {Promise<void>} - Resolves when ready.
    */
   async ensureReady() {
@@ -74,6 +79,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
    * @param {Array<?>} args.args - Arguments.
@@ -111,6 +117,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs next available job.
    * @param {object} [args] - Options.
    * @param {boolean} [args.forked] - Compatibility filter for non-inline vs inline jobs.
    * @param {import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]} [args.executionMode] - Execution mode or modes to match.
@@ -146,6 +153,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs next queued job.
    * @param {object} args - Options.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
    * @param {"<=" | ">"} args.scheduledAtOperator - Scheduled timestamp operator.
@@ -184,6 +192,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs get job.
    * @param {string} jobId - Job id.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Job row.
    */
@@ -222,11 +231,15 @@ export default class BackgroundJobsStore {
         .group("status")
         .results()
 
-      /** @type {Record<string, number>} */
+      /**
+ * Counts.
+ * @type {Record<string, number>} */
       const counts = {}
 
       for (const row of rows) {
-        const typedRow = /** @type {Record<string, ?>} */ (row)
+        const typedRow = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (row)
 
         counts[String(typedRow.status)] = this._normalizeNumber(typedRow.count) || 0
       }
@@ -252,7 +265,9 @@ export default class BackgroundJobsStore {
       if (jobName) query = query.where({job_name: jobName})
 
       const rows = await query.results()
-      const countRow = /** @type {Record<string, ?>} */ (rows[0] || {})
+      const countRow = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (rows[0] || {})
 
       return this._normalizeNumber(countRow.count) || 0
     })
@@ -291,6 +306,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs mark handed off.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {string} [args.workerId] - Worker id.
@@ -317,6 +333,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs mark completed.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {string} [args.workerId] - Worker id.
@@ -344,6 +361,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs mark returned to queue.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @returns {Promise<void>} - Resolves when updated.
@@ -366,6 +384,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs mark failed.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {?} args.error - Error.
@@ -387,6 +406,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs mark orphaned jobs.
    * @param {object} [args] - Options.
    * @param {number} [args.orphanedAfterMs] - Mark jobs orphaned after this duration.
    * @returns {Promise<number>} - Count of orphaned jobs.
@@ -420,6 +440,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs clear all.
    * @returns {Promise<void>} - Resolves when cleared.
    */
   async clearAll() {
@@ -431,6 +452,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs get retry delay ms.
    * @param {number} retryCount - Retry attempt count (1-based).
    * @returns {number} - Delay in milliseconds.
    */
@@ -445,6 +467,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs normalize max retries.
    * @param {number | null | undefined} maxRetries - Input.
    * @returns {number} - Normalized max retries.
    */
@@ -482,6 +505,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs ensure migrations table.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -499,6 +523,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs has migration.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {string} [version] - Migration version.
    * @returns {Promise<boolean>} - Whether migration exists.
@@ -516,6 +541,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs apply migrations.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -550,6 +576,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs ensure jobs table columns.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -575,6 +602,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs backfill execution modes once.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -609,6 +637,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs record migration.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {string} version - Migration version.
    * @returns {Promise<void>} - Resolves when complete.
@@ -638,6 +667,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs get job row by id.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {string} jobId - Job id.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Job row.
@@ -657,6 +687,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs apply failure.
    * @param {object} args - Options.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
@@ -690,6 +721,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs failure update.
    * @param {object} args - Options.
    * @param {string} args.failureMessage - Last failure message.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
@@ -700,7 +732,9 @@ export default class BackgroundJobsStore {
    * @returns {Record<string, ?>} - Database update data.
    */
   _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry}) {
-    /** @type {Record<string, ?>} */
+    /**
+ * Update.
+ * @type {Record<string, ?>} */
     const update = {
       attempts: nextAttempt,
       handed_off_at_ms: null,
@@ -715,6 +749,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs apply orphaned failure update.
    * @param {object} args - Options.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
    * @param {number} args.now - Current timestamp.
@@ -726,6 +761,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs apply failure status update.
    * @param {object} args - Options.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
    * @param {number} args.now - Current timestamp.
@@ -751,6 +787,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs job with failure update.
    * @param {object} args - Options.
    * @param {string} args.failureMessage - Last failure message.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
@@ -773,6 +810,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs normalize job row.
    * @param {Record<string, ?>} row - Raw database row.
    * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
    */
@@ -802,6 +840,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs normalize number.
    * @param {?} value - Input value.
    * @returns {number | null} - Normalized number.
    */
@@ -816,6 +855,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs normalize boolean.
    * @param {?} value - Input value.
    * @returns {boolean} - Normalized boolean.
    */
@@ -828,6 +868,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs normalize execution mode.
    * @param {import("./types.js").BackgroundJobOptions} [options] - Job options.
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
    */
@@ -843,6 +884,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs normalize execution mode name.
    * @param {string} executionMode - Execution mode name.
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
    */
@@ -855,6 +897,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs parse args.
    * @param {?} value - Input value.
    * @returns {Array<?>} - Parsed args.
    */
@@ -873,6 +916,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs with db.
    * @template T
    * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Callback.
    * @returns {Promise<T>} - Callback result.
@@ -880,7 +924,9 @@ export default class BackgroundJobsStore {
   async _withDb(callback) {
     const pool = this.configuration.getDatabasePool(this.getDatabaseIdentifier())
     let callbackCalled = false
-    /** @type {T | undefined} */
+    /**
+ * Documents this API.
+ * @type {T | undefined} */
     let result
 
     await pool.withConnection({name: "Background jobs store"}, async (db) => {
@@ -892,10 +938,11 @@ export default class BackgroundJobsStore {
       throw new Error("Background jobs store callback was not invoked")
     }
 
-    return /** @type {T} */ (result)
+    return /** Documents this API. @type {T} */ (result)
   }
 
   /**
+ * Runs should accept report.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {string | null | undefined} args.workerId - Worker id from report.
@@ -909,6 +956,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs worker report matches.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {string | null | undefined} args.workerId - Worker id from report.
@@ -922,6 +970,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs handoff report matches.
    * @param {object} args - Options.
    * @param {number | null | undefined} args.handedOffAtMs - Handed off timestamp from report.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
@@ -935,6 +984,7 @@ export default class BackgroundJobsStore {
   }
 
   /**
+ * Runs migration key.
    * @param {string} [version] - Migration version.
    * @returns {string} - Migration key.
    */

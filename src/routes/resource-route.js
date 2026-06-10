@@ -9,6 +9,7 @@ import singularizeModelName from "../utils/singularize-model-name.js"
 
 class VelociousRouteResourceRoute extends BasicRoute {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -17,11 +18,14 @@ class VelociousRouteResourceRoute extends BasicRoute {
     restArgsError(restArgs)
     this.name = name
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
-    /** @type {Set<string>} */
+    /**
+ * Documents this API.
+ * @type {Set<string>} */
     this.collectionRouteNames = new Set()
   }
 
   /**
+ * Runs get.
    * @param {string} name - Name.
    * @param {{on?: "member" | "collection"}} [options] - Route options for scope.
    */
@@ -42,6 +46,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
   }
 
   /**
+ * Runs post.
    * @param {string} name - Name.
    * @param {{on?: "member" | "collection"}} [options] - Route options for scope.
    */
@@ -71,6 +76,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
   }
 
   /**
+ * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.

@@ -7,6 +7,7 @@ import PreloaderSelection from "./preloader/selection.js"
 import restArgsError from "../../utils/rest-args-error.js"
 
 /**
+ * Runs normalize nested preload.
  * @param {import("../query/index.js").NestedPreloadRecord | string | string[] | boolean} preload - Preload data in shorthand or nested form.
  * @returns {import("../query/index.js").NestedPreloadRecord | null} - Normalized nested preload record.
  */
@@ -18,7 +19,9 @@ function normalizeNestedPreload(preload) {
   }
 
   if (Array.isArray(preload)) {
-    /** @type {import("../query/index.js").NestedPreloadRecord} */
+    /**
+ * Result.
+ * @type {import("../query/index.js").NestedPreloadRecord} */
     const result = {}
 
     for (const entry of preload) {
@@ -45,7 +48,9 @@ function normalizeNestedPreload(preload) {
   }
 
   if (preload && typeof preload == "object") {
-    /** @type {import("../query/index.js").NestedPreloadRecord} */
+    /**
+ * Result.
+ * @type {import("../query/index.js").NestedPreloadRecord} */
     const result = {}
 
     for (const [key, value] of Object.entries(preload)) {
@@ -83,13 +88,19 @@ export default class VelociousDatabaseQueryPreloader {
   static async preload(models, queryOrSpec, {force = false} = {}) {
     if (models.length == 0) return
 
-    const modelClass = /** @type {typeof import("../record/index.js").default} */ (models[0].constructor)
+    const modelClass = /**
+ * Documents this API.
+ * @type {typeof import("../record/index.js").default} */ (models[0].constructor)
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec == "object" && "_preload" in queryOrSpec
     // Reuse the query builder's preload/select normalization for raw specs
     // instead of duplicating it here.
     const query = isQuery
-      ? /** @type {import("./model-class-query.js").default} */ (queryOrSpec)
-      : modelClass.preload(/** @type {?} */ (queryOrSpec))
+      ? /**
+ * Documents this API.
+ * @type {import("./model-class-query.js").default} */ (queryOrSpec)
+      : modelClass.preload(/**
+ * Documents this API.
+ * @type {?} */ (queryOrSpec))
 
     const preloader = new VelociousDatabaseQueryPreloader({
       modelClass,
@@ -106,6 +117,7 @@ export default class VelociousDatabaseQueryPreloader {
   }
 
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {import("../record/index.js").default[]} args.models - Model instances.
@@ -129,17 +141,23 @@ export default class VelociousDatabaseQueryPreloader {
       let preloadResult
 
       if (relationship.getType() == "belongsTo") {
-        const belongsToRelationship = /** @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
+        const belongsToRelationship = /**
+ * Documents this API.
+ * @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
         const hasManyPreloader = new BelongsToPreloader({models: this.models, relationship: belongsToRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasMany") {
-        const hasManyRelationship = /** @type {import("../record/relationships/has-many.js").default} */ (relationship)
+        const hasManyRelationship = /**
+ * Documents this API.
+ * @type {import("../record/relationships/has-many.js").default} */ (relationship)
         const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: hasManyRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasOne") {
-        const hasOneRelationship = /** @type {import("../record/relationships/has-one.js").default} */ (relationship)
+        const hasOneRelationship = /**
+ * Documents this API.
+ * @type {import("../record/relationships/has-one.js").default} */ (relationship)
         const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: hasOneRelationship, selection: this.selection})
 
         preloadResult = await hasOnePreloader.run()

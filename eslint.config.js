@@ -23,7 +23,7 @@ export default defineConfig([
     config: "flat/recommended",
     files: ["src/**/*.js"],
     rules: {
-      "jsdoc/require-description": "warn",
+      "jsdoc/require-description": "error",
       "jsdoc/reject-any-type": "error"
     }
   }),

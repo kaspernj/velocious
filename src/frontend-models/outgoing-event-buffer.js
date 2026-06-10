@@ -3,12 +3,15 @@
 const MAX_BUFFERED_OUTGOING_EVENTS = 50
 
 /**
+ * BufferedOutgoingEvent type.
  * @typedef {object} BufferedOutgoingEvent
  * @property {string} customPath - Request path.
  * @property {Record<string, ?>} payload - Command payload.
  */
 
-/** @type {BufferedOutgoingEvent[]} */
+/**
+ * Buffer.
+ * @type {BufferedOutgoingEvent[]} */
 let buffer = []
 
 /**
@@ -32,12 +35,16 @@ export function drainBufferedOutgoingEvents() {
   return buffer.splice(0, buffer.length)
 }
 
-/** @returns {void} */
+/**
+ * Documents this API.
+ * @returns {void} */
 export function clearBufferedOutgoingEvents() {
   buffer = []
 }
 
-/** @returns {number} - Current buffer size. */
+/**
+ * Documents this API.
+ * @returns {number} - Current buffer size. */
 export function bufferedOutgoingEventCount() {
   return buffer.length
 }

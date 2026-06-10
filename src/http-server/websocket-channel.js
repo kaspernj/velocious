@@ -1,9 +1,11 @@
 // @ts-check
 
 /**
+ * WebsocketJsonValue type.
  * @typedef {null | boolean | number | string | object} WebsocketJsonValue
  */
 /**
+ * WebsocketParams type.
  * @typedef {Record<string, WebsocketJsonValue>} WebsocketParams
  */
 
@@ -17,6 +19,7 @@
  */
 export default class VelociousWebsocketChannel {
   /**
+ * Runs constructor.
    * @param {object} args
    * @param {string} args.subscriptionId - Client-assigned id, unique within the session.
    * @param {WebsocketParams} args.params - Subscribe params.
@@ -136,6 +139,8 @@ export default class VelociousWebsocketChannel {
     })
   }
 
-  /** @returns {boolean} */
+  /**
+ * Runs is closed.
+ * @returns {boolean} */
   isClosed() { return this._closed }
 }

@@ -35,6 +35,7 @@ export function assignSafeProperty(target, key, value) {
 }
 
 /**
+ * Runs is undefined marker.
  * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value is encoded undefined marker.
  */
@@ -69,6 +70,7 @@ function isStringValueMarker(value, markerType, valueMatches) {
 }
 
 /**
+ * Runs is date marker.
  * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value is encoded date marker.
  */
@@ -77,6 +79,7 @@ function isDateMarker(value) {
 }
 
 /**
+ * Runs is big int marker.
  * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value is encoded bigint marker.
  */
@@ -85,6 +88,7 @@ function isBigIntMarker(value) {
 }
 
 /**
+ * Runs is non finite number marker.
  * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value is encoded non-finite number marker.
  */
@@ -104,6 +108,7 @@ function isNonFiniteNumberMarker(value) {
 }
 
 /**
+ * Runs is frontend model marker.
  * @param {?} value - Candidate value.
  * @returns {value is {__velocious_type: "frontend_model", attributes: Record<string, ?>, modelName: string, preloadedRelationships?: Record<string, ?>}} - Whether value is encoded frontend-model marker.
  */
@@ -125,13 +130,16 @@ function isFrontendModelMarker(value) {
 }
 
 /**
+ * Documents this API.
  * @param {?} value - Candidate value.
  * @returns {value is {attributes: () => Record<string, ?>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => {getRelationshipsMap: () => Record<string, ?>}, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => ?}}} - Whether value looks like a backend model instance.
  */
 export function isBackendModelInstance(value) {
   if (!value || typeof value !== "object") return false
 
-  const candidate = /** @type {Record<string, ?>} */ (value)
+  const candidate = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (value)
 
   return (
     typeof candidate.attributes === "function"
@@ -141,6 +149,7 @@ export function isBackendModelInstance(value) {
 }
 
 /**
+ * Runs serialize frontend model transport value internal.
  * @param {?} value - Value to serialize.
  * @param {WeakSet<object>} seenModels - Models already visited in the current recursion path.
  * @returns {?} - Serialized value with transport markers.
@@ -184,10 +193,14 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
     const modelClass = value.constructor
     const modelName = typeof modelClass.getModelName === "function" ? modelClass.getModelName() : modelClass.name
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Serialized model.
+ * @type {Record<string, ?>} */
     const serializedModel = {
       [TYPE_KEY]: TYPE_FRONTEND_MODEL,
-      attributes: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
+      attributes: /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
       modelName
     }
 
@@ -197,7 +210,9 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
     seenModels.add(value)
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Preloaded relationships.
+ * @type {Record<string, ?>} */
     const preloadedRelationships = {}
     const relationshipsMap = value.getModelClass().getRelationshipsMap()
 
@@ -224,7 +239,9 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
   }
 
   if (isPlainObject(value)) {
-    /** @type {Record<string, ?>} */
+    /**
+ * Serialized.
+ * @type {Record<string, ?>} */
     const serialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
@@ -238,13 +255,18 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 }
 
 /**
+ * Runs deserialize frontend model marker.
  * @param {{attributes: Record<string, ?>, modelName: string, preloadedRelationships?: Record<string, ?>}} marker - Encoded frontend-model marker.
  * @returns {?} - Hydrated frontend model or plain object fallback.
  */
 function deserializeFrontendModelMarker(marker) {
-  const attributes = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
+  const attributes = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
   const preloadedRelationships = isPlainObject(marker.preloadedRelationships)
-    ? /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
+    ? /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
     : {}
   const modelClass = resolveFrontendModelClass(marker.modelName)
 
@@ -277,6 +299,7 @@ function deserializeFrontendModelMarker(marker) {
 }
 
 /**
+ * Documents this API.
  * @param {?} value - Value to serialize.
  * @returns {?} - Serialized value with transport markers.
  */
@@ -285,6 +308,7 @@ export function serializeFrontendModelTransportValue(value) {
 }
 
 /**
+ * Documents this API.
  * @param {?} value - Value to deserialize.
  * @returns {?} - Deserialized value with transport markers restored.
  */
@@ -294,19 +318,25 @@ export function deserializeFrontendModelTransportValue(value) {
   }
 
   if (isDateMarker(value)) {
-    const dateValue = /** @type {{value: string}} */ (value).value
+    const dateValue = /**
+ * Documents this API.
+ * @type {{value: string}} */ (value).value
 
     return new Date(dateValue)
   }
 
   if (isBigIntMarker(value)) {
-    const bigintValue = /** @type {{value: string}} */ (value).value
+    const bigintValue = /**
+ * Documents this API.
+ * @type {{value: string}} */ (value).value
 
     return BigInt(bigintValue)
   }
 
   if (isNonFiniteNumberMarker(value)) {
-    const numberValue = /** @type {{value: string}} */ (value).value
+    const numberValue = /**
+ * Documents this API.
+ * @type {{value: string}} */ (value).value
 
     if (numberValue === NUMBER_NAN) return Number.NaN
     if (numberValue === NUMBER_POSITIVE_INFINITY) return Number.POSITIVE_INFINITY
@@ -323,7 +353,9 @@ export function deserializeFrontendModelTransportValue(value) {
   }
 
   if (isPlainObject(value)) {
-    /** @type {Record<string, ?>} */
+    /**
+ * Deserialized.
+ * @type {Record<string, ?>} */
     const deserialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {

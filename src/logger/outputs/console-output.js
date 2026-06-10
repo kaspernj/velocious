@@ -1,10 +1,14 @@
 // @ts-check
 
-/** @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+/**
+ * LoggingOutputPayload type.
+ * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 /** Logger console output. */
 export default class LoggerConsoleOutput {
-  /** @param {LoggingOutputPayload} payload - Log payload. */
+  /**
+ * Runs write.
+ * @param {LoggingOutputPayload} payload - Log payload. */
   async write({level, message}) {
     if (level === "error") {
       console.error(message)

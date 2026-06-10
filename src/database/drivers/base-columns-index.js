@@ -4,6 +4,7 @@ import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversBaseColumnsIndex {
   /**
+ * Runs constructor.
    * @param {import("./base-table.js").default} table - Table.
    * @param {object} data - Data payload.
    */
@@ -13,12 +14,14 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs get column names.
    * @abstract
    * @returns {string[]} - The column names.
    */
   getColumnNames() { throw new Error("'getColumnNames' not implemented") }
 
   /**
+ * Runs get driver.
    * @returns {import("./base.js").default} - The driver.
    */
   getDriver() {
@@ -26,6 +29,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs get name.
    * @returns {string} - The name.
    */
   getName()  {
@@ -33,6 +37,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -40,6 +45,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs get table.
    * @returns {import("./base-table.js").default} - The table.
    */
   getTable() {
@@ -49,6 +55,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs get table data index.
    * @abstract
    * @returns {import("../table-data/table-index.js").default} - The table data index.
    */
@@ -57,6 +64,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs is primary key.
    * @returns {boolean} - Whether primary key.
    */
   isPrimaryKey() {
@@ -64,6 +72,7 @@ export default class VelociousDatabaseDriversBaseColumnsIndex {
   }
 
   /**
+ * Runs is unique.
    * @returns {boolean} - Whether unique.
    */
   isUnique() {

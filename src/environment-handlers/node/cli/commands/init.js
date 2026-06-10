@@ -3,11 +3,13 @@ import fileExists from "../../../../utils/file-exists.js"
 import fs from "fs/promises"
 
 /**
+ * VelociousCliCommandsInit class.
  * @typedef {{source: string, target: string}} FileMappingType
  */
 
 export default class VelociousCliCommandsInit extends BaseCommand {
   /**
+ * Runs execute.
    * @returns {Promise<void | {fileMappings: FileMappingType[]}>} - Resolves with generated file mappings, if any.
    */
   async execute() {

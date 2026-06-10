@@ -4,6 +4,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryInsertBase {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} [args.data] - Data payload.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
@@ -29,6 +30,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
+ * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -36,6 +38,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
+ * Runs format value.
    * @param {?} value - Value to format.
    * @returns {string | number} - SQL literal.
    */
@@ -46,6 +49,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
+ * Runs to sql.
    * @returns {string} SQL statement
    */
   toSql() {
@@ -146,6 +150,7 @@ export default class VelociousDatabaseQueryInsertBase {
   }
 
   /**
+ * Runs values sql.
    * @param {Array<?>} data - Data payload.
    * @returns {string} - SQL string.
    */

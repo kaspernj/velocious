@@ -5,20 +5,27 @@ import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   /**
+ * Runs validate.
    * @param {object} args - Options object.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.attributeName - Attribute name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async validate({model, attributeName}) {
-    const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
+    const modelClass = /**
+ * Documents this API.
+ * @type {typeof import("../index.js").default} */ (model.constructor)
 
     const connection = modelClass.connection()
     const tableName = modelClass._getTable().getName()
-    const attributeValue = /** @type {string | number} */ (model.readAttribute(attributeName))
+    const attributeValue = /**
+ * Documents this API.
+ * @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
 
-    /** @type {Record<string, string | number>} */
+    /**
+ * Where args.
+ * @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[attributeNameUnderscore] = attributeValue
@@ -42,7 +49,9 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
       if (scopeValue == null) return
 
-      whereArgs[scopeUnderscore] = /** @type {string | number} */ (scopeValue)
+      whereArgs[scopeUnderscore] = /**
+ * Documents this API.
+ * @type {string | number} */ (scopeValue)
     }
 
     let existingRecordQuery = modelClass
@@ -74,7 +83,9 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * @returns {string | number | null}
    */
   _resolveScopeValueFromRelationship(model, scopeColumn) {
-    const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
+    const modelClass = /**
+ * Documents this API.
+ * @type {typeof import("../index.js").default} */ (model.constructor)
     const relationships = modelClass.getRelationshipsMap()
 
     for (const relationshipName in relationships) {

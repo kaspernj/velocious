@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs dispatch channel subscribers.
  * @param {object} args - Dispatch arguments.
  * @param {string} args.channel - Channel name.
  * @param {string | undefined} args.createdAt - Event creation timestamp.

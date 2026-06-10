@@ -2,9 +2,12 @@
 
 import restArgsError from "../../utils/rest-args-error.js"
 
-/** @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
+/**
+ * Documents this API.
+ * @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
 
 /**
+ * Runs normalize recipients.
  * @param {?} value - Recipient input.
  * @returns {string[]} - Normalized recipients.
  */
@@ -15,6 +18,7 @@ function normalizeRecipients(value) {
 }
 
 /**
+ * Runs header line.
  * @param {string} name - Header name.
  * @param {string | undefined} value - Header value.
  * @returns {string | null} - Header line.
@@ -26,6 +30,7 @@ function headerLine(name, value) {
 }
 
 /**
+ * Runs envelope address.
  * @param {string} address - Header or mailbox address.
  * @returns {string} - SMTP envelope mailbox.
  */
@@ -40,6 +45,7 @@ function envelopeAddress(address) {
  */
 export default class SmtpMailerBackend {
   /**
+ * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {SmtpConnectionOptions} args.connectionOptions - smtp-connection options.
    * @param {string} [args.defaultFrom] - Default from address.
@@ -56,6 +62,7 @@ export default class SmtpMailerBackend {
   }
 
   /**
+ * Runs deliver.
    * @param {object} args - Delivery args.
    * @param {import("../index.js").MailerDeliveryPayload} args.payload - Mail delivery payload.
    * @param {import("../../configuration.js").default} [args.configuration] - Active configuration.
@@ -119,6 +126,7 @@ export default class SmtpMailerBackend {
       }
 
       /**
+ * Reject delivery.
        * @param {Error} error - Error that failed delivery.
        */
       const rejectDelivery = (error) => {
@@ -133,6 +141,7 @@ export default class SmtpMailerBackend {
       const onEnd = () => resolveDelivery()
 
       /**
+ * On error.
        * @param {Error} error - Error emitted by the SMTP connection.
        */
       const onError = (error) => {
@@ -151,7 +160,11 @@ export default class SmtpMailerBackend {
       }
 
       const sendMessage = () => {
-        connection.send({from: envelopeFrom, to: recipients}, /** @type {?} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
+        connection.send({from: envelopeFrom, to: recipients}, /**
+ * Documents this API.
+ * @type {?} */ (message), (/**
+ * Documents this API.
+ * @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

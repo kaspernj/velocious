@@ -5,6 +5,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 export default class ExpectToChange extends BaseExpect {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {function(): Promise<number>} args.changeCallback - Change callback.
    * @param {import("./expect.js").default} args.expect - Expect.
@@ -18,6 +19,7 @@ export default class ExpectToChange extends BaseExpect {
   }
 
   /**
+ * Runs by.
    * @param {number} count - Count value.
    * @returns {import("./expect.js").default} - The by.
    */
@@ -36,6 +38,7 @@ export default class ExpectToChange extends BaseExpect {
   }
 
   /**
+ * Runs execute.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async execute() {

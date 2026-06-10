@@ -4,6 +4,7 @@ import RecordAttachmentDownload from "./download.js"
 import {recordAttachmentsStoreForModel} from "./store.js"
 
 /**
+ * Runs download from row.
  * @param {object} args - Options.
  * @param {Record<string, ?>} args.row - Raw row.
  * @param {Buffer} args.content - Attachment bytes.
@@ -24,6 +25,7 @@ function downloadFromRow({content, row, url}) {
 }
 
 /**
+ * Runs is array.
  * @param {?} value - Candidate value.
  * @returns {value is Array<?>} - Whether value is an array.
  */
@@ -35,10 +37,13 @@ function isArray(value) {
  * Attachment helper bound to one model + attachment name.
  */
 export default class RecordAttachmentHandle {
-  /** @type {Array<?>} */
+  /**
+ * Pending inputs.
+ * @type {Array<?>} */
   pendingInputs = []
 
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -50,12 +55,15 @@ export default class RecordAttachmentHandle {
     this.type = type
   }
 
-  /** @returns {boolean} - Whether there are pending attachment writes. */
+  /**
+ * Runs has pending attachments.
+ * @returns {boolean} - Whether there are pending attachment writes. */
   hasPendingAttachments() {
     return this.pendingInputs.length > 0
   }
 
   /**
+ * Runs queue attach.
    * @param {?} input - Attachment input.
    * @returns {void} - Queues attachment write for next save.
    */
@@ -82,6 +90,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
+ * Runs attach.
    * @param {?} input - Attachment input.
    * @returns {Promise<void>} - Resolves when attached.
    */
@@ -91,6 +100,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
+ * Runs flush pending attachments.
    * @returns {Promise<void>} - Resolves when pending attachments are flushed.
    */
   async flushPendingAttachments() {
@@ -113,6 +123,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
+ * Runs download.
    * @param {string} [id] - Optional attachment id for has-many attachments.
    * @returns {Promise<RecordAttachmentDownload | null>} - Downloaded attachment.
    */
@@ -133,6 +144,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
+ * Runs download all.
    * @returns {Promise<Array<RecordAttachmentDownload>>} - Downloaded attachments.
    */
   async downloadAll() {
@@ -140,7 +152,9 @@ export default class RecordAttachmentHandle {
 
     const store = recordAttachmentsStoreForModel(this.model)
     const rows = await store.findMany({model: this.model, name: this.name})
-    /** @type {RecordAttachmentDownload[]} */
+    /**
+ * Downloads.
+ * @type {RecordAttachmentDownload[]} */
     const downloads = []
 
     for (const row of rows) {
@@ -156,6 +170,7 @@ export default class RecordAttachmentHandle {
   }
 
   /**
+ * Runs url.
    * @param {string} [id] - Optional attachment id for has-many attachments.
    * @returns {Promise<string | null>} - Resolvable attachment URL.
    */

@@ -1,10 +1,16 @@
 // @ts-check
 
-/** @typedef {{getDatabaseAnnotations?: () => string[], withDatabaseAnnotation?: (annotation: string, callback: () => Promise<?>) => Promise<?>}} DatabaseAnnotationsRuntime */
-/** @type {typeof globalThis & {velociousDatabaseAnnotations?: DatabaseAnnotationsRuntime}} */
+/**
+ * Documents this API.
+ * @typedef {{getDatabaseAnnotations?: () => string[], withDatabaseAnnotation?: (annotation: string, callback: () => Promise<?>) => Promise<?>}} DatabaseAnnotationsRuntime */
+/**
+ * Database annotations global.
+ * @type {typeof globalThis & {velociousDatabaseAnnotations?: DatabaseAnnotationsRuntime}} */
 const databaseAnnotationsGlobal = globalThis
 
-/** @returns {string[]} - Active database annotations for the current async context. */
+/**
+ * Runs get database annotations.
+ * @returns {string[]} - Active database annotations for the current async context. */
 function getDatabaseAnnotations() {
   const runtime = databaseAnnotationsGlobal.velociousDatabaseAnnotations
 
@@ -24,7 +30,7 @@ async function withDatabaseAnnotation(annotation, callback) {
   const runtime = databaseAnnotationsGlobal.velociousDatabaseAnnotations
 
   if (runtime && runtime.withDatabaseAnnotation) {
-    return /** @type {T} */ (await runtime.withDatabaseAnnotation(annotation, callback))
+    return /** Documents this API. @type {T} */ (await runtime.withDatabaseAnnotation(annotation, callback))
   }
 
   return await callback()

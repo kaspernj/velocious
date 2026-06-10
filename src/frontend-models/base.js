@@ -14,15 +14,22 @@ import {defineModelScope} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
 
-/** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
-/** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
 /**
+ * FrontendModelCommandType type.
+ * @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
+/**
+ * FrontendModelRequestCommandType type.
+ * @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
+/**
+ * Documents this API.
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
+ * Documents this API.
  * @typedef {{attributes?: string[], builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
  */
 /**
+ * FrontendModelTransportConfig type.
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. This should be the shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`).
  * @property {boolean} [shared] - Deprecated shared-endpoint flag retained for compatibility. Frontend-model CRUD/custom commands use the shared frontend-model API envelope by default.
@@ -32,12 +39,15 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
  */
 /**
+ * FrontendModelIdleWaitArgs type.
  * @typedef {object} FrontendModelIdleWaitArgs
  * @property {number} [quietMs] - Milliseconds the transport must stay idle before resolving.
  * @property {number} [timeout] - Timeout in milliseconds.
  */
 
-/** @type {FrontendModelTransportConfig} */
+/**
+ * Frontend model transport config.
+ * @type {FrontendModelTransportConfig} */
 const frontendModelTransportConfig = {}
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
@@ -45,25 +55,35 @@ const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 const ASSOCIATION_COUNTS_KEY = "__associationCounts"
 const QUERY_DATA_KEY = "__queryData"
 const ABILITIES_KEY = "__abilities"
-/** @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, ?>, requestId: string, resolve: (response: Record<string, ?>) => void, reject: (error: ?) => void, resourcePath?: string | null}>} */
+/**
+ * Pending shared frontend model requests.
+ * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, ?>, requestId: string, resolve: (response: Record<string, ?>) => void, reject: (error: ?) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
 let activeFrontendModelTransportRequestCount = 0
-/** @type {Array<() => void>} */
+/**
+ * Frontend model idle resolvers.
+ * @type {Array<() => void>} */
 let frontendModelIdleResolvers = []
 
-/** @type {VelociousWebsocketClient | null} */
+/**
+ * Internal websocket client.
+ * @type {VelociousWebsocketClient | null} */
 let internalWebsocketClient = null
 
-/** @returns {boolean} - Whether all queued and active frontend-model transport requests are done. */
+/**
+ * Runs frontend model transport is idle.
+ * @returns {boolean} - Whether all queued and active frontend-model transport requests are done. */
 function frontendModelTransportIsIdle() {
   return activeFrontendModelTransportRequestCount === 0
     && pendingSharedFrontendModelRequests.length === 0
     && !sharedFrontendModelFlushScheduled
 }
 
-/** @returns {void} */
+/**
+ * Runs resolve frontend model idle waiters.
+ * @returns {void} */
 function resolveFrontendModelIdleWaiters() {
   if (!frontendModelTransportIsIdle()) return
 
@@ -76,6 +96,7 @@ function resolveFrontendModelIdleWaiters() {
 }
 
 /**
+ * Runs wait for frontend model transport quiet period.
  * @param {number} milliseconds - Quiet period length.
  * @returns {Promise<void>} Resolves after the quiet period.
  */
@@ -86,6 +107,7 @@ async function waitForFrontendModelTransportQuietPeriod(milliseconds) {
 }
 
 /**
+ * Runs wait for frontend model transport idle.
  * @param {number} quietMs - Milliseconds the transport must stay idle before resolving.
  * @returns {Promise<void>} Resolves when transport stays idle.
  */
@@ -108,6 +130,7 @@ async function waitForFrontendModelTransportIdle(quietMs = 0) {
 }
 
 /**
+ * Runs track frontend model transport request.
  * @template T
  * @param {() => Promise<T>} callback - Transport callback.
  * @returns {Promise<T>} - Callback result.
@@ -151,7 +174,9 @@ function resolveInternalWebsocketClient() {
   return internalWebsocketClient
 }
 
-/** @returns {Promise<void>} */
+/**
+ * Runs flush buffered outgoing events after reconnect.
+ * @returns {Promise<void>} */
 async function flushBufferedOutgoingEventsAfterReconnect() {
   if (!internalWebsocketClient) return
 
@@ -177,6 +202,7 @@ async function flushBufferedOutgoingEventsAfterReconnect() {
 }
 
 /**
+ * Runs default frontend model resource path.
  * @param {typeof FrontendModelBase} modelClass - Frontend model class.
  * @returns {string} - Default resource path for the model class.
  */
@@ -187,6 +213,7 @@ function defaultFrontendModelResourcePath(modelClass) {
 /** Error raised when reading an attribute that was not selected in query payloads. */
 export class AttributeNotSelectedError extends Error {
   /**
+ * Runs constructor.
    * @param {string} modelName - Model class name.
    * @param {string} attributeName - Attribute that was requested.
    */
@@ -203,6 +230,7 @@ export class AttributeNotSelectedError extends Error {
  */
 export class FrontendModelSingularRelationship {
   /**
+ * Runs constructor.
    * @param {InstanceType<S>} model - Parent model.
    * @param {string} relationshipName - Relationship name.
    * @param {T | null} targetModelClass - Target model class.
@@ -216,6 +244,7 @@ export class FrontendModelSingularRelationship {
   }
 
   /**
+ * Runs set loaded.
    * @param {?} loadedValue - Loaded relationship value.
    * @returns {void}
    */
@@ -225,6 +254,7 @@ export class FrontendModelSingularRelationship {
   }
 
   /**
+ * Runs get preloaded.
    * @returns {boolean} - Whether relationship is preloaded.
    */
   getPreloaded() {
@@ -232,6 +262,7 @@ export class FrontendModelSingularRelationship {
   }
 
   /**
+ * Runs loaded.
    * @returns {?} - Loaded relationship value.
    */
   loaded() {
@@ -243,6 +274,7 @@ export class FrontendModelSingularRelationship {
   }
 
   /**
+ * Runs build.
    * @param {Record<string, ?>} [attributes] - New model attributes.
    * @returns {InstanceType<T>} - Built model.
    */
@@ -251,7 +283,9 @@ export class FrontendModelSingularRelationship {
       throw new Error(`No target model class configured for ${this.model.constructor.name}#${this.relationshipName}`)
     }
 
-    const model = /** @type {InstanceType<T>} */ (new this.targetModelClass(attributes))
+    const model = /**
+ * Documents this API.
+ * @type {InstanceType<T>} */ (new this.targetModelClass(attributes))
 
     this.setLoaded(model)
 
@@ -265,10 +299,13 @@ export class FrontendModelSingularRelationship {
  * @template {typeof FrontendModelBase} T
  */
 export class FrontendModelHasManyRelationship {
-  /** @type {Array<InstanceType<T>>} */
+  /**
+ * Documents this API.
+ * @type {Array<InstanceType<T>>} */
   _loadedValue
 
   /**
+ * Runs constructor.
    * @param {InstanceType<S>} model - Parent model.
    * @param {string} relationshipName - Relationship name.
    * @param {T | null} targetModelClass - Target model class.
@@ -282,6 +319,7 @@ export class FrontendModelHasManyRelationship {
   }
 
   /**
+ * Runs set loaded.
    * @param {Array<InstanceType<T>>} loadedValue - Loaded relationship value.
    * @returns {void}
    */
@@ -291,6 +329,7 @@ export class FrontendModelHasManyRelationship {
   }
 
   /**
+ * Runs get preloaded.
    * @returns {boolean} - Whether relationship is preloaded.
    */
   getPreloaded() {
@@ -298,6 +337,7 @@ export class FrontendModelHasManyRelationship {
   }
 
   /**
+ * Runs loaded.
    * @returns {Array<InstanceType<T>>} - Loaded relationship values.
    */
   loaded() {
@@ -309,6 +349,7 @@ export class FrontendModelHasManyRelationship {
   }
 
   /**
+ * Runs add to loaded.
    * @param {Array<InstanceType<T>>} models - Models to append.
    * @returns {void}
    */
@@ -319,6 +360,7 @@ export class FrontendModelHasManyRelationship {
   }
 
   /**
+ * Runs build.
    * @param {Record<string, ?>} [attributes] - New model attributes.
    * @returns {InstanceType<T>} - Built model.
    */
@@ -327,7 +369,9 @@ export class FrontendModelHasManyRelationship {
       throw new Error(`No target model class configured for ${this.model.constructor.name}#${this.relationshipName}`)
     }
 
-    const model = /** @type {InstanceType<T>} */ (new this.targetModelClass(attributes))
+    const model = /**
+ * Documents this API.
+ * @type {InstanceType<T>} */ (new this.targetModelClass(attributes))
 
     this.addToLoaded([model])
 
@@ -347,14 +391,17 @@ export class FrontendModelHasManyRelationship {
     this._preloaded = false
     this._loadedValue = []
 
-    const batched = await /** @type {?} */ (this.model)._tryCohortPreload(this.relationshipName)
+    const batched = await /**
+ * Documents this API.
+ * @type {?} */ (this.model)._tryCohortPreload(this.relationshipName)
 
     if (batched) return this._loadedValue
 
-    return /** @type {Promise<Array<InstanceType<T>>>} */ (this.model.loadRelationship(this.relationshipName))
+    return /** Documents this API. @type {Promise<Array<InstanceType<T>>>} */ (this.model.loadRelationship(this.relationshipName))
   }
 
   /**
+ * Runs to array.
    * @returns {Promise<Array<InstanceType<T>>>} - Loaded relationship models.
    */
   async toArray() {
@@ -367,6 +414,7 @@ export class FrontendModelHasManyRelationship {
 }
 
 /**
+ * Runs relationship type is collection.
  * @param {string} relationshipType - Relationship type.
  * @returns {boolean} - Whether relationship type is has-many.
  */
@@ -379,6 +427,7 @@ function relationshipTypeIsCollection(relationshipType) {
  */
 export class FrontendModelAttachmentDownload {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {string} args.id - Attachment id.
    * @param {string} args.filename - Filename.
@@ -396,27 +445,42 @@ export class FrontendModelAttachmentDownload {
     this.urlValue = url
   }
 
-  /** @returns {number} - File size in bytes. */
+  /**
+ * Runs byte size.
+ * @returns {number} - File size in bytes. */
   byteSize() { return this.byteSizeValue }
-  /** @returns {Uint8Array} - File content bytes. */
+  /**
+ * Runs content.
+ * @returns {Uint8Array} - File content bytes. */
   content() { return this.contentValue }
-  /** @returns {string | null} - Content type. */
+  /**
+ * Runs content type.
+ * @returns {string | null} - Content type. */
   contentType() { return this.contentTypeValue }
-  /** @returns {string} - Filename. */
+  /**
+ * Runs filename.
+ * @returns {string} - Filename. */
   filename() { return this.filenameValue }
-  /** @returns {string} - Attachment id. */
+  /**
+ * Runs id.
+ * @returns {string} - Attachment id. */
   id() { return this.idValue }
-  /** @returns {string | null} - Resolvable attachment URL. */
+  /**
+ * Runs url.
+ * @returns {string | null} - Resolvable attachment URL. */
   url() { return this.urlValue }
 }
 
 /**
+ * Runs frontend model attachment command payload.
  * @param {FrontendModelAttachmentHandle} attachment - Attachment wrapper.
  * @param {string | undefined} attachmentId - Optional has-many attachment id.
  * @returns {Record<string, ?>} - Command payload.
  */
 function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Payload.
+ * @type {Record<string, ?>} */
   const payload = {
     attachmentName: attachment.attachmentName,
     id: attachment.model.primaryKeyValue()
@@ -428,6 +492,7 @@ function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
 }
 
 /**
+ * Runs frontend attachment value is bytes.
  * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value looks like byte data.
  */
@@ -436,28 +501,37 @@ function frontendAttachmentValueIsBytes(value) {
 }
 
 /**
+ * Runs frontend attachment value supports array buffer.
  * @param {?} value - Candidate value.
  * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether candidate supports arrayBuffer().
  */
 function frontendAttachmentValueSupportsArrayBuffer(value) {
-  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).arrayBuffer === "function")
+  return Boolean(value && typeof value === "object" && typeof /**
+ * Documents this API.
+ * @type {?} */ (value).arrayBuffer === "function")
 }
 
 /**
+ * Runs frontend attachment normalize bytes.
  * @param {Uint8Array | Buffer | ArrayBuffer} value - Byte-like value.
  * @returns {Uint8Array} - Uint8Array bytes.
  */
 function frontendAttachmentNormalizeBytes(value) {
   if (value instanceof Uint8Array) return value
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
-  if (typeof Buffer !== "undefined" && Buffer.isBuffer(/** @type {?} */ (value))) {
-    return new Uint8Array(/** @type {Buffer} */ (value))
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(/**
+ * Documents this API.
+ * @type {?} */ (value))) {
+    return new Uint8Array(/**
+ * Documents this API.
+ * @type {Buffer} */ (value))
   }
 
   throw new Error("Unsupported attachment bytes value")
 }
 
 /**
+ * Runs frontend attachment bytes to base64.
  * @param {Uint8Array} bytes - Bytes.
  * @returns {string} - Base64 value.
  */
@@ -478,6 +552,7 @@ function frontendAttachmentBytesToBase64(bytes) {
 }
 
 /**
+ * Runs frontend attachment base64 to bytes.
  * @param {string} value - Base64 value.
  * @returns {Uint8Array} - Decoded bytes.
  */
@@ -499,6 +574,7 @@ function frontendAttachmentBase64ToBytes(value) {
 }
 
 /**
+ * Runs frontend attachment value is plain object.
  * @param {?} value - Candidate value.
  * @returns {value is Record<string, ?>} - Whether value is plain object.
  */
@@ -511,6 +587,7 @@ function frontendAttachmentValueIsPlainObject(value) {
 }
 
 /**
+ * Runs frontend model payload contains attachment upload.
  * @param {?} value - Payload candidate.
  * @returns {boolean} - Whether payload contains an attachment upload body.
  */
@@ -531,6 +608,7 @@ function frontendModelPayloadContainsAttachmentUpload(value) {
 }
 
 /**
+ * Runs normalize frontend attachment input.
  * @param {?} input - Attachment input.
  * @returns {Promise<Record<string, ?>>} - Transport-safe attachment payload.
  */
@@ -566,17 +644,31 @@ async function normalizeFrontendAttachmentInput(input) {
 
     return {
       contentBase64: frontendAttachmentBytesToBase64(bytes),
-      contentType: typeof /** @type {?} */ (input).type === "string" && /** @type {?} */ (input).type.length > 0
-        ? /** @type {?} */ (input).type
+      contentType: typeof /**
+ * Documents this API.
+ * @type {?} */ (input).type === "string" && /**
+ * Documents this API.
+ * @type {?} */ (input).type.length > 0
+        ? /**
+ * Documents this API.
+ * @type {?} */ (input).type
         : null,
-      filename: typeof /** @type {?} */ (input).name === "string" && /** @type {?} */ (input).name.length > 0
-        ? /** @type {?} */ (input).name
+      filename: typeof /**
+ * Documents this API.
+ * @type {?} */ (input).name === "string" && /**
+ * Documents this API.
+ * @type {?} */ (input).name.length > 0
+        ? /**
+ * Documents this API.
+ * @type {?} */ (input).name
         : "attachment.bin"
     }
   }
 
   if (frontendAttachmentValueIsBytes(input)) {
-    const bytes = frontendAttachmentNormalizeBytes(/** @type {Uint8Array | Buffer | ArrayBuffer} */ (input))
+    const bytes = frontendAttachmentNormalizeBytes(/**
+ * Documents this API.
+ * @type {Uint8Array | Buffer | ArrayBuffer} */ (input))
 
     return {
       contentBase64: frontendAttachmentBytesToBase64(bytes),
@@ -593,6 +685,7 @@ async function normalizeFrontendAttachmentInput(input) {
  */
 export class FrontendModelAttachmentHandle {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {FrontendModelBase} args.model - Model instance.
    * @param {string} args.attachmentName - Attachment name.
@@ -603,11 +696,14 @@ export class FrontendModelAttachmentHandle {
   }
 
   /**
+ * Runs attach.
    * @param {?} input - Attachment input.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(input) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.model.constructor)
     const normalizedInput = await normalizeFrontendAttachmentInput(input)
     const response = await ModelClass.executeCommand("attach", {
       attachment: normalizedInput,
@@ -619,11 +715,14 @@ export class FrontendModelAttachmentHandle {
   }
 
   /**
+ * Runs download.
    * @param {string} [attachmentId] - Optional attachment id for has-many attachments.
    * @returns {Promise<FrontendModelAttachmentDownload | null>} - Downloaded attachment payload.
    */
   async download(attachmentId) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.model.constructor)
     const response = await ModelClass.executeCommand("download", frontendModelAttachmentCommandPayload(this, attachmentId))
     const attachmentPayload = response.attachment
 
@@ -644,11 +743,14 @@ export class FrontendModelAttachmentHandle {
   }
 
   /**
+ * Runs url.
    * @param {string} [attachmentId] - Optional attachment id for has-many attachments.
    * @returns {Promise<string | null>} - Resolvable attachment URL.
    */
   async url(attachmentId) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.model.constructor)
     const response = await ModelClass.executeCommand("url", frontendModelAttachmentCommandPayload(this, attachmentId))
 
     if (typeof response.url === "string" && response.url.length > 0) {
@@ -659,10 +761,13 @@ export class FrontendModelAttachmentHandle {
   }
 
   /**
+ * Runs download url.
    * @returns {string} - Download URL for this attachment on the configured backend.
    */
   downloadUrl() {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.model.constructor)
     const commandName = ModelClass.commandName("download")
     const resourcePath = ModelClass.resourcePath()
     const commandUrl = frontendModelCommandUrl(resourcePath, commandName)
@@ -676,6 +781,7 @@ export class FrontendModelAttachmentHandle {
 }
 
 /**
+ * Runs normalize frontend model transport url.
  * @param {string | undefined | null} value - URL candidate.
  * @returns {string} - Normalized URL without trailing slash.
  */
@@ -690,6 +796,7 @@ function normalizeFrontendModelTransportUrl(value) {
 }
 
 /**
+ * Runs frontend model transport url.
  * @returns {string} - Resolved frontend-model transport URL.
  */
 function frontendModelTransportUrl() {
@@ -701,11 +808,12 @@ function frontendModelTransportUrl() {
 }
 
 /**
+ * Runs clone frontend model attributes.
  * @param {Record<string, ?>} value - Attributes hash.
  * @returns {Record<string, ?>} - Cloned attributes hash.
  */
 function cloneFrontendModelAttributes(value) {
-  return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
+  return /** Documents this API. @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
 }
 
 /**
@@ -715,13 +823,16 @@ function cloneFrontendModelAttributes(value) {
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
+ * Documents this API.
  * @typedef {{callback: (payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
  */
 /**
+ * Documents this API.
  * @typedef {{callback: (payload: {id: string}) => void}} FrontendModelDestroyEventCallbackEntry
  */
 
 /**
+ * Runs merge frontend model event preload.
  * @param {Record<string, import("./query.js").FrontendModelTransportValue>} target - Target preload payload.
  * @param {Record<string, import("./query.js").FrontendModelTransportValue>} source - Source preload payload.
  * @returns {void}
@@ -745,13 +856,18 @@ function mergeFrontendModelEventPreload(target, source) {
     }
 
     mergeFrontendModelEventPreload(
-      /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (target[relationshipName]),
-      /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (value)
+      /**
+ * Documents this API.
+ * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (target[relationshipName]),
+      /**
+ * Documents this API.
+ * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (value)
     )
   }
 }
 
 /**
+ * Runs merge frontend model event select.
  * @param {Record<string, string[]>} target - Target select map.
  * @param {Record<string, string[]>} source - Source select map.
  * @returns {void}
@@ -765,6 +881,7 @@ function mergeFrontendModelEventSelect(target, source) {
 }
 
 /**
+ * Runs merge unique frontend model event entries.
  * @param {Array<import("./query.js").FrontendModelWithCountPayloadEntry | import("./query.js").FrontendModelAbilitiesPayloadEntry>} target - Target array.
  * @param {Array<import("./query.js").FrontendModelWithCountPayloadEntry | import("./query.js").FrontendModelAbilitiesPayloadEntry>} source - Source array.
  * @returns {void}
@@ -783,6 +900,7 @@ function mergeUniqueFrontendModelEventEntries(target, source) {
 }
 
 /**
+ * Runs merge frontend model event projection payload.
  * @param {import("./query.js").FrontendModelProjectionPayload} target - Target payload.
  * @param {import("./query.js").FrontendModelProjectionPayload} source - Source payload.
  * @returns {void}
@@ -826,13 +944,16 @@ function mergeFrontendModelEventProjectionPayload(target, source) {
 }
 
 /**
+ * Runs frontend model matched event filter keys.
  * @param {?} body - Raw websocket event body.
  * @returns {Set<string>} - Matched event filter keys delivered by the backend.
  */
 function frontendModelMatchedEventFilterKeys(body) {
   if (!body || typeof body !== "object") return new Set()
 
-  const keys = /** @type {{matchedEventFilterKeys?: ?}} */ (body).matchedEventFilterKeys
+  const keys = /**
+ * Documents this API.
+ * @type {{matchedEventFilterKeys?: ?}} */ (body).matchedEventFilterKeys
 
   if (!Array.isArray(keys)) return new Set()
 
@@ -840,6 +961,7 @@ function frontendModelMatchedEventFilterKeys(body) {
 }
 
 /**
+ * Runs frontend model event entry matches.
  * @param {FrontendModelModelEventCallbackEntry} entry - Callback entry.
  * @param {Set<string>} matchedEventFilterKeys - Backend matched filter keys.
  * @returns {boolean} Whether the callback should receive the event.
@@ -851,6 +973,7 @@ function frontendModelEventEntryMatches(entry, matchedEventFilterKeys) {
 }
 
 /**
+ * Runs assert no destroy event filter.
  * @param {typeof FrontendModelBase} ModelClass - Event model class.
  * @param {import("./query.js").FrontendModelEventOptions} options - Event options.
  * @returns {void}
@@ -875,32 +998,53 @@ function assertNoDestroyEventFilter(ModelClass, options) {
  * callers can read fresh values from the same instance handle.
  */
 class FrontendModelEventSubscription {
-  /** @param {typeof FrontendModelBase} ModelClass - Frontend model class for this subscription bucket. */
+  /**
+ * Runs constructor.
+ * @param {typeof FrontendModelBase} ModelClass - Frontend model class for this subscription bucket. */
   constructor(ModelClass) {
     this.ModelClass = ModelClass
-    /** @type {Set<FrontendModelModelEventCallbackEntry>} */
+    /**
+ * Documents this API.
+ * @type {Set<FrontendModelModelEventCallbackEntry>} */
     this.classCreateCallbacks = new Set()
-    /** @type {Set<FrontendModelModelEventCallbackEntry>} */
+    /**
+ * Documents this API.
+ * @type {Set<FrontendModelModelEventCallbackEntry>} */
     this.classUpdateCallbacks = new Set()
-    /** @type {Set<FrontendModelDestroyEventCallbackEntry>} */
+    /**
+ * Documents this API.
+ * @type {Set<FrontendModelDestroyEventCallbackEntry>} */
     this.classDestroyCallbacks = new Set()
-    /** @type {Map<string, {instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}>} */
+    /**
+ * Documents this API.
+ * @type {Map<string, {instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}>} */
     this.instanceListeners = new Map()
-    /** @type {?} */
+    /**
+ * Documents this API.
+ * @type {?} */
     this.channelHandle = null
-    /** @type {Promise<void> | null} */
+    /**
+ * Documents this API.
+ * @type {Promise<void> | null} */
     this.readyPromise = null
-    /** @type {string | null} */
+    /**
+ * Documents this API.
+ * @type {string | null} */
     this.subscriptionParamsKey = null
   }
 
   /**
+ * Runs subscription params.
    * @returns {{model: string, eventFilters?: import("./query.js").FrontendModelEventFilterPayloadEntry[], unfilteredEventDelivery?: boolean} & import("./query.js").FrontendModelProjectionPayload} - Current websocket subscription params.
    */
   subscriptionParams() {
-    /** @type {import("./query.js").FrontendModelProjectionPayload} */
+    /**
+ * Projection payload.
+ * @type {import("./query.js").FrontendModelProjectionPayload} */
     const projectionPayload = {}
-    /** @type {Record<string, import("./query.js").FrontendModelEventFilterPayloadEntry>} */
+    /**
+ * Event filters by key.
+ * @type {Record<string, import("./query.js").FrontendModelEventFilterPayloadEntry>} */
     const eventFiltersByKey = {}
     const projectionEntries = []
     let hasUnfilteredEventDelivery = this.classDestroyCallbacks.size > 0
@@ -941,12 +1085,16 @@ class FrontendModelEventSubscription {
     }
   }
 
-  /** @returns {string} - Stable key for current subscription params. */
+  /**
+ * Runs subscription params json.
+ * @returns {string} - Stable key for current subscription params. */
   subscriptionParamsJson() {
     return JSON.stringify(this.subscriptionParams())
   }
 
-  /** @returns {Promise<void>} */
+  /**
+ * Runs ensure subscribed.
+ * @returns {Promise<void>} */
   async ensureSubscribed() {
     const paramsJson = this.subscriptionParamsJson()
 
@@ -969,7 +1117,9 @@ class FrontendModelEventSubscription {
       return
     }
 
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /**
+ * Documents this API.
+ * @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.subscribeChannel !== "function") {
       throw new Error("Frontend model event subscriptions require configureTransport({websocketUrl}) or configureTransport({websocketClient})")
@@ -983,7 +1133,9 @@ class FrontendModelEventSubscription {
       this.subscriptionParamsKey = JSON.stringify(params)
       this.channelHandle = client.subscribeChannel(FRONTEND_MODELS_CHANNEL_NAME, {
         params,
-        onMessage: (/** @type {?} */ body) => this._dispatchEvent(body),
+        onMessage: (/**
+ * Documents this API.
+ * @type {?} */ body) => this._dispatchEvent(body),
         onClose: () => {
           this.channelHandle = null
           this.readyPromise = null
@@ -1005,7 +1157,9 @@ class FrontendModelEventSubscription {
     await this.readyPromise
   }
 
-  /** @param {?} body - WebSocket event payload. */
+  /**
+ * Runs dispatch event.
+ * @param {?} body - WebSocket event payload. */
   _dispatchEvent(body) {
     if (!body || typeof body !== "object") return
 
@@ -1035,8 +1189,12 @@ class FrontendModelEventSubscription {
 
     if (!body.record || typeof body.record !== "object") return
 
-    const deserializedRecord = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(body.record))
-    const freshModel = /** @type {?} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
+    const deserializedRecord = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(body.record))
+    const freshModel = /**
+ * Documents this API.
+ * @type {?} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
     const listener = this.instanceListeners.get(id)
 
     if (action === "update" && listener) {
@@ -1047,7 +1205,9 @@ class FrontendModelEventSubscription {
       if (matchingUpdateCallbacks.length > 0) {
         // Auto-merge into the registered instance so callers reading
         // through the same handle see fresh attributes.
-        const instanceAny = /** @type {?} */ (listener.instance)
+        const instanceAny = /**
+ * Documents this API.
+ * @type {?} */ (listener.instance)
 
         instanceAny.assignAttributes(freshModel.attributes())
         instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
@@ -1067,7 +1227,9 @@ class FrontendModelEventSubscription {
     }
   }
 
-  /** @returns {void} */
+  /**
+ * Runs maybe teardown.
+ * @returns {void} */
   maybeTeardown() {
     const hasAnyListener = this.classCreateCallbacks.size > 0
       || this.classUpdateCallbacks.size > 0
@@ -1089,10 +1251,13 @@ class FrontendModelEventSubscription {
   }
 }
 
-/** @type {WeakMap<typeof FrontendModelBase, FrontendModelEventSubscription>} */
+/**
+ * Frontend model event subscriptions.
+ * @type {WeakMap<typeof FrontendModelBase, FrontendModelEventSubscription>} */
 const frontendModelEventSubscriptions = new WeakMap()
 
 /**
+ * Runs ensure frontend model event subscription.
  * @param {typeof FrontendModelBase} ModelClass - Model class.
  * @returns {FrontendModelEventSubscription} - Per-class subscription helper.
  */
@@ -1108,6 +1273,7 @@ function ensureFrontendModelEventSubscription(ModelClass) {
 }
 
 /**
+ * Runs ensure frontend model instance listener.
  * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
  * @param {string} id - Model id.
  * @param {InstanceType<typeof FrontendModelBase>} instance - Listener instance.
@@ -1127,6 +1293,7 @@ function ensureFrontendModelInstanceListener(sub, id, instance) {
 }
 
 /**
+ * Runs frontend model command url.
  * @param {string} resourcePath - Resource path prefix.
  * @param {string} commandName - Command path segment.
  * @returns {string} - Frontend model API URL.
@@ -1139,6 +1306,7 @@ function frontendModelCommandUrl(resourcePath, commandName) {
 }
 
 /**
+ * Runs frontend model api url.
  * @returns {string} - Shared frontend-model API URL.
  */
 function frontendModelApiUrl() {
@@ -1146,6 +1314,7 @@ function frontendModelApiUrl() {
 }
 
 /**
+ * Runs frontend model transport path.
  * @param {string} url - Request URL or path.
  * @returns {string} - Websocket-safe request path.
  */
@@ -1168,6 +1337,7 @@ function frontendModelTransportPath(url) {
 }
 
 /**
+ * Runs perform shared frontend model api request.
  * @param {Record<string, ?>} requestPayload - Shared request payload.
  * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
  */
@@ -1186,7 +1356,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
     })
     const responseJson = response.json()
 
-    return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(responseJson))
+    return /** Documents this API. @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(responseJson))
   }
 
   const response = await fetch(url, {
@@ -1207,7 +1377,9 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
     const responseContentType = response.headers.get("content-type")
 
     if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
-      /** @type {Record<string, ?> | null} */
+      /**
+ * Documents this API.
+ * @type {Record<string, ?> | null} */
       let errorBody
 
       try {
@@ -1226,10 +1398,11 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
 
   const json = responseText.length > 0 ? JSON.parse(responseText) : {}
 
-  return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
+  return /** Documents this API. @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
 }
 
 /**
+ * Runs flush pending shared frontend model requests.
  * @returns {Promise<void>} - Resolves after pending shared frontend-model requests flush.
  */
 async function flushPendingSharedFrontendModelRequests() {
@@ -1280,7 +1453,9 @@ async function flushPendingSharedFrontendModelRequests() {
           continue
         }
 
-        request.resolve(/** @type {Record<string, ?>} */ (responsePayload))
+        request.resolve(/**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (responsePayload))
       }
     } catch (error) {
       for (const request of batchedRequests) {
@@ -1290,7 +1465,9 @@ async function flushPendingSharedFrontendModelRequests() {
   })
 }
 
-/** @returns {void} */
+/**
+ * Runs schedule shared frontend model request flush.
+ * @returns {void} */
 function scheduleSharedFrontendModelRequestFlush() {
   if (sharedFrontendModelFlushScheduled) return
 
@@ -1321,6 +1498,7 @@ function frontendModelCustomCommandPath({commandName, memberId, modelName, resou
 }
 
 /**
+ * Runs assert find by conditions shape.
  * @param {?} conditions - findBy conditions.
  * @returns {void}
  */
@@ -1343,6 +1521,7 @@ function assertFindByConditionsShape(conditions) {
 }
 
 /**
+ * Runs assert defined find by condition value.
  * @param {?} value - Condition value to validate.
  * @param {string} keyPath - Key path for error output.
  * @returns {void}
@@ -1380,7 +1559,9 @@ function assertDefinedFindByConditionValue(value, keyPath) {
       return
     }
 
-    const objectValue = /** @type {Record<string, ?>} */ (value)
+    const objectValue = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (value)
     const prototype = Object.getPrototypeOf(objectValue)
 
     if (prototype !== Object.prototype && prototype !== null) {
@@ -1393,7 +1574,9 @@ function assertDefinedFindByConditionValue(value, keyPath) {
       throw new Error(`findBy does not support symbol condition keys (key: ${keyPath})`)
     }
 
-    const valueObject = /** @type {Record<string, ?>} */ (value)
+    const valueObject = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (value)
 
     Object.keys(valueObject).forEach((nestedKey) => {
       assertDefinedFindByConditionValue(valueObject[nestedKey], `${keyPath}.${nestedKey}`)
@@ -1403,43 +1586,69 @@ function assertDefinedFindByConditionValue(value, keyPath) {
 
 /** Base class for generated frontend model classes. */
 export default class FrontendModelBase {
-  /** @type {string | undefined} */
+  /**
+ * Documents this API.
+ * @type {string | undefined} */
   static modelName
 
-  /** @type {boolean} - Global auto-batch-preload toggle. Apps can opt out via FrontendModelBase.setAutoload(false). */
+  /**
+ * Autoload.
+ * @type {boolean} - Global auto-batch-preload toggle. Apps can opt out via FrontendModelBase.setAutoload(false). */
   static _autoload = true
 
-  /** @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
+  /**
+ * Runs get autoload.
+ * @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally. */
   static getAutoload() { return FrontendModelBase._autoload }
 
   /**
+ * Runs set autoload.
    * @param {boolean} newValue - Whether auto-batch-preload of relationships is enabled.
    * @returns {void}
    */
   static setAutoload(newValue) { FrontendModelBase._autoload = newValue }
 
-  /** @type {Record<string, ?>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
   _attributes
-  /** @type {Record<string, FrontendModelHasManyRelationship<?, ?> | FrontendModelSingularRelationship<?, ?>>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, FrontendModelHasManyRelationship<?, ?> | FrontendModelSingularRelationship<?, ?>>} */
   _relationships
-  /** @type {Record<string, FrontendModelAttachmentHandle>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, FrontendModelAttachmentHandle>} */
   _attachments
-  /** @type {Set<string> | null} */
+  /**
+ * Documents this API.
+ * @type {Set<string> | null} */
   _selectedAttributes
-  /** @type {boolean} */
+  /**
+ * Documents this API.
+ * @type {boolean} */
   _isNewRecord
-  /** @type {boolean} */
+  /**
+ * Documents this API.
+ * @type {boolean} */
   _markedForDestruction
-  /** @type {Record<string, ?>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
   _persistedAttributes
-  /** @type {Array<FrontendModelBase> | undefined} - Shared reference to sibling records loaded in the same batch. Used by auto-batch-preload. */
+  /**
+ * Documents this API.
+ * @type {Array<FrontendModelBase> | undefined} - Shared reference to sibling records loaded in the same batch. Used by auto-batch-preload. */
   _loadCohort
 
   /**
+ * Runs constructor.
    * @param {Record<string, ?>} [attributes] - Initial attributes.
    */
   constructor(attributes = {}) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
 
     ModelClass.ensureGeneratedAttachmentMethods()
     this._attributes = {}
@@ -1453,6 +1662,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs ensure generated attachment methods.
    * @this {typeof FrontendModelBase}
    * @returns {void} - Ensures attachment helper methods exist on the prototype.
    */
@@ -1460,7 +1670,9 @@ export default class FrontendModelBase {
     if (this._generatedAttachmentMethods) return
 
     const attachments = this.attachmentDefinitions()
-    const prototype = /** @type {Record<string, ?>} */ (this.prototype)
+    const prototype = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (this.prototype)
 
     for (const attachmentName of Object.keys(attachments)) {
       if (!(attachmentName in prototype)) {
@@ -1474,6 +1686,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs resource config.
    * @returns {FrontendModelResourceConfig} - Resource configuration.
    */
   static resourceConfig() {
@@ -1483,6 +1696,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs relationship model classes.
    * @this {typeof FrontendModelBase}
    * @returns {Record<string, typeof FrontendModelBase | string>} - Relationship model classes (or class name strings) keyed by relationship name.
    */
@@ -1500,6 +1714,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs define scope.
    * @param {(...args: Array<?>) => ?} callback - Scope callback.
    * @returns {((...args: Array<?>) => import("./query.js").default<?>) & {scope: (...args: Array<?>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
    */
@@ -1521,6 +1736,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs relationship definitions.
    * @this {typeof FrontendModelBase}
    * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany", autoload?: boolean}>} - Relationship definitions keyed by relationship name.
    */
@@ -1529,6 +1745,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs attachment definitions.
    * @this {typeof FrontendModelBase}
    * @returns {Record<string, FrontendModelAttachmentDefinition>} - Attachment definitions keyed by attachment name.
    */
@@ -1537,6 +1754,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs attachment definition.
    * @this {typeof FrontendModelBase}
    * @param {string} attachmentName - Attachment name.
    * @returns {FrontendModelAttachmentDefinition | null} - Attachment definition.
@@ -1546,6 +1764,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs relationship definition.
    * @this {typeof FrontendModelBase}
    * @param {string} relationshipName - Relationship name.
    * @returns {{type: "belongsTo" | "hasOne" | "hasMany", autoload?: boolean} | null} - Relationship definition.
@@ -1557,6 +1776,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs relationship model class.
    * @this {typeof FrontendModelBase}
    * @param {string} relationshipName - Relationship name.
    * @returns {typeof FrontendModelBase | null} - Target relationship model class.
@@ -1569,6 +1789,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs attributes.
    * @returns {Record<string, ?>} - Attributes hash.
    */
   attributes() {
@@ -1576,6 +1797,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs is new record.
    * @returns {boolean} - Whether this model has not yet been persisted.
    */
   isNewRecord() {
@@ -1583,6 +1805,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs is persisted.
    * @returns {boolean} - Whether this model has been persisted.
    */
   isPersisted() {
@@ -1590,6 +1813,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs set is new record.
    * @param {boolean} newIsNewRecord - New persisted-state flag.
    * @returns {void}
    */
@@ -1608,6 +1832,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs marked for destruction.
    * @returns {boolean} - Whether this record is queued for nested destruction on next parent save.
    */
   markedForDestruction() {
@@ -1615,10 +1840,13 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs changes.
    * @returns {Record<string, Array<?>>} - Changed attributes as `[oldValue, newValue]`.
    */
   changes() {
-    /** @type {Record<string, Array<?>>} */
+    /**
+ * Changed attributes.
+ * @type {Record<string, Array<?>>} */
     const changedAttributes = {}
     const attributeNames = new Set([
       ...Object.keys(this._persistedAttributes),
@@ -1638,6 +1866,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs is changed.
    * @returns {boolean} - Whether any tracked attribute has changed.
    */
   isChanged() {
@@ -1645,12 +1874,15 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs get relationship by name.
    * @param {string} relationshipName - Relationship name.
    * @returns {FrontendModelHasManyRelationship<?, ?> | FrontendModelSingularRelationship<?, ?>} - Relationship state object.
    */
   getRelationshipByName(relationshipName) {
     if (!this._relationships[relationshipName]) {
-      const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+      const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
       const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
       const targetModelClass = ModelClass.relationshipModelClass(relationshipName)
 
@@ -1665,11 +1897,14 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs get attachment by name.
    * @param {string} attachmentName - Attachment name.
    * @returns {FrontendModelAttachmentHandle} - Attachment helper.
    */
   getAttachmentByName(attachmentName) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const attachmentDefinition = ModelClass.attachmentDefinition(attachmentName)
 
     if (!attachmentDefinition) {
@@ -1687,11 +1922,14 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs load relationship.
    * @param {string} relationshipName - Relationship name.
    * @returns {Promise<?>} - Loaded relationship value.
    */
   async loadRelationship(relationshipName) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const id = this.primaryKeyValue()
     const reloadedModel = await ModelClass
       .preload([relationshipName])
@@ -1719,6 +1957,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs relationship or load.
    * @param {string} relationshipName - Relationship name.
    * @returns {Promise<?>} - Loaded relationship value.
    */
@@ -1750,7 +1989,9 @@ export default class FrontendModelBase {
   async _tryCohortPreload(relationshipName) {
     if (!FrontendModelBase.getAutoload()) return false
 
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const cohort = this._loadCohort
 
     if (!cohort || cohort.length <= 1) return false
@@ -1760,7 +2001,9 @@ export default class FrontendModelBase {
     if (!definition) return false
     if (definition.autoload === false) return false
 
-    /** @type {Array<FrontendModelBase>} */
+    /**
+ * Batch.
+ * @type {Array<FrontendModelBase>} */
     const batch = []
 
     // Exact same class, persisted, no existing in-memory relationship state.
@@ -1787,7 +2030,9 @@ export default class FrontendModelBase {
       .where({[primaryKey]: batchIds})
       .toArray()
 
-    /** @type {Map<string, FrontendModelBase>} */
+    /**
+ * Reloaded by id.
+ * @type {Map<string, FrontendModelBase>} */
     const reloadedById = new Map()
 
     for (const reloaded of reloadedBatch) {
@@ -1815,12 +2060,15 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs set relationship.
    * @param {string} relationshipName - Relationship name.
    * @param {?} relationshipValue - Relationship value.
    * @returns {?} - Assigned relationship value.
    */
   setRelationship(relationshipName, relationshipValue) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
 
     if (!relationshipDefinition) {
@@ -1837,6 +2085,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs assign attributes.
    * @param {Record<string, ?>} attributes - Attributes to assign.
    * @returns {void} - No return value.
    */
@@ -1847,6 +2096,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs clear relationship cache.
    * @returns {void} - Clears cached relationship state.
    */
   clearRelationshipCache() {
@@ -1854,6 +2104,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs primary key.
    * @this {typeof FrontendModelBase}
    * @returns {string} - Primary key name.
    */
@@ -1862,10 +2113,13 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs primary key value.
    * @returns {number | string} - Primary key value.
    */
   primaryKeyValue() {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const value = this.readAttribute(ModelClass.primaryKey())
 
     if (value === undefined || value === null) {
@@ -1876,6 +2130,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs read attribute.
    * @param {string} attributeName - Attribute name.
    * @returns {?} - Attribute value.
    */
@@ -1911,7 +2166,11 @@ export default class FrontendModelBase {
    * @returns {number}
    */
   readCount(attributeName) {
-    return readPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName)
+    return readPayloadAssociationCount(/**
+ * Documents this API.
+ * @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
+ * Documents this API.
+ * @type {?} */ (this)), attributeName)
   }
 
   /**
@@ -1923,7 +2182,11 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setAssociationCount(attributeName, value) {
-    setPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName, value)
+    setPayloadAssociationCount(/**
+ * Documents this API.
+ * @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
+ * Documents this API.
+ * @type {?} */ (this)), attributeName, value)
   }
 
   /**
@@ -1939,7 +2202,11 @@ export default class FrontendModelBase {
    * @returns {boolean}
    */
   can(action) {
-    return readPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action)
+    return readPayloadComputedAbility(/**
+ * Documents this API.
+ * @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
+ * Documents this API.
+ * @type {?} */ (this)), action)
   }
 
   /**
@@ -1952,7 +2219,11 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setComputedAbility(action, value) {
-    setPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action, value)
+    setPayloadComputedAbility(/**
+ * Documents this API.
+ * @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
+ * Documents this API.
+ * @type {?} */ (this)), action, value)
   }
 
   /**
@@ -1966,7 +2237,11 @@ export default class FrontendModelBase {
    * @returns {?}
    */
   queryData(name) {
-    return readPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name)
+    return readPayloadQueryData(/**
+ * Documents this API.
+ * @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
+ * Documents this API.
+ * @type {?} */ (this)), name)
   }
 
   /**
@@ -1978,10 +2253,15 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setQueryData(name, value) {
-    setPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name, value)
+    setPayloadQueryData(/**
+ * Documents this API.
+ * @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
+ * Documents this API.
+ * @type {?} */ (this)), name, value)
   }
 
   /**
+ * Runs set attribute.
    * @param {string} attributeName - Attribute name.
    * @param {?} newValue - New value.
    * @returns {?} - Assigned value.
@@ -2021,11 +2301,15 @@ export default class FrontendModelBase {
   _invalidateRelationshipsForAttribute(attributeName) {
     if (!this._relationships || Object.keys(this._relationships).length === 0) return
 
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const definitions = typeof ModelClass.relationshipDefinitions === "function" ? ModelClass.relationshipDefinitions() : {}
 
     for (const relationshipName of Object.keys(this._relationships)) {
-      const definition = /** @type {?} */ (definitions[relationshipName])
+      const definition = /**
+ * Documents this API.
+ * @type {?} */ (definitions[relationshipName])
 
       if (!definition || definition.type !== "belongsTo") continue
 
@@ -2038,6 +2322,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs resource path.
    * @this {typeof FrontendModelBase}
    * @returns {string} - Derived resource path.
    */
@@ -2049,6 +2334,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs command name.
    * @this {typeof FrontendModelBase}
    * @param {FrontendModelCommandType} commandType - Command type.
    * @returns {string} - Resolved command name.
@@ -2069,6 +2355,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs normalize custom command payload arguments.
    * @this {typeof FrontendModelBase}
    * @param {Array<?>} args - Command arguments.
    * @returns {Record<string, ?>} - Command payload.
@@ -2085,10 +2372,12 @@ export default class FrontendModelBase {
         return {arg1: payload}
       }
 
-      return /** @type {Record<string, ?>} */ (payload)
+      return /** Documents this API. @type {Record<string, ?>} */ (payload)
     }
 
-    /** @type {Record<string, number | string | Array<?>>} */
+    /**
+ * Payload.
+ * @type {Record<string, number | string | Array<?>>} */
     const payload = {}
 
     for (let index = 0; index < args.length; index += 1) {
@@ -2113,6 +2402,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs configure transport.
    * @param {FrontendModelTransportConfig} config - Frontend model transport configuration.
    * @returns {void} - No return value.
    */
@@ -2231,7 +2521,9 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   static setWebsocketMetadata(key, value) {
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /**
+ * Documents this API.
+ * @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.setMetadata !== "function") return
 
@@ -2249,10 +2541,14 @@ export default class FrontendModelBase {
    * @returns {{sync: () => void, close: () => void}} - Handle used to resync or close the managed connection.
    */
   static openManagedConnection(connectionType, options) {
-    /** @type {?} */
+    /**
+ * Connection.
+ * @type {?} */
     let connection = null
     let closed = false
-    /** @type {ReturnType<typeof setTimeout> | null} */
+    /**
+ * Retry timer.
+ * @type {ReturnType<typeof setTimeout> | null} */
     let retryTimer = null
     let lastParamsJson = ""
 
@@ -2289,7 +2585,9 @@ export default class FrontendModelBase {
       // WS client not ready — retry. Check the actual client (which
       // may be an injected websocketClient) instead of websocketState()
       // which only reflects the internal client.
-      const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+      const client = /**
+ * Documents this API.
+ * @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
       if (!client || !client.isOpen()) {
         if (retryTimer === null) {
@@ -2337,7 +2635,9 @@ export default class FrontendModelBase {
    * @returns {?} - VelociousWebsocketClientConnection handle (typed loosely to avoid a cross-module import cycle).
    */
   static openWebsocketConnection(connectionType, options) {
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /**
+ * Documents this API.
+ * @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.openConnection !== "function") {
       throw new Error("openWebsocketConnection requires configureTransport({websocketUrl})")
@@ -2354,7 +2654,9 @@ export default class FrontendModelBase {
    * @returns {?} - Websocket channel handle from the configured client.
    */
   static subscribeWebsocketChannel(channelType, options) {
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /**
+ * Documents this API.
+ * @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.subscribeChannel !== "function") {
       throw new Error("subscribeWebsocketChannel requires configureTransport({websocketUrl})")
@@ -2371,7 +2673,7 @@ export default class FrontendModelBase {
   static installWebsocketTestHooks() {
     if (typeof globalThis === "undefined") return
 
-    /** @type {?} */ (globalThis).__velocious_websocket_hooks = {
+    /** Documents this API. @type {?} */ (globalThis).__velocious_websocket_hooks = {
       connect: () => this.connectWebsocket(),
       disconnect: () => this.disconnectWebsocket(),
       drop: () => this.dropWebsocket(),
@@ -2380,6 +2682,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs attributes from response.
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
    * @returns {Record<string, ?>} - Attributes from payload.
@@ -2391,6 +2694,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs model data from response.
    * @this {typeof FrontendModelBase}
    * @param {object} response - Response payload.
    * @returns {{abilities: Record<string, boolean>, attributes: Record<string, ?>, associationCounts: Record<string, number>, queryData: Record<string, ?>, preloadedRelationships: Record<string, ?>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, abilities, and the selected-attributes set.
@@ -2400,34 +2704,52 @@ export default class FrontendModelBase {
       throw new Error(`Expected object response but got: ${response}`)
     }
 
-    const responseObject = /** @type {Record<string, ?>} */ (response)
+    const responseObject = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (response)
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
     let modelData
 
     if (responseObject.model && typeof responseObject.model === "object") {
-      modelData = /** @type {Record<string, ?>} */ (responseObject.model)
+      modelData = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (responseObject.model)
     } else if (responseObject.attributes && typeof responseObject.attributes === "object") {
-      modelData = /** @type {Record<string, ?>} */ (responseObject.attributes)
+      modelData = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (responseObject.attributes)
     } else {
       modelData = responseObject
     }
 
     const attributes = {...modelData}
     const preloadedRelationships = isPlainObject(attributes[PRELOADED_RELATIONSHIPS_KEY])
-      ? /** @type {Record<string, ?>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
+      ? /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (attributes[PRELOADED_RELATIONSHIPS_KEY])
       : {}
     const associationCounts = isPlainObject(attributes[ASSOCIATION_COUNTS_KEY])
-      ? /** @type {Record<string, number>} */ (attributes[ASSOCIATION_COUNTS_KEY])
+      ? /**
+ * Documents this API.
+ * @type {Record<string, number>} */ (attributes[ASSOCIATION_COUNTS_KEY])
       : {}
     const queryData = isPlainObject(attributes[QUERY_DATA_KEY])
-      ? /** @type {Record<string, ?>} */ (attributes[QUERY_DATA_KEY])
+      ? /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (attributes[QUERY_DATA_KEY])
       : {}
     const abilities = isPlainObject(attributes[ABILITIES_KEY])
-      ? /** @type {Record<string, boolean>} */ (attributes[ABILITIES_KEY])
+      ? /**
+ * Documents this API.
+ * @type {Record<string, boolean>} */ (attributes[ABILITIES_KEY])
       : {}
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
-      ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
+      ? new Set(/**
+ * Documents this API.
+ * @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
 
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
@@ -2442,6 +2764,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs apply preloaded relationships.
    * @this {typeof FrontendModelBase}
    * @param {FrontendModelBase} model - Model instance.
    * @param {Record<string, ?>} preloadedRelationships - Preloaded relationship payload.
@@ -2462,6 +2785,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs instantiate relationship value.
    * @this {typeof FrontendModelBase}
    * @param {?} relationshipPayload - Relationship payload value.
    * @param {typeof FrontendModelBase | null} targetModelClass - Target model class.
@@ -2476,6 +2800,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs instantiate from response.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?> | InstanceType<T>} response - Response payload, or an already-hydrated instance of this class.
@@ -2492,7 +2817,7 @@ export default class FrontendModelBase {
     // model instance into a new constructor call and produce a broken model
     // with internal state keys promoted to attributes.
     if (response instanceof this) {
-      return /** @type {InstanceType<T>} */ (response)
+      return /** Documents this API. @type {InstanceType<T>} */ (response)
     }
 
     const modelData = this.modelDataFromResponse(response)
@@ -2502,7 +2827,9 @@ export default class FrontendModelBase {
     const queryData = modelData.queryData
     const abilities = modelData.abilities
     const selectedAttributes = modelData.selectedAttributes
-    const model = /** @type {InstanceType<T>} */ (new this(attributes))
+    const model = /**
+ * Documents this API.
+ * @type {InstanceType<T>} */ (new this(attributes))
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
@@ -2526,6 +2853,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {number | string} id - Record identifier.
@@ -2536,6 +2864,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find by.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
@@ -2546,6 +2875,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find by or fail.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
@@ -2556,6 +2886,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs to array.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
@@ -2565,6 +2896,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs load.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
@@ -2574,6 +2906,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs all.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
@@ -2583,6 +2916,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs where.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Root-model where conditions.
@@ -2593,6 +2927,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs joins.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?> | Array<Record<string, ?>>} joins - Relationship descriptor joins.
@@ -2603,6 +2938,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs limit.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {number} value - Maximum number of records.
@@ -2613,6 +2949,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs offset.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {number} value - Number of records to skip.
@@ -2623,6 +2960,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs page.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {number} pageNumber - 1-based page number.
@@ -2633,6 +2971,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs per page.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {number} value - Number of records per page.
@@ -2643,6 +2982,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs count.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {Promise<number>} - Number of loaded model instances.
@@ -2727,8 +3067,12 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onUpdate(callback, options = {}) {
-    const self = /** @type {?} */ (this)
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const self = /**
+ * Documents this API.
+ * @type {?} */ (this)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
     const entry = {callback, ...frontendModelEventOptionsPayload(ModelClass, options)}
@@ -2757,8 +3101,12 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onDestroy(callback, options = {}) {
-    const self = /** @type {?} */ (this)
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const self = /**
+ * Documents this API.
+ * @type {?} */ (this)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
 
     assertNoDestroyEventFilter(ModelClass, options)
 
@@ -2784,6 +3132,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs pluck.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {...(string | string[] | Record<string, ?> | Array<Record<string, ?>>)} columns - Pluck definition(s).
@@ -2794,6 +3143,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs search.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {string[]} path - Relationship path.
@@ -2807,6 +3157,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs ransack.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} params - Ransack-style params hash.
@@ -2817,6 +3168,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs sort.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
@@ -2827,6 +3179,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs order.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
@@ -2837,6 +3190,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs group.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {string | string[] | Record<string, ?> | Array<Record<string, ?>>} group - Group definition(s).
@@ -2847,6 +3201,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs distinct.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {boolean} [value] - Whether to request distinct rows.
@@ -2857,45 +3212,50 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs query.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
    */
   static query() {
-    return /** @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({modelClass: this}))
+    return /** Documents this API. @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({modelClass: this}))
   }
 
   /**
+ * Runs preload.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} preload - Preload graph.
    * @returns {FrontendModelQuery<T>} - Query with preload.
    */
   static preload(preload) {
-    return /** @type {FrontendModelQuery<T>} */ (this.query().preload(preload))
+    return /** Documents this API. @type {FrontendModelQuery<T>} */ (this.query().preload(preload))
   }
 
   /**
+ * Runs select.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, string[] | string> | string | string[]} select - Model-aware attribute select map or root-model shorthand.
    * @returns {FrontendModelQuery<T>} - Query with selected attributes.
    */
   static select(select) {
-    return /** @type {FrontendModelQuery<T>} */ (this.query().select(select))
+    return /** Documents this API. @type {FrontendModelQuery<T>} */ (this.query().select(select))
   }
 
   /**
+ * Runs selects extra.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, string[] | string> | string | string[]} select - Extra attributes to load in addition to the defaults, keyed by model name or root-model shorthand.
    * @returns {FrontendModelQuery<T>} - Query with extra selected attributes.
    */
   static selectsExtra(select) {
-    return /** @type {FrontendModelQuery<T>} */ (this.query().selectsExtra(select))
+    return /** Documents this API. @type {FrontendModelQuery<T>} */ (this.query().selectsExtra(select))
   }
 
   /**
+ * Runs first.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {Promise<InstanceType<T> | null>} - First model or null.
@@ -2905,6 +3265,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs last.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @returns {Promise<InstanceType<T> | null>} - Last model or null.
@@ -2914,6 +3275,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find or initialize by.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
@@ -2924,6 +3286,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find or create by.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
@@ -2935,13 +3298,16 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs create.
    * @template {typeof FrontendModelBase} T
    * @this {T}
    * @param {Record<string, ?>} [attributes] - Initial attributes.
    * @returns {Promise<InstanceType<T>>} - Persisted model.
    */
   static async create(attributes = {}) {
-    const model = /** @type {InstanceType<T>} */ (new this(attributes))
+    const model = /**
+ * Documents this API.
+ * @type {InstanceType<T>} */ (new this(attributes))
 
     await model.save()
 
@@ -2949,6 +3315,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs assert find by conditions.
    * @this {typeof FrontendModelBase}
    * @param {Record<string, ?>} conditions - findBy conditions.
    * @returns {void}
@@ -2962,6 +3329,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs matches find by conditions.
    * @this {typeof FrontendModelBase}
    * @param {FrontendModelBase} model - Candidate model.
    * @param {Record<string, ?>} conditions - Match conditions.
@@ -2991,6 +3359,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find by condition value matches.
    * @this {typeof FrontendModelBase}
    * @param {?} actualValue - Actual model value.
    * @param {?} expectedValue - Expected find condition value.
@@ -3024,8 +3393,12 @@ export default class FrontendModelBase {
         return false
       }
 
-      const actualObject = /** @type {Record<string, ?>} */ (actualValue)
-      const expectedObject = /** @type {Record<string, ?>} */ (expectedValue)
+      const actualObject = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (actualValue)
+      const expectedObject = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (expectedValue)
       const actualKeys = Object.keys(actualObject)
       const expectedKeys = Object.keys(expectedObject)
 
@@ -3054,6 +3427,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find by primitive values match.
    * @this {typeof FrontendModelBase}
    * @param {?} actualValue - Actual model value.
    * @param {?} expectedValue - Expected find condition value.
@@ -3084,6 +3458,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs find by numeric string matches number.
    * @this {typeof FrontendModelBase}
    * @param {string} numericString - Numeric string value.
    * @param {number} expectedNumber - Number value.
@@ -3102,15 +3477,22 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs update.
    * @param {Record<string, ?>} [newAttributes] - New values to assign before update.
    * @returns {Promise<this>} - Updated model.
    */
   async update(newAttributes = {}) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const attachmentDefinitions = ModelClass.attachmentDefinitions()
-    /** @type {Record<string, ?>} */
+    /**
+ * Regular attributes.
+ * @type {Record<string, ?>} */
     const regularAttributes = {}
-    /** @type {Array<{attachmentName: string, value: ?}>} */
+    /**
+ * Pending attachments.
+ * @type {Array<{attachmentName: string, value: ?}>} */
     const pendingAttachments = []
 
     for (const [attributeName, attributeValue] of Object.entries(newAttributes)) {
@@ -3147,11 +3529,14 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs attach.
    * @param {?} attachmentInput - Attachment input or named attachment payload.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(attachmentInput) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const attachmentDefinitions = ModelClass.attachmentDefinitions()
     const attachmentNames = Object.keys(attachmentDefinitions)
     let attachmentName = attachmentNames[0]
@@ -3179,13 +3564,18 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs save.
    * @returns {Promise<this>} - Saved model.
    */
   async save() {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const isNew = this.isNewRecord()
     const commandType = isNew ? "create" : "update"
-    /** @type {Record<string, ?>} */
+    /**
+ * Payload.
+ * @type {Record<string, ?>} */
     const payload = {
       // For creates, send all assigned attributes — the user-set hash typically
       // only contains writable fields. For updates, send only changed
@@ -3224,7 +3614,9 @@ export default class FrontendModelBase {
    * @returns {Record<string, ?>} - Changed attributes hash.
    */
   _changedAttributesForSave() {
-    /** @type {Record<string, ?>} */
+    /**
+ * Changed attributes.
+ * @type {Record<string, ?>} */
     const changedAttributes = {}
 
     for (const [attributeName, [, currentValue]] of Object.entries(this.changes())) {
@@ -3235,10 +3627,13 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs destroy.
    * @returns {Promise<void>} - Resolves when destroyed on backend.
    */
   async destroy() {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
 
     await ModelClass.executeCommand("destroy", {
       id: this.primaryKeyValue()
@@ -3260,13 +3655,17 @@ export default class FrontendModelBase {
    * @returns {Record<string, Array<Record<string, ?>>>} - Per-relationship list of nested-attribute entries.
    */
   _buildNestedAttributesPayload() {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
     if (!nestedAttributesConfig) return {}
 
-    /** @type {Record<string, Array<Record<string, ?>>>} */
+    /**
+ * Payload.
+ * @type {Record<string, Array<Record<string, ?>>>} */
     const payload = {}
 
     for (const relationshipName of Object.keys(nestedAttributesConfig)) {
@@ -3275,7 +3674,9 @@ export default class FrontendModelBase {
       if (!relationship || !(relationship instanceof FrontendModelHasManyRelationship)) continue
       if (!Array.isArray(relationship._loadedValue) || relationship._loadedValue.length === 0) continue
 
-      /** @type {Array<Record<string, ?>>} */
+      /**
+ * Entries.
+ * @type {Array<Record<string, ?>>} */
       const entries = []
 
       for (const child of relationship._loadedValue) {
@@ -3308,7 +3709,9 @@ export default class FrontendModelBase {
     const hasNestedDirty = Object.keys(nestedAttributes).length > 0
 
     if (this.isNewRecord()) {
-      /** @type {Record<string, ?>} */
+      /**
+ * Entry.
+ * @type {Record<string, ?>} */
       const entry = {attributes: this.attributes()}
 
       if (hasNestedDirty) entry.nestedAttributes = nestedAttributes
@@ -3318,7 +3721,9 @@ export default class FrontendModelBase {
 
     if (!this.isChanged() && !hasNestedDirty) return null
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Entry.
+ * @type {Record<string, ?>} */
     const entry = {id: this.primaryKeyValue()}
 
     if (this.isChanged()) entry.attributes = this.attributes()
@@ -3337,7 +3742,9 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _reconcileNestedAttributesFromResponse(response) {
-    const ModelClass = /** @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = /**
+ * Documents this API.
+ * @type {typeof FrontendModelBase} */ (this.constructor)
     const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
@@ -3346,7 +3753,9 @@ export default class FrontendModelBase {
     const modelData = ModelClass.modelDataFromResponse(response)
     const preloadedRelationships = modelData.preloadedRelationships
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Relevant preloads.
+ * @type {Record<string, ?>} */
     const relevantPreloads = {}
 
     for (const relationshipName of Object.keys(nestedAttributesConfig)) {
@@ -3361,6 +3770,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs execute command.
    * @this {typeof FrontendModelBase}
    * @param {FrontendModelCommandType} commandType - Command type.
    * @param {Record<string, ?>} payload - Command payload.
@@ -3368,7 +3778,9 @@ export default class FrontendModelBase {
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
-    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
+    const serializedPayload = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
     const resourcePath = this.resourcePath()
     const containsAttachmentUpload = frontendModelPayloadContainsAttachmentUpload(serializedPayload)
     const useSharedTransport = !containsAttachmentUpload
@@ -3390,7 +3802,9 @@ export default class FrontendModelBase {
         scheduleSharedFrontendModelRequestFlush()
       })
 
-      const decodedBatchResponse = /** @type {Record<string, ?>} */ (batchResponse)
+      const decodedBatchResponse = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (batchResponse)
 
       this.throwOnErrorFrontendModelResponse({
         commandType,
@@ -3416,7 +3830,9 @@ export default class FrontendModelBase {
 
       const directResponseText = await directResponse.text()
       const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
-      const decodedDirectResponse = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(directJson))
+      const decodedDirectResponse = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(directJson))
 
       this.throwOnErrorFrontendModelResponse({
         commandType,
@@ -3428,6 +3844,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs execute custom command.
    * @this {typeof FrontendModelBase}
    * @param {object} args - Command arguments.
    * @param {string} args.commandName - Raw command path segment.
@@ -3438,7 +3855,9 @@ export default class FrontendModelBase {
    * @returns {Promise<Record<string, ?>>} - Decoded response payload.
    */
   static async executeCustomCommand({commandName, commandType, memberId = null, payload, resourcePath}) {
-    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
+    const serializedPayload = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
     const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,
@@ -3460,7 +3879,9 @@ export default class FrontendModelBase {
       scheduleSharedFrontendModelRequestFlush()
     })
 
-    const decodedBatchResponse = /** @type {Record<string, ?>} */ (batchResponse)
+    const decodedBatchResponse = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (batchResponse)
 
     this.throwOnErrorFrontendModelResponse({
       commandType,
@@ -3471,6 +3892,7 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs throw on error frontend model response.
    * @this {typeof FrontendModelBase}
    * @param {object} args - Arguments.
    * @param {FrontendModelRequestCommandType} args.commandType - Command type.
@@ -3500,7 +3922,9 @@ export default class FrontendModelBase {
       ? response.errorMessage
       : `Request failed for ${this.name}#${commandType}`
 
-    const error = /** @type {Error & {velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>}} */ (new Error(errorMessage))
+    const error = /**
+ * Documents this API.
+ * @type {Error & {velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>}} */ (new Error(errorMessage))
     if (response.velocious && typeof response.velocious === "object") {
       error.velocious = response.velocious
     }
@@ -3514,11 +3938,14 @@ export default class FrontendModelBase {
   }
 
   /**
+ * Runs configured frontend model attribute names.
    * @this {typeof FrontendModelBase}
    * @returns {Set<string>} - Configured frontend model attribute names.
    */
   static configuredFrontendModelAttributeNames() {
-    const resourceConfig = /** @type {Record<string, ?>} */ (this.resourceConfig())
+    const resourceConfig = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (this.resourceConfig())
     const attributes = resourceConfig.attributes
 
     if (Array.isArray(attributes)) {

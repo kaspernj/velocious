@@ -4,6 +4,7 @@ import EventEmitter from "../utils/event-emitter.js"
 import Logger from "../logger.js"
 
 /**
+ * Runs summarize socket chunk.
  * @param {Buffer} chunk - Incoming socket data.
  * @returns {object} - Chunk debug metadata.
  */
@@ -20,6 +21,7 @@ export default class ServerClient {
   events = new EventEmitter()
 
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("net").Socket} args.socket - Socket instance.
@@ -43,7 +45,9 @@ export default class ServerClient {
     socket.on("finish", this.onSocketFinish)
   }
 
-  /** @returns {void} - No return value.  */
+  /**
+ * Runs listen.
+ * @returns {void} - No return value.  */
   listen() {
     this.logger.debug(() => ["Socket listen", {
       clientCount: this.clientCount,
@@ -54,7 +58,9 @@ export default class ServerClient {
     this.socket.on("data", this.onSocketData)
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+ * Runs end.
+ * @returns {Promise<void>} - Resolves when complete.  */
   end() {
     return new Promise((resolve) => {
       if (this.socket.destroyed || this.socket.writableEnded || this.socket.writable === false) {
@@ -68,6 +74,7 @@ export default class ServerClient {
   }
 
   /**
+ * On socket data.
    * @param {Buffer} chunk - Chunk.
    * @returns {void} - No return value.
    */
@@ -84,40 +91,53 @@ export default class ServerClient {
     })
   }
 
-  /** @returns {void} - No return value.  */
+  /**
+ * On socket end.
+ * @returns {void} - No return value.  */
   onSocketEnd = () => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount} end`)
     this.emitClose()
   }
 
-  /** @returns {void} - No return value. */
+  /**
+ * On socket close.
+ * @returns {void} - No return value. */
   onSocketClose = () => {
     this.logger.debugLowLevel(() => `Socket ${this.clientCount} close`)
     this.emitClose()
   }
 
-  /** @returns {void} - No return value. */
+  /**
+ * On socket timeout.
+ * @returns {void} - No return value. */
   onSocketTimeout = () => {
     this.logger.debug(() => ["Socket timeout", {clientCount: this.clientCount}])
   }
 
-  /** @returns {void} - No return value. */
+  /**
+ * On socket drain.
+ * @returns {void} - No return value. */
   onSocketDrain = () => {
     this.logger.debug(() => ["Socket drain", {clientCount: this.clientCount}])
   }
 
-  /** @returns {void} - No return value. */
+  /**
+ * On socket finish.
+ * @returns {void} - No return value. */
   onSocketFinish = () => {
     this.logger.debug(() => ["Socket finish", {clientCount: this.clientCount}])
   }
 
 
   /**
+ * On socket error.
    * @param {Error} error - Socket error.
    * @returns {void} - No return value.
    */
   onSocketError = (error) => {
-    const errorCode = /** @type {{code?: string}} */ (error).code
+    const errorCode = /**
+ * Documents this API.
+ * @type {{code?: string}} */ (error).code
 
     this.logger.error(() => [`Socket ${this.clientCount} error`, errorCode || error.message])
     this.emitClose()
@@ -127,7 +147,9 @@ export default class ServerClient {
     }
   }
 
-  /** @returns {void} - No return value. */
+  /**
+ * Runs emit close.
+ * @returns {void} - No return value. */
   emitClose() {
     if (this.closeEmitted) return
 
@@ -136,6 +158,7 @@ export default class ServerClient {
   }
 
   /**
+ * Runs send.
    * @param {string | Uint8Array} data - Data payload.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -157,8 +180,12 @@ export default class ServerClient {
         this.socket.off("error", onWriteError)
         resolve()
       }
-      const onWriteError = (/** @type {Error} */ error) => {
-        const errorCode = /** @type {{code?: string}} */ (error).code
+      const onWriteError = (/**
+ * Documents this API.
+ * @type {Error} */ error) => {
+        const errorCode = /**
+ * Documents this API.
+ * @type {{code?: string}} */ (error).code
 
         this.logger.error(() => [`Socket ${this.clientCount} write error`, errorCode || error.message])
         finish()
@@ -177,6 +204,7 @@ export default class ServerClient {
   }
 
   /**
+ * Runs set worker.
    * @param {import("worker_threads").Worker} newWorker - New worker.
    * @returns {void} - No return value.
    */

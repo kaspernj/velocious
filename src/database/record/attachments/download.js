@@ -3,6 +3,7 @@
 /** Downloaded attachment payload wrapper. */
 export default class RecordAttachmentDownload {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {string} args.id - Attachment id.
    * @param {string} args.filename - Filename.
@@ -15,16 +16,28 @@ export default class RecordAttachmentDownload {
     this.values = {byteSize, content, contentType, filename, id, url}
   }
 
-  /** @returns {number} - File size in bytes. */
+  /**
+ * Runs byte size.
+ * @returns {number} - File size in bytes. */
   byteSize() { return this.values.byteSize }
-  /** @returns {Buffer} - File content. */
+  /**
+ * Runs content.
+ * @returns {Buffer} - File content. */
   content() { return this.values.content }
-  /** @returns {string | null} - Content type. */
+  /**
+ * Runs content type.
+ * @returns {string | null} - Content type. */
   contentType() { return this.values.contentType }
-  /** @returns {string} - Filename. */
+  /**
+ * Runs filename.
+ * @returns {string} - Filename. */
   filename() { return this.values.filename }
-  /** @returns {string} - Attachment id. */
+  /**
+ * Runs id.
+ * @returns {string} - Attachment id. */
   id() { return this.values.id }
-  /** @returns {string | null} - Resolvable attachment URL. */
+  /**
+ * Runs url.
+ * @returns {string | null} - Resolvable attachment URL. */
   url() { return this.values.url }
 }

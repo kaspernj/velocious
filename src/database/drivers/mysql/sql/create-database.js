@@ -5,6 +5,7 @@ import CreateDatabaseBase from "../../../query/create-database-base.js"
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_]+$/
 
 /**
+ * Runs validate charset or collation.
  * @param {string} field - Field name (for error messages).
  * @param {string} value - Identifier value.
  * @returns {string} - Same value, validated.
@@ -19,6 +20,7 @@ function validateCharsetOrCollation(field, value) {
 
 export default class VelociousDatabaseConnectionDriversMysqlSqlCreateDatabase extends CreateDatabaseBase {
   /**
+ * Runs to sql.
    * @returns {string[]} - SQL statements.
    */
   toSql() {

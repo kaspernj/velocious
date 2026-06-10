@@ -2,9 +2,12 @@
 
 import BaseResource from "./base-resource.js"
 
-/** @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} AbilityConditionsType */
+/**
+ * Documents this API.
+ * @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} AbilityConditionsType */
 
 /**
+ * AbilityRuleType type.
  * @typedef {object} AbilityRuleType
  * @property {string[]} actions - Actions covered by rule.
  * @property {typeof import("../database/record/index.js").default} modelClass - Model class.
@@ -14,22 +17,33 @@ import BaseResource from "./base-resource.js"
 
 /** CanCan-style ability object for query-level access control. */
 export default class VelociousAuthorizationAbility {
-  /** @type {string[]} */
+  /**
+ * Create.
+ * @type {string[]} */
   static CREATE = ["create"]
 
-  /** @type {string[]} */
+  /**
+ * Read.
+ * @type {string[]} */
   static READ = ["read"]
 
-  /** @type {string[]} */
+  /**
+ * Update.
+ * @type {string[]} */
   static UPDATE = ["update"]
 
-  /** @type {string[]} */
+  /**
+ * Destroy.
+ * @type {string[]} */
   static DESTROY = ["destroy"]
 
-  /** @type {string[]} */
+  /**
+ * Crud.
+ * @type {string[]} */
   static CRUD = ["create", "read", "update", "destroy"]
 
   /**
+ * Runs constructor.
    * @param {object} args - Ability args.
    * @param {Record<string, ?>} [args.context] - Ability context.
    * @param {Record<string, ?>} [args.locals] - Ability locals.
@@ -40,10 +54,14 @@ export default class VelociousAuthorizationAbility {
     this.locals = locals
     this.resources = resources || this._resolveResourcesFromConfiguration()
 
-    /** @type {AbilityRuleType[]} */
+    /**
+ * Documents this API.
+ * @type {AbilityRuleType[]} */
     this.rules = []
 
-    /** @type {Record<string, boolean>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, boolean>} */
     this.loadedModelClassAbilities = {}
   }
 
@@ -59,7 +77,9 @@ export default class VelociousAuthorizationAbility {
       return []
     }
 
-    /** @type {Array<typeof BaseResource>} */
+    /**
+ * Resolved.
+ * @type {Array<typeof BaseResource>} */
     const resolved = []
     const backendProjects = configuration.getBackendProjects()
 
@@ -78,22 +98,29 @@ export default class VelociousAuthorizationAbility {
     return resolved
   }
 
-  /** @returns {Record<string, ?>} - Context. */
+  /**
+ * Runs get context.
+ * @returns {Record<string, ?>} - Context. */
   getContext() {
     return this.context
   }
 
-  /** @returns {Record<string, ?>} - Locals. */
+  /**
+ * Runs get locals.
+ * @returns {Record<string, ?>} - Locals. */
   getLocals() {
     return this.locals
   }
 
-  /** @returns {?} - Current user from context. */
+  /**
+ * Runs current user.
+ * @returns {?} - Current user from context. */
   currentUser() {
     return this.context.currentUser
   }
 
   /**
+ * Runs can.
    * @param {string | string[]} actions - Action(s).
    * @param {typeof import("../database/record/index.js").default} modelClass - Model class.
    * @param {AbilityConditionsType} [conditions] - Conditions.
@@ -104,6 +131,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs cannot.
    * @param {string | string[]} actions - Action(s).
    * @param {typeof import("../database/record/index.js").default} modelClass - Model class.
    * @param {AbilityConditionsType} [conditions] - Conditions.
@@ -114,6 +142,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs add rule.
    * @param {object} args - Rule args.
    * @param {string | string[]} args.actions - Action(s).
    * @param {AbilityConditionsType} [args.conditions] - Conditions.
@@ -128,6 +157,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs load abilities for model class.
    * @param {typeof import("../database/record/index.js").default} modelClass - Model class.
    * @returns {void} - No return value.
    */
@@ -155,6 +185,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs apply to query.
    * @param {object} args - Query args.
    * @param {string} args.action - Requested action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
@@ -190,6 +221,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs rules for.
    * @param {object} args - Rule lookup args.
    * @param {string} args.action - Action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
@@ -204,6 +236,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs condition sql parts.
    * @param {object} args - SQL args.
    * @param {string} args.action - Action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
@@ -243,6 +276,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs apply deny rules.
    * @param {object} args - Deny args.
    * @param {string} args.action - Action.
    * @param {AbilityRuleType[]} args.denyRules - Deny rules.
@@ -266,6 +300,7 @@ export default class VelociousAuthorizationAbility {
   }
 
   /**
+ * Runs apply rule condition.
    * @param {object} args - Condition args.
    * @param {string} args.action - Action.
    * @param {AbilityConditionsType} args.conditions - Rule conditions.

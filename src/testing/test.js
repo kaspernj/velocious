@@ -6,17 +6,27 @@ import EventEmitter from "../utils/event-emitter.js"
 import Expect from "./expect.js"
 import {arrayContaining, objectContaining} from "./expect-utils.js"
 
-/** @type {import("./test-runner.js").TestsArgument} */
+/**
+ * Tests.
+ * @type {import("./test-runner.js").TestsArgument} */
 const tests = {
-  /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
+  /**
+ * Documents this API.
+ * @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   afterEaches: [],
-  /** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+  /**
+ * Documents this API.
+ * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
   afterAlls: [],
   args: {},
 
-  /** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+  /**
+ * Documents this API.
+ * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
   beforeAlls: [],
-  /** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
+  /**
+ * Documents this API.
+ * @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   beforeEaches: [],
   filePath: undefined,
   line: undefined,
@@ -29,6 +39,7 @@ const testEvents = new EventEmitter()
 let currentPath = [tests]
 
 /**
+ * Runs capture location.
  * @returns {{filePath?: string, line?: number}} - Location.
  */
 function captureLocation() {
@@ -61,6 +72,7 @@ function captureLocation() {
 }
 
 /**
+ * Runs normalize tags.
  * @param {string[] | string | undefined} tags - Tags.
  * @returns {string[]} - Normalized tags.
  */
@@ -85,7 +97,9 @@ function normalizeTags(tags) {
   return Array.from(new Set(values))
 }
 
-/** @type {VelociousTestConfig} */
+/**
+ * Test config.
+ * @type {VelociousTestConfig} */
 const testConfig = {
   consoleOutput: "failure",
   failedConsoleOutputMaxLines: 200,
@@ -94,6 +108,7 @@ const testConfig = {
 }
 
 /**
+ * Runs configure tests.
  * @param {object} args - Options.
  * @param {"failure" | "live"} [args.consoleOutput] - Console output mode.
  * @param {string[] | string} [args.excludeTags] - Tags to exclude.
@@ -124,6 +139,7 @@ function configureTests({consoleOutput, excludeTags, defaultTimeoutSeconds, fail
 }
 
 /**
+ * Runs merge test args.
  * @param {Record<string, ?>} baseArgs - Base args.
  * @param {Record<string, ?>} extraArgs - Extra args.
  * @returns {Record<string, ?>} - Merged args.
@@ -142,6 +158,7 @@ function mergeTestArgs(baseArgs, extraArgs) {
 }
 
 /**
+ * Runs before each.
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -152,6 +169,7 @@ function beforeEach(callback) {
 }
 
 /**
+ * Runs before all.
  * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -162,6 +180,7 @@ function beforeAll(callback) {
 }
 
 /**
+ * Runs after each.
  * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -172,6 +191,7 @@ function afterEach(callback) {
 }
 
 /**
+ * Runs after all.
  * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
  * @returns {void} - No return value.
  */
@@ -183,13 +203,16 @@ function afterAll(callback) {
 
 
 /**
+ * Runs describe.
  * @param {string} description - Description.
  * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
  * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function describe(description, arg1, arg2) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
   let testArgs, testFunction
 
   if (typeof arg2 == "function") {
@@ -233,6 +256,7 @@ async function describe(description, arg1, arg2) {
 }
 
 /**
+ * Runs expect.
  * @param {?} arg - Arg.
  * @returns {Expect} - The expect.
  */
@@ -244,6 +268,7 @@ expect.objectContaining = objectContaining
 expect.arrayContaining = arrayContaining
 
 /**
+ * Runs it.
  * @param {string} description - Description.
  * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
  * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
@@ -251,17 +276,25 @@ expect.arrayContaining = arrayContaining
  */
 function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
-  /** @type {Record<string, ?>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
   let testArgs
 
-  /** @type {() => (void|Promise<void>)} */
+  /**
+ * Documents this API.
+ * @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
+    testFunction = /**
+ * Documents this API.
+ * @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {}
   } else if (typeof arg2 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
+    testFunction = /**
+ * Documents this API.
+ * @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = arg1
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
@@ -280,23 +313,32 @@ function it(description, arg1, arg2) {
 }
 
 /**
+ * Runs fit.
  * @param {string} description - Description.
  * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
  * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
  * @returns {void} - No return value.
  */
 function fit(description, arg1, arg2) {
-  /** @type {Record<string, ?>} */
+  /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
   let testArgs
 
-  /** @type {() => (void|Promise<void>)} */
+  /**
+ * Documents this API.
+ * @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
+    testFunction = /**
+ * Documents this API.
+ * @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {focus: true}
   } else if (typeof arg2 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
+    testFunction = /**
+ * Documents this API.
+ * @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = Object.assign({focus: true}, arg1)
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
@@ -319,6 +361,7 @@ globalThis.configureTests = configureTests
 
 export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests}
 /**
+ * VelociousTestConfig type.
  * @typedef {object} VelociousTestConfig
  * @property {"failure" | "live"} consoleOutput - Console output mode.
  * @property {string[]} excludeTags - Tags excluded by default.

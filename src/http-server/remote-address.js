@@ -2,10 +2,13 @@
 
 import proxyaddr from "proxy-addr"
 
-/** @type {WeakMap<import("../configuration.js").default, {source: string | string[] | undefined, trust: ((address: string, index: number) => boolean) | undefined}>} */
+/**
+ * Trusted proxy cache.
+ * @type {WeakMap<import("../configuration.js").default, {source: string | string[] | undefined, trust: ((address: string, index: number) => boolean) | undefined}>} */
 const trustedProxyCache = new WeakMap()
 
 /**
+ * Runs trusted proxy checker.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @returns {((address: string, index: number) => boolean) | undefined} - Compiled trusted proxy checker.
  */
@@ -28,11 +31,14 @@ function trustedProxyChecker(configuration) {
 }
 
 /**
+ * Runs node style headers.
  * @param {Record<string, string | string[]>} headers - Request headers.
  * @returns {Record<string, string | string[]>} - Headers with lowercase names.
  */
 function nodeStyleHeaders(headers) {
-  /** @type {Record<string, string | string[]>} */
+  /**
+ * Result.
+ * @type {Record<string, string | string[]>} */
   const result = {}
 
   for (const [key, value] of Object.entries(headers)) {
@@ -43,6 +49,7 @@ function nodeStyleHeaders(headers) {
 }
 
 /**
+ * Runs resolve remote address.
  * @param {object} args - Options object.
  * @param {import("../configuration.js").default} args.configuration - Configuration instance.
  * @param {Record<string, string | string[]>} args.headers - Request headers.
@@ -56,7 +63,11 @@ export default function resolveRemoteAddress({configuration, headers, socketRemo
 
   if (!trust) return socketRemoteAddress
 
-  const proxyRequest = /** @type {Parameters<typeof proxyaddr>[0]} */ (/** @type {?} */ ({
+  const proxyRequest = /**
+ * Documents this API.
+ * @type {Parameters<typeof proxyaddr>[0]} */ (/**
+ * Documents this API.
+ * @type {?} */ ({
     connection: {remoteAddress: socketRemoteAddress},
     headers: nodeStyleHeaders(headers),
     socket: {remoteAddress: socketRemoteAddress}

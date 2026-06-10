@@ -10,6 +10,7 @@ export default class VelociousRoutes {
   rootRoute = new RootRoute()
 
   /**
+ * Runs draw.
    * @param {function(import("./root-route.js").default) : void} callback - Callback function.
    * @returns {void} - No return value.
    */
@@ -23,10 +24,14 @@ export default class VelociousRoutes {
    * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} - Declared mounts.
    */
   getMounts() {
-    /** @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
+    /**
+ * Collected.
+ * @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
     const collected = []
 
-    /** @param {import("./base-route.js").default} route - Route to visit. */
+    /**
+ * Visit.
+ * @param {import("./base-route.js").default} route - Route to visit. */
     const visit = (route) => {
       if (typeof route.getMounts === "function") {
         collected.push(...route.getMounts())

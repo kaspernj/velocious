@@ -9,6 +9,7 @@ import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
 
 /**
+ * Runs stack frame line.
  * @param {string | undefined} line - Potential header line.
  * @returns {boolean} - Whether the line is a stack frame.
  */
@@ -19,6 +20,7 @@ function stackFrameLine(line) {
 }
 
 /**
+ * Runs request error summary.
  * @param {Error} error - Error to format for logging.
  * @param {string | undefined} cleanedStackWithHeader - Cleaned stack with header line.
  * @returns {string} - Error summary line with type information.
@@ -28,8 +30,12 @@ function requestErrorSummary(error, cleanedStackWithHeader) {
 
   if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
 
-  const errorCode = typeof /** @type {?} */ (error).code === "string"
-    ? /** @type {?} */ (error).code
+  const errorCode = typeof /**
+ * Documents this API.
+ * @type {?} */ (error).code === "string"
+    ? /**
+ * Documents this API.
+ * @type {?} */ (error).code
     : undefined
   const errorMessage = error.message || String(error)
 
@@ -39,6 +45,7 @@ function requestErrorSummary(error, cleanedStackWithHeader) {
 }
 
 /**
+ * Runs request error log details.
  * @param {Error} error - Error to format for logging.
  * @returns {{
  *   errorSummary: string,
@@ -54,6 +61,7 @@ function requestErrorLogDetails(error) {
 }
 
 /**
+ * Runs request error log message.
  * @param {{
  *   errorSummary: string,
  *   cleanedBacktrace: string | undefined,
@@ -69,6 +77,7 @@ function requestErrorLogMessage(logDetails) {
 }
 
 /**
+ * Runs response body type for log.
  * @param {Response} response - Response object.
  * @returns {string} - Response body type for logging.
  */
@@ -83,6 +92,7 @@ function responseBodyTypeForLog(response) {
 }
 
 /**
+ * Runs format bucket ms.
  * @param {number} value - Milliseconds.
  * @returns {string} - Formatted milliseconds with one decimal place.
  */
@@ -91,6 +101,7 @@ function formatBucketMs(value) {
 }
 
 /**
+ * Runs query count label.
  * @param {number} count - Query count.
  * @returns {string} - Query count label.
  */
@@ -102,6 +113,7 @@ export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("./request.js").default | import("./websocket-request.js").default} args.request - Request object.
@@ -168,13 +180,19 @@ export default class VelociousHttpServerClientRequestRunner {
         await this.logger.debug("Run request")
         const routesResolver = new RoutesResolver({configuration, request, response})
         const startTimeMs = Date.now()
-        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        /**
+ * Documents this API.
+ * @type {ReturnType<typeof setTimeout> | undefined} */
         let timeoutId
-        /** @type {((error: Error) => void) | undefined} */
+        /**
+ * Documents this API.
+ * @type {((error: Error) => void) | undefined} */
         let timeoutReject
         let timedOut = false
 
-        const setRequestTimeoutSeconds = (/** @type {number | undefined} */ timeoutSeconds) => {
+        const setRequestTimeoutSeconds = (/**
+ * Documents this API.
+ * @type {number | undefined} */ timeoutSeconds) => {
           if (timeoutId) {
             clearTimeout(timeoutId)
             timeoutId = undefined
@@ -237,7 +255,9 @@ export default class VelociousHttpServerClientRequestRunner {
       }
     } catch (e) {
       const error = ensureError(e)
-      const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
+      const errorWithContext = /**
+ * Documents this API.
+ * @type {{velociousContext?: object}} */ (error)
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
       const logDetails = requestErrorLogDetails(error)
 
@@ -269,7 +289,9 @@ export default class VelociousHttpServerClientRequestRunner {
     this.events.emit("done", this)
   }
 
-  /** @returns {Promise<void>} - Logs the completed request line after the response has been served. */
+  /**
+ * Runs log completed request.
+ * @returns {Promise<void>} - Logs the completed request line after the response has been served. */
   async logCompletedRequest() {
     if (this.completedRequestLogged) return
 

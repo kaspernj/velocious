@@ -18,6 +18,7 @@ const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
  */
 export default class VelociousDatabaseQueryPreloaderSelection {
   /**
+ * Runs constructor.
    * @param {object} [args] - Options object.
    * @param {Record<string, string[]>} [args.preloadSelects] - Narrowing selects keyed by target model name.
    * @param {Record<string, string[]>} [args.preloadSelectsExtra] - Extra selects keyed by target model name.
@@ -29,10 +30,13 @@ export default class VelociousDatabaseQueryPreloaderSelection {
     this.force = force
   }
 
-  /** @returns {boolean} - Whether already-preloaded relationships should still be re-loaded. */
+  /**
+ * Runs get force.
+ * @returns {boolean} - Whether already-preloaded relationships should still be re-loaded. */
   getForce() { return this.force }
 
   /**
+ * Runs narrowing for.
    * @param {typeof import("../../record/index.js").default} targetModelClass - Target model class.
    * @returns {string[] | undefined} - Narrowing select attributes for the class, if any.
    */
@@ -41,6 +45,7 @@ export default class VelociousDatabaseQueryPreloaderSelection {
   }
 
   /**
+ * Runs extra for.
    * @param {typeof import("../../record/index.js").default} targetModelClass - Target model class.
    * @returns {string[] | undefined} - Extra select attributes/expressions for the class, if any.
    */
@@ -64,13 +69,13 @@ export default class VelociousDatabaseQueryPreloaderSelection {
     if (narrowing) {
       const selects = [...new Set([...narrowing, ...mappingColumns, ...(extra || [])])]
 
-      return /** @type {T} */ (query.select(selects))
+      return /** Documents this API. @type {T} */ (query.select(selects))
     }
 
     if (extra) {
       const allColumns = `${query.driver.quoteTable(targetModelClass.tableName())}.*`
 
-      return /** @type {T} */ (query.select([allColumns, ...extra]))
+      return /** Documents this API. @type {T} */ (query.select([allColumns, ...extra]))
     }
 
     return query
@@ -121,7 +126,9 @@ export default class VelociousDatabaseQueryPreloaderSelection {
     const attributeMap = targetModelClass.getAttributeNameToColumnNameMap()
     const narrowing = this._narrowingFor(targetModelClass)
     const extra = this._extraFor(targetModelClass)
-    /** @type {string[]} */
+    /**
+ * Columns.
+ * @type {string[]} */
     const columns = []
 
     if (narrowing) {

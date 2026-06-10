@@ -27,27 +27,32 @@ const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES = 16 * 1024 * 1024
 const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
 
 /**
+ * Documents this API.
  * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
  */
 
 /**
+ * Runs subscribe message.
  * @param {WebsocketSessionMessage} message - Raw websocket message.
  * @returns {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | null} - Subscribe message when matched.
  */
 function subscribeMessage(message) {
   return message.type === "subscribe"
-    ? /** @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
+    ? /**
+ * Documents this API.
+ * @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
     : null
 }
 
 /**
+ * Runs request message.
  * @param {WebsocketSessionMessage} message - Raw websocket message.
  * @returns {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | null} - Request message when matched.
  */
 function requestMessage(message) {
   if (message.type && message.type !== "request") return null
 
-  return /** @type {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string}} */ (message)
+  return /** Documents this API. @type {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string}} */ (message)
 }
 
 /**
@@ -80,10 +85,13 @@ export default class VelociousHttpServerClientWebsocketSession {
   handlerSubscriptions = new Map()
   channelTenants = new Map()
   channelReplayStates = new Map()
-  /** @type {WebsocketSessionMessage[]} */
+  /**
+ * Message queue.
+ * @type {WebsocketSessionMessage[]} */
   messageQueue = []
 
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("./index.js").default} args.client - Client instance.
@@ -101,7 +109,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
     this._metadata = {}
 
     /**
@@ -112,10 +122,14 @@ export default class VelociousHttpServerClientWebsocketSession {
      */
     this.data = {}
 
-    /** @type {Map<string, import("../websocket-connection.js").default>} */
+    /**
+ * Documents this API.
+ * @type {Map<string, import("../websocket-connection.js").default>} */
     this._connections = new Map()
 
-    /** @type {Map<string, {channelType: string, subscription: import("../websocket-channel.js").default}>} */
+    /**
+ * Documents this API.
+ * @type {Map<string, {channelType: string, subscription: import("../websocket-channel.js").default}>} */
     this._channelSubscriptions = new Map()
 
     /**
@@ -127,13 +141,19 @@ export default class VelociousHttpServerClientWebsocketSession {
      */
     this.sessionId = randomUUID()
 
-    /** @type {boolean} - true after `_handleClose` pauses instead of tearing down. */
+    /**
+ * Documents this API.
+ * @type {boolean} - true after `_handleClose` pauses instead of tearing down. */
     this._paused = false
 
-    /** @type {Array<?>} - frames produced while paused; flushed on resume. */
+    /**
+ * Documents this API.
+ * @type {Array<?>} - frames produced while paused; flushed on resume. */
     this._outboundQueue = []
 
-    /** @type {import("./index.js").default | null} */
+    /**
+ * Documents this API.
+ * @type {import("./index.js").default | null} */
     this.socket = null
 
     /**
@@ -208,17 +228,22 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._connections.delete(connectionId)
   }
 
-  /** @returns {Record<string, ?>} - Client-provided metadata (defensive copy). */
+  /**
+ * Runs get metadata.
+ * @returns {Record<string, ?>} - Client-provided metadata (defensive copy). */
   getMetadata() {
     return {...this._metadata}
   }
 
-  /** @returns {boolean} - true while the session is in the paused/grace registry. */
+  /**
+ * Runs is paused.
+ * @returns {boolean} - true while the session is in the paused/grace registry. */
   isPaused() {
     return this._paused
   }
 
   /**
+ * Runs add subscription.
    * @param {string} channel - Channel name.
    * @returns {void} - No return value.
    */
@@ -236,6 +261,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs has subscription.
    * @param {string} channel - Channel name.
    * @returns {boolean} - Whether it has subscription.
    */
@@ -244,6 +270,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs on data.
    * @param {Buffer} data - Data payload.
    * @returns {void} - No return value.
    */
@@ -253,6 +280,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs send event.
    * @param {string} channel - Channel name.
    * @param {?} payload - Payload data.
    * @param {{createdAt?: string, eventId?: string, replayed?: boolean, sequence?: number}} [options] - Event metadata.
@@ -302,6 +330,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs initialize channel.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeChannel() {
@@ -348,6 +377,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs send goodbye.
    * @param {import("./index.js").default} client - Client instance.
    * @returns {void} - No return value.
    */
@@ -358,6 +388,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs handle message.
    * @param {WebsocketSessionMessage} message - Message text.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -374,6 +405,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs dispatch message.
    * @param {WebsocketSessionMessage} message - Message text.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -430,7 +462,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     if (message.type === "metadata") {
-      const metadataPayload = /** @type {{data?: Record<string, ?>}} */ (message)
+      const metadataPayload = /**
+ * Documents this API.
+ * @type {{data?: Record<string, ?>}} */ (message)
 
       this._metadata = metadataPayload.data && typeof metadataPayload.data === "object" ? {...metadataPayload.data} : {}
 
@@ -527,6 +561,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs process buffer.
    * @returns {void} - No return value.
    */
   _processBuffer() {
@@ -555,7 +590,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       if (this.buffer.length < offset + maskLength + payloadLength) return
 
-      /** @type {Buffer} */
+      /** Payload. @type {Buffer} */
       let payload = this.buffer.slice(offset + maskLength, offset + maskLength + payloadLength)
 
       if (isMasked) {
@@ -621,9 +656,13 @@ export default class VelociousHttpServerClientWebsocketSession {
         continue
       }
 
-      /** @type {Buffer} */
+      /**
+ * Documents this API.
+ * @type {Buffer} */
       let finalPayload
-      /** @type {number} */
+      /**
+ * Documents this API.
+ * @type {number} */
       let finalOpcode
 
       if (this._fragmentedPayloads !== null) {
@@ -712,7 +751,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     return false
   }
 
-  /** @returns {void} */
+  /**
+ * Runs reset fragment buffer.
+ * @returns {void} */
   _resetFragmentBuffer() {
     this._fragmentedPayloads = null
     this._fragmentedOpcode = null
@@ -720,6 +761,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs send control frame.
    * @param {number} opcode - Opcode.
    * @param {Buffer} payload - Payload data.
    * @returns {void} - No return value.
@@ -734,6 +776,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs send json.
    * @param {object} body - Request body.
    * @returns {void} - No return value.
    */
@@ -795,6 +838,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs subscribe to channel.
    * @param {string} channel - Channel name.
    * @param {{acknowledge?: boolean, channelHandler?: import("../websocket-channel.js").default, lastEventId?: string, params?: Record<string, ?>, subscriptionChannel?: string}} [options] - Subscribe options.
    * @returns {Promise<boolean>} - Whether the subscription was added.
@@ -932,6 +976,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs fire lifecycle callback.
    * @param {"onDisconnect" | "onResume"} callbackName Lifecycle callback to fire.
    * @returns {Promise<void>} Resolves when every live handler has been attempted.
    */
@@ -1110,7 +1155,9 @@ export default class VelociousHttpServerClientWebsocketSession {
       this.sendJson({type: "connection-opened", connectionId})
     } catch (error) {
       this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to open connection"})
+      this.sendJson({type: "connection-error", connectionId, message: /**
+ * Documents this API.
+ * @type {Error} */ (error).message || "Failed to open connection"})
     }
   }
 
@@ -1135,7 +1182,9 @@ export default class VelociousHttpServerClientWebsocketSession {
       })
     } catch (error) {
       this.logger.error(() => [`Failed to handle connection-message for ${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to handle message"})
+      this.sendJson({type: "connection-error", connectionId, message: /**
+ * Documents this API.
+ * @type {Error} */ (error).message || "Failed to handle message"})
     }
   }
 
@@ -1248,7 +1297,9 @@ export default class VelociousHttpServerClientWebsocketSession {
       this._channelSubscriptions.delete(subscriptionId)
       this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
       this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
-      this.sendJson({type: "channel-error", subscriptionId, message: /** @type {Error} */ (error).message || "Failed to subscribe"})
+      this.sendJson({type: "channel-error", subscriptionId, message: /**
+ * Documents this API.
+ * @type {Error} */ (error).message || "Failed to subscribe"})
     }
   }
 
@@ -1292,7 +1343,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const event of events) {
       if (subscription.isClosed()) break
 
-      subscription.sendMessage(/** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
+      subscription.sendMessage(/**
+ * Documents this API.
+ * @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
     }
   }
 
@@ -1359,6 +1412,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs teardown single channel.
    * @param {WebsocketChannel} channel - Channel instance.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -1393,6 +1447,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs register channel.
    * @param {WebsocketChannel | undefined} channel - Channel instance.
    * @param {string | null | undefined} tenant - Tenant key.
    * @returns {Promise<void>} - Resolves when complete.
@@ -1410,6 +1465,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs with connections.
    * @param {() => Promise<void>} callback - Callback.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -1420,6 +1476,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs handle channel subscription.
    * @param {{channel: string, lastEventId?: string, params?: Record<string, ?>}} args - Subscription args.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -1474,6 +1531,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs prepare replay state.
    * @param {object} args - Options.
    * @param {string} args.channel - Internal channel name.
    * @param {string | undefined} args.lastEventId - Last received event id.
@@ -1501,6 +1559,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs replay channel events.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {{buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean}} args.replayState - Replay state.
@@ -1525,6 +1584,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs finish replay state.
    * @param {string} channel - Channel name.
    * @param {{buffered: boolean, ceilingSequence: number, checkpointSequence: number, replaying: boolean}} replayState - Replay state.
    * @returns {Promise<void>} - Resolves when buffered events are flushed.
@@ -1552,6 +1612,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs resolve tenant.
    * @param {{channel?: string, params?: Record<string, ?>}} args - Tenant resolution args.
    * @returns {Promise<string | null | undefined>} - Resolved tenant.
    */
@@ -1562,7 +1623,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       ...(params && typeof params === "object" ? params : {})
     }
 
-    return /** @type {Promise<string | null | undefined>} */ (this.configuration.resolveTenant({
+    return /** Documents this API. @type {Promise<string | null | undefined>} */ (this.configuration.resolveTenant({
       params: mergedParams,
       request: this.upgradeRequest,
       response: undefined,
@@ -1571,12 +1632,15 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs unmask payload.
    * @param {Buffer} payload - Payload data.
    * @param {Buffer} mask - Mask.
    * @returns {Buffer} - The unmask payload.
    */
   _unmaskPayload(payload, mask) {
-    /** @type {Buffer} */
+    /**
+ * Result.
+ * @type {Buffer} */
     const result = Buffer.alloc(payload.length)
 
     for (let i = 0; i < payload.length; i++) {
@@ -1600,6 +1664,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs run message handler message.
    * @param {WebsocketSessionMessage} message - Incoming websocket message.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -1635,12 +1700,15 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
   }
 
-  /** @returns {string | undefined} - Remote address resolved from the websocket upgrade request. */
+  /**
+ * Runs remote address.
+ * @returns {string | undefined} - Remote address resolved from the websocket upgrade request. */
   remoteAddress() {
     return this.upgradeRequest?.remoteAddress() || this.client.remoteAddress
   }
 
   /**
+ * Runs set message handler.
    * @param {import("../../configuration-types.js").WebsocketMessageHandler} handler - Handler instance.
    * @returns {void}
    */
@@ -1679,6 +1747,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+ * Runs flush queued messages.
    * @param {{useHandler: boolean}} args - Args.
    * @returns {Promise<void>} - Resolves when complete.
    */

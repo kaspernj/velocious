@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs normalize background job error.
  * @param {?} error - Error input.
  * @returns {string} - Normalized error string.
  */
@@ -12,6 +13,7 @@ export default function normalizeBackgroundJobError(error) {
 }
 
 /**
+ * Runs stringify unknown error.
  * @param {?} error - Error input.
  * @returns {string} - Stringified error.
  */

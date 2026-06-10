@@ -4,14 +4,21 @@
  * Represents a prepared mail delivery.
  */
 export default class MailerDelivery {
-  /** @type {import("./base.js").VelociousMailerBase} */
+  /**
+ * Documents this API.
+ * @type {import("./base.js").VelociousMailerBase} */
   mailer
-  /** @type {Promise<?>} */
+  /**
+ * Documents this API.
+ * @type {Promise<?>} */
   actionPromise
-  /** @type {string} */
+  /**
+ * Documents this API.
+ * @type {string} */
   actionName
 
   /**
+ * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {import("./base.js").VelociousMailerBase} args.mailer - Mailer instance.
    * @param {Promise<?>} args.actionPromise - Action promise.
@@ -24,15 +31,17 @@ export default class MailerDelivery {
   }
 
   /**
+ * Runs build payload.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload>} - Rendered mailer payload.
    */
   async buildPayload() {
     await this.actionPromise
 
-    return /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+    return /** Documents this API. @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
   }
 
   /**
+ * Runs deliver now.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Delivered payload or handler result.
    */
   async deliverNow() {
@@ -42,6 +51,7 @@ export default class MailerDelivery {
   }
 
   /**
+ * Runs deliver later.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLater() {
@@ -51,6 +61,7 @@ export default class MailerDelivery {
   }
 
   /**
+ * Runs deliver laver.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLaver() {

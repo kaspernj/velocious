@@ -4,7 +4,9 @@ import BaseRelationship from "./base.js"
 import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordHasOneRelationship extends BaseRelationship {
-  /** @returns {string} - The foreign key.  */
+  /**
+ * Runs get foreign key.
+ * @returns {string} - The foreign key.  */
   getForeignKey() {
     if (!this.foreignKey) {
       this.foreignKey = `${inflection.underscore(this.modelClass.getModelName())}_id`
@@ -13,7 +15,9 @@ export default class VelociousDatabaseRecordHasOneRelationship extends BaseRelat
     return this.foreignKey
   }
 
-  /** @returns {string | undefined} - The inverse of.  */
+  /**
+ * Runs get inverse of.
+ * @returns {string | undefined} - The inverse of.  */
   getInverseOf() {
     if (!this._inverseOf && !this._autoGenerateInverseOfAttempted) {
       this._autoGenerateInverseOfAttempted = true

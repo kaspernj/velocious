@@ -1,21 +1,30 @@
 // @ts-check
 
-/** @type {{withTrackedStack?: {withTrackedStack?: (stack: string | undefined, fn: () => Promise<?>) => Promise<?>, addTrackedStackToError?: (error: Error) => void}}} */
-const trackedStackGlobal = /** @type {?} */ (globalThis)
+/**
+ * Tracked stack global.
+ * @type {{withTrackedStack?: {withTrackedStack?: (stack: string | undefined, fn: () => Promise<?>) => Promise<?>, addTrackedStackToError?: (error: Error) => void}}} */
+const trackedStackGlobal = /**
+ * Documents this API.
+ * @type {?} */ (globalThis)
 
-/** @param {Error} error - Error to annotate with a tracked stack. */
+/**
+ * Runs add tracked stack to error.
+ * @param {Error} error - Error to annotate with a tracked stack. */
 function addTrackedStackToError(error) {
   trackedStackGlobal.withTrackedStack?.addTrackedStackToError?.(error)
 }
 
 /**
+ * Runs with tracked stack.
  * @param {string | (() => Promise<?>)} stackOrCallback - Stack string or callback.
  * @param {(() => Promise<?>)} [callback] - Callback to execute.
  * @returns {Promise<?>} - Resolves with value.
  */
 async function withTrackedStack(stackOrCallback, callback) {
   const tracked = trackedStackGlobal.withTrackedStack?.withTrackedStack
-  const resolvedCallback = callback ?? /** @type {() => Promise<?>} */ (stackOrCallback)
+  const resolvedCallback = callback ?? /**
+ * Documents this API.
+ * @type {() => Promise<?>} */ (stackOrCallback)
   const stack = typeof stackOrCallback == "string" ? stackOrCallback : undefined
 
   if (tracked) {

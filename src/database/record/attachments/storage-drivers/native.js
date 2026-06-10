@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs throw missing method.
  * @param {object} args - Args.
  * @param {string} args.driverName - Driver name.
  * @param {string} args.methodName - Method name.
@@ -11,6 +12,7 @@ function throwMissingMethod({driverName, methodName}) {
 }
 
 /**
+ * Runs to buffer.
  * @param {?} value - Candidate value.
  * @returns {Buffer} - Buffer value.
  */
@@ -29,6 +31,7 @@ function toBuffer(value) {
  */
 export default class NativeAttachmentStorageDriver {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../../../../configuration.js").default} [args.configuration] - Configuration instance.
    * @param {string} args.name - Driver name.
@@ -41,6 +44,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+ * Runs write.
    * @param {object} args - Write args.
    * @param {string} args.attachmentId - Attachment id.
    * @param {{contentBase64: string, contentType: string | null, filename: string}} args.input - Normalized attachment input.
@@ -70,6 +74,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+ * Runs read.
    * @param {object} args - Read args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
@@ -94,6 +99,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+ * Runs delete.
    * @param {object} args - Delete args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
@@ -114,6 +120,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+ * Runs url.
    * @param {object} args - URL args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.

@@ -3,6 +3,7 @@
 const frontendModelSafeUrlSegmentPattern = /^[A-Za-z0-9_-]+$/u
 
 /**
+ * Documents this API.
  * @param {object} args - Args.
  * @param {string} args.commandName - Command name candidate.
  * @param {string} args.modelName - Model class name.
@@ -22,6 +23,7 @@ export function validateFrontendModelResourceCommandName({commandName, modelName
 }
 
 /**
+ * Documents this API.
  * @param {object} args - Args.
  * @param {string} args.resourcePath - Resource path candidate.
  * @param {string} args.modelName - Model class name.

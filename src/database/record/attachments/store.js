@@ -6,11 +6,16 @@ import normalizeRecordAttachmentInput from "./normalize-input.js"
 
 const ATTACHMENTS_TABLE = "velocious_attachments"
 
-/** @typedef {new (...args: Array<?>) => Record<string, ?>} AttachmentDriverConstructor */
-/** @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */
+/**
+ * AttachmentDriverConstructor type.
+ * @typedef {new (...args: Array<?>) => Record<string, ?>} AttachmentDriverConstructor */
+/**
+ * Stores by configuration.
+ * @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */
 const storesByConfiguration = new WeakMap()
 
 /**
+ * Runs generate uuid.
  * @returns {string} - Generated UUID v4 value.
  */
 function generateUUID() {
@@ -18,6 +23,7 @@ function generateUUID() {
 }
 
 /**
+ * Runs store key for model.
  * @param {import("../index.js").default} model - Model instance.
  * @returns {string} - Store key.
  */
@@ -26,6 +32,7 @@ function storeKeyForModel(model) {
 }
 
 /**
+ * Documents this API.
  * @param {import("../index.js").default} model - Model instance.
  * @returns {RecordAttachmentsStore} - Store instance.
  */
@@ -58,6 +65,7 @@ export function recordAttachmentsStoreForModel(model) {
  */
 export default class RecordAttachmentsStore {
   /**
+ * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../../../configuration.js").default} args.configuration - Configuration instance.
    * @param {string} args.databaseIdentifier - Database identifier.
@@ -68,13 +76,18 @@ export default class RecordAttachmentsStore {
     this._readyPromise = null
     this._driverColumnsAvailable = false
     this._contentBase64Nullable = true
-    /** @type {Map<string, Record<string, ?>>} */
+    /**
+ * Documents this API.
+ * @type {Map<string, Record<string, ?>>} */
     this._attachmentDriversByName = new Map()
-    /** @type {Map<AttachmentDriverConstructor | Record<string, ?>, Record<string, ?>>} */
+    /**
+ * Documents this API.
+ * @type {Map<AttachmentDriverConstructor | Record<string, ?>, Record<string, ?>>} */
     this._attachmentDriversByReference = new Map()
   }
 
   /**
+ * Runs ensure ready.
    * @returns {Promise<void>} - Resolves when schema is ready.
    */
   async ensureReady() {
@@ -120,6 +133,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs attach.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -172,7 +186,9 @@ export default class RecordAttachmentsStore {
       }
 
       const position = replace ? 0 : await this._nextPosition({db, name, recordId, recordType})
-      /** @type {Record<string, ?>} */
+      /**
+ * Insert data.
+ * @type {Record<string, ?>} */
       const insertData = {
         byte_size: normalizedInput.byteSize,
         content_base64: this._contentBase64Nullable ? null : normalizedInput.contentBase64,
@@ -200,6 +216,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs ensure attachment store schema.
    * @param {object} args - Options.
    * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
    * @returns {Promise<void>} - Resolves when schema columns are ensured.
@@ -236,6 +253,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs read attachment row.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -264,6 +282,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs attachment row url.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -290,6 +309,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs find one.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -321,6 +341,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs find many.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -344,6 +365,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs delete attachment row storage.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -368,17 +390,20 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs attachment driver by name.
    * @param {string} driverName - Driver name.
    * @returns {Promise<Record<string, ?>>} - Attachment storage driver instance.
    */
   async attachmentDriverByName(driverName) {
     if (this._attachmentDriversByName.has(driverName)) {
-      return /** @type {Record<string, ?>} */ (this._attachmentDriversByName.get(driverName))
+      return /** Documents this API. @type {Record<string, ?>} */ (this._attachmentDriversByName.get(driverName))
     }
 
     const attachmentConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
     const configuredDriver = attachmentConfiguration.drivers?.[driverName]
-    /** @type {Record<string, ?>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
     let attachmentDriver
 
     if (!configuredDriver) {
@@ -411,6 +436,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs attachment driver by reference.
    * @param {object} args - Options.
    * @param {AttachmentDriverConstructor | Record<string, ?>} args.driverReference - Driver class or instance.
    * @param {string} args.attachmentName - Attachment name.
@@ -419,14 +445,18 @@ export default class RecordAttachmentsStore {
    */
   attachmentDriverByReference({attachmentName, driverReference, modelClass}) {
     if (this._attachmentDriversByReference.has(driverReference)) {
-      return /** @type {Record<string, ?>} */ (this._attachmentDriversByReference.get(driverReference))
+      return /** Documents this API. @type {Record<string, ?>} */ (this._attachmentDriversByReference.get(driverReference))
     }
 
-    /** @type {Record<string, ?>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
     let attachmentDriver
 
     if (typeof driverReference === "function") {
-      const DriverClass = /** @type {AttachmentDriverConstructor} */ (driverReference)
+      const DriverClass = /**
+ * Documents this API.
+ * @type {AttachmentDriverConstructor} */ (driverReference)
 
       attachmentDriver = new DriverClass({
         attachmentName,
@@ -449,6 +479,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs attachment driver name for.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -486,6 +517,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs resolve attachment driver.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
@@ -511,6 +543,7 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs next position.
    * @param {object} args - Options.
    * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
    * @param {string} args.name - Attachment name.
@@ -526,7 +559,9 @@ export default class RecordAttachmentsStore {
       .order("position DESC")
       .limit(1)
     const rows = await query.results()
-    const currentRow = /** @type {{position?: string | number | null} | undefined} */ (rows[0])
+    const currentRow = /**
+ * Documents this API.
+ * @type {{position?: string | number | null} | undefined} */ (rows[0])
     const current = Number(currentRow?.position)
 
     if (!Number.isFinite(current)) return 0
@@ -535,19 +570,22 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+ * Runs with db.
    * @template T
    * @param {(db: import("../../../database/drivers/base.js").default) => Promise<T>} callback - Callback.
    * @returns {Promise<T>} - Callback result.
    */
   async _withDb(callback) {
     const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
-    /** @type {T | undefined} */
+    /**
+ * Documents this API.
+ * @type {T | undefined} */
     let result
 
     await pool.withConnection({name: "Record attachment store"}, async (db) => {
       result = await callback(db)
     })
 
-    return /** @type {T} */ (result)
+    return /** Documents this API. @type {T} */ (result)
   }
 }

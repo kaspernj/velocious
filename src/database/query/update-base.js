@@ -2,6 +2,7 @@
 
 export default class VelociousDatabaseQueryUpdateBase {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.conditions - Conditions.
    * @param {Record<string, ?>} args.data - Data payload.
@@ -16,6 +17,7 @@ export default class VelociousDatabaseQueryUpdateBase {
   }
 
   /**
+ * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -23,6 +25,7 @@ export default class VelociousDatabaseQueryUpdateBase {
   }
 
   /**
+ * Runs format value.
    * @param {?} value - Value to format.
    * @returns {string | number} - SQL literal.
    */

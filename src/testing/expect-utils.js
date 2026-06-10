@@ -3,6 +3,7 @@
 import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
 
 /**
+ * Runs object containing.
  * @param {?} value - Value.
  * @returns {{__velociousMatcher: string, value: ?}} - Matcher wrapper.
  */
@@ -18,6 +19,7 @@ function objectContaining(value) {
 }
 
 /**
+ * Runs array containing.
  * @param {?} value - Value.
  * @returns {{__velociousMatcher: string, value: ?}} - Matcher wrapper.
  */
@@ -33,6 +35,7 @@ function arrayContaining(value) {
 }
 
 /**
+ * Runs is object like.
  * @param {?} value - Value.
  * @returns {boolean} - Whether object-like.
  */
@@ -41,22 +44,29 @@ function isObjectLike(value) {
 }
 
 /**
+ * Runs is array containing.
  * @param {?} value - Value.
  * @returns {boolean} - Whether arrayContaining matcher.
  */
 function isArrayContaining(value) {
-  return !!value && typeof value === "object" && (/** @type {?} */ (value)).__velociousMatcher === "arrayContaining"
+  return !!value && typeof value === "object" && (/**
+ * Documents this API.
+ * @type {?} */ (value)).__velociousMatcher === "arrayContaining"
 }
 
 /**
+ * Runs is object containing.
  * @param {?} value - Value.
  * @returns {boolean} - Whether objectContaining matcher.
  */
 function isObjectContaining(value) {
-  return !!value && typeof value === "object" && (/** @type {?} */ (value)).__velociousMatcher === "objectContaining"
+  return !!value && typeof value === "object" && (/**
+ * Documents this API.
+ * @type {?} */ (value)).__velociousMatcher === "objectContaining"
 }
 
 /**
+ * Runs is plain object.
  * @param {?} value - Value.
  * @returns {boolean} - Whether plain object.
  */
@@ -69,6 +79,7 @@ function isPlainObject(value) {
 }
 
 /**
+ * Runs values equal.
  * @param {?} actual - Actual value.
  * @param {?} expected - Expected value.
  * @returns {boolean} - Whether values are equal.
@@ -86,6 +97,7 @@ function valuesEqual(actual, expected) {
 }
 
 /**
+ * Runs collect match differences.
  * @param {?} actual - Actual value.
  * @param {?} expected - Expected value.
  * @param {string} path - Path.
@@ -94,12 +106,18 @@ function valuesEqual(actual, expected) {
  */
 function collectMatchDifferences(actual, expected, path, differences) {
   if (isObjectContaining(expected)) {
-    collectMatchDifferences(actual, /** @type {?} */ (expected).value, path, differences)
+    collectMatchDifferences(actual, /**
+ * Documents this API.
+ * @type {?} */ (expected).value, path, differences)
     return
   }
 
   if (isArrayContaining(expected)) {
-    const {matches} = matchArrayContaining(actual, /** @type {Array<?>} */ (/** @type {?} */ (expected).value))
+    const {matches} = matchArrayContaining(actual, /**
+ * Documents this API.
+ * @type {Array<?>} */ (/**
+ * Documents this API.
+ * @type {?} */ (expected).value))
 
     if (!matches) {
       differences[path || "$"] = [expected, actual]
@@ -128,8 +146,12 @@ function collectMatchDifferences(actual, expected, path, differences) {
       return
     }
 
-    const expectedObject = /** @type {Record<string, ?>} */ (expected)
-    const actualObject = /** @type {Record<string, ?>} */ (actual)
+    const expectedObject = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (expected)
+    const actualObject = /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (actual)
 
     for (const key of Object.keys(expectedObject)) {
       const nextPath = path ? `${path}.${key}` : key
@@ -151,12 +173,15 @@ function collectMatchDifferences(actual, expected, path, differences) {
 }
 
 /**
+ * Runs match object.
  * @param {?} actual - Actual value.
  * @param {Record<string, ?> | Array<?>} expected - Expected value.
  * @returns {{matches: boolean, differences: Record<string, Array<?>>}} - Match result.
  */
 function matchObject(actual, expected) {
-  /** @type {Record<string, Array<?>>} */
+  /**
+ * Differences.
+ * @type {Record<string, Array<?>>} */
   const differences = {}
 
   collectMatchDifferences(actual, expected, "", differences)
@@ -168,12 +193,15 @@ function matchObject(actual, expected) {
 }
 
 /**
+ * Runs match array containing.
  * @param {?} actual - Actual value.
  * @param {Array<?>} expected - Expected values.
  * @returns {{matches: boolean, differences: Record<string, Array<?>>}} - Match result.
  */
 function matchArrayContaining(actual, expected) {
-  /** @type {Record<string, Array<?>>} */
+  /**
+ * Differences.
+ * @type {Record<string, Array<?>>} */
   const differences = {}
 
   if (!Array.isArray(actual)) {
@@ -190,7 +218,9 @@ function matchArrayContaining(actual, expected) {
       if (usedIndexes.has(i)) continue
 
       if (isObjectContaining(expectedItem)) {
-        const {matches} = matchObject(actual[i], /** @type {?} */ (expectedItem).value)
+        const {matches} = matchObject(actual[i], /**
+ * Documents this API.
+ * @type {?} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break
@@ -199,7 +229,9 @@ function matchArrayContaining(actual, expected) {
       }
 
       if (isArrayContaining(expectedItem)) {
-        const {matches} = matchArrayContaining(actual[i], /** @type {?} */ (expectedItem).value)
+        const {matches} = matchArrayContaining(actual[i], /**
+ * Documents this API.
+ * @type {?} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break

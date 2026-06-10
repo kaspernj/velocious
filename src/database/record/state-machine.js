@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Documents this API.
  * @typedef {{
  *   column?: string,
  *   initial: string,
@@ -22,7 +23,9 @@
  * }} EventDefinition
  */
 
-/** @type {string} */
+/**
+ * Pending transition key.
+ * @type {string} */
 const PENDING_TRANSITION_KEY = "_stateMachinePendingTransition"
 
 /**
@@ -63,29 +66,39 @@ export function stateMachine(ModelClass, definition) {
   const stateNames = Object.keys(definition.states)
 
   // Store definition on the model class for introspection
-  /** @type {?} */
+  /**
+ * Dynamic class.
+ * @type {?} */
   const dynamicClass = ModelClass
 
   dynamicClass._stateMachineDefinition = definition
   dynamicClass._stateMachineColumn = column
 
-  /** @returns {StateMachineDefinition} - The registered state machine definition. */
+  /**
+ * Documents this API.
+ * @returns {StateMachineDefinition} - The registered state machine definition. */
   dynamicClass.getStateMachineDefinition = function () {
     return dynamicClass._stateMachineDefinition
   }
 
-  /** @returns {string} - The column name used for state storage. */
+  /**
+ * Documents this API.
+ * @returns {string} - The column name used for state storage. */
   dynamicClass.getStateMachineColumn = function () {
     return dynamicClass._stateMachineColumn
   }
 
-  /** @returns {string[]} - All declared state names. */
+  /**
+ * Documents this API.
+ * @returns {string[]} - All declared state names. */
   dynamicClass.getStateMachineStateNames = function () {
     return stateNames
   }
 
   // Register event methods and guard methods on the prototype
-  /** @type {?} */
+  /**
+ * Proto.
+ * @type {?} */
   const proto = ModelClass.prototype
 
   for (const [eventName, eventDef] of Object.entries(definition.events)) {
@@ -132,7 +145,9 @@ export function stateMachine(ModelClass, definition) {
 
     // Transition method: queue(), run(), etc. — checks guard, sets the state, stashes event name
     proto[eventName] = function () {
-      /** @type {?} */
+      /**
+ * Self.
+ * @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -165,7 +180,9 @@ export function stateMachine(ModelClass, definition) {
 
     // Bang method: queueAndSave(), runAndSave(), etc. — transitions AND saves (supports async guards)
     proto[`${eventName}AndSave`] = async function () {
-      /** @type {?} */
+      /**
+ * Self.
+ * @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -195,7 +212,9 @@ export function stateMachine(ModelClass, definition) {
 
   // Register a beforeSave callback that fires state-enter hooks
   ModelClass.beforeSave(async function (model) {
-    /** @type {?} */
+    /**
+ * Dynamic model.
+ * @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
@@ -220,7 +239,9 @@ export function stateMachine(ModelClass, definition) {
 
   // Register an afterSave callback for afterEnter hooks
   ModelClass.afterSave(async function (model) {
-    /** @type {?} */
+    /**
+ * Dynamic model.
+ * @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 

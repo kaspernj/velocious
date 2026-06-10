@@ -13,10 +13,14 @@ import Base from "./base.js"
 import fileExists from "../../../utils/file-exists.js"
 
 export default class VelociousDatabaseDriversSqliteNode extends Base {
-  /** @type {import("sqlite3").Database | undefined} */
+  /**
+ * Connection.
+ * @type {import("sqlite3").Database | undefined} */
   connection = undefined
 
-  /** @type {string | undefined} */
+  /**
+ * Advisory lock directory.
+ * @type {string | undefined} */
   _advisoryLockDirectory = undefined
 
   async connect() {
@@ -36,7 +40,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
     try {
       // @ts-expect-error
-      this.connection = /** @type {import("sqlite3").Database} */ (await open({
+      this.connection = /** Documents this API. @type {import("sqlite3").Database} */ (await open({
         filename: databasePath,
         driver: sqlite3.Database
       }))
@@ -65,6 +69,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<Record<string, ?>[]>} - Resolves with the query actual.
    */
@@ -115,6 +120,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs try acquire advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>}
    */
@@ -160,6 +166,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs is advisory lock held.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>}
    */
@@ -169,7 +176,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     return await this._isAdvisoryLockFileHeld(name)
   }
 
-  /** @returns {string} */
+  /**
+ * Runs resolve advisory lock directory.
+ * @returns {string} */
   _resolveAdvisoryLockDirectory() {
     if (!this._advisoryLockDirectory) {
       // Fall back to deriving the directory for callers that invoked
@@ -183,6 +192,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs advisory lock path.
    * @param {string} name - Lock name.
    * @returns {string}
    */
@@ -193,12 +203,15 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     return path.join(this._resolveAdvisoryLockDirectory(), `${safeName}-${hash}.lock`)
   }
 
-  /** @returns {Promise<void>} */
+  /**
+ * Runs ensure advisory lock directory.
+ * @returns {Promise<void>} */
   async _ensureAdvisoryLockDirectory() {
     await fs.mkdir(this._resolveAdvisoryLockDirectory(), {recursive: true})
   }
 
   /**
+ * Runs write advisory lock metadata.
    * @param {string} lockDirPath - Absolute path of the lock directory.
    * @returns {Promise<void>}
    */
@@ -214,6 +227,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs acquire advisory lock file.
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} args - Timeout args.
    * @returns {Promise<boolean>}
@@ -235,7 +249,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
         return true
       } catch (error) {
-        if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
+        if (/**
+ * Documents this API.
+ * @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
 
         if (await this._isAdvisoryLockStale(lockPath)) {
           await fs.rm(lockPath, {recursive: true, force: true})
@@ -256,6 +272,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs try acquire advisory lock file.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>}
    */
@@ -270,7 +287,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
       return true
     } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
+      if (/**
+ * Documents this API.
+ * @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
 
       if (await this._isAdvisoryLockStale(lockPath)) {
         await fs.rm(lockPath, {recursive: true, force: true})
@@ -281,7 +300,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
           return true
         } catch (retryError) {
-          if (/** @type {NodeJS.ErrnoException} */ (retryError)?.code === "EEXIST") return false
+          if (/**
+ * Documents this API.
+ * @type {NodeJS.ErrnoException} */ (retryError)?.code === "EEXIST") return false
 
           throw retryError
         }
@@ -292,6 +313,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs release advisory lock file.
    * @param {string} name - Lock name.
    * @returns {Promise<void>}
    */
@@ -308,6 +330,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+ * Runs is advisory lock file held.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>}
    */
@@ -334,7 +357,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * @returns {Promise<boolean>}
    */
   async _isAdvisoryLockStale(lockPath) {
-    /** @type {string} */
+    /**
+ * Documents this API.
+ * @type {string} */
     let rawOwner
 
     try {
@@ -344,7 +369,9 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
       return true
     }
 
-    /** @type {{pid?: number, hostname?: string}} */
+    /**
+ * Documents this API.
+ * @type {{pid?: number, hostname?: string}} */
     let owner
 
     try {
@@ -364,7 +391,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
       return false
     } catch (error) {
-      return /** @type {NodeJS.ErrnoException} */ (error)?.code === "ESRCH"
+      return /** Documents this API. @type {NodeJS.ErrnoException} */ (error)?.code === "ESRCH"
     }
   }
 }

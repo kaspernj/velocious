@@ -8,6 +8,7 @@ import Migrator from "./migrator.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
+ * Runs load migrations.
  * @param {object} args - Options object.
  * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback - Migrations require context callback.
  * @returns {{loaded: boolean}} - Whether the database was loaded by this call.

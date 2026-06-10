@@ -1,4 +1,5 @@
 /**
+ * Runs query.
  * @param {import("mysql").Pool} pool - Pool.
  * @param {string} sql - SQL string.
  * @returns {Promise<Record<string, ?>[]>} - Resolves with string value.
@@ -14,7 +15,9 @@ export default async function query(pool, sql) {
         const resultFields = Array.isArray(fields) ? fields : []
 
         for (const rowData of resultRows) {
-          /** @type {Record<string, ?>} */
+          /**
+ * Result.
+ * @type {Record<string, ?>} */
           const result = {}
 
           for (const fieldData of resultFields) {

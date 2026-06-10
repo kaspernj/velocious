@@ -4,6 +4,7 @@ import {digg} from "diggerize"
 
 export default class VelociousRoutesAppRoutes {
   /**
+ * Runs get routes.
    * @param {import("../configuration.js").default} configuration - Configuration instance.
    * @returns {Promise<import("./index.js").default>} - Resolves with the routes.
    */

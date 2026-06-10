@@ -14,6 +14,7 @@ import {pathToFileURL} from "url"
 import {clearDeliveries} from "../mailer.js"
 
 /**
+ * Runs run with timeout.
  * @param {Promise<?> | ?} promise - Promise or value.
  * @param {number} timeoutMs - Timeout in milliseconds.
  * @param {string} testDescription - Test description.
@@ -36,18 +37,24 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
   })
 }
 
-/** @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
+/**
+ * ConsoleMethodName type.
+ * @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
 
-/** @type {ConsoleMethodName[]} */
+/**
+ * Captured console methods.
+ * @type {ConsoleMethodName[]} */
 const CAPTURED_CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"]
 
 /**
+ * AttemptConsoleOutput type.
  * @typedef {object} AttemptConsoleOutput
  * @property {number} attemptNumber - Attempt number.
  * @property {string} output - Captured console output.
  */
 
 /**
+ * Runs to file slug.
  * @param {string} value - Value to sanitize.
  * @returns {string} - Slug-safe value.
  */
@@ -60,6 +67,7 @@ function toFileSlug(value) {
 }
 
 /**
+ * TestArgs type.
  * @typedef {object} TestArgs
  * @property {Application} [application] - Application instance for integration tests.
  * @property {RequestClient} [client] - HTTP client for request tests.
@@ -75,6 +83,7 @@ function toFileSlug(value) {
  */
 
 /**
+ * TestData type.
  * @typedef {object} TestData
  * @property {TestArgs} args - Arguments passed to the test.
  * @property {string} [filePath] - Source file path.
@@ -83,6 +92,7 @@ function toFileSlug(value) {
  */
 
 /**
+ * FailedTestDetail type.
  * @typedef {object} FailedTestDetail
  * @property {string} fullDescription - Full test description.
  * @property {string} [filePath] - Source file path.
@@ -93,30 +103,36 @@ function toFileSlug(value) {
  */
 
 /**
+ * ActiveAfterAllScopeEntry type.
  * @typedef {object} ActiveAfterAllScopeEntry
  * @property {TestsArgument} tests - Scope test tree.
  * @property {boolean} afterAllsRun - Whether cleanup hooks have run.
  */
 
 /**
+ * Documents this API.
  * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : (void|Promise<void>)} AfterBeforeEachCallbackType
  */
 
 /**
+ * AfterBeforeEachCallbackObjectType type.
  * @typedef {object} AfterBeforeEachCallbackObjectType
  * @property {AfterBeforeEachCallbackType} callback - Hook callback to execute.
  */
 
 /**
+ * Documents this API.
  * @typedef {function({configuration: import("../configuration.js").default}) : (void|Promise<void>)} BeforeAfterAllCallbackType
  */
 
 /**
+ * BeforeAfterAllCallbackObjectType type.
  * @typedef {object} BeforeAfterAllCallbackObjectType
  * @property {BeforeAfterAllCallbackType} callback - Hook callback to execute.
  */
 
 /**
+ * TestsArgument type.
  * @typedef {object} TestsArgument
  * @property {Record<string, TestData>} args - Arguments keyed by test description.
  * @property {boolean} [anyTestsFocussed] - Whether any tests in the tree are focused.
@@ -131,13 +147,18 @@ function toFileSlug(value) {
  */
 
 export default class TestRunner {
-  /** @type {ActiveAfterAllScopeEntry[]} */
+  /**
+ * Documents this API.
+ * @type {ActiveAfterAllScopeEntry[]} */
   _activeAfterAllScopes
 
-  /** @type {FailedTestDetail[]} */
+  /**
+ * Documents this API.
+ * @type {FailedTestDetail[]} */
   _failedTestDetails
 
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string[] | string} [args.excludeTags] - Tags to exclude.
@@ -168,22 +189,29 @@ export default class TestRunner {
   }
 
   /**
+ * Runs get configuration.
    * @returns {import("../configuration.js").default} - The configuration.
    */
   getConfiguration() { return this._configuration }
 
   /**
+ * Runs get test files.
    * @returns {string[]} - The test files.
    */
   getTestFiles() { return this._testFiles }
 
-  /** @returns {Record<string, number[]>} - Line filters. */
+  /**
+ * Runs get line filters.
+ * @returns {Record<string, number[]>} - Line filters. */
   getLineFilters() { return this._lineFilters }
 
-  /** @returns {RegExp[]} - Example patterns. */
+  /**
+ * Runs get example patterns.
+ * @returns {RegExp[]} - Example patterns. */
   getExamplePatterns() { return this._examplePatterns }
 
   /**
+ * Runs normalize tags.
    * @param {string[] | string | undefined} tags - Tags.
    * @returns {string[]} - Normalized tags.
    */
@@ -209,6 +237,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs has tag.
    * @param {TestArgs} testArgs - Test args.
    * @param {string} tag - Tag to check for.
    * @returns {boolean} - Whether tag is present.
@@ -218,6 +247,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs is browser test mode.
    * @returns {boolean} - Whether running browser tests.
    */
   isBrowserTestMode() {
@@ -225,6 +255,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run with dummy if needed.
    * @param {TestArgs} testArgs - Test args.
    * @param {() => Promise<void>} callback - Callback to run.
    * @returns {Promise<void>} - Resolves when complete.
@@ -244,6 +275,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run node dummy.
    * @param {() => Promise<void>} callback - Callback to run.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -260,6 +292,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs default dummy path.
    * @returns {string} - Default dummy helper path.
    */
   defaultDummyPath() {
@@ -274,6 +307,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run browser dummy.
    * @param {() => Promise<void>} callback - Callback to run.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -290,6 +324,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs truncate databases.
    * @param {Record<string, import("../database/drivers/base.js").default>} dbs - Database connections.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -300,16 +335,20 @@ export default class TestRunner {
   }
 
   /**
+ * Runs get exclude tag set.
    * @returns {Set<string>} - Exclude tag set.
    */
   getExcludeTagSet() {
-    /** @type {string[]} */
+    /**
+ * Config tags.
+ * @type {string[]} */
     const configTags = Array.isArray(testConfig.excludeTags) ? testConfig.excludeTags : []
 
     return new Set([...this._excludeTags, ...configTags])
   }
 
   /**
+ * Runs has matching tag.
    * @param {string[] | string | undefined} testTags - Test tags.
    * @param {Set<string>} tagSet - Tag set.
    * @returns {boolean} - Whether any tags match.
@@ -327,6 +366,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs has runnable tests.
    * @param {TestsArgument} tests - Tests.
    * @param {string[]} [descriptions] - Description stack.
    * @param {boolean} [lineMatchedInScope] - Whether line matched in scope.
@@ -335,7 +375,9 @@ export default class TestRunner {
   hasRunnableTests(tests, descriptions = [], lineMatchedInScope = false) {
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
-      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+      const testArgs = /**
+ * Documents this API.
+ * @type {TestArgs} */ (Object.assign({}, testData.args))
       const includeByLine = lineMatchedInScope || this.matchesLineFilter(testData)
 
       if (this._onlyFocussed && !testArgs.focus) continue
@@ -357,6 +399,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs should skip test.
    * @param {TestArgs} testArgs - Test args.
    * @param {TestData} testData - Test data.
    * @param {string} testDescription - Test description.
@@ -391,6 +434,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs matches line filter.
    * @param {TestData | TestsArgument} entry - Test entry.
    * @returns {boolean} - Whether line filter matches entry.
    */
@@ -406,6 +450,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs build full description.
    * @param {string[]} descriptions - Description stack.
    * @param {string} testDescription - Test description.
    * @returns {string} - Full description.
@@ -417,6 +462,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs application.
    * @returns {Promise<Application>} - Resolves with the application.
    */
   async application() {
@@ -435,6 +481,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs request client.
    * @returns {Promise<RequestClient>} - Resolves with the request client.
    */
   async requestClient() {
@@ -446,6 +493,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs import test files.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async importTestFiles() {
@@ -453,11 +501,13 @@ export default class TestRunner {
   }
 
   /**
+ * Runs is failed.
    * @returns {boolean} - Whether failed.
    */
   isFailed() { return this._failedTests !== undefined && this._failedTests > 0 }
 
   /**
+ * Runs get failed tests.
    * @returns {number} - The failed tests.
    */
   getFailedTests() {
@@ -466,12 +516,15 @@ export default class TestRunner {
     return this._failedTests
   }
 
-  /** @returns {FailedTestDetail[]} - Failed test details. */
+  /**
+ * Runs get failed test details.
+ * @returns {FailedTestDetail[]} - Failed test details. */
   getFailedTestDetails() {
     return this._failedTestDetails
   }
 
   /**
+ * Runs persist failed test console outputs to assets.
    * @param {object} [args] - Options object.
    * @param {string} [args.assetsPath] - Assets directory path.
    * @returns {Promise<string[]>} - Written log file paths.
@@ -515,6 +568,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs get successful tests.
    * @returns {number} - The successful tests.
    */
   getSuccessfulTests() {
@@ -524,6 +578,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs get tests count.
    * @returns {number} - The tests count.
    */
   getTestsCount() {
@@ -533,6 +588,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs get executed tests count.
    * @returns {number} - The executed tests count.
    */
   getExecutedTestsCount() {
@@ -544,6 +600,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs prepare.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async prepare() {
@@ -564,6 +621,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs are any tests focussed.
    * @returns {boolean} - Whether any tests focussed.
    */
   areAnyTestsFocussed() {
@@ -575,6 +633,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async run() {
@@ -590,6 +649,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run after alls for active scopes.
    * @returns {Promise<void>} - Resolves when cleanup hooks finish.
    */
   async runAfterAllsForActiveScopes() {
@@ -603,6 +663,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs analyze tests.
    * @param {TestsArgument} tests - Tests.
    * @returns {{anyTestsFocussed: boolean}} - Whether any tests in the tree are focused.
    */
@@ -636,6 +697,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run tests.
    * @param {object} args - Options object.
    * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches - After eaches.
    * @param {Array<AfterBeforeEachCallbackObjectType>} args.beforeEaches - Before eaches.
@@ -654,7 +716,7 @@ export default class TestRunner {
 
     if (!shouldRunAnyTests) return
 
-    /** @type {ActiveAfterAllScopeEntry} */
+    /** Scope entry. @type {ActiveAfterAllScopeEntry} */
     const scopeEntry = {tests, afterAllsRun: false}
     this._activeAfterAllScopes.push(scopeEntry)
 
@@ -665,7 +727,9 @@ export default class TestRunner {
 
       for (const testDescription in tests.tests) {
         const testData = tests.tests[testDescription]
-        const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+        const testArgs = /**
+ * Documents this API.
+ * @type {TestArgs} */ (Object.assign({}, testData.args))
         const includeByLine = scopeLineMatch || this.matchesLineFilter(testData)
 
         if (this._onlyFocussed && !testArgs.focus) continue
@@ -688,18 +752,26 @@ export default class TestRunner {
         const timeoutMs = useTimeout ? timeoutSeconds * 1000 : undefined
         let retriesUsed = 0
         let attemptNumber = 1
-        /** @type {AttemptConsoleOutput[]} */
+        /**
+ * Attempt console outputs.
+ * @type {AttemptConsoleOutput[]} */
         const attemptConsoleOutputs = []
 
         console.log(`${leftPadding}it ${testDescription}`)
 
         while (true) {
           let shouldRetry = false
-          /** @type {?} */
+          /**
+ * Documents this API.
+ * @type {?} */
           let caughtError
-          /** @type {?} */
+          /**
+ * Documents this API.
+ * @type {?} */
           let failedError
-          /** @type {?} */
+          /**
+ * Documents this API.
+ * @type {?} */
           let lastError
           let willRetry = false
           const stopConsoleCapture = this.startConsoleCapture({
@@ -895,6 +967,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs run after alls for scope.
    * @param {ActiveAfterAllScopeEntry} scopeEntry - Scope entry.
    * @returns {Promise<void>} - Resolves when scope cleanup finishes.
    */
@@ -909,6 +982,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs emit event.
    * @param {string} eventName - Event name.
    * @param {object} payload - Event payload.
    * @returns {Promise<void>} - Resolves when all listeners complete.
@@ -922,6 +996,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs print rerun command.
    * @param {object} args - Options object.
    * @param {string[]} args.descriptions - Description stack.
    * @param {string} args.testDescription - Test description.
@@ -938,6 +1013,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs build rerun command.
    * @param {object} args - Options object.
    * @param {string[]} args.descriptions - Description stack.
    * @param {string} args.testDescription - Test description.
@@ -964,6 +1040,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs build console output.
    * @param {AttemptConsoleOutput[]} attemptConsoleOutputs - Attempt output entries.
    * @returns {string} - Combined console output.
    */
@@ -977,6 +1054,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs get failed console output max lines.
    * @returns {number} - Maximum failed console lines.
    */
   getFailedConsoleOutputMaxLines() {
@@ -988,6 +1066,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs truncate failed console output lines.
    * @param {string} consoleOutput - Console output.
    * @returns {string[]} - Lines for inline output.
    */
@@ -1008,6 +1087,7 @@ export default class TestRunner {
   }
 
   /**
+ * Runs print failed console output.
    * @param {object} args - Options object.
    * @param {string} args.consoleOutput - Console output.
    * @param {string} args.leftPadding - Left padding.
@@ -1029,16 +1109,25 @@ export default class TestRunner {
   }
 
   /**
+ * Runs start console capture.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.passthrough] - Whether to pass through to the original console.
    * @returns {() => string} - Stops the capture and returns captured text.
    */
   startConsoleCapture({passthrough = false} = {}) {
-    /** @type {string[]} */
+    /**
+ * Lines.
+ * @type {string[]} */
     const lines = []
-    /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
-    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
-    /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
+    /**
+ * Console object.
+ * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
+    const consoleObject = /**
+ * Documents this API.
+ * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
+    /**
+ * Original console methods.
+ * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
     const originalConsoleMethods = {
       debug: consoleObject.debug.bind(console),
       error: consoleObject.error.bind(console),

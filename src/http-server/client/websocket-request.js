@@ -4,6 +4,7 @@ import querystring from "querystring"
 
 export default class VelociousHttpServerClientWebsocketRequest {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {?} [args.body] - Request body.
    * @param {Record<string, string>} [args.headers] - Header list.
@@ -18,12 +19,18 @@ export default class VelociousHttpServerClientWebsocketRequest {
     if (!path) throw new Error("path is required")
 
     this.body = body
-    /** @type {Record<string, string>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, string>} */
     this.headersMap = {}
-    /** @type {Record<string, ?>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
     this.metadataObject = metadata ? {...metadata} : {}
     this.method = method.toUpperCase()
-    /** @type {Record<string, ?>} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>} */
     this.paramsObject = {}
     this._path = path
     this.remoteAddressValue = remoteAddress
@@ -53,6 +60,7 @@ export default class VelociousHttpServerClientWebsocketRequest {
   }
 
   /**
+ * Runs header.
    * @param {string} name - Header name.
    * @returns {string | null} - Header value.
    */
@@ -67,6 +75,7 @@ export default class VelociousHttpServerClientWebsocketRequest {
   host() { return this.header("host") || undefined }
 
   /**
+ * Runs metadata.
    * @param {string} [key] - Metadata key.
    * @returns {?} - Metadata value for a key, or the full metadata object.
    */
@@ -106,7 +115,9 @@ export default class VelociousHttpServerClientWebsocketRequest {
     return match?.[1]
   }
 
-  /** @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
+  /**
+ * Runs query params.
+ * @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
   queryParams() { return this._parseQueryParams() }
 
   remoteAddress() { return this.remoteAddressValue }
@@ -117,7 +128,9 @@ export default class VelociousHttpServerClientWebsocketRequest {
     if (!query) return Object.create(null)
 
     const parsedQuery = querystring.parse(query)
-    /** @type {Record<string, string | string[]>} */
+    /**
+ * Params.
+ * @type {Record<string, string | string[]>} */
     const params = Object.create(null)
 
     for (const key of Object.keys(parsedQuery)) {

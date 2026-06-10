@@ -5,11 +5,13 @@ import * as inflection from "inflection"
 import strftime from "strftime"
 
 /**
+ * DbGenerateMigration class.
  * @typedef {{date: Date, migrationContent: string, migrationName: string, migrationNameCamelized: string, migrationNumber: string, migrationPath: string}} DbGenerateMigrationReturnType
  */
 
 export default class DbGenerateMigration extends BaseCommand {
   /**
+ * Runs execute.
    * @returns {Promise<void | DbGenerateMigrationReturnType>} - Resolves with the execute.
    */
   async execute() {

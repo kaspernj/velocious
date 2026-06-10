@@ -7,6 +7,7 @@ import escapeStringRegexp from "escape-string-regexp"
 
 class VelociousRouteNamespaceRoute extends BasicRoute {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -24,6 +25,7 @@ class VelociousRouteNamespaceRoute extends BasicRoute {
   }
 
   /**
+ * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.

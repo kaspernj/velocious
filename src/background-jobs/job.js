@@ -4,6 +4,7 @@ import BackgroundJobsClient from "./client.js"
 
 export default class VelociousJob {
   /**
+ * Runs job name.
    * @returns {string} - Job name.
    */
   static jobName() {
@@ -11,6 +12,7 @@ export default class VelociousJob {
   }
 
   /**
+ * Runs perform later.
    * @param {...?} args - Job args.
    * @returns {Promise<string>} - Job id.
    */
@@ -26,6 +28,7 @@ export default class VelociousJob {
   }
 
   /**
+ * Runs perform later with options.
    * @param {object} args - Options.
    * @param {Array<?>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
@@ -42,6 +45,7 @@ export default class VelociousJob {
   }
 
   /**
+ * Runs split args and options.
    * @param {Array<?>} args - Job args.
    * @returns {{jobArgs: Array<?>, jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
    */
@@ -54,7 +58,9 @@ export default class VelociousJob {
     const isOptionsArg = lastArg && typeof lastArg === "object" && !Array.isArray(lastArg) && "jobOptions" in lastArg
 
     if (isOptionsArg) {
-      const {jobOptions} = /** @type {{jobOptions: import("./types.js").BackgroundJobOptions}} */ (lastArg)
+      const {jobOptions} = /**
+ * Documents this API.
+ * @type {{jobOptions: import("./types.js").BackgroundJobOptions}} */ (lastArg)
       return {jobArgs: args.slice(0, -1), jobOptions: jobOptions || {}}
     }
 

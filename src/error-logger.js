@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs error logger.
  * @param {(...args: Array<?>) => Promise<void>} callback - Callback function.
  * @returns {(...args: Array<?>) => Promise<void>} - The error logger.
  */

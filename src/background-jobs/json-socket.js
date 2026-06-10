@@ -4,18 +4,27 @@ import EventEmitter from "../utils/event-emitter.js"
 
 export default class JsonSocket extends EventEmitter {
   /**
+ * Runs constructor.
    * @param {import("net").Socket} socket - Socket instance.
    */
   constructor(socket) {
     super()
     this.socket = socket
-    /** @type {string | undefined} */
+    /**
+ * Documents this API.
+ * @type {string | undefined} */
     this.workerId = undefined
-    /** @type {boolean} */
+    /**
+ * Documents this API.
+ * @type {boolean} */
     this.acceptsSpawnedJobs = true
-    /** @type {boolean} */
+    /**
+ * Documents this API.
+ * @type {boolean} */
     this.acceptsForkedJobs = true
-    /** @type {boolean} */
+    /**
+ * Documents this API.
+ * @type {boolean} */
     this.acceptsInlineJobs = true
     this.buffer = ""
     this.socket.setEncoding("utf8")
@@ -25,6 +34,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
+ * Runs on data.
    * @param {string} chunk - Data chunk.
    * @returns {void}
    */
@@ -50,6 +60,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
+ * Runs send.
    * @param {?} message - Message to send.
    * @returns {void}
    */
@@ -58,6 +69,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
+ * Runs close.
    * @returns {void}
    */
   close() {

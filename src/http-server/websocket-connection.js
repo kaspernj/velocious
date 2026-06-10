@@ -11,6 +11,7 @@
  */
 export default class VelociousWebsocketConnection {
   /**
+ * Runs constructor.
    * @param {object} args
    * @param {string} args.connectionId - Client-assigned id, unique within the session.
    * @param {Record<string, ?>} args.params - Opaque params from the `connection-open` message.
@@ -115,7 +116,9 @@ export default class VelociousWebsocketConnection {
     }
   }
 
-  /** @returns {boolean} */
+  /**
+ * Runs is closed.
+ * @returns {boolean} */
   isClosed() {
     return this._closed
   }

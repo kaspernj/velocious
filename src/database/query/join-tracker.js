@@ -2,6 +2,7 @@
 
 export default class VelociousDatabaseQueryJoinTracker {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Root model class.
    */
@@ -16,6 +17,7 @@ export default class VelociousDatabaseQueryJoinTracker {
   }
 
   /**
+ * Runs clone.
    * @returns {VelociousDatabaseQueryJoinTracker} - The clone.
    */
   clone() {
@@ -28,6 +30,7 @@ export default class VelociousDatabaseQueryJoinTracker {
   }
 
   /**
+ * Runs get root model class.
    * @returns {typeof import("../record/index.js").default} - Root model class.
    */
   getRootModelClass() {
@@ -35,6 +38,7 @@ export default class VelociousDatabaseQueryJoinTracker {
   }
 
   /**
+ * Runs path key.
    * @param {string[]} path - Join path.
    * @returns {string} - Path key.
    */
@@ -43,6 +47,7 @@ export default class VelociousDatabaseQueryJoinTracker {
   }
 
   /**
+ * Runs get entry.
    * @param {string[]} path - Join path.
    * @returns {{tableName: string, alias: string | undefined} | undefined} - Entry.
    */
@@ -51,6 +56,7 @@ export default class VelociousDatabaseQueryJoinTracker {
   }
 
   /**
+ * Runs register path.
    * @param {string[]} path - Join path.
    * @param {string} tableName - Table name.
    * @returns {{tableName: string, alias: string | undefined}} - Entry.
@@ -74,6 +80,7 @@ export default class VelociousDatabaseQueryJoinTracker {
   }
 
   /**
+ * Runs build alias.
    * @param {string} tableName - Table name.
    * @param {string[]} path - Join path.
    * @returns {string} - Alias.

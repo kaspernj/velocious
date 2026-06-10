@@ -58,6 +58,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs alter table sqls.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -69,6 +70,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs create database sql.
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifNotExists] - Whether if not exists.
@@ -82,6 +84,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs drop database sql.
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifExists] - Whether if exists.
@@ -95,6 +98,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs create index sqls.
    * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -106,6 +110,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs create table sql.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -117,6 +122,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs current database.
    * @returns {Promise<string>} - Resolves with the current database.
    */
   async currentDatabase() {
@@ -134,6 +140,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs drop table sqls.
    * @param {string} tableName - Table name.
    * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
@@ -170,6 +177,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs drop table.
    * @param {string} tableName - Table name.
    * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<void>} - Resolves when complete.
@@ -186,16 +194,19 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs get type.
    * @returns {string} - The type.
    */
   getType() { return "mssql" }
 
   /**
+ * Runs primary key type.
    * @returns {string} - The primary key type.
    */
   primaryKeyType() { return "bigint" }
 
   /**
+ * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
@@ -230,6 +241,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
    */
@@ -239,6 +251,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
+ * Runs escape.
    * @param {?} value - Value to use.
    * @returns {string} - The escape.
    */
@@ -253,6 +266,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs quote.
    * @param {?} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
@@ -266,18 +280,21 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs quote column.
    * @param {string} columnName - Column name.
    * @returns {string} - The quote column.
    */
   quoteColumn(columnName) { return this.options().quoteColumnName(columnName) }
 
   /**
+ * Runs quote table.
    * @param {string} string - String.
    * @returns {string} - The quote table.
    */
   quoteTable(string) { return this.options().quoteTableName(string) }
 
   /**
+ * Runs rename column.
    * @param {string} tableName - Table name.
    * @param {string} oldColumnName - Previous column name.
    * @param {string} newColumnName - New column name.
@@ -288,6 +305,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs delete sql.
    * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -298,6 +316,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs insert sql.
    * @abstract
    * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
@@ -310,6 +329,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs get tables.
    * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
@@ -322,7 +342,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
       const tables = []
 
       for (const row of result) {
-        const table = new Table(this, /** @type {Record<string, string>} */ (row))
+        const table = new Table(this, /**
+ * Documents this API.
+ * @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }
@@ -340,7 +362,9 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return lastInsertID
   }
 
-  /** @returns {Options} - The options options.  */
+  /**
+ * Runs options.
+ * @returns {Options} - The options options.  */
   options() {
     if (!this._options) this._options = new Options({driver: this})
 
@@ -397,6 +421,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs start save point action.
    * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -405,6 +430,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs release save point action.
    * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -413,6 +439,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs rollback save point action.
    * @param {string} savePointName - Save point name.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -446,6 +473,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs update sql.
    * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -456,6 +484,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs upsert sql.
    * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -466,6 +495,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs structure sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
@@ -501,6 +531,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs try acquire advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
@@ -509,6 +540,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+ * Runs release advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */

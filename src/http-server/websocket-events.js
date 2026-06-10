@@ -2,6 +2,7 @@
 
 export default class VelociousHttpServerWebsocketEvents {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
    * @param {number} args.workerCount - Worker count.
@@ -12,6 +13,7 @@ export default class VelociousHttpServerWebsocketEvents {
   }
 
   /**
+ * Runs publish.
    * @param {string} channel - Channel name.
    * @param {?} payload - Payload data.
    * @returns {void} - No return value.

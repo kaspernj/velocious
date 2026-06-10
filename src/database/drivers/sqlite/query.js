@@ -1,13 +1,16 @@
 // @ts-check
 
 /**
+ * Runs query.
  * @param {import("sqlite3").Database} connection - Connection.
  * @param {string} sql - SQL string.
  * @returns {Promise<Record<string, ?>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {
   try {
-    /** @type {Record<string, ?>[]} */
+    /**
+ * Documents this API.
+ * @type {Record<string, ?>[]} */
     let result
 
     // @ts-expect-error

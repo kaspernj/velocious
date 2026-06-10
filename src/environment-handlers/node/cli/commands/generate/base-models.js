@@ -67,14 +67,16 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += `   ? @returns {typeof import("${sourceModelFilePath}").default}\n`
         fileContent += "   */\n"
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
-        fileContent += `  getModelClass() { return /** @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
+        fileContent += `  getModelClass() { return /**
+ * Documents this API. @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
       } else {
         // No model file yet → fall back to typeof TicketBase
         fileContent += "  /**\n"
         fileContent += `   ? @returns {typeof ${modelNameCamelized}Base}\n`
         fileContent += "   */\n"
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
-        fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
+        fileContent += `  getModelClass() { return /**
+ * Documents this API. @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
       }
 
       const table = await modelClass.connection().getTableByName(modelClass.tableName())
@@ -233,7 +235,8 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   ? @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${modelFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /**
+ * Documents this API. @type {import("${modelFilePath}").default} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -277,13 +280,15 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   ? @returns {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}() { return /** @type {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}() { return /**
+ * Documents this API. @type {import("${hasManyRelationFilePath}").default<typeof import("${sourceModelFilePath}").default, typeof import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += `   ? @returns {Array<import("${recordImport}").default>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /** @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /**
+ * Documents this API. @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -323,6 +328,7 @@ export default class DbGenerateModel extends BaseCommand {
   }
 
   /**
+ * Runs js doc type from column.
    * @param {import("../../../../../database/drivers/base-column.js").default} column - Column.
    * @returns {string | undefined} - The js doc type from column.
    */
@@ -345,6 +351,7 @@ export default class DbGenerateModel extends BaseCommand {
   }
 
   /**
+ * Runs js doc setter type from column.
    * @param {import("../../../../../database/drivers/base-column.js").default} column - Column.
    * @returns {string | undefined} - The js doc setter type from column.
    */

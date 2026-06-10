@@ -32,9 +32,12 @@ import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import {timingSafeEqual} from "node:crypto"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
-/** @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?}} TimezoneStore */
+/**
+ * Documents this API.
+ * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?}} TimezoneStore */
 
 /**
+ * Runs path within allowed prefixes.
  * @param {string} filePath - Input file path.
  * @param {string[]} allowedPathPrefixes - Allowed path prefixes.
  * @returns {boolean} - Whether input path is inside an allowed prefix.
@@ -55,13 +58,18 @@ function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
 }
 
 export default class VelociousEnvironmentHandlerNode extends Base{
-  /** @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
+  /**
+ * Timezone async local storage.
+ * @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
   _timezoneAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
 
-  /** @type {import("./base.js").CommandFileObjectType[] | undefined} */
+  /**
+ * Find commands result.
+ * @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
 
   /**
+ * Runs debug endpoint token matches.
    * @param {string} providedToken - Token from the request.
    * @param {string} expectedToken - Configured token.
    * @returns {boolean} - Whether both tokens match.
@@ -74,6 +82,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get framework source directory.
    * @returns {string | undefined} - Velocious source directory used to filter framework stack frames.
    */
   getFrameworkSourceDirectory() {
@@ -101,7 +110,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         continue
       }
 
-      /** @type {Record<string, ?>} */
+      /**
+ * Discovered.
+ * @type {Record<string, ?>} */
       const discovered = {}
 
       for (const file of files) {
@@ -117,7 +128,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         const baseName = file.replace(/\.(js|mjs)$/, "")
         const modelName = baseName.replace(/-resource$/, "")
           .split("-")
-          .map((/** @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .map((/**
+ * Documents this API.
+ * @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join("")
 
         discovered[modelName] = ResourceClass
@@ -130,6 +143,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs set configuration.
    * @param {import("../configuration.js").default} newConfiguration - New configuration.
    * @returns {void} - No return value.
    */
@@ -142,6 +156,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs read attachment input file.
    * @param {string} filePath - File path.
    * @returns {Promise<Buffer>} - File bytes.
    */
@@ -150,6 +165,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs resolve attachment input path.
    * @param {object} args - Args.
    * @param {string[]} args.allowedPathPrefixes - Allowed path prefixes.
    * @param {string} args.inputPath - Input path.
@@ -171,6 +187,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs find commands.
    * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.
    */
   async findCommands() {
@@ -182,6 +199,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs run with timezone offset.
    * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
    * @param {() => Promise<?>} callback - Callback to run.
    * @returns {Promise<?>} - Result of the callback.
@@ -202,6 +220,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs set timezone offset.
    * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
    * @returns {void} - No return value.
    */
@@ -225,6 +244,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get timezone offset minutes.
    * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
    * @returns {number} - Offset in minutes.
    */
@@ -241,6 +261,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs run with ability.
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -261,6 +282,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs set current ability.
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set.
    * @returns {void} - No return value.
    */
@@ -285,6 +307,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get current ability.
    * @returns {import("../authorization/ability.js").default | undefined} - Current ability.
    */
   getCurrentAbility() {
@@ -296,6 +319,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs run with request timing.
    * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -316,6 +340,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get current request timing.
    * @returns {import("../http-server/client/request-timing.js").default | undefined} - Current request timing collector.
    */
   getCurrentRequestTiming() {
@@ -327,6 +352,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs run with tenant.
    * @param {?} tenant - Tenant to set for callback scope.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -347,6 +373,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs set current tenant.
    * @param {?} tenant - Tenant to set.
    * @returns {void} - No return value.
    */
@@ -371,6 +398,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get current tenant.
    * @returns {?} - Current tenant.
    */
   getCurrentTenant() {
@@ -382,11 +410,13 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs actual find commands.
    * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with discovered command files.
    */
   async _actualFindCommands() {
     const basePath = await this.getBasePath()
-    const commandFiles = fs.glob(`${basePath}/src/cli/commands/**/*.js`)
+    const commandFiles = fs.glob(`${basePath}/src/cli/commands/**
+ * Documents this API./*.js`)
     const commands = []
 
     for await (const aFilePath of commandFiles) {
@@ -399,6 +429,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs command name from file path.
    * @param {string} filePath - Full command file path.
    * @returns {string} - Parsed command name.
    */
@@ -426,6 +457,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands init.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -434,6 +466,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands migration generate.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -442,6 +475,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands migration destroy.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -450,6 +484,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands generate base models.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -458,6 +493,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands generate frontend models.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -466,6 +502,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands generate model.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -474,6 +511,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands routes.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -482,6 +520,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands console.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -490,6 +529,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands server.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -498,6 +538,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands test.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -506,6 +547,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands background jobs main.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -514,6 +556,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands background jobs worker.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -522,6 +565,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands background jobs runner.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -530,6 +574,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands beacon.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -537,14 +582,18 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     return await this.forwardCommand(command, CliCommandsBeacon)
   }
 
-  /** @returns {Promise<typeof import("../beacon/client.js").default>} - Beacon client class. */
+  /**
+ * Runs load beacon client.
+ * @returns {Promise<typeof import("../beacon/client.js").default>} - Beacon client class. */
   async loadBeaconClient() {
     const {default: BeaconClient} = await import("../beacon/client.js")
 
     return BeaconClient
   }
 
-  /** @returns {Promise<typeof import("../beacon/in-process-client.js").default>} - In-process client class. */
+  /**
+ * Runs load in process beacon client.
+ * @returns {Promise<typeof import("../beacon/in-process-client.js").default>} - In-process client class. */
   async loadInProcessBeaconClient() {
     const {default: InProcessBeaconClient} = await import("../beacon/in-process-client.js")
 
@@ -552,6 +601,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands db schema dump.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -560,6 +610,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands db schema load.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -568,6 +619,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands db seed.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -576,6 +628,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands runner.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -584,6 +637,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs cli commands run script.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @returns {Promise<?>} - Resolves with the command result.
    */
@@ -592,6 +646,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs require command.
    * @param {object} args - Options object.
    * @param {string[]} args.commandParts - Command parts.
    * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Resolves with the require command.
@@ -614,11 +669,13 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs find migrations.
    * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Resolves with the migrations.
    */
   async findMigrations() {
     const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
-    const glob = await fs.glob(`${migrationsPath}/**/*.js`)
+    const glob = await fs.glob(`${migrationsPath}/**
+ * Documents this API./*.js`)
     let files = []
 
     for await (const fullPath of glob) {
@@ -646,6 +703,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs import application routes.
    * @returns {Promise<import("../routes/index.js").default>} - Resolves with the import application routes.
    */
   async importApplicationRoutes() {
@@ -655,6 +713,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get velocious path.
    * @returns {Promise<string>} - Resolves with the velocious path.
    */
   async getVelociousPath() {
@@ -669,6 +728,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs import test files.
    * @param {string[]} testFiles - Test files.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -679,6 +739,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get default log directory.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @returns {string} - The default log directory.
@@ -688,6 +749,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs get log file path.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string | undefined} args.directory - Directory path.
@@ -703,6 +765,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs write log to file.
    * @param {object} args - Options object.
    * @param {string} args.filePath - File path.
    * @param {string} args.message - Message text.
@@ -732,6 +795,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs require migration.
    * @param {string} filePath - File path.
    * @returns {Promise<import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
@@ -753,6 +817,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs after migrations.
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @param {"migration" | "schemaDump"} [args.reason] - Why the structure write is being triggered.
@@ -780,12 +845,15 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+ * Runs structure sql by identifier.
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @returns {Promise<Record<string, string>>} - Resolves with SQL string.
    */
   async _structureSqlByIdentifier({dbs}) {
-    const sqlByIdentifier = /** @type {Record<string, string>} */ ({})
+    const sqlByIdentifier = /**
+ * Documents this API.
+ * @type {Record<string, string>} */ ({})
 
     for (const identifier of Object.keys(dbs)) {
       const db = dbs[identifier]

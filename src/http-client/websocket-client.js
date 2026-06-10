@@ -14,6 +14,7 @@ const DEFAULT_URL = "ws://127.0.0.1:3006/websocket"
  */
 export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
   /**
+ * Runs constructor.
    * @param {Partial<ConstructorParameters<typeof SnapReqWebSocketClient>[0]>} [args] - Options forwarded to `SnapReqWebSocketClient`.
    */
   constructor(args = {}) {

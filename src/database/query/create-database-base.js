@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * CreateDatabaseArgsType type.
  * @typedef {object} CreateDatabaseArgsType
  * @property {import("../drivers/base.js").default} driver - Database driver used to generate SQL.
  * @property {string} databaseName - Name of the database to create.
@@ -13,6 +14,7 @@ import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase {
   /**
+ * Runs constructor.
    * @param {CreateDatabaseArgsType} args - Options object.
    */
   constructor({driver, databaseName, ifNotExists, databaseCharset, databaseCollation}) {
@@ -24,6 +26,7 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
   }
 
   /**
+ * Runs to sql.
    * @returns {string[]} - SQL statements.
    */
   toSql() {

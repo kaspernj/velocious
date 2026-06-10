@@ -3,6 +3,7 @@
 const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
 
 /**
+ * ModelScopeDescriptor type.
  * @typedef {object} ModelScopeDescriptor
  * @property {true} [velociousModelScopeDescriptor] - Internal marker.
  * @property {(...args: Array<?>) => ?} callback - Scope callback.
@@ -11,6 +12,7 @@ const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
  */
 
 /**
+ * Documents this API.
  * @param {object} args - Definition arguments.
  * @param {(...args: Array<?>) => ?} args.callback - Scope callback.
  * @param {typeof import("../database/record/index.js").default | typeof import("../frontend-models/base.js").default} args.modelClass - Owning model class.
@@ -19,6 +21,7 @@ const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
  */
 export function defineModelScope({callback, modelClass, startQuery}) {
   /**
+ * Runs defined scope.
    * @param {...?} scopeArgs - Scope arguments.
    * @returns {?} - Scoped root query.
    */
@@ -27,6 +30,7 @@ export function defineModelScope({callback, modelClass, startQuery}) {
   }
 
   /**
+ * Documents this API.
    * @param {...?} scopeArgs - Scope arguments.
    * @returns {ModelScopeDescriptor} - Reusable scope descriptor.
    */
@@ -41,9 +45,12 @@ export function defineModelScope({callback, modelClass, startQuery}) {
 }
 
 /**
+ * Documents this API.
  * @param {?} value - Candidate descriptor.
  * @returns {value is ModelScopeDescriptor} - Whether the value is a scope descriptor.
  */
 export function isModelScopeDescriptor(value) {
-  return Boolean(value && typeof value === "object" && /** @type {Record<string, ?>} */ (value)[MODEL_SCOPE_DESCRIPTOR_MARKER] === true)
+  return Boolean(value && typeof value === "object" && /**
+ * Documents this API.
+ * @type {Record<string, ?>} */ (value)[MODEL_SCOPE_DESCRIPTOR_MARKER] === true)
 }

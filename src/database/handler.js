@@ -2,6 +2,7 @@
 
 export default class VelociousDatabaseHandler {
   /**
+ * Runs clone.
    * @returns {VelociousDatabaseHandler} - The clone.
    */
   clone() {

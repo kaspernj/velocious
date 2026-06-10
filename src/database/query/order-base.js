@@ -2,6 +2,7 @@
 
 export default class VelociousDatabaseQueryOrderBase {
   /**
+ * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    */
   constructor(query) {
@@ -9,6 +10,7 @@ export default class VelociousDatabaseQueryOrderBase {
   }
 
   /**
+ * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -16,6 +18,7 @@ export default class VelociousDatabaseQueryOrderBase {
   }
 
   /**
+ * Runs set reverse order.
    * @abstract
    * @param {boolean} _reverseOrder - Whether reverse order.
    * @returns {void} - No return value.

@@ -4,6 +4,7 @@ import WhereBase from "./where-base.js"
 
 export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   /**
+ * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    * @param {string} plain - Plain.
    */

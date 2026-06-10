@@ -13,6 +13,7 @@ import websocketEventsHost from "../websocket-events-host.js"
  */
 export default class VelociousHttpServerInProcessHandler {
   /**
+ * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {number} args.workerCount - Worker count.
@@ -20,21 +21,28 @@ export default class VelociousHttpServerInProcessHandler {
   constructor({configuration, workerCount}) {
     this.configuration = configuration
 
-    /** @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
+    /**
+ * Documents this API.
+ * @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
     this.clients = {}
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
-    this.unregisterFromEventsHost = websocketEventsHost.register(/** @type {?} */ (this))
+    this.unregisterFromEventsHost = websocketEventsHost.register(/**
+ * Documents this API.
+ * @type {?} */ (this))
     this._stopping = false
   }
 
-  /** @returns {Promise<void>} */
+  /**
+ * Runs start.
+ * @returns {Promise<void>} */
   async start() {
     await this.logger.debug(() => `In-process handler ${this.workerCount} started`)
   }
 
   /**
+ * Runs add socket connection.
    * @param {import("../server-client.js").default} serverClient - Server client instance.
    * @returns {void}
    */
@@ -64,8 +72,14 @@ export default class VelociousHttpServerInProcessHandler {
 
     // Create a message-port shim so ServerClient.onSocketData can route data
     // to the in-process HTTP Client without needing a real worker thread.
-    const messagePortShim = /** @type {import("worker_threads").Worker} */ (/** @type {?} */ ({
-      postMessage: (/** @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
+    const messagePortShim = /**
+ * Documents this API.
+ * @type {import("worker_threads").Worker} */ (/**
+ * Documents this API.
+ * @type {?} */ ({
+      postMessage: (/**
+ * Documents this API.
+ * @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
         if (data.command === "clientWrite" && data.chunk) {
           const chunk = typeof data.chunk === "string" ? Buffer.from(data.chunk) : Buffer.from(data.chunk)
 
@@ -78,7 +92,9 @@ export default class VelociousHttpServerInProcessHandler {
     serverClient.listen()
   }
 
-  /** @returns {Promise<void>} */
+  /**
+ * Runs stop.
+ * @returns {Promise<void>} */
   async stop() {
     this._stopping = true
 
@@ -95,6 +111,7 @@ export default class VelociousHttpServerInProcessHandler {
   }
 
   /**
+ * Documents this API.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {string} [args.createdAt] - Event creation time.
@@ -115,12 +132,11 @@ export default class VelociousHttpServerInProcessHandler {
    * @returns {void}
    */
   dispatchWebsocketV2Broadcast({body, broadcastParams, channel, eventId}) {
-    if (!this.configuration) return
-
-    /** @type {?} */ (this.configuration)._broadcastToChannelLocal(channel, broadcastParams, body, {eventId})
+    if (!this.configuration) return /** Documents this API. @type {?} */ (this.configuration)._broadcastToChannelLocal(channel, broadcastParams, body, {eventId})
   }
 
   /**
+ * Runs dispatch websocket event.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {string} [args.createdAt] - Event creation time.
