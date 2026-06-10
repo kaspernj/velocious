@@ -83,9 +83,11 @@ export default class VelociousApplication {
     const host = httpServerConfiguration.host
 
     await this.logger.debug(`Starting server on port ${port}`)
-    const httpServerLock = new HttpServerLock({configuration, host: host ?? "0.0.0.0", port})
-    await httpServerLock.acquire()
-    this.httpServerLock = httpServerLock
+    if (this.getType() !== "test-runner") {
+      const httpServerLock = new HttpServerLock({configuration, host: host ?? "0.0.0.0", port})
+      await httpServerLock.acquire()
+      this.httpServerLock = httpServerLock
+    }
 
     try {
       if (!configuration.getWebsocketEvents()) {

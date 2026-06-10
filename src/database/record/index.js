@@ -23,6 +23,7 @@ import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
 import ModelClassQuery from "../query/model-class-query.js"
 import Preloader from "../query/preloader.js"
+import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../../record-payload-values.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
@@ -68,6 +69,57 @@ class ValidationError extends Error {
   setValidationErrors(validationErrors) {
     this._validationErrors = validationErrors
   }
+}
+
+/**
+ * @param {object} args - Options.
+ * @param {VelociousDatabaseRecord} args.parent - Parent record being built from.
+ * @param {{getRelationshipByName: VelociousDatabaseRecord["getRelationshipByName"]}} args.record - Newly built related record.
+ * @param {string | undefined | null} args.inverseOf - Inverse relationship name.
+ * @param {boolean} args.allowHasMany - Whether a has-many inverse should be appended.
+ * @returns {void}
+ */
+function applyBuiltRecordInverseRelationship({allowHasMany, inverseOf, parent, record}) {
+  if (!inverseOf) return
+
+  const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
+
+  inverseInstanceRelationship.setAutoSave(false)
+
+  if (!allowHasMany || inverseInstanceRelationship.getType() == "hasOne") {
+    inverseInstanceRelationship.setLoaded(parent)
+    return
+  }
+
+  if (inverseInstanceRelationship.getType() == "hasMany") {
+    inverseInstanceRelationship.addToLoaded(parent)
+    return
+  }
+
+  throw new Error(`Unknown relationship type: ${inverseInstanceRelationship.getType()}`)
+}
+
+/**
+ * Build a related record and wire its inverse relationship to the parent.
+ * @param {VelociousDatabaseRecord} parent - Parent record building the relationship.
+ * @param {string} relationshipName - Relationship name being built.
+ * @param {Record<string, any>} attributes - Attributes for the new related record.
+ * @param {boolean} allowHasMany - Whether has-many inverse relationships should append the parent.
+ * @returns {Record<string, any>} - Built related record.
+ */
+function buildRelatedRecordWithInverse(parent, relationshipName, attributes, allowHasMany) {
+  const instanceRelationship = parent.getRelationshipByName(relationshipName)
+  const record = instanceRelationship.build(attributes)
+  const inverseOf = instanceRelationship.getRelationship().getInverseOf()
+
+  applyBuiltRecordInverseRelationship({
+    allowHasMany,
+    inverseOf,
+    parent,
+    record: /** @type {{getRelationshipByName: VelociousDatabaseRecord["getRelationshipByName"]}} */ (record)
+  })
+
+  return record
 }
 
 /**
@@ -427,25 +479,7 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, any>} */ attributes) {
-        const instanceRelationship = this.getRelationshipByName(relationshipName)
-        const record = instanceRelationship.build(attributes)
-        const inverseOf = instanceRelationship.getRelationship().getInverseOf()
-
-        if (inverseOf) {
-          const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
-
-          inverseInstanceRelationship.setAutoSave(false)
-
-          if (inverseInstanceRelationship.getType() == "hasOne") {
-            inverseInstanceRelationship.setLoaded(this)
-          } else if (inverseInstanceRelationship.getType() == "hasMany") {
-            inverseInstanceRelationship.addToLoaded(this)
-          } else {
-            throw new Error(`Unknown relationship type: ${inverseInstanceRelationship.getType()}`)
-          }
-        }
-
-        return record
+        return buildRelatedRecordWithInverse(/** @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, true)
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
@@ -488,18 +522,7 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, any>} */ attributes) {
-        const instanceRelationship = this.getRelationshipByName(relationshipName)
-        const record = instanceRelationship.build(attributes)
-        const inverseOf = instanceRelationship.getRelationship().getInverseOf()
-
-        if (inverseOf) {
-          const inverseInstanceRelationship = record.getRelationshipByName(inverseOf)
-
-          inverseInstanceRelationship.setAutoSave(false)
-          inverseInstanceRelationship.setLoaded(this)
-        }
-
-        return record
+        return buildRelatedRecordWithInverse(/** @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, false)
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
@@ -3025,10 +3048,7 @@ class VelociousDatabaseRecord {
    * @returns {number}
    */
   readCount(attributeName) {
-    if (!this._associationCounts) return 0
-    if (!this._associationCounts.has(attributeName)) return 0
-
-    return /** @type {number} */ (this._associationCounts.get(attributeName))
+    return readPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), attributeName)
   }
 
   /**
@@ -3040,12 +3060,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setAssociationCount(attributeName, value) {
-    if (!this._associationCounts) {
-      /** @type {Map<string, number>} */
-      this._associationCounts = new Map()
-    }
-
-    this._associationCounts.set(attributeName, value)
+    setPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), attributeName, value)
   }
 
   /**
@@ -3059,9 +3074,11 @@ class VelociousDatabaseRecord {
     /** @type {Record<string, number>} */
     const result = {}
 
-    if (!this._associationCounts) return result
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this))
 
-    for (const [attributeName, value] of this._associationCounts) {
+    if (!target._associationCounts) return result
+
+    for (const [attributeName, value] of target._associationCounts) {
       result[attributeName] = value
     }
 
@@ -3080,10 +3097,7 @@ class VelociousDatabaseRecord {
    * @returns {unknown}
    */
   queryData(name) {
-    if (!this._queryDataValues) return null
-    if (!this._queryDataValues.has(name)) return null
-
-    return this._queryDataValues.get(name)
+    return readPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), name)
   }
 
   /**
@@ -3096,12 +3110,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setQueryData(name, value) {
-    if (!this._queryDataValues) {
-      /** @type {Map<string, unknown>} */
-      this._queryDataValues = new Map()
-    }
-
-    this._queryDataValues.set(name, value)
+    setPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), name, value)
   }
 
   /**
@@ -3115,9 +3124,11 @@ class VelociousDatabaseRecord {
     /** @type {Record<string, unknown>} */
     const result = {}
 
-    if (!this._queryDataValues) return result
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this))
 
-    for (const [name, value] of this._queryDataValues) {
+    if (!target._queryDataValues) return result
+
+    for (const [name, value] of target._queryDataValues) {
       result[name] = value
     }
 
@@ -3137,10 +3148,7 @@ class VelociousDatabaseRecord {
    * @returns {boolean}
    */
   can(action) {
-    if (!this._computedAbilities) return false
-    if (!this._computedAbilities.has(action)) return false
-
-    return Boolean(this._computedAbilities.get(action))
+    return readPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), action)
   }
 
   /**
@@ -3153,12 +3161,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setComputedAbility(action, value) {
-    if (!this._computedAbilities) {
-      /** @type {Map<string, boolean>} */
-      this._computedAbilities = new Map()
-    }
-
-    this._computedAbilities.set(action, Boolean(value))
+    setPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), action, value)
   }
 
   /**
@@ -3172,9 +3175,11 @@ class VelociousDatabaseRecord {
     /** @type {Record<string, boolean>} */
     const result = {}
 
-    if (!this._computedAbilities) return result
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this))
 
-    for (const [action, value] of this._computedAbilities) {
+    if (!target._computedAbilities) return result
+
+    for (const [action, value] of target._computedAbilities) {
       result[action] = value
     }
 

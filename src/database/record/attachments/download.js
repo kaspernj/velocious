@@ -1,8 +1,6 @@
 // @ts-check
 
-/**
- * Downloaded attachment payload wrapper.
- */
+/** Downloaded attachment payload wrapper. */
 export default class RecordAttachmentDownload {
   /**
    * @param {object} args - Options.
@@ -14,24 +12,19 @@ export default class RecordAttachmentDownload {
    * @param {string | null} [args.url] - Resolvable URL.
    */
   constructor({byteSize, content, contentType, filename, id, url = null}) {
-    this.idValue = id
-    this.filenameValue = filename
-    this.contentTypeValue = contentType
-    this.byteSizeValue = byteSize
-    this.contentValue = content
-    this.urlValue = url
+    this.values = {byteSize, content, contentType, filename, id, url}
   }
 
   /** @returns {number} - File size in bytes. */
-  byteSize() { return this.byteSizeValue }
+  byteSize() { return this.values.byteSize }
   /** @returns {Buffer} - File content. */
-  content() { return this.contentValue }
+  content() { return this.values.content }
   /** @returns {string | null} - Content type. */
-  contentType() { return this.contentTypeValue }
+  contentType() { return this.values.contentType }
   /** @returns {string} - Filename. */
-  filename() { return this.filenameValue }
+  filename() { return this.values.filename }
   /** @returns {string} - Attachment id. */
-  id() { return this.idValue }
+  id() { return this.values.id }
   /** @returns {string | null} - Resolvable attachment URL. */
-  url() { return this.urlValue }
+  url() { return this.values.url }
 }

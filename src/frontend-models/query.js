@@ -3,6 +3,7 @@
 import {resolveFrontendModelClass} from "./model-registry.js"
 import {normalizeRansackGroup, parseRansackSort} from "../utils/ransack.js"
 import {isModelScopeDescriptor} from "../utils/model-scope.js"
+import isPlainObject from "../utils/plain-object.js"
 
 /**
  * @typedef {object} FrontendModelSearch
@@ -61,22 +62,10 @@ import {isModelScopeDescriptor} from "../utils/model-scope.js"
  */
 
 /**
- * @param {unknown} value - Candidate value.
- * @returns {value is Record<string, any>} - Whether value is a plain object.
- */
-function isPlainObject(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false
-
-  const prototype = Object.getPrototypeOf(value)
-
-  return prototype === Object.prototype || prototype === null
-}
-
-/**
  * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord> | boolean | undefined | null} preload - Preload shorthand.
  * @returns {import("../database/query/index.js").NestedPreloadRecord} - Normalized preload.
  */
-function normalizePreload(preload) {
+export function normalizePreload(preload) {
   if (!preload) return {}
 
   if (preload === true) return {}
@@ -352,7 +341,7 @@ function mergeSelectRecord(targetSelect, incomingSelect) {
  * @param {string} operator - Raw search operator.
  * @returns {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} - Normalized operator.
  */
-function normalizeSearchOperator(operator) {
+export function normalizeSearchOperator(operator) {
   const operatorAliases = {
     "<": "lt",
     "<=": "lteq",
@@ -407,7 +396,7 @@ function mergeJoinRecord(targetJoins, incomingJoins) {
  * @param {unknown} joins - Join payload.
  * @returns {Record<string, any>} - Normalized relationship descriptor joins.
  */
-function normalizeJoins(joins) {
+export function normalizeJoins(joins) {
   if (!joins) return {}
 
   if (Array.isArray(joins)) {
@@ -487,6 +476,7 @@ function normalizeSortDirection(direction) {
 }
 
 /**
+ * Check whether a value is a two-item `[column, direction]` sort tuple.
  * @param {unknown} value - Candidate tuple.
  * @returns {value is [string, string]} - Whether value is a sort tuple.
  */
@@ -503,6 +493,22 @@ function sortTuple(value) {
 }
 
 /**
+ * Check whether a value is a structured sort descriptor with a relationship path.
+ * @param {unknown} value - Candidate descriptor.
+ * @returns {value is {column: string, direction: string, path: string[]}} - Whether value is an explicit sort descriptor object.
+ */
+function sortDescriptor(value) {
+  if (!isPlainObject(value)) return false
+  if (!("column" in value) || !("direction" in value) || !("path" in value)) return false
+  if (typeof value.column !== "string") return false
+  if (typeof value.direction !== "string") return false
+  if (!Array.isArray(value.path)) return false
+
+  return value.path.every((pathEntry) => typeof pathEntry === "string")
+}
+
+/**
+ * Parse a string shorthand into a sort descriptor.
  * @param {string} sortValue - Sort string.
  * @param {string[]} [path] - Relationship path.
  * @returns {FrontendModelSort} - Normalized sort descriptor.
@@ -552,6 +558,7 @@ function parseSortString(sortValue, path = []) {
 }
 
 /**
+ * Parse a tuple shorthand into a sort descriptor.
  * @param {[string, string]} sortValue - Sort tuple.
  * @param {string[]} [path] - Relationship path.
  * @returns {FrontendModelSort} - Normalized sort descriptor.
@@ -572,6 +579,7 @@ function parseSortTuple(sortValue, path = []) {
 }
 
 /**
+ * Normalize a nested object sort payload into flat sort descriptors.
  * @param {Record<string, any>} sortValue - Nested sort object.
  * @param {string[]} path - Relationship path.
  * @returns {FrontendModelSort[]} - Normalized sort descriptors.
@@ -622,10 +630,11 @@ function normalizeSortObject(sortValue, path) {
 }
 
 /**
+ * Normalize any supported sort payload into flat sort descriptors.
  * @param {unknown} sort - Sort payload.
  * @returns {FrontendModelSort[]} - Normalized sort definitions.
  */
-function normalizeSort(sort) {
+export function normalizeSort(sort) {
   if (!sort) return []
 
   if (typeof sort === "string") {
@@ -634,6 +643,14 @@ function normalizeSort(sort) {
 
   if (sortTuple(sort)) {
     return [parseSortTuple(sort)]
+  }
+
+  if (sortDescriptor(sort)) {
+    return [{
+      column: sort.column.trim(),
+      direction: normalizeSortDirection(sort.direction),
+      path: [...sort.path]
+    }]
   }
 
   if (isPlainObject(sort)) {
@@ -655,6 +672,15 @@ function normalizeSort(sort) {
         continue
       }
 
+      if (sortDescriptor(sortEntry)) {
+        normalized.push({
+          column: sortEntry.column.trim(),
+          direction: normalizeSortDirection(sortEntry.direction),
+          path: [...sortEntry.path]
+        })
+        continue
+      }
+
       if (isPlainObject(sortEntry)) {
         normalized.push(...normalizeSortObject(sortEntry, []))
         continue
@@ -670,6 +696,7 @@ function normalizeSort(sort) {
 }
 
 /**
+ * Parse a string shorthand into a group descriptor.
  * @param {string} groupValue - Group string.
  * @param {string[]} [path] - Relationship path.
  * @returns {FrontendModelGroup} - Normalized group descriptor.
@@ -688,10 +715,11 @@ function parseGroupString(groupValue, path = []) {
 }
 
 /**
+ * Check whether a value is a structured column/path descriptor.
  * @param {unknown} value - Candidate descriptor.
- * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit group descriptor object.
+ * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit column descriptor object.
  */
-function groupDescriptor(value) {
+function columnPathDescriptor(value) {
   if (!isPlainObject(value)) return false
   if (!("column" in value) || !("path" in value)) return false
   if (typeof value.column !== "string") return false
@@ -701,59 +729,64 @@ function groupDescriptor(value) {
 }
 
 /**
- * @param {Record<string, any>} groupValue - Nested group object.
+ * Normalize a nested object column projection payload into flat descriptors.
+ * @template {{column: string, path: string[]}} T
+ * @param {Record<string, any>} value - Nested projection object.
  * @param {string[]} path - Relationship path.
- * @returns {FrontendModelGroup[]} - Normalized group descriptors.
+ * @param {(columnValue: string, path?: string[]) => T} parseString - String projection parser.
+ * @param {string} label - Projection label for errors.
+ * @returns {T[]} - Normalized projection descriptors.
  */
-function normalizeGroupObject(groupValue, path) {
-  /** @type {FrontendModelGroup[]} */
-  const normalizedGroups = []
+function normalizeColumnProjectionObject(value, path, parseString, label) {
+  /** @type {T[]} */
+  const normalized = []
 
-  for (const [groupKey, groupEntry] of Object.entries(groupValue)) {
-    if (typeof groupEntry === "string") {
-      normalizedGroups.push(parseGroupString(groupEntry, [...path, groupKey]))
+  for (const [projectionKey, projectionEntry] of Object.entries(value)) {
+    if (typeof projectionEntry === "string") {
+      normalized.push(parseString(projectionEntry, [...path, projectionKey]))
       continue
     }
 
-    if (Array.isArray(groupEntry)) {
-      if (groupEntry.length < 1) {
-        throw new Error(`Invalid group definition for "${groupKey}": empty array`)
+    if (Array.isArray(projectionEntry)) {
+      if (projectionEntry.length < 1) {
+        throw new Error(`Invalid ${label} definition for "${projectionKey}": empty array`)
       }
 
-      for (const nestedGroupEntry of groupEntry) {
-        if (typeof nestedGroupEntry !== "string") {
-          throw new Error(`Invalid group definition for "${groupKey}": expected string columns`)
+      for (const nestedProjectionEntry of projectionEntry) {
+        if (typeof nestedProjectionEntry !== "string") {
+          throw new Error(`Invalid ${label} definition for "${projectionKey}": expected string columns`)
         }
 
-        normalizedGroups.push(parseGroupString(nestedGroupEntry, [...path, groupKey]))
+        normalized.push(parseString(nestedProjectionEntry, [...path, projectionKey]))
       }
 
       continue
     }
 
-    if (isPlainObject(groupEntry)) {
-      normalizedGroups.push(...normalizeGroupObject(groupEntry, [...path, groupKey]))
+    if (isPlainObject(projectionEntry)) {
+      normalized.push(...normalizeColumnProjectionObject(projectionEntry, [...path, projectionKey], parseString, label))
       continue
     }
 
-    throw new Error(`Invalid group definition for "${groupKey}": ${typeof groupEntry}`)
+    throw new Error(`Invalid ${label} definition for "${projectionKey}": ${typeof projectionEntry}`)
   }
 
-  return normalizedGroups
+  return normalized
 }
 
 /**
+ * Normalize any supported group payload into flat group descriptors.
  * @param {unknown} group - Group payload.
  * @returns {FrontendModelGroup[]} - Normalized group definitions.
  */
-function normalizeGroup(group) {
+export function normalizeGroup(group) {
   if (!group) return []
 
   if (typeof group === "string") {
     return [parseGroupString(group)]
   }
 
-  if (groupDescriptor(group)) {
+  if (columnPathDescriptor(group)) {
     return [{
       column: parseGroupString(group.column).column,
       path: [...group.path]
@@ -761,7 +794,7 @@ function normalizeGroup(group) {
   }
 
   if (isPlainObject(group)) {
-    return normalizeGroupObject(group, [])
+    return normalizeColumnProjectionObject(group, [], parseGroupString, "group")
   }
 
   if (Array.isArray(group)) {
@@ -774,7 +807,7 @@ function normalizeGroup(group) {
         continue
       }
 
-      if (groupDescriptor(groupEntry)) {
+      if (columnPathDescriptor(groupEntry)) {
         normalized.push({
           column: parseGroupString(groupEntry.column).column,
           path: [...groupEntry.path]
@@ -783,7 +816,7 @@ function normalizeGroup(group) {
       }
 
       if (isPlainObject(groupEntry)) {
-        normalized.push(...normalizeGroupObject(groupEntry, []))
+        normalized.push(...normalizeColumnProjectionObject(groupEntry, [], parseGroupString, "group"))
         continue
       }
 
@@ -797,6 +830,7 @@ function normalizeGroup(group) {
 }
 
 /**
+ * Parse a string shorthand into a pluck descriptor.
  * @param {string} pluckValue - Pluck string.
  * @param {string[]} [path] - Relationship path.
  * @returns {FrontendModelPluck} - Normalized pluck descriptor.
@@ -815,72 +849,18 @@ function parsePluckString(pluckValue, path = []) {
 }
 
 /**
- * @param {unknown} value - Candidate descriptor.
- * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit pluck descriptor object.
- */
-function pluckDescriptor(value) {
-  if (!isPlainObject(value)) return false
-  if (!("column" in value) || !("path" in value)) return false
-  if (typeof value.column !== "string") return false
-  if (!Array.isArray(value.path)) return false
-
-  return value.path.every((pathEntry) => typeof pathEntry === "string")
-}
-
-/**
- * @param {Record<string, any>} pluckValue - Nested pluck object.
- * @param {string[]} path - Relationship path.
- * @returns {FrontendModelPluck[]} - Normalized pluck descriptors.
- */
-function normalizePluckObject(pluckValue, path) {
-  /** @type {FrontendModelPluck[]} */
-  const normalizedPlucks = []
-
-  for (const [pluckKey, pluckEntry] of Object.entries(pluckValue)) {
-    if (typeof pluckEntry === "string") {
-      normalizedPlucks.push(parsePluckString(pluckEntry, [...path, pluckKey]))
-      continue
-    }
-
-    if (Array.isArray(pluckEntry)) {
-      if (pluckEntry.length < 1) {
-        throw new Error(`Invalid pluck definition for "${pluckKey}": empty array`)
-      }
-
-      for (const nestedPluckEntry of pluckEntry) {
-        if (typeof nestedPluckEntry !== "string") {
-          throw new Error(`Invalid pluck definition for "${pluckKey}": expected string columns`)
-        }
-
-        normalizedPlucks.push(parsePluckString(nestedPluckEntry, [...path, pluckKey]))
-      }
-
-      continue
-    }
-
-    if (isPlainObject(pluckEntry)) {
-      normalizedPlucks.push(...normalizePluckObject(pluckEntry, [...path, pluckKey]))
-      continue
-    }
-
-    throw new Error(`Invalid pluck definition for "${pluckKey}": ${typeof pluckEntry}`)
-  }
-
-  return normalizedPlucks
-}
-
-/**
+ * Normalize any supported pluck payload into flat pluck descriptors.
  * @param {unknown} pluck - Pluck payload.
  * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
  */
-function normalizePluck(pluck) {
+export function normalizePluck(pluck) {
   if (!pluck) return []
 
   if (typeof pluck === "string") {
     return [parsePluckString(pluck)]
   }
 
-  if (pluckDescriptor(pluck)) {
+  if (columnPathDescriptor(pluck)) {
     return [{
       column: parsePluckString(pluck.column).column,
       path: [...pluck.path]
@@ -888,7 +868,7 @@ function normalizePluck(pluck) {
   }
 
   if (isPlainObject(pluck)) {
-    return normalizePluckObject(pluck, [])
+    return normalizeColumnProjectionObject(pluck, [], parsePluckString, "pluck")
   }
 
   if (Array.isArray(pluck)) {
@@ -901,7 +881,7 @@ function normalizePluck(pluck) {
         continue
       }
 
-      if (pluckDescriptor(pluckEntry)) {
+      if (columnPathDescriptor(pluckEntry)) {
         normalized.push({
           column: parsePluckString(pluckEntry.column).column,
           path: [...pluckEntry.path]
@@ -910,7 +890,7 @@ function normalizePluck(pluck) {
       }
 
       if (isPlainObject(pluckEntry)) {
-        normalized.push(...normalizePluckObject(pluckEntry, []))
+        normalized.push(...normalizeColumnProjectionObject(pluckEntry, [], parsePluckString, "pluck"))
         continue
       }
 
@@ -1005,18 +985,6 @@ function serializeFindConditions(conditions) {
     return JSON.stringify(conditions)
   } catch {
     return "[unserializable conditions]"
-  }
-}
-
-/**
- * @param {Record<string, any>} conditions - findBy conditions.
- * @returns {Record<string, any>} - JSON-normalized conditions.
- */
-function normalizeFindConditions(conditions) {
-  try {
-    return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(conditions)))
-  } catch (error) {
-    throw new Error(`findBy conditions could not be serialized: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
   }
 }
 
@@ -1199,11 +1167,10 @@ export default class FrontendModelQuery {
    */
   where(conditions) {
     this.modelClass.assertFindByConditions(conditions)
-    const normalizedConditions = normalizeFindConditions(conditions)
 
     this._where = {
       ...this._where,
-      ...normalizedConditions
+      ...conditions
     }
 
     return this
@@ -1242,7 +1209,7 @@ export default class FrontendModelQuery {
 
     if (hasFilters) {
       normalizeRansackGroup(this.modelClass, filterParams)
-      this._ransack.push(normalizeFindConditions(filterParams))
+      this._ransack.push(filterParams)
     }
 
     if (typeof s === "string" && s.trim().length > 0) {
@@ -1463,8 +1430,8 @@ export default class FrontendModelQuery {
     }))
 
     newQuery._joins = normalizeJoins(this._joins)
-    newQuery._where = normalizeFindConditions(this._where)
-    newQuery._ransack = this._ransack.map((ransackParams) => normalizeFindConditions(ransackParams))
+    newQuery._where = {...this._where}
+    newQuery._ransack = this._ransack.map((ransackParams) => ({...ransackParams}))
     newQuery._searches = this._searches.map((search) => ({
       column: search.column,
       operator: search.operator,
@@ -1493,7 +1460,7 @@ export default class FrontendModelQuery {
       where: entry.where ? {...entry.where} : undefined
     }))
     newQuery._queryData = this._queryData.map((entry) => (
-      typeof entry === "string" ? entry : JSON.parse(JSON.stringify(entry))
+      typeof entry === "string" ? entry : {...entry}
     ))
     newQuery._abilities = this._abilities.map((entry) => ({
       actions: [...entry.actions],
@@ -1609,7 +1576,7 @@ export default class FrontendModelQuery {
 
     return {
       ransack: {
-        g: this._ransack.map((ransackParams) => normalizeFindConditions(ransackParams)),
+        g: this._ransack,
         m: "and"
       }
     }
@@ -2020,12 +1987,12 @@ export default class FrontendModelQuery {
 
   /**
    * @param {Record<string, any>} conditions - Candidate structured conditions.
-   * @returns {Record<string, any>} - Validated and normalized conditions.
+   * @returns {Record<string, any>} - Validated conditions.
    */
   validatedStructuredConditions(conditions) {
     this.modelClass.assertFindByConditions(conditions)
 
-    return normalizeFindConditions(conditions)
+    return conditions
   }
 }
 

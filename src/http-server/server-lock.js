@@ -9,6 +9,7 @@ import path from "node:path"
  */
 export default class VelociousHttpServerLock {
   /**
+   * Build a lock for the configured application directory and server endpoint.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration that owns the application directory.
    * @param {string} args.host - Configured HTTP host.
@@ -22,7 +23,10 @@ export default class VelociousHttpServerLock {
     this.acquired = false
   }
 
-  /** @returns {Promise<void>} - Resolves after the lock has been acquired. */
+  /**
+   * Acquires the app-directory HTTP server lock before startup side effects run.
+   * @returns {Promise<void>} - Resolves after the lock has been acquired.
+   */
   async acquire() {
     await fs.mkdir(path.dirname(this.lockPath), {recursive: true})
 
@@ -41,7 +45,7 @@ export default class VelociousHttpServerLock {
         this.acquired = true
         return
       } catch (error) {
-        if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EEXIST") throw error
+        if (/** @type {{code?: string}} */ (error).code !== "EEXIST") throw error
 
         if (await this.isStale()) {
           await fs.rm(this.lockPath, {recursive: true, force: true})
@@ -53,7 +57,10 @@ export default class VelociousHttpServerLock {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves after best-effort lock release. */
+  /**
+   * Releases the held HTTP server lock directory.
+   * @returns {Promise<void>} - Resolves after best-effort lock release.
+   */
   async release() {
     if (!this.acquired) return
 
@@ -61,7 +68,10 @@ export default class VelociousHttpServerLock {
     await fs.rm(this.lockPath, {recursive: true, force: true})
   }
 
-  /** @returns {Promise<void>} - Resolves after owner metadata has been written. */
+  /**
+   * Writes metadata used to explain or reclaim an existing server lock.
+   * @returns {Promise<void>} - Resolves after owner metadata has been written.
+   */
   async writeOwnerMetadata() {
     await fs.writeFile(path.join(this.lockPath, "owner.json"), JSON.stringify({
       acquiredAt: new Date().toISOString(),
@@ -72,7 +82,10 @@ export default class VelociousHttpServerLock {
     }))
   }
 
-  /** @returns {Promise<boolean>} - Whether the existing lock belongs to a dead process. */
+  /**
+   * Checks whether the current lock owner is a dead process on this host.
+   * @returns {Promise<boolean>} - Whether the existing lock belongs to a dead process.
+   */
   async isStale() {
     const owner = await this.readOwnerMetadata()
 
@@ -84,11 +97,14 @@ export default class VelociousHttpServerLock {
 
       return false
     } catch (error) {
-      return /** @type {NodeJS.ErrnoException} */ (error).code === "ESRCH"
+      return /** @type {{code?: string}} */ (error).code === "ESRCH"
     }
   }
 
-  /** @returns {Promise<Record<string, unknown> | null>} - Parsed owner metadata, when readable. */
+  /**
+   * Reads owner metadata from an existing server lock directory.
+   * @returns {Promise<Record<string, unknown> | null>} - Parsed owner metadata, when readable.
+   */
   async readOwnerMetadata() {
     try {
       const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
@@ -99,7 +115,10 @@ export default class VelociousHttpServerLock {
     }
   }
 
-  /** @returns {Promise<string>} - Error message explaining which server owns the lock. */
+  /**
+   * Builds a duplicate-server error message with owner details when available.
+   * @returns {Promise<string>} - Error message explaining which server owns the lock.
+   */
   async lockHeldMessage() {
     const owner = await this.readOwnerMetadata()
     const details = owner

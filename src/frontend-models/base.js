@@ -11,6 +11,8 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 import {defineModelScope} from "../utils/model-scope.js"
+import isPlainObject from "../utils/plain-object.js"
+import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
 
 /** @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
 /** @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -192,18 +194,6 @@ export class AttributeNotSelectedError extends Error {
     super(`${modelName}#${attributeName} was not selected`)
     this.name = "AttributeNotSelectedError"
   }
-}
-
-/**
- * @param {unknown} value - Candidate value.
- * @returns {value is Record<string, any>} - Whether value is a plain object.
- */
-function isPlainObject(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false
-
-  const prototype = Object.getPrototypeOf(value)
-
-  return prototype === Object.prototype || prototype === null
 }
 
 /**
@@ -421,6 +411,23 @@ export class FrontendModelAttachmentDownload {
 }
 
 /**
+ * @param {FrontendModelAttachmentHandle} attachment - Attachment wrapper.
+ * @param {string | undefined} attachmentId - Optional has-many attachment id.
+ * @returns {Record<string, any>} - Command payload.
+ */
+function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
+  /** @type {Record<string, any>} */
+  const payload = {
+    attachmentName: attachment.attachmentName,
+    id: attachment.model.primaryKeyValue()
+  }
+
+  if (attachmentId) payload.attachmentId = attachmentId
+
+  return payload
+}
+
+/**
  * @param {unknown} value - Candidate value.
  * @returns {boolean} - Whether value looks like byte data.
  */
@@ -617,17 +624,7 @@ export class FrontendModelAttachmentHandle {
    */
   async download(attachmentId) {
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
-    /** @type {Record<string, any>} */
-    const payload = {
-      attachmentName: this.attachmentName,
-      id: this.model.primaryKeyValue()
-    }
-
-    if (attachmentId) {
-      payload.attachmentId = attachmentId
-    }
-
-    const response = await ModelClass.executeCommand("download", payload)
+    const response = await ModelClass.executeCommand("download", frontendModelAttachmentCommandPayload(this, attachmentId))
     const attachmentPayload = response.attachment
 
     if (!attachmentPayload || typeof attachmentPayload !== "object") return null
@@ -652,17 +649,7 @@ export class FrontendModelAttachmentHandle {
    */
   async url(attachmentId) {
     const ModelClass = /** @type {typeof FrontendModelBase} */ (this.model.constructor)
-    /** @type {Record<string, any>} */
-    const payload = {
-      attachmentName: this.attachmentName,
-      id: this.model.primaryKeyValue()
-    }
-
-    if (attachmentId) {
-      payload.attachmentId = attachmentId
-    }
-
-    const response = await ModelClass.executeCommand("url", payload)
+    const response = await ModelClass.executeCommand("url", frontendModelAttachmentCommandPayload(this, attachmentId))
 
     if (typeof response.url === "string" && response.url.length > 0) {
       return response.url
@@ -1121,6 +1108,25 @@ function ensureFrontendModelEventSubscription(ModelClass) {
 }
 
 /**
+ * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
+ * @param {string} id - Model id.
+ * @param {InstanceType<typeof FrontendModelBase>} instance - Listener instance.
+ * @returns {{instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}} - Instance listener bucket.
+ */
+function ensureFrontendModelInstanceListener(sub, id, instance) {
+  let listener = sub.instanceListeners.get(id)
+
+  if (!listener) {
+    listener = {instance, updateCallbacks: new Set(), destroyCallbacks: new Set()}
+    sub.instanceListeners.set(id, listener)
+  } else {
+    listener.instance = instance
+  }
+
+  return listener
+}
+
+/**
  * @param {string} resourcePath - Resource path prefix.
  * @param {string} commandName - Command path segment.
  * @returns {string} - Frontend model API URL.
@@ -1315,18 +1321,6 @@ function frontendModelCustomCommandPath({commandName, memberId, modelName, resou
 }
 
 /**
- * @param {Record<string, any>} conditions - findBy conditions.
- * @returns {Record<string, any>} - JSON-normalized conditions.
- */
-function normalizeFindConditions(conditions) {
-  try {
-    return /** @type {Record<string, any>} */ (JSON.parse(JSON.stringify(conditions)))
-  } catch (error) {
-    throw new Error(`findBy conditions could not be serialized: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
-  }
-}
-
-/**
  * @param {unknown} conditions - findBy conditions.
  * @returns {void}
  */
@@ -1404,69 +1398,6 @@ function assertDefinedFindByConditionValue(value, keyPath) {
     Object.keys(valueObject).forEach((nestedKey) => {
       assertDefinedFindByConditionValue(valueObject[nestedKey], `${keyPath}.${nestedKey}`)
     })
-  }
-}
-
-/**
- * @param {unknown} originalValue - Original condition value.
- * @param {unknown} normalizedValue - JSON-normalized condition value.
- * @param {string} keyPath - Key path for error output.
- * @returns {void}
- */
-function assertFindByConditionSerializationPreservesValue(originalValue, normalizedValue, keyPath) {
-  if (originalValue === null) {
-    if (normalizedValue !== null) {
-      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
-    }
-
-    return
-  }
-
-  if (Array.isArray(originalValue)) {
-    if (!Array.isArray(normalizedValue)) {
-      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
-    }
-
-    if (originalValue.length !== normalizedValue.length) {
-      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
-    }
-
-    for (let index = 0; index < originalValue.length; index += 1) {
-      assertFindByConditionSerializationPreservesValue(originalValue[index], normalizedValue[index], `${keyPath}[${index}]`)
-    }
-
-    return
-  }
-
-  if (originalValue instanceof Date) {
-    if (typeof normalizedValue !== "string") {
-      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
-    }
-
-    return
-  }
-
-  if (originalValue && typeof originalValue === "object") {
-    if (!normalizedValue || typeof normalizedValue !== "object" || Array.isArray(normalizedValue)) {
-      throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
-    }
-
-    const normalizedObject = /** @type {Record<string, unknown>} */ (normalizedValue)
-    const originalObject = /** @type {Record<string, unknown>} */ (originalValue)
-
-    Object.keys(originalObject).forEach((nestedKey) => {
-      if (!(nestedKey in normalizedObject)) {
-        throw new Error(`findBy condition key was removed during serialization (key: ${keyPath}.${nestedKey})`)
-      }
-
-      assertFindByConditionSerializationPreservesValue(originalObject[nestedKey], normalizedObject[nestedKey], `${keyPath}.${nestedKey}`)
-    })
-
-    return
-  }
-
-  if (normalizedValue !== originalValue) {
-    throw new Error(`findBy condition changed during serialization (key: ${keyPath})`)
   }
 }
 
@@ -1980,10 +1911,7 @@ export default class FrontendModelBase {
    * @returns {number}
    */
   readCount(attributeName) {
-    if (!this._associationCounts) return 0
-    if (!this._associationCounts.has(attributeName)) return 0
-
-    return /** @type {number} */ (this._associationCounts.get(attributeName))
+    return readPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), attributeName)
   }
 
   /**
@@ -1995,12 +1923,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setAssociationCount(attributeName, value) {
-    if (!this._associationCounts) {
-      /** @type {Map<string, number>} */
-      this._associationCounts = new Map()
-    }
-
-    this._associationCounts.set(attributeName, value)
+    setPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), attributeName, value)
   }
 
   /**
@@ -2016,10 +1939,7 @@ export default class FrontendModelBase {
    * @returns {boolean}
    */
   can(action) {
-    if (!this._computedAbilities) return false
-    if (!this._computedAbilities.has(action)) return false
-
-    return Boolean(this._computedAbilities.get(action))
+    return readPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), action)
   }
 
   /**
@@ -2032,12 +1952,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setComputedAbility(action, value) {
-    if (!this._computedAbilities) {
-      /** @type {Map<string, boolean>} */
-      this._computedAbilities = new Map()
-    }
-
-    this._computedAbilities.set(action, Boolean(value))
+    setPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), action, value)
   }
 
   /**
@@ -2051,10 +1966,7 @@ export default class FrontendModelBase {
    * @returns {unknown}
    */
   queryData(name) {
-    if (!this._queryDataValues) return null
-    if (!this._queryDataValues.has(name)) return null
-
-    return this._queryDataValues.get(name)
+    return readPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), name)
   }
 
   /**
@@ -2066,12 +1978,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setQueryData(name, value) {
-    if (!this._queryDataValues) {
-      /** @type {Map<string, unknown>} */
-      this._queryDataValues = new Map()
-    }
-
-    this._queryDataValues.set(name, value)
+    setPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {unknown} */ (this)), name, value)
   }
 
   /**
@@ -2825,14 +2732,7 @@ export default class FrontendModelBase {
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
     const entry = {callback, ...frontendModelEventOptionsPayload(ModelClass, options)}
-    let listener = sub.instanceListeners.get(id)
-
-    if (!listener) {
-      listener = {instance: this, updateCallbacks: new Set(), destroyCallbacks: new Set()}
-      sub.instanceListeners.set(id, listener)
-    } else {
-      listener.instance = this
-    }
+    const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
     listener.updateCallbacks.add(entry)
     await sub.ensureSubscribed()
@@ -2865,14 +2765,7 @@ export default class FrontendModelBase {
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
     const entry = {callback}
-    let listener = sub.instanceListeners.get(id)
-
-    if (!listener) {
-      listener = {instance: this, updateCallbacks: new Set(), destroyCallbacks: new Set()}
-      sub.instanceListeners.set(id, listener)
-    } else {
-      listener.instance = this
-    }
+    const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
     listener.destroyCallbacks.add(entry)
     await sub.ensureSubscribed()
@@ -3062,11 +2955,9 @@ export default class FrontendModelBase {
    */
   static assertFindByConditions(conditions) {
     assertFindByConditionsShape(conditions)
-    const normalizedConditions = normalizeFindConditions(conditions)
 
     Object.keys(conditions).forEach((key) => {
       assertDefinedFindByConditionValue(conditions[key], key)
-      assertFindByConditionSerializationPreservesValue(conditions[key], normalizedConditions[key], key)
     })
   }
 

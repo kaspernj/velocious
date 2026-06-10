@@ -1,6 +1,7 @@
 // @ts-check
 
 import {resolveFrontendModelClass} from "./model-registry.js"
+import isPlainObject from "../utils/plain-object.js"
 
 const TYPE_KEY = "__velocious_type"
 const TYPE_DATE = "date"
@@ -35,18 +36,6 @@ export function assignSafeProperty(target, key, value) {
 
 /**
  * @param {unknown} value - Candidate value.
- * @returns {value is Record<string, any>} - Whether value is a plain object.
- */
-function isPlainObject(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false
-
-  const prototype = Object.getPrototypeOf(value)
-
-  return prototype === Object.prototype || prototype === null
-}
-
-/**
- * @param {unknown} value - Candidate value.
  * @returns {boolean} - Whether value is encoded undefined marker.
  */
 function isUndefinedMarker(value) {
@@ -58,10 +47,13 @@ function isUndefinedMarker(value) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
- * @returns {boolean} - Whether value is encoded date marker.
+ * Check whether a value is a typed marker object with a string `value` field.
+ * @param {unknown} value - Candidate marker.
+ * @param {string} markerType - Expected marker type value.
+ * @param {(stringValue: string) => boolean} valueMatches - Additional string value predicate.
+ * @returns {boolean} - Whether value matches the marker shape.
  */
-function isDateMarker(value) {
+function isStringValueMarker(value, markerType, valueMatches) {
   if (!isPlainObject(value)) return false
 
   const keys = Object.keys(value)
@@ -70,9 +62,18 @@ function isDateMarker(value) {
     keys.length === 2
     && Object.prototype.hasOwnProperty.call(value, TYPE_KEY)
     && Object.prototype.hasOwnProperty.call(value, "value")
-    && value[TYPE_KEY] === TYPE_DATE
+    && value[TYPE_KEY] === markerType
     && typeof value.value === "string"
+    && valueMatches(value.value)
   )
+}
+
+/**
+ * @param {unknown} value - Candidate value.
+ * @returns {boolean} - Whether value is encoded date marker.
+ */
+function isDateMarker(value) {
+  return isStringValueMarker(value, TYPE_DATE, () => true)
 }
 
 /**
@@ -80,18 +81,7 @@ function isDateMarker(value) {
  * @returns {boolean} - Whether value is encoded bigint marker.
  */
 function isBigIntMarker(value) {
-  if (!isPlainObject(value)) return false
-
-  const keys = Object.keys(value)
-
-  return (
-    keys.length === 2
-    && Object.prototype.hasOwnProperty.call(value, TYPE_KEY)
-    && Object.prototype.hasOwnProperty.call(value, "value")
-    && value[TYPE_KEY] === TYPE_BIGINT
-    && typeof value.value === "string"
-    && /^-?\d+$/.test(value.value)
-  )
+  return isStringValueMarker(value, TYPE_BIGINT, (stringValue) => /^-?\d+$/.test(stringValue))
 }
 
 /**

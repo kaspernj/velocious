@@ -119,13 +119,14 @@ async function createTempApplicationDirectory() {
 /**
  * @param {string} directory - Application directory.
  * @param {Error | undefined} [startError] - Optional startup error.
+ * @param {string} [type] - Application type.
  * @returns {{application: HttpServerLockTestApplication, configuration: HttpServerLockTestConfiguration}} - Test app and config.
  */
-function buildApplication(directory, startError) {
+function buildApplication(directory, startError, type = "test") {
   const configuration = new HttpServerLockTestConfiguration(directory)
   const application = new HttpServerLockTestApplication({
     configuration: /** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ (configuration)),
-    type: "test"
+    type
   })
   application.setStartError(startError)
 
@@ -216,6 +217,24 @@ describe("Application HTTP server lock", {databaseCleaning: {transaction: true}}
       expect(application.createdServers).toHaveLength(1)
     } finally {
       await application.stop()
+      await fs.rm(directory, {recursive: true, force: true})
+    }
+  })
+
+  it("lets the test runner server coexist with dummy app servers", async () => {
+    const directory = await createTempApplicationDirectory()
+    const testRunner = buildApplication(directory, undefined, "test-runner")
+    const dummy = buildApplication(directory)
+
+    try {
+      await testRunner.application.startHttpServer()
+      await dummy.application.startHttpServer()
+
+      expect(testRunner.application.createdServers).toHaveLength(1)
+      expect(dummy.application.createdServers).toHaveLength(1)
+    } finally {
+      await dummy.application.stop()
+      await testRunner.application.stop()
       await fs.rm(directory, {recursive: true, force: true})
     }
   })
