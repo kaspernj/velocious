@@ -1411,7 +1411,38 @@ class VelociousDatabaseRecord {
     normalizedValue = this._normalizeSqliteBooleanValue({columnType, value: normalizedValue})
 
     if (this._attributes[columnName] != normalizedValue) {
+      this._clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue)
       this._changes[columnName] = normalizedValue
+    }
+  }
+
+  /**
+   * Clears loaded belongs-to caches when callers assign the foreign key directly.
+   * @param {string} columnName - Changed database column name.
+   * @param {unknown} normalizedValue - New normalized column value.
+   * @returns {void} - No return value.
+   */
+  _clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue) {
+    if (!this._instanceRelationships) return
+
+    for (const relationshipName in this._instanceRelationships) {
+      const relationship = this._instanceRelationships[relationshipName]
+
+      if (relationship.getType() != "belongsTo") continue
+      if (relationship.getForeignKey() != columnName) continue
+
+      const loaded = relationship.getLoadedOrUndefined()
+      const TargetModelClass = relationship.getTargetModelClass()
+
+      if (loaded && !Array.isArray(loaded) && TargetModelClass) {
+        const loadedPrimaryKey = loaded.readColumn(TargetModelClass.primaryKey())
+
+        if (loadedPrimaryKey == normalizedValue) continue
+      }
+
+      relationship.setLoaded(undefined)
+      relationship.setPreloaded(false)
+      relationship.setDirty(false)
     }
   }
 
