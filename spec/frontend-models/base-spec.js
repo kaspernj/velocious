@@ -2368,7 +2368,7 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
 
     try {
       user.setUserId(null)
-      user._persistedAttributes = {userId: null}
+      user.markAttributeUnchanged("userId")
       user.setEmail("draft@example.com")
       user.setName("Draft")
       await user.save()

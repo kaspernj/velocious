@@ -3652,6 +3652,16 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Marks the current value for an attribute as already persisted so the next
+   * save does not send it unless the caller changes it again.
+   * @param {string} attributeName - Attribute to mark unchanged.
+   * @returns {void}
+   */
+  markAttributeUnchanged(attributeName) {
+    this._persistedAttributes[attributeName] = cloneFrontendModelAttributes({value: this._attributes[attributeName]}).value
+  }
+
+  /**
    * Runs destroy.
    * @returns {Promise<void>} - Resolves when destroyed on backend.
    */
