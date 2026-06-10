@@ -69,14 +69,11 @@ services:
 builds:
   mariadb_1:
     depends_on:
-      - mssql
       - mariadb
-      - postgres
     name: "MariaDB (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -84,14 +81,11 @@ builds:
       - npm run test -- --groups 3 --group-number 1
   mariadb_2:
     depends_on:
-      - mssql
       - mariadb
-      - postgres
     name: "MariaDB (2/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -99,14 +93,11 @@ builds:
       - npm run test -- --groups 3 --group-number 2
   mariadb_3:
     depends_on:
-      - mssql
       - mariadb
-      - postgres
     name: "MariaDB (3/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -115,8 +106,6 @@ builds:
   mssql_1:
     depends_on:
       - mssql
-      - mariadb
-      - postgres
     name: "MS-SQL (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
@@ -129,8 +118,6 @@ builds:
   mssql_2:
     depends_on:
       - mssql
-      - mariadb
-      - postgres
     name: "MS-SQL (2/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
@@ -143,8 +130,6 @@ builds:
   mssql_3:
     depends_on:
       - mssql
-      - mariadb
-      - postgres
     name: "MS-SQL (3/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
@@ -156,14 +141,11 @@ builds:
       - npm run test -- --groups 3 --group-number 3
   pgsql_1:
     depends_on:
-      - mssql
-      - mariadb
       - postgres
     name: "PG-SQL (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -171,14 +153,11 @@ builds:
       - npm run test -- --groups 3 --group-number 1
   pgsql_2:
     depends_on:
-      - mssql
-      - mariadb
       - postgres
     name: "PG-SQL (2/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
@@ -186,56 +165,38 @@ builds:
       - npm run test -- --groups 3 --group-number 2
   pgsql_3:
     depends_on:
-      - mssql
-      - mariadb
       - postgres
     name: "PG-SQL (3/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test -- --groups 3 --group-number 3
   sqlite_1:
-    depends_on:
-      - mssql
-      - mariadb
-      - postgres
     name: "SQLite (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test -- --groups 3 --group-number 1
   sqlite_2:
-    depends_on:
-      - mssql
-      - mariadb
-      - postgres
     name: "SQLite (2/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test -- --groups 3 --group-number 2
   sqlite_3:
-    depends_on:
-      - mssql
-      - mariadb
-      - postgres
     name: "SQLite (3/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
-      - wait-for-it -t 120 mssql:1433
       - sleep 5
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
