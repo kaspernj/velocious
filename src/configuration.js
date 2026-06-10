@@ -1256,6 +1256,12 @@ export default class VelociousConfiguration {
 
     const timer = setTimeout(() => {
       this._beaconReportTimer = undefined
+
+      if (this._beaconClient?.isConnected()) {
+        this._handleBeaconUp()
+        return
+      }
+
       this._beaconOutageReported = true
 
       if (this._beaconLastDownError) this._reportBeaconError(this._beaconLastDownError)
