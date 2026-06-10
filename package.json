@@ -7,12 +7,7 @@
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
-    "bin/**",
-    "build/**",
-    "index.js",
-    "scripts/**",
-    "src/**",
-    "tsconfig.json"
+    "build/**"
   ],
   "scripts": {
     "all-checks": "npm run lint && npm run test",
