@@ -25,7 +25,7 @@ function buildTestModelClass() {
      */
     static resourceConfig() {
       return {
-        attributes: ["id", "name", "email"],
+        attributes: ["id", "name", "email", "userId"],
         commands: ["create", "destroy", "find", "index", "update"],
         primaryKey: "id"
       }
@@ -37,11 +37,29 @@ function buildTestModelClass() {
     /** @returns {any} */
     name() { return this.readAttribute("name") }
 
+    /** @returns {any} */
+    email() { return this.readAttribute("email") }
+
+    /** @returns {any} */
+    userId() { return this.readAttribute("userId") }
+
+    /**
+     * @param {any} newValue
+     * @returns {any}
+     */
+    setEmail(newValue) { return this.setAttribute("email", newValue) }
+
     /**
      * @param {any} newValue
      * @returns {any}
      */
     setName(newValue) { return this.setAttribute("name", newValue) }
+
+    /**
+     * @param {any} newValue
+     * @returns {any}
+     */
+    setUserId(newValue) { return this.setAttribute("userId", newValue) }
   }
 
   return User
@@ -2349,10 +2367,10 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     const user = new User()
 
     try {
-      user.assignAttributes({userId: null})
+      user.setUserId(null)
       user._persistedAttributes = {userId: null}
-      user.setAttribute("email", "draft@example.com")
-      user.setAttribute("name", "Draft")
+      user.setEmail("draft@example.com")
+      user.setName("Draft")
       await user.save()
 
       expect(fetchStub.calls).toEqual([
