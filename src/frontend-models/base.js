@@ -3644,7 +3644,9 @@ export default class FrontendModelBase {
       @type {Record<string, ?>} */
     const changedAttributes = {}
 
-    for (const [attributeName, [, currentValue]] of Object.entries(this.changes())) {
+    for (const [attributeName, [previousValue, currentValue]] of Object.entries(this.changes())) {
+      if (this.isNewRecord() && previousValue === undefined && currentValue === null) continue
+
       changedAttributes[attributeName] = currentValue
     }
 

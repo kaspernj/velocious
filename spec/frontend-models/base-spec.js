@@ -2387,6 +2387,30 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }
   })
 
+  it("save() on the create path omits null attributes that were never explicitly persisted", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "draft@example.com", id: 9, name: "Draft", userId: 12}})
+    const user = new User({userId: null})
+
+    try {
+      user.setEmail("draft@example.com")
+      user.setName("Draft")
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "draft@example.com", name: "Draft"}
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("save() resets dirty tracking after a successful update so the next save sends nothing extra", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "Renamed"}})
