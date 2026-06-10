@@ -2343,6 +2343,32 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }
   })
 
+  it("save() on the create path does not send unchanged attributes", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "draft@example.com", id: 9, name: "Draft", userId: 12}})
+    const user = new User()
+
+    try {
+      user.assignAttributes({userId: null})
+      user._persistedAttributes = {userId: null}
+      user.setAttribute("email", "draft@example.com")
+      user.setAttribute("name", "Draft")
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "draft@example.com", name: "Draft"}
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("save() resets dirty tracking after a successful update so the next save sends nothing extra", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "Renamed"}})

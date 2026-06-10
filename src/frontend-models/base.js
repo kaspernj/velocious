@@ -3606,11 +3606,7 @@ export default class FrontendModelBase {
      * Payload.
       @type {Record<string, ?>} */
     const payload = {
-      // For creates, send all assigned attributes — the user-set hash typically
-      // only contains writable fields. For updates, send only changed
-      // attributes so server-side strict permits don't reject framework-managed
-      // fields like `id`/`createdAt`/`updatedAt` that the resource never lists.
-      attributes: isNew ? this.attributes() : this._changedAttributesForSave()
+      attributes: this._changedAttributesForSave()
     }
 
     if (!isNew) {
@@ -3636,10 +3632,10 @@ export default class FrontendModelBase {
 
   /**
    * Returns the subset of `_attributes` whose value has diverged from
-   * `_persistedAttributes`. Used by `save()` on the update path so the server
-   * receives only the fields the caller actually changed — avoiding strict
-   * permit rejections on framework-managed fields like `id`, `createdAt`,
-   * `updatedAt` that the resource never lists in `permittedParams`.
+   * `_persistedAttributes`. Used by `save()` so the server receives only the
+   * fields the caller actually changed — avoiding strict permit rejections on
+   * framework-managed fields like `id`, `createdAt`, `updatedAt`, or owner
+   * foreign keys that the resource never lists in `permittedParams`.
    * @returns {Record<string, ?>} - Changed attributes hash.
    */
   _changedAttributesForSave() {
