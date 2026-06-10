@@ -1626,7 +1626,7 @@ export default class FrontendModelBase {
   _attributes
   /**
    * Narrows the runtime value to the documented type.
-    @type {Record<string, FrontendModelHasManyRelationship<?, ?> | FrontendModelSingularRelationship<?, ?>>} */
+    @type {Record<string, FrontendModelHasManyRelationship<typeof FrontendModelBase, typeof FrontendModelBase> | FrontendModelSingularRelationship<typeof FrontendModelBase, typeof FrontendModelBase>>} */
   _relationships
   /**
    * Narrows the runtime value to the documented type.
@@ -1889,7 +1889,7 @@ export default class FrontendModelBase {
   /**
    * Runs get relationship by name.
    * @param {string} relationshipName - Relationship name.
-   * @returns {FrontendModelHasManyRelationship<?, ?> | FrontendModelSingularRelationship<?, ?>} - Relationship state object.
+   * @returns {FrontendModelHasManyRelationship<typeof FrontendModelBase, typeof FrontendModelBase> | FrontendModelSingularRelationship<typeof FrontendModelBase, typeof FrontendModelBase>} - Relationship state object.
    */
   getRelationshipByName(relationshipName) {
     if (!this._relationships[relationshipName]) {
@@ -1961,7 +1961,7 @@ export default class FrontendModelBase {
    * required columns present are left untouched unless `force` is set. Carries
    * the query's preload graph, select, selectsExtra, withCount, abilities, and
    * queryData when re-fetching.
-   * @param {import("./query.js").default<?> | import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
+   * @param {import("./query.js").default<typeof FrontendModelBase> | import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
    * @param {{force?: boolean}} [options] - Options.
    * @returns {Promise<void>} - Resolves when preloading completes.
    */

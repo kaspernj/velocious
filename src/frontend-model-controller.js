@@ -2029,8 +2029,8 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs apply frontend model translated attribute preloads.
    * @param {object} args - Args.
-   * @param {import("./database/query/model-class-query.js").default<?>} args.query - Query instance.
-   * @returns {import("./database/query/model-class-query.js").default<?>} - Query with translations preloaded if needed.
+   * @param {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} args.query - Query instance.
+   * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Query with translations preloaded if needed.
    */
   applyFrontendModelTranslatedAttributePreloads({query}) {
     const modelClass = this.frontendModelClass()
