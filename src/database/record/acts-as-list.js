@@ -293,8 +293,7 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
 function resolveScopeValue(record, scope) {
   const attrValue = record.readAttribute(scope)
 
-  if (attrValue != null) return /**
- * Documents this API. @type {string | number} */ (attrValue)
+  if (attrValue != null) return /** Documents this API. @type {string | number} */ (attrValue)
 
   const modelClass = /**
  * Documents this API. @type {typeof import("./index.js").default} */ (record.constructor)
