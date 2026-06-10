@@ -3,17 +3,17 @@ import {digg} from "diggerize"
 
 export default class DbBaseCommand extends BaseCommand {
   /**
- * Documents this API.
- * @type {import("../../../database/drivers/base.js").default | undefined} */
+   * Narrows the runtime value to the documented type.
+    @type {import("../../../database/drivers/base.js").default | undefined} */
   databaseConnection
 
   /**
- * Documents this API.
- * @type {Array<object> | undefined} */
+   * Narrows the runtime value to the documented type.
+    @type {Array<object> | undefined} */
   result
 
   /**
- * Runs with direct database connection.
+   * Runs with direct database connection.
    * @param {object} driverConfiguration - Driver configuration.
    * @param {() => Promise<void>} callback - Callback to run while the connection is open.
    * @returns {Promise<void>} - Resolves when complete.
@@ -32,7 +32,7 @@ export default class DbBaseCommand extends BaseCommand {
   }
 
   /**
- * Runs get database connection.
+   * Runs get database connection.
    * @returns {import("../../../database/drivers/base.js").default} - Active database connection.
    */
   getDatabaseConnection() {
@@ -42,7 +42,7 @@ export default class DbBaseCommand extends BaseCommand {
   }
 
   /**
- * Runs query or collect sqls.
+   * Runs query or collect sqls.
    * @param {string[]} sqls - SQL statements.
    * @param {(sql: string) => object} resultEntryForSql - Test result entry builder.
    * @returns {Promise<void>} - Resolves when SQLs have been collected or executed.
@@ -56,7 +56,7 @@ export default class DbBaseCommand extends BaseCommand {
   }
 
   /**
- * Runs collect sql results.
+   * Runs collect sql results.
    * @param {string[]} sqls - SQL statements.
    * @param {(sql: string) => object} resultEntryForSql - Test result entry builder.
    * @returns {void}
@@ -70,7 +70,7 @@ export default class DbBaseCommand extends BaseCommand {
   }
 
   /**
- * Runs query sqls.
+   * Runs query sqls.
    * @param {string[]} sqls - SQL statements.
    * @returns {Promise<void>} - Resolves when complete.
    */

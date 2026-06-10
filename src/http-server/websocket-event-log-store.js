@@ -26,7 +26,7 @@ const stores = new WeakMap()
  */
 
 /**
- * Documents this API.
+ * Runs the websocketEventLogStoreForConfiguration helper.
  * @param {import("../configuration.js").default} configuration - Configuration.
  * @returns {VelociousHttpServerWebsocketEventLogStore} - Shared store instance.
  */
@@ -43,7 +43,7 @@ export function websocketEventLogStoreForConfiguration(configuration) {
 
 export default class VelociousHttpServerWebsocketEventLogStore {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.databaseIdentifier] - Database identifier.
@@ -57,13 +57,13 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     this._isReady = false
     this._readyPromise = null
     /**
- * Documents this API.
- * @type {Map<string, number>} */
+     * Narrows the runtime value to the documented type.
+      @type {Map<string, number>} */
     this._interestedChannels = new Map()
   }
 
   /**
- * Runs ensure ready.
+   * Runs ensure ready.
    * @returns {Promise<void>} - Resolves when ready.
    */
   async ensureReady() {
@@ -101,7 +101,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs schema present.
+   * Runs schema present.
    * @returns {Promise<boolean>} - Whether both event-log tables physically exist.
    */
   async _schemaPresent() {
@@ -111,7 +111,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs append event.
+   * Runs append event.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {?} args.payload - Event payload.
@@ -138,7 +138,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs mark channel interested.
+   * Runs mark channel interested.
    * @param {string} channel - Channel name.
    * @returns {Promise<void>} - Resolves when the channel interest was persisted.
    */
@@ -155,7 +155,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs should persist channel.
+   * Runs should persist channel.
    * @param {string} channel - Channel name.
    * @returns {Promise<boolean>} - Whether the channel should be persisted for replay.
    */
@@ -179,7 +179,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs channel interest cached.
+   * Runs channel interest cached.
    * @param {string} channel - Channel name.
    * @returns {boolean} - Whether memory cache still marks the channel interested.
    */
@@ -195,7 +195,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs get event by id.
+   * Runs get event by id.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {string} args.id - Event id.
@@ -210,7 +210,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs latest sequence.
+   * Runs latest sequence.
    * @param {string} channel - Channel name.
    * @returns {Promise<number | null>} - Latest channel sequence.
    */
@@ -226,8 +226,8 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         .limit(1)
         .results()
       const row = /**
- * Documents this API.
- * @type {Record<string, ?> | undefined} */ (rows[0])
+                   * Narrows the runtime value to the documented type.
+                    @type {Record<string, ?> | undefined} */ (rows[0])
 
       if (!row) return null
 
@@ -236,7 +236,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs get events after.
+   * Runs get events after.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {number} args.sequence - Lower bound sequence.
@@ -259,15 +259,15 @@ export default class VelociousHttpServerWebsocketEventLogStore {
       }
 
       const rows = /**
- * Documents this API.
- * @type {WebsocketEventRow[]} */ (await query.results())
+                    * Narrows the runtime value to the documented type.
+                     @type {WebsocketEventRow[]} */ (await query.results())
 
       return rows.map((row) => this._normalizeEventRow(row))
     })
   }
 
   /**
- * Runs cleanup expired.
+   * Runs cleanup expired.
    * @param {object} [args] - Options.
    * @param {Date} [args.now] - Cleanup reference time.
    * @returns {Promise<void>} - Resolves when cleanup completes.
@@ -279,15 +279,15 @@ export default class VelociousHttpServerWebsocketEventLogStore {
 
     await this._withDb(async (db) => {
       const expiredEventRows = /**
- * Documents this API.
- * @type {Array<{id: string}>} */ (await db
+                                * Narrows the runtime value to the documented type.
+                                 @type {Array<{id: string}>} */ (await db
         .newQuery()
         .from(EVENTS_TABLE)
         .where(`created_at <= ${db.quote(cutoff)}`)
         .results())
       const expiredReplayChannelRows = /**
- * Documents this API.
- * @type {WebsocketReplayChannelRow[]} */ (await db
+                                        * Narrows the runtime value to the documented type.
+                                         @type {WebsocketReplayChannelRow[]} */ (await db
         .newQuery()
         .from(REPLAY_CHANNELS_TABLE)
         .where(`interested_until <= ${db.quote(now)}`)
@@ -317,7 +317,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs ensure events table.
+   * Runs ensure events table.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -341,7 +341,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs ensure replay channels table.
+   * Runs ensure replay channels table.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -357,7 +357,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs get event by id.
+   * Runs get event by id.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
@@ -366,8 +366,8 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    */
   async _getEventById({channel, db, id}) {
     const rows = /**
- * Documents this API.
- * @type {WebsocketEventRow[]} */ (await db
+                  * Narrows the runtime value to the documented type.
+                   @type {WebsocketEventRow[]} */ (await db
       .newQuery()
       .from(EVENTS_TABLE)
       .where({channel, id})
@@ -380,7 +380,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs normalize event row.
+   * Runs normalize event row.
    * @param {WebsocketEventRow} row - Raw row.
    * @returns {{channel: string, createdAt: string, id: string, payload: ?, sequence: number}} - Normalized row.
    */
@@ -397,7 +397,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs upsert replay channel interest.
+   * Runs upsert replay channel interest.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
@@ -417,7 +417,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   }
 
   /**
- * Runs with db.
+   * Runs with db.
    * @param {(db: import("../database/drivers/base.js").default) => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
    */

@@ -8,8 +8,9 @@ import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigura
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
   /**
- * Runs execute.
- * @returns {Promise<void>} - Resolves when files are generated. */
+   * Runs execute.
+   * @returns {Promise<void>} - Resolves when files are generated.
+   */
   async execute() {
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects()
@@ -27,16 +28,16 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     /**
- * Ensured directories.
- * @type {Set<string>} */
+     * Ensured directories.
+      @type {Set<string>} */
     const ensuredDirectories = new Set()
     /**
- * Generated model names by directory.
- * @type {Map<string, Set<string>>} */
+     * Generated model names by directory.
+      @type {Map<string, Set<string>>} */
     const generatedModelNamesByDirectory = new Map()
     /**
- * Generated files by directory.
- * @type {Map<string, Array<{className: string, fileName: string}>>} */
+     * Generated files by directory.
+      @type {Map<string, Array<{className: string, fileName: string}>>} */
     const generatedFilesByDirectory = new Map()
 
     for (const backendProject of backendProjects) {
@@ -119,7 +120,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs validate model config.
+   * Runs validate model config.
    * @param {object} args - Arguments.
    * @param {Set<string>} args.availableFrontendModelClassNames - Available frontend model class names in backend project.
    * @param {string} args.className - Model class name.
@@ -158,7 +159,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs resources for backend project.
+   * Runs resources for backend project.
    * @param {import("../../../../../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
    * @returns {Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>} - Resource definitions keyed by model class name.
    */
@@ -167,14 +168,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs available frontend model class names.
+   * Runs available frontend model class names.
    * @param {Record<string, ?>} resources - Resource configuration keyed by model name.
    * @returns {Set<string>} - Available frontend model class names.
    */
   availableFrontendModelClassNames(resources) {
     /**
- * Class names.
- * @type {Set<string>} */
+     * Class names.
+      @type {Set<string>} */
     const classNames = new Set()
 
     for (const resourceModelName in resources) {
@@ -185,7 +186,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs frontend models directory for backend project.
+   * Runs frontend models directory for backend project.
    * @param {{frontendModelsOutputPath?: string}} backendProject - Backend project config.
    * @returns {string} - Absolute frontend models output directory.
    */
@@ -196,7 +197,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs import path for frontend models directory.
+   * Runs import path for frontend models directory.
    * @param {string} frontendModelsDir - Frontend models output directory.
    * @returns {string} - Base class import path.
    */
@@ -211,7 +212,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs build model file content.
+   * Runs build model file content.
    * @param {object} args - Method args.
    * @param {string} args.className - Model class name.
    * @param {string} args.importPath - Base class import path.
@@ -269,10 +270,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += " */\n"
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /**\n"
-    fileContent += "   * Returns resource config.\n"
-    fileContent += "   * @returns {FrontendModelResourceConfig} - Resource config.\n"
-    fileContent += "   */\n"
+    fileContent += "  /** @returns {FrontendModelResourceConfig} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
     fileContent += `      modelName: ${JSON.stringify(className)},\n`
@@ -345,10 +343,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (relationships.length > 0) {
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * Returns relationship definitions.\n"
-      fileContent += "   * @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */\n"
       fileContent += "  static relationshipDefinitions() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -362,10 +357,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  }\n"
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += "   * Returns relationship model class names.\n"
-      fileContent += "   * @returns {Record<string, string>} - Relationship model class names.\n"
-      fileContent += "   */\n"
+      fileContent += "  /** @returns {Record<string, string>} - Relationship model class names. */\n"
       fileContent += "  static relationshipModelClasses() {\n"
       fileContent += "    return {\n"
       for (const relationship of relationships) {
@@ -380,15 +372,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const camelizedAttributeUpper = inflection.camelize(attribute.name)
 
       fileContent += "\n"
-      fileContent += "  /**\n"
-      fileContent += `   * Returns ${attribute.name}.\n`
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value.\n`
-      fileContent += "   */\n"
+      fileContent += `  /** @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value. */\n`
       fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attribute.name)}) }\n`
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += `   * Sets ${attribute.name}.\n`
       fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attribute.name)}]} newValue - New attribute value.\n`
       fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Assigned value.\n`
       fileContent += "   */\n"
@@ -440,28 +428,28 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += `   * Returns ${relationship.relationshipName}.\n`
         fileContent += `   * @returns {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} - Relationship helper.\n`
         fileContent += "   */\n"
-        fileContent += `  ${relationship.relationshipName}() { return /** Relationship helper. @type {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)})) }\n`
+        fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(importPath)}).FrontendModelHasManyRelationship<typeof import(${JSON.stringify(`./${inflection.dasherize(inflection.underscore(className))}.js`)}).default, typeof import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
         fileContent += "  /**\n"
         fileContent += `   * Returns loaded ${relationship.relationshipName}.\n`
         fileContent += `   * @returns {Array<import(${JSON.stringify(targetImportPath)}).default>} - Loaded related models.\n`
         fileContent += "   */\n"
-        fileContent += `  ${relationship.relationshipName}Loaded() { return /** Loaded related models. @type {Array<import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
+        fileContent += `  ${relationship.relationshipName}Loaded() { return /** @type {Array<import(${JSON.stringify(targetImportPath)}).default>} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
 
         fileContent += "\n"
         fileContent += "  /**\n"
         fileContent += `   * Loads ${relationship.relationshipName}.\n`
         fileContent += `   * @returns {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} - Loaded related models.\n`
         fileContent += "   */\n"
-        fileContent += `  async load${relationshipNameCamelized}() { return /** Loaded related models. @type {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
+        fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<Array<import(${JSON.stringify(targetImportPath)}).default>>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
       } else {
         fileContent += "\n"
         fileContent += "  /**\n"
         fileContent += `   * Returns ${relationship.relationshipName}.\n`
         fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Loaded related model.\n`
         fileContent += "   */\n"
-        fileContent += `  ${relationship.relationshipName}() { return /** Loaded related model. @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
+        fileContent += `  ${relationship.relationshipName}() { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).loaded()) }\n`
 
         fileContent += "\n"
         fileContent += "  /**\n"
@@ -469,21 +457,21 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += `   * @param {Record<string, ?>} [attributes] - Attributes for the new related model.\n`
         fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default} - Built related model.\n`
         fileContent += "   */\n"
-        fileContent += `  build${relationshipNameCamelized}(attributes = {}) { return /** Built related model. @type {import(${JSON.stringify(targetImportPath)}).default} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).build(attributes)) }\n`
+        fileContent += `  build${relationshipNameCamelized}(attributes = {}) { return /** @type {import(${JSON.stringify(targetImportPath)}).default} */ (this.getRelationshipByName(${JSON.stringify(relationship.relationshipName)}).build(attributes)) }\n`
 
         fileContent += "\n"
         fileContent += "  /**\n"
         fileContent += `   * Loads ${relationship.relationshipName}.\n`
         fileContent += `   * @returns {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} - Loaded related model.\n`
         fileContent += "   */\n"
-        fileContent += `  async load${relationshipNameCamelized}() { return /** Loaded related model. @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
+        fileContent += `  async load${relationshipNameCamelized}() { return /** @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.loadRelationship(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
         fileContent += "  /**\n"
         fileContent += `   * Returns or loads ${relationship.relationshipName}.\n`
         fileContent += `   * @returns {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} - Loaded related model.\n`
         fileContent += "   */\n"
-        fileContent += `  async ${relationship.relationshipName}OrLoad() { return /** Loaded related model. @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.relationshipOrLoad(${JSON.stringify(relationship.relationshipName)})) }\n`
+        fileContent += `  async ${relationship.relationshipName}OrLoad() { return /** @type {Promise<import(${JSON.stringify(targetImportPath)}).default | null>} */ (this.relationshipOrLoad(${JSON.stringify(relationship.relationshipName)})) }\n`
 
         fileContent += "\n"
         fileContent += "  /**\n"
@@ -491,7 +479,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         fileContent += `   * @param {import(${JSON.stringify(targetImportPath)}).default | null} model - Related model.\n`
         fileContent += `   * @returns {import(${JSON.stringify(targetImportPath)}).default | null} - Assigned related model.\n`
         fileContent += "   */\n"
-        fileContent += `  set${relationshipNameCamelized}(model) { return /** Assigned related model. @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.setRelationship(${JSON.stringify(relationship.relationshipName)}, model)) }\n`
+        fileContent += `  set${relationshipNameCamelized}(model) { return /** @type {import(${JSON.stringify(targetImportPath)}).default | null} */ (this.setRelationship(${JSON.stringify(relationship.relationshipName)}, model)) }\n`
       }
     }
 
@@ -503,7 +491,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs build index file content.
+   * Runs build index file content.
    * @param {Array<{className: string, fileName: string}>} generatedFiles - Generated model files.
    * @returns {string} - Index file content that imports and re-exports all models.
    */
@@ -518,7 +506,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs build setup file content.
+   * Runs build setup file content.
    * @param {Array<{className: string, fileName: string}>} generatedFiles - Generated model files.
    * @returns {string} - Setup file content with side-effect imports for model registration.
    */
@@ -550,9 +538,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (!resourceClass || typeof resourceClass !== "function") return []
 
     const prototypeWithMethod = /**
-     * Resource prototype.
-     * @type {{permittedParams?: (arg?: object) => Array<string | Record<string, ?>>}}
-     */ (resourceClass.prototype)
+                                 * Resource prototype.
+                                 * @type {{permittedParams?: (arg?: object) => Array<string | Record<string, ?>>}}
+                                 */ (resourceClass.prototype)
 
     if (typeof prototypeWithMethod?.permittedParams !== "function") return []
 
@@ -567,9 +555,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
         params: {},
         resourceConfiguration: /**
-         * Resource configuration.
-         * @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration}
-         */ ({attributes: []})
+                                * Resource configuration.
+                                * @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration}
+                                */ ({attributes: []})
       })
       spec = instance.permittedParams()
     } catch (error) {
@@ -579,8 +567,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (!Array.isArray(spec)) return []
 
     /**
- * Relationship names.
- * @type {string[]} */
+     * Relationship names.
+      @type {string[]} */
     const relationshipNames = []
 
     for (const entry of spec) {
@@ -597,7 +585,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs formatted array property.
+   * Runs formatted array property.
    * @param {object} args - Formatting args.
    * @param {string} args.indent - Base indentation.
    * @param {string} args.propertyName - Object property name.
@@ -617,16 +605,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Documents this API.
-   * @param {object} args - Formatting args.
-   * @param {string} args.indent - Base indentation.
-   * @param {string} args.propertyName - Object property name.
-   * @param {Record<string, string>} args.values - Object key-values.
-   * @param {Record<string, string>} [args.filterDefaultValues] - Default values to omit from output.
-   * @returns {string} - Formatted multiline object property.
-   */
-  /**
- * Runs formatted commands property.
+   * Runs formatted commands property.
    * @param {object} args - Formatting args.
    * @param {string} args.indent - Base indentation.
    * @param {string} args.propertyName - Object property name.
@@ -644,7 +623,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs formatted object property.
+   * Runs formatted object property.
    * @param {object} args - Formatting args.
    * @param {string} args.indent - Base indentation.
    * @param {string} args.propertyName - Object property name.
@@ -667,7 +646,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs attribute definitions for model.
+   * Runs attribute definitions for model.
    * @param {object} args - Arguments.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Record<string, ?>} args.modelConfig - Model configuration.
@@ -717,7 +696,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs js doc type for frontend attribute.
+   * Runs js doc type for frontend attribute.
    * @param {object} args - Arguments.
    * @param {?} args.attributeConfig - Attribute configuration value.
    * @returns {string} - JSDoc type.
@@ -733,7 +712,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs js doc type for frontend attribute base type.
+   * Runs js doc type for frontend attribute base type.
    * @param {?} attributeConfig - Attribute configuration value.
    * @returns {string} - Non-nullable JSDoc type.
    */
@@ -760,7 +739,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs frontend attribute can be null.
+   * Runs frontend attribute can be null.
    * @param {?} attributeConfig - Attribute configuration value.
    * @returns {boolean} - Whether the attribute allows null values.
    */
@@ -777,7 +756,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs frontend attribute type value.
+   * Runs frontend attribute type value.
    * @param {?} attributeConfig - Attribute configuration value.
    * @returns {string | null} - Normalized column type.
    */
@@ -800,7 +779,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs frontend attribute config for model attribute.
+   * Runs frontend attribute config for model attribute.
    * @param {object} args - Arguments.
    * @param {string} args.attributeName - Frontend model attribute name.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
@@ -821,7 +800,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs relationships for model.
+   * Runs relationships for model.
    * @param {object} args - Arguments.
    * @param {string} args.className - Model class name.
    * @param {Record<string, ?>} args.modelConfig - Model configuration.
@@ -843,7 +822,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
- * Runs inferred relationship definition.
+   * Runs inferred relationship definition.
    * @param {object} args - Arguments.
    * @param {string} args.className - Model class name.
    * @param {string} args.relationshipName - Relationship name.

@@ -4,7 +4,7 @@ import {incorporate} from "incorporator"
 
 export default class DbDrop extends DbBaseCommand {
   /**
- * Runs execute.
+   * Runs execute.
    * @returns {Promise<void | Array<object>>} - Resolves with SQL statements when running in dry mode.
    */
   async execute() {
@@ -50,7 +50,7 @@ export default class DbDrop extends DbBaseCommand {
   }
 
   /**
- * Runs system fallback database name.
+   * Runs system fallback database name.
    * @param {string} databaseType - Database type.
    * @returns {string} - System/maintenance database name for that driver.
    */
@@ -62,7 +62,7 @@ export default class DbDrop extends DbBaseCommand {
   }
 
   /**
- * Runs drop database.
+   * Runs drop database.
    * @param {string} databaseIdentifier - Database identifier.
    * @returns {Promise<void>} - Resolves when complete.
    */

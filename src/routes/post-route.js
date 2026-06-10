@@ -28,7 +28,7 @@ function assignActionAndController(params, name) {
 
 class VelociousRoutePostRoute extends BaseRoute {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -46,7 +46,7 @@ class VelociousRoutePostRoute extends BaseRoute {
   }
 
   /**
- * Runs match with path.
+   * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
@@ -57,7 +57,7 @@ class VelociousRoutePostRoute extends BaseRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
+      const [_beginnigSlash, _matchedName, restPath] = match
 
       // Prevent partial prefix matches (e.g., "update" matching "update-password")
       if (restPath && !restPath.startsWith("/")) return

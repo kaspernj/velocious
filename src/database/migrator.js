@@ -9,12 +9,12 @@ import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
   /**
- * Migrations versions.
- * @type {Record<string, Record<string, boolean>>} */
+   * Migrations versions.
+    @type {Record<string, Record<string, boolean>>} */
   migrationsVersions = {}
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string[]} [args.databaseIdentifiers] - Optional database identifiers to migrate.
@@ -30,7 +30,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs handles database identifier.
+   * Runs handles database identifier.
    * @param {string} dbIdentifier - Database identifier.
    * @returns {boolean} - Whether this migrator should touch the database identifier.
    */
@@ -42,16 +42,18 @@ export default class VelociousDatabaseMigrator {
 
 
   /**
- * Runs prepare.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs prepare.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async prepare() {
     await this.createMigrationsTable()
     await this.loadMigrationsVersions()
   }
 
   /**
- * Runs create migrations table.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs create migrations table.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async createMigrationsTable() {
     const dbs = await this.configuration.getCurrentConnections()
 
@@ -63,7 +65,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs create migrations table for database.
+   * Runs create migrations table for database.
    * @param {object} args - Options object.
    * @param {string} args.dbIdentifier - Database identifier.
    * @param {import("./drivers/base.js").default} args.db - Database connection.
@@ -97,7 +99,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs has run migration version.
+   * Runs has run migration version.
    * @param {string} dbIdentifier - Db identifier.
    * @param {number} version - Version.
    * @returns {boolean} - Whether it has run migration version.
@@ -114,7 +116,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs migrate files.
+   * Runs migrate files.
    * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
    * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback - Import callback.
    * @returns {Promise<number>} - Number of migrations actually applied (not skipped as already-run).
@@ -149,14 +151,14 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs migrate files from require context.
+   * Runs migrate files from require context.
    * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async migrateFilesFromRequireContext(requireContext) {
     /**
- * Files.
- * @type {import("./migrator/types.js").MigrationObjectType[]} */
+     * Files.
+      @type {import("./migrator/types.js").MigrationObjectType[]} */
     let files = []
 
     for (const file of requireContext.keys()) {
@@ -201,7 +203,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs after migrations.
+   * Runs after migrations.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _afterMigrations() {
@@ -217,8 +219,9 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs load migrations versions.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs load migrations versions.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async loadMigrationsVersions() {
     this.migrationsVersions = {}
 
@@ -232,7 +235,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs load migrations versions for database.
+   * Runs load migrations versions for database.
    * @param {object} args - Options object.
    * @param {string} args.dbIdentifier - Database identifier.
    * @param {import("./drivers/base.js").default} args.db - Database connection.
@@ -264,7 +267,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs migrations table exist.
+   * Runs migrations table exist.
    * @param {import("./drivers/base.js").default} db - Database connection.
    * @returns {Promise<boolean>} - Resolves with Whether migrations table exist.
    */
@@ -277,7 +280,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs execute require context.
+   * Runs execute require context.
    * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -285,8 +288,8 @@ export default class VelociousDatabaseMigrator {
     const migrationFiles = requireContext.keys()
 
     /**
- * Files.
- * @type {import("./migrator/types.js").MigrationObjectType[]} */
+     * Files.
+      @type {import("./migrator/types.js").MigrationObjectType[]} */
     let files = []
 
     for (const file of migrationFiles) {
@@ -299,8 +302,8 @@ export default class VelociousDatabaseMigrator {
       const migrationClassName = inflection.camelize(migrationName)
 
       const migrationObject = /**
- * Documents this API.
- * @type {import("./migrator/types.js").MigrationObjectType} */ ({
+                               * Narrows the runtime value to the documented type.
+                                @type {import("./migrator/types.js").MigrationObjectType} */ ({
         file,
         date,
         migrationClassName
@@ -320,7 +323,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs reset.
+   * Runs reset.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async reset() {
@@ -362,7 +365,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs rollback.
+   * Runs rollback.
    * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
    * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback Function to import a file
    * @returns {Promise<void>} - Resolves when complete.
@@ -393,15 +396,15 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs latest migration version.
+   * Runs latest migration version.
    * @returns {Promise<string | undefined>} The latest migration version
    */
   async _latestMigrationVersion() {
     if (!this.migrationsVersions) await this.loadMigrationsVersions()
 
     /**
- * Documents this API.
- * @type {string | undefined} */
+     * Defines highestVersion.
+      @type {string | undefined} */
     let highestVersion
 
     for (const dbIdentifier in this.migrationsVersions) {
@@ -416,7 +419,7 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
- * Runs run migration file.
+   * Runs run migration file.
    * @param {object} args - Options object.
    * @param {import("./migrator/types.js").MigrationObjectType} args.migration - Migration.
    * @param {import("./migrator/types.js").RequireMigrationType} args.requireMigration - Require migration.
@@ -432,8 +435,8 @@ export default class VelociousDatabaseMigrator {
     const dbs = await this.configuration.getCurrentConnections()
 
     /**
- * Db identifiers needing migration versions.
- * @type {string[]} */
+     * Db identifiers needing migration versions.
+      @type {string[]} */
     const dbIdentifiersNeedingMigrationVersions = []
 
     // migrateFiles() wraps execution in ensureConnections(), so the current

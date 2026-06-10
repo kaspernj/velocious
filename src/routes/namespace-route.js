@@ -7,7 +7,7 @@ import escapeStringRegexp from "escape-string-regexp"
 
 class VelociousRouteNamespaceRoute extends BasicRoute {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -25,7 +25,7 @@ class VelociousRouteNamespaceRoute extends BasicRoute {
   }
 
   /**
- * Runs match with path.
+   * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
@@ -36,7 +36,7 @@ class VelociousRouteNamespaceRoute extends BasicRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
+      const [_beginnigSlash, _matchedName, restPath] = match
 
       params.controller = this.name
 

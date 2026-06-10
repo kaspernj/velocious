@@ -30,7 +30,7 @@ function escapeRegExp(value) {
 }
 
 /**
- * Documents this API.
+ * Runs the normalizeExamplePatterns helper.
  * @param {string[]} patterns - Patterns.
  * @returns {RegExp[]} - Normalized patterns.
  */
@@ -62,7 +62,7 @@ export function normalizeExamplePatterns(patterns) {
  */
 
 /**
- * Documents this API.
+ * Runs the parseFilters helper.
  * @param {string[]} processArgs - Process args.
  * @returns {ParseFiltersResult} - Parsed tags, group options, and process args.
  */
@@ -73,12 +73,12 @@ export function parseFilters(processArgs) {
   const examplePatterns = []
 
   /**
- * Documents this API.
- * @type {number | undefined} */
+   * Defines groups.
+    @type {number | undefined} */
   let groups
   /**
- * Documents this API.
- * @type {number | undefined} */
+   * Defines groupNumber.
+    @type {number | undefined} */
   let groupNumber
 
   let inRestArgs = false

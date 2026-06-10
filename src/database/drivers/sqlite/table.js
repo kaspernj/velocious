@@ -7,7 +7,7 @@ import ForeignKey from "./foreign-key.js"
 
 export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    * @param {Record<string, string | number | null>} args.row - Row data.
@@ -19,8 +19,9 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   }
 
   /**
- * Runs get columns.
- * @returns {Promise<Array<import("../base-column.js").default>>} - Resolves with the columns.  */
+   * Runs get columns.
+   * @returns {Promise<Array<import("../base-column.js").default>>} - Resolves with the columns.
+   */
   async getColumns() {
     return await this.getDriver()._cachedTableSchemaMetadata(this.getName(), "columns", async () => {
       const result = await this.driver.query(`PRAGMA table_info('${this.getName()}')`)
@@ -71,8 +72,8 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
         if (!sql) throw new Error(`Could not find SQL for index ${columnsIndex.getName()}`)
 
         const indexData = /**
- * Documents this API.
- * @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
+                           * Narrows the runtime value to the documented type.
+                            @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
 
         indexData.columnNames = this._parseColumnsFromSQL(String(sql))
 
@@ -84,7 +85,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   }
 
   /**
- * Runs parse columns from sql.
+   * Runs parse columns from sql.
    * @param {string} sql - SQL string.
    * @returns {string[]} - SQL statements.
    */
@@ -117,8 +118,9 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
   }
 
   /**
- * Runs get name.
- * @returns {string} - The table name. */
+   * Runs get name.
+   * @returns {string} - The table name.
+   */
   getName() {
     if (!this.row.name) {
       throw new Error("No name given for SQLite table")

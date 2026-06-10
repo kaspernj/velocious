@@ -5,12 +5,12 @@ import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseColumn {
   /**
- * Table.
- * @type {import("./base-table.js").default | undefined} */
+   * Table.
+    @type {import("./base-table.js").default | undefined} */
   table = undefined
 
   /**
- * Runs get auto increment.
+   * Runs get auto increment.
    * @abstract
    * @returns {boolean} - Whether auto increment.
    */
@@ -19,7 +19,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get default.
+   * Runs get default.
    * @abstract
    * @returns {?} - The default.
    */
@@ -28,7 +28,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get index by name.
+   * Runs get index by name.
    * @param {string} indexName - Index name.
    * @returns {Promise<import("./base-columns-index.js").default | undefined>} - Resolves with the index by name.
    */
@@ -40,7 +40,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs change nullable.
+   * Runs change nullable.
    * @param {boolean} nullable Whether the column should be nullable or not.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -60,7 +60,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get driver.
+   * Runs get driver.
    * @returns {import("./base.js").default} - The driver.
    */
   getDriver() {
@@ -68,7 +68,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get indexes.
+   * Runs get indexes.
    * @abstract
    * @returns {Promise<Array<import("./base-columns-index.js").default>>} - Resolves with the indexes.
    */
@@ -77,7 +77,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get max length.
+   * Runs get max length.
    * @abstract
    * @returns {number | undefined} - The max length.
    */
@@ -86,7 +86,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get notes.
+   * Runs get notes.
    * @returns {string | undefined} - The notes.
    */
   getNotes() {
@@ -94,7 +94,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get name.
+   * Runs get name.
    * @abstract
    * @returns {string} - The name.
    */
@@ -103,7 +103,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get null.
+   * Runs get null.
    * @abstract
    * @returns {boolean} - Whether null.
    */
@@ -112,7 +112,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get options.
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -120,7 +120,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get primary key.
+   * Runs get primary key.
    * @abstract
    * @returns {boolean} - Whether primary key.
    */
@@ -129,7 +129,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get table.
+   * Runs get table.
    * @returns {import("./base-table.js").default} - The table.
    */
   getTable() {
@@ -139,7 +139,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get table data column.
+   * Runs get table data column.
    * @returns {TableColumn} The table column data for this column. This is used for altering tables and such.
    */
   getTableDataColumn() {
@@ -156,7 +156,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get type hint from notes.
+   * Runs get type hint from notes.
    * @returns {string | undefined} - The type hint from notes.
    */
   getTypeHintFromNotes() {
@@ -172,7 +172,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
- * Runs get type.
+   * Runs get type.
    * @abstract
    * @returns {string} - The type.
    */

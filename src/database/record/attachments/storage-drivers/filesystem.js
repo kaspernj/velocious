@@ -26,7 +26,7 @@ function encodeStorageKey(storageKey) {
  */
 export default class FilesystemAttachmentStorageDriver {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../../../../configuration.js").default} args.configuration - Configuration instance.
    * @param {Record<string, ?>} [args.options] - Driver options.
@@ -37,7 +37,7 @@ export default class FilesystemAttachmentStorageDriver {
   }
 
   /**
- * Runs directory.
+   * Runs directory.
    * @returns {string} - Root directory for attachment files.
    */
   directory() {
@@ -49,7 +49,7 @@ export default class FilesystemAttachmentStorageDriver {
   }
 
   /**
- * Runs write.
+   * Runs write.
    * @param {object} args - Options.
    * @param {string} args.attachmentId - Attachment id.
    * @param {{contentBuffer: Buffer, filename: string}} args.input - Normalized attachment input.
@@ -67,7 +67,7 @@ export default class FilesystemAttachmentStorageDriver {
   }
 
   /**
- * Runs read.
+   * Runs read.
    * @param {object} args - Options.
    * @param {string} args.storageKey - Storage key.
    * @returns {Promise<Buffer>} - Attachment bytes.
@@ -79,7 +79,7 @@ export default class FilesystemAttachmentStorageDriver {
   }
 
   /**
- * Runs delete.
+   * Runs delete.
    * @param {object} args - Options.
    * @param {string} args.storageKey - Storage key.
    * @returns {Promise<void>} - Resolves when file has been deleted.
@@ -97,7 +97,7 @@ export default class FilesystemAttachmentStorageDriver {
   }
 
   /**
- * Runs url.
+   * Runs url.
    * @param {object} args - Options.
    * @param {string} args.storageKey - Storage key.
    * @returns {Promise<string>} - Resolvable URL.

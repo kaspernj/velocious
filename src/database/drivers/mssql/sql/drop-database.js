@@ -4,7 +4,7 @@ import DropDatabaseBase from "../../../query/drop-database-base.js"
 
 export default class VelociousDatabaseConnectionDriversMssqlSqlDropDatabase extends DropDatabaseBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../base.js").default} args.driver - Database driver instance.
    * @param {string} args.databaseName - Database name.

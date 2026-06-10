@@ -59,7 +59,7 @@ const supportedPredicates = [
 ]
 
 /**
- * Documents this API.
+ * Runs the normalizeRansackParams helper.
  * @param {RansackModelClass} modelClass - Model class.
  * @param {Record<string, ?>} params - Ransack-style params hash.
  * @returns {RansackCondition[]} - Normalized conditions.
@@ -70,7 +70,7 @@ export function normalizeRansackParams(modelClass, params) {
 }
 
 /**
- * Documents this API.
+ * Runs the normalizeRansackGroup helper.
  * @param {RansackModelClass} modelClass - Model class.
  * @param {Record<string, ?>} params - Ransack-style params hash.
  * @returns {RansackGroup} - Normalized group.
@@ -81,8 +81,8 @@ export function normalizeRansackGroup(modelClass, params) {
   }
 
   /**
- * Normalized.
- * @type {RansackGroup} */
+   * Normalized.
+    @type {RansackGroup} */
   const normalized = {
     combinator: normalizeRansackCombinator(params.m, "and"),
     conditions: [],
@@ -154,8 +154,8 @@ function normalizeSimpleRansackCondition({key, modelClass, rawValue}) {
  */
 function normalizeAdvancedRansackConditions({modelClass, value}) {
   /**
- * Conditions.
- * @type {RansackCondition[]} */
+   * Conditions.
+    @type {RansackCondition[]} */
   const conditions = []
 
   for (const entry of normalizeRansackCollection(value, "conditions")) {
@@ -174,8 +174,8 @@ function normalizeAdvancedRansackConditions({modelClass, value}) {
     }
 
     const predicate = /**
- * Documents this API.
- * @type {RansackPredicate} */ (predicateValue)
+                       * Narrows the runtime value to the documented type.
+                        @type {RansackPredicate} */ (predicateValue)
     const rawValue = advancedRansackConditionValue({predicate, value: entry.v})
     const normalizedValue = normalizeRansackValue({predicate, value: rawValue})
 
@@ -203,8 +203,8 @@ function normalizeAdvancedRansackConditions({modelClass, value}) {
  */
 function normalizeAdvancedRansackGroups({modelClass, value}) {
   /**
- * Groupings.
- * @type {RansackGroup[]} */
+   * Groupings.
+    @type {RansackGroup[]} */
   const groupings = []
 
   for (const entry of normalizeRansackCollection(value, "groupings")) {
@@ -286,8 +286,8 @@ function advancedRansackConditionValue({predicate, value}) {
 function resolveRansackAttributesFromAdvancedValue({modelClass, value}) {
   const values = normalizeAdvancedAttributeValues(value)
   /**
- * Attributes.
- * @type {RansackAttribute[]} */
+   * Attributes.
+    @type {RansackAttribute[]} */
   const attributes = []
 
   for (const attributeValue of values) {
@@ -391,8 +391,8 @@ function modelClassAtPath({modelClass, path}) {
  */
 function resolveRansackPath({modelClass, value}) {
   /**
- * Path.
- * @type {string[]} */
+   * Path.
+    @type {string[]} */
   const path = []
   let currentModelClass = modelClass
   let remainingValue = value
@@ -525,17 +525,17 @@ function resolveAttributeName({modelClass, value}) {
  */
 function relationshipEntries(modelClass) {
   if (typeof /**
- * Documents this API.
- * @type {?} */ (modelClass).getRelationshipsMap === "function") {
+              * Narrows the runtime value to the documented type.
+               @type {?} */ (modelClass).getRelationshipsMap === "function") {
     return backendRelationshipEntries(modelClass)
   }
 
   if (typeof /**
- * Documents this API.
- * @type {?} */ (modelClass).relationshipDefinitions === "function" &&
+              * Narrows the runtime value to the documented type.
+               @type {?} */ (modelClass).relationshipDefinitions === "function" &&
     typeof /**
- * Documents this API.
- * @type {?} */ (modelClass).relationshipModelClasses === "function") {
+            * Narrows the runtime value to the documented type.
+             @type {?} */ (modelClass).relationshipModelClasses === "function") {
     return frontendRelationshipEntries(modelClass)
   }
 
@@ -549,12 +549,12 @@ function relationshipEntries(modelClass) {
  */
 function backendRelationshipEntries(modelClass) {
   /**
- * Entries.
- * @type {Record<string, {targetModelClass: RansackModelClass}>} */
+   * Entries.
+    @type {Record<string, {targetModelClass: RansackModelClass}>} */
   const entries = {}
   const relationshipsMap = /**
- * Documents this API.
- * @type {?} */ (modelClass).getRelationshipsMap()
+                            * Narrows the runtime value to the documented type.
+                             @type {?} */ (modelClass).getRelationshipsMap()
 
   for (const relationshipName of Object.keys(relationshipsMap)) {
     const relationship = relationshipsMap[relationshipName]
@@ -578,15 +578,15 @@ function backendRelationshipEntries(modelClass) {
  */
 function frontendRelationshipEntries(modelClass) {
   /**
- * Entries.
- * @type {Record<string, {targetModelClass: RansackModelClass}>} */
+   * Entries.
+    @type {Record<string, {targetModelClass: RansackModelClass}>} */
   const entries = {}
   const definitions = /**
- * Documents this API.
- * @type {?} */ (modelClass).relationshipDefinitions()
+                       * Narrows the runtime value to the documented type.
+                        @type {?} */ (modelClass).relationshipDefinitions()
   const relationshipModelClasses = /**
- * Documents this API.
- * @type {?} */ (modelClass).relationshipModelClasses()
+                                    * Narrows the runtime value to the documented type.
+                                     @type {?} */ (modelClass).relationshipModelClasses()
 
   for (const relationshipName of Object.keys(definitions)) {
     const targetModelClass = resolveFrontendModelClass(relationshipModelClasses[relationshipName])
@@ -606,24 +606,24 @@ function frontendRelationshipEntries(modelClass) {
  */
 function attributeEntries(modelClass) {
   if (typeof /**
- * Documents this API.
- * @type {?} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
-    return /** Documents this API. @type {Record<string, string>} */ ((/**
- * Documents this API.
- * @type {?} */ (modelClass).getAttributeNameToColumnNameMap()))
+              * Narrows the runtime value to the documented type.
+               @type {?} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
+    return /** Narrows the runtime value to the documented type. @type {Record<string, string>} */ ((/**
+                                                                                                      * Narrows the runtime value to the documented type.
+                                                                                                       @type {?} */ (modelClass).getAttributeNameToColumnNameMap()))
   }
 
   const resourceConfig = typeof /**
- * Documents this API.
- * @type {?} */ (modelClass).resourceConfig === "function"
+                                 * Narrows the runtime value to the documented type.
+                                  @type {?} */ (modelClass).resourceConfig === "function"
     ? /**
- * Documents this API.
- * @type {?} */ (modelClass).resourceConfig()
+       * Narrows the runtime value to the documented type.
+        @type {?} */ (modelClass).resourceConfig()
     : {}
   const attributes = resourceConfig.attributes
   /**
- * Entries.
- * @type {Record<string, string>} */
+   * Entries.
+    @type {Record<string, string>} */
   const entries = {}
 
   if (Array.isArray(attributes)) {
@@ -677,8 +677,8 @@ function parseRansackKey(key) {
     return {
       pathValue,
       predicate: /**
- * Documents this API.
- * @type {RansackPredicate} */ (predicate)
+                  * Narrows the runtime value to the documented type.
+                   @type {RansackPredicate} */ (predicate)
     }
   }
 
@@ -696,8 +696,8 @@ function parseRansackKey(key) {
     return {
       pathValue,
       predicate: /**
- * Documents this API.
- * @type {RansackPredicate} */ (predicate)
+                  * Narrows the runtime value to the documented type.
+                   @type {RansackPredicate} */ (predicate)
     }
   }
 
@@ -760,11 +760,11 @@ function normalizeRansackListValue(value) {
 
 /**
  * Ransack true values.
- * @type {Set<?>} */
+  @type {Set<?>} */
 const ransackTrueValues = new Set([true, 1, "1", "true"])
 /**
  * Ransack false values.
- * @type {Set<?>} */
+  @type {Set<?>} */
 const ransackFalseValues = new Set([false, 0, "0", "false"])
 
 /**
@@ -825,8 +825,8 @@ export function parseRansackSort(modelClass, sortString) {
   const segments = sortString.split(",").map((segment) => segment.trim()).filter((segment) => segment.length > 0)
 
   /**
- * Sorts.
- * @type {RansackSort[]} */
+   * Sorts.
+    @type {RansackSort[]} */
   const sorts = []
 
   for (const segment of segments) {

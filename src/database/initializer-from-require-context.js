@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Documents this API.
+ * Defines this typedef.
  * @typedef {(id: string) => {default: typeof import("./record/index.js").default}} ModelClassRequireContextIDFunctionType
  * @typedef {ModelClassRequireContextIDFunctionType & {
  *   keys: () => string[],
@@ -14,7 +14,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousDatabaseInitializerFromRequireContext {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {ModelClassRequireContextType} args.requireContext - Require context.
    */
@@ -26,7 +26,7 @@ export default class VelociousDatabaseInitializerFromRequireContext {
   }
 
   /**
- * Runs initialize.
+   * Runs initialize.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @returns {Promise<void>} - Resolves when complete.

@@ -2,7 +2,7 @@
 
 /**
  * Named status aliases.
- * @type {Record<string, number>} */
+  @type {Record<string, number>} */
 const NAMED_STATUS_ALIASES = {
   "success": 200,
   "not-found": 404,
@@ -11,7 +11,7 @@ const NAMED_STATUS_ALIASES = {
 
 /**
  * Standard status messages.
- * @type {Record<number, string>} */
+  @type {Record<number, string>} */
 const STANDARD_STATUS_MESSAGES = {
   100: "Continue",
   101: "Switching Protocols",
@@ -79,22 +79,22 @@ const STANDARD_STATUS_MESSAGES = {
 
 export default class VelociousHttpServerClientResponse {
   /**
- * Body.
- * @type {string | Uint8Array | null} */
+   * Body.
+    @type {string | Uint8Array | null} */
   body = null
 
   /**
- * File path.
- * @type {string | null} */
+   * File path.
+    @type {string | null} */
   filePath = null
 
   /**
- * Headers.
- * @type {Record<string, string[]>} */
+   * Headers.
+    @type {Record<string, string[]>} */
   headers = {}
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
@@ -105,7 +105,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs add header.
+   * Runs add header.
    * @param {string} key - Key.
    * @param {string} value - Value to use.
    * @returns {void} - No return value.
@@ -119,7 +119,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs set header.
+   * Runs set header.
    * @param {string} key - Key.
    * @param {string} value - Value to use.
    * @returns {void} - No return value.
@@ -129,7 +129,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs get body.
+   * Runs get body.
    * @returns {string | Uint8Array | null} - The body.
    */
   getBody() {
@@ -141,7 +141,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs get status code.
+   * Runs get status code.
    * @returns {number} - The status code.
    */
   getStatusCode() {
@@ -149,7 +149,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs get status message.
+   * Runs get status message.
    * @returns {string} - The status message.
    */
   getStatusMessage() {
@@ -157,7 +157,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs set body.
+   * Runs set body.
    * @param {string | Uint8Array} value - Value to use.
    * @returns {void} - No return value.
    */
@@ -167,7 +167,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs get file path.
+   * Runs get file path.
    * @returns {string | null} - File path.
    */
   getFilePath() {
@@ -175,7 +175,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs set file path.
+   * Runs set file path.
    * @param {string} path - File path.
    * @returns {void} - No return value.
    */
@@ -185,7 +185,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs set error body.
+   * Runs set error body.
    * @param {Error} error - Error instance.
    * @returns {void} - No return value.
    */
@@ -200,7 +200,6 @@ export default class VelociousHttpServerClientResponse {
    * Numeric inputs in the standard 1xx-5xx range resolve their own
    * status messages from the IANA registry; aliases keep the
    * back-compatible code mapping.
-   *
    * @param {number | string} status - Status.
    * @returns {void} - No return value.
    */
@@ -217,7 +216,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs get request timeout ms.
+   * Runs get request timeout ms.
    * @returns {number | undefined} - Request timeout in seconds.
    */
   getRequestTimeoutMs() {
@@ -225,7 +224,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs set request timeout ms.
+   * Runs set request timeout ms.
    * @param {number | undefined | null} timeoutSeconds - Timeout in seconds.
    * @returns {void} - No return value.
    */
@@ -242,7 +241,7 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
- * Runs set request timeout ms change handler.
+   * Runs set request timeout ms change handler.
    * @param {(timeoutSeconds: number | undefined) => void} handler - Change handler.
    * @returns {void} - No return value.
    */

@@ -11,7 +11,7 @@ const MAX_BUFFERED_OUTGOING_EVENTS = 50
 
 /**
  * Buffer.
- * @type {BufferedOutgoingEvent[]} */
+  @type {BufferedOutgoingEvent[]} */
 let buffer = []
 
 /**
@@ -36,15 +36,16 @@ export function drainBufferedOutgoingEvents() {
 }
 
 /**
- * Documents this API.
- * @returns {void} */
+ * Runs the clearBufferedOutgoingEvents helper.
+  @returns {void} */
 export function clearBufferedOutgoingEvents() {
   buffer = []
 }
 
 /**
- * Documents this API.
- * @returns {number} - Current buffer size. */
+ * Runs the bufferedOutgoingEventCount helper.
+ * @returns {number} - Current buffer size.
+ */
 export function bufferedOutgoingEventCount() {
   return buffer.length
 }

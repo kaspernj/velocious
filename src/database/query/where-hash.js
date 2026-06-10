@@ -9,7 +9,7 @@ import WhereBase from "./where-base.js"
 
 export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    * @param {WhereHash} hash - Hash.
    */
@@ -20,7 +20,7 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   }
 
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {string} - SQL string.
    */
   toSql() {
@@ -33,7 +33,7 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   }
 
   /**
- * Runs where sqlfrom hash.
+   * Runs where sqlfrom hash.
    * @param {WhereHash} hash - Hash.
    * @param {string} [tableName] - Table name.
    * @param {number} index - Index value.

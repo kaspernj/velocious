@@ -9,11 +9,11 @@ import MailerDelivery from "./delivery.js"
 
 /**
  * Deliveries store.
- * @type {import("./index.js").MailerDeliveryPayload[]} */
+  @type {import("./index.js").MailerDeliveryPayload[]} */
 const deliveriesStore = []
 /**
  * Delivery handler.
- * @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} */
+  @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} */
 let deliveryHandler = null
 
 /**
@@ -37,7 +37,7 @@ function mailerDirectoryName(className) {
 }
 
 /**
- * Documents this API.
+ * Runs the inferActionName helper.
  * @param {typeof VelociousMailerBase} mailerClass - Mailer class.
  * @param {string} stack - Error stack.
  * @returns {string | null} - Inferred action name.
@@ -59,10 +59,10 @@ function inferActionName(mailerClass, stack) {
     if (frameActionName === "constructor") continue
     if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, frameActionName)) continue
     if (typeof /**
- * Documents this API.
- * @type {Record<string, ?>} */ (/**
- * Documents this API.
- * @type {?} */ (prototype))[frameActionName] !== "function") continue
+                * Narrows the runtime value to the documented type.
+                 @type {Record<string, ?>} */ (/**
+                                                * Narrows the runtime value to the documented type.
+                                                 @type {?} */ (prototype))[frameActionName] !== "function") continue
 
     actionName = frameActionName
   }
@@ -85,7 +85,7 @@ async function isTestingEnvironment() {
  */
 export class VelociousMailerBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} [args] - Constructor args.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration instance.
    */
@@ -97,7 +97,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs assign view.
+   * Runs assign view.
    * @param {Record<string, ?>} params - View params.
    * @returns {void} - No return value.
    */
@@ -106,7 +106,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs mail.
+   * Runs mail.
    * @param {object} args - Mail options.
    * @param {?} args.to - Recipient.
    * @param {string} args.subject - Subject line.
@@ -123,8 +123,8 @@ export class VelociousMailerBase {
     restArgsError(restArgs)
 
     const resolvedActionName = actionName || inferActionName(/**
- * Documents this API.
- * @type {typeof VelociousMailerBase} */ (this.constructor), new Error().stack || "")
+                                                              * Narrows the runtime value to the documented type.
+                                                               @type {typeof VelociousMailerBase} */ (this.constructor), new Error().stack || "")
 
     if (!resolvedActionName) {
       throw new Error(`Missing actionName for ${this.constructor.name}.mail()`)
@@ -142,7 +142,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs get configuration.
+   * Runs get configuration.
    * @returns {Promise<import("../configuration.js").default>} - Configuration instance.
    */
   async _getConfiguration() {
@@ -150,7 +150,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs get action name.
+   * Runs get action name.
    * @returns {string} - Action name.
    */
   _getActionName() {
@@ -162,7 +162,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs build payload sync.
+   * Runs build payload sync.
    * @param {string} html - Rendered HTML.
    * @returns {import("./index.js").MailerDeliveryPayload} - Delivery payload.
    */
@@ -196,7 +196,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs build payload.
+   * Runs build payload.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload>} - Delivery payload.
    */
   async _buildPayload() {
@@ -206,7 +206,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs render view.
+   * Runs render view.
    * @returns {Promise<string>} - Rendered HTML.
    */
   async _renderView() {
@@ -216,18 +216,18 @@ export class VelociousMailerBase {
     const fileName = viewFileName(actionName)
     const viewPath = `${configuration.getDirectory()}/src/mailers/${mailerDir}/${fileName}.ejs`
     const translate = (/**
- * Documents this API.
- * @type {string} */ msgID, /**
- * Documents this API.
- * @type {Record<string, ?> | undefined} */ args) => configuration.getTranslator()(msgID, args)
+                        * Narrows the runtime value to the documented type.
+                         @type {string} */ msgID, /**
+                                                   * Narrows the runtime value to the documented type.
+                                                    @type {Record<string, ?> | undefined} */ args) => configuration.getTranslator()(msgID, args)
     const viewParams = incorporate({mailer: this, _: translate}, this._viewParams)
 
     return await new Promise((resolve, reject) => {
       ejs.renderFile(viewPath, viewParams, {}, (err, str) => {
         if (err) {
           const errorCode = /**
- * Documents this API.
- * @type {{code?: string}} */ (err).code
+                             * Narrows the runtime value to the documented type.
+                              @type {{code?: string}} */ (err).code
 
           if (errorCode === "ENOENT") {
             reject(new Error(`Missing mailer view file: ${viewPath}`))
@@ -242,7 +242,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs deliver payload.
+   * Runs deliver payload.
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Handler result.
    */
@@ -251,7 +251,7 @@ export class VelociousMailerBase {
   }
 
   /**
- * Runs enqueue payload.
+   * Runs enqueue payload.
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
@@ -261,7 +261,7 @@ export class VelociousMailerBase {
 }
 
 /**
- * Documents this API.
+ * Runs the deliveries helper.
  * @returns {import("./index.js").MailerDeliveryPayload[]} - Delivered payloads.
  */
 export function deliveries() {
@@ -269,7 +269,7 @@ export function deliveries() {
 }
 
 /**
- * Documents this API.
+ * Runs the clearDeliveries helper.
  * @returns {void} - No return value.
  */
 export function clearDeliveries() {
@@ -277,7 +277,7 @@ export function clearDeliveries() {
 }
 
 /**
- * Documents this API.
+ * Runs the setDeliveryHandler helper.
  * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?} handler - Delivery handler.
  * @returns {void} - No return value.
  */
@@ -286,7 +286,7 @@ export function setDeliveryHandler(handler) {
 }
 
 /**
- * Documents this API.
+ * Runs the getDeliveryHandler helper.
  * @returns {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} - Handler or null.
  */
 export function getDeliveryHandler() {
@@ -294,7 +294,7 @@ export function getDeliveryHandler() {
 }
 
 /**
- * Documents this API.
+ * Runs the deliverPayload helper.
  * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
  * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Handler result.
  */
@@ -321,7 +321,7 @@ export async function deliverPayload(payload) {
 }
 
 /**
- * Documents this API.
+ * Runs the enqueuePayload helper.
  * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
  * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
  */

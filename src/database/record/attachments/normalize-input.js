@@ -56,8 +56,8 @@ function isArrayBuffer(value) {
  */
 function isArrayBufferLike(value) {
   return Boolean(value && typeof value === "object" && typeof /**
- * Documents this API.
- * @type {?} */ (value).arrayBuffer === "function")
+                                                               * Narrows the runtime value to the documented type.
+                                                                @type {?} */ (value).arrayBuffer === "function")
 }
 
 /**
@@ -82,14 +82,14 @@ function toBuffer(value) {
  */
 async function uploadedFileBuffer(uploadedFile, environmentHandler) {
   const memoryBuffer = /**
- * Documents this API.
- * @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
+                        * Narrows the runtime value to the documented type.
+                         @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
 
   if (Buffer.isBuffer(memoryBuffer)) return memoryBuffer
 
   const tempPath = /**
- * Documents this API.
- * @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
+                    * Narrows the runtime value to the documented type.
+                     @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
 
   if (typeof tempPath === "string" && tempPath.length > 0) {
     if (!environmentHandler || typeof environmentHandler.readAttachmentInputFile !== "function") {
@@ -126,16 +126,16 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
   const defaultFilename = args.defaultFilename || "attachment.bin"
   const environmentHandler = args.environmentHandler
   /**
- * Documents this API.
- * @type {Buffer} */
+   * Defines buffer.
+    @type {Buffer} */
   let buffer
   /**
- * Content type.
- * @type {string | null} */
+   * Content type.
+    @type {string | null} */
   let contentType = null
   /**
- * Documents this API.
- * @type {string | undefined} */
+   * Defines filename.
+    @type {string | undefined} */
   let filename
 
   if (input instanceof UploadedFile) {
@@ -175,22 +175,22 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
 
     buffer = Buffer.from(arrayBuffer)
     filename = typeof /**
- * Documents this API.
- * @type {?} */ (input).name === "string" && /**
- * Documents this API.
- * @type {?} */ (input).name.length > 0
+                       * Narrows the runtime value to the documented type.
+                        @type {?} */ (input).name === "string" && /**
+                                                                   * Narrows the runtime value to the documented type.
+                                                                    @type {?} */ (input).name.length > 0
       ? /**
- * Documents this API.
- * @type {?} */ (input).name
+         * Narrows the runtime value to the documented type.
+          @type {?} */ (input).name
       : defaultFilename
     contentType = typeof /**
- * Documents this API.
- * @type {?} */ (input).type === "string" && /**
- * Documents this API.
- * @type {?} */ (input).type.length > 0
+                          * Narrows the runtime value to the documented type.
+                           @type {?} */ (input).type === "string" && /**
+                                                                      * Narrows the runtime value to the documented type.
+                                                                       @type {?} */ (input).type.length > 0
       ? /**
- * Documents this API.
- * @type {?} */ (input).type
+         * Narrows the runtime value to the documented type.
+          @type {?} */ (input).type
       : null
   } else if (typeof input === "string" || Buffer.isBuffer(input) || isArrayBuffer(input) || isUint8Array(input)) {
     buffer = toBuffer(input)

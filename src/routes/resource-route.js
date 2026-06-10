@@ -9,7 +9,7 @@ import singularizeModelName from "../utils/singularize-model-name.js"
 
 class VelociousRouteResourceRoute extends BasicRoute {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -19,13 +19,13 @@ class VelociousRouteResourceRoute extends BasicRoute {
     this.name = name
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
     /**
- * Documents this API.
- * @type {Set<string>} */
+     * Narrows the runtime value to the documented type.
+      @type {Set<string>} */
     this.collectionRouteNames = new Set()
   }
 
   /**
- * Runs get.
+   * Runs get.
    * @param {string} name - Name.
    * @param {{on?: "member" | "collection"}} [options] - Route options for scope.
    */
@@ -46,7 +46,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
   }
 
   /**
- * Runs post.
+   * Runs post.
    * @param {string} name - Name.
    * @param {{on?: "member" | "collection"}} [options] - Route options for scope.
    */
@@ -76,7 +76,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
   }
 
   /**
- * Runs match with path.
+   * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
@@ -87,7 +87,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
+      const [_beginnigSlash, _matchedName, restPath] = match
 
       let action
       const controllerName = params.controller ? `${params.controller}/${this.name}` : this.name

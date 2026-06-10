@@ -4,19 +4,19 @@ import {isPlainObject} from "is-plain-object"
 
 /**
  * QueryDataEntry type.
- * @typedef {Object} QueryDataEntry
+ * @typedef {object} QueryDataEntry
  * @property {string[]} chain - Relationship chain from the root model to the model that declares the fn. Empty for a root-level entry.
  * @property {string} fnName - Identifier under which the fn is registered on the declaring model.
  */
 
 /**
- * Documents this API.
+ * Defines this typedef.
  * @typedef {string | Array<string | Record<string, ?>> | {[key: string]: true | false | string | string[] | Record<string, ?>}} QueryDataSpec
  */
 
 /**
  * QueryDataCallbackArgs type.
- * @typedef {Object} QueryDataCallbackArgs
+ * @typedef {object} QueryDataCallbackArgs
  * @property {string} attributeName - Name under which the fn was registered. Convenient when a fn is reused across aliases.
  * @property {import("../drivers/base.js").default} driver - Active database driver, for quoting helpers and type-specific SQL.
  * @property {typeof import("../record/index.js").default} modelClass - Model class the fn is registered on (the chain's target).
@@ -45,7 +45,6 @@ import {isPlainObject} from "is-plain-object"
  *   {projects: {tasks: ["transportSecondsSum", {timelogs: ["timeSecondsSum"]}]}}
  *     → [{chain: ["projects","tasks"], fnName: "transportSecondsSum"},
  *        {chain: ["projects","tasks","timelogs"], fnName: "timeSecondsSum"}]
- *
  * @param {QueryDataSpec} spec - User-supplied spec.
  * @param {string[]} [chain] - Current chain (internal recursion).
  * @returns {QueryDataEntry[]} - Flat list of entries.
@@ -59,8 +58,8 @@ export function normalizeQueryDataSpec(spec, chain = []) {
 
   if (Array.isArray(spec)) {
     /**
- * Entries.
- * @type {QueryDataEntry[]} */
+     * Entries.
+      @type {QueryDataEntry[]} */
     const entries = []
 
     for (const item of spec) {
@@ -71,8 +70,8 @@ export function normalizeQueryDataSpec(spec, chain = []) {
 
       if (isPlainObject(item)) {
         for (const nested of normalizeQueryDataSpec(/**
- * Documents this API.
- * @type {?} */ (item), chain)) {
+                                                     * Narrows the runtime value to the documented type.
+                                                      @type {?} */ (item), chain)) {
           entries.push(nested)
         }
         continue
@@ -86,8 +85,8 @@ export function normalizeQueryDataSpec(spec, chain = []) {
 
   if (isPlainObject(spec)) {
     /**
- * Entries.
- * @type {QueryDataEntry[]} */
+     * Entries.
+      @type {QueryDataEntry[]} */
     const entries = []
 
     for (const [key, value] of Object.entries(spec)) {
@@ -100,8 +99,8 @@ export function normalizeQueryDataSpec(spec, chain = []) {
 
       if (typeof value === "string" || Array.isArray(value) || isPlainObject(value)) {
         for (const nested of normalizeQueryDataSpec(/**
- * Documents this API.
- * @type {?} */ (value), [...chain, key])) {
+                                                     * Narrows the runtime value to the documented type.
+                                                      @type {?} */ (value), [...chain, key])) {
           entries.push(nested)
         }
         continue
@@ -121,7 +120,6 @@ export function normalizeQueryDataSpec(spec, chain = []) {
  * `["projects", "tasks"]` → `{projects: {tasks: true}}`. Used internally so
  * the runner can reuse the existing `joins` path-registration machinery
  * (JoinTracker, alias generation, scope application).
- *
  * @param {string[]} chain - Relationship chain.
  * @returns {true | Record<string, ?>} - Nested join descriptor, or `true` when the chain is empty.
  */
@@ -129,8 +127,8 @@ function buildNestedJoinDescriptor(chain) {
   if (chain.length === 0) return true
 
   /**
- * Obj.
- * @type {Record<string, ?>} */
+   * Obj.
+    @type {Record<string, ?>} */
   const obj = {}
   let cursor = obj
 
@@ -150,7 +148,6 @@ function buildNestedJoinDescriptor(chain) {
  * Walk a relationship chain from the root model and return the model
  * class at its tail. Throws with a clear message when any segment is
  * unknown.
- *
  * @param {typeof import("../record/index.js").default} rootModelClass - Root model class.
  * @param {string[]} chain - Relationship chain.
  * @returns {typeof import("../record/index.js").default} - Target model class.
@@ -186,7 +183,6 @@ function resolveTargetModelClass(rootModelClass, chain) {
  *
  * Mirrors the shape of `runWithCount`: one query per entry, a separate
  * storage map on the record, never touches `_attributes`.
- *
  * @param {object} args - Options.
  * @param {typeof import("../record/index.js").default} args.rootModelClass - Root model class.
  * @param {import("../record/index.js").default[]} args.rootModels - Loaded root records.
@@ -198,8 +194,8 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
 
   const primaryKey = rootModelClass.primaryKey()
   const rootIds = rootModels.map((model) => /**
- * Documents this API.
- * @type {string | number} */ (model.readColumn(primaryKey)))
+                                             * Narrows the runtime value to the documented type.
+                                              @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     await runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels})
@@ -242,8 +238,8 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   const rootPkSql = `${driver.quoteTable(rootTable)}.${driver.quoteColumn(primaryKey)}`
 
   /**
- * Root where.
- * @type {Record<string, ?>} */
+   * Root where.
+    @type {Record<string, ?>} */
   const rootWhere = {}
   rootWhere[primaryKey] = rootIds
   query.where(rootWhere)
@@ -275,8 +271,8 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   })
 
   const rows = /**
- * Documents this API.
- * @type {Array<Record<string, ?>>} */ (await query._executeQuery())
+                * Narrows the runtime value to the documented type.
+                 @type {Array<Record<string, ?>>} */ (await query._executeQuery())
   const byParent = new Map()
 
   for (const row of rows) {
@@ -289,8 +285,8 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
 
   for (const model of rootModels) {
     const modelId = /**
- * Documents this API.
- * @type {string | number} */ (model.readColumn(primaryKey))
+                     * Narrows the runtime value to the documented type.
+                      @type {string | number} */ (model.readColumn(primaryKey))
     // Driver-type tolerance: MySQL can return PKs as strings even when
     // the column is numeric. Fall back to a string lookup so results
     // still land on the right model.

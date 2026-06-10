@@ -8,7 +8,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousHttpServerClientRequest {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("./index.js").default} args.client - Client instance.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
@@ -24,14 +24,14 @@ export default class VelociousHttpServerClientRequest {
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
 
   /**
- * Runs feed.
+   * Runs feed.
    * @param {Buffer} data - Data payload.
    * @returns {Buffer | undefined} - Remaining data, if any.
    */
   feed(data) { return this.requestParser.feed(data) }
 
   /**
- * Runs header.
+   * Runs header.
    * @param {string} headerName - Header name.
    * @returns {string | null} - The header.
    */
@@ -41,7 +41,7 @@ export default class VelociousHttpServerClientRequest {
   httpVersion() { return this.requestParser.getHttpVersion() }
   host() { return this.requestParser.getHost() }
   /**
- * Runs metadata.
+   * Runs metadata.
    * @param {string} [key] - Metadata key.
    * @returns {?} - Metadata value for a key, or the full metadata object.
    */
@@ -70,14 +70,16 @@ export default class VelociousHttpServerClientRequest {
   origin() { return this.header("origin") }
   path() { return this.requestParser.getPath() }
   /**
- * Runs params.
- * @returns {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} - The request params. */
+   * Runs params.
+   * @returns {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} - The request params.
+   */
   params() { return digg(this, "requestParser", "params") }
   port() { return this.requestParser.getPort() }
 
   /**
- * Runs query params.
- * @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
+   * Runs query params.
+   * @returns {Record<string, string | string[]>} - Parsed query parameters from the URL.
+   */
   queryParams() {
     const query = this.path().split("?")[1]
 
@@ -85,8 +87,8 @@ export default class VelociousHttpServerClientRequest {
 
     const parsed = querystring.parse(query)
     /**
- * Params.
- * @type {Record<string, string | string[]>} */
+     * Params.
+      @type {Record<string, string | string[]>} */
     const params = Object.create(null)
 
     for (const [key, value] of Object.entries(parsed)) {

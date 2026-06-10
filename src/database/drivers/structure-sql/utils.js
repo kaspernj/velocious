@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Documents this API.
+ * Runs the normalizeSqlStatement helper.
  * @param {string} statement - Statement.
  * @returns {string} - SQL string.
  */
@@ -16,7 +16,7 @@ export function normalizeSqlStatement(statement) {
 }
 
 /**
- * Documents this API.
+ * Runs the normalizeCreateStatement helper.
  * @param {object} args - Options object.
  * @param {import("../base.js").default} args.db - Database connection.
  * @param {string} args.objectName - Object name.

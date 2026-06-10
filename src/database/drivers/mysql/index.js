@@ -31,7 +31,7 @@ const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
 
 export default class VelociousDatabaseDriversMysql extends Base{
   /**
- * Runs connect.
+   * Runs connect.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async connect() {
@@ -40,14 +40,15 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * On pool error.
- * @param {Error} error - Error from the connection attempt. */
+   * On pool error.
+   * @param {Error} error - Error from the connection attempt.
+   */
   onPoolError = (error) => {
     console.error("Velocious / MySQL driver / Pool error", error)
   }
 
   /**
- * Runs close.
+   * Runs close.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async close() {
@@ -56,7 +57,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs set connection checkout name.
+   * Runs set connection checkout name.
    * @param {string | undefined} name - Human-readable name for this active checkout.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -66,15 +67,16 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs clear connection checkout name.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs clear connection checkout name.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async clearConnectionCheckoutName() {
     await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false})
     await super.clearConnectionCheckoutName()
   }
 
   /**
- * Runs connect args.
+   * Runs connect args.
    * @returns {Record<string, ?>} - The connect args.
    */
   connectArgs() {
@@ -82,8 +84,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
     const forward = ["database", "host", "password"]
 
     /**
- * Connect args.
- * @type {Record<string, ?>} */
+     * Connect args.
+      @type {Record<string, ?>} */
     const connectArgs = {charset: "utf8mb4"}
 
     for (const forwardValue of forward) {
@@ -97,7 +99,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs alter table sqls.
+   * Runs alter table sqls.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -109,7 +111,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs create database sql.
+   * Runs create database sql.
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifNotExists] - Whether if not exists.
@@ -123,7 +125,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs drop database sql.
+   * Runs drop database sql.
    * @param {string} databaseName - Database name.
    * @param {object} [args] - Options object.
    * @param {boolean} [args.ifExists] - Whether if exists.
@@ -137,7 +139,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs create index sqls.
+   * Runs create index sqls.
    * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -149,7 +151,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs create table sql.
+   * Runs create table sql.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -161,7 +163,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs current database.
+   * Runs current database.
    * @returns {Promise<string>} - Resolves with the current database.
    */
   async currentDatabase() {
@@ -171,7 +173,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs disable foreign keys.
+   * Runs disable foreign keys.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async disableForeignKeys() {
@@ -179,7 +181,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs enable foreign keys.
+   * Runs enable foreign keys.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async enableForeignKeys() {
@@ -187,7 +189,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs drop table sqls.
+   * Runs drop table sqls.
    * @param {string} tableName - Table name.
    * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
@@ -200,26 +202,26 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs get type.
+   * Runs get type.
    * @returns {string} - The type.
    */
   getType() { return "mysql" }
 
   /**
- * Runs primary key type.
+   * Runs primary key type.
    * @returns {string} - The primary key type.
    */
   primaryKeyType() { return "bigint" }
 
   /**
- * Runs retryable database error.
+   * Runs retryable database error.
    * @param {Error} error - Error instance.
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
     const errorCode = /**
- * Documents this API.
- * @type {?} */ (error).code
+                       * Narrows the runtime value to the documented type.
+                        @type {?} */ (error).code
     const message = error.message || ""
     const shouldRetry = (
       errorCode == "ECONNREFUSED" ||
@@ -237,7 +239,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs query actual.
+   * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
@@ -258,21 +260,21 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs query to sql.
+   * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
    */
   queryToSql(query) { return new QueryParser({query}).toSql() }
 
   /**
- * Runs should set auto increment when primary key.
+   * Runs should set auto increment when primary key.
    * @returns {boolean} - Whether set auto increment when primary key.
    */
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
- * Runs escape.
+   * Runs escape.
    * @param {?} value - Value to use.
    * @returns {?} - The escape.
    */
@@ -285,7 +287,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs quote.
+   * Runs quote.
    * @param {string} value - Value to use.
    * @returns {string} - The quote.
    */
@@ -298,7 +300,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs delete sql.
+   * Runs delete sql.
    * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -309,7 +311,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs insert sql.
+   * Runs insert sql.
    * @abstract
    * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
@@ -322,7 +324,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs get tables.
+   * Runs get tables.
    * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
    */
   async getTables() {
@@ -332,8 +334,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
       for (const row of result) {
         const table = new Table(this, /**
- * Documents this API.
- * @type {Record<string, string>} */ (row))
+                                       * Narrows the runtime value to the documented type.
+                                        @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }
@@ -343,7 +345,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs structure sql.
+   * Runs structure sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
@@ -351,7 +353,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs last insert id.
+   * Runs last insert id.
    * @returns {Promise<number>} - Resolves with the last insert id.
    */
   async lastInsertID() {
@@ -361,7 +363,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs options.
+   * Runs options.
    * @returns {Options} - The options options.
    */
   options() {
@@ -371,7 +373,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs start transaction action.
+   * Runs start transaction action.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _startTransactionAction() {
@@ -379,7 +381,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs update sql.
+   * Runs update sql.
    * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -390,7 +392,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs upsert sql.
+   * Runs upsert sql.
    * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
@@ -411,7 +413,6 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * and MariaDB the "indefinite" case is encoded as a large positive
    * timeout (one year), which is comfortably longer than any
    * realistic critical section and works on every supported version.
-   *
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks for `MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS`.
    * @returns {Promise<boolean>} - True if acquired, false if the timeout elapsed.
@@ -431,7 +432,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs try acquire advisory lock.
+   * Runs try acquire advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
@@ -447,7 +448,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs release advisory lock.
+   * Runs release advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
@@ -459,7 +460,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
- * Runs is advisory lock held.
+   * Runs is advisory lock held.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any session currently holds the lock.
    */

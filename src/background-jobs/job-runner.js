@@ -64,8 +64,8 @@ export default async function runJobPayload(payload) {
   const JobClass = registry.getJobByName(payload.jobName)
   const jobInstance = new JobClass()
   /**
- * Perform.
- * @type {(...args: Array<?>) => Promise<void>} */
+   * Perform.
+    @type {(...args: Array<?>) => Promise<void>} */
   const perform = jobInstance.perform
 
   try {

@@ -8,7 +8,7 @@ import {deliverPayload} from "../mailer.js"
  */
 export default class MailDeliveryJob extends VelociousJob {
   /**
- * Runs perform.
+   * Runs perform.
    * @param {import("../mailer.js").MailerDeliveryPayload} [payload] - Mail delivery payload.
    * @returns {Promise<void>} - Resolves when complete.
    */

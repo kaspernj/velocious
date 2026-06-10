@@ -5,20 +5,20 @@
  */
 export default class MailerDelivery {
   /**
- * Documents this API.
- * @type {import("./base.js").VelociousMailerBase} */
+   * Narrows the runtime value to the documented type.
+    @type {import("./base.js").VelociousMailerBase} */
   mailer
   /**
- * Documents this API.
- * @type {Promise<?>} */
+   * Narrows the runtime value to the documented type.
+    @type {Promise<?>} */
   actionPromise
   /**
- * Documents this API.
- * @type {string} */
+   * Narrows the runtime value to the documented type.
+    @type {string} */
   actionName
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {import("./base.js").VelociousMailerBase} args.mailer - Mailer instance.
    * @param {Promise<?>} args.actionPromise - Action promise.
@@ -31,17 +31,17 @@ export default class MailerDelivery {
   }
 
   /**
- * Runs build payload.
+   * Runs build payload.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload>} - Rendered mailer payload.
    */
   async buildPayload() {
     await this.actionPromise
 
-    return /** Documents this API. @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+    return /** Narrows the runtime value to the documented type. @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
   }
 
   /**
- * Runs deliver now.
+   * Runs deliver now.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Delivered payload or handler result.
    */
   async deliverNow() {
@@ -51,7 +51,7 @@ export default class MailerDelivery {
   }
 
   /**
- * Runs deliver later.
+   * Runs deliver later.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLater() {
@@ -61,7 +61,7 @@ export default class MailerDelivery {
   }
 
   /**
- * Runs deliver laver.
+   * Runs deliver laver.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLaver() {

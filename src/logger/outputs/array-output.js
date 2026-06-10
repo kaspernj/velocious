@@ -2,22 +2,22 @@
 
 /**
  * LoggingOutputPayload type.
- * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+  @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 /** Logger array output. */
 export default class LoggerArrayOutput {
   _limit = 2000
   /**
- * Levels.
- * @type {import("../../configuration-types.js").LogLevel[]} */
+   * Levels.
+    @type {import("../../configuration-types.js").LogLevel[]} */
   levels = ["debug", "info", "warn", "error"]
   /**
- * Logs.
- * @type {LoggingOutputPayload[]} */
+   * Logs.
+    @type {LoggingOutputPayload[]} */
   _logs = []
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} [args] - Options object.
    * @param {number} [args.limit] - Max number of log entries to keep.
    */
@@ -27,8 +27,9 @@ export default class LoggerArrayOutput {
   }
 
   /**
- * Runs write.
- * @param {LoggingOutputPayload} payload - Log payload. */
+   * Runs write.
+   * @param {LoggingOutputPayload} payload - Log payload.
+   */
   async write({level, message, subject, timestamp}) {
     if (this._limit <= 0) return
 
@@ -40,8 +41,9 @@ export default class LoggerArrayOutput {
   }
 
   /**
- * Runs get logs.
- * @returns {LoggingOutputPayload[]} - Stored log entries. */
+   * Runs get logs.
+   * @returns {LoggingOutputPayload[]} - Stored log entries.
+   */
   getLogs() {
     return this._logs.slice()
   }

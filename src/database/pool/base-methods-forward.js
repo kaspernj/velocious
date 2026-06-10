@@ -29,19 +29,19 @@ export default function baseMethodsForward(PoolBase) {
   ]
 
   const prototype = /**
- * Documents this API.
- * @type {Record<string, (...args: Array<?>) => ?>} */ (/**
- * Documents this API.
- * @type {?} */ (PoolBase.prototype))
+                     * Narrows the runtime value to the documented type.
+                      @type {Record<string, (...args: Array<?>) => ?>} */ (/**
+                                                                            * Narrows the runtime value to the documented type.
+                                                                             @type {?} */ (PoolBase.prototype))
 
   for (const forwardMethod of forwardMethods) {
     prototype[forwardMethod] = function(...args) {
       const connection = this.getCurrentConnection()
       const connectionRecord = /**
- * Documents this API.
- * @type {Record<string, (...args: Array<?>) => ?>} */ (/**
- * Documents this API.
- * @type {?} */ (connection))
+                                * Narrows the runtime value to the documented type.
+                                 @type {Record<string, (...args: Array<?>) => ?>} */ (/**
+                                                                                       * Narrows the runtime value to the documented type.
+                                                                                        @type {?} */ (connection))
       const connectionMethod = connectionRecord[forwardMethod]
 
       if (!connectionMethod) throw new Error(`${forwardMethod} isn't defined on driver`)

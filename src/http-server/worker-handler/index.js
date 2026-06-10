@@ -36,7 +36,7 @@ function summarizeWorkerMessage(data) {
 
 export default class VelociousHttpServerWorker {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {number} args.workerCount - Worker count.
@@ -45,8 +45,8 @@ export default class VelociousHttpServerWorker {
     this.configuration = configuration
 
     /**
- * Documents this API.
- * @type {Record<number, import("../server-client.js").default>} */
+     * Narrows the runtime value to the documented type.
+      @type {Record<number, import("../server-client.js").default>} */
     this.clients = {}
 
     this.logger = new Logger(this)
@@ -55,8 +55,8 @@ export default class VelociousHttpServerWorker {
     this._stopping = false
     this._debugRequestId = 0
     /**
- * Documents this API.
- * @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
+     * Narrows the runtime value to the documented type.
+      @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
     this._debugSnapshotRequests = new Map()
   }
 
@@ -86,7 +86,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs add socket connection.
+   * Runs add socket connection.
    * @param {import("../server-client.js").default} client - Client instance.
    * @returns {void} - No return value.
    */
@@ -103,7 +103,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * On worker error.
+   * On worker error.
    * @param {?} error - Error instance.
    */
   onWorkerError = (error) => {
@@ -113,7 +113,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * On worker exit.
+   * On worker exit.
    * @param {number} code - Code.
    * @returns {void} - No return value.
    */
@@ -137,7 +137,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs close all clients.
+   * Runs close all clients.
    * @returns {void} - No return value.
    */
   _closeAllClients() {
@@ -154,7 +154,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * On worker message.
+   * On worker message.
    * @param {object} data - Data payload.
    * @param {string} data.command - Command.
    * @param {number} [data.clientCount] - Client count.
@@ -257,8 +257,9 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs get debug snapshot.
- * @returns {Promise<Record<string, ?>>} - Worker-local debug snapshot. */
+   * Runs get debug snapshot.
+   * @returns {Promise<Record<string, ?>>} - Worker-local debug snapshot.
+   */
   getDebugSnapshot() {
     if (!this.workerStarted || !this.worker) {
       return Promise.resolve({active: false, workerCount: this.workerCount})
@@ -293,7 +294,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs stop.
+   * Runs stop.
    * @returns {Promise<void>} - Resolves when stopped.
    */
   stop() {
@@ -314,7 +315,7 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs dispatch websocket event.
+   * Runs dispatch websocket event.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {string} [args.createdAt] - Event creation time.
@@ -349,8 +350,8 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs register with events host.
- * @returns {void} */
+   * Runs register with events host.
+    @returns {void} */
   registerWithEventsHost() {
     if (this.unregisterFromEventsHost) return
 
@@ -358,8 +359,8 @@ export default class VelociousHttpServerWorker {
   }
 
   /**
- * Runs unregister from events host if needed.
- * @returns {void} */
+   * Runs unregister from events host if needed.
+    @returns {void} */
   unregisterFromEventsHostIfNeeded() {
     if (!this.unregisterFromEventsHost) return
 

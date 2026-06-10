@@ -10,7 +10,7 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
@@ -18,20 +18,20 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
   }
 
   /**
- * Runs build.
+   * Runs build.
    * @param {Record<string, ?>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
     const TargetModelClass = /**
- * Documents this API.
- * @type {TMC} */ (this.getTargetModelClass())
+                              * Narrows the runtime value to the documented type.
+                               @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model")
 
     const newInstance = /**
- * Documents this API.
- * @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+                         * Narrows the runtime value to the documented type.
+                          @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -59,8 +59,8 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     const primaryKey = TargetModelClass.primaryKey()
     /**
- * Where args.
- * @type {Record<string, string | number | null | undefined>} */
+     * Where args.
+      @type {Record<string, string | number | null | undefined>} */
     const whereArgs = {}
 
     whereArgs[primaryKey] = foreignModelID

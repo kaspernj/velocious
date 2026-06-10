@@ -7,28 +7,28 @@ import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js
 
 /**
  * FrontendModelClass type.
- * @typedef {typeof import("./base.js").default} FrontendModelClass */
+  @typedef {typeof import("./base.js").default} FrontendModelClass */
 /**
  * FrontendModelInstance type.
- * @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
+  @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
 /**
  * FrontendModelClassEventName type.
- * @typedef {"create" | "update" | "destroy"} FrontendModelClassEventName */
+  @typedef {"create" | "update" | "destroy"} FrontendModelClassEventName */
 /**
- * Documents this API.
- * @typedef {{id: string, model: FrontendModelInstance}} FrontendModelCreateUpdateEventPayload */
+ * Defines this typedef.
+  @typedef {{id: string, model: FrontendModelInstance}} FrontendModelCreateUpdateEventPayload */
 /**
- * Documents this API.
- * @typedef {{id: string}} FrontendModelDestroyEventPayload */
+ * Defines this typedef.
+  @typedef {{id: string}} FrontendModelDestroyEventPayload */
 /**
  * FrontendModelClassEventPayload type.
- * @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
+  @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
 /**
  * FrontendModelClassEventCallback type.
- * @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
+  @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
 /**
- * Documents this API.
- * @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelEventOptionsObject} UseModelClassEventOptions */
+ * Defines this typedef.
+  @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelEventOptionsObject} UseModelClassEventOptions */
 
 /**
  * Runs assert no unknown options.
@@ -112,8 +112,8 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
   const eventsKey = eventNamesDependencyKey(eventNames)
   const eventCallback = useMemo(() => {
     const wrappedCallback = (/**
- * Documents this API.
- * @type {FrontendModelClassEventPayload} */ payload) => {
+                              * Narrows the runtime value to the documented type.
+                               @type {FrontendModelClassEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -128,12 +128,12 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
 
     let closed = false
     /**
- * Unsubscribe callbacks.
- * @type {Array<() => void>} */
+     * Unsubscribe callbacks.
+      @type {Array<() => void>} */
     const unsubscribeCallbacks = []
     const subscriptionCallback = (/**
- * Documents this API.
- * @type {FrontendModelClassEventPayload} */ payload) => {
+                                   * Narrows the runtime value to the documented type.
+                                    @type {FrontendModelClassEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

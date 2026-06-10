@@ -3,13 +3,13 @@
 import {AsyncLocalStorage} from "node:async_hooks"
 
 /**
- * Documents this API.
- * @type {import("node:async_hooks").AsyncLocalStorage<string[]> | undefined} */
+ * Defines asyncLocalStorage.
+  @type {import("node:async_hooks").AsyncLocalStorage<string[]> | undefined} */
 let asyncLocalStorage
 
 /**
  * Database annotations global.
- * @type {typeof globalThis & {velociousDatabaseAnnotations?: {getDatabaseAnnotations: () => string[], withDatabaseAnnotation: (annotation: string, callback: () => Promise<?>) => Promise<?>}}} */
+  @type {typeof globalThis & {velociousDatabaseAnnotations?: {getDatabaseAnnotations: () => string[], withDatabaseAnnotation: (annotation: string, callback: () => Promise<?>) => Promise<?>}}} */
 const databaseAnnotationsGlobal = globalThis
 
 if (AsyncLocalStorage) {
@@ -18,7 +18,8 @@ if (AsyncLocalStorage) {
 
 /**
  * Runs get database annotations.
- * @returns {string[]} - Active database annotations for the current async context. */
+ * @returns {string[]} - Active database annotations for the current async context.
+ */
 function getDatabaseAnnotations() {
   return asyncLocalStorage?.getStore() || []
 }

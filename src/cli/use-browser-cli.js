@@ -5,7 +5,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 /**
  * Shared.
- * @type {{browserCli?: BrowserCli}} */
+  @type {{browserCli?: BrowserCli}} */
 const shared = {}
 
 /**

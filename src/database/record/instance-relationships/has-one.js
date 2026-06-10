@@ -10,7 +10,7 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
@@ -18,25 +18,25 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   }
 
   /**
- * Loaded.
- * @type {InstanceType<TMC> | undefined} */
+   * Loaded.
+    @type {InstanceType<TMC> | undefined} */
   _loaded = undefined
 
   /**
- * Runs build.
+   * Runs build.
    * @param {Record<string, ?>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
     const TargetModelClass = /**
- * Documents this API.
- * @type {TMC} */ (this.getTargetModelClass())
+                              * Narrows the runtime value to the documented type.
+                               @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
 
     const newInstance = /**
- * Documents this API.
- * @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+                         * Narrows the runtime value to the documented type.
+                          @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -57,17 +57,17 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = /**
- * Documents this API.
- * @type {string | number} */ (this.getModel().readColumn(primaryKey))
+                            * Narrows the runtime value to the documented type.
+                             @type {string | number} */ (this.getModel().readColumn(primaryKey))
     const TargetModelClass = /**
- * Documents this API.
- * @type {TMC} */ (this.getTargetModelClass())
+                              * Narrows the runtime value to the documented type.
+                               @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't load without a target model class")
 
     /**
- * Where args.
- * @type {Record<string, string | number>} */
+     * Where args.
+      @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = primaryModelID
@@ -90,7 +90,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   }
 
   /**
- * Runs loaded.
+   * Runs loaded.
    * @returns {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} The loaded model or models (depending on relationship type)
    */
   loaded() {
@@ -104,13 +104,14 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   getLoadedOrUndefined() { return this._loaded }
 
   /**
- * Runs set loaded.
- * @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s). */
+   * Runs set loaded.
+   * @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s).
+   */
   setLoaded(model) {
     if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
 
     this._loaded = model
   }
 
-  getTargetModelClass() { return /** Documents this API. @type {TMC | undefined} */ (this.relationship.getTargetModelClass()) }
+  getTargetModelClass() { return /** Narrows the runtime value to the documented type. @type {TMC | undefined} */ (this.relationship.getTargetModelClass()) }
 }

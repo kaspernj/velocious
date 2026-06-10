@@ -3,7 +3,7 @@
 /** Framework error with optional client-safe message exposure flag. */
 export default class VelociousError extends Error {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {string} message - Error message.
    * @param {object} [args] - Options.
    * @param {?} [args.cause] - Error cause.
@@ -21,7 +21,7 @@ export default class VelociousError extends Error {
   }
 
   /**
- * Runs safe.
+   * Runs safe.
    * @param {string} message - Error message.
    * @param {object} [args] - Options.
    * @param {?} [args.cause] - Error cause.

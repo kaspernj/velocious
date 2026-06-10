@@ -4,7 +4,7 @@ import {normalizeSqlStatement} from "../structure-sql/utils.js"
 
 export default class VelociousDatabaseDriversPgsqlStructureSql {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    */
@@ -13,7 +13,7 @@ export default class VelociousDatabaseDriversPgsqlStructureSql {
   }
 
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
@@ -78,7 +78,7 @@ export default class VelociousDatabaseDriversPgsqlStructureSql {
   }
 
   /**
- * Runs column definition.
+   * Runs column definition.
    * @param {Record<string, ?>} column - Column.
    * @returns {string | null} - The column definition.
    */

@@ -55,8 +55,8 @@ export default class VelociousHttpServerLock {
       await fs.mkdir(this.lockPath)
     } catch (error) {
       if (/**
- * Documents this API.
- * @type {{code?: string}} */ (error).code === "EEXIST") return false
+           * Narrows the runtime value to the documented type.
+            @type {{code?: string}} */ (error).code === "EEXIST") return false
       throw error
     }
 
@@ -106,12 +106,12 @@ export default class VelociousHttpServerLock {
     if (!this.isLocalProcessOwner(owner)) return false
 
     return this.processIsDead(/**
- * Documents this API.
- * @type {{pid: number}} */ (owner).pid)
+                               * Narrows the runtime value to the documented type.
+                                @type {{pid: number}} */ (owner).pid)
   }
 
   /**
- * Runs is local process owner.
+   * Runs is local process owner.
    * @param {Record<string, ?> | null} owner - Existing lock owner metadata.
    * @returns {boolean} - Whether owner metadata names a local process.
    */
@@ -123,7 +123,7 @@ export default class VelociousHttpServerLock {
   }
 
   /**
- * Runs owner hostname matches.
+   * Runs owner hostname matches.
    * @param {Record<string, ?>} owner - Existing lock owner metadata.
    * @returns {boolean} - Whether the owner hostname is local or absent.
    */
@@ -135,7 +135,7 @@ export default class VelociousHttpServerLock {
   }
 
   /**
- * Runs process is dead.
+   * Runs process is dead.
    * @param {number} pid - Process id.
    * @returns {boolean} - Whether the process no longer exists.
    */
@@ -145,7 +145,7 @@ export default class VelociousHttpServerLock {
 
       return false
     } catch (error) {
-      return /** Documents this API. @type {{code?: string}} */ (error).code === "ESRCH"
+      return /** Narrows the runtime value to the documented type. @type {{code?: string}} */ (error).code === "ESRCH"
     }
   }
 
@@ -157,7 +157,7 @@ export default class VelociousHttpServerLock {
     try {
       const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
 
-      return /** Documents this API. @type {Record<string, ?>} */ (JSON.parse(rawOwner))
+      return /** Narrows the runtime value to the documented type. @type {Record<string, ?>} */ (JSON.parse(rawOwner))
     } catch {
       return null
     }

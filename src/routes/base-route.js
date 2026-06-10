@@ -2,61 +2,65 @@
 
 export default class VelociousBaseRoute {
   /**
- * Documents this API.
- * @type {typeof import("./get-route.js").default} */
+   * Narrows the runtime value to the documented type.
+    @type {typeof import("./get-route.js").default} */
   static GetRouteType
 
   /**
- * Documents this API.
- * @type {typeof import("./namespace-route.js").default} */
+   * Narrows the runtime value to the documented type.
+    @type {typeof import("./namespace-route.js").default} */
   static NameSpaceRouteType
 
   /**
- * Documents this API.
- * @type {typeof import("./post-route.js").default} */
+   * Narrows the runtime value to the documented type.
+    @type {typeof import("./post-route.js").default} */
   static PostRouteType
 
   /**
- * Documents this API.
- * @type {typeof import("./resource-route.js").default} */
+   * Narrows the runtime value to the documented type.
+    @type {typeof import("./resource-route.js").default} */
   static ResourceRouteType
 
   /**
- * Runs register route get type.
- * @param {typeof import("./get-route.js").default} RouteClass - Route class to register. */
+   * Runs register route get type.
+   * @param {typeof import("./get-route.js").default} RouteClass - Route class to register.
+   */
   static registerRouteGetType(RouteClass) {
     this.GetRouteType = RouteClass
   }
 
   /**
- * Runs register route namespace type.
- * @param {typeof import("./namespace-route.js").default} RouteClass - Route class to register. */
+   * Runs register route namespace type.
+   * @param {typeof import("./namespace-route.js").default} RouteClass - Route class to register.
+   */
   static registerRouteNamespaceType(RouteClass) {
     this.NameSpaceRouteType = RouteClass
   }
 
   /**
- * Runs register route post type.
- * @param {typeof import("./post-route.js").default} RouteClass - Route class to register. */
+   * Runs register route post type.
+   * @param {typeof import("./post-route.js").default} RouteClass - Route class to register.
+   */
   static registerRoutePostType(RouteClass) {
     this.PostRouteType = RouteClass
   }
 
   /**
- * Runs register route resource type.
- * @param {typeof import("./resource-route.js").default} RouteClass - Route class to register. */
+   * Runs register route resource type.
+   * @param {typeof import("./resource-route.js").default} RouteClass - Route class to register.
+   */
   static registerRouteResourceType(RouteClass) {
     this.ResourceRouteType = RouteClass
   }
 
   /**
- * Routes.
- * @type {Array<VelociousBaseRoute>} */
+   * Routes.
+    @type {Array<VelociousBaseRoute>} */
   routes = []
 
   /**
- * Mounts.
- * @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
+   * Mounts.
+    @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
   mounts = []
 
   constructor() {
@@ -64,31 +68,33 @@ export default class VelociousBaseRoute {
   }
 
   /**
- * Runs get mounts.
- * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} - Mounts declared on this route. */
+   * Runs get mounts.
+   * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} - Mounts declared on this route.
+   */
   getMounts() { return this.mounts }
 
   /**
- * Runs get.
+   * Runs get.
    * @abstract
    * @param {string} name - Name.
    */
   get(name) { throw new Error("'get' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
- * Runs get human paths.
+   * Runs get human paths.
    * @abstract
    * @returns {Array<{action: string | null, method: string, path: string}>} - Route definitions for this resource.
    */
   getHumanPaths() { throw new Error(`'getHumanPaths' not implemented for ${this.constructor.name}`) }
 
   /**
- * Runs get sub routes.
- * @returns {Array<VelociousBaseRoute>} - The sub routes.  */
+   * Runs get sub routes.
+   * @returns {Array<VelociousBaseRoute>} - The sub routes.
+   */
   getSubRoutes() { return this.routes }
 
   /**
- * Runs match with path.
+   * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
@@ -100,7 +106,7 @@ export default class VelociousBaseRoute {
   }
 
   /**
- * Runs namespace.
+   * Runs namespace.
    * @abstract
    * @param {string} name - Name.
    * @param {function(import("./namespace-route.js").default) : void} callback - Callback function.
@@ -109,7 +115,7 @@ export default class VelociousBaseRoute {
   namespace(name, callback) { throw new Error("'namespace' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
- * Runs post.
+   * Runs post.
    * @abstract
    * @param {string} name - Name.
    * @returns {void} - No return value.
@@ -117,7 +123,7 @@ export default class VelociousBaseRoute {
   post(name) { throw new Error("'post' not implemented") } // eslint-disable-line no-unused-vars
 
   /**
- * Runs resources.
+   * Runs resources.
    * @abstract
    * @param {string} name - Name.
    * @param {function(import("./resource-route.js").default) : void} callback - Callback function.

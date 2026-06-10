@@ -12,13 +12,13 @@ import wait from "awaitery/build/wait.js"
 
 /**
  * FrontendModelResourceConfig type.
- * @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
+  @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
 /**
- * Documents this API.
- * @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+ * Defines this typedef.
+  @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
 /**
- * Documents this API.
- * @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
+ * Defines this typedef.
+  @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
 /**
  * FakeSubscriptions type.
  * @typedef {object} FakeSubscriptions
@@ -30,7 +30,8 @@ import wait from "awaitery/build/wait.js"
 
 /**
  * Runs flush effects.
- * @returns {Promise<void>} - Resolves after React effects have run. */
+ * @returns {Promise<void>} - Resolves after React effects have run.
+ */
 async function flushEffects() {
   await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -53,7 +54,8 @@ async function waitFor(callback) {
 
 /**
  * Runs build fake subscriptions.
- * @returns {FakeSubscriptions} - Empty fake subscription store. */
+ * @returns {FakeSubscriptions} - Empty fake subscription store.
+ */
 function buildFakeSubscriptions() {
   return {
     create: new Set(),
@@ -104,20 +106,22 @@ async function renderElement(element) {
 
 /**
  * Runs build fake model class.
- * @returns {{ModelClass: typeof FrontendModelBase, subscriptions: FakeSubscriptions}} - Fake model class setup. */
+ * @returns {{ModelClass: typeof FrontendModelBase, subscriptions: FakeSubscriptions}} - Fake model class setup.
+ */
 function buildFakeModelClass() {
   const subscriptions = buildFakeSubscriptions()
 
   class FakeModelClass extends FrontendModelBase {
     /**
- * Runs resource config.
- * @returns {FrontendModelResourceConfig} - Fake resource config. */
+     * Runs resource config.
+     * @returns {FrontendModelResourceConfig} - Fake resource config.
+     */
     static resourceConfig() {
       return fakeResourceConfig("HookFakeClassModel")
     }
 
     /**
- * Runs on create.
+     * Runs on create.
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -130,7 +134,7 @@ function buildFakeModelClass() {
     }
 
     /**
- * Runs on destroy.
+     * Runs on destroy.
      * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -143,7 +147,7 @@ function buildFakeModelClass() {
     }
 
     /**
- * Runs on update.
+     * Runs on update.
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -193,14 +197,15 @@ function emitEvent(subscriptions, eventName, payload) {
 function buildFakeModel(id, subscriptions) {
   class FakeModel extends FrontendModelBase {
     /**
- * Runs resource config.
- * @returns {FrontendModelResourceConfig} - Fake resource config. */
+     * Runs resource config.
+     * @returns {FrontendModelResourceConfig} - Fake resource config.
+     */
     static resourceConfig() {
       return fakeResourceConfig("HookFakeInstanceModel")
     }
 
     /**
- * Runs on destroy.
+     * Runs on destroy.
      * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -213,7 +218,7 @@ function buildFakeModel(id, subscriptions) {
     }
 
     /**
- * Runs on update.
+     * Runs on update.
      * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -226,8 +231,9 @@ function buildFakeModel(id, subscriptions) {
     }
 
     /**
- * Runs primary key value.
- * @returns {string} - Primary key value. */
+     * Runs primary key value.
+     * @returns {string} - Primary key value.
+     */
     primaryKeyValue() {
       return id
     }
@@ -238,19 +244,21 @@ function buildFakeModel(id, subscriptions) {
 
 /**
  * Runs class lifecycle scenario.
- * @returns {Promise<Record<string, number>>} - Scenario result. */
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
 async function classLifecycleScenario() {
   const {ModelClass, subscriptions} = buildFakeModelClass()
   const eventModel = buildFakeModel("1", buildFakeSubscriptions())
   /**
- * Received events.
- * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * Received events.
+    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
   let connectedCount = 0
 
   /**
- * Runs test component.
- * @returns {React.ReactElement} - Test element. */
+   * Runs test component.
+   * @returns {React.ReactElement} - Test element.
+   */
   function TestComponent() {
     useModelClassEvent(ModelClass, ["create", "update"], (payload) => receivedEvents.push(payload), {
       onConnected: () => { connectedCount += 1 }
@@ -289,19 +297,21 @@ async function classLifecycleScenario() {
 
 /**
  * Runs instance lifecycle scenario.
- * @returns {Promise<Record<string, number>>} - Scenario result. */
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
 async function instanceLifecycleScenario() {
   const subscriptions = buildFakeSubscriptions()
   const model = buildFakeModel("task-1", subscriptions)
   /**
- * Received events.
- * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * Received events.
+    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
   let connectedCount = 0
 
   /**
- * Runs test component.
- * @returns {React.ReactElement} - Test element. */
+   * Runs test component.
+   * @returns {React.ReactElement} - Test element.
+   */
   function TestComponent() {
     useUpdatedEvent(model, (payload) => receivedEvents.push(payload), {
       onConnected: () => { connectedCount += 1 }
@@ -339,7 +349,8 @@ async function instanceLifecycleScenario() {
 
 /**
  * Runs projection options scenario.
- * @returns {Promise<Record<string, number>>} - Scenario result. */
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
 async function projectionOptionsScenario() {
   const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
   const instanceSubscriptions = buildFakeSubscriptions()
@@ -349,8 +360,9 @@ async function projectionOptionsScenario() {
     .select(["id"])
 
   /**
- * Runs test component.
- * @returns {React.ReactElement} - Test element. */
+   * Runs test component.
+   * @returns {React.ReactElement} - Test element.
+   */
   function TestComponent() {
     useCreatedEvent(ModelClass, () => {}, {
       preload: "project",
@@ -391,19 +403,21 @@ async function projectionOptionsScenario() {
 
 /**
  * Runs debounce unmount scenario.
- * @returns {Promise<Record<string, number>>} - Scenario result. */
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
 async function debounceUnmountScenario() {
   const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
   const instanceSubscriptions = buildFakeSubscriptions()
   const model = buildFakeModel("task-1", instanceSubscriptions)
   /**
- * Received events.
- * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * Received events.
+    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
 
   /**
- * Runs test component.
- * @returns {React.ReactElement} - Test element. */
+   * Runs test component.
+   * @returns {React.ReactElement} - Test element.
+   */
   function TestComponent() {
     useModelClassEvent(ModelClass, "update", (payload) => receivedEvents.push(payload), {debounce: 20})
     useUpdatedEvent(model, (payload) => receivedEvents.push(payload), {debounce: 20})
@@ -427,19 +441,20 @@ async function debounceUnmountScenario() {
 
 /**
  * Runs resubscribe instance scenario.
- * @returns {Promise<Record<string, number>>} - Scenario result. */
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
 async function resubscribeInstanceScenario() {
   const firstSubscriptions = buildFakeSubscriptions()
   const secondSubscriptions = buildFakeSubscriptions()
   const firstModel = buildFakeModel("task-1", firstSubscriptions)
   const secondModel = buildFakeModel("task-1", secondSubscriptions)
   /**
- * Received events.
- * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * Received events.
+    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
 
   /**
- * Runs test component.
+   * Runs test component.
    * @param {{model: import("../frontend-models/base.js").default}} props - Component props.
    * @returns {React.ReactElement} - Test element.
    */

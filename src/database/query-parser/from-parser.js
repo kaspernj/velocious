@@ -4,7 +4,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryParserFromParser {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {boolean} args.pretty - Whether pretty.
    * @param {import("../query/index.js").default} args.query - Query instance.
@@ -17,8 +17,9 @@ export default class VelociousDatabaseQueryParserFromParser {
   }
 
   /**
- * Runs to sql.
- * @returns {string} - SQL string.  */
+   * Runs to sql.
+   * @returns {string} - SQL string.
+   */
   toSql() {
     const {pretty, query} = this
     const froms = query.getFroms()

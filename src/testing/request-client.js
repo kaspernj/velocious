@@ -2,7 +2,7 @@
 
 class Response {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {globalThis.Response} fetchResponse - Fetch response.
    */
   constructor(fetchResponse) {
@@ -10,7 +10,7 @@ class Response {
   }
 
   /**
- * Runs parse.
+   * Runs parse.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async parse() {
@@ -20,8 +20,9 @@ class Response {
   }
 
   /**
- * Runs body.
- * @returns {string} - The body.  */
+   * Runs body.
+   * @returns {string} - The body.
+   */
   body() {
     if (!this._body) throw new Error("Response body not parsed yet. Call parse() first.")
 
@@ -29,15 +30,17 @@ class Response {
   }
 
   /**
- * Runs content type.
- * @returns {string | null} - The content type.  */
+   * Runs content type.
+   * @returns {string | null} - The content type.
+   */
   contentType() {
     return this.fetchResponse.headers.get("content-type")
   }
 
   /**
- * Runs status code.
- * @returns {number} - The status code.  */
+   * Runs status code.
+   * @returns {number} - The status code.
+   */
   statusCode() { return this.fetchResponse.status }
 }
 
@@ -46,7 +49,7 @@ export default class RequestClient {
   port = 31006
 
   /**
- * Runs get.
+   * Runs get.
    * @param {string} path - Path.
    * @returns {Promise<Response>} - Resolves with the get.
    */
@@ -60,7 +63,7 @@ export default class RequestClient {
   }
 
   /**
- * Runs post.
+   * Runs post.
    * @param {string} path - Path.
    * @param {object} data - Data payload.
    * @returns {Promise<Response>} - Resolves with the post.

@@ -2,7 +2,7 @@
 
 /**
  * Shared.
- * @type {{currentConfiguration: import("./configuration.js").default | null}} */
+  @type {{currentConfiguration: import("./configuration.js").default | null}} */
 const shared = {
   currentConfiguration: null
 }
@@ -10,7 +10,7 @@ const shared = {
 class CurrentConfigurationNotSetError extends Error {}
 
 /**
- * Documents this API.
+ * Types the following value.
  * @returns {import("./configuration.js").default} - Current configuration.
  */
 export function currentConfiguration() {
@@ -20,7 +20,7 @@ export function currentConfiguration() {
 }
 
 /**
- * Documents this API.
+ * Types the following value.
  * @param {import("./configuration.js").default} configuration - Current configuration.
  * @returns {void} - No return value.
  */

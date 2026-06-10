@@ -4,27 +4,27 @@ import EventEmitter from "../utils/event-emitter.js"
 
 export default class JsonSocket extends EventEmitter {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("net").Socket} socket - Socket instance.
    */
   constructor(socket) {
     super()
     this.socket = socket
     /**
- * Documents this API.
- * @type {string | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {string | undefined} */
     this.workerId = undefined
     /**
- * Documents this API.
- * @type {boolean} */
+     * Narrows the runtime value to the documented type.
+      @type {boolean} */
     this.acceptsSpawnedJobs = true
     /**
- * Documents this API.
- * @type {boolean} */
+     * Narrows the runtime value to the documented type.
+      @type {boolean} */
     this.acceptsForkedJobs = true
     /**
- * Documents this API.
- * @type {boolean} */
+     * Narrows the runtime value to the documented type.
+      @type {boolean} */
     this.acceptsInlineJobs = true
     this.buffer = ""
     this.socket.setEncoding("utf8")
@@ -34,7 +34,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
- * Runs on data.
+   * Runs on data.
    * @param {string} chunk - Data chunk.
    * @returns {void}
    */
@@ -60,7 +60,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
- * Runs send.
+   * Runs send.
    * @param {?} message - Message to send.
    * @returns {void}
    */
@@ -69,7 +69,7 @@ export default class JsonSocket extends EventEmitter {
   }
 
   /**
- * Runs close.
+   * Runs close.
    * @returns {void}
    */
   close() {

@@ -10,7 +10,7 @@ import * as inflection from "inflection"
 
 export default class DbGenerateModel extends BaseCommand {
   /**
- * Runs execute.
+   * Runs execute.
    * @returns {Promise<void | DbGenerateModelResult>} - Resolves with the execute.
    */
   async execute() {

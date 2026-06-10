@@ -5,8 +5,8 @@ import {websocketEventLogStoreForConfiguration} from "./websocket-event-log-stor
 export class VelociousHttpServerWebsocketEventsHost {
   constructor() {
     /**
- * Documents this API.
- * @type {Set<import("./worker-handler/index.js").default>} */
+     * Narrows the runtime value to the documented type.
+      @type {Set<import("./worker-handler/index.js").default>} */
     this.handlers = new Set()
     this.publishQueue = Promise.resolve()
   }
@@ -17,7 +17,6 @@ export class VelociousHttpServerWebsocketEventsHost {
    * when a request handler needs to guarantee its broadcast is persisted
    * before responding — without this, the HTTP response can return before
    * the async event-log write finishes.
-   *
    * @returns {Promise<void>}
    */
   async awaitPendingBroadcasts() {
@@ -25,7 +24,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
- * Runs register.
+   * Runs register.
    * @param {import("./worker-handler/index.js").default} handler - Handler instance.
    * @returns {() => void} - The register.
    */
@@ -36,7 +35,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
- * Runs publish.
+   * Runs publish.
    * @param {object | string} channelOrArgs - Channel name or options object.
    * @param {?} [payloadArg] - Payload data when channel is passed separately.
    * @returns {void} - No return value.
@@ -45,8 +44,8 @@ export class VelociousHttpServerWebsocketEventsHost {
     const publishArgs = typeof channelOrArgs === "string"
       ? {channel: channelOrArgs, payload: payloadArg}
       : /**
- * Documents this API.
- * @type {{channel: string, payload: ?}} */ (channelOrArgs)
+         * Narrows the runtime value to the documented type.
+          @type {{channel: string, payload: ?}} */ (channelOrArgs)
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
@@ -68,7 +67,6 @@ export class VelociousHttpServerWebsocketEventsHost {
    * Fan a V2 channel broadcast out to every registered worker handler.
    * Persists the event to the event-log store (if the channel is marked
    * interested) so clients can resume from a `lastEventId` checkpoint.
-   *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
@@ -96,7 +94,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
- * Runs queue publish.
+   * Runs queue publish.
    * @param {() => Promise<void>} callback - Publish work to run in order.
    * @param {string} errorMessage - Message logged when publish work fails.
    * @returns {void}
@@ -120,7 +118,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
- * Runs persist v2 event if needed.
+   * Runs persist v2 event if needed.
    * @param {object} args - Options.
    * @param {?} args.body - Event body.
    * @param {string} args.channel - Channel name.
@@ -131,7 +129,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
- * Runs persist event if needed.
+   * Runs persist event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {?} args.payload - Payload data.
@@ -142,7 +140,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
- * Runs persist channel event if needed.
+   * Runs persist channel event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {?} args.payload - Payload data.

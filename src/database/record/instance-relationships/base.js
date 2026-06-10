@@ -20,20 +20,20 @@ import HasOnePreloader from "../../query/preloader/has-one.js"
  */
 export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
- * Auto save.
- * @type {boolean | undefined} */
+   * Auto save.
+    @type {boolean | undefined} */
   _autoSave = undefined
   /**
- * Preloaded.
- * @type {boolean | undefined} */
+   * Preloaded.
+    @type {boolean | undefined} */
   _preloaded = undefined
   /**
- * Loaded.
- * @type {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} */
+   * Loaded.
+    @type {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} */
   _loaded = undefined
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor({model, relationship}) {
@@ -43,7 +43,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
- * Runs add to loaded.
+   * Runs add to loaded.
    * @abstract
    * @param {InstanceType<TMC>[] | InstanceType<TMC>} models - Model instances.
    * @returns {void} - No return value.
@@ -53,7 +53,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
- * Runs build.
+   * Runs build.
    * @abstract
    * @param {Record<string, ?>} attributes - Attributes.
    * @returns {InstanceType<TMC>} - The build.
@@ -63,31 +63,33 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
- * Runs get auto save.
- * @returns {boolean | undefined} Whether the relationship should be auto-saved before saving the parent model */
+   * Runs get auto save.
+   * @returns {boolean | undefined} Whether the relationship should be auto-saved before saving the parent model
+   */
   getAutoSave() { return this._autoSave }
 
   /**
- * Runs set auto save.
+   * Runs set auto save.
    * @param {boolean} newAutoSaveValue Whether the relationship should be auto-saved before saving the parent model
    * @returns {void} - No return value.
    */
   setAutoSave(newAutoSaveValue) { this._autoSave = newAutoSaveValue }
 
   /**
- * Runs set dirty.
+   * Runs set dirty.
    * @param {boolean} newValue Whether the relationship is dirty (has been modified)
    * @returns {void} - No return value.
    */
   setDirty(newValue) { this._dirty = newValue }
 
   /**
- * Runs get dirty.
- * @returns {boolean} Whether the relationship is dirty (has been modified) */
+   * Runs get dirty.
+   * @returns {boolean} Whether the relationship is dirty (has been modified)
+   */
   getDirty() { return this._dirty }
 
   /**
- * Runs load.
+   * Runs load.
    * @abstract
    * @returns {Promise<InstanceType<TMC> | Array<InstanceType<TMC>> | undefined>} - Resolves with loaded relationship value.
    */
@@ -125,10 +127,10 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     const relationshipDef = this.getRelationship()
     const configuration = relationshipDef.getConfiguration()
     const cohort = /**
- * Documents this API.
- * @type {Array<import("../index.js").default> | undefined} */ (/**
- * Documents this API.
- * @type {?} */ (this.model)._loadCohort)
+                    * Narrows the runtime value to the documented type.
+                     @type {Array<import("../index.js").default> | undefined} */ (/**
+                                                                                   * Narrows the runtime value to the documented type.
+                                                                                    @type {?} */ (this.model)._loadCohort)
 
     if (!configuration.getAutoload() || !relationshipDef.getAutoload() || !cohort || cohort.length <= 1) {
       return false
@@ -136,11 +138,11 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
     const relationshipName = relationshipDef.getRelationshipName()
     const OwnerModelClass = /**
- * Documents this API.
- * @type {?} */ (this.model).constructor
+                             * Narrows the runtime value to the documented type.
+                              @type {?} */ (this.model).constructor
     /**
- * Batch.
- * @type {Array<import("../index.js").default>} */
+     * Batch.
+      @type {Array<import("../index.js").default>} */
     const batch = []
 
     // Exact same class, persisted, no existing in-memory relationship state.
@@ -165,22 +167,22 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
 
     if (type == "belongsTo") {
       const belongsToRelationship = /**
- * Documents this API.
- * @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
+                                     * Narrows the runtime value to the documented type.
+                                      @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
       const preloader = new BelongsToPreloader({models: batch, relationship: belongsToRelationship})
 
       await preloader.run()
     } else if (type == "hasMany") {
       const hasManyRelationship = /**
- * Documents this API.
- * @type {import("../relationships/has-many.js").default} */ (relationshipDef)
+                                   * Narrows the runtime value to the documented type.
+                                    @type {import("../relationships/has-many.js").default} */ (relationshipDef)
       const preloader = new HasManyPreloader({models: batch, relationship: hasManyRelationship})
 
       await preloader.run()
     } else if (type == "hasOne") {
       const hasOneRelationship = /**
- * Documents this API.
- * @type {import("../relationships/has-one.js").default} */ (relationshipDef)
+                                  * Narrows the runtime value to the documented type.
+                                   @type {import("../relationships/has-one.js").default} */ (relationshipDef)
       const preloader = new HasOnePreloader({models: batch, relationship: hasOneRelationship})
 
       await preloader.run()
@@ -192,13 +194,15 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
- * Runs is loaded.
- * @returns {boolean} Whether the relationship has been preloaded */
+   * Runs is loaded.
+   * @returns {boolean} Whether the relationship has been preloaded
+   */
   isLoaded() { return Boolean(this._loaded) }
 
   /**
- * Runs loaded.
- * @returns {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} The loaded model or models (depending on relationship type) */
+   * Runs loaded.
+   * @returns {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} The loaded model or models (depending on relationship type)
+   */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
@@ -208,47 +212,55 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
- * Runs set loaded.
- * @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s) to mark as loaded. */
+   * Runs set loaded.
+   * @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s) to mark as loaded.
+   */
   setLoaded(model) { this._loaded = model }
 
   /**
- * Runs get loaded or undefined.
- * @returns {InstanceType<TMC> | InstanceType<TMC>[] | undefined} - The loaded or undefined.  */
+   * Runs get loaded or undefined.
+   * @returns {InstanceType<TMC> | InstanceType<TMC>[] | undefined} - The loaded or undefined.
+   */
   getLoadedOrUndefined() { return this._loaded }
 
   /**
- * Runs get preloaded.
- * @returns {boolean} The loaded model or models (depending on relationship type) */
+   * Runs get preloaded.
+   * @returns {boolean} The loaded model or models (depending on relationship type)
+   */
   getPreloaded() { return this._preloaded || false }
 
   /**
- * Runs set preloaded.
- * @param {boolean} isPreloaded - Whether the relationship is preloaded. */
+   * Runs set preloaded.
+   * @param {boolean} isPreloaded - Whether the relationship is preloaded.
+   */
   setPreloaded(isPreloaded) { this._preloaded = isPreloaded }
 
   /**
- * Runs get foreign key.
- * @returns {string} The foreign key for this relationship */
+   * Runs get foreign key.
+   * @returns {string} The foreign key for this relationship
+   */
   getForeignKey() { return this.getRelationship().getForeignKey() }
 
   /**
- * Runs get model.
- * @returns {InstanceType<MC>} - The model.  */
+   * Runs get model.
+   * @returns {InstanceType<MC>} - The model.
+   */
   getModel() { return this.model }
 
   /**
- * Runs get primary key.
- * @returns {string} The primary key for this relationship's model */
+   * Runs get primary key.
+   * @returns {string} The primary key for this relationship's model
+   */
   getPrimaryKey() { return this.getRelationship().getPrimaryKey() }
 
   /**
- * Runs get relationship.
- * @returns {import("../relationships/base.js").default} The relationship object that this instance relationship is based on */
+   * Runs get relationship.
+   * @returns {import("../relationships/base.js").default} The relationship object that this instance relationship is based on
+   */
   getRelationship() { return this.relationship }
 
   /**
- * Runs apply scope.
+   * Runs apply scope.
    * @template T
    * @param {T} query - Query instance.
    * @returns {T} - Scoped query.
@@ -258,18 +270,20 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
- * Runs get target model class.
- * @returns {TMC | undefined} The model class that this instance relationship */
+   * Runs get target model class.
+   * @returns {TMC | undefined} The model class that this instance relationship
+   */
   getTargetModelClass() {
     const TargetModelClass = /**
- * Documents this API.
- * @type {TMC} */ (this.getRelationship().getTargetModelClass())
+                              * Narrows the runtime value to the documented type.
+                               @type {TMC} */ (this.getRelationship().getTargetModelClass())
 
     return TargetModelClass
   }
 
   /**
- * Runs get type.
- * @returns {string} The type of relationship (e.g. "has_many", "belongs_to", etc.) */
+   * Runs get type.
+   * @returns {string} The type of relationship (e.g. "has_many", "belongs_to", etc.)
+   */
   getType() { return this.getRelationship().getType() }
 }

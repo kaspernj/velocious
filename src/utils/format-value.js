@@ -24,7 +24,7 @@ function minifiedStringify(value) {
   const seen = new WeakSet()
 
   /**
- * Runs serialize.
+   * Runs serialize.
    * @param {?} current - Current.
    * @param {number} depth - Depth.
    * @returns {?} - The serialize.
@@ -50,8 +50,8 @@ function minifiedStringify(value) {
     }
 
     /**
- * Output.
- * @type {Record<string, ?>} */
+     * Output.
+      @type {Record<string, ?>} */
     const output = {}
 
     for (const key of Object.keys(current)) {

@@ -31,7 +31,7 @@ function toBuffer(value) {
  */
 export default class NativeAttachmentStorageDriver {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../../../../configuration.js").default} [args.configuration] - Configuration instance.
    * @param {string} args.name - Driver name.
@@ -44,7 +44,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
- * Runs write.
+   * Runs write.
    * @param {object} args - Write args.
    * @param {string} args.attachmentId - Attachment id.
    * @param {{contentBase64: string, contentType: string | null, filename: string}} args.input - Normalized attachment input.
@@ -74,7 +74,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
- * Runs read.
+   * Runs read.
    * @param {object} args - Read args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
@@ -99,7 +99,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
- * Runs delete.
+   * Runs delete.
    * @param {object} args - Delete args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
@@ -120,7 +120,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
- * Runs url.
+   * Runs url.
    * @param {object} args - URL args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.

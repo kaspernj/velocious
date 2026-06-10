@@ -19,7 +19,7 @@ const RELOADABLE_EXTENSIONS = new Set([
  */
 export default class VelociousHttpServerDevelopmentReloader {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {function({changedPath: string}) : Promise<void>} args.onReload - Reload callback.
@@ -38,24 +38,25 @@ export default class VelociousHttpServerDevelopmentReloader {
     this.watchFactory = watchFactory
 
     /**
- * Documents this API.
- * @type {ReturnType<typeof setTimeout> | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {ReturnType<typeof setTimeout> | undefined} */
     this.reloadTimer = undefined
 
     /**
- * Documents this API.
- * @type {string | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {string | undefined} */
     this.pendingChangedPath = undefined
 
     /**
- * Documents this API.
- * @type {Map<string, import("fs").FSWatcher>} */
+     * Narrows the runtime value to the documented type.
+      @type {Map<string, import("fs").FSWatcher>} */
     this.watchers = new Map()
   }
 
   /**
- * Runs start.
- * @returns {Promise<void>} - Resolves when watching has started. */
+   * Runs start.
+   * @returns {Promise<void>} - Resolves when watching has started.
+   */
   async start() {
     for (const rootPath of this.watchRootPaths()) {
       await this.watchDirectoryRecursive(rootPath)
@@ -63,8 +64,9 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs watch root paths.
- * @returns {string[]} - Source directories to watch. */
+   * Runs watch root paths.
+   * @returns {string[]} - Source directories to watch.
+   */
   watchRootPaths() {
     const rootPaths = new Set()
     const configurationDirectory = this.configuration.getDirectory()
@@ -80,7 +82,7 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs watch directory recursive.
+   * Runs watch directory recursive.
    * @param {string} directoryPath - Directory path.
    * @returns {Promise<void>} - Resolves when child directories are watched.
    */
@@ -95,8 +97,8 @@ export default class VelociousHttpServerDevelopmentReloader {
       entries = await this.readdir(resolvedDirectoryPath, {withFileTypes: true})
     } catch (error) {
       if (/**
- * Documents this API.
- * @type {{code?: string}} */ (error)?.code === "ENOENT") return
+           * Narrows the runtime value to the documented type.
+            @type {{code?: string}} */ (error)?.code === "ENOENT") return
       throw error
     }
 
@@ -119,7 +121,7 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs on watcher event.
+   * Runs on watcher event.
    * @param {object} args - Options object.
    * @param {string} args.directoryPath - Watched directory path.
    * @param {string} args.eventType - Watch event type.
@@ -141,7 +143,7 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs should reload path.
+   * Runs should reload path.
    * @param {object} args - Options object.
    * @param {string} args.changedPath - Changed path.
    * @param {string | Buffer | null} args.fileName - Raw filename from fs.watch.
@@ -156,7 +158,7 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs watch potential directory.
+   * Runs watch potential directory.
    * @param {string} changedPath - Candidate directory path.
    * @returns {Promise<void>} - Resolves when any new directory watchers are added.
    */
@@ -169,15 +171,15 @@ export default class VelociousHttpServerDevelopmentReloader {
       }
     } catch (error) {
       if (/**
- * Documents this API.
- * @type {{code?: string}} */ (error)?.code !== "ENOENT") {
+           * Narrows the runtime value to the documented type.
+            @type {{code?: string}} */ (error)?.code !== "ENOENT") {
         throw error
       }
     }
   }
 
   /**
- * Runs schedule reload.
+   * Runs schedule reload.
    * @param {string} changedPath - Changed path.
    * @returns {void} - No return value.
    */
@@ -194,8 +196,9 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs flush reload.
- * @returns {Promise<void>} - Resolves when the queued reload is handled. */
+   * Runs flush reload.
+   * @returns {Promise<void>} - Resolves when the queued reload is handled.
+   */
   async flushReload() {
     this.reloadTimer = undefined
 
@@ -208,7 +211,7 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * On watcher error.
+   * On watcher error.
    * @param {Error} error - Watcher error.
    * @returns {void} - No return value.
    */
@@ -217,8 +220,9 @@ export default class VelociousHttpServerDevelopmentReloader {
   }
 
   /**
- * Runs stop.
- * @returns {Promise<void>} - Resolves when watchers are closed. */
+   * Runs stop.
+   * @returns {Promise<void>} - Resolves when watchers are closed.
+   */
   async stop() {
     if (this.reloadTimer) {
       clearTimeout(this.reloadTimer)

@@ -20,8 +20,8 @@ function normalizeNestedPreload(preload) {
 
   if (Array.isArray(preload)) {
     /**
- * Result.
- * @type {import("../query/index.js").NestedPreloadRecord} */
+     * Result.
+      @type {import("../query/index.js").NestedPreloadRecord} */
     const result = {}
 
     for (const entry of preload) {
@@ -49,8 +49,8 @@ function normalizeNestedPreload(preload) {
 
   if (preload && typeof preload == "object") {
     /**
- * Result.
- * @type {import("../query/index.js").NestedPreloadRecord} */
+     * Result.
+      @type {import("../query/index.js").NestedPreloadRecord} */
     const result = {}
 
     for (const [key, value] of Object.entries(preload)) {
@@ -89,18 +89,18 @@ export default class VelociousDatabaseQueryPreloader {
     if (models.length == 0) return
 
     const modelClass = /**
- * Documents this API.
- * @type {typeof import("../record/index.js").default} */ (models[0].constructor)
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("../record/index.js").default} */ (models[0].constructor)
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec == "object" && "_preload" in queryOrSpec
     // Reuse the query builder's preload/select normalization for raw specs
     // instead of duplicating it here.
     const query = isQuery
       ? /**
- * Documents this API.
- * @type {import("./model-class-query.js").default} */ (queryOrSpec)
+         * Narrows the runtime value to the documented type.
+          @type {import("./model-class-query.js").default} */ (queryOrSpec)
       : modelClass.preload(/**
- * Documents this API.
- * @type {?} */ (queryOrSpec))
+                            * Narrows the runtime value to the documented type.
+                             @type {?} */ (queryOrSpec))
 
     const preloader = new VelociousDatabaseQueryPreloader({
       modelClass,
@@ -117,7 +117,7 @@ export default class VelociousDatabaseQueryPreloader {
   }
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {import("../record/index.js").default[]} args.models - Model instances.
@@ -142,22 +142,22 @@ export default class VelociousDatabaseQueryPreloader {
 
       if (relationship.getType() == "belongsTo") {
         const belongsToRelationship = /**
- * Documents this API.
- * @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
+                                       * Narrows the runtime value to the documented type.
+                                        @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
         const hasManyPreloader = new BelongsToPreloader({models: this.models, relationship: belongsToRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasMany") {
         const hasManyRelationship = /**
- * Documents this API.
- * @type {import("../record/relationships/has-many.js").default} */ (relationship)
+                                     * Narrows the runtime value to the documented type.
+                                      @type {import("../record/relationships/has-many.js").default} */ (relationship)
         const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: hasManyRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasOne") {
         const hasOneRelationship = /**
- * Documents this API.
- * @type {import("../record/relationships/has-one.js").default} */ (relationship)
+                                    * Narrows the runtime value to the documented type.
+                                     @type {import("../record/relationships/has-one.js").default} */ (relationship)
         const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: hasOneRelationship, selection: this.selection})
 
         preloadResult = await hasOnePreloader.run()

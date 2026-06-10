@@ -8,7 +8,7 @@ import BackgroundJobsSocketRequest from "./socket-request.js"
 
 export default class BackgroundJobsStatusReporter {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.host] - Host.
@@ -22,7 +22,7 @@ export default class BackgroundJobsStatusReporter {
   }
 
   /**
- * Runs report.
+   * Runs report.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
@@ -64,7 +64,7 @@ export default class BackgroundJobsStatusReporter {
   }
 
   /**
- * Runs report with retry.
+   * Runs report with retry.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.

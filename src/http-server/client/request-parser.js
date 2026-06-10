@@ -8,7 +8,7 @@ import RequestBuffer from "./request-buffer/index.js"
 
 export default class VelociousHttpServerClientRequestParser {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    */
@@ -20,8 +20,8 @@ export default class VelociousHttpServerClientRequestParser {
     this.events = new EventEmitter()
     this.hasCompleted = false
     /**
- * Documents this API.
- * @type {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} */
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} */
     this.params = {}
 
     this.requestBuffer = new RequestBuffer({configuration})
@@ -31,8 +31,9 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * Runs destroy.
- * @returns {void} - No return value.  */
+   * Runs destroy.
+   * @returns {void} - No return value.
+   */
   destroy() {
     this.requestBuffer.events.off("completed", this.requestDone)
     this.requestBuffer.events.off("form-data-part", this.onFormDataPart)
@@ -41,14 +42,14 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * On form data part.
+   * On form data part.
    * @param {import("./request-buffer/form-data-part.js").default} formDataPart - Form data part.
    * @returns {void} - No return value.
    */
   onFormDataPart = (formDataPart) => {
     /**
- * Unordered params.
- * @type {Record<string, string | string[] | import("./uploaded-file/uploaded-file.js").default>} */
+     * Unordered params.
+      @type {Record<string, string | string[] | import("./uploaded-file/uploaded-file.js").default>} */
     const unorderedParams = {}
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()
@@ -60,8 +61,8 @@ export default class VelociousHttpServerClientRequestParser {
       incorporate(this.params, newParams)
     } catch (error) {
       const ensuredError = /**
- * Documents this API.
- * @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+                            * Narrows the runtime value to the documented type.
+                             @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),
@@ -78,7 +79,7 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * Feed.
+   * Feed.
    * @param {Buffer} data - Data payload.
    * @returns {Buffer | undefined} - Remaining data, if any.
    */
@@ -91,30 +92,34 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * Runs get header.
+   * Runs get header.
    * @param {string} name - Name.
    * @returns {string} - The header.
    */
   getHeader(name) { return this.requestBuffer.getHeader(name)?.value }
 
   /**
- * Runs get headers.
- * @returns {Record<string, string>} - The headers.  */
+   * Runs get headers.
+   * @returns {Record<string, string>} - The headers.
+   */
   getHeaders() { return this.requestBuffer.getHeadersHash() }
 
   /**
- * Runs get http method.
- * @returns {string} - The http method.  */
+   * Runs get http method.
+   * @returns {string} - The http method.
+   */
   getHttpMethod() { return digg(this, "requestBuffer", "httpMethod") }
 
   /**
- * Runs get http version.
- * @returns {string} - The http version.  */
+   * Runs get http version.
+   * @returns {string} - The http version.
+   */
   getHttpVersion() { return digg(this, "requestBuffer", "httpVersion") }
 
   /**
- * Runs get host match.
- * @returns {{host: string, port: string, protocol: string} | null} - Parsed host info, or null when unavailable. */
+   * Runs get host match.
+   * @returns {{host: string, port: string, protocol: string} | null} - Parsed host info, or null when unavailable.
+   */
   _getHostMatch() {
     const rawHost = this.requestBuffer.getHeader("origin")?.value
 
@@ -132,8 +137,9 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * Runs get host.
- * @returns {string | void} - The host.  */
+   * Runs get host.
+   * @returns {string | void} - The host.
+   */
   getHost() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
 
@@ -141,13 +147,15 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * Runs get path.
- * @returns {string} - The path.  */
+   * Runs get path.
+   * @returns {string} - The path.
+   */
   getPath() { return digg(this, "requestBuffer", "path") }
 
   /**
- * Runs get port.
- * @returns {number | void} - The port.  */
+   * Runs get port.
+   * @returns {number | void} - The port.
+   */
   getPort() {
     const rawHostSplit = this.requestBuffer.getHeader("host")?.value?.split(":")
     const httpMethod = this.getHttpMethod()
@@ -162,18 +170,21 @@ export default class VelociousHttpServerClientRequestParser {
   }
 
   /**
- * Runs get protocol.
- * @returns {string | null} - The protocol.  */
+   * Runs get protocol.
+   * @returns {string | null} - The protocol.
+   */
   getProtocol() { return this._getHostMatch()?.protocol || null }
 
   /**
- * Runs get request buffer.
- * @returns {RequestBuffer} - The request buffer.  */
+   * Runs get request buffer.
+   * @returns {RequestBuffer} - The request buffer.
+   */
   getRequestBuffer() { return this.requestBuffer }
 
   /**
- * Request done.
- * @returns {void} - No return value.  */
+   * Request done.
+   * @returns {void} - No return value.
+   */
   requestDone = () => {
     this.hasCompleted = true
     incorporate(this.params, this.requestBuffer.params)

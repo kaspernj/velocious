@@ -9,8 +9,8 @@
 export default async function query(connection, sql) {
   try {
     /**
- * Documents this API.
- * @type {Record<string, ?>[]} */
+     * Defines result.
+      @type {Record<string, ?>[]} */
     let result
 
     // @ts-expect-error

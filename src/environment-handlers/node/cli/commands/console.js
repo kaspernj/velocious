@@ -4,8 +4,8 @@ import path from "node:path"
 import repl from "node:repl"
 
 /**
- * Documents this API.
- * @typedef {{application: import("../../../../application.js").default, configuration: import("../../../../configuration.js").default}} ConsoleContextArgs */
+ * Defines this typedef.
+  @typedef {{application: import("../../../../application.js").default, configuration: import("../../../../configuration.js").default}} ConsoleContextArgs */
 
 /**
  * Runs build console context.
@@ -14,8 +14,8 @@ import repl from "node:repl"
  */
 function buildConsoleContext({application, configuration}) {
   /**
- * Dbs.
- * @type {Record<string, import("../../../../database/drivers/base.js").default>} */
+   * Dbs.
+    @type {Record<string, import("../../../../database/drivers/base.js").default>} */
   const dbs = configuration.getCurrentConnections()
 
   for (const identifier of configuration.getDatabaseIdentifiers()) {
@@ -23,8 +23,8 @@ function buildConsoleContext({application, configuration}) {
 
     const pool = configuration.getDatabasePool(identifier)
     const poolWithGlobal = /**
- * Documents this API.
- * @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
+                            * Narrows the runtime value to the documented type.
+                             @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
     const globalConnection = poolWithGlobal.getGlobalConnection?.()
 
     if (globalConnection) {
@@ -66,8 +66,8 @@ function assignConsoleContext({context, replServer}) {
   Object.assign(replServer.context, context)
 
   const modelClasses = /**
- * Documents this API.
- * @type {Record<string, typeof import("../../../../database/record/index.js").default>} */ (
+                        * Narrows the runtime value to the documented type.
+                         @type {Record<string, typeof import("../../../../database/record/index.js").default>} */ (
     context.models || {}
   )
 
@@ -120,8 +120,9 @@ async function startConsoleRepl({configuration, context}) {
 /** Velocious console command. */
 export default class VelociousCliCommandsConsole extends BaseCommand{
   /**
- * Runs execute.
- * @returns {Promise<?>} - Resolves with the command result. */
+   * Runs execute.
+   * @returns {Promise<?>} - Resolves with the command result.
+   */
   async execute() {
     const configuration = this.getConfiguration()
     const application = new Application({

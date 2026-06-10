@@ -2,16 +2,16 @@
 
 /**
  * FrontendModelInstance type.
- * @typedef {import("./base.js").default} FrontendModelInstance */
+  @typedef {import("./base.js").default} FrontendModelInstance */
 
 /**
  * Model dependency ids.
- * @type {WeakMap<FrontendModelInstance, number>} */
+  @type {WeakMap<FrontendModelInstance, number>} */
 const modelDependencyIds = new WeakMap()
 let nextModelDependencyId = 1
 
 /**
- * Documents this API.
+ * Runs the modelsFromInput helper.
  * @param {FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelOrModels - Model or models.
  * @returns {FrontendModelInstance[]} - Normalized model list.
  */
@@ -40,7 +40,7 @@ function modelDependencyId(model) {
 }
 
 /**
- * Documents this API.
+ * Runs the modelsDependencyKey helper.
  * @param {FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelOrModels - Model or models.
  * @returns {string} - Stable dependency key.
  */

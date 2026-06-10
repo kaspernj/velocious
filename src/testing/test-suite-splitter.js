@@ -40,7 +40,7 @@ const BROWSER_SPEC_MULTIPLIER = 2
  */
 export default class TestSuiteSplitter {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {number} args.groups - Total number of groups.
    * @param {number} args.groupNumber - Which group to return (1-indexed).
@@ -139,8 +139,8 @@ export default class TestSuiteSplitter {
    */
   distributeGreedily(sortedFiles) {
     /**
- * Buckets.
- * @type {GroupBucket[]} */
+     * Buckets.
+      @type {GroupBucket[]} */
     const buckets = []
 
     for (let i = 0; i < this._groups; i++) {

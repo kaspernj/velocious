@@ -4,7 +4,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryUpsertBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {Array<string>} args.conflictColumns - Columns that identify duplicates.
    * @param {Record<string, ?>} args.data - Data payload.
@@ -29,7 +29,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs data columns.
+   * Runs data columns.
    * @returns {Array<string>} - Column names from the data payload.
    */
   dataColumns() {
@@ -37,7 +37,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs format column value.
+   * Runs format column value.
    * @param {string} columnName - Column name.
    * @returns {string | number} - SQL literal.
    */
@@ -46,7 +46,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs format value.
+   * Runs format value.
    * @param {?} value - Value to format.
    * @returns {string | number} - SQL literal.
    */
@@ -57,7 +57,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs get options.
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - Driver options.
    */
   getOptions() {
@@ -65,7 +65,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs quoted column.
+   * Runs quoted column.
    * @param {string} columnName - Column name.
    * @returns {string} - Quoted column name.
    */
@@ -74,7 +74,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs quoted insert columns sql.
+   * Runs quoted insert columns sql.
    * @returns {string} - Comma-separated quoted insert columns.
    */
   quotedInsertColumnsSql() {
@@ -82,7 +82,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs quoted insert values sql.
+   * Runs quoted insert values sql.
    * @returns {string} - Comma-separated formatted insert values.
    */
   quotedInsertValuesSql() {
@@ -90,7 +90,7 @@ export default class VelociousDatabaseQueryUpsertBase {
   }
 
   /**
- * Runs quoted table name.
+   * Runs quoted table name.
    * @returns {string} - Quoted table name.
    */
   quotedTableName() {

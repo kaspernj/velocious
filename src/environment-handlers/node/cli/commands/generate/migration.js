@@ -11,7 +11,7 @@ import strftime from "strftime"
 
 export default class DbGenerateMigration extends BaseCommand {
   /**
- * Runs execute.
+   * Runs execute.
    * @returns {Promise<void | DbGenerateMigrationReturnType>} - Resolves with the execute.
    */
   async execute() {

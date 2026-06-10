@@ -18,8 +18,8 @@ export default function buildCliCommandContext(command, argsOffset) {
   const dbs = configuration.getCurrentConnections()
   const identifiers = Object.keys(dbs)
   /**
- * Process args.
- * @type {string[]} */
+   * Process args.
+    @type {string[]} */
   const processArgs = command.processArgs || []
 
   return {

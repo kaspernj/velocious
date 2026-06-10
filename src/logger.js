@@ -8,20 +8,20 @@ import restArgsError from "./utils/rest-args-error.js"
 
 /**
  * LogLevel type.
- * @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
+  @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
 
 const DEFAULT_LOGGING_CONFIGURATION = {
   console: true,
   file: false,
   /**
- * Documents this API.
- * @type {LogLevel[]} */
+   * Types the following value.
+    @type {LogLevel[]} */
   levels: ["info", "warn", "error"]
 }
 
 /**
  * Level order.
- * @type {LogLevel[]} */
+  @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
@@ -63,7 +63,6 @@ function formatPart(value) {
  * messages are interpolated into it in order (like `console.log` /
  * `util.format`). Any leftover messages are appended with a space
  * separator. Otherwise, all parts are joined with spaces.
- *
  * @param {Array<?>} messages - User-supplied message parts.
  * @returns {string} - The formatted user message.
  */
@@ -117,7 +116,6 @@ function formatUserMessages(messages) {
 
 /**
  * Converts a logger subject and message parts into a single log line.
- *
  * @param {string} subject - Logger subject / category prefix.
  * @param {...?} messages - User-supplied message parts (supports printf-style format specifiers on the first part).
  * @returns {string} - The formatted log line.
@@ -191,16 +189,16 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
 
   if (Array.isArray(loggingConfiguration.loggers)) {
     /**
- * Logger outputs.
- * @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+     * Logger outputs.
+      @type {import("./configuration-types.js").LoggingOutputConfig[]} */
     const loggerOutputs = []
 
     for (const logger of loggingConfiguration.loggers) {
       if (!logger) continue
 
       const loggerConfig = /**
- * Documents this API.
- * @type {?} */ (logger)
+                            * Types the following value.
+                             @type {?} */ (logger)
 
       if (typeof loggerConfig.toOutputConfig === "function") {
         loggerOutputs.push(loggerConfig.toOutputConfig({configuration}))
@@ -231,8 +229,8 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
   }
 
   /**
- * Outputs.
- * @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+   * Outputs.
+    @type {import("./configuration-types.js").LoggingOutputConfig[]} */
   const outputs = []
   if (loggingConfiguration.console !== false) {
     outputs.push({
@@ -320,16 +318,16 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
 
   const writes = []
   /**
- * Documents this API.
- * @type {Array<?> | undefined} */
+   * Types the following value.
+    @type {Array<?> | undefined} */
   let resolvedMessages
   /**
- * Documents this API.
- * @type {string | undefined} */
+   * Types the following value.
+    @type {string | undefined} */
   let message
   /**
- * Payload.
- * @type {import("./configuration-types.js").LoggingOutputPayload | null} */
+   * Payload.
+    @type {import("./configuration-types.js").LoggingOutputPayload | null} */
   let payload = null
 
   for (const outputConfig of enabledOutputs) {
@@ -357,7 +355,7 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
 
 export default class Logger {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {string | object} object - Object.
    * @param {object} args - Options object.
    * @param {import("./configuration.js").default} [args.configuration] - Configuration instance.
@@ -380,14 +378,14 @@ export default class Logger {
   }
 
   /**
- * Runs get configuration.
+   * Runs get configuration.
    * @returns {import("./configuration.js").default} - The configuration.
    */
   getConfiguration() {
     if (!this._configuration) {
       const objectWithConfig = /**
- * Documents this API.
- * @type {{configuration?: import("./configuration.js").default}} */ (this._object)
+                                * Types the following value.
+                                 @type {{configuration?: import("./configuration.js").default}} */ (this._object)
       this._configuration = objectWithConfig?.configuration || currentConfiguration()
     }
 
@@ -395,7 +393,7 @@ export default class Logger {
   }
 
   /**
- * Runs safe configuration.
+   * Runs safe configuration.
    * @returns {import("./configuration.js").default | undefined} - The safe configuration.
    */
   _safeConfiguration() {
@@ -407,7 +405,7 @@ export default class Logger {
   }
 
   /**
- * Runs is level enabled.
+   * Runs is level enabled.
    * @param {LogLevel} level - Level.
    * @returns {boolean} - Whether any configured output emits this level.
    */
@@ -425,7 +423,7 @@ export default class Logger {
   }
 
   /**
- * Runs debug.
+   * Runs debug.
    * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -434,7 +432,7 @@ export default class Logger {
   }
 
   /**
- * Runs info.
+   * Runs info.
    * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -443,7 +441,7 @@ export default class Logger {
   }
 
   /**
- * Runs debug low level.
+   * Runs debug low level.
    * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -452,7 +450,7 @@ export default class Logger {
   }
 
   /**
- * Runs log.
+   * Runs log.
    * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -461,7 +459,7 @@ export default class Logger {
   }
 
   /**
- * Runs error.
+   * Runs error.
    * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -470,7 +468,7 @@ export default class Logger {
   }
 
   /**
- * Runs set debug.
+   * Runs set debug.
    * @param {boolean} newValue - New value.
    * @returns {void} - No return value.
    */
@@ -479,7 +477,7 @@ export default class Logger {
   }
 
   /**
- * Runs warn.
+   * Runs warn.
    * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
    */
   async warn(...messages) {
@@ -487,7 +485,7 @@ export default class Logger {
   }
 
   /**
- * Runs write.
+   * Runs write.
    * @param {object} args - Options object.
    * @param {LogLevel} args.level - Level.
    * @param {Parameters<typeof functionOrMessages>} args.messages - Messages.

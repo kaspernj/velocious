@@ -6,7 +6,7 @@ import LoggerFileOutput from "./outputs/file-output.js"
 /** File logger configuration wrapper. */
 export default class FileLogger extends BaseLogger {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.path - File path to write to.
    * @param {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [args.levels] - Levels to emit.
@@ -18,7 +18,7 @@ export default class FileLogger extends BaseLogger {
   }
 
   /**
- * Runs to output config.
+   * Runs to output config.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default | undefined} [args.configuration] - Configuration instance.
    * @returns {import("../configuration-types.js").LoggingOutputConfig} - Output config.

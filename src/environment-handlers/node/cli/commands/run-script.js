@@ -27,8 +27,9 @@ async function importRunScriptFunction(filePath) {
 /** Node command for running a custom script file in initialized app/DB context. */
 export default class RunScriptCommand extends BaseCommand {
   /**
- * Runs execute.
- * @returns {Promise<?>} - Resolves with the script function result. */
+   * Runs execute.
+   * @returns {Promise<?>} - Resolves with the script function result.
+   */
   async execute() {
     const configuration = this.getConfiguration()
     const scriptPath = this.scriptFilePath()
@@ -47,8 +48,9 @@ export default class RunScriptCommand extends BaseCommand {
   }
 
   /**
- * Runs initialize runtime.
- * @returns {Promise<void>} - Resolves when runtime initialization is complete. */
+   * Runs initialize runtime.
+   * @returns {Promise<void>} - Resolves when runtime initialization is complete.
+   */
   async initializeRuntime() {
     const configuration = this.getConfiguration()
 
@@ -60,8 +62,9 @@ export default class RunScriptCommand extends BaseCommand {
   }
 
   /**
- * Runs script file path.
- * @returns {string} - Absolute path to the user-provided script file. */
+   * Runs script file path.
+   * @returns {string} - Absolute path to the user-provided script file.
+   */
   scriptFilePath() {
     const filePath = this.processArgs?.[1]
 
@@ -73,8 +76,9 @@ export default class RunScriptCommand extends BaseCommand {
   }
 
   /**
- * Runs build run script context.
- * @returns {RunScriptContext} - Runtime context passed to the script function. */
+   * Runs build run script context.
+   * @returns {RunScriptContext} - Runtime context passed to the script function.
+   */
   buildRunScriptContext() {
     return buildCliCommandContext(this, 2)
   }

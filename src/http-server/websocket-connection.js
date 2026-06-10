@@ -11,7 +11,7 @@
  */
 export default class VelociousWebsocketConnection {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args
    * @param {string} args.connectionId - Client-assigned id, unique within the session.
    * @param {Record<string, ?>} args.params - Opaque params from the `connection-open` message.
@@ -28,7 +28,6 @@ export default class VelociousWebsocketConnection {
    * Called once after the session registers this connection and before
    * any `onMessage` fires. Returning a Promise defers the first
    * `connection-opened` message to the client until it resolves.
-   *
    * @returns {void | Promise<void>}
    */
   onConnect() {}
@@ -37,7 +36,6 @@ export default class VelociousWebsocketConnection {
    * Called for each `connection-message` the client sends to this
    * specific connection. Messages arriving before `onConnect` has
    * resolved are queued and delivered in order once it finishes.
-   *
    * @param {?} body
    * @returns {void | Promise<void>}
    */
@@ -49,7 +47,6 @@ export default class VelociousWebsocketConnection {
    * itself survives; either `onResume` fires on a successful
    * client reconnect, or `onClose("grace_expired")` fires when the
    * grace window expires.
-   *
    * @returns {void | Promise<void>}
    */
   onDisconnect() {}
@@ -57,7 +54,6 @@ export default class VelociousWebsocketConnection {
   /**
    * Called after a client reconnect + `session-resume` rebinds this
    * connection to a new socket.
-   *
    * @returns {void | Promise<void>}
    */
   onResume() {}
@@ -68,7 +64,6 @@ export default class VelociousWebsocketConnection {
    * (server-initiated `close()`), `session_destroyed` (socket dropped
    * and nothing to resume; grace path did not apply), `grace_expired`
    * (paused session's grace window ran out without resume), `error`.
-   *
    * @param {"client_close" | "server_close" | "session_destroyed" | "grace_expired" | "error"} reason
    * @returns {void | Promise<void>}
    */
@@ -77,7 +72,6 @@ export default class VelociousWebsocketConnection {
   /**
    * Sends a `connection-message` frame to the client side of this
    * connection. Throws if the connection has already been closed.
-   *
    * @param {?} body
    * @returns {void}
    */
@@ -96,7 +90,6 @@ export default class VelociousWebsocketConnection {
   /**
    * Closes this connection from the server side. Fires `onClose`
    * locally and notifies the client with `{type: "connection-closed"}`.
-   *
    * @param {"server_close" | "error"} [reason]
    * @returns {Promise<void>}
    */
@@ -117,8 +110,8 @@ export default class VelociousWebsocketConnection {
   }
 
   /**
- * Runs is closed.
- * @returns {boolean} */
+   * Runs is closed.
+    @returns {boolean} */
   isClosed() {
     return this._closed
   }

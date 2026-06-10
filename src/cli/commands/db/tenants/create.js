@@ -5,8 +5,9 @@ import TenantDatabaseCommandHelper from "../../../tenant-database-command-helper
 
 export default class DbTenantsCreate extends BaseCommand {
   /**
- * Runs execute.
- * @returns {Promise<{identifier: string, tenantCount: number} | void>} - Result in test mode. */
+   * Runs execute.
+   * @returns {Promise<{identifier: string, tenantCount: number} | void>} - Result in test mode.
+   */
   async execute() {
     const helper = new TenantDatabaseCommandHelper({
       command: this,

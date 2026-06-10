@@ -31,11 +31,11 @@ function requestErrorSummary(error, cleanedStackWithHeader) {
   if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
 
   const errorCode = typeof /**
- * Documents this API.
- * @type {?} */ (error).code === "string"
+                            * Narrows the runtime value to the documented type.
+                             @type {?} */ (error).code === "string"
     ? /**
- * Documents this API.
- * @type {?} */ (error).code
+       * Narrows the runtime value to the documented type.
+        @type {?} */ (error).code
     : undefined
   const errorMessage = error.message || String(error)
 
@@ -113,7 +113,7 @@ export default class VelociousHttpServerClientRequestRunner {
   events = new EventEmitter()
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {import("./request.js").default | import("./websocket-request.js").default} args.request - Request object.
@@ -181,18 +181,18 @@ export default class VelociousHttpServerClientRequestRunner {
         const routesResolver = new RoutesResolver({configuration, request, response})
         const startTimeMs = Date.now()
         /**
- * Documents this API.
- * @type {ReturnType<typeof setTimeout> | undefined} */
+         * Defines timeoutId.
+          @type {ReturnType<typeof setTimeout> | undefined} */
         let timeoutId
         /**
- * Documents this API.
- * @type {((error: Error) => void) | undefined} */
+         * Defines timeoutReject.
+          @type {((error: Error) => void) | undefined} */
         let timeoutReject
         let timedOut = false
 
         const setRequestTimeoutSeconds = (/**
- * Documents this API.
- * @type {number | undefined} */ timeoutSeconds) => {
+                                           * Narrows the runtime value to the documented type.
+                                            @type {number | undefined} */ timeoutSeconds) => {
           if (timeoutId) {
             clearTimeout(timeoutId)
             timeoutId = undefined
@@ -256,8 +256,8 @@ export default class VelociousHttpServerClientRequestRunner {
     } catch (e) {
       const error = ensureError(e)
       const errorWithContext = /**
- * Documents this API.
- * @type {{velociousContext?: object}} */ (error)
+                                * Narrows the runtime value to the documented type.
+                                 @type {{velociousContext?: object}} */ (error)
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
       const logDetails = requestErrorLogDetails(error)
 
@@ -290,8 +290,9 @@ export default class VelociousHttpServerClientRequestRunner {
   }
 
   /**
- * Runs log completed request.
- * @returns {Promise<void>} - Logs the completed request line after the response has been served. */
+   * Runs log completed request.
+   * @returns {Promise<void>} - Logs the completed request line after the response has been served.
+   */
   async logCompletedRequest() {
     if (this.completedRequestLogged) return
 

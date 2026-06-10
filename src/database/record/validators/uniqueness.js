@@ -5,7 +5,7 @@ import * as inflection from "inflection"
 
 export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   /**
- * Runs validate.
+   * Runs validate.
    * @param {object} args - Options object.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.attributeName - Attribute name.
@@ -13,19 +13,19 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    */
   async validate({model, attributeName}) {
     const modelClass = /**
- * Documents this API.
- * @type {typeof import("../index.js").default} */ (model.constructor)
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("../index.js").default} */ (model.constructor)
 
     const connection = modelClass.connection()
     const tableName = modelClass._getTable().getName()
     const attributeValue = /**
- * Documents this API.
- * @type {string | number} */ (model.readAttribute(attributeName))
+                            * Narrows the runtime value to the documented type.
+                             @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
 
     /**
- * Where args.
- * @type {Record<string, string | number>} */
+     * Where args.
+      @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[attributeNameUnderscore] = attributeValue
@@ -50,8 +50,8 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       if (scopeValue == null) return
 
       whereArgs[scopeUnderscore] = /**
- * Documents this API.
- * @type {string | number} */ (scopeValue)
+                                    * Narrows the runtime value to the documented type.
+                                     @type {string | number} */ (scopeValue)
     }
 
     let existingRecordQuery = modelClass
@@ -77,15 +77,14 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * `new Task({project})`, the FK (`projectId`) is only flushed onto
    * the attribute store during save — but the relationship object is
    * already loaded and carries the id we need for the WHERE clause.
-   *
    * @param {import("../index.js").default} model
    * @param {string} scopeColumn - camelCase attribute name (e.g. `"projectId"`).
    * @returns {string | number | null}
    */
   _resolveScopeValueFromRelationship(model, scopeColumn) {
     const modelClass = /**
- * Documents this API.
- * @type {typeof import("../index.js").default} */ (model.constructor)
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("../index.js").default} */ (model.constructor)
     const relationships = modelClass.getRelationshipsMap()
 
     for (const relationshipName in relationships) {
@@ -112,7 +111,6 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * Normalize the `scope` option into an array of attribute names.
    * Supports string (`"userId"`), array of strings (`["userId", "projectId"]`),
    * or absent (empty array — no scope, original single-column behavior).
-   *
    * @returns {string[]}
    */
   _normalizeScopeColumns() {

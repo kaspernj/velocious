@@ -25,7 +25,7 @@ import {publishToInProcessPeers, registerInProcessPeer} from "./in-process-broke
  */
 export default class InProcessBeaconClient extends EventEmitter {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} [args] - Options.
    * @param {string} [args.peerType] - Optional human-readable peer label.
    * @param {string} [args.peerId] - Optional explicit peer id (defaults to a random UUID).
@@ -36,24 +36,27 @@ export default class InProcessBeaconClient extends EventEmitter {
     this.peerId = peerId || randomUUID()
     this._connected = false
     /**
- * Documents this API.
- * @type {(() => void) | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {(() => void) | undefined} */
     this._unregister = undefined
   }
 
   /**
- * Runs get peer id.
- * @returns {string} - Peer id. */
+   * Runs get peer id.
+   * @returns {string} - Peer id.
+   */
   getPeerId() { return this.peerId }
 
   /**
- * Runs is connected.
- * @returns {boolean} - Whether the peer is registered with the broker. */
+   * Runs is connected.
+   * @returns {boolean} - Whether the peer is registered with the broker.
+   */
   isConnected() { return this._connected }
 
   /**
- * Runs is ready.
- * @returns {boolean} - Whether the peer is ready to publish through the broker. */
+   * Runs is ready.
+   * @returns {boolean} - Whether the peer is ready to publish through the broker.
+   */
   isReady() { return this._connected }
 
   /**
@@ -90,8 +93,8 @@ export default class InProcessBeaconClient extends EventEmitter {
     if (!this._connected) return false
 
     /**
- * Message.
- * @type {import("./types.js").BeaconBroadcastMessage} */
+     * Message.
+      @type {import("./types.js").BeaconBroadcastMessage} */
     const message = {
       type: "broadcast",
       channel,
@@ -125,8 +128,9 @@ export default class InProcessBeaconClient extends EventEmitter {
   }
 
   /**
- * Runs close.
- * @returns {Promise<void>} - Unregisters from the broker. */
+   * Runs close.
+   * @returns {Promise<void>} - Unregisters from the broker.
+   */
   async close() {
     if (this._unregister) this._unregister()
     this._unregister = undefined

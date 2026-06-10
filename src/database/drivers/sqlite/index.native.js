@@ -40,8 +40,8 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
   connectArgs() {
     const args = this.getArgs()
     /**
- * Connect args.
- * @type {Record<string, ?>} */
+     * Connect args.
+      @type {Record<string, ?>} */
     const connectArgs = {}
     const forward = ["database", "host", "password"]
 
@@ -60,7 +60,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
   }
 
   /**
- * Runs query actual.
+   * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<Record<string, ?>[]>} - Query result rows.
    */

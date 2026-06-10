@@ -12,7 +12,7 @@ import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryDropDatabaseBase extends QueryBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {DropDatabaseArgsType} args - Options object.
    */
   constructor({driver, databaseName, ifExists}) {
@@ -22,7 +22,7 @@ export default class VelociousDatabaseQueryDropDatabaseBase extends QueryBase {
   }
 
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {string[]} - SQL statements.
    */
   toSql() {

@@ -3,16 +3,16 @@
 import {AsyncLocalStorage} from "node:async_hooks"
 
 /**
- * Documents this API.
- * @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
+ * Defines asyncLocalStorage.
+  @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
 let asyncLocalStorage
 
 /**
  * Tracked stack global.
- * @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
+  @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
 const trackedStackGlobal = /**
- * Documents this API.
- * @type {?} */ (globalThis)
+                            * Narrows the runtime value to the documented type.
+                             @type {?} */ (globalThis)
 
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
@@ -20,7 +20,8 @@ if (AsyncLocalStorage) {
 
 /**
  * Runs add tracked stack to error.
- * @param {Error} error - Error to annotate with a tracked stack. */
+ * @param {Error} error - Error to annotate with a tracked stack.
+ */
 function addTrackedStackToError(error) {
   // Not supported
   if (!asyncLocalStorage) return
@@ -40,31 +41,30 @@ function addTrackedStackToError(error) {
 
 /**
  * Runs with tracked stack.
- *
  * @param {(() => Promise<?>) | string} arg1 - Arg1.
  * @param {(() => Promise<?>) | Error} [arg2] - Arg2.
  * @returns {Promise<?>} - Resolves with the callback result.
  */
 async function withTrackedStack(arg1, arg2) {
   /**
- * Documents this API.
- * @type {() => Promise<?>} */
+   * Defines callback.
+    @type {() => Promise<?>} */
   let callback
 
   /**
- * Documents this API.
- * @type {string} */
+   * Defines stack.
+    @type {string} */
   let stack
 
   if (typeof arg2 == "function" && typeof arg1 == "string") {
     callback = /**
- * Documents this API.
- * @type {() => Promise<?>} */ (arg2)
+                * Narrows the runtime value to the documented type.
+                 @type {() => Promise<?>} */ (arg2)
     stack = arg1
   } else {
     callback = /**
- * Documents this API.
- * @type {() => Promise<?>} */ (arg1)
+                * Narrows the runtime value to the documented type.
+                 @type {() => Promise<?>} */ (arg1)
     stack = Error().stack || ""
   }
 

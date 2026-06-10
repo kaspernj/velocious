@@ -11,7 +11,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousCliBaseCommand {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {VelociousCliCommandArgs} args.args - Options object.
    * @param {import("./index.js").default} args.cli - Cli.
@@ -29,12 +29,13 @@ export default class VelociousCliBaseCommand {
   }
 
   /**
- * Runs directory.
- * @returns {string} - The directory.  */
+   * Runs directory.
+   * @returns {string} - The directory.
+   */
   directory() { return this.getConfiguration().getDirectory() }
 
   /**
- * Runs execute.
+   * Runs execute.
    * @abstract
    * @returns {Promise<?>} - Resolves with the execute.
    */
@@ -43,18 +44,19 @@ export default class VelociousCliBaseCommand {
   }
 
   /**
- * Runs get configuration.
+   * Runs get configuration.
    * @returns {import("../configuration.js").default} - The configuration.
    */
   getConfiguration() { return this._configuration }
 
   /**
- * Runs get environment handler.
- * @returns {import("../environment-handlers/base.js").default} - The environment handler.  */
+   * Runs get environment handler.
+   * @returns {import("../environment-handlers/base.js").default} - The environment handler.
+   */
   getEnvironmentHandler() { return this._environmentHandler }
 
   /**
- * Runs initialize.
+   * Runs initialize.
    * @abstract
    * @returns {Promise<void>} - Resolves when complete.
    */

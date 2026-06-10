@@ -130,7 +130,7 @@ function isFrontendModelMarker(value) {
 }
 
 /**
- * Documents this API.
+ * Runs the isBackendModelInstance helper.
  * @param {?} value - Candidate value.
  * @returns {value is {attributes: () => Record<string, ?>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => {getRelationshipsMap: () => Record<string, ?>}, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => ?}}} - Whether value looks like a backend model instance.
  */
@@ -138,8 +138,8 @@ export function isBackendModelInstance(value) {
   if (!value || typeof value !== "object") return false
 
   const candidate = /**
- * Documents this API.
- * @type {Record<string, ?>} */ (value)
+                     * Narrows the runtime value to the documented type.
+                      @type {Record<string, ?>} */ (value)
 
   return (
     typeof candidate.attributes === "function"
@@ -194,13 +194,13 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
     const modelName = typeof modelClass.getModelName === "function" ? modelClass.getModelName() : modelClass.name
 
     /**
- * Serialized model.
- * @type {Record<string, ?>} */
+     * Serialized model.
+      @type {Record<string, ?>} */
     const serializedModel = {
       [TYPE_KEY]: TYPE_FRONTEND_MODEL,
       attributes: /**
- * Documents this API.
- * @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
+                   * Narrows the runtime value to the documented type.
+                    @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
       modelName
     }
 
@@ -211,8 +211,8 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
     seenModels.add(value)
 
     /**
- * Preloaded relationships.
- * @type {Record<string, ?>} */
+     * Preloaded relationships.
+      @type {Record<string, ?>} */
     const preloadedRelationships = {}
     const relationshipsMap = value.getModelClass().getRelationshipsMap()
 
@@ -240,8 +240,8 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
   if (isPlainObject(value)) {
     /**
- * Serialized.
- * @type {Record<string, ?>} */
+     * Serialized.
+      @type {Record<string, ?>} */
     const serialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
@@ -261,12 +261,12 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
  */
 function deserializeFrontendModelMarker(marker) {
   const attributes = /**
- * Documents this API.
- * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
+                      * Narrows the runtime value to the documented type.
+                       @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
   const preloadedRelationships = isPlainObject(marker.preloadedRelationships)
     ? /**
- * Documents this API.
- * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
+       * Narrows the runtime value to the documented type.
+        @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
     : {}
   const modelClass = resolveFrontendModelClass(marker.modelName)
 
@@ -299,7 +299,7 @@ function deserializeFrontendModelMarker(marker) {
 }
 
 /**
- * Documents this API.
+ * Runs the serializeFrontendModelTransportValue helper.
  * @param {?} value - Value to serialize.
  * @returns {?} - Serialized value with transport markers.
  */
@@ -308,7 +308,7 @@ export function serializeFrontendModelTransportValue(value) {
 }
 
 /**
- * Documents this API.
+ * Runs the deserializeFrontendModelTransportValue helper.
  * @param {?} value - Value to deserialize.
  * @returns {?} - Deserialized value with transport markers restored.
  */
@@ -319,24 +319,24 @@ export function deserializeFrontendModelTransportValue(value) {
 
   if (isDateMarker(value)) {
     const dateValue = /**
- * Documents this API.
- * @type {{value: string}} */ (value).value
+                       * Narrows the runtime value to the documented type.
+                        @type {{value: string}} */ (value).value
 
     return new Date(dateValue)
   }
 
   if (isBigIntMarker(value)) {
     const bigintValue = /**
- * Documents this API.
- * @type {{value: string}} */ (value).value
+                         * Narrows the runtime value to the documented type.
+                          @type {{value: string}} */ (value).value
 
     return BigInt(bigintValue)
   }
 
   if (isNonFiniteNumberMarker(value)) {
     const numberValue = /**
- * Documents this API.
- * @type {{value: string}} */ (value).value
+                         * Narrows the runtime value to the documented type.
+                          @type {{value: string}} */ (value).value
 
     if (numberValue === NUMBER_NAN) return Number.NaN
     if (numberValue === NUMBER_POSITIVE_INFINITY) return Number.POSITIVE_INFINITY
@@ -354,8 +354,8 @@ export function deserializeFrontendModelTransportValue(value) {
 
   if (isPlainObject(value)) {
     /**
- * Deserialized.
- * @type {Record<string, ?>} */
+     * Deserialized.
+      @type {Record<string, ?>} */
     const deserialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {

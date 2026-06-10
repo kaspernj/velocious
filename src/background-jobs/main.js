@@ -29,7 +29,7 @@ const MAX_TIMER_MS = 2_147_483_647 // ~24.8 days
  */
 /**
  * Worker execution mode capabilities.
- * @type {WorkerExecutionModeCapability[]} */
+  @type {WorkerExecutionModeCapability[]} */
 const WORKER_EXECUTION_MODE_CAPABILITIES = [
   {executionMode: "inline", accepts: (worker) => worker.acceptsInlineJobs !== false},
   {executionMode: "forked", accepts: (worker) => worker.acceptsForkedJobs !== false},
@@ -41,7 +41,7 @@ const WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE = new Map(
 
 export default class BackgroundJobsMain {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.host] - Hostname.
@@ -57,56 +57,56 @@ export default class BackgroundJobsMain {
     this.store = new BackgroundJobsStore({configuration, databaseIdentifier: config.databaseIdentifier})
     this.logger = new Logger(this)
     /**
- * Documents this API.
- * @type {Set<JsonSocket>} */
+     * Narrows the runtime value to the documented type.
+      @type {Set<JsonSocket>} */
     this.workers = new Set()
     /**
- * Documents this API.
- * @type {Set<JsonSocket>} */
+     * Narrows the runtime value to the documented type.
+      @type {Set<JsonSocket>} */
     this.readyWorkers = new Set()
     /**
- * Documents this API.
- * @type {net.Server | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {net.Server | undefined} */
     this.server = undefined
     /**
- * Documents this API.
- * @type {NodeJS.Timeout | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {NodeJS.Timeout | undefined} */
     this._pollTimer = undefined
     /**
- * Documents this API.
- * @type {NodeJS.Timeout | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {NodeJS.Timeout | undefined} */
     this._scheduledTimer = undefined
     /**
- * Documents this API.
- * @type {NodeJS.Timeout | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {NodeJS.Timeout | undefined} */
     this._errorRetryTimer = undefined
     /**
- * Documents this API.
- * @type {NodeJS.Timeout | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {NodeJS.Timeout | undefined} */
     this._orphanTimer = undefined
     /**
- * Documents this API.
- * @type {BackgroundJobsScheduler | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {BackgroundJobsScheduler | undefined} */
     this.scheduler = undefined
     this._draining = false
     this._redrainQueued = false
     this._stopped = false
     /**
- * Documents this API.
- * @type {(() => void) | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {(() => void) | undefined} */
     this._unsubscribeBeacon = undefined
     /**
- * Documents this API.
- * @type {((...args: Array<?>) => void) | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {((...args: Array<?>) => void) | undefined} */
     this._beaconConnectHandler = undefined
     /**
- * Documents this API.
- * @type {import("../beacon/client.js").default | import("../beacon/in-process-client.js").default | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {import("../beacon/client.js").default | import("../beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
   }
 
   /**
- * Runs start.
+   * Runs start.
    * @returns {Promise<void>} - Resolves when listening.
    */
   async start() {
@@ -162,7 +162,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs stop.
+   * Runs stop.
    * @returns {Promise<void>} - Resolves when closed.
    */
   async stop() {
@@ -177,8 +177,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs close workers.
- * @returns {void} */
+   * Runs close workers.
+    @returns {void} */
   _closeWorkers() {
     for (const worker of this.workers) {
       worker.close()
@@ -186,8 +186,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs clear timers.
- * @returns {void} */
+   * Runs clear timers.
+    @returns {void} */
   _clearTimers() {
     if (this._pollTimer) clearInterval(this._pollTimer)
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
@@ -200,8 +200,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs disconnect beacon handlers.
- * @returns {void} */
+   * Runs disconnect beacon handlers.
+    @returns {void} */
   _disconnectBeaconHandlers() {
     if (this._unsubscribeBeacon) {
       this._unsubscribeBeacon()
@@ -216,8 +216,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs stop beacon and server.
- * @returns {Promise<void>} */
+   * Runs stop beacon and server.
+    @returns {Promise<void>} */
   async _stopBeaconAndServer() {
     try {
       await this.configuration.disconnectBeacon()
@@ -227,8 +227,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs close server and database connections.
- * @returns {Promise<void>} */
+   * Runs close server and database connections.
+    @returns {Promise<void>} */
   async _closeServerAndDatabaseConnections() {
     try {
       await this._closeServer()
@@ -238,8 +238,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs close server.
- * @returns {Promise<void>} */
+   * Runs close server.
+    @returns {Promise<void>} */
   async _closeServer() {
     if (!this.server) return
 
@@ -249,7 +249,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs get port.
+   * Runs get port.
    * @returns {number} - Bound port.
    */
   getPort() {
@@ -319,15 +319,15 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle connection.
+   * Runs handle connection.
    * @param {import("net").Socket} socket - Socket.
    * @returns {void}
    */
   _handleConnection(socket) {
     const jsonSocket = new JsonSocket(socket)
     /**
- * Role.
- * @type {import("./types.js").BackgroundJobSocketRole | null} */
+     * Role.
+      @type {import("./types.js").BackgroundJobSocketRole | null} */
     let role = null
 
     const cleanup = () => {
@@ -349,7 +349,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle socket message.
+   * Runs handle socket message.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
@@ -366,7 +366,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle roleless socket message.
+   * Runs handle roleless socket message.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
@@ -384,7 +384,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle client socket message.
+   * Runs handle client socket message.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
@@ -397,7 +397,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle worker socket message.
+   * Runs handle worker socket message.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
@@ -418,7 +418,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle reporter socket message.
+   * Runs handle reporter socket message.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
@@ -436,7 +436,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle worker ready.
+   * Runs handle worker ready.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobReadyMessage} args.message - Ready message.
@@ -451,7 +451,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle worker draining.
+   * Runs handle worker draining.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @returns {void}
@@ -464,7 +464,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle enqueue.
+   * Runs handle enqueue.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobEnqueueMessage} args.message - Message.
@@ -488,7 +488,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle job complete.
+   * Runs handle job complete.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobCompleteMessage} args.message - Message.
@@ -509,7 +509,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs handle job failed.
+   * Runs handle job failed.
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobFailedMessage} args.message - Message.
@@ -545,7 +545,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs emit background job failed.
+   * Runs emit background job failed.
    * @param {{error: ?, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
    * @returns {void}
    */
@@ -574,7 +574,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs normalize failure error.
+   * Runs normalize failure error.
    * @param {?} error - Reported failure value.
    * @returns {Error} Normalized error.
    */
@@ -585,7 +585,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs error from unknown failure.
+   * Runs error from unknown failure.
    * @param {?} error - Reported failure value.
    * @returns {Error} Normalized error.
    */
@@ -599,7 +599,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs message from unknown failure.
+   * Runs message from unknown failure.
    * @param {?} error - Reported failure value.
    * @returns {string} Error message.
    */
@@ -610,7 +610,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs has string failure.
+   * Runs has string failure.
    * @param {?} error - Reported failure value.
    * @returns {error is string} Whether the value is a non-empty string.
    */
@@ -619,7 +619,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs copy string failure stack.
+   * Runs copy string failure stack.
    * @param {object} args - Options.
    * @param {?} args.error - Reported failure value.
    * @param {Error} args.normalizedError - Normalized error.
@@ -655,8 +655,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs start drain.
- * @returns {boolean} - Whether the drain should continue. */
+   * Runs start drain.
+   * @returns {boolean} - Whether the drain should continue.
+   */
   _startDrain() {
     if (this._stopped) return false
     if (this._queueDrainIfAlreadyRunning()) return false
@@ -666,7 +667,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs finish drain.
+   * Runs finish drain.
    * @param {object} args - Options.
    * @param {boolean} args.errored - Whether the drain hit an error.
    * @returns {Promise<void>} - Resolves after follow-up timers are handled.
@@ -679,8 +680,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs arm scheduled timer or retry.
- * @returns {Promise<void>} - Resolves after scheduled timer handling. */
+   * Runs arm scheduled timer or retry.
+   * @returns {Promise<void>} - Resolves after scheduled timer handling.
+   */
   async _armScheduledTimerOrRetry() {
     try {
       await this._armScheduledTimer()
@@ -694,8 +696,8 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs clear error retry timer.
- * @returns {void} */
+   * Runs clear error retry timer.
+    @returns {void} */
   _clearErrorRetryTimer() {
     if (this._errorRetryTimer) {
       clearTimeout(this._errorRetryTimer)
@@ -704,8 +706,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs queue drain if already running.
- * @returns {boolean} - Whether another drain is already in progress. */
+   * Runs queue drain if already running.
+   * @returns {boolean} - Whether another drain is already in progress.
+   */
   _queueDrainIfAlreadyRunning() {
     if (!this._draining) return false
 
@@ -714,8 +717,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs drain until idle.
- * @returns {Promise<boolean>} - Whether the drain hit an error. */
+   * Runs drain until idle.
+   * @returns {Promise<boolean>} - Whether the drain hit an error.
+   */
   async _drainUntilIdle() {
     try {
       return await this._runDrainLoop()
@@ -725,8 +729,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs run drain loop.
- * @returns {Promise<boolean>} - Whether the drain hit an error. */
+   * Runs run drain loop.
+   * @returns {Promise<boolean>} - Whether the drain hit an error.
+   */
   async _runDrainLoop() {
     do {
       this._redrainQueued = false
@@ -739,8 +744,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs drain once with error report.
- * @returns {Promise<boolean>} - Whether one drain pass failed. */
+   * Runs drain once with error report.
+   * @returns {Promise<boolean>} - Whether one drain pass failed.
+   */
   async _drainOnceWithErrorReport() {
     try {
       await this._drainOnce()
@@ -810,7 +816,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs next available job for ready workers.
+   * Runs next available job for ready workers.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next queued job matching ready worker capacity.
    */
   async nextAvailableJobForReadyWorkers() {
@@ -823,8 +829,9 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs ready worker execution modes.
- * @returns {import("./types.js").BackgroundJobExecutionMode[]} - Execution modes currently accepted by ready workers. */
+   * Runs ready worker execution modes.
+   * @returns {import("./types.js").BackgroundJobExecutionMode[]} - Execution modes currently accepted by ready workers.
+   */
   readyWorkerExecutionModes() {
     const executionModes = new Set()
 
@@ -832,11 +839,11 @@ export default class BackgroundJobsMain {
       this._addAcceptedExecutionModes({executionModes, worker})
     }
 
-    return /** Documents this API. @type {import("./types.js").BackgroundJobExecutionMode[]} */ ([...executionModes])
+    return /** Narrows the runtime value to the documented type. @type {import("./types.js").BackgroundJobExecutionMode[]} */ ([...executionModes])
   }
 
   /**
- * Runs add accepted execution modes.
+   * Runs add accepted execution modes.
    * @param {object} args - Options.
    * @param {Set<import("./types.js").BackgroundJobExecutionMode>} args.executionModes - Accepted modes.
    * @param {JsonSocket} args.worker - Worker socket.
@@ -849,7 +856,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs ready worker for job.
+   * Runs ready worker for job.
    * @param {import("./types.js").BackgroundJobRow} job - Job being handed off.
    * @returns {JsonSocket | undefined} - Ready worker for the job type.
    */
@@ -860,7 +867,7 @@ export default class BackgroundJobsMain {
   }
 
   /**
- * Runs worker accepts job.
+   * Runs worker accepts job.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job being handed off.
    * @param {JsonSocket} args.worker - Worker socket.

@@ -49,7 +49,7 @@ export const FRAMEWORK_SOURCE_DIRECTORY = frameworkSourceDirectory()
 
 export default class NodeBacktraceCleaner extends BacktraceCleaner {
   /**
- * Runs get cleaned stack.
+   * Runs get cleaned stack.
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
    * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.
@@ -61,7 +61,7 @@ export default class NodeBacktraceCleaner extends BacktraceCleaner {
   }
 
   /**
- * Runs get application source line.
+   * Runs get application source line.
    * @param {Error} error - Error instance.
    * @param {object} args - Options object.
    * @param {string} args.applicationDirectory - Application directory.
@@ -73,7 +73,7 @@ export default class NodeBacktraceCleaner extends BacktraceCleaner {
   }
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {Error} error - Error instance.
    * @param {object} [args] - Options object.
    * @param {string | undefined} [args.frameworkSourceDirectory] - Directory for Velocious internals to skip.

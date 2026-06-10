@@ -50,7 +50,7 @@ const FIELDS = [
  */
 
 /**
- * Documents this API.
+ * Runs the parseCronExpression helper.
  * @param {string} expression - Cron expression or shortcut.
  * @returns {ParsedCron}
  */
@@ -61,8 +61,8 @@ export function parseCronExpression(expression) {
 
   const trimmed = expression.trim().toLowerCase()
   const expanded = SHORTCUTS[/**
- * Documents this API.
- * @type {keyof typeof SHORTCUTS} */ (trimmed)] || trimmed
+                              * Narrows the runtime value to the documented type.
+                               @type {keyof typeof SHORTCUTS} */ (trimmed)] || trimmed
   const fields = expanded.split(/\s+/)
 
   if (fields.length !== 5) {
@@ -230,7 +230,6 @@ const MAX_NEXT_FIRE_ITERATIONS = 5 * 366 * 24 * 60
  * Operates at minute granularity. Bails out with an error after five
  * years of search, which only happens if the expression matches no
  * real time (e.g., `0 0 31 2 *` — Feb 31st).
- *
  * @param {ParsedCron} parsed - Parsed cron expression.
  * @param {Date} from - Reference Date — the next match is strictly after this.
  * @returns {Date}

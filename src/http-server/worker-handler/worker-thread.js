@@ -23,7 +23,7 @@ function summarizeClientWriteChunk(chunk) {
 
 export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
    * @param {{debug: boolean, directory: string, environment: string, workerCount: number}} args.workerData - Worker configuration details.
@@ -34,8 +34,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const {workerCount} = workerData
 
     /**
- * Documents this API.
- * @type {Record<number, Client>} */
+     * Narrows the runtime value to the documented type.
+      @type {Record<number, Client>} */
     this.clients = {}
 
     this.logger = new Logger(this)
@@ -56,7 +56,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs initialize.
+   * Runs initialize.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize() {
@@ -65,8 +65,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const configurationImport = await import(toImportSpecifier(configurationPath))
 
     /**
- * Documents this API.
- * @type {import("../../configuration.js").default} */
+     * Narrows the runtime value to the documented type.
+      @type {import("../../configuration.js").default} */
     this.configuration = configurationImport.default
 
     if (!this.configuration) throw new Error(`Configuration couldn't be loaded from: ${configurationPath}`)
@@ -88,7 +88,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * On command.
+   * On command.
    * @param {object} data - Data payload.
    * @param {string} data.command - Command.
    * @param {Buffer | Uint8Array | string} [data.chunk] - Chunk.
@@ -125,7 +125,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs handle new client.
+   * Runs handle new client.
    * @param {object} data - Data payload.
    * @param {number} [data.clientCount] - Client count.
    * @param {string} [data.remoteAddress] - Remote address.
@@ -157,7 +157,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs handle client write.
+   * Runs handle client write.
    * @param {object} data - Data payload.
    * @param {Buffer | Uint8Array | string} [data.chunk] - Chunk.
    * @param {number} [data.clientCount] - Client count.
@@ -169,8 +169,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const {chunk, clientCount} = data
     if (!chunk) throw new Error("No chunk given")
     const client = /**
- * Documents this API.
- * @type {Client | undefined} */ (digg(this.clients, clientCount))
+                    * Narrows the runtime value to the documented type.
+                     @type {Client | undefined} */ (digg(this.clients, clientCount))
 
     if (!client) throw new Error(`Client not found for clientWrite: ${clientCount}`)
 
@@ -182,7 +182,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs handle websocket event.
+   * Runs handle websocket event.
    * @param {object} data - Data payload.
    * @param {string} [data.channel] - Channel name.
    * @param {string} [data.createdAt] - Event creation time.
@@ -199,7 +199,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs handle websocket v2 broadcast.
+   * Runs handle websocket v2 broadcast.
    * @param {object} data - Data payload.
    * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
    * @param {?} [data.body] - V2 broadcast body.
@@ -217,7 +217,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs handle debug snapshot.
+   * Runs handle debug snapshot.
    * @param {object} data - Data payload.
    * @param {number} [data.requestId] - Debug request id.
    * @returns {void}
@@ -236,8 +236,9 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs handle shutdown.
- * @returns {Promise<void>} Resolves after worker shutdown has been requested. */
+   * Runs handle shutdown.
+   * @returns {Promise<void>} Resolves after worker shutdown has been requested.
+   */
   async handleShutdown() {
     if (this.configuration?.closeDatabaseConnections) {
       await this.configuration.closeDatabaseConnections()
@@ -248,7 +249,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   }
 
   /**
- * Runs broadcast websocket event.
+   * Runs broadcast websocket event.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {string | undefined} args.createdAt - Event creation time.

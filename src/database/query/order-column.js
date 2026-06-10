@@ -35,7 +35,7 @@ function reverseDirection(direction) {
 
 export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    * @param {OrderColumnInput} input - Column order input.
    */
@@ -51,7 +51,7 @@ export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
   }
 
   /**
- * Runs set reverse order.
+   * Runs set reverse order.
    * @param {boolean} [reverseOrder] - Whether to reverse the order.
    * @returns {void}
    */
@@ -60,8 +60,9 @@ export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
   }
 
   /**
- * Runs to sql.
- * @returns {string} - SQL string. */
+   * Runs to sql.
+   * @returns {string} - SQL string.
+   */
   toSql() {
     const options = this.getOptions()
     const direction = this.reverseOrder ? reverseDirection(this.direction) : this.direction

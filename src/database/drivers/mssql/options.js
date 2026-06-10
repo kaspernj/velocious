@@ -4,7 +4,7 @@ import QueryParserOptions from "../../query-parser/options.js"
 
 export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOptions {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    */
@@ -21,7 +21,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
- * Runs quote.
+   * Runs quote.
    * @param {?} string - String.
    * @returns {number | string} - The quote.
    */
@@ -32,7 +32,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
- * Runs quote column name.
+   * Runs quote column name.
    * @param {string} string - String.
    * @returns {string} - The quote column name.
    */
@@ -43,7 +43,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
- * Runs quote database name.
+   * Runs quote database name.
    * @param {string} databaseName - Database name.
    * @returns {string} - The quote database name.
    */
@@ -55,7 +55,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
- * Runs quote index name.
+   * Runs quote index name.
    * @param {string} string - String.
    * @returns {string} - The quote index name.
    */
@@ -66,7 +66,7 @@ export default class VelociousDatabaseDriversMssqlOptions extends QueryParserOpt
   }
 
   /**
- * Runs quote table name.
+   * Runs quote table name.
    * @param {string} string - String.
    * @returns {string} - The quote table name.
    */

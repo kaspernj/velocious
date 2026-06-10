@@ -40,7 +40,7 @@ export default class VeoliciousHttpServerClient {
   state = "initial"
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {number} args.clientCount - Client count.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
@@ -55,13 +55,13 @@ export default class VeoliciousHttpServerClient {
     this.remoteAddress = remoteAddress
 
     /**
- * Documents this API.
- * @type {RequestRunner[]} */
+     * Narrows the runtime value to the documented type.
+      @type {RequestRunner[]} */
     this.requestRunners = []
   }
 
   /**
- * Runs send bad upgrade response.
+   * Runs send bad upgrade response.
    * @param {string} message - Message text.
    * @returns {void} - No return value.
    */
@@ -82,7 +82,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs send bad request response.
+   * Runs send bad request response.
    * @param {string} message - Response message.
    * @returns {void} - No return value.
    */
@@ -103,19 +103,19 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs handle bad request.
+   * Runs handle bad request.
    * @param {Error} error - Error instance.
    * @returns {void} - No return value.
    */
   handleBadRequest(error) {
     this.logger.warn(() => ["Failed to parse HTTP request", badRequestDetails(/**
- * Documents this API.
- * @type {Error & {velociousContext?: Record<string, ?>}} */ (error))])
+                                                                               * Narrows the runtime value to the documented type.
+                                                                                @type {Error & {velociousContext?: Record<string, ?>}} */ (error))])
 
     if (this.currentRequest && "getRequestParser" in this.currentRequest) {
       const httpRequest = /**
- * Documents this API.
- * @type {import("./request.js").default} */ (this.currentRequest)
+                           * Narrows the runtime value to the documented type.
+                            @type {import("./request.js").default} */ (this.currentRequest)
 
       httpRequest.getRequestParser().destroy()
     }
@@ -160,7 +160,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs on write.
+   * Runs on write.
    * @param {Buffer} data - Data payload.
    * @returns {void} - No return value.
    */
@@ -178,8 +178,8 @@ export default class VeoliciousHttpServerClient {
 
     try {
       /**
- * Remaining.
- * @type {Buffer | undefined} */
+       * Remaining.
+        @type {Buffer | undefined} */
       let remaining = data
 
       while (remaining) {
@@ -229,7 +229,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs is websocket upgrade.
+   * Runs is websocket upgrade.
    * @param {import("./request.js").default} request - Request object.
    * @returns {boolean} - Whether websocket upgrade.
    */
@@ -241,8 +241,9 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs upgrade to websocket.
- * @returns {void} - No return value.  */
+   * Runs upgrade to websocket.
+   * @returns {void} - No return value.
+   */
   _upgradeToWebsocket() {
     if (!this.currentRequest) throw new Error("No current request")
 
@@ -279,17 +280,17 @@ export default class VeoliciousHttpServerClient {
       })
 
       const resolvedThenable = /**
- * Documents this API.
- * @type {{then?: (...args: Array<?>) => ?}} */ (resolvedHandler)
+                                * Narrows the runtime value to the documented type.
+                                 @type {{then?: (...args: Array<?>) => ?}} */ (resolvedHandler)
 
       if (resolvedThenable?.then) {
         messageHandlerPromise = /**
- * Documents this API.
- * @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)
+                                 * Narrows the runtime value to the documented type.
+                                  @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)
       } else if (resolvedHandler) {
         messageHandler = /**
- * Documents this API.
- * @type {import("../../configuration-types.js").WebsocketMessageHandler} */ (resolvedHandler)
+                          * Narrows the runtime value to the documented type.
+                           @type {import("../../configuration-types.js").WebsocketMessageHandler} */ (resolvedHandler)
       }
     }
 
@@ -356,7 +357,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs send response.
+   * Runs send response.
    * @param {RequestRunner} requestRunner - Request runner.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -443,14 +444,14 @@ export default class VeoliciousHttpServerClient {
 
     if ("getRequestParser" in request) {
       const httpRequest = /**
- * Documents this API.
- * @type {import("./request.js").default} */ (request)
+                           * Narrows the runtime value to the documented type.
+                            @type {import("./request.js").default} */ (request)
       httpRequest.getRequestParser().destroy()
     }
   }
 
   /**
- * Runs send file output.
+   * Runs send file output.
    * @param {string} filePath - File path.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -474,7 +475,7 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
- * Runs should close connection.
+   * Runs should close connection.
    * @param {import("./request.js").default | import("./websocket-request.js").default} request - Request object.
    * @returns {boolean} - Whether the connection should be closed.
    */
@@ -498,7 +499,6 @@ export default class VeoliciousHttpServerClient {
  * Returns true for the status codes that RFC 7230 §3.3.3 declares
  * cannot carry a message body: every 1xx informational, 204 No
  * Content, and 304 Not Modified.
- *
  * @param {number} statusCode - HTTP status code.
  * @returns {boolean}
  */

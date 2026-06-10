@@ -6,7 +6,7 @@ import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
 
 /**
- * Documents this API.
+ * Runs the frontendModelResourcesForBackendProject helper.
  * @param {import("../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
  * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
  */
@@ -25,7 +25,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
 }
 
 /**
- * Documents this API.
+ * Runs the frontendModelResourceDefinitionIsClass helper.
  * @param {?} value - Candidate resource definition.
  * @returns {value is typeof FrontendModelBaseResource} - Whether value is a resource class.
  */
@@ -34,7 +34,7 @@ export function frontendModelResourceDefinitionIsClass(value) {
 }
 
 /**
- * Documents this API.
+ * Runs the frontendModelResourceClassFromDefinition helper.
  * @param {?} resourceDefinition - Resource definition.
  * @returns {typeof FrontendModelBaseResource | null} - Resource class when definition is class-based.
  */
@@ -43,7 +43,7 @@ export function frontendModelResourceClassFromDefinition(resourceDefinition) {
 }
 
 /**
- * Documents this API.
+ * Runs the frontendModelResourceConfigurationFromDefinition helper.
  * @param {?} resourceDefinition - Resource definition.
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} - Normalized resource configuration.
  */
@@ -60,8 +60,8 @@ export function frontendModelResourceConfigurationFromDefinition(resourceDefinit
  */
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
   const restArgs = /**
- * Documents this API.
- * @type {Record<string, ?>} */ ({...resourceConfiguration})
+                    * Narrows the runtime value to the documented type.
+                     @type {Record<string, ?>} */ ({...resourceConfiguration})
 
   for (const key of [
     "abilities",
@@ -119,8 +119,8 @@ function normalizeFrontendModelResourceAbilities(abilities) {
   }
 
   /**
- * Normalized.
- * @type {Record<string, string>} */
+   * Normalized.
+    @type {Record<string, string>} */
   const normalized = {}
 
   if (abilities.includes("create")) normalized.create = "create"
@@ -136,7 +136,8 @@ function normalizeFrontendModelResourceAbilities(abilities) {
 
 /**
  * Runs default crud abilities.
- * @returns {Record<string, string>} - Default CRUD ability map. */
+ * @returns {Record<string, string>} - Default CRUD ability map.
+ */
 function defaultCrudAbilities() {
   return {
     create: "create",
@@ -204,8 +205,8 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
   }
 
   /**
- * Normalized commands.
- * @type {Record<string, string>} */
+   * Normalized commands.
+    @type {Record<string, string>} */
   const normalizedCommands = {}
 
   for (const commandType of commandsConfig) {
@@ -242,8 +243,8 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
   }
 
   /**
- * Normalized commands.
- * @type {Record<string, string>} */
+   * Normalized commands.
+    @type {Record<string, string>} */
   const normalizedCommands = {}
 
   for (const methodName of commandsConfig) {
@@ -261,7 +262,7 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
 }
 
 /**
- * Documents this API.
+ * Runs the frontendModelResourcePath helper.
  * @param {string} modelName - Model class name.
  * @param {?} resourceDefinition - Resource definition.
  * @returns {string} - Normalized resource path.
@@ -277,7 +278,7 @@ export function frontendModelResourcePath(modelName, resourceDefinition) {
 }
 
 /**
- * Documents this API.
+ * Runs the frontendModelActionForCommand helper.
  * @param {object} args - Arguments.
  * @param {string} args.commandName - Command path segment.
  * @param {string} args.modelName - Model class name.
@@ -300,13 +301,13 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
     const validatedCommandName = validateFrontendModelResourceCommandName({
       commandName: configuredCommandName,
       commandType: /**
- * Documents this API.
- * @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
+                    * Narrows the runtime value to the documented type.
+                     @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
       modelName
     })
 
     if (commandName === validatedCommandName) {
-      return /** Documents this API. @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
+      return /** Narrows the runtime value to the documented type. @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
     }
   }
 
@@ -314,7 +315,7 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
 }
 
 /**
- * Documents this API.
+ * Runs the frontendModelCustomCommandForPath helper.
  * @param {object} args - Arguments.
  * @param {import("../configuration-types.js").BackendProjectConfiguration[]} args.backendProjects - Backend projects to scan.
  * @param {string} args.currentPath - Request path without query.

@@ -6,7 +6,7 @@ import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {TableData} args.tableData - Table data.
@@ -21,7 +21,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
   }
 
   /**
- * Runs to sqls.
+   * Runs to sqls.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {

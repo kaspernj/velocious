@@ -17,8 +17,9 @@ const MAX_PER_PAGE = 100
  */
 export default class VelociousBackgroundJobsWebController extends Controller {
   /**
- * Runs mount options.
- * @returns {import("./registry.js").JobsMountOptions} - Options for the mount that matched this request. */
+   * Runs mount options.
+   * @returns {import("./registry.js").JobsMountOptions} - Options for the mount that matched this request.
+   */
   _mountOptions() {
     const at = this.params().velociousJobsMountAt
 
@@ -26,8 +27,9 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs store.
- * @returns {BackgroundJobsStore} - Jobs store scoped to the mount's database. */
+   * Runs store.
+   * @returns {BackgroundJobsStore} - Jobs store scoped to the mount's database.
+   */
   _store() {
     if (!this._jobsStore) {
       this._jobsStore = new BackgroundJobsStore({
@@ -92,8 +94,9 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs health.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs health.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async health() {
     await this._respond(async () => {
       await this.render({json: {ok: true, service: "velocious-background-jobs"}})
@@ -101,14 +104,15 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs stats.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs stats.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async stats() {
     await this._respond(async () => {
       const counts = await this._store().countsByStatus()
       /**
- * By status.
- * @type {Record<string, number>} */
+       * By status.
+        @type {Record<string, number>} */
       const byStatus = {}
       let total = 0
 
@@ -125,8 +129,9 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs index.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs index.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async index() {
     await this._respond(async () => {
       const params = this.params()
@@ -147,8 +152,9 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs show.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs show.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async show() {
     await this._respond(async () => {
       const job = await this._store().getJob(this.params().id)
@@ -163,8 +169,9 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs schedule.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs schedule.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async schedule() {
     await this._respond(async () => {
       const scheduled = await this.getConfiguration().getScheduledBackgroundJobsConfig()
@@ -174,7 +181,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs serialize job.
+   * Runs serialize job.
    * @param {import("../types.js").BackgroundJobRow} job - Job row.
    * @returns {Record<string, ?>} - Serialized job for the API.
    */
@@ -203,7 +210,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs serialize schedule.
+   * Runs serialize schedule.
    * @param {import("../../configuration-types.js").ScheduledBackgroundJobsConfiguration | undefined} scheduled - Scheduled jobs config.
    * @returns {Array<Record<string, ?>>} - Serialized recurring jobs.
    */
@@ -216,8 +223,8 @@ export default class VelociousBackgroundJobsWebController extends Controller {
 
     return Object.keys(jobs).map((name) => {
       const entry = jobs[name] || /**
- * Documents this API.
- * @type {?} */ ({})
+                                   * Narrows the runtime value to the documented type.
+                                    @type {?} */ ({})
 
       return {
         args: redactArgs ? undefined : (entry.args || []),
@@ -232,7 +239,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs sanitize status.
+   * Runs sanitize status.
    * @param {?} value - Raw status param.
    * @returns {string | undefined} - Valid status or undefined.
    */
@@ -241,7 +248,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs sanitize sort.
+   * Runs sanitize sort.
    * @param {?} value - Raw sort param (e.g. "createdAtMs" or "-failedAtMs").
    * @returns {{sortColumn: string, sortDirection: "ASC" | "DESC"}} - Normalized sort.
    */
@@ -258,7 +265,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   }
 
   /**
- * Runs positive int.
+   * Runs positive int.
    * @param {?} value - Raw numeric param.
    * @param {number} fallback - Fallback when invalid.
    * @returns {number} - Positive integer.

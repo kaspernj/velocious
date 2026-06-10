@@ -11,7 +11,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class TableIndex {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {Array<string | import("./table-column.js").default>} columns - Column names.
    * @param {TableIndexArgsType} [args] - Options object.
    */
@@ -27,19 +27,19 @@ export default class TableIndex {
   }
 
   /**
- * Runs get columns.
+   * Runs get columns.
    * @returns {Array<string | import("./table-column.js").default>} - The columns.
    */
   getColumns() { return this.columns }
 
   /**
- * Runs get name.
+   * Runs get name.
    * @returns {string | undefined} - The name.
    */
   getName() { return this.args?.name }
 
   /**
- * Runs get unique.
+   * Runs get unique.
    * @returns {boolean} - Whether unique.
    */
   getUnique() { return Boolean(this.args?.unique) }

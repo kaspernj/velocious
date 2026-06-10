@@ -5,8 +5,8 @@ import path from "path"
 /** Node CLI command for dumping DB structure SQL files. */
 export default class DbSchemaDump extends BaseCommand {
   /**
- * Runs execute.
- * @returns {Promise<void>} */
+   * Runs execute.
+    @returns {Promise<void>} */
   async execute() {
     await this.getConfiguration().ensureConnections({name: "DB schema dump"}, async (dbs) => {
       const shouldGenerate = await this.shouldGenerateStructureSql({dbs})
@@ -18,7 +18,7 @@ export default class DbSchemaDump extends BaseCommand {
   }
 
   /**
- * Runs should generate structure sql.
+   * Runs should generate structure sql.
    * @param {object} args - Options object.
    * @param {Record<string, import("../../../../../../database/drivers/base.js").default>} args.dbs - Active DB connections by identifier.
    * @returns {Promise<boolean>} - Whether structure SQL should be generated.

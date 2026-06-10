@@ -102,7 +102,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {string} newValue
    * @returns {void}
    */
-  setName(newValue) { return this._setTranslatedAttribute("name", this._getConfiguration().getLocale(), newValue) } // eslint-disable-line no-unused-vars
+  setName(newValue) { return this._setTranslatedAttribute("name", this._getConfiguration().getLocale(), newValue) }
 
   /**
    * @returns {string | null}
@@ -113,7 +113,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {string} newValue
    * @returns {void}
    */
-  setNameDe(newValue) { return this._setTranslatedAttribute("name", "de", newValue) } // eslint-disable-line no-unused-vars
+  setNameDe(newValue) { return this._setTranslatedAttribute("name", "de", newValue) }
 
   /**
    * @abstract
@@ -130,7 +130,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {string} newValue
    * @returns {void}
    */
-  setNameEn(newValue) { return this._setTranslatedAttribute("name", "en", newValue) } // eslint-disable-line no-unused-vars
+  setNameEn(newValue) { return this._setTranslatedAttribute("name", "en", newValue) }
 
   /**
    * @abstract

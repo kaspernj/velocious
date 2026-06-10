@@ -16,8 +16,8 @@ export default async function query(pool, sql) {
 
         for (const rowData of resultRows) {
           /**
- * Result.
- * @type {Record<string, ?>} */
+           * Result.
+            @type {Record<string, ?>} */
           const result = {}
 
           for (const fieldData of resultFields) {

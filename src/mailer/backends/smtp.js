@@ -3,8 +3,8 @@
 import restArgsError from "../../utils/rest-args-error.js"
 
 /**
- * Documents this API.
- * @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
+ * Defines this typedef.
+  @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
 
 /**
  * Runs normalize recipients.
@@ -45,7 +45,7 @@ function envelopeAddress(address) {
  */
 export default class SmtpMailerBackend {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {SmtpConnectionOptions} args.connectionOptions - smtp-connection options.
    * @param {string} [args.defaultFrom] - Default from address.
@@ -62,7 +62,7 @@ export default class SmtpMailerBackend {
   }
 
   /**
- * Runs deliver.
+   * Runs deliver.
    * @param {object} args - Delivery args.
    * @param {import("../index.js").MailerDeliveryPayload} args.payload - Mail delivery payload.
    * @param {import("../../configuration.js").default} [args.configuration] - Active configuration.
@@ -126,7 +126,7 @@ export default class SmtpMailerBackend {
       }
 
       /**
- * Reject delivery.
+       * Reject delivery.
        * @param {Error} error - Error that failed delivery.
        */
       const rejectDelivery = (error) => {
@@ -141,7 +141,7 @@ export default class SmtpMailerBackend {
       const onEnd = () => resolveDelivery()
 
       /**
- * On error.
+       * On error.
        * @param {Error} error - Error emitted by the SMTP connection.
        */
       const onError = (error) => {
@@ -161,10 +161,10 @@ export default class SmtpMailerBackend {
 
       const sendMessage = () => {
         connection.send({from: envelopeFrom, to: recipients}, /**
- * Documents this API.
- * @type {?} */ (message), (/**
- * Documents this API.
- * @type {Error | null | undefined} */ sendError) => {
+                                                               * Narrows the runtime value to the documented type.
+                                                                @type {?} */ (message), (/**
+                                                                                          * Narrows the runtime value to the documented type.
+                                                                                           @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

@@ -29,8 +29,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
     let stopping = false
 
     /**
- * Cleanup.
- * @returns {void} - Remove installed signal handlers. */
+     * Cleanup.
+     * @returns {void} - Remove installed signal handlers.
+     */
     const cleanup = () => {
       processObject.removeListener("SIGINT", onSignal)
       processObject.removeListener("SIGTERM", onSignal)
@@ -55,8 +56,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
     }
 
     /**
- * Stop application.
- * @returns {Promise<void>} - Stops the application once. */
+     * Stop application.
+     * @returns {Promise<void>} - Stops the application once.
+     */
     const stopApplication = async () => {
       if (stopping || finished) return
 
@@ -70,8 +72,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
     }
 
     /**
- * On signal.
- * @returns {void} - Handles one shutdown signal. */
+     * On signal.
+     * @returns {void} - Handles one shutdown signal.
+     */
     const onSignal = () => {
       void stopApplication()
     }
@@ -110,7 +113,7 @@ function httpServerWorkersFromArg(workersArg) {
 }
 
 /**
- * Documents this API.
+ * Runs the httpServerConfigFromParsedArgs helper.
  * @param {Record<string, string | number | boolean | undefined>} parsedProcessArgs - Parsed CLI args.
  * @param {import("../../../../configuration-types.js").HttpServerConfiguration} [defaults] - Default HTTP server config.
  * @returns {{host: string, port: number, workers?: number}} - HTTP server config.
@@ -126,8 +129,9 @@ export function httpServerConfigFromParsedArgs(parsedProcessArgs = {}, defaults 
 
 export default class VelociousCliCommandsServer extends BaseCommand{
   /**
- * Runs execute.
- * @returns {Promise<void>} - Starts the HTTP server and waits until it stops. */
+   * Runs execute.
+   * @returns {Promise<void>} - Starts the HTTP server and waits until it stops.
+   */
   async execute() {
     const parsedProcessArgs = this.args?.parsedProcessArgs || {}
     const configuration = this.getConfiguration()

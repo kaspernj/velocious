@@ -22,7 +22,7 @@ import TableData from "../../table-data/index.js"
  */
 export default class VelociousDatabaseDriversSqliteTableRebuilder {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    * @param {string} args.originalTableName - Name of the existing table to rebuild.
@@ -41,7 +41,7 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
   }
 
   /**
- * Runs to sqls.
+   * Runs to sqls.
    * @returns {Promise<string[]>} - Resolves with SQL statements to execute in order.
    */
   async toSQLs() {

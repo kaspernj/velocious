@@ -12,13 +12,13 @@
 export default class VelociousWebsocketChannelSubscribers {
   constructor() {
     /**
- * Documents this API.
- * @type {Map<string, Set<(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
+     * Narrows the runtime value to the documented type.
+      @type {Map<string, Set<(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
     this._subscribers = new Map()
   }
 
   /**
- * Runs subscribe.
+   * Runs subscribe.
    * @param {string} channel - Channel name to subscribe to.
    * @param {(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Callback invoked for each event on the channel.
    * @returns {() => void} - Unsubscribe function.
@@ -40,7 +40,7 @@ export default class VelociousWebsocketChannelSubscribers {
   }
 
   /**
- * Runs unsubscribe.
+   * Runs unsubscribe.
    * @param {string} channel - Channel name.
    * @param {(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Previously registered callback.
    * @returns {void}
@@ -58,7 +58,7 @@ export default class VelociousWebsocketChannelSubscribers {
   }
 
   /**
- * Runs has subscribers.
+   * Runs has subscribers.
    * @param {string} channel - Channel name.
    * @returns {boolean} - Whether any subscribers exist for the channel.
    */
@@ -93,11 +93,11 @@ export default class VelociousWebsocketChannelSubscribers {
         const result = callback(payload, meta)
 
         if (result && typeof (/**
- * Documents this API.
- * @type {Promise<void>} */ (result)).then === "function") {
+                               * Narrows the runtime value to the documented type.
+                                @type {Promise<void>} */ (result)).then === "function") {
           tasks.push(/**
- * Documents this API.
- * @type {Promise<void>} */ (result))
+                      * Narrows the runtime value to the documented type.
+                       @type {Promise<void>} */ (result))
         }
       } catch (error) {
         // Don't let one subscriber's failure abort the others; surface via the returned promises instead.

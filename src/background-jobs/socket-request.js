@@ -5,7 +5,7 @@ import JsonSocket from "./json-socket.js"
 
 export default class BackgroundJobsSocketRequest {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {string} args.host - Host.
    * @param {number} args.port - Port.
@@ -18,7 +18,7 @@ export default class BackgroundJobsSocketRequest {
   }
 
   /**
- * Runs run.
+   * Runs run.
    * @template T
    * @param {object} args - Options.
    * @param {(jsonSocket: JsonSocket) => void} args.onConnect - Called after the socket connects.
@@ -32,8 +32,9 @@ export default class BackgroundJobsSocketRequest {
     return await new Promise((resolve, reject) => {
       let finished = false
       /**
- * Finish.
- * @param {() => void} callback - Finish callback. */
+       * Finish.
+       * @param {() => void} callback - Finish callback.
+       */
       const finish = (callback) => {
         if (finished) return
         finished = true
@@ -47,8 +48,9 @@ export default class BackgroundJobsSocketRequest {
       })
 
       /**
- * Documents this API.
- * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
+       * Handles the socket response message.
+       * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message.
+       */
       jsonSocket.on("message", (message) => {
         onMessage({
           message,

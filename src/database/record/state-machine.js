@@ -1,19 +1,17 @@
 // @ts-check
 
 /**
- * Documents this API.
+ * Defines this typedef.
  * @typedef {{
  *   column?: string,
  *   initial: string,
  *   states: Record<string, StateDefinition>,
  *   events: Record<string, EventDefinition>
  * }} StateMachineDefinition
- *
  * @typedef {{
  *   beforeEnter?: (model: import("./index.js").default) => void | Promise<void>,
  *   afterEnter?: (model: import("./index.js").default) => void | Promise<void>
  * }} StateDefinition
- *
  * @typedef {{
  *   from: string | string[],
  *   to: string,
@@ -25,7 +23,7 @@
 
 /**
  * Pending transition key.
- * @type {string} */
+  @type {string} */
 const PENDING_TRANSITION_KEY = "_stateMachinePendingTransition"
 
 /**
@@ -56,7 +54,6 @@ const PENDING_TRANSITION_KEY = "_stateMachinePendingTransition"
  *   }
  * })
  * ```
- *
  * @param {typeof import("./index.js").default} ModelClass - The model class to add state machine behavior to.
  * @param {StateMachineDefinition} definition - The state machine definition.
  * @returns {void}
@@ -67,38 +64,41 @@ export function stateMachine(ModelClass, definition) {
 
   // Store definition on the model class for introspection
   /**
- * Dynamic class.
- * @type {?} */
+   * Dynamic class.
+    @type {?} */
   const dynamicClass = ModelClass
 
   dynamicClass._stateMachineDefinition = definition
   dynamicClass._stateMachineColumn = column
 
   /**
- * Documents this API.
- * @returns {StateMachineDefinition} - The registered state machine definition. */
+   * Returns the registered state machine definition.
+   * @returns {StateMachineDefinition} - The registered state machine definition.
+   */
   dynamicClass.getStateMachineDefinition = function () {
     return dynamicClass._stateMachineDefinition
   }
 
   /**
- * Documents this API.
- * @returns {string} - The column name used for state storage. */
+   * Returns the state column name.
+   * @returns {string} - The column name used for state storage.
+   */
   dynamicClass.getStateMachineColumn = function () {
     return dynamicClass._stateMachineColumn
   }
 
   /**
- * Documents this API.
- * @returns {string[]} - All declared state names. */
+   * Returns all declared state names.
+   * @returns {string[]} - All declared state names.
+   */
   dynamicClass.getStateMachineStateNames = function () {
     return stateNames
   }
 
   // Register event methods and guard methods on the prototype
   /**
- * Proto.
- * @type {?} */
+   * Proto.
+    @type {?} */
   const proto = ModelClass.prototype
 
   for (const [eventName, eventDef] of Object.entries(definition.events)) {
@@ -146,8 +146,8 @@ export function stateMachine(ModelClass, definition) {
     // Transition method: queue(), run(), etc. — checks guard, sets the state, stashes event name
     proto[eventName] = function () {
       /**
- * Self.
- * @type {?} */
+       * Self.
+        @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -181,8 +181,8 @@ export function stateMachine(ModelClass, definition) {
     // Bang method: queueAndSave(), runAndSave(), etc. — transitions AND saves (supports async guards)
     proto[`${eventName}AndSave`] = async function () {
       /**
- * Self.
- * @type {?} */
+       * Self.
+        @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -213,8 +213,8 @@ export function stateMachine(ModelClass, definition) {
   // Register a beforeSave callback that fires state-enter hooks
   ModelClass.beforeSave(async function (model) {
     /**
- * Dynamic model.
- * @type {?} */
+     * Dynamic model.
+      @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
@@ -240,8 +240,8 @@ export function stateMachine(ModelClass, definition) {
   // Register an afterSave callback for afterEnter hooks
   ModelClass.afterSave(async function (model) {
     /**
- * Dynamic model.
- * @type {?} */
+     * Dynamic model.
+      @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 

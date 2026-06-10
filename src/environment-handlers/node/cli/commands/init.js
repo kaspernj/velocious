@@ -9,7 +9,7 @@ import fs from "fs/promises"
 
 export default class VelociousCliCommandsInit extends BaseCommand {
   /**
- * Runs execute.
+   * Runs execute.
    * @returns {Promise<void | {fileMappings: FileMappingType[]}>} - Resolves with generated file mappings, if any.
    */
   async execute() {

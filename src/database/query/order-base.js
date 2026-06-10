@@ -2,7 +2,7 @@
 
 export default class VelociousDatabaseQueryOrderBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    */
   constructor(query) {
@@ -10,7 +10,7 @@ export default class VelociousDatabaseQueryOrderBase {
   }
 
   /**
- * Runs get options.
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -18,12 +18,12 @@ export default class VelociousDatabaseQueryOrderBase {
   }
 
   /**
- * Runs set reverse order.
+   * Runs set reverse order.
    * @abstract
    * @param {boolean} _reverseOrder - Whether reverse order.
    * @returns {void} - No return value.
    */
-  setReverseOrder(_reverseOrder) { // eslint-disable-line no-unused-vars
+  setReverseOrder(_reverseOrder) {
     throw new Error("setReverseOrder not implemented")
   }
 

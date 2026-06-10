@@ -4,7 +4,7 @@ import {normalizeCreateStatement, normalizeSqlStatement} from "../structure-sql/
 
 export default class VelociousDatabaseDriversMssqlStructureSql {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    */
@@ -13,7 +13,7 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
   }
 
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
@@ -70,7 +70,7 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
   }
 
   /**
- * Runs column definition.
+   * Runs column definition.
    * @param {Record<string, ?>} column - Column.
    * @returns {string | null} - The column definition.
    */

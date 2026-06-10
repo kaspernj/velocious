@@ -5,7 +5,7 @@ import {deserializeFrontendModelTransportValue} from "../frontend-models/transpo
 
 export default class Response {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.method - HTTP method.
    * @param {function() : void} args.onComplete - On complete.
@@ -14,8 +14,8 @@ export default class Response {
     if (!method) throw new Error(`Invalid method given: ${method}`)
 
     /**
- * Documents this API.
- * @type {Header[]} */
+     * Narrows the runtime value to the documented type.
+      @type {Header[]} */
     this.headers = []
 
     this.method = method.toUpperCase().trim()
@@ -23,21 +23,22 @@ export default class Response {
     this.state = "status-line"
 
     /**
- * Documents this API.
- * @type {Buffer} */
+     * Narrows the runtime value to the documented type.
+      @type {Buffer} */
     this.response = Buffer.alloc(0);
   }
 
   /**
- * Runs feed.
- * @param {Buffer} data - Response data chunk. */
+   * Runs feed.
+   * @param {Buffer} data - Response data chunk.
+   */
   feed(data) {
     this.response = Buffer.concat([this.response, data])
     this.tryToParse()
   }
 
   /**
- * Runs get header.
+   * Runs get header.
    * @param {string} name - Name.
    * @returns {Header} - The header.
    */
@@ -132,7 +133,7 @@ export default class Response {
   }
 
   /**
- * Runs content length number.
+   * Runs content length number.
    * @returns {number} - The content length number.
    */
   _contentLengthNumber() {

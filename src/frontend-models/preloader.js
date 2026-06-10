@@ -13,7 +13,7 @@
  */
 export default class FrontendModelPreloader {
   /**
- * Runs preload.
+   * Runs preload.
    * @param {Array<import("./base.js").default>} models - Frontend model instances to preload onto.
    * @param {import("./query.js").default<?> | import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} queryOrSpec - A query built via `Model.preload(...).select(...)`, or a raw preload spec.
    * @param {{force?: boolean}} [options] - Options.
@@ -23,16 +23,16 @@ export default class FrontendModelPreloader {
     if (!models || models.length === 0) return
 
     const modelClass = /**
- * Documents this API.
- * @type {typeof import("./base.js").default} */ (models[0].constructor)
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("./base.js").default} */ (models[0].constructor)
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec === "object" && "_preload" in queryOrSpec
     const query = isQuery
       ? /**
- * Documents this API.
- * @type {import("./query.js").default<?>} */ (queryOrSpec)
+         * Narrows the runtime value to the documented type.
+          @type {import("./query.js").default<?>} */ (queryOrSpec)
       : modelClass.preload(/**
- * Documents this API.
- * @type {?} */ (queryOrSpec))
+                            * Narrows the runtime value to the documented type.
+                             @type {?} */ (queryOrSpec))
 
     const topLevelRelationships = Object.keys(query._preload)
 
@@ -59,8 +59,8 @@ export default class FrontendModelPreloader {
     const reloaded = await reloadQuery.toArray()
 
     /**
- * Reloaded by id.
- * @type {Map<string, import("./base.js").default>} */
+     * Reloaded by id.
+      @type {Map<string, import("./base.js").default>} */
     const reloadedById = new Map()
 
     for (const reloadedModel of reloaded) {
@@ -83,7 +83,7 @@ export default class FrontendModelPreloader {
   }
 
   /**
- * Runs model needs reload.
+   * Runs model needs reload.
    * @param {object} args - Options object.
    * @param {typeof import("./base.js").default} args.modelClass - Model class the preload graph is rooted at.
    * @param {import("./base.js").default} args.model - Model instance.
@@ -156,7 +156,7 @@ export default class FrontendModelPreloader {
   }
 
   /**
- * Runs nested preload record.
+   * Runs nested preload record.
    * @param {import("../database/query/index.js").NestedPreloadRecord[string]} subPreload - Preload value for a relationship.
    * @returns {import("../database/query/index.js").NestedPreloadRecord | null} - Nested preload record, or null when there is no deeper graph.
    */
@@ -164,6 +164,6 @@ export default class FrontendModelPreloader {
     if (!subPreload || typeof subPreload !== "object") return null
     if (Object.keys(subPreload).length === 0) return null
 
-    return /** Documents this API. @type {import("../database/query/index.js").NestedPreloadRecord} */ (subPreload)
+    return /** Narrows the runtime value to the documented type. @type {import("../database/query/index.js").NestedPreloadRecord} */ (subPreload)
   }
 }

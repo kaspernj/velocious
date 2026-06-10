@@ -13,8 +13,8 @@ function isJobMessage(message) {
   if (!message || typeof message !== "object") return false
 
   const messageRecord = /**
- * Documents this API.
- * @type {{type?: ?, payload?: ?}} */ (message)
+                         * Narrows the runtime value to the documented type.
+                          @type {{type?: ?, payload?: ?}} */ (message)
 
   return messageRecord.type === "job" && Object.hasOwn(messageRecord, "payload")
 }

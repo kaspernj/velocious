@@ -4,15 +4,15 @@ import Base from "./base.js"
 
 export default class VelociousDatabaseRecordValidatorsPresence extends Base {
   /**
- * Runs validate.
+   * Runs validate.
    * @param {object} args - Options object.
    * @param {import("../index.js").default} args.model - Model instance.
    * @param {string} args.attributeName - Attribute name.
    */
   async validate({model, attributeName}) {
     const rawValue = /**
- * Documents this API.
- * @type {string | undefined} */ (model.readAttribute(attributeName))
+                      * Narrows the runtime value to the documented type.
+                       @type {string | undefined} */ (model.readAttribute(attributeName))
     const attributeValue = rawValue?.trim()
 
     if (!attributeValue) {

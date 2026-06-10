@@ -28,7 +28,7 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /**
  * Shared.
- * @type {{currentPool: VelociousDatabasePoolBase | null}} */
+  @type {{currentPool: VelociousDatabasePoolBase | null}} */
 const shared = {
   currentPool: null
 }
@@ -46,12 +46,12 @@ function stableStringify(value) {
   if (value && typeof value === "object") {
     const entries = Object
       .keys(/**
- * Documents this API.
- * @type {Record<string, ?>} */ (value))
+             * Narrows the runtime value to the documented type.
+              @type {Record<string, ?>} */ (value))
       .sort()
       .map((key) => `${JSON.stringify(key)}:${stableStringify(/**
- * Documents this API.
- * @type {Record<string, ?>} */ (value)[key])}`)
+                                                               * Narrows the runtime value to the documented type.
+                                                                @type {Record<string, ?>} */ (value)[key])}`)
 
     return `{${entries.join(",")}}`
   }
@@ -61,12 +61,12 @@ function stableStringify(value) {
 
 class VelociousDatabasePoolBase {
   /**
- * Without current connection context.
- * @type {undefined | ((callback: () => ?) => ?)} */
+   * Without current connection context.
+    @type {undefined | ((callback: () => ?) => ?)} */
   _withoutCurrentConnectionContext = undefined
 
   /**
- * Runs current.
+   * Runs current.
    * @returns {VelociousDatabasePoolBase} - The current.
    */
   static current() {
@@ -82,7 +82,7 @@ class VelociousDatabasePoolBase {
   static clearGlobalConnections() {}
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {Configuration} args.configuration - Configuration instance.
    * @param {string} args.identifier - Identifier.
@@ -98,7 +98,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs checkin.
+   * Runs checkin.
    * @abstract
    * @param {import("../drivers/base.js").default} _connection - Connection.
    */
@@ -107,7 +107,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs checkout.
+   * Runs checkout.
    * @abstract
    * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
@@ -117,7 +117,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs get current connection.
+   * Runs get current connection.
    * @abstract
    * @returns {import("../drivers/base.js").default} - The current connection.
    */
@@ -135,19 +135,19 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs without current connection context.
+   * Runs without current connection context.
    * @template T
    * @param {() => T} callback - Callback to run without ? current connection context.
    * @returns {T} - Callback result.
    */
   withoutCurrentConnectionContext(callback) {
-    if (this._withoutCurrentConnectionContext) return /** Documents this API. @type {T} */ (this._withoutCurrentConnectionContext(callback))
+    if (this._withoutCurrentConnectionContext) return /** Narrows the runtime value to the documented type. @type {T} */ (this._withoutCurrentConnectionContext(callback))
 
     return callback()
   }
 
   /**
- * Runs get configuration.
+   * Runs get configuration.
    * @returns {import("../../configuration-types.js").DatabaseConfigurationType} - Resolved database configuration for the pool identifier.
    */
   getConfiguration() {
@@ -155,7 +155,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs get configuration reuse key.
+   * Runs get configuration reuse key.
    * @returns {string} - Reuse key for the currently resolved database configuration.
    */
   getConfigurationReuseKey() {
@@ -176,14 +176,14 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs connection matches current configuration.
+   * Runs connection matches current configuration.
    * @param {import("../drivers/base.js").default} connection - Connection.
    * @returns {boolean} - Whether connection matches current resolved configuration.
    */
   connectionMatchesCurrentConfiguration(connection) {
     const connectionWithPoolKey = /**
- * Documents this API.
- * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * Narrows the runtime value to the documented type.
+                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
   }
@@ -198,7 +198,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs clear connection schema cache.
+   * Runs clear connection schema cache.
    * @param {import("../drivers/base.js").default} connection - Connection whose local schema cache should be cleared.
    * @returns {void} - No return value.
    */
@@ -207,7 +207,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs primary key type.
+   * Runs primary key type.
    * @abstract
    * @returns {string} - The primary key type.
    */
@@ -216,7 +216,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs set current.
+   * Runs set current.
    * @returns {void} - No return value.
    */
   setCurrent() {
@@ -224,7 +224,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs set driver class.
+   * Runs set driver class.
    * @param {typeof import("../drivers/base.js").default} driverClass - Driver class.
    */
   setDriverClass(driverClass) {
@@ -232,7 +232,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs spawn connection.
+   * Runs spawn connection.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection.
    */
   async spawnConnection() {
@@ -243,8 +243,8 @@ class VelociousDatabasePoolBase {
     const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
 
     const connectionWithPoolKey = /**
- * Documents this API.
- * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * Narrows the runtime value to the documented type.
+                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
     connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
     connection.setSchemaCacheInvalidator(() => {
       this.clearSchemaCache()
@@ -255,7 +255,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs spawn connection with configuration.
+   * Runs spawn connection with configuration.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection with configuration.
    */
@@ -277,7 +277,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs close connection after failed connect.
+   * Runs close connection after failed connect.
    * @param {import("../drivers/base.js").default} connection - Connection to close.
    * @returns {Promise<void>} - Resolves when cleanup has been attempted.
    */
@@ -290,7 +290,7 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs with connection.
+   * Runs with connection.
    * @template T
    * @abstract
    * @param {ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} _optionsOrCallback - Checkout options or callback function.
@@ -311,8 +311,9 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs get debug snapshot.
- * @returns {DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
+   * Runs get debug snapshot.
+   * @returns {DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool.
+   */
   getDebugSnapshot() {
     return {
       configuration: this.debugConfigurationSnapshot(),
@@ -327,8 +328,9 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs debug configuration snapshot.
- * @returns {Record<string, ?>} - Sanitized resolved database configuration. */
+   * Runs debug configuration snapshot.
+   * @returns {Record<string, ?>} - Sanitized resolved database configuration.
+   */
   debugConfigurationSnapshot() {
     const databaseConfig = this.getConfiguration()
     const poolConfig = databaseConfig.pool
@@ -349,15 +351,15 @@ class VelociousDatabasePoolBase {
   }
 
   /**
- * Runs debug connection snapshot.
+   * Runs debug connection snapshot.
    * @param {import("../drivers/base.js").default} connection - Database connection.
    * @param {Record<string, ?>} details - Extra diagnostic fields.
    * @returns {Record<string, ?>} - Connection diagnostic snapshot.
    */
   debugConnectionSnapshot(connection, details = {}) {
     const connectionWithPoolKey = /**
- * Documents this API.
- * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * Narrows the runtime value to the documented type.
+                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return {
       ...connection.getDebugSnapshot(),

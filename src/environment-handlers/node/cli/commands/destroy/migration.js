@@ -8,7 +8,7 @@ import fs from "fs/promises"
 
 export default class DbDestroyMigration extends BaseCommand {
   /**
- * Runs execute.
+   * Runs execute.
    * @returns {Promise<void | DestroyMigrationResult>} - Resolves with the execute.
    */
   async execute() {

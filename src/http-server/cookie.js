@@ -4,7 +4,7 @@ import crypto from "crypto"
 
 export default class Cookie {
   /**
- * CookieOptions type.
+   * CookieOptions type.
    * @typedef {object} CookieOptions
    * @property {string} [domain] - Domain.
    * @property {Date} [expires] - Expires date.
@@ -16,7 +16,7 @@ export default class Cookie {
    */
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Cookie name.
    * @param {string | undefined | null} args.value - Cookie value.
@@ -35,33 +35,39 @@ export default class Cookie {
   }
 
   /**
- * Runs name.
- * @returns {string} - Cookie name. */
+   * Runs name.
+   * @returns {string} - Cookie name.
+   */
   name() { return this._name }
 
   /**
- * Runs value.
- * @returns {string} - Cookie value (decrypted when available). */
+   * Runs value.
+   * @returns {string} - Cookie value (decrypted when available).
+   */
   value() { return String(this._value ?? "") }
 
   /**
- * Runs raw value.
- * @returns {string} - Raw cookie value. */
+   * Runs raw value.
+   * @returns {string} - Raw cookie value.
+   */
   rawValue() { return String(this._rawValue ?? "") }
 
   /**
- * Runs is encrypted.
- * @returns {boolean} - Whether cookie is encrypted. */
+   * Runs is encrypted.
+   * @returns {boolean} - Whether cookie is encrypted.
+   */
   isEncrypted() { return Boolean(this._encrypted) }
 
   /**
- * Runs error.
- * @returns {Error | undefined} - Decryption error. */
+   * Runs error.
+   * @returns {Error | undefined} - Decryption error.
+   */
   error() { return this._error }
 
   /**
- * Runs to header.
- * @returns {string} - Set-Cookie header value. */
+   * Runs to header.
+   * @returns {string} - Set-Cookie header value.
+   */
   toHeader() {
     const parts = []
     const value = encodeURIComponent(this.rawValue())
@@ -80,7 +86,7 @@ export default class Cookie {
   }
 
   /**
- * Runs parse header.
+   * Runs parse header.
    * @param {string | undefined | null} headerValue - Cookie header.
    * @param {string | undefined} secret - Encryption secret.
    * @returns {Cookie[]} - Cookie list.
@@ -118,7 +124,7 @@ export default class Cookie {
   }
 
   /**
- * Runs encrypt value.
+   * Runs encrypt value.
    * @param {?} value - Value to encrypt.
    * @param {string} secret - Encryption secret.
    * @returns {string} - Encrypted value.
@@ -137,7 +143,7 @@ export default class Cookie {
   }
 
   /**
- * Runs decrypt value.
+   * Runs decrypt value.
    * @param {string} value - Encrypted value.
    * @param {string} secret - Encryption secret.
    * @returns {string} - Decrypted value.
@@ -167,7 +173,7 @@ export default class Cookie {
   }
 
   /**
- * Runs serialize encrypted value.
+   * Runs serialize encrypted value.
    * @param {?} value - Value to serialize.
    * @returns {{payload: string, type: string}} - Serialized payload.
    */
@@ -189,7 +195,7 @@ export default class Cookie {
   }
 
   /**
- * Runs deserialize encrypted value.
+   * Runs deserialize encrypted value.
    * @param {string} type - Serialized type.
    * @param {string} payload - Payload.
    * @returns {string} - Deserialized value.
@@ -208,7 +214,7 @@ export default class Cookie {
   }
 
   /**
- * Runs derive key.
+   * Runs derive key.
    * @param {string} secret - Secret.
    * @returns {Buffer} - Key.
    */
@@ -217,7 +223,7 @@ export default class Cookie {
   }
 
   /**
- * Runs to base64 url.
+   * Runs to base64 url.
    * @param {Buffer} buffer - Buffer.
    * @returns {string} - Base64 URL encoded string.
    */
@@ -226,7 +232,7 @@ export default class Cookie {
   }
 
   /**
- * Runs from base64 url.
+   * Runs from base64 url.
    * @param {string} value - Base64 URL encoded string.
    * @returns {Buffer} - Buffer.
    */

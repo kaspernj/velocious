@@ -12,7 +12,7 @@ import WhereNot from "./where-not.js"
 
 export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {JoinObject} object - Object.
    * @param {string[]} [basePath] - Join base path relative to the root query.
    */
@@ -30,11 +30,11 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
     }
 
     const modelQuery = /**
- * Documents this API.
- * @type {import("./model-class-query.js").default} */ (query)
+                        * Narrows the runtime value to the documented type.
+                         @type {import("./model-class-query.js").default} */ (query)
     const ModelClass = /**
- * Documents this API.
- * @type {typeof import("../record/index.js").default} */ (
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("../record/index.js").default} */ (
       this.basePath.length > 0 ? modelQuery._resolveModelClassForJoinPath(this.basePath) : modelQuery.modelClass
     )
 
@@ -42,7 +42,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
- * Runs join object.
+   * Runs join object.
    * @param {JoinObject} join - Join.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string} sql - SQL string.
@@ -54,8 +54,8 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
     const pretty = this.pretty
     const conn = this.getQuery().driver
     const query = /**
- * Documents this API.
- * @type {import("./model-class-query.js").default} */ (this.getQuery())
+                   * Narrows the runtime value to the documented type.
+                    @type {import("./model-class-query.js").default} */ (this.getQuery())
 
     for (const joinKey in join) {
       const joinValue = join[joinKey]
@@ -109,7 +109,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
- * Runs scope sql.
+   * Runs scope sql.
    * @param {object} args - Options object.
    * @param {import("../record/relationships/base.js").default} args.relationship - Relationship definition.
    * @param {import("./model-class-query.js").default} args.query - Model class query.
@@ -137,7 +137,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   }
 
   /**
- * Runs scope sql for where.
+   * Runs scope sql for where.
    * @param {import("./where-base.js").default} where - Where.
    * @param {string} targetTableRef - Target table reference.
    * @returns {string} - Scope where SQL.

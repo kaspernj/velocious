@@ -4,7 +4,7 @@ import Header from "./header.js"
 
 export default class Request {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} [args.body] - Request body.
    * @param {string} args.method - HTTP method.
@@ -31,7 +31,7 @@ export default class Request {
   }
 
   /**
- * Runs get header.
+   * Runs get header.
    * @param {string} name - Name.
    * @returns {Header} - The header.
    */
@@ -50,7 +50,7 @@ export default class Request {
   }
 
   /**
- * Runs add header.
+   * Runs add header.
    * @param {string} name - Name.
    * @param {string | number} value - Value to use.
    * @returns {void} - No return value.
@@ -60,7 +60,7 @@ export default class Request {
   }
 
   /**
- * Runs prepare.
+   * Runs prepare.
    * @returns {void} - No return value.
    */
   prepare() {
@@ -70,7 +70,7 @@ export default class Request {
   }
 
   /**
- * Runs stream.
+   * Runs stream.
    * @param {function(string) : void} callback - Callback function.
    * @returns {void} - No return value.
    */

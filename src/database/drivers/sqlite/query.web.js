@@ -33,8 +33,8 @@ export default async function query(connection, sql) {
 
     for (const rowValues of result[0].values) {
       /**
- * Row.
- * @type {Record<string, ?>} */
+       * Row.
+        @type {Record<string, ?>} */
       const row = {}
 
       for (const columnIndex in columns) {

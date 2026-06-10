@@ -1,8 +1,12 @@
 import FrontendModelBase from "../../../../src/frontend-models/base.js"
 
-/** @typedef {import("../../../../src/frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
+/**
+ * Frontend model resource config.
+ * @typedef {import("../../../../src/frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig
+ */
 
 /**
+ * UserAttributes type.
  * @typedef {object} UserAttributes
  * @property {any} reference - Attribute value.
  * @property {any} email - Attribute value.

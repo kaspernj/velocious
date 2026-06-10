@@ -20,7 +20,7 @@ function validateCharsetOrCollation(field, value) {
 
 export default class VelociousDatabaseConnectionDriversMysqlSqlCreateDatabase extends CreateDatabaseBase {
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {string[]} - SQL statements.
    */
   toSql() {

@@ -9,11 +9,11 @@ import restArgsError from "./utils/rest-args-error.js"
 
 /**
  * HttpServerConfiguration type.
- * @typedef {import("./configuration-types.js").HttpServerConfiguration} HttpServerConfiguration */
+  @typedef {import("./configuration-types.js").HttpServerConfiguration} HttpServerConfiguration */
 
 export default class VelociousApplication {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {HttpServerConfiguration} [args.httpServer] - Http server.
@@ -27,26 +27,28 @@ export default class VelociousApplication {
     this.configuration = configuration
 
     /**
- * Documents this API.
- * @type {HttpServerConfiguration} */
+     * Stores the http server configuration value.
+      @type {HttpServerConfiguration} */
     this.httpServerConfiguration = httpServer ?? {}
 
     this.logger = new Logger(this)
     this._type = type
     /**
- * Documents this API.
- * @type {HttpServerLock | undefined} */
+     * Stores the http server lock value.
+      @type {HttpServerLock | undefined} */
     this.httpServerLock = undefined
   }
 
   /**
- * Runs get type.
- * @returns {string} - The type.  */
+   * Runs get type.
+   * @returns {string} - The type.
+   */
   getType() { return this._type }
 
   /**
- * Runs initialize.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs initialize.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async initialize() {
     const routes = await AppRoutes.getRoutes(this.configuration)
 
@@ -61,8 +63,9 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs is active.
- * @returns {boolean} - Whether active.  */
+   * Runs is active.
+   * @returns {boolean} - Whether active.
+   */
   isActive() {
     if (this.httpServer) {
       return this.httpServer?.isActive()
@@ -72,7 +75,7 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs run.
+   * Runs run.
    * @param {function() : void} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -87,8 +90,9 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs start http server.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs start http server.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async startHttpServer() {
     const {configuration} = this
     const httpServerConfiguration = {
@@ -104,7 +108,7 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs start locked http server.
+   * Runs start locked http server.
    * @param {object} args - HTTP server startup arguments.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {string} [args.host] - HTTP server host.
@@ -116,8 +120,8 @@ export default class VelociousApplication {
     try {
       if (!configuration.getWebsocketEvents()) {
         configuration.setWebsocketEvents(/**
- * Documents this API.
- * @type {?} */ (websocketEventsHost))
+                                          * Types the following value.
+                                           @type {?} */ (websocketEventsHost))
       }
 
       await configuration.connectBeacon({peerType: "server"})
@@ -143,7 +147,7 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs acquire http server lock.
+   * Runs acquire http server lock.
    * @param {object} args - Lock acquisition arguments.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {string} args.host - HTTP server host.
@@ -159,7 +163,7 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs create http server.
+   * Runs create http server.
    * @param {object} args - HTTP server arguments.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {string} [args.host] - Host.
@@ -174,8 +178,9 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs stop.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs stop.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async stop() {
     await this.logger.debug("Stopping server")
 
@@ -190,8 +195,9 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs release http server lock.
- * @returns {Promise<void>} - Resolves after the HTTP server lock has been released. */
+   * Runs release http server lock.
+   * @returns {Promise<void>} - Resolves after the HTTP server lock has been released.
+   */
   async releaseHttpServerLock() {
     const {httpServerLock} = this
 
@@ -200,8 +206,9 @@ export default class VelociousApplication {
   }
 
   /**
- * On http server close.
- * @returns {void} - No return value.  */
+   * On http server close.
+   * @returns {void} - No return value.
+   */
   onHttpServerClose = () => {
     this.logger.debug("HTTP server closed")
 
@@ -211,8 +218,9 @@ export default class VelociousApplication {
   }
 
   /**
- * Runs wait.
- * @returns {Promise<void>} - Resolves when complete.  */
+   * Runs wait.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   wait() {
     return new Promise((resolve) => {
       this.waitResolve = resolve

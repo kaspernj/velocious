@@ -50,8 +50,8 @@ function isObjectLike(value) {
  */
 function isArrayContaining(value) {
   return !!value && typeof value === "object" && (/**
- * Documents this API.
- * @type {?} */ (value)).__velociousMatcher === "arrayContaining"
+                                                   * Narrows the runtime value to the documented type.
+                                                    @type {?} */ (value)).__velociousMatcher === "arrayContaining"
 }
 
 /**
@@ -61,8 +61,8 @@ function isArrayContaining(value) {
  */
 function isObjectContaining(value) {
   return !!value && typeof value === "object" && (/**
- * Documents this API.
- * @type {?} */ (value)).__velociousMatcher === "objectContaining"
+                                                   * Narrows the runtime value to the documented type.
+                                                    @type {?} */ (value)).__velociousMatcher === "objectContaining"
 }
 
 /**
@@ -107,17 +107,17 @@ function valuesEqual(actual, expected) {
 function collectMatchDifferences(actual, expected, path, differences) {
   if (isObjectContaining(expected)) {
     collectMatchDifferences(actual, /**
- * Documents this API.
- * @type {?} */ (expected).value, path, differences)
+                                     * Narrows the runtime value to the documented type.
+                                      @type {?} */ (expected).value, path, differences)
     return
   }
 
   if (isArrayContaining(expected)) {
     const {matches} = matchArrayContaining(actual, /**
- * Documents this API.
- * @type {Array<?>} */ (/**
- * Documents this API.
- * @type {?} */ (expected).value))
+                                                    * Narrows the runtime value to the documented type.
+                                                     @type {Array<?>} */ (/**
+                                                                           * Narrows the runtime value to the documented type.
+                                                                            @type {?} */ (expected).value))
 
     if (!matches) {
       differences[path || "$"] = [expected, actual]
@@ -147,11 +147,11 @@ function collectMatchDifferences(actual, expected, path, differences) {
     }
 
     const expectedObject = /**
- * Documents this API.
- * @type {Record<string, ?>} */ (expected)
+                            * Narrows the runtime value to the documented type.
+                             @type {Record<string, ?>} */ (expected)
     const actualObject = /**
- * Documents this API.
- * @type {Record<string, ?>} */ (actual)
+                          * Narrows the runtime value to the documented type.
+                           @type {Record<string, ?>} */ (actual)
 
     for (const key of Object.keys(expectedObject)) {
       const nextPath = path ? `${path}.${key}` : key
@@ -180,8 +180,8 @@ function collectMatchDifferences(actual, expected, path, differences) {
  */
 function matchObject(actual, expected) {
   /**
- * Differences.
- * @type {Record<string, Array<?>>} */
+   * Differences.
+    @type {Record<string, Array<?>>} */
   const differences = {}
 
   collectMatchDifferences(actual, expected, "", differences)
@@ -200,8 +200,8 @@ function matchObject(actual, expected) {
  */
 function matchArrayContaining(actual, expected) {
   /**
- * Differences.
- * @type {Record<string, Array<?>>} */
+   * Differences.
+    @type {Record<string, Array<?>>} */
   const differences = {}
 
   if (!Array.isArray(actual)) {
@@ -219,8 +219,8 @@ function matchArrayContaining(actual, expected) {
 
       if (isObjectContaining(expectedItem)) {
         const {matches} = matchObject(actual[i], /**
- * Documents this API.
- * @type {?} */ (expectedItem).value)
+                                                  * Narrows the runtime value to the documented type.
+                                                   @type {?} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break
@@ -230,8 +230,8 @@ function matchArrayContaining(actual, expected) {
 
       if (isArrayContaining(expectedItem)) {
         const {matches} = matchArrayContaining(actual[i], /**
- * Documents this API.
- * @type {?} */ (expectedItem).value)
+                                                           * Narrows the runtime value to the documented type.
+                                                            @type {?} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break

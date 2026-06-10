@@ -5,7 +5,7 @@ import {CurrentConfigurationNotSetError} from "./configuration.js"
 
 export default class Current {
   /**
- * Runs configuration.
+   * Runs configuration.
    * @returns {import("./configuration.js").default} - Current configuration.
    */
   static configuration() {
@@ -13,7 +13,7 @@ export default class Current {
   }
 
   /**
- * Runs ability.
+   * Runs ability.
    * @returns {import("./authorization/ability.js").default | undefined} - Current ability.
    */
   static ability() {
@@ -27,7 +27,7 @@ export default class Current {
   }
 
   /**
- * Runs set ability.
+   * Runs set ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability.
    * @returns {void} - No return value.
    */
@@ -36,7 +36,7 @@ export default class Current {
   }
 
   /**
- * Runs with ability.
+   * Runs with ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
@@ -46,7 +46,7 @@ export default class Current {
   }
 
   /**
- * Runs tenant.
+   * Runs tenant.
    * @returns {?} - Current tenant.
    */
   static tenant() {
@@ -60,7 +60,7 @@ export default class Current {
   }
 
   /**
- * Runs set tenant.
+   * Runs set tenant.
    * @param {?} tenant - Tenant.
    * @returns {void} - No return value.
    */
@@ -69,7 +69,7 @@ export default class Current {
   }
 
   /**
- * Runs with tenant.
+   * Runs with tenant.
    * @param {?} tenant - Tenant.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.

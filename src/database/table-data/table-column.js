@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Documents this API.
+ * Defines this typedef.
  * @typedef {{unique: boolean}} IndexArgType
  */
 
@@ -31,7 +31,7 @@ import TableForeignKey from "./table-foreign-key.js"
 
 export default class TableColumn {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {string} name - Name.
    * @param {TableColumnArgsType} [args] - Options object.
    */
@@ -60,83 +60,83 @@ export default class TableColumn {
   }
 
   /**
- * Runs get name.
+   * Runs get name.
    * @returns {string} name
    */
   getName() { return this.name }
 
   /**
- * Runs get new name.
+   * Runs get new name.
    * @returns {string | undefined} - The new name.
    */
   getNewName() { return this._newName }
 
   /**
- * Runs set new name.
+   * Runs set new name.
    * @param {string} newName - New name.
    * @returns {void} - No return value.
    */
   setNewName(newName) { this._newName = newName }
 
   /**
- * Runs get actual name.
+   * Runs get actual name.
    * @returns {string} - The actual name.
    */
   getActualName() { return this.getNewName() || this.getName() }
 
   /**
- * Runs get auto increment.
+   * Runs get auto increment.
    * @returns {boolean} - Whether auto increment.
    */
   getAutoIncrement() { return this.args?.autoIncrement || false }
 
   /**
- * Runs set auto increment.
+   * Runs set auto increment.
    * @param {boolean} newAutoIncrement - New auto increment.
    * @returns {void} - No return value.
    */
   setAutoIncrement(newAutoIncrement) { this.args.autoIncrement = newAutoIncrement }
 
   /**
- * Runs get default.
+   * Runs get default.
    * @returns {? | (() => ?)} - The default value or factory.
    */
   getDefault() { return this.args?.default }
 
   /**
- * Runs set default.
+   * Runs set default.
    * @param {?} newDefault - New default.
    * @returns {void} - No return value.
    */
   setDefault(newDefault) { this.args.default = newDefault }
 
   /**
- * Runs get drop column.
+   * Runs get drop column.
    * @returns {boolean} - Whether drop column.
    */
   getDropColumn() { return this.args?.dropColumn || false }
 
   /**
- * Runs get foreign key.
+   * Runs get foreign key.
    * @returns {boolean | object | undefined} - Whether foreign key.
    */
   getForeignKey() { return this.args?.foreignKey }
 
   /**
- * Runs set foreign key.
+   * Runs set foreign key.
    * @param {boolean | object | undefined} newForeignKey - New foreign key.
    * @returns {void} - No return value.
    */
   setForeignKey(newForeignKey) { this.args.foreignKey = newForeignKey }
 
   /**
- * Runs get index.
+   * Runs get index.
    * @returns {boolean|IndexArgType} - Whether index.
    */
   getIndex() { return this.args?.index || false }
 
   /**
- * Runs get index args.
+   * Runs get index args.
    * @returns {IndexArgType} - The index args.
    */
   getIndexArgs() {
@@ -156,91 +156,91 @@ export default class TableColumn {
   }
 
   /**
- * Runs set index.
+   * Runs set index.
    * @param {boolean|IndexArgType} newIndex - New index.
    * @returns {void} - No return value.
    */
   setIndex(newIndex) { this.args.index = newIndex }
 
   /**
- * Runs get max length.
+   * Runs get max length.
    * @returns {number | undefined} - The max length.
    */
   getMaxLength() { return this.args?.maxLength }
 
   /**
- * Runs set max length.
+   * Runs set max length.
    * @param {number | undefined} newMaxLength - New max length.
    * @returns {void} - No return value.
    */
   setMaxLength(newMaxLength) { this.args.maxLength = newMaxLength }
 
   /**
- * Runs get notes.
+   * Runs get notes.
    * @returns {string | undefined} - The notes.
    */
   getNotes() { return this.args?.notes }
 
   /**
- * Runs set notes.
+   * Runs set notes.
    * @param {string | undefined} newNotes - New notes.
    * @returns {void} - No return value.
    */
   setNotes(newNotes) { this.args.notes = newNotes }
 
   /**
- * Runs get null.
+   * Runs get null.
    * @returns {boolean | undefined} - Whether null.
    */
   getNull() { return this.args?.null }
 
   /**
- * Runs set null.
+   * Runs set null.
    * @param {boolean} nullable - Whether nullable.
    * @returns {void} - No return value.
    */
   setNull(nullable) { this.args.null = nullable }
 
   /**
- * Runs get precision.
+   * Runs get precision.
    * @returns {number | undefined} - Numeric precision (total digits).
    */
   getPrecision() { return this.args?.precision }
 
   /**
- * Runs get primary key.
+   * Runs get primary key.
    * @returns {boolean} - Whether primary key.
    */
   getPrimaryKey() { return this.args?.primaryKey || false }
 
   /**
- * Runs set primary key.
+   * Runs set primary key.
    * @param {boolean} newPrimaryKey - New primary key.
    * @returns {void} - No return value.
    */
   setPrimaryKey(newPrimaryKey) { this.args.primaryKey = newPrimaryKey }
 
   /**
- * Runs get scale.
+   * Runs get scale.
    * @returns {number | undefined} - Numeric scale (digits after decimal point).
    */
   getScale() { return this.args?.scale }
 
   /**
- * Runs get type.
+   * Runs get type.
    * @returns {string | undefined} - The type.
    */
   getType() { return this.args?.type }
 
   /**
- * Runs set type.
+   * Runs set type.
    * @param {string | undefined} newType - New type.
    * @returns {void} - No return value.
    */
   setType(newType) { this.args.type = newType }
 
   /**
- * Runs get type hint notes.
+   * Runs get type hint notes.
    * @returns {string | undefined} - The type hint notes.
    */
   getTypeHintNotes() {
@@ -248,7 +248,7 @@ export default class TableColumn {
   }
 
   /**
- * Runs get notes for database.
+   * Runs get notes for database.
    * @param {string} databaseType - Database type.
    * @returns {string | undefined} - Notes for the database.
    */
@@ -259,13 +259,13 @@ export default class TableColumn {
   }
 
   /**
- * Runs is new column.
+   * Runs is new column.
    * @returns {boolean} - Whether new column.
    */
   isNewColumn() { return this.args?.isNewColumn || false }
 
   /**
- * Runs get sql.
+   * Runs get sql.
    * @param {object} args - Options object.
    * @param {boolean} args.forAlterTable - Whether for alter table.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.

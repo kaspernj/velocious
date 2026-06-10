@@ -6,7 +6,7 @@ import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasMany {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../record/index.js").default[]} args.models - Model instances.
    * @param {import("../../record/relationships/has-many.js").default} args.relationship - Relationship.
@@ -21,8 +21,9 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
   }
 
   /**
- * Runs run.
- * @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models. */
+   * Runs run.
+   * @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models.
+   */
   async run() {
     if (this.relationship.through) {
       return await this._runThrough()
@@ -42,12 +43,12 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
   _partition(targetModelClass, mappingColumns) {
     const relationshipName = this.relationship.getRelationshipName()
     /**
- * Models to load.
- * @type {import("../../record/index.js").default[]} */
+     * Models to load.
+      @type {import("../../record/index.js").default[]} */
     const modelsToLoad = []
     /**
- * Satisfied targets.
- * @type {import("../../record/index.js").default[]} */
+     * Satisfied targets.
+      @type {import("../../record/index.js").default[]} */
     const satisfiedTargets = []
 
     for (const model of this.models) {
@@ -67,7 +68,6 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
   /**
    * Preload through a join table (e.g. hasMany("invoiceGroups", {through: "invoiceGroupLinks"})).
-   *
    * @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models.
    */
   async _runThrough() {
@@ -78,8 +78,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     }
 
     const throughRelationshipName = /**
- * Documents this API.
- * @type {string} */ (this.relationship.through)
+                                     * Narrows the runtime value to the documented type.
+                                      @type {string} */ (this.relationship.through)
     const parentModelClass = this.relationship.getModelClass()
     const throughRelationship = parentModelClass.getRelationshipByName(throughRelationshipName)
     const throughModelClass = throughRelationship.getTargetModelClass()
@@ -103,24 +103,24 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const throughForeignKey = throughRelationship.getForeignKey()
 
     /**
- * Models primary key values.
- * @type {Array<number | string>} */
+     * Models primary key values.
+      @type {Array<number | string>} */
     const modelsPrimaryKeyValues = []
 
     /**
- * Models by primary key value.
- * @type {Record<number | string, Array<import("../../record/index.js").default>>} */
+     * Models by primary key value.
+      @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const modelsByPrimaryKeyValue = {}
 
     /**
- * Preload collections.
- * @type {Record<number | string, Array<import("../../record/index.js").default>>} */
+     * Preload collections.
+      @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const preloadCollections = {}
 
     for (const model of modelsToLoad) {
       const primaryKeyValue = /**
- * Documents this API.
- * @type {string | number} */ (model.readColumn(primaryKey))
+                               * Narrows the runtime value to the documented type.
+                                @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = []
 
@@ -136,22 +136,22 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       .toArray()
 
     /**
- * Parent to target ids.
- * @type {Record<string | number, Array<string | number>>} */
+     * Parent to target ids.
+      @type {Record<string | number, Array<string | number>>} */
     const parentToTargetIds = {}
 
     /**
- * All target ids.
- * @type {Set<string | number>} */
+     * All target ids.
+      @type {Set<string | number>} */
     const allTargetIds = new Set()
 
     for (const throughModel of throughModels) {
       const parentId = /**
- * Documents this API.
- * @type {string | number} */ (throughModel.readColumn(throughForeignKey))
+                        * Narrows the runtime value to the documented type.
+                         @type {string | number} */ (throughModel.readColumn(throughForeignKey))
       const throughId = /**
- * Documents this API.
- * @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
+                         * Narrows the runtime value to the documented type.
+                          @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
 
       if (!(parentId in parentToTargetIds)) parentToTargetIds[parentId] = []
 
@@ -161,8 +161,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     // Step 2: Load target models by the foreign key that points to the through table
     /**
- * Target models.
- * @type {import("../../record/index.js").default[]} */
+     * Target models.
+      @type {import("../../record/index.js").default[]} */
     let targetModels = []
 
     if (allTargetIds.size > 0) {
@@ -175,14 +175,14 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     // Step 3: Index target models by their foreign key (maps to through model ID)
     /**
- * Target models by foreign key.
- * @type {Record<string | number, Array<import("../../record/index.js").default>>} */
+     * Target models by foreign key.
+      @type {Record<string | number, Array<import("../../record/index.js").default>>} */
     const targetModelsByForeignKey = {}
 
     for (const targetModel of targetModels) {
       const fkValue = /**
- * Documents this API.
- * @type {string | number} */ (targetModel.readColumn(targetForeignKey))
+                       * Narrows the runtime value to the documented type.
+                        @type {string | number} */ (targetModel.readColumn(targetForeignKey))
 
       if (!(fkValue in targetModelsByForeignKey)) targetModelsByForeignKey[fkValue] = []
 
@@ -222,7 +222,6 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
   /**
    * Preload direct has-many relationships.
-   *
    * @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models.
    */
   async _runDirect() {
@@ -242,24 +241,24 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     if (modelsToLoad.length == 0) return satisfiedTargets
 
     /**
- * Models primary key values.
- * @type {Array<number | string>} */
+     * Models primary key values.
+      @type {Array<number | string>} */
     const modelsPrimaryKeyValues = []
 
     /**
- * Models by primary key value.
- * @type {Record<number | string, Array<import("../../record/index.js").default>>} */
+     * Models by primary key value.
+      @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const modelsByPrimaryKeyValue = {}
 
     /**
- * Preload collections.
- * @type {Record<number | string, Array<import("../../record/index.js").default>>} */
+     * Preload collections.
+      @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const preloadCollections = {}
 
     for (const model of modelsToLoad) {
       const primaryKeyValue = /**
- * Documents this API.
- * @type {string | number} */ (model.readColumn(primaryKey))
+                               * Narrows the runtime value to the documented type.
+                                @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = []
 
@@ -270,8 +269,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     }
 
     /**
- * Where args.
- * @type {Record<string, string | number | Array<string | number>>} */
+     * Where args.
+      @type {Record<string, string | number | Array<string | number>>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = modelsPrimaryKeyValues
@@ -293,8 +292,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     for (const targetModel of targetModels) {
       const foreignKeyValue = /**
- * Documents this API.
- * @type {string | number} */ (targetModel.readColumn(foreignKey))
+                               * Narrows the runtime value to the documented type.
+                                @type {string | number} */ (targetModel.readColumn(foreignKey))
 
       preloadCollections[foreignKeyValue].push(targetModel)
     }

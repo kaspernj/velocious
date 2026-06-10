@@ -21,7 +21,7 @@
 const registry = new WeakMap()
 
 /**
- * Documents this API.
+ * Runs the registerJobsMount helper.
  * @param {import("../../configuration.js").default} configuration - Configuration instance.
  * @param {string} at - Normalized mount path.
  * @param {JobsMountOptions} options - Mount options.
@@ -39,7 +39,7 @@ export function registerJobsMount(configuration, at, options) {
 }
 
 /**
- * Documents this API.
+ * Runs the getJobsMount helper.
  * @param {import("../../configuration.js").default} configuration - Configuration instance.
  * @param {string} at - Normalized mount path.
  * @returns {JobsMountOptions | undefined} - Mount options if registered.

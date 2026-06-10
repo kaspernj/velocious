@@ -35,7 +35,7 @@ const MAX_RECONNECT_DELAY_MS = 30_000
  */
 export default class BeaconClient extends EventEmitter {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {string} args.host - Beacon host.
    * @param {number} args.port - Beacon port.
@@ -54,23 +54,23 @@ export default class BeaconClient extends EventEmitter {
     this._maxReconnectDelayMs = maxReconnectDelayMs ?? MAX_RECONNECT_DELAY_MS
     this._reconnectDelayMs = this._initialReconnectDelayMs
     /**
- * Documents this API.
- * @type {JsonSocket | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {JsonSocket | undefined} */
     this._jsonSocket = undefined
     /**
- * Documents this API.
- * @type {net.Socket | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {net.Socket | undefined} */
     this._socket = undefined
     this._connected = false
     this._ready = false
     this._closed = false
     /**
- * Documents this API.
- * @type {NodeJS.Timeout | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {NodeJS.Timeout | undefined} */
     this._reconnectTimer = undefined
     /**
- * Documents this API.
- * @type {Promise<void> | undefined} */
+     * Narrows the runtime value to the documented type.
+      @type {Promise<void> | undefined} */
     this._connectPromise = undefined
     /**
      * Last socket error observed while connected, surfaced as the disconnect reason.
@@ -80,18 +80,21 @@ export default class BeaconClient extends EventEmitter {
   }
 
   /**
- * Runs get peer id.
- * @returns {string} - The peer id sent on the hello handshake. */
+   * Runs get peer id.
+   * @returns {string} - The peer id sent on the hello handshake.
+   */
   getPeerId() { return this.peerId }
 
   /**
- * Runs is connected.
- * @returns {boolean} - Whether the underlying socket is currently connected. */
+   * Runs is connected.
+   * @returns {boolean} - Whether the underlying socket is currently connected.
+   */
   isConnected() { return this._connected }
 
   /**
- * Runs is ready.
- * @returns {boolean} - Whether the daemon has acknowledged this peer registration. */
+   * Runs is ready.
+   * @returns {boolean} - Whether the daemon has acknowledged this peer registration.
+   */
   isReady() { return this._ready }
 
   /**
@@ -114,8 +117,8 @@ export default class BeaconClient extends EventEmitter {
         resolve()
       }
       const onError = (/**
- * Documents this API.
- * @type {Error} */ error) => {
+                        * Narrows the runtime value to the documented type.
+                         @type {Error} */ error) => {
         this.off("connect", onConnect)
         this.off("connect-error", onError)
         reject(error)
@@ -180,8 +183,8 @@ export default class BeaconClient extends EventEmitter {
     if (!this._connected || !this._jsonSocket) return false
 
     /**
- * Message.
- * @type {import("./types.js").BeaconBroadcastMessage} */
+     * Message.
+      @type {import("./types.js").BeaconBroadcastMessage} */
     const message = {
       type: "broadcast",
       channel,
@@ -211,8 +214,9 @@ export default class BeaconClient extends EventEmitter {
   }
 
   /**
- * Runs close.
- * @returns {Promise<void>} - Resolves once the socket is closed. */
+   * Runs close.
+   * @returns {Promise<void>} - Resolves once the socket is closed.
+   */
   async close() {
     this._closed = true
 
@@ -232,7 +236,7 @@ export default class BeaconClient extends EventEmitter {
   }
 
   /**
- * Runs open socket.
+   * Runs open socket.
    * @returns {void}
    */
   _openSocket() {
@@ -259,8 +263,8 @@ export default class BeaconClient extends EventEmitter {
     })
 
     jsonSocket.on("message", (/**
- * Documents this API.
- * @type {import("./types.js").BeaconSocketMessage} */ message) => {
+                               * Narrows the runtime value to the documented type.
+                                @type {import("./types.js").BeaconSocketMessage} */ message) => {
       if (message?.type === "hello-ack" && message.peerId === this.peerId) {
         this._ready = true
         this.emit("ready")
@@ -309,7 +313,7 @@ export default class BeaconClient extends EventEmitter {
   }
 
   /**
- * Runs schedule reconnect.
+   * Runs schedule reconnect.
    * @returns {void}
    */
   _scheduleReconnect() {

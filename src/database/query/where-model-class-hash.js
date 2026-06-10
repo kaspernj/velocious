@@ -25,16 +25,16 @@ function normalizeRelationshipWhereOperator(operator) {
     ">=": "gteq"
   }
 
-  return /** Documents this API. @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+  return /** Narrows the runtime value to the documented type. @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
     operatorAliases[/**
- * Documents this API.
- * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+                     * Narrows the runtime value to the documented type.
+                      @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   )
 }
 
 export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("./index.js").default} args.query - Query instance.
    * @param {WhereHash} args.hash - Hash.
@@ -50,7 +50,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs get model class.
+   * Runs get model class.
    * @returns {typeof import("../record/index.js").default} - The model class.
    */
   getModelClass() {
@@ -60,15 +60,15 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {string} - SQL string.
    */
   toSql() {
     let sql = "("
 
     const modelQuery = /**
- * Documents this API.
- * @type {import("./model-class-query.js").default} */ (this.query)
+                        * Narrows the runtime value to the documented type.
+                         @type {import("./model-class-query.js").default} */ (this.query)
     const baseTableName = this.qualifyBaseTable
       ? modelQuery.getTableReferenceForJoin()
       : undefined
@@ -80,7 +80,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs resolve column name.
+   * Runs resolve column name.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string} key - Attribute or column name.
    * @returns {string | undefined} - The resolved column name.
@@ -100,7 +100,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs get relationship.
+   * Runs get relationship.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string} relationshipName - Relationship name.
    * @returns {import("../record/relationships/base.js").default | undefined} - The relationship.
@@ -110,7 +110,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs is relationship where operator tuple.
+   * Runs is relationship where operator tuple.
    * @param {?} tupleValue - Candidate tuple.
    * @returns {boolean} - Whether this is a relationship where tuple.
    */
@@ -125,7 +125,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs normalize relationship where operator tuples.
+   * Runs normalize relationship where operator tuples.
    * @param {?} value - Candidate relationship where value.
    * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
    */
@@ -135,17 +135,18 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     }
 
     /**
- * Normalized.
- * @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
+     * Normalized.
+      @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
     const normalized = []
     /**
- * Add condition.
- * @param {?} conditionValue - Candidate nested condition. */
+     * Add condition.
+     * @param {?} conditionValue - Candidate nested condition.
+     */
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
         const tuple = /**
- * Documents this API.
- * @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
+                       * Narrows the runtime value to the documented type.
+                        @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
         const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
@@ -182,7 +183,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs is relationship where operator tuple container.
+   * Runs is relationship where operator tuple container.
    * @param {?} value - Candidate relationship where value.
    * @returns {boolean} - Whether value can be normalized to relationship tuples.
    */
@@ -197,7 +198,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs where sqlfrom relationship where operator tuples.
+   * Runs where sqlfrom relationship where operator tuples.
    * @param {object} args - Relationship where options.
    * @param {typeof import("../record/index.js").default} args.modelClass - Relationship model class.
    * @param {string} args.tableName - Relationship table reference name.
@@ -303,7 +304,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs normalize sqlite boolean value.
+   * Runs normalize sqlite boolean value.
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {string} args.columnName - Column name.
@@ -319,8 +320,9 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     if (columnType.toLowerCase() !== "boolean") return value
 
     /**
- * Normalize.
- * @param {?} entry - Value to normalize. */
+     * Normalize.
+     * @param {?} entry - Value to normalize.
+     */
     const normalize = (entry) => {
       if (entry === true) return 1
       if (entry === false) return 0
@@ -335,7 +337,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs normalize value for column type.
+   * Runs normalize value for column type.
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {string} args.columnName - Column name.
@@ -355,8 +357,9 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
       stringTypes.has(normalizedType)
 
     /**
- * Normalize.
- * @param {?} entry - Value to normalize. */
+     * Normalize.
+     * @param {?} entry - Value to normalize.
+     */
     const normalize = (entry) => {
       if (isUuidType && typeof entry === "number") return NO_MATCH
       if (!shouldCoerceToString || typeof entry !== "number") return entry
@@ -380,7 +383,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
- * Runs where sqlfrom hash.
+   * Runs where sqlfrom hash.
    * @param {WhereHash} hash - Hash.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
    * @param {string[]} path - Join path.
@@ -391,8 +394,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   _whereSQLFromHash(hash, modelClass, path, tableName, index = 0) {
     const options = this.getOptions()
     const modelQuery = /**
- * Documents this API.
- * @type {import("./model-class-query.js").default} */ (this.query)
+                        * Narrows the runtime value to the documented type.
+                         @type {import("./model-class-query.js").default} */ (this.query)
     let sql = ""
 
     for (const whereKey in hash) {
@@ -439,8 +442,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
         if (!targetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
 
         const nestedHash = /**
- * Documents this API.
- * @type {WhereHash} */ (whereValue)
+                            * Narrows the runtime value to the documented type.
+                             @type {WhereHash} */ (whereValue)
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
 

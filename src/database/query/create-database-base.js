@@ -14,7 +14,7 @@ import QueryBase from "./base.js"
 
 export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {CreateDatabaseArgsType} args - Options object.
    */
   constructor({driver, databaseName, ifNotExists, databaseCharset, databaseCollation}) {
@@ -26,7 +26,7 @@ export default class VelociousDatabaseQueryCreateDatabaseBase extends QueryBase 
   }
 
   /**
- * Runs to sql.
+   * Runs to sql.
    * @returns {string[]} - SQL statements.
    */
   toSql() {

@@ -10,7 +10,7 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordHasManyInstanceRelationship extends BaseInstanceRelationship {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
@@ -18,7 +18,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs build.
+   * Runs build.
    * @param {Record<string, ?>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
@@ -29,8 +29,8 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     if (!targetModelClass) throw new Error("Can't build a new record without a taget model class")
 
     const newInstance = /**
- * Documents this API.
- * @type {InstanceType<TMC>} */ (new targetModelClass(data))
+                         * Narrows the runtime value to the documented type.
+                          @type {InstanceType<TMC>} */ (new targetModelClass(data))
 
 
     // Add it to the loaded models of this relationship
@@ -65,8 +65,8 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const primaryKeyName = this.getPrimaryKey()
       const foreignKeyValue = parentModel.readColumn(primaryKeyName)
       /**
- * Assign data.
- * @type {Record<string, ?>} */
+       * Assign data.
+        @type {Record<string, ?>} */
       const assignData = {}
 
       assignData[foreignKeyAttributeName] = foreignKeyValue
@@ -80,7 +80,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs create.
+   * Runs create.
    * @param {Record<string, ?>} data - Data payload.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
@@ -93,8 +93,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs load.
- * @returns {Promise<InstanceType<TMC>[]>} - Resolves with loaded models. */
+   * Runs load.
+   * @returns {Promise<InstanceType<TMC>[]>} - Resolves with loaded models.
+   */
   async load() {
     // Force-reload: discard the cached value and fetch fresh. When the parent
     // record was loaded as part of a batch, route through the cohort preloader
@@ -107,12 +108,12 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     const batched = await this._tryCohortPreload()
 
     if (batched) {
-      return /** Documents this API. @type {InstanceType<TMC>[]} */ (Array.isArray(this._loaded) ? this._loaded : [])
+      return /** Narrows the runtime value to the documented type. @type {InstanceType<TMC>[]} */ (Array.isArray(this._loaded) ? this._loaded : [])
     }
 
     const foreignModels = /**
- * Documents this API.
- * @type {InstanceType<TMC>[]} */ (await this.query().load())
+                           * Narrows the runtime value to the documented type.
+                            @type {InstanceType<TMC>[]} */ (await this.query().load())
 
     this.setLoaded(foreignModels)
     this.setDirty(false)
@@ -122,8 +123,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs to array.
- * @returns {Promise<InstanceType<TMC>[]>} - Resolves with the array. */
+   * Runs to array.
+   * @returns {Promise<InstanceType<TMC>[]>} - Resolves with the array.
+   */
   async toArray() {
     const loadedValue = await this.autoloadOrLoad()
 
@@ -133,8 +135,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs size.
- * @returns {Promise<number>} - Resolves with the relationship size, using loaded records when available. */
+   * Runs size.
+   * @returns {Promise<number>} - Resolves with the relationship size, using loaded records when available.
+   */
   async size() {
     const loadedValue = this.getLoadedOrUndefined()
 
@@ -150,7 +153,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs preload.
+   * Runs preload.
    * @param {import("../../query/index.js").NestedPreloadRecord} preloads - Preload map for related records.
    * @returns {import("../../query/model-class-query.js").default<TMC>} - The preload.
    */
@@ -159,17 +162,18 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs find.
+   * Runs find.
    * @param {string | number} modelID - Related model identifier.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the find.
    */
   async find(modelID) {
-    return /** Documents this API. @type {Promise<InstanceType<TMC>>} */ (this.query().find(modelID))
+    return /** Narrows the runtime value to the documented type. @type {Promise<InstanceType<TMC>>} */ (this.query().find(modelID))
   }
 
   /**
- * Runs query.
- * @returns {import("../../query/model-class-query.js").default<TMC>} - The query.  */
+   * Runs query.
+   * @returns {import("../../query/model-class-query.js").default<TMC>} - The query.
+   */
   query() {
     if (!this.getModel().isPersisted()) throw new Error("Cannot build a query for an unpersisted parent model")
 
@@ -194,8 +198,8 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const driver = TargetModelClass.connection()
       const parentPrimaryKey = this.getPrimaryKey()
       const parentId = /**
- * Documents this API.
- * @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
+                        * Narrows the runtime value to the documented type.
+                         @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
@@ -207,12 +211,12 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = /**
- * Documents this API.
- * @type {string | number} */ (this.getModel().readColumn(primaryKey))
+                            * Narrows the runtime value to the documented type.
+                             @type {string | number} */ (this.getModel().readColumn(primaryKey))
 
     /**
- * Where args.
- * @type {Record<string, string | number>} */
+     * Where args.
+      @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = primaryModelID
@@ -223,8 +227,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs loaded.
- * @returns {Array<InstanceType<TMC>>} The loaded model or models (depending on relationship type) */
+   * Runs loaded.
+   * @returns {Array<InstanceType<TMC>>} The loaded model or models (depending on relationship type)
+   */
   loaded() {
     if (!this._preloaded && this.model.isPersisted()) {
       throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
@@ -238,7 +243,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs add to loaded.
+   * Runs add to loaded.
    * @param {InstanceType<TMC>[] | InstanceType<TMC>} models - Model instances.
    * @returns {void} - No return value.
    */
@@ -267,7 +272,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
   }
 
   /**
- * Runs set loaded.
+   * Runs set loaded.
    * @param {InstanceType<TMC>[]} models - Model instances.
    * @returns {void} - No return value.
    */

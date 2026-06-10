@@ -25,19 +25,19 @@ export default class RequestBuffer {
   bodyLength = 0
 
   /**
- * Data.
- * @type {number[]} */
+   * Data.
+    @type {number[]} */
   data = []
 
   events = new EventEmitter()
 
   /**
- * Headers by name.
- * @type {Record<string, Header>} */
+   * Headers by name.
+    @type {Record<string, Header>} */
   headersByName = {}
   /**
- * Chunked body chars.
- * @type {number[] | undefined} */
+   * Chunked body chars.
+    @type {number[] | undefined} */
   chunkedBodyChars = undefined
 
   multiPartyFormData = false
@@ -48,7 +48,7 @@ export default class RequestBuffer {
   state = "status"
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../../configuration.js").default} args.configuration - Configuration instance.
    */
@@ -62,7 +62,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs feed.
+   * Runs feed.
    * @param {Buffer} data - Data payload.
    * @returns {Buffer | undefined} - Remaining data, if any.
    */
@@ -97,8 +97,8 @@ export default class RequestBuffer {
 
           chunkedBodyChars.push(char)
           /**
- * Current chunk bytes read.
- * @type {number} */
+           * Current chunk bytes read.
+            @type {number} */
           const currentChunkBytesRead = (this.currentChunkBytesRead || 0) + 1
 
           this.currentChunkBytesRead = currentChunkBytesRead
@@ -177,7 +177,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs get header.
+   * Runs get header.
    * @param {string} name - Name.
    * @returns {Header} - The header.
    */
@@ -190,13 +190,13 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs get headers hash.
+   * Runs get headers hash.
    * @returns {Record<string, string>} - The headers hash.
    */
   getHeadersHash() {
     /**
- * Result.
- * @type {Record<string, string>} */
+     * Result.
+      @type {Record<string, string>} */
     const result = {}
 
     for (const headerFormattedName in this.headersByName) {
@@ -209,7 +209,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs form data part done.
+   * Runs form data part done.
    * @returns {void} - No return value.
    */
   formDataPartDone() {
@@ -228,7 +228,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs new form data part.
+   * Runs new form data part.
    * @returns {void} - No return value.
    */
   newFormDataPart() {
@@ -237,7 +237,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs parse.
+   * Runs parse.
    * @param {string} line - Line.
    * @returns {void} - No return value.
    */
@@ -278,7 +278,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs read header from line.
+   * Runs read header from line.
    * @param {string} line - Line.
    * @returns {Header | undefined} - The header from line.
    */
@@ -293,7 +293,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs add header.
+   * Runs add header.
    * @param {Header} header - Header value.
    */
   addHeader(header) {
@@ -305,7 +305,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs parse header.
+   * Runs parse header.
    * @param {string} line - Line.
    * @returns {void} - No return value.
    */
@@ -346,8 +346,8 @@ export default class RequestBuffer {
           throw new Error("Content length is invalid")
         } else {
           /**
- * Documents this API.
- * @type {number[]} */
+           * Narrows the runtime value to the documented type.
+            @type {number[]} */
           this.postBodyChars = []
 
           // this.postBodyBuffer = new ArrayBuffer(this.contentLength)
@@ -360,7 +360,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs parse status line.
+   * Runs parse status line.
    * @param {string} line - Line.
    * @returns {void} - No return value.
    */
@@ -390,7 +390,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs expects request body.
+   * Runs expects request body.
    * @param {string} httpMethod - HTTP method.
    * @returns {boolean} - Whether the request expects a body.
    */
@@ -399,7 +399,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs is chunked encoding.
+   * Runs is chunked encoding.
    * @returns {boolean} - Whether the request uses chunked transfer encoding.
    */
   isChunkedEncoding() {
@@ -409,7 +409,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs initialize chunked body.
+   * Runs initialize chunked body.
    * @returns {void} - No return value.
    */
   initializeChunkedBody() {
@@ -420,7 +420,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs parse chunk size line.
+   * Runs parse chunk size line.
    * @param {string} line - Chunk size line.
    * @returns {void} - No return value.
    */
@@ -448,7 +448,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs finish chunked body.
+   * Runs finish chunked body.
    * @returns {void} - No return value.
    */
   finishChunkedBody() {
@@ -460,7 +460,7 @@ export default class RequestBuffer {
   }
 
   /**
- * Runs set state.
+   * Runs set state.
    * @param {string} newState - New state.
    * @returns {void} - No return value.
    */
@@ -497,8 +497,8 @@ export default class RequestBuffer {
       try {
         const parsedQuery = querystring.parse(this.postBody)
         /**
- * Unparsed params.
- * @type {Record<string, string | string[]>} */
+         * Unparsed params.
+          @type {Record<string, string | string[]>} */
         const unparsedParams = {}
 
         for (const [key, value] of Object.entries(parsedQuery)) {
@@ -513,8 +513,8 @@ export default class RequestBuffer {
         incorporate(this.params, newParams)
       } catch (error) {
         const ensuredError = /**
- * Documents this API.
- * @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+                              * Narrows the runtime value to the documented type.
+                               @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
         ensuredError.velociousContext = {
           ...(ensuredError.velociousContext || {}),

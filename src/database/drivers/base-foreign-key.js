@@ -4,12 +4,12 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 
 export default class VelociousDatabaseDriversBaseForeignKey {
   /**
- * Table.
- * @type {import("./base-table.js").default | undefined} */
+   * Table.
+    @type {import("./base-table.js").default | undefined} */
   table = undefined
 
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {Record<string, ?>} data - Data payload.
    */
   constructor(data) {
@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get column name.
+   * Runs get column name.
    * @abstract
    * @returns {string} - The column name.
    */
@@ -26,7 +26,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get driver.
+   * Runs get driver.
    * @returns {import("./base.js").default} - The driver.
    */
   getDriver() {
@@ -34,7 +34,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get name.
+   * Runs get name.
    * @abstract
    * @returns {string} - The name.
    */
@@ -43,7 +43,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get options.
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -51,7 +51,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get referenced column name.
+   * Runs get referenced column name.
    * @abstract
    * @returns {string} - The referenced column name.
    */
@@ -60,7 +60,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get referenced table name.
+   * Runs get referenced table name.
    * @abstract
    * @returns {string} - The referenced table name.
    */
@@ -69,7 +69,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get table.
+   * Runs get table.
    * @returns {import("./base-table.js").default} - The table.
    */
   getTable() {
@@ -79,7 +79,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get table name.
+   * Runs get table name.
    * @abstract
    * @returns {string} - The table name.
    */
@@ -88,7 +88,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
   }
 
   /**
- * Runs get table data foreign key.
+   * Runs get table data foreign key.
    * @returns {TableForeignKey} - The table data foreign key.
    */
   getTableDataForeignKey() {

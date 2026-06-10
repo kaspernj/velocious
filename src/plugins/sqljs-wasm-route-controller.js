@@ -32,8 +32,9 @@ function normalizeSqlJsAssetFileName(assetFileName) {
 /** Serves sql.js assets from the backend for sqlite-web locateFile callbacks. */
 export default class SqlJsWasmRouteController extends Controller {
   /**
- * Runs show.
- * @returns {Promise<void>} - Resolves when complete. */
+   * Runs show.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async show() {
     const {sqlJsAssetFileName, sqlJsDistDirectory} = this.params()
 
@@ -52,8 +53,8 @@ export default class SqlJsWasmRouteController extends Controller {
       await fs.access(assetPath)
     } catch (error) {
       const ensuredError = /**
- * Documents this API.
- * @type {{code?: string}} */ (error)
+                            * Narrows the runtime value to the documented type.
+                             @type {{code?: string}} */ (error)
 
       if (ensuredError.code === "ENOENT") {
         await this.render({json: {errorMessage: "Not found", status: "error"}, status: "not-found"})

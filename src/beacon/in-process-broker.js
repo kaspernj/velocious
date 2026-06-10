@@ -19,12 +19,12 @@
  */
 
 /**
- * Documents this API.
- * @typedef {{_receiveBroadcast: (message: import("./types.js").BeaconBroadcastMessage) => void}} InProcessPeer */
+ * Defines this typedef.
+  @typedef {{_receiveBroadcast: (message: import("./types.js").BeaconBroadcastMessage) => void}} InProcessPeer */
 
 /**
  * Peers.
- * @type {Set<InProcessPeer>} */
+  @type {Set<InProcessPeer>} */
 const peers = new Set()
 
 /**
@@ -63,7 +63,7 @@ export function publishToInProcessPeers(message) {
 }
 
 /**
- * Documents this API.
+ * Runs the getInProcessPeerCount helper.
  * @returns {number} - Current peer count. Exposed for diagnostics and tests.
  */
 export function getInProcessPeerCount() {

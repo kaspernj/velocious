@@ -4,7 +4,7 @@ import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   /**
- * Runs checkin.
+   * Runs checkin.
    * @param {import("../drivers/base.js").default} connection - Connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -13,7 +13,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
- * Runs checkout.
+   * Runs checkout.
    * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
@@ -36,7 +36,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
- * Runs with connection.
+   * Runs with connection.
    * @template T
    * @param {import("./base.js").ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} optionsOrCallback - Checkout options or callback function.
    * @param {function(import("../drivers/base.js").default) : Promise<T>} [callback] - Callback function.
@@ -81,8 +81,9 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
- * Runs get current connection.
- * @returns {import("../drivers/base.js").default} - The current connection.  */
+   * Runs get current connection.
+   * @returns {import("../drivers/base.js").default} - The current connection.
+   */
   getCurrentConnection() {
     if (!this.connection) {
       throw new Error("A connection hasn't been made yet")
@@ -92,15 +93,17 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
- * Runs get current context connection.
- * @returns {import("../drivers/base.js").default | undefined} - The current context connection.  */
+   * Runs get current context connection.
+   * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
+   */
   getCurrentContextConnection() {
     return this.connection
   }
 
   /**
- * Runs get debug snapshot.
- * @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool. */
+   * Runs get debug snapshot.
+   * @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool.
+   */
   getDebugSnapshot() {
     const connections = this.connection
       ? [this.debugConnectionSnapshot(this.connection, {state: "shared"})]

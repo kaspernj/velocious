@@ -29,7 +29,7 @@ function assignActionAndController(params, name) {
 
 class VelociousRouteGetRoute extends BaseRoute {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -47,7 +47,7 @@ class VelociousRouteGetRoute extends BaseRoute {
   }
 
   /**
- * Runs match with path.
+   * Runs match with path.
    * @param {object} args - Options object.
    * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
@@ -58,7 +58,7 @@ class VelociousRouteGetRoute extends BaseRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
+      const [_beginnigSlash, _matchedName, restPath] = match
 
       // Prevent partial prefix matches (e.g., "params" matching "params-with-query")
       if (restPath && !restPath.startsWith("/")) return

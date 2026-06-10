@@ -16,8 +16,8 @@ function throwS3ConfigurationError(message) {
  */
 function isReadableStream(value) {
   return Boolean(value && typeof value === "object" && typeof /**
- * Documents this API.
- * @type {?} */ (value).pipe === "function")
+                                                               * Narrows the runtime value to the documented type.
+                                                                @type {?} */ (value).pipe === "function")
 }
 
 /**
@@ -27,8 +27,8 @@ function isReadableStream(value) {
  */
 async function dynamicImport(specifier) {
   const importer = /**
- * Documents this API.
- * @type {(moduleSpecifier: string) => Promise<?>} */ (
+                    * Narrows the runtime value to the documented type.
+                     @type {(moduleSpecifier: string) => Promise<?>} */ (
     new Function("moduleSpecifier", "return import(moduleSpecifier)")
   )
 
@@ -50,18 +50,18 @@ async function streamToBuffer(value) {
   }
 
   /**
- * Chunks.
- * @type {Buffer[]} */
+   * Chunks.
+    @type {Buffer[]} */
   const chunks = []
 
   const readableStream = /**
- * Documents this API.
- * @type {?} */ (value)
+                          * Narrows the runtime value to the documented type.
+                           @type {?} */ (value)
 
   await new Promise((resolve, reject) => {
     readableStream.on("data", (/**
- * Documents this API.
- * @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
+                                * Narrows the runtime value to the documented type.
+                                 @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
       if (Buffer.isBuffer(chunk)) {
         chunks.push(chunk)
       } else if (chunk instanceof ArrayBuffer) {
@@ -82,7 +82,7 @@ async function streamToBuffer(value) {
  */
 export default class S3AttachmentStorageDriver {
   /**
- * Runs constructor.
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {Record<string, ?>} [args.options] - Driver options.
    */
@@ -92,7 +92,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs bucket.
+   * Runs bucket.
    * @returns {string} - S3 bucket name.
    */
   bucket() {
@@ -106,7 +106,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs signed url expires in.
+   * Runs signed url expires in.
    * @returns {number} - Signed URL expiration in seconds.
    */
   signedUrlExpiresIn() {
@@ -118,7 +118,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs s3 runtime.
+   * Runs s3 runtime.
    * @returns {Promise<{S3Client: ?, PutObjectCommand: ?, GetObjectCommand: ?, DeleteObjectCommand: ?, getSignedUrl: ?}>} - S3 runtime.
    */
   async s3Runtime() {
@@ -137,15 +137,15 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs client.
+   * Runs client.
    * @returns {Promise<?>} - S3 client.
    */
   async client() {
     if (!this._client) {
       const {S3Client} = await this.s3Runtime()
       /**
- * Client config.
- * @type {Record<string, ?>} */
+       * Client config.
+        @type {Record<string, ?>} */
       const clientConfig = {
         region: this.options.region || process.env.VELOCIOUS_ATTACHMENTS_S3_REGION || "us-east-1"
       }
@@ -172,7 +172,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs write.
+   * Runs write.
    * @param {object} args - Write args.
    * @param {string} args.attachmentId - Attachment id.
    * @param {{contentBuffer: Buffer, contentType: string | null, filename: string}} args.input - Normalized attachment input.
@@ -194,7 +194,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs read.
+   * Runs read.
    * @param {object} args - Read args.
    * @param {string} args.storageKey - Storage key.
    * @returns {Promise<Buffer>} - Attachment bytes.
@@ -211,7 +211,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs delete.
+   * Runs delete.
    * @param {object} args - Delete args.
    * @param {string} args.storageKey - Storage key.
    * @returns {Promise<void>} - Resolves when deleted.
@@ -227,7 +227,7 @@ export default class S3AttachmentStorageDriver {
   }
 
   /**
- * Runs url.
+   * Runs url.
    * @param {object} args - URL args.
    * @param {string} args.storageKey - Storage key.
    * @returns {Promise<string>} - Signed URL.
