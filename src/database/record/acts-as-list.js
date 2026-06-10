@@ -180,7 +180,7 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
     .select(positionColumn)
     .where({[scopeUnderscore]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
-    .order(`${positionUnderscore} DESC`)
+    .order(`${positionColumnSql} DESC`)
 
   if (toPosition != null) {
     query = query.where(`${positionColumnSql} < ${connection.quote(toPosition)}`)
@@ -274,8 +274,10 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
+  const connection = modelClass.connection()
   const scopeUnderscore = inflection.underscore(scope)
   const positionUnderscore = inflection.underscore(positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionUnderscore)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
   if (resolvedScopeValue == null) return 0
@@ -283,7 +285,7 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
   const rows = await modelClass
     .select(positionColumn)
     .where({[scopeUnderscore]: resolvedScopeValue})
-    .order(`${positionUnderscore} DESC`)
+    .order(`${positionColumnSql} DESC`)
     .limit(1)
     .toArray()
 
