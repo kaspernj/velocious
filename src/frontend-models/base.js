@@ -1347,6 +1347,18 @@ function frontendModelTransportPath(url) {
 }
 
 /**
+ * Runs frontend model request headers.
+ * @returns {Record<string, string>} - Headers for frontend-model HTTP requests.
+ */
+function frontendModelRequestHeaders() {
+  const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
+    ? (frontendModelTransportConfig.requestHeaders() || {})
+    : (frontendModelTransportConfig.requestHeaders || {})
+
+  return {"Content-Type": "application/json", ...dynamicHeaders}
+}
+
+/**
  * Runs perform shared frontend model api request.
  * @param {Record<string, ?>} requestPayload - Shared request payload.
  * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
@@ -1355,10 +1367,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload)
   const websocketClient = frontendModelTransportConfig.websocketClient
   const url = frontendModelApiUrl()
-  const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
-    ? (frontendModelTransportConfig.requestHeaders() || {})
-    : (frontendModelTransportConfig.requestHeaders || {})
-  const mergedHeaders = {"Content-Type": "application/json", ...dynamicHeaders}
+  const mergedHeaders = frontendModelRequestHeaders()
 
   if (websocketClient) {
     const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
@@ -3825,9 +3834,7 @@ export default class FrontendModelBase {
       const directResponse = await fetch(url, {
         body: JSON.stringify(serializedPayload),
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: frontendModelRequestHeaders(),
         method: "POST"
       })
 
