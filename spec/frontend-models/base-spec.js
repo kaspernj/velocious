@@ -1425,6 +1425,20 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }
   })
 
+  it("raises debug error messages from non-production error status payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({debugErrorMessage: "Database relation is missing.", errorMessage: "Request failed.", status: "error"})
+
+    try {
+      await expect(async () => {
+        await User.find(123)
+      }).toThrow(/Database relation is missing\./)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("does not treat raw model status attributes as command errors for fetch transport", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: [{id: 5, name: "Domain status model", status: "error"}]})

@@ -3950,9 +3950,12 @@ export default class FrontendModelBase {
 
     if (!hasErrorMessage && !hasOnlyStatus && !hasErrorEnvelopeKeys && looksLikeRawModelPayload) return
 
-    const errorMessage = hasErrorMessage
+    const debugErrorMessage = typeof response.debugErrorMessage === "string" && response.debugErrorMessage.length > 0
+      ? response.debugErrorMessage
+      : null
+    const errorMessage = debugErrorMessage || (hasErrorMessage
       ? response.errorMessage
-      : `Request failed for ${this.name}#${commandType}`
+      : `Request failed for ${this.name}#${commandType}`)
 
     const error = /**
                    * Narrows the runtime value to the documented type.
