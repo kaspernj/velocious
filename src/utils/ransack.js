@@ -64,7 +64,6 @@ const supportedPredicates = [
  * @param {Record<string, ?>} params - Ransack-style params hash.
  * @returns {RansackCondition[]} - Normalized conditions.
  */
-// fallow-ignore-next-line unused-export
 export function normalizeRansackParams(modelClass, params) {
   return normalizeRansackGroup(modelClass, params).conditions
 }

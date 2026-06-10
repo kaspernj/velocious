@@ -1381,7 +1381,6 @@ export default class FrontendModelQuery {
    * @param {?} value - Search value.
    * @returns {this} - Query with appended search.
    */
-  // fallow-ignore-next-line unused-class-member
   search(path, column, operator, value) {
     if (!Array.isArray(path)) {
       throw new Error(`search path must be an array, got: ${typeof path}`)
@@ -1464,7 +1463,6 @@ export default class FrontendModelQuery {
    * @param {number} value - Maximum number of records.
    * @returns {this} - Query with limit.
    */
-  // fallow-ignore-next-line unused-class-member
   limit(value) {
     this._limit = normalizeIntegerArgument(value, "limit", {min: 0})
     this._page = null
@@ -1835,7 +1833,6 @@ export default class FrontendModelQuery {
    * Returns the eventOptionsPayload result.
    * @returns {FrontendModelEventOptionsPayload} - Combined event filter and projection payload.
    */
-  // fallow-ignore-next-line unused-class-member
   eventOptionsPayload() {
     const eventFilterPayload = this.eventFilterPayload()
 
