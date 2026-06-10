@@ -1388,36 +1388,49 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const responseText = await response.text()
 
   if (!response.ok) {
-    // Surface the backend's friendly errorMessage envelope (the
-    // `{status: "error", errorMessage: "..."}` shape every controller
-    // ships on its 4xx/5xx responses) instead of the generic status
-    // string. Fall through to the status-only message when the body is
-    // missing, non-JSON, or has no usable errorMessage field.
-    const responseContentType = response.headers.get("content-type")
-
-    if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
-      /**
-       * Defines errorBody.
-        @type {Record<string, ?> | null} */
-      let errorBody
-
-      try {
-        errorBody = JSON.parse(responseText)
-      } catch {
-        errorBody = null
-      }
-
-      if (errorBody && typeof errorBody.errorMessage === "string" && errorBody.errorMessage.trim().length > 0) {
-        throw new Error(errorBody.errorMessage.trim())
-      }
-    }
-
-    throw new Error(`Request failed (${response.status}) for shared frontend model API`)
+    throwFrontendModelHttpError({
+      commandLabel: "shared frontend model API",
+      response,
+      responseText
+    })
   }
 
   const json = responseText.length > 0 ? JSON.parse(responseText) : {}
 
   return /** Narrows the runtime value to the documented type. @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
+}
+
+/**
+ * Throws a frontend-model HTTP error with backend-provided envelope details when available.
+ * @param {{commandLabel: string, response: Response, responseText: string}} args - Error response details.
+ * @returns {never}
+ */
+function throwFrontendModelHttpError({commandLabel, response, responseText}) {
+  // Surface the backend's friendly errorMessage envelope (the
+  // `{status: "error", errorMessage: "..."}` shape every controller
+  // ships on its 4xx/5xx responses) instead of the generic status
+  // string. Fall through to the status-only message when the body is
+  // missing, non-JSON, or has no usable errorMessage field.
+  const responseContentType = response.headers.get("content-type")
+
+  if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
+    /**
+     * Defines errorBody.
+      @type {Record<string, ?> | null} */
+    let errorBody
+
+    try {
+      errorBody = JSON.parse(responseText)
+    } catch {
+      errorBody = null
+    }
+
+    if (errorBody && typeof errorBody.errorMessage === "string" && errorBody.errorMessage.trim().length > 0) {
+      throw new Error(errorBody.errorMessage.trim())
+    }
+  }
+
+  throw new Error(`Request failed (${response.status}) for ${commandLabel}`)
 }
 
 /**
@@ -3838,11 +3851,16 @@ export default class FrontendModelBase {
         method: "POST"
       })
 
+      const directResponseText = await directResponse.text()
+
       if (!directResponse.ok) {
-        throw new Error(`Request failed (${directResponse.status}) for ${this.name}#${commandType}`)
+        throwFrontendModelHttpError({
+          commandLabel: `${this.name}#${commandType}`,
+          response: directResponse,
+          responseText: directResponseText
+        })
       }
 
-      const directResponseText = await directResponse.text()
       const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
       const decodedDirectResponse = /**
                                      * Narrows the runtime value to the documented type.
