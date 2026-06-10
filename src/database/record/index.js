@@ -1435,7 +1435,7 @@ class VelociousDatabaseRecord {
       const TargetModelClass = relationship.getTargetModelClass()
 
       if (loaded && !Array.isArray(loaded) && TargetModelClass) {
-        const loadedPrimaryKey = loaded.readColumn(TargetModelClass.primaryKey())
+        const loadedPrimaryKey = loaded.readColumn(relationship.getPrimaryKey())
 
         if (loadedPrimaryKey == normalizedValue) continue
       }

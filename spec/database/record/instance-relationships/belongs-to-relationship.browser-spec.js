@@ -21,11 +21,10 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     const targetProject = await Project.create()
     const task = await Task.create({name: "Changed relationship task", project: originalProject})
 
-    await task.projectOrLoad()
     expect(task.project().id()).toEqual(originalProject.id())
 
     task.setProjectId(targetProject.id())
-    await task.preload("project", {force: true})
+    await task.loadProject()
 
     expect(task.project().id()).toEqual(targetProject.id())
   })
@@ -35,7 +34,6 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     const targetProject = await Project.create()
     const task = await Task.create({name: "Cleared relationship task", project: originalProject})
 
-    await task.projectOrLoad()
     expect(task.project().id()).toEqual(originalProject.id())
 
     task.setProjectId(targetProject.id())
@@ -52,7 +50,6 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     const task = await Task.create({name: "Lifecycle relationship task", project: originalProject})
     let callbackProjectId
 
-    await task.projectOrLoad()
     expect(task.project().id()).toEqual(originalProject.id())
 
     Task._lifecycleCallbacks = {}
