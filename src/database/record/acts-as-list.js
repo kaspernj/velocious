@@ -2,8 +2,6 @@
 
 /** @file Registers gap-less positional list callbacks on a model class. */
 
-import * as inflection from "inflection"
-
 /**
  * Acts as list shifting.
  * @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks.
@@ -64,8 +62,11 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     if (isShifting(record)) return
     if (!record.isPersisted()) return
 
-    const posColumn = inflection.underscore(positionColumn)
-    const scopeCol = inflection.underscore(scope)
+    const modelClass = /**
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("./index.js").default} */ (record.constructor)
+    const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
+    const scopeCol = modelClass.getColumnNameForAttributeName(scope)
     const rawAttributes = /**
                            * Narrows the runtime value to the documented type.
                             @type {Record<string, ?>} */ (record._attributes || {})
@@ -165,22 +166,22 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const scopeUnderscore = inflection.underscore(scope)
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
   if (resolvedScopeValue == null) return
 
-  const positionUnderscore = inflection.underscore(positionColumn)
-  const positionColumnSql = connection.quoteColumn(positionUnderscore)
-  const scopeColumnSql = connection.quoteColumn(scopeUnderscore)
+  const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionColumnName)
+  const scopeColumnSql = connection.quoteColumn(scopeColumnName)
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in descending order so we bump the highest first
   let query = modelClass
     .select(positionColumn)
-    .where({[scopeUnderscore]: resolvedScopeValue})
+    .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
-    .order(`${positionUnderscore} DESC`)
+    .order(`${positionColumnSql} DESC`)
 
   if (toPosition != null) {
     query = query.where(`${positionColumnSql} < ${connection.quote(toPosition)}`)
@@ -223,22 +224,22 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const scopeUnderscore = inflection.underscore(scope)
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
   if (resolvedScopeValue == null) return
 
-  const positionUnderscore = inflection.underscore(positionColumn)
-  const positionColumnSql = connection.quoteColumn(positionUnderscore)
-  const scopeColumnSql = connection.quoteColumn(scopeUnderscore)
+  const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionColumnName)
+  const scopeColumnSql = connection.quoteColumn(scopeColumnName)
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in ascending order so we shift the lowest gap first
   let query = modelClass
     .select(positionColumn)
-    .where({[scopeUnderscore]: resolvedScopeValue})
+    .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
-    .order(positionUnderscore)
+    .order(positionColumnName)
 
   if (toPosition != null) {
     query = query.where(`${positionColumnSql} < ${connection.quote(toPosition)}`)
@@ -274,15 +275,18 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
-  const scopeUnderscore = inflection.underscore(scope)
+  const connection = modelClass.connection()
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
+  const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionColumnName)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
   if (resolvedScopeValue == null) return 0
 
   const rows = await modelClass
     .select(positionColumn)
-    .where({[scopeUnderscore]: resolvedScopeValue})
-    .order(`${positionColumn} DESC`)
+    .where({[scopeColumnName]: resolvedScopeValue})
+    .order(`${positionColumnSql} DESC`)
     .limit(1)
     .toArray()
 
@@ -309,15 +313,16 @@ function resolveScopeValue(record, scope) {
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
   const relationships = modelClass.getRelationshipsMap()
+  const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
   for (const relationshipName in relationships) {
     const relationship = relationships[relationshipName]
 
     if (relationship.getType?.() !== "belongsTo") continue
 
-    const foreignKey = inflection.camelize(relationship.getForeignKey(), true)
+    const foreignKey = relationship.getForeignKey()
 
-    if (foreignKey !== scope) continue
+    if (foreignKey !== scopeColumnName) continue
 
     const instanceRelationship = record.getRelationshipByName(relationshipName)
     const loaded = instanceRelationship.loaded()
@@ -352,8 +357,8 @@ async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
 
   const highest = await highestPositionInScope({record, positionColumn, scope, scopeValue: resolvedScopeValue})
   const tempPosition = highest + 10000
-  const positionColumnSql = connection.quoteColumn(inflection.underscore(positionColumn))
-  const scopeColumnSql = connection.quoteColumn(inflection.underscore(scope))
+  const positionColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(positionColumn))
+  const scopeColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(scope))
   const tableSql = connection.quoteTable(tableName)
   const pkSql = connection.quoteColumn("id")
 
