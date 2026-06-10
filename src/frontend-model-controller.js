@@ -29,7 +29,11 @@ function normalizeFrontendModelPreload(preload) {
 function normalizeFrontendModelJoins(joins) {
   if (!joins) return null
 
-  return normalizeQueryJoins(joins)
+  try {
+    return normalizeQueryJoins(joins)
+  } catch (error) {
+    throw frontendModelValidationErrorForError(error)
+  }
 }
 
 /**
@@ -146,6 +150,20 @@ function frontendModelQueryMetadata(query) {
  */
 function frontendModelValidationError(message) {
   return VelociousError.safe(message, {code: "frontend-model-validation"})
+}
+
+/**
+ * @param {unknown} error - Error raised while normalizing client query params.
+ * @returns {VelociousError} - Client-safe validation error preserving the normalizer message.
+ */
+function frontendModelValidationErrorForError(error) {
+  if (error instanceof VelociousError && error.safeToExpose) return error
+
+  const message = error instanceof Error
+    ? error.message
+    : String(error)
+
+  return frontendModelValidationError(message)
 }
 
 /**
@@ -1013,7 +1031,11 @@ export default class FrontendModelController extends Controller {
 
   /** @returns {FrontendModelGroup[]} - Frontend group definitions. */
   frontendModelGroup() {
-    return normalizeQueryGroup(this.frontendModelParams().group)
+    try {
+      return normalizeQueryGroup(this.frontendModelParams().group)
+    } catch (error) {
+      throw frontendModelValidationErrorForError(error)
+    }
   }
 
   /** @returns {FrontendModelPagination} - Frontend pagination params. */
@@ -1035,7 +1057,11 @@ export default class FrontendModelController extends Controller {
 
   /** @returns {FrontendModelPluck[]} - Frontend pluck definitions. */
   frontendModelPluck() {
-    return normalizeQueryPluck(this.frontendModelParams().pluck)
+    try {
+      return normalizeQueryPluck(this.frontendModelParams().pluck)
+    } catch (error) {
+      throw frontendModelValidationErrorForError(error)
+    }
   }
 
   /** @returns {boolean} - Whether the request asks for an aggregate count. */

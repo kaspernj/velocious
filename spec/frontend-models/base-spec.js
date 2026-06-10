@@ -1145,13 +1145,13 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            ransack: {created_at_gteq: "2026-02-24T10:00:00.000Z"}
+            ransack: {created_at_gteq: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}}
           },
           url: "/frontend-models"
         },
         {
           body: {
-            ransack: {createdAtGteq: "2026-02-24T10:00:00.000Z"}
+            ransack: {createdAtGteq: {__velocious_type: "date", value: "2026-02-24T10:00:00.000Z"}}
           },
           url: "/frontend-models"
         }
