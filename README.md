@@ -2078,6 +2078,8 @@ npx velocious server --host 0.0.0.0 --port 8082
 
 When the server runs in the `development` environment, Velocious watches application `src/` trees and hot-reloads by recycling HTTP workers after `.js`/`.mjs`/`.cjs`/`.json`/`.ejs` changes. That picks up edited controllers, models, resources, routes, and views without a manual server restart while keeping production/test behavior unchanged.
 
+Starting the HTTP server creates `tmp/server.lock` under the configured application directory before Beacon, workers, or the TCP listener start. A second server for the same app fails fast with the lock owner details instead of partially starting. Normal shutdown removes the lock; stale locks with a dead local PID are reclaimed automatically, while locks from another host or unreadable metadata should be removed manually only after confirming no server is running. See [docs/http-server.md](docs/http-server.md#server-lock).
+
 # Authorization (CanCan-style)
 
 Define resource classes with an `abilities()` method and use `can` / `cannot` rules to constrain model access.

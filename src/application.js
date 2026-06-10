@@ -3,6 +3,7 @@
 import AppRoutes from "./routes/app-routes.js"
 import Logger from "./logger.js"
 import HttpServer from "./http-server/index.js"
+import HttpServerLock from "./http-server/server-lock.js"
 import websocketEventsHost from "./http-server/websocket-events-host.js"
 import restArgsError from "./utils/rest-args-error.js"
 
@@ -27,6 +28,8 @@ export default class VelociousApplication {
 
     this.logger = new Logger(this)
     this._type = type
+    /** @type {HttpServerLock | undefined} */
+    this.httpServerLock = undefined
   }
 
   /** @returns {string} - The type.  */
@@ -77,36 +80,74 @@ export default class VelociousApplication {
       ...this.httpServerConfiguration
     }
     const port = httpServerConfiguration.port ?? 3006
+    const host = httpServerConfiguration.host
 
     await this.logger.debug(`Starting server on port ${port}`)
+    const httpServerLock = new HttpServerLock({configuration, host: host ?? "0.0.0.0", port})
+    await httpServerLock.acquire()
+    this.httpServerLock = httpServerLock
 
-    if (!configuration.getWebsocketEvents()) {
-      configuration.setWebsocketEvents(/** @type {any} */ (websocketEventsHost))
+    try {
+      if (!configuration.getWebsocketEvents()) {
+        configuration.setWebsocketEvents(/** @type {any} */ (websocketEventsHost))
+      }
+
+      await configuration.connectBeacon({peerType: "server"})
+
+      this.httpServer = this.createHttpServer({
+        configuration,
+        host,
+        inProcess: httpServerConfiguration.inProcess,
+        maxWorkers: httpServerConfiguration.maxWorkers,
+        port,
+        workers: httpServerConfiguration.workers
+      })
+      this.httpServer.events.on("close", this.onHttpServerClose)
+      configuration._httpServerInstance = this.httpServer
+
+      await this.httpServer.start()
+    } catch (error) {
+      await this.releaseHttpServerLock()
+      configuration._httpServerInstance = undefined
+
+      throw error
     }
+  }
 
-    await configuration.connectBeacon({peerType: "server"})
-
-    this.httpServer = new HttpServer({
-      configuration,
-      host: httpServerConfiguration.host,
-      inProcess: httpServerConfiguration.inProcess,
-      maxWorkers: httpServerConfiguration.maxWorkers,
-      port,
-      workers: httpServerConfiguration.workers
-    })
-    this.httpServer.events.on("close", this.onHttpServerClose)
-    configuration._httpServerInstance = this.httpServer
-
-    await this.httpServer.start()
+  /**
+   * @param {object} args - HTTP server arguments.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} [args.host] - Host.
+   * @param {boolean} [args.inProcess] - Run HTTP handlers in the main thread.
+   * @param {number} [args.maxWorkers] - Max workers.
+   * @param {number} args.port - Port.
+   * @param {number} [args.workers] - Worker count.
+   * @returns {HttpServer} - HTTP server instance.
+   */
+  createHttpServer({configuration, host, inProcess, maxWorkers, port, workers}) {
+    return new HttpServer({configuration, host, inProcess, maxWorkers, port, workers})
   }
 
   /** @returns {Promise<void>} - Resolves when complete.  */
   async stop() {
     await this.logger.debug("Stopping server")
-    await this.httpServer?.stop()
-    this.configuration._httpServerInstance = undefined
-    await this.configuration.disconnectBeacon()
-    await this.configuration.closeDatabaseConnections()
+
+    try {
+      await this.httpServer?.stop()
+      this.configuration._httpServerInstance = undefined
+      await this.configuration.disconnectBeacon()
+      await this.configuration.closeDatabaseConnections()
+    } finally {
+      await this.releaseHttpServerLock()
+    }
+  }
+
+  /** @returns {Promise<void>} - Resolves after the HTTP server lock has been released. */
+  async releaseHttpServerLock() {
+    const {httpServerLock} = this
+
+    this.httpServerLock = undefined
+    if (httpServerLock) await httpServerLock.release()
   }
 
   /** @returns {void} - No return value.  */

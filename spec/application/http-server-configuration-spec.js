@@ -1,7 +1,12 @@
 // @ts-check
 
+import os from "node:os"
+import path from "node:path"
+
 import Application from "../../src/application.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+let testDirectorySequence = 0
 
 class HttpServerConfigurationTestConfiguration {
   debug = false
@@ -10,6 +15,13 @@ class HttpServerConfigurationTestConfiguration {
   /** @param {{httpServer?: import("../../src/configuration-types.js").HttpServerConfiguration}} args */
   constructor({httpServer = {}} = {}) {
     this.httpServer = httpServer
+    testDirectorySequence++
+    this.directory = path.join(os.tmpdir(), `velocious-http-server-configuration-${process.pid}-${testDirectorySequence}`)
+  }
+
+  /** @returns {string} - Application directory. */
+  getDirectory() {
+    return this.directory
   }
 
   /** @returns {string} */

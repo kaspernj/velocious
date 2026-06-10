@@ -57,3 +57,18 @@ const application = new Application({
 `maxWorkers` remains accepted as a compatibility alias when `workers` is not
 provided, but new code should use `workers` because it describes the actual
 number of handlers started.
+
+## Server Lock
+
+Starting an application HTTP server creates a lock directory at
+`tmp/server.lock` under the configured application directory. The lock is
+acquired before Beacon connects, before workers start, and before the TCP socket
+binds, so a second server for the same app fails fast instead of partially
+starting and then racing on the port.
+
+The lock directory contains `owner.json` with the owning PID, host, port,
+hostname, and acquisition time. Normal shutdown removes the lock. If a process
+dies without cleanup, the next startup removes the stale lock when the metadata
+names a dead local PID; locks owned by another host or locks without readable PID
+metadata are left in place and should be removed manually only after confirming
+no server is running.
