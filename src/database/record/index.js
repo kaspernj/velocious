@@ -27,6 +27,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
+import {formatValue} from "../../utils/format-value.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
@@ -1720,15 +1721,7 @@ class VelociousDatabaseRecord {
    * @returns {string} - Safe row representation.
    */
   static _safeSerializeInsertRow(row) {
-    try {
-      return JSON.stringify(row, (key, value) => {
-        if (typeof value === "bigint") return value.toString()
-
-        return value
-      })
-    } catch {
-      return String(row)
-    }
+    return formatValue(row)
   }
 
   /**
