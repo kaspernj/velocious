@@ -94,7 +94,7 @@ export default class CommentBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/task.js").default}
    */
   buildTask(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
@@ -124,7 +124,7 @@ export default class CommentBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/task.js").default}
    */
   buildDoneTask(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

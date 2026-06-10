@@ -110,7 +110,7 @@ export default class UserBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildCreatedProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
