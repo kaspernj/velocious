@@ -67,8 +67,7 @@ export default class BackgroundJobRegistry {
       return
     }
 
-    const jobFiles = fs.glob(`${jobsDir}/**
- * Documents this API./*.js`)
+    const jobFiles = fs.glob(`${jobsDir}/**/*.js`)
 
     for await (const jobFile of jobFiles) {
       const jobImport = await import(toImportSpecifier(jobFile))

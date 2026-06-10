@@ -415,8 +415,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async _actualFindCommands() {
     const basePath = await this.getBasePath()
-    const commandFiles = fs.glob(`${basePath}/src/cli/commands/**
- * Documents this API./*.js`)
+    const commandFiles = fs.glob(`${basePath}/src/cli/commands/**/*.js`)
     const commands = []
 
     for await (const aFilePath of commandFiles) {
@@ -674,8 +673,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async findMigrations() {
     const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
-    const glob = await fs.glob(`${migrationsPath}/**
- * Documents this API./*.js`)
+    const glob = await fs.glob(`${migrationsPath}/**/*.js`)
     let files = []
 
     for await (const fullPath of glob) {
