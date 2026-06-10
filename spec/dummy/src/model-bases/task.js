@@ -126,7 +126,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
@@ -184,7 +184,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
   buildPrimaryInteraction(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

@@ -1,9 +1,11 @@
 // @ts-check
 
 /**
+ * WebsocketJsonValue type.
  * @typedef {null | boolean | number | string | object} WebsocketJsonValue
  */
 /**
+ * WebsocketParams type.
  * @typedef {Record<string, WebsocketJsonValue>} WebsocketParams
  */
 
@@ -17,6 +19,7 @@
  */
 export default class VelociousWebsocketChannel {
   /**
+   * Runs constructor.
    * @param {object} args
    * @param {string} args.subscriptionId - Client-assigned id, unique within the session.
    * @param {WebsocketParams} args.params - Subscribe params.
@@ -33,7 +36,6 @@ export default class VelociousWebsocketChannel {
    * Subscribe-time auth. Default is `false` (deny). Channel authors
    * MUST override to allow subscriptions. Returning a Promise defers
    * the `channel-subscribed` confirmation until it resolves.
-   *
    * @returns {boolean | Promise<boolean>}
    */
   canSubscribe() { return false }
@@ -42,7 +44,6 @@ export default class VelociousWebsocketChannel {
    * Optional — called once after `canSubscribe` resolves truthy and
    * before `channel-subscribed` is sent to the client. Use for
    * initial snapshot delivery.
-   *
    * @returns {void | Promise<void>}
    */
   subscribed() {}
@@ -50,7 +51,6 @@ export default class VelociousWebsocketChannel {
   /**
    * Optional — called once when the subscription ends. Fires on
    * client-initiated `channel-unsubscribe` or on session teardown.
-   *
    * @returns {void | Promise<void>}
    */
   unsubscribed() {}
@@ -60,7 +60,6 @@ export default class VelociousWebsocketChannel {
    * moved into the paused/grace registry. Either `onResume` fires
    * on successful client reconnect, or `unsubscribed()` fires when
    * the grace window expires.
-   *
    * @returns {void | Promise<void>}
    */
   onDisconnect() {}
@@ -68,7 +67,6 @@ export default class VelociousWebsocketChannel {
   /**
    * Called after a client reconnect + `session-resume` rebinds this
    * subscription to a new socket.
-   *
    * @returns {void | Promise<void>}
    */
   onResume() {}
@@ -77,7 +75,6 @@ export default class VelociousWebsocketChannel {
    * Called when the client sends updated metadata (e.g. after
    * sign-in / locale change). Override to react to session-level
    * metadata updates.
-   *
    * @param {WebsocketParams} _metadata - Updated metadata.
    * @returns {void | Promise<void>}
    */
@@ -88,7 +85,6 @@ export default class VelociousWebsocketChannel {
    * each live subscription — returning true delivers the body via
    * `sendMessage`. Default matches all broadcasts regardless of
    * params; override for per-subscriber filtering.
-   *
    * @param {...WebsocketJsonValue} _broadcastArgs - Params forwarded from `broadcastToChannel` (ignored by default).
    * @returns {boolean} - True to deliver the broadcast to this subscriber.
    */
@@ -97,7 +93,7 @@ export default class VelociousWebsocketChannel {
   /**
    * Returns sanitized diagnostics for debug snapshots.
    * Subclasses can override to expose non-sensitive routing details.
-   * @returns {Record<string, unknown>} Debug-safe subscription details.
+   * @returns {Record<string, ?>} Debug-safe subscription details.
    */
   debugSnapshot() { return {} }
 
@@ -105,7 +101,6 @@ export default class VelociousWebsocketChannel {
    * Delivers a matched broadcast to this subscriber. Subclasses can
    * override when the outbound body must be tailored to subscription
    * params before sending.
-   *
    * @param {WebsocketJsonValue} body
    * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void | Promise<void>}
@@ -118,7 +113,6 @@ export default class VelociousWebsocketChannel {
    * Sends a `channel-message` frame to THIS subscriber only.
    * When `meta.eventId` is provided, the client receives it so it
    * can track its checkpoint for `lastEventId` replay on reconnect.
-   *
    * @param {WebsocketJsonValue} body
    * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void}
@@ -136,6 +130,8 @@ export default class VelociousWebsocketChannel {
     })
   }
 
-  /** @returns {boolean} */
+  /**
+   * Runs is closed.
+    @returns {boolean} */
   isClosed() { return this._closed }
 }

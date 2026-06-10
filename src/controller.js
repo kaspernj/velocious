@@ -13,12 +13,15 @@ import {serializeFrontendModelTransportValue} from "./frontend-models/transport-
 
 export default class VelociousController {
   /**
+   * Runs before action.
    * @param {string} methodName - Method name.
    * @returns {void} - No return value.
    */
   static beforeAction(methodName) {
     if (!this._beforeActions) {
-      /** @type {Array<string>}  */
+      /**
+       * Stores the before actions value.
+        @type {Array<string>}  */
       this._beforeActions = []
     }
 
@@ -26,6 +29,7 @@ export default class VelociousController {
   }
 
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.action - Action.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
@@ -55,21 +59,34 @@ export default class VelociousController {
     this._viewPath = viewPath
   }
 
-  /** @returns {string} - The action.  */
+  /**
+   * Runs get action.
+   * @returns {string} - The action.
+   */
   getAction() { return this._action }
 
-  /** @returns {import("./configuration.js").default} - The configuration.  */
+  /**
+   * Runs get configuration.
+   * @returns {import("./configuration.js").default} - The configuration.
+   */
   getConfiguration() { return this._configuration }
 
-  /** @returns {Record<string, any>} - The params.  */
+  /**
+   * Runs get params.
+   * @returns {Record<string, ?>} - The params.
+   */
   getParams() { return this._params }
 
-  /** @returns {import("./http-server/client/request.js").default} - The request.  */
+  /**
+   * Runs get request.
+   * @returns {import("./http-server/client/request.js").default} - The request.
+   */
   getRequest() { return this._request }
 
   /**
+   * Runs set cookie.
    * @param {string} name - Cookie name.
-   * @param {unknown} value - Cookie value.
+   * @param {?} value - Cookie value.
    * @param {object} [args] - Options object.
    * @param {string} [args.domain] - Domain.
    * @param {Date} [args.expires] - Expires date.
@@ -83,7 +100,9 @@ export default class VelociousController {
    */
   setCookie(name, value, args = {}) {
     const {encrypted = false, ...options} = args
-    /** @type {string} */
+    /**
+     * Types the following value.
+      @type {string} */
     let cookieValue
 
     if (encrypted) {
@@ -101,7 +120,10 @@ export default class VelociousController {
     return cookie
   }
 
-  /** @returns {Cookie[]} - Cookies from the request. */
+  /**
+   * Runs get cookies.
+   * @returns {Cookie[]} - Cookies from the request.
+   */
   getCookies() {
     if (!this._cookies) {
       const secret = this.getConfiguration().getCookieSecret()
@@ -114,11 +136,14 @@ export default class VelociousController {
   }
 
   /**
+   * Runs get controller class.
    * @private
    * @returns {typeof VelociousController} - The controller class.
    */
   _getControllerClass() {
-    const controllerClass = /** @type {typeof VelociousController} */ (this.constructor)
+    const controllerClass = /**
+                             * Types the following value.
+                              @type {typeof VelociousController} */ (this.constructor)
 
     return controllerClass
   }
@@ -134,7 +159,11 @@ export default class VelociousController {
       const beforeActions = currentControllerClass._beforeActions
 
       if (beforeActions) {
-        const controllerPrototype = /** @type {Record<string, Function | undefined>} */ (/** @type {unknown} */ (currentControllerClass.prototype))
+        const controllerPrototype = /**
+                                     * Types the following value.
+                                      @type {Record<string, Function | undefined>} */ (/**
+                                                                                        * Types the following value.
+                                                                                         @type {?} */ (currentControllerClass.prototype))
 
         for (const beforeActionName of beforeActions) {
           const beforeAction = controllerPrototype[beforeActionName]
@@ -155,7 +184,10 @@ export default class VelociousController {
     await this.logger.debug("After runBeforeCallbacks")
   }
 
-  /** @returns {Record<string, any>} - The params.  */
+  /**
+   * Runs params.
+   * @returns {Record<string, ?>} - The params.
+   */
   params() {
     // Merge query parameters so controllers can read them via params()
     const mergedParams = {...this.queryParameters(), ...this._params}
@@ -165,20 +197,27 @@ export default class VelociousController {
     return mergedParams
   }
 
-  /** @returns {Record<string, any>} - The query parameters.  */
+  /**
+   * Runs query parameters.
+   * @returns {Record<string, ?>} - The query parameters.
+   */
   queryParameters() {
     const query = this._request.path().split("?")[1]
 
     if (!query) return {}
 
     try {
-      /** @type {Record<string, any>} */
+      /**
+       * Unparsed params.
+        @type {Record<string, ?>} */
       const unparsedParams = querystring.parse(query)
       const paramsToObject = new ParamsToObject(unparsedParams)
 
       return paramsToObject.toObject()
     } catch (error) {
-      const ensuredError = /** @type {Error & {velociousContext?: Record<string, unknown>}} */ (error)
+      const ensuredError = /**
+                            * Types the following value.
+                             @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),
@@ -196,6 +235,7 @@ export default class VelociousController {
   }
 
   /**
+   * Runs render.
    * @param {object} [args] - Options object.
    * @param {object} [args.json] - Json.
    * @param {number | string} [args.status] - Status.
@@ -219,7 +259,10 @@ export default class VelociousController {
     return await this.renderView()
   }
 
-  /** @param {object} json - JSON payload. */
+  /**
+   * Runs render json arg.
+   * @param {object} json - JSON payload.
+   */
   renderJsonArg(json) {
     return this._measureViewRender(() => {
       const body = JSON.stringify(serializeFrontendModelTransportValue(json))
@@ -229,7 +272,10 @@ export default class VelociousController {
     })
   }
 
-  /** @returns {Promise<void>} - Resolves when complete.  */
+  /**
+   * Runs render view.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   renderView() {
     const requestTiming = this.getConfiguration().getCurrentRequestTiming()
 
@@ -238,7 +284,10 @@ export default class VelociousController {
       : this._renderViewActual()
   }
 
-  /** @returns {Promise<void>} - Resolves when complete. */
+  /**
+   * Runs render view actual.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   _renderViewActual() {
     return new Promise((resolve, reject) => {
       const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
@@ -246,7 +295,9 @@ export default class VelociousController {
 
       ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
         if (err) {
-          const renderError = /** @type {Error & {code?: string}} */ (err)
+          const renderError = /**
+                               * Types the following value.
+                                @type {Error & {code?: string}} */ (err)
 
           if (renderError.code === "ENOENT") {
             this.logger.warn(`Missing view file: ${viewPath}`)
@@ -272,7 +323,10 @@ export default class VelociousController {
     })
   }
 
-  /** @returns {void} - No return value.  */
+  /**
+   * Runs render text.
+   * @returns {void} - No return value.
+   */
   renderText() {
     throw new Error("renderText stub")
   }
@@ -310,6 +364,7 @@ export default class VelociousController {
   }
 
   /**
+   * Runs measure view render.
    * @template T
    * @param {() => T} callback - Callback to measure.
    * @returns {T} - Callback result.
@@ -323,6 +378,7 @@ export default class VelociousController {
   }
 
   /**
+   * Runs send file content type.
    * @param {string} filePath - File path.
    * @returns {string} - Content type value.
    */
@@ -343,14 +399,23 @@ export default class VelociousController {
     return "application/octet-stream"
   }
 
-  /** @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope. */
+  /**
+   * Runs current ability.
+   * @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope.
+   */
   currentAbility() {
     return this.getConfiguration().getCurrentAbility()
   }
 
-  /** @returns {import("./http-server/client/request.js").default} - The request.  */
+  /**
+   * Runs request.
+   * @returns {import("./http-server/client/request.js").default} - The request.
+   */
   request() { return this._request }
 
-  /** @returns {import("./http-server/client/response.js").default} - The response.  */
+  /**
+   * Runs response.
+   * @returns {import("./http-server/client/response.js").default} - The response.
+   */
   response() { return this._response }
 }

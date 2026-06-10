@@ -5,16 +5,33 @@ import {useEffect, useMemo, useRef} from "react"
 
 import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
 
-/** @typedef {typeof import("./base.js").default} FrontendModelClass */
-/** @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
-/** @typedef {"create" | "update" | "destroy"} FrontendModelClassEventName */
-/** @typedef {{id: string, model: FrontendModelInstance}} FrontendModelCreateUpdateEventPayload */
-/** @typedef {{id: string}} FrontendModelDestroyEventPayload */
-/** @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
-/** @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
-/** @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelEventOptionsObject} UseModelClassEventOptions */
+/**
+ * FrontendModelClass type.
+  @typedef {typeof import("./base.js").default} FrontendModelClass */
+/**
+ * FrontendModelInstance type.
+  @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
+/**
+ * FrontendModelClassEventName type.
+  @typedef {"create" | "update" | "destroy"} FrontendModelClassEventName */
+/**
+ * Defines this typedef.
+  @typedef {{id: string, model: FrontendModelInstance}} FrontendModelCreateUpdateEventPayload */
+/**
+ * Defines this typedef.
+  @typedef {{id: string}} FrontendModelDestroyEventPayload */
+/**
+ * FrontendModelClassEventPayload type.
+  @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
+/**
+ * FrontendModelClassEventCallback type.
+  @typedef {(payload: FrontendModelClassEventPayload) => void} FrontendModelClassEventCallback */
+/**
+ * Defines this typedef.
+  @typedef {{active?: boolean, debounce?: boolean | number, onConnected?: () => void} & import("./query.js").FrontendModelEventOptionsObject} UseModelClassEventOptions */
 
 /**
+ * Runs assert no unknown options.
  * @param {Record<string, import("./query.js").FrontendModelTransportValue | (() => void) | undefined>} restOptions - Unknown options object.
  * @returns {void}
  */
@@ -27,6 +44,7 @@ function assertNoUnknownOptions(restOptions) {
 }
 
 /**
+ * Runs event query dependency payload.
  * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
  * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
  */
@@ -37,6 +55,7 @@ function eventQueryDependencyPayload(query) {
 }
 
 /**
+ * Runs normalize event names.
  * @param {FrontendModelClassEventName | FrontendModelClassEventName[]} eventOrEvents - Event name or names.
  * @returns {FrontendModelClassEventName[]} - Normalized event names.
  */
@@ -45,6 +64,7 @@ function normalizeEventNames(eventOrEvents) {
 }
 
 /**
+ * Runs event names dependency key.
  * @param {FrontendModelClassEventName[]} eventNames - Event names.
  * @returns {string} - Stable dependency key.
  */
@@ -53,6 +73,7 @@ function eventNamesDependencyKey(eventNames) {
 }
 
 /**
+ * Runs subscribe to model class event.
  * @param {FrontendModelClass} modelClass - Frontend model class.
  * @param {FrontendModelClassEventName} eventName - Event name.
  * @param {FrontendModelClassEventCallback} callback - Event callback.
@@ -90,7 +111,9 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
   const eventNames = normalizeEventNames(eventOrEvents)
   const eventsKey = eventNamesDependencyKey(eventNames)
   const eventCallback = useMemo(() => {
-    const wrappedCallback = (/** @type {FrontendModelClassEventPayload} */ payload) => {
+    const wrappedCallback = (/**
+                              * Narrows the runtime value to the documented type.
+                               @type {FrontendModelClassEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -104,9 +127,13 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
     if (!active || !modelClass) return undefined
 
     let closed = false
-    /** @type {Array<() => void>} */
+    /**
+     * Unsubscribe callbacks.
+      @type {Array<() => void>} */
     const unsubscribeCallbacks = []
-    const subscriptionCallback = (/** @type {FrontendModelClassEventPayload} */ payload) => {
+    const subscriptionCallback = (/**
+                                   * Narrows the runtime value to the documented type.
+                                    @type {FrontendModelClassEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

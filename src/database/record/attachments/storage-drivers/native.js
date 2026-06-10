@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs throw missing method.
  * @param {object} args - Args.
  * @param {string} args.driverName - Driver name.
  * @param {string} args.methodName - Method name.
@@ -11,7 +12,8 @@ function throwMissingMethod({driverName, methodName}) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * Runs to buffer.
+ * @param {?} value - Candidate value.
  * @returns {Buffer} - Buffer value.
  */
 function toBuffer(value) {
@@ -29,10 +31,11 @@ function toBuffer(value) {
  */
 export default class NativeAttachmentStorageDriver {
   /**
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../../../../configuration.js").default} [args.configuration] - Configuration instance.
    * @param {string} args.name - Driver name.
-   * @param {Record<string, any>} [args.options] - Driver options.
+   * @param {Record<string, ?>} [args.options] - Driver options.
    */
   constructor({configuration, name, options = {}}) {
     this.configuration = configuration
@@ -41,6 +44,7 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+   * Runs write.
    * @param {object} args - Write args.
    * @param {string} args.attachmentId - Attachment id.
    * @param {{contentBase64: string, contentType: string | null, filename: string}} args.input - Normalized attachment input.
@@ -70,11 +74,12 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+   * Runs read.
    * @param {object} args - Read args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
-   * @param {Record<string, any>} args.row - Attachment row.
+   * @param {Record<string, ?>} args.row - Attachment row.
    * @returns {Promise<Buffer>} - Attachment bytes.
    */
   async read({model, name, row, storageKey}) {
@@ -94,11 +99,12 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+   * Runs delete.
    * @param {object} args - Delete args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
-   * @param {Record<string, any>} args.row - Attachment row.
+   * @param {Record<string, ?>} args.row - Attachment row.
    * @returns {Promise<void>} - Resolves when deleted.
    */
   async delete({model, name, row, storageKey}) {
@@ -114,11 +120,12 @@ export default class NativeAttachmentStorageDriver {
   }
 
   /**
+   * Runs url.
    * @param {object} args - URL args.
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
-   * @param {Record<string, any>} args.row - Attachment row.
+   * @param {Record<string, ?>} args.row - Attachment row.
    * @returns {Promise<string | null>} - Attachment URL.
    */
   async url({model, name, row, storageKey}) {

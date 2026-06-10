@@ -145,7 +145,7 @@ export default class DbGenerateModel extends BaseCommand {
 
           const hasName = `has${inflection.camelize(name)}`
           const setterName = `set${inflection.camelize(name)}`
-          const setterParamType = translationJsdocType || "any"
+          const setterParamType = translationJsdocType || "?"
 
           fileContent += `\n`
           fileContent += "  /**\n"
@@ -238,7 +238,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @param {Record<string, any>} [attributes]\n"
+          fileContent += "   * @param {Record<string, ?>} [attributes]\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
@@ -323,6 +323,7 @@ export default class DbGenerateModel extends BaseCommand {
   }
 
   /**
+   * Runs js doc type from column.
    * @param {import("../../../../../database/drivers/base-column.js").default} column - Column.
    * @returns {string | undefined} - The js doc type from column.
    */
@@ -332,7 +333,7 @@ export default class DbGenerateModel extends BaseCommand {
     if (type == "boolean") {
       return "boolean"
     } else if (type == "json") {
-      return "Record<string, any>"
+      return "Record<string, ?>"
     } else if (["blob", "char", "nvarchar", "varchar", "text", "tinytext", "mediumtext", "longtext", "uuid", "character varying"].includes(type)) {
       return "string"
     } else if (["bit", "bigint", "decimal", "float", "int", "integer", "numeric", "smallint", "tinyint"].includes(type)) {
@@ -345,6 +346,7 @@ export default class DbGenerateModel extends BaseCommand {
   }
 
   /**
+   * Runs js doc setter type from column.
    * @param {import("../../../../../database/drivers/base-column.js").default} column - Column.
    * @returns {string | undefined} - The js doc setter type from column.
    */

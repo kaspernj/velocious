@@ -7,15 +7,30 @@ import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js
 import {modelsDependencyKey, modelsFromInput} from "./event-hook-models.js"
 import useModelClassEvent from "./use-model-class-event.js"
 
-/** @typedef {typeof import("./base.js").default} FrontendModelClass */
-/** @typedef {import("./base.js").default} FrontendModelInstance */
-/** @typedef {import("./use-model-class-event.js").FrontendModelDestroyEventPayload} FrontendModelClassDestroyEventPayload */
-/** @typedef {{id: string}} FrontendModelInstanceDestroyEventPayload */
-/** @typedef {FrontendModelClassDestroyEventPayload | FrontendModelInstanceDestroyEventPayload} FrontendModelDestroyEventPayload */
-/** @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseDestroyedEventOptions */
-/** @typedef {(payload: FrontendModelDestroyEventPayload) => void} FrontendModelDestroyEventCallback */
+/**
+ * FrontendModelClass type.
+  @typedef {typeof import("./base.js").default} FrontendModelClass */
+/**
+ * FrontendModelInstance type.
+  @typedef {import("./base.js").default} FrontendModelInstance */
+/**
+ * FrontendModelClassDestroyEventPayload type.
+  @typedef {import("./use-model-class-event.js").FrontendModelDestroyEventPayload} FrontendModelClassDestroyEventPayload */
+/**
+ * Defines this typedef.
+  @typedef {{id: string}} FrontendModelInstanceDestroyEventPayload */
+/**
+ * FrontendModelDestroyEventPayload type.
+  @typedef {FrontendModelClassDestroyEventPayload | FrontendModelInstanceDestroyEventPayload} FrontendModelDestroyEventPayload */
+/**
+ * UseDestroyedEventOptions type.
+  @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseDestroyedEventOptions */
+/**
+ * FrontendModelDestroyEventCallback type.
+  @typedef {(payload: FrontendModelDestroyEventPayload) => void} FrontendModelDestroyEventCallback */
 
 /**
+ * Runs assert no unknown options.
  * @param {Record<string, import("./query.js").FrontendModelTransportValue | (() => void) | undefined>} restOptions - Unknown options object.
  * @returns {void}
  */
@@ -28,6 +43,7 @@ function assertNoUnknownOptions(restOptions) {
 }
 
 /**
+ * Runs event query dependency payload.
  * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
  * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
  */
@@ -58,6 +74,7 @@ export default function useDestroyedEvent(modelClassOrModels, callback, options 
 }
 
 /**
+ * Runs use instance destroyed event.
  * @param {FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelOrModels - Model or models.
  * @param {FrontendModelDestroyEventCallback} callback - Event callback.
  * @param {UseDestroyedEventOptions} options - Hook options.
@@ -75,7 +92,9 @@ function useInstanceDestroyedEvent(modelOrModels, callback, options) {
 
   const modelsKey = modelsDependencyKey(modelOrModels)
   const eventCallback = useMemo(() => {
-    const wrappedCallback = (/** @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
+    const wrappedCallback = (/**
+                              * Narrows the runtime value to the documented type.
+                               @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -92,9 +111,13 @@ function useInstanceDestroyedEvent(modelOrModels, callback, options) {
     if (models.length < 1) return undefined
 
     let closed = false
-    /** @type {Array<() => void>} */
+    /**
+     * Unsubscribe callbacks.
+      @type {Array<() => void>} */
     const unsubscribeCallbacks = []
-    const subscriptionCallback = (/** @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
+    const subscriptionCallback = (/**
+                                   * Narrows the runtime value to the documented type.
+                                    @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

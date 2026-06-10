@@ -1,10 +1,12 @@
 // @ts-check
 
 /**
+ * RequestTimingBucket type.
  * @typedef {"controller" | "db" | "views"} RequestTimingBucket
  */
 
 /**
+ * Defines this typedef.
  * @typedef {{bucket: RequestTimingBucket, startedAtMs: number}} ActiveTimingBucket
  */
 
@@ -13,26 +15,37 @@
  * the currently active bucket is paused until the nested bucket exits.
  */
 export default class RequestTiming {
-  /** @type {Record<RequestTimingBucket, number>} */
+  /**
+   * Buckets.
+    @type {Record<RequestTimingBucket, number>} */
   buckets = {
     controller: 0,
     db: 0,
     views: 0
   }
 
-  /** @type {ActiveTimingBucket[]} */
+  /**
+   * Bucket stack.
+    @type {ActiveTimingBucket[]} */
   bucketStack = []
 
   dbQueryCount = 0
-  /** @type {"debug" | "info" | undefined} */
+  /**
+   * Completed log method.
+    @type {"debug" | "info" | undefined} */
   completedLogMethod = undefined
-  /** @type {string | undefined} */
+  /**
+   * Completed log subject.
+    @type {string | undefined} */
   completedLogSubject = undefined
-  /** @type {number | undefined} */
+  /**
+   * Response served at ms.
+    @type {number | undefined} */
   responseServedAtMs = undefined
   startedAtMs = Date.now()
 
   /**
+   * Runs measure.
    * @template T
    * @param {RequestTimingBucket} bucket - Bucket name.
    * @param {() => Promise<T> | T} callback - Callback to measure.
@@ -49,6 +62,7 @@ export default class RequestTiming {
   }
 
   /**
+   * Runs measure sync.
    * @template T
    * @param {RequestTimingBucket} bucket - Bucket name.
    * @param {() => T} callback - Callback to measure.
@@ -65,6 +79,7 @@ export default class RequestTiming {
   }
 
   /**
+   * Runs measure db query.
    * @template T
    * @param {() => Promise<T>} callback - Query callback.
    * @returns {Promise<T>} - Query result.
@@ -75,12 +90,16 @@ export default class RequestTiming {
     return await this.measure("db", callback)
   }
 
-  /** @returns {void} - Marks the response as fully served. */
+  /**
+   * Runs mark response served.
+   * @returns {void} - Marks the response as fully served.
+   */
   markResponseServed() {
     this.responseServedAtMs = Date.now()
   }
 
   /**
+   * Runs summary.
    * @returns {{controllerMs: number, dbMs: number, totalMs: number, velociousMs: number, viewsMs: number, dbQueryCount: number}} - Timing summary.
    */
   summary() {
@@ -103,6 +122,7 @@ export default class RequestTiming {
   }
 
   /**
+   * Runs bucket totals at.
    * @param {number} now - Timestamp to calculate active bucket elapsed time against.
    * @returns {Record<RequestTimingBucket, number>} - Bucket totals.
    */
@@ -118,6 +138,7 @@ export default class RequestTiming {
   }
 
   /**
+   * Runs push bucket.
    * @param {RequestTimingBucket} bucket - Bucket name.
    * @returns {void} - No return value.
    */
@@ -132,7 +153,10 @@ export default class RequestTiming {
     this.bucketStack.push({bucket, startedAtMs: now})
   }
 
-  /** @returns {void} - No return value. */
+  /**
+   * Runs pop bucket.
+   * @returns {void} - No return value.
+   */
   _popBucket() {
     const now = Date.now()
     const activeBucket = this.bucketStack.pop()

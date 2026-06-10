@@ -12,11 +12,14 @@ import {fileURLToPath} from "node:url"
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
-/** @type {import("./types.js").BackgroundJobExecutionMode[]} */
+/**
+ * Execution modes.
+  @type {import("./types.js").BackgroundJobExecutionMode[]} */
 const EXECUTION_MODES = ["inline", "forked", "spawned"]
 
 export default class BackgroundJobsWorker {
   /**
+   * Runs constructor.
    * @param {object} [args] - Options.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {string} [args.host] - Hostname.
@@ -26,9 +29,13 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    */
   constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs} = {}) {
-    /** @type {Promise<import("../configuration.js").default>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Promise<import("../configuration.js").default>} */
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
-    /** @type {import("../configuration.js").default | undefined} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {import("../configuration.js").default | undefined} */
     this.configuration = undefined
     this.host = host
     this.port = port
@@ -41,7 +48,9 @@ export default class BackgroundJobsWorker {
     this.maxConcurrentInlineJobsOverride = typeof maxConcurrentInlineJobs === "number" && maxConcurrentInlineJobs >= 1
       ? maxConcurrentInlineJobs
       : undefined
-    /** @type {number | undefined} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {number | undefined} */
     this.maxConcurrentForkedJobsOverride = typeof maxConcurrentForkedJobs === "number" && maxConcurrentForkedJobs >= 1
       ? maxConcurrentForkedJobs
       : undefined
@@ -51,7 +60,9 @@ export default class BackgroundJobsWorker {
      * @type {number}
      */
     this.maxConcurrentInlineJobs = this.maxConcurrentInlineJobsOverride || 4
-    /** @type {number} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {number} */
     this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
     /**
      * Grace period between SIGTERM and SIGKILL when reaping process runners that
@@ -63,9 +74,13 @@ export default class BackgroundJobsWorker {
       : FORKED_CHILD_SIGKILL_GRACE_MS
     this.shouldStop = false
     this.workerId = randomUUID()
-    /** @type {JsonSocket | undefined} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {JsonSocket | undefined} */
     this.jsonSocket = undefined
-    /** @type {BackgroundJobsStatusReporter | undefined} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {BackgroundJobsStatusReporter | undefined} */
     this.statusReporter = undefined
     /**
      * Up to `this.maxConcurrentInlineJobs` of these run in parallel. They
@@ -92,6 +107,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs start.
    * @returns {Promise<void>} - Resolves when connected.
    */
   async start() {
@@ -225,7 +241,10 @@ export default class BackgroundJobsWorker {
     const jsonSocket = new JsonSocket(socket)
     this.jsonSocket = jsonSocket
 
-    /** @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message. */
+    /**
+     * Handles a background job socket message.
+     * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message.
+     */
     jsonSocket.on("message", async (message) => {
       if (message?.type === "job") {
         await this._handleJob(message.payload)
@@ -248,13 +267,18 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs handle job.
    * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {Promise<void>} - Resolves when done.
    */
   async _handleJob(payload) {
     if (!payload.id) throw new Error("Background job payload missing id")
-    /** @type {import("./types.js").BackgroundJobPayload & {id: string}} */
-    const identifiedPayload = /** @type {any} */ (payload)
+    /**
+     * Identified payload.
+      @type {import("./types.js").BackgroundJobPayload & {id: string}} */
+    const identifiedPayload = /**
+                               * Narrows the runtime value to the documented type.
+                                @type {?} */ (payload)
 
     const executionMode = this._executionModeForPayload(identifiedPayload)
 
@@ -267,6 +291,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs start process job.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobExecutionMode} args.executionMode - Execution mode.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
@@ -279,6 +304,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs handle inline job.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload.
    * @returns {void}
    */
@@ -294,7 +320,9 @@ export default class BackgroundJobsWorker {
     //   ask for the next job to refill the slot.
     // The bookkeeping in `finally()` ratchets capacity back up
     // regardless of success or failure.
-    /** @type {Promise<void>} */
+    /**
+     * Defines inflight.
+      @type {Promise<void>} */
     let inflight
 
     inflight = this._runInlineJobAndReport(payload).finally(() => {
@@ -313,6 +341,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs execution mode for payload.
    * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Execution mode.
    */
@@ -326,6 +355,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs normalize execution mode.
    * @param {string} executionMode - Execution mode.
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
    */
@@ -338,11 +368,14 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs track process job.
    * @param {Promise<void>} processJob - Process job promise.
    * @returns {void}
    */
   _trackProcessJob(processJob) {
-    /** @type {Promise<void>} */
+    /**
+     * Defines inflight.
+      @type {Promise<void>} */
     let inflight
 
     inflight = processJob.finally(() => {
@@ -358,6 +391,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs run inline job and report.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload with required id.
    * @returns {Promise<void>} - Resolves when complete (success or failure reported).
    */
@@ -398,6 +432,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs ready message.
    * @returns {import("./types.js").BackgroundJobSocketMessage | null} - Ready message or null when the worker has no capacity.
    */
   _readyMessage() {
@@ -415,6 +450,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs run job inline.
    * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {Promise<void>} - Resolves when done.
    */
@@ -426,7 +462,9 @@ export default class BackgroundJobsWorker {
     await registry.load()
     const JobClass = registry.getJobByName(payload.jobName)
     const jobInstance = new JobClass()
-    /** @type {(...args: any[]) => Promise<void>} */
+    /**
+     * Perform.
+      @type {(...args: Array<?>) => Promise<void>} */
     const perform = jobInstance.perform
 
     await configuration.withConnections({name: `Background job worker inline: ${payload.jobName}`}, async () => {
@@ -435,6 +473,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs fork job.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload.
    * @returns {Promise<void>} - Resolves when the forked runner exits or fork fails.
    */
@@ -451,6 +490,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs create forked child.
    * @returns {import("node:child_process").ChildProcess} - Forked child process.
    */
   _createForkedChild() {
@@ -473,6 +513,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs wait for forked child.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
@@ -490,6 +531,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs handle forked child exit.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
    * @param {number | null} args.code - Exit code.
@@ -515,6 +557,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs forked child exited cleanly.
    * @param {object} args - Options.
    * @param {number | null} args.code - Exit code.
    * @param {NodeJS.Signals | null} args.signal - Exit signal.
@@ -525,6 +568,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs handle forked child error.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
    * @param {Error} args.error - Child process error.
@@ -540,6 +584,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs send forked payload.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
@@ -555,9 +600,10 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs report forked child failure.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
-   * @param {unknown} args.error - Error.
+   * @param {?} args.error - Error.
    * @returns {Promise<void>} - Resolves after failure is reported.
    */
   async _reportForkedChildFailure({payload, error}) {
@@ -571,6 +617,7 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs spawn job.
    * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
    * @returns {Promise<void>} - Resolves when the spawned runner exits or spawn fails.
    */
@@ -615,10 +662,11 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Runs report job result.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {unknown} [args.error] - Error.
+   * @param {?} [args.error] - Error.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.

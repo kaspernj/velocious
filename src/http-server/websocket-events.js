@@ -2,6 +2,7 @@
 
 export default class VelociousHttpServerWebsocketEvents {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
    * @param {number} args.workerCount - Worker count.
@@ -12,8 +13,9 @@ export default class VelociousHttpServerWebsocketEvents {
   }
 
   /**
+   * Runs publish.
    * @param {string} channel - Channel name.
-   * @param {any} payload - Payload data.
+   * @param {?} payload - Payload data.
    * @returns {void} - No return value.
    */
   publish(channel, payload) {
@@ -27,11 +29,10 @@ export default class VelociousHttpServerWebsocketEvents {
    * Fan-out entry point for `configuration.broadcastToChannel` on V2
    * channels. The worker posts to the main process, which fans out to
    * every worker so subscribers on any worker receive the broadcast.
-   *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Filter params forwarded to `matches()`.
-   * @param {any} args.body - Message body delivered via `sendMessage()`.
+   * @param {Record<string, ?>} args.broadcastParams - Filter params forwarded to `matches()`.
+   * @param {?} args.body - Message body delivered via `sendMessage()`.
    * @returns {void}
    */
   publishV2Broadcast({channel, broadcastParams, body}) {

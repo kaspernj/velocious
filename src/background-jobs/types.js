@@ -13,7 +13,7 @@
  * @typedef {object} BackgroundJobPayload
  * @property {string} [id] - Job id.
  * @property {string} jobName - Job class name.
- * @property {any[]} [args] - Serialized job arguments.
+ * @property {Array<?>} [args] - Serialized job arguments.
  * @property {string} [workerId] - Worker id handling the job.
  * @property {number} [handedOffAtMs] - Time handed to a worker in ms.
  * @property {BackgroundJobOptions} [options] - Runtime options.
@@ -22,7 +22,7 @@
  * @typedef {object} BackgroundJobRow
  * @property {string} id - Job id.
  * @property {string} jobName - Job class name.
- * @property {any[]} args - Serialized job arguments.
+ * @property {Array<?>} args - Serialized job arguments.
  * @property {BackgroundJobExecutionMode} executionMode - How the job should run.
  * @property {boolean} forked - Compatibility flag; true for non-inline execution.
  * @property {string} status - Current job status.
@@ -40,7 +40,7 @@
 /**
  * @typedef {object} BackgroundJobFailureEvent
  * @property {BackgroundJobRow} job - Updated job row after failure handling.
- * @property {unknown} error - Failure error.
+ * @property {?} error - Failure error.
  * @property {number | null} attempts - Updated failure attempts count.
  * @property {boolean} terminal - Whether this failure ended the job.
  * @property {boolean} willRetry - Whether the job was returned to the queue.
@@ -54,12 +54,12 @@
  * @typedef {{type: "hello", role: BackgroundJobSocketRole, workerId?: string}} BackgroundJobHelloMessage
  * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
- * @typedef {{type: "enqueue", jobName: string, args?: any[], options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
+ * @typedef {{type: "enqueue", jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
  * @typedef {{type: "enqueued", jobId: string}} BackgroundJobEnqueuedMessage
  * @typedef {{type: "enqueue-error", error?: string}} BackgroundJobEnqueueErrorMessage
  * @typedef {{type: "job", payload: BackgroundJobPayload}} BackgroundJobJobMessage
  * @typedef {{type: "job-complete", jobId: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobCompleteMessage
- * @typedef {{type: "job-failed", jobId: string, error?: unknown, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
+ * @typedef {{type: "job-failed", jobId: string, error?: ?, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
  * @typedef {{type: "job-updated", jobId: string}} BackgroundJobUpdatedMessage
  * @typedef {{type: "job-update-error", jobId: string, error?: string}} BackgroundJobUpdateErrorMessage
  */

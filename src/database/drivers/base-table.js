@@ -4,10 +4,13 @@ import {digg} from "diggerize"
 import TableData from "../table-data/index.js"
 
 export default class VelociousDatabaseDriversBaseTable {
-  /** @type {import("./base.js").default | undefined} */
+  /**
+   * Driver.
+    @type {import("./base.js").default | undefined} */
   driver = undefined
 
   /**
+   * Runs get column by name.
    * @param {string} columnName - Column name.
    * @returns {Promise<import("./base-column.js").default | undefined>} - Resolves with the column by name.
    */
@@ -19,6 +22,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get column by name or fail.
    * @param {string} columnName - Column name.
    * @returns {Promise<import("./base-column.js").default>} - Resolves with the column by name or fail.
    */
@@ -31,6 +35,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get columns.
    * @abstract
    * @returns {Promise<Array<import("./base-column.js").default>>} - Resolves with the columns.
    */
@@ -39,6 +44,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get driver.
    * @returns {import("./base.js").default} - The driver.
    */
   getDriver() {
@@ -48,6 +54,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get foreign keys.
    * @abstract
    * @returns {Promise<import("./base-foreign-key.js").default[]>} - Resolves with the foreign keys.
    */
@@ -56,6 +63,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get indexes.
    * @abstract
    * @returns {Promise<import("./base-columns-index.js").default[]>} - Resolves with the indexes.
    */
@@ -64,6 +72,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get name.
    * @abstract
    * @returns {string} - The name.
    */
@@ -72,6 +81,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -79,6 +89,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs get table data.
    * @returns {Promise<TableData>} - Resolves with the table data.
    */
   async getTableData() {
@@ -110,6 +121,7 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs rows count.
    * @returns {Promise<number>} - Resolves with the rows count.
    */
   async rowsCount() {
@@ -119,8 +131,9 @@ export default class VelociousDatabaseDriversBaseTable {
   }
 
   /**
+   * Runs truncate.
    * @param {{cascade: boolean}} [args] - Truncate options.
-   * @returns {Promise<Array<Record<string, any>>>} - Resolves with the truncate.
+   * @returns {Promise<Array<Record<string, ?>>>} - Resolves with the truncate.
    */
   async truncate(args) {
     this.getDriver()._assertNotReadOnly()

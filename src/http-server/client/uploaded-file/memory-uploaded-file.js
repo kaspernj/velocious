@@ -5,6 +5,7 @@ import UploadedFile from "./uploaded-file.js"
 
 export default class MemoryUploadedFile extends UploadedFile {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {Buffer} args.buffer - Buffer.
    * @param {string} args.fieldName - Field name.
@@ -21,6 +22,7 @@ export default class MemoryUploadedFile extends UploadedFile {
   getBuffer() { return this.buffer }
 
   /**
+   * Runs save to.
    * @param {string} destinationPath - Destination path.
    * @returns {Promise<void>} - Resolves when complete.
    */

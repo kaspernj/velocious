@@ -4,6 +4,7 @@ import restArgsError from "../utils/rest-args-error.js"
 import Logger from "../logger.js"
 
 /**
+ * Defines this typedef.
  * @typedef {(id: string) => {default: typeof import("../database/migration/index.js").default}} MigrationsRequireContextIDFunctionType
  * @typedef {MigrationsRequireContextIDFunctionType & {
  *   keys: () => string[],
@@ -12,6 +13,7 @@ import Logger from "../logger.js"
  */
 
 /**
+ * Defines this typedef.
  * @typedef {(id: string) => {default: typeof import("../cli/base-command.js").default}} CommandsRequireContextIDFunctionType
  * @typedef {CommandsRequireContextIDFunctionType & {
  *   keys: () => string[],
@@ -20,7 +22,8 @@ import Logger from "../logger.js"
  */
 
 /**
- * @typedef {(id: string) => unknown} TestFilesRequireContextIDFunctionType
+ * TestFilesRequireContextIDFunctionType type.
+ * @typedef {(id: string) => ?} TestFilesRequireContextIDFunctionType
  * @typedef {TestFilesRequireContextIDFunctionType & {
  *   keys: () => string[],
  *   id: string
@@ -28,6 +31,7 @@ import Logger from "../logger.js"
  */
 
 /**
+ * Runs is migration object.
  * @param {import("./base.js").MigrationObjectType | null} migration - Candidate migration object.
  * @returns {migration is import("./base.js").MigrationObjectType} - Whether migration exists.
  */
@@ -36,16 +40,23 @@ function isMigrationObject(migration) {
 }
 
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
-  /** @type {CommandsRequireContextType | undefined} */
+  /**
+   * Find commands require context result.
+    @type {CommandsRequireContextType | undefined} */
   findCommandsRequireContextResult = undefined
 
-  /** @type {MigrationsRequireContextType | undefined} */
+  /**
+   * Migrations require context result.
+    @type {MigrationsRequireContextType | undefined} */
   _migrationsRequireContextResult = undefined
 
-  /** @type {TestFilesRequireContextType | undefined} */
+  /**
+   * Test files require context result.
+    @type {TestFilesRequireContextType | undefined} */
   _testFilesRequireContextResult = undefined
 
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {() => Promise<MigrationsRequireContextType>} [args.migrationsRequireContextCallback] - Migrations require context callback.
    * @param {() => Promise<TestFilesRequireContextType>} [args.testFilesRequireContextCallback] - Test files require context callback.
@@ -61,6 +72,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
 
 
   /**
+   * Runs migrations require context.
    * @returns {Promise<MigrationsRequireContextType>} - Resolves with the migrations require context.
    */
   async migrationsRequireContext() {
@@ -74,6 +86,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs test files require context.
    * @returns {Promise<TestFilesRequireContextType>} - Resolves with the test files require context.
    */
   async testFilesRequireContext() {
@@ -89,6 +102,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs find commands.
    * @returns {Promise<Array<import("./base.js").CommandFileObjectType>>} - Resolves with the commands.
    */
   async findCommands() {
@@ -98,11 +112,12 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs find commands require context.
    * @returns {CommandsRequireContextType} - The commands require context.
    */
   _findCommandsRequireContext() {
     // @ts-expect-error
-    this.findCommandsRequireContextResult ||= /** @type {CommandsRequireContextType} */ (require.context("../cli/commands", true, /\.js$/))
+    this.findCommandsRequireContextResult ||= /** Narrows the runtime value to the documented type. @type {CommandsRequireContextType} */ (require.context("../cli/commands", true, /\.js$/))
 
     return this.findCommandsRequireContextResult
   }
@@ -129,6 +144,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs require command.
    * @param {object} args - Options object.
    * @param {Array<string>} args.commandParts - Command parts.
    * @returns {Promise<typeof import("../cli/base-command.js").default>} - Resolves with the require command.
@@ -172,11 +188,14 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs find migrations.
    * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Resolves with the migrations.
    */
   async findMigrations() {
     const migrationsRequireContext = await this.migrationsRequireContext()
-    /** @type {Array<import("./base.js").MigrationObjectType | null>} */
+    /**
+     * Migrations.
+      @type {Array<import("./base.js").MigrationObjectType | null>} */
     const migrations = migrationsRequireContext
       .keys()
       .map((file) => {
@@ -207,8 +226,12 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
         }
       })
       .filter(isMigrationObject)
-    /** @type {import("./base.js").MigrationObjectType[]} */
-    const files = /** @type {import("./base.js").MigrationObjectType[]} */ (migrations)
+    /**
+     * Files.
+      @type {import("./base.js").MigrationObjectType[]} */
+    const files = /**
+                   * Narrows the runtime value to the documented type.
+                    @type {import("./base.js").MigrationObjectType[]} */ (migrations)
 
     files.sort((migration1, migration2) => migration1.date - migration2.date)
 
@@ -216,6 +239,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs import test files.
    * @param {string[]} testFiles - Test files.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -244,6 +268,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Require migration.
    * @param {string} filePath - File path.
    * @returns {Promise<typeof import("../database/migration/index.js").default>} - Resolves with the require migration.
    */
@@ -264,6 +289,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs after migrations.
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @param {"migration" | "schemaDump"} [args.reason] - Why the structure hook is running.
@@ -278,6 +304,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
   }
 
   /**
+   * Runs sqlite structure sql.
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
    * @returns {Promise<string | null>} - Resolves with SQL string.

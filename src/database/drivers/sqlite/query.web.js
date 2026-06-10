@@ -1,9 +1,10 @@
 // @ts-check
 
 /**
+ * Runs query.
  * @param {import("sql.js").Database} connection - Connection.
  * @param {string} sql - SQL string.
- * @returns {Promise<Record<string, any>[]>} - Resolves with string value.
+ * @returns {Promise<Record<string, ?>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {
   const rows = []
@@ -31,7 +32,9 @@ export default async function query(connection, sql) {
     const columns = result[0].columns
 
     for (const rowValues of result[0].values) {
-      /** @type {Record<string, any>} */
+      /**
+       * Row.
+        @type {Record<string, ?>} */
       const row = {}
 
       for (const columnIndex in columns) {

@@ -5,7 +5,8 @@ import escapeStringRegexp from "escape-string-regexp"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
- * @param {Record<string, any>} params - Route params object.
+ * Runs assign action and controller.
+ * @param {Record<string, ?>} params - Route params object.
  * @param {string} name - Route name.
  * @returns {void} - No return value.
  */
@@ -27,6 +28,7 @@ function assignActionAndController(params, name) {
 
 class VelociousRoutePostRoute extends BaseRoute {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.name - Name.
    */
@@ -44,8 +46,9 @@ class VelociousRoutePostRoute extends BaseRoute {
   }
 
   /**
+   * Runs match with path.
    * @param {object} args - Options object.
-   * @param {Record<string, any>} args.params - Parameters object.
+   * @param {Record<string, ?>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
@@ -54,7 +57,7 @@ class VelociousRoutePostRoute extends BaseRoute {
     const match = path.match(this.regExp)
 
     if (match) {
-      const [_beginnigSlash, _matchedName, restPath] = match // eslint-disable-line no-unused-vars
+      const [_beginnigSlash, _matchedName, restPath] = match
 
       // Prevent partial prefix matches (e.g., "update" matching "update-password")
       if (restPath && !restPath.startsWith("/")) return

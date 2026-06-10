@@ -4,17 +4,24 @@
  * Represents a prepared mail delivery.
  */
 export default class MailerDelivery {
-  /** @type {import("./base.js").VelociousMailerBase} */
+  /**
+   * Narrows the runtime value to the documented type.
+    @type {import("./base.js").VelociousMailerBase} */
   mailer
-  /** @type {Promise<unknown>} */
+  /**
+   * Narrows the runtime value to the documented type.
+    @type {Promise<?>} */
   actionPromise
-  /** @type {string} */
+  /**
+   * Narrows the runtime value to the documented type.
+    @type {string} */
   actionName
 
   /**
+   * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {import("./base.js").VelociousMailerBase} args.mailer - Mailer instance.
-   * @param {Promise<unknown>} args.actionPromise - Action promise.
+   * @param {Promise<?>} args.actionPromise - Action promise.
    * @param {string} args.actionName - Action name.
    */
   constructor({mailer, actionPromise, actionName}) {
@@ -24,16 +31,18 @@ export default class MailerDelivery {
   }
 
   /**
+   * Runs build payload.
    * @returns {Promise<import("./index.js").MailerDeliveryPayload>} - Rendered mailer payload.
    */
   async buildPayload() {
     await this.actionPromise
 
-    return /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+    return /** Narrows the runtime value to the documented type. @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
   }
 
   /**
-   * @returns {Promise<import("./index.js").MailerDeliveryPayload | unknown>} - Delivered payload or handler result.
+   * Runs deliver now.
+   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Delivered payload or handler result.
    */
   async deliverNow() {
     const payload = await this.buildPayload()
@@ -42,6 +51,7 @@ export default class MailerDelivery {
   }
 
   /**
+   * Runs deliver later.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLater() {
@@ -51,6 +61,7 @@ export default class MailerDelivery {
   }
 
   /**
+   * Runs deliver laver.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
   async deliverLaver() {

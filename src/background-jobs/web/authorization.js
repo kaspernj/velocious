@@ -19,6 +19,7 @@ function safeEqual(a, b) {
 }
 
 /**
+ * Runs bearer token.
  * @param {import("../../http-server/client/request.js").default} request - Request object.
  * @returns {string | null} - Bearer token from the Authorization header, if any.
  */
@@ -33,6 +34,7 @@ function bearerToken(request) {
 }
 
 /**
+ * Runs is loopback.
  * @param {string | undefined} remoteAddress - Remote address.
  * @returns {boolean} - Whether the address is loopback.
  */

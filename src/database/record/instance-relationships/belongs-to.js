@@ -10,6 +10,7 @@ import BaseInstanceRelationship from "./base.js"
  */
 export default class VelociousDatabaseRecordBelongsToInstanceRelationship extends BaseInstanceRelationship {
   /**
+   * Runs constructor.
    * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
    */
   constructor(args) {
@@ -17,15 +18,20 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
   }
 
   /**
-   * @param {Record<string, any>} data - Data payload.
+   * Runs build.
+   * @param {Record<string, ?>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
-    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
+    const TargetModelClass = /**
+                              * Narrows the runtime value to the documented type.
+                               @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model")
 
-    const newInstance = /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    const newInstance = /**
+                         * Narrows the runtime value to the documented type.
+                          @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -52,7 +58,9 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     if (!TargetModelClass) throw new Error("Can't load without a target model")
 
     const primaryKey = TargetModelClass.primaryKey()
-    /** @type {Record<string, string | number | null | undefined>} */
+    /**
+     * Where args.
+      @type {Record<string, string | number | null | undefined>} */
     const whereArgs = {}
 
     whereArgs[primaryKey] = foreignModelID

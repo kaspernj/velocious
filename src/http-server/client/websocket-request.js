@@ -4,13 +4,14 @@ import querystring from "querystring"
 
 export default class VelociousHttpServerClientWebsocketRequest {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
-   * @param {any} [args.body] - Request body.
+   * @param {?} [args.body] - Request body.
    * @param {Record<string, string>} [args.headers] - Header list.
-   * @param {Record<string, any>} [args.metadata] - Session metadata.
+   * @param {Record<string, ?>} [args.metadata] - Session metadata.
    * @param {string} args.method - HTTP method.
    * @param {string} args.path - Path.
-   * @param {Record<string, any>} [args.params] - Parameters object.
+   * @param {Record<string, ?>} [args.params] - Parameters object.
    * @param {string} [args.remoteAddress] - Remote address.
    */
   constructor({body, headers, metadata, method, params, path, remoteAddress}) {
@@ -18,12 +19,18 @@ export default class VelociousHttpServerClientWebsocketRequest {
     if (!path) throw new Error("path is required")
 
     this.body = body
-    /** @type {Record<string, string>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, string>} */
     this.headersMap = {}
-    /** @type {Record<string, any>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, ?>} */
     this.metadataObject = metadata ? {...metadata} : {}
     this.method = method.toUpperCase()
-    /** @type {Record<string, any>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, ?>} */
     this.paramsObject = {}
     this._path = path
     this.remoteAddressValue = remoteAddress
@@ -53,6 +60,7 @@ export default class VelociousHttpServerClientWebsocketRequest {
   }
 
   /**
+   * Runs header.
    * @param {string} name - Header name.
    * @returns {string | null} - Header value.
    */
@@ -67,8 +75,9 @@ export default class VelociousHttpServerClientWebsocketRequest {
   host() { return this.header("host") || undefined }
 
   /**
+   * Runs metadata.
    * @param {string} [key] - Metadata key.
-   * @returns {any} - Metadata value for a key, or the full metadata object.
+   * @returns {?} - Metadata value for a key, or the full metadata object.
    */
   metadata(key) {
     if (key !== undefined) return this.metadataObject[key]
@@ -106,7 +115,10 @@ export default class VelociousHttpServerClientWebsocketRequest {
     return match?.[1]
   }
 
-  /** @returns {Record<string, string | string[]>} - Parsed query parameters from the URL. */
+  /**
+   * Runs query params.
+   * @returns {Record<string, string | string[]>} - Parsed query parameters from the URL.
+   */
   queryParams() { return this._parseQueryParams() }
 
   remoteAddress() { return this.remoteAddressValue }
@@ -117,7 +129,9 @@ export default class VelociousHttpServerClientWebsocketRequest {
     if (!query) return Object.create(null)
 
     const parsedQuery = querystring.parse(query)
-    /** @type {Record<string, string | string[]>} */
+    /**
+     * Params.
+      @type {Record<string, string | string[]>} */
     const params = Object.create(null)
 
     for (const key of Object.keys(parsedQuery)) {

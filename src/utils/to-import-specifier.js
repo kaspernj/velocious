@@ -4,6 +4,7 @@ import path from "path"
 import {pathToFileURL} from "url"
 
 /**
+ * Runs is windows absolute path.
  * @param {string} value - Path or import specifier.
  * @returns {boolean} - Whether value is a Windows absolute path.
  */
@@ -12,6 +13,7 @@ function isWindowsAbsolutePath(value) {
 }
 
 /**
+ * Runs windows path to file url.
  * @param {string} windowsPath - Windows absolute path.
  * @returns {string} - File URL.
  */

@@ -1,10 +1,13 @@
 // @ts-check
 
 export default class VelociousDatabaseQueryFromBase {
-  /** @type {import("./index.js").default  | null} */
+  /**
+   * Query.
+    @type {import("./index.js").default  | null} */
   query = null
 
   /**
+   * Runs set query.
    * @param {import("./index.js").default} query - Query instance.
    * @returns {void} - No return value.
    */
@@ -13,6 +16,7 @@ export default class VelociousDatabaseQueryFromBase {
   }
 
   /**
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -22,6 +26,7 @@ export default class VelociousDatabaseQueryFromBase {
   }
 
   /**
+   * Runs to sql.
    * @abstract
    * @returns {string[]} - SQL statements.
    */

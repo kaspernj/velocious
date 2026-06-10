@@ -18,7 +18,7 @@ export default class BaseLogger {
 
     return {
       output: this,
-      levels: /** @type {any} */ (this).levels
+      levels: /** @type {?} */ (this).levels
     }
   }
 

@@ -5,6 +5,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class UserModule {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.secretKey - Secret key.
    */
@@ -17,6 +18,7 @@ export default class UserModule {
   }
 
   /**
+   * Runs attach to.
    * @param {typeof import("./index.js").default} UserClass - User class.
    */
   attachTo(UserClass) {

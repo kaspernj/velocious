@@ -17,6 +17,7 @@ import Logger from "../logger.js"
  */
 export default class BeaconServer {
   /**
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.host] - Hostname to bind. Defaults to the configured beacon host.
@@ -28,13 +29,18 @@ export default class BeaconServer {
     this.host = host || config.host
     this.port = typeof port === "number" ? port : config.port
     this.logger = new Logger(this)
-    /** @type {Set<JsonSocket>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Set<JsonSocket>} */
     this.peers = new Set()
-    /** @type {net.Server | undefined} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {net.Server | undefined} */
     this.server = undefined
   }
 
   /**
+   * Runs start.
    * @returns {Promise<void>} - Resolves when listening.
    */
   async start() {
@@ -54,6 +60,7 @@ export default class BeaconServer {
   }
 
   /**
+   * Runs stop.
    * @returns {Promise<void>} - Resolves when closed.
    */
   async stop() {
@@ -69,6 +76,7 @@ export default class BeaconServer {
   }
 
   /**
+   * Runs get port.
    * @returns {number} - Bound port.
    */
   getPort() {
@@ -76,6 +84,7 @@ export default class BeaconServer {
   }
 
   /**
+   * Runs get peer count.
    * @returns {number} - Number of connected peers.
    */
   getPeerCount() {
@@ -83,12 +92,15 @@ export default class BeaconServer {
   }
 
   /**
+   * Runs handle connection.
    * @param {import("net").Socket} socket - Socket.
    * @returns {void}
    */
   _handleConnection(socket) {
     const jsonSocket = new JsonSocket(socket)
-    /** @type {string | undefined} */
+    /**
+     * Defines peerId.
+      @type {string | undefined} */
     let peerId
 
     const cleanup = () => {
@@ -101,7 +113,10 @@ export default class BeaconServer {
       cleanup()
     })
 
-    /** @param {import("./types.js").BeaconSocketMessage} message - Socket message. */
+    /**
+     * Handles a beacon socket message.
+     * @param {import("./types.js").BeaconSocketMessage} message - Socket message.
+     */
     jsonSocket.on("message", (message) => {
       if (!peerId && message?.type === "hello") {
         peerId = message.peerId
@@ -117,6 +132,7 @@ export default class BeaconServer {
   }
 
   /**
+   * Runs fan out.
    * @param {import("./types.js").BeaconBroadcastMessage} message - Broadcast message.
    * @returns {void}
    */

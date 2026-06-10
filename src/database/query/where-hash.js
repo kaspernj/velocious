@@ -3,11 +3,13 @@
 import WhereBase from "./where-base.js"
 
 /**
+ * VelociousDatabaseQueryWhereHash class.
  * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | WhereHash}} WhereHash
  */
 
 export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   /**
+   * Runs constructor.
    * @param {import("./index.js").default} query - Query instance.
    * @param {WhereHash} hash - Hash.
    */
@@ -18,6 +20,7 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   }
 
   /**
+   * Runs to sql.
    * @returns {string} - SQL string.
    */
   toSql() {
@@ -30,6 +33,7 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
   }
 
   /**
+   * Runs where sqlfrom hash.
    * @param {WhereHash} hash - Hash.
    * @param {string} [tableName] - Table name.
    * @param {number} index - Index value.

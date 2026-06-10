@@ -6,6 +6,7 @@ import fileExists from "./utils/file-exists.js"
 import toImportSpecifier from "./utils/to-import-specifier.js"
 
 /**
+ * Runs configuration resolver.
  * @param {import("./configuration-types.js").ConfigurationArgsType} [args] - Options object.
  * @returns {Promise<Configuration>} - Resolves with value.
  */

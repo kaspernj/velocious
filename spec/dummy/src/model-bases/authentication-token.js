@@ -94,7 +94,7 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/user.js").default}
    */
   buildUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

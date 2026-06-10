@@ -1,7 +1,8 @@
 // @ts-check
 
 /**
- * @param {unknown} error - Error input.
+ * Runs normalize background job error.
+ * @param {?} error - Error input.
  * @returns {string} - Normalized error string.
  */
 export default function normalizeBackgroundJobError(error) {
@@ -12,7 +13,8 @@ export default function normalizeBackgroundJobError(error) {
 }
 
 /**
- * @param {unknown} error - Error input.
+ * Runs stringify unknown error.
+ * @param {?} error - Error input.
  * @returns {string} - Stringified error.
  */
 function stringifyUnknownError(error) {

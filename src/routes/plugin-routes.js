@@ -1,6 +1,7 @@
 /**
+ * AddRouteOptions type.
  * @typedef {object} AddRouteOptions
- * @property {Record<string, any>} [params] - Static params to merge for matched route.
+ * @property {Record<string, ?>} [params] - Static params to merge for matched route.
  * @property {[typeof import("../controller.js").default, string]} to - Controller class and action tuple.
  * @property {string} [viewPath] - Optional view path for controllers using renderView().
  */
@@ -8,6 +9,7 @@
 /** Lightweight plugin route DSL for route-hook backed endpoints. */
 export default class PluginRoutes {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    */
@@ -20,6 +22,7 @@ export default class PluginRoutes {
   }
 
   /**
+   * Runs get.
    * @param {string} routePath - Route path.
    * @param {AddRouteOptions} options - Route options.
    * @returns {void} - No return value.
@@ -29,6 +32,7 @@ export default class PluginRoutes {
   }
 
   /**
+   * Runs post.
    * @param {string} routePath - Route path.
    * @param {AddRouteOptions} options - Route options.
    * @returns {void} - No return value.
@@ -38,6 +42,7 @@ export default class PluginRoutes {
   }
 
   /**
+   * Runs add route.
    * @param {"GET" | "POST"} method - HTTP method.
    * @param {string} routePath - Route path.
    * @param {AddRouteOptions} options - Route options.
@@ -90,6 +95,7 @@ export default class PluginRoutes {
   }
 
   /**
+   * Runs match path.
    * @param {string} routePath - Route pattern.
    * @param {string} currentPath - Current request path.
    * @returns {Record<string, string> | null} - Matched params or null.
@@ -104,7 +110,9 @@ export default class PluginRoutes {
 
     if (routeSegments.length !== currentSegments.length) return null
 
-    /** @type {Record<string, string>} */
+    /**
+     * Params.
+      @type {Record<string, string>} */
     const params = {}
 
     for (let index = 0; index < routeSegments.length; index += 1) {

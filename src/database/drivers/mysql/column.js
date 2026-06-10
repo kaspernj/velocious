@@ -6,8 +6,9 @@ import {digg} from "diggerize"
 
 export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
   /**
+   * Runs constructor.
    * @param {import("../base-table.js").default} table - Table.
-   * @param {Record<string, any>} data - Data payload.
+   * @param {Record<string, ?>} data - Data payload.
    */
   constructor(table, data) {
     super()
@@ -102,7 +103,7 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
       return type.toLowerCase()
     }
 
-    const match = type.match(/^([a-z]+)(?:\((\d+)\))?/i)
+    const match = type.match(/^([a-z]+)(?:\((\d+)\))*/i)
 
     if (!match) throw new Error(`Couldn't match column type from: ${type}`)
 

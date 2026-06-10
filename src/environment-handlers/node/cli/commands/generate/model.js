@@ -4,11 +4,13 @@ import fs from "fs/promises"
 import * as inflection from "inflection"
 
 /**
+ * DbGenerateModel class.
  * @typedef {{date: Date, modelContent: string, modelName: string, modelNameCamelized: string, modelPath: string}} DbGenerateModelResult
  */
 
 export default class DbGenerateModel extends BaseCommand {
   /**
+   * Runs execute.
    * @returns {Promise<void | DbGenerateModelResult>} - Resolves with the execute.
    */
   async execute() {

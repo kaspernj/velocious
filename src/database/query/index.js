@@ -15,6 +15,7 @@ import WhereNot from "./where-not.js"
 import WherePlain from "./where-plain.js"
 
 /**
+ * OrderArgumentType type.
  * @typedef {{[key: string]: boolean | string | string[] | NestedPreloadRecord }} NestedPreloadRecord
  * @typedef {string | number | import("./order-base.js").default | import("./order-column.js").OrderColumnInput} OrderArgumentType
  * @typedef {string | string[] | import("./select-base.js").default | import("./select-base.js").default[] | Record<string, string | string[]>} SelectArgumentType
@@ -22,6 +23,7 @@ import WherePlain from "./where-plain.js"
  */
 
 /**
+ * Runs normalize join object.
  * @param {import("./join-object.js").JoinObjectInput | string | string[]} join - Join data in shorthand or nested form.
  * @returns {import("./join-object.js").JoinObject} - Normalized join record.
  */
@@ -33,7 +35,9 @@ function normalizeJoinObject(join) {
   }
 
   if (Array.isArray(join)) {
-    /** @type {import("./join-object.js").JoinObject} */
+    /**
+     * Result.
+      @type {import("./join-object.js").JoinObject} */
     const result = {}
 
     for (const entry of join) {
@@ -63,7 +67,9 @@ function normalizeJoinObject(join) {
     throw new Error(`Invalid join type: ${typeof join}`)
   }
 
-  /** @type {import("./join-object.js").JoinObject} */
+  /**
+   * Result.
+    @type {import("./join-object.js").JoinObject} */
   const result = {}
 
   for (const [key, value] of Object.entries(join)) {
@@ -86,6 +92,7 @@ function normalizeJoinObject(join) {
 }
 
 /**
+ * Runs merge join value.
  * @param {import("./join-object.js").JoinObject[string] | undefined} existing - Existing normalized join value.
  * @param {import("./join-object.js").JoinObject[string]} incoming - Incoming normalized join value.
  * @returns {import("./join-object.js").JoinObject[string]} - Merged join value.
@@ -102,6 +109,7 @@ function mergeJoinValue(existing, incoming) {
 }
 
 /**
+ * QueryArgsType type.
  * @typedef {object} QueryArgsType
  * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Driver instance or factory for query execution.
  * @property {Array<import("./from-base.js").default>} [froms] - FROM clauses for the query.
@@ -123,6 +131,7 @@ function mergeJoinValue(existing, incoming) {
 
 export default class VelociousDatabaseQuery {
   /**
+   * Runs constructor.
    * @param {QueryArgsType} args - Options object.
    */
   constructor({
@@ -146,7 +155,9 @@ export default class VelociousDatabaseQuery {
     if (!driver) throw new Error("No driver given to query")
     if (!handler) throw new Error("No handler given to query")
 
-    /** @type {() => import("../drivers/base.js").default} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {() => import("../drivers/base.js").default} */
     this._driverFn = typeof driver === "function" ? driver : () => driver
     this.handler = handler
     this.logger = new Logger(this)
@@ -160,25 +171,38 @@ export default class VelociousDatabaseQuery {
     this._perPage = perPage
     this._preload = preload
 
-    /** @type {Record<string, string[]>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, string[]>} */
     this._preloadSelects = preloadSelects
 
-    /** @type {Record<string, string[]>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, string[]>} */
     this._preloadSelectsExtra = preloadSelectsExtra
     this._distinct = distinct
     this._selects = selects
 
-    /** @type {import("./where-base.js").default[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {import("./where-base.js").default[]} */
     this._wheres = wheres
 
-    const boundWhere = /** @type {any} */ (this.where.bind(this))
+    const boundWhere = /**
+                        * Narrows the runtime value to the documented type.
+                         @type {?} */ (this.where.bind(this))
     boundWhere.not = this.whereNot.bind(this)
     this.where = boundWhere
   }
 
-  /** @returns {this} - The clone.  */
+  /**
+   * Runs clone.
+   * @returns {this} - The clone.
+   */
   clone() {
-    const QueryClass = /** @type {new (args: QueryArgsType) => this} */ (this.constructor)
+    const QueryClass = /**
+                        * Narrows the runtime value to the documented type.
+                         @type {new (args: QueryArgsType) => this} */ (this.constructor)
     const newQuery = new QueryClass({
       driver: this._driverFn,
       froms: [...this._froms],
@@ -199,23 +223,36 @@ export default class VelociousDatabaseQuery {
     return newQuery
   }
 
-  /** @returns {import("./from-base.js").default[]} - The froms.  */
+  /**
+   * Runs get froms.
+   * @returns {import("./from-base.js").default[]} - The froms.
+   */
   getFroms() {
     return this._froms
   }
 
-  /** @returns {string[]} - The groups.  */
+  /**
+   * Runs get groups.
+   * @returns {string[]} - The groups.
+   */
   getGroups() {
     return this._groups
   }
 
-  /** @returns {import("../query-parser/options.js").default} - The options options.  */
+  /**
+   * Runs get options.
+   * @returns {import("../query-parser/options.js").default} - The options options.
+   */
   getOptions() { return this.driver.options() }
 
-  /** @returns {Array<import("./select-base.js").default>} - The selects.  */
+  /**
+   * Runs get selects.
+   * @returns {Array<import("./select-base.js").default>} - The selects.
+   */
   getSelects() { return this._selects }
 
   /**
+   * Runs from.
    * @param {string|import("./from-base.js").default} from - From.
    * @returns {this} - The from.
    */
@@ -227,6 +264,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs group.
    * @param {string} group - Group.
    * @returns {this} - The group.
    */
@@ -236,6 +274,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs joins.
    * @param {string | string[] | import("./join-object.js").JoinObjectInput} join - Join clause or join descriptor.
    * @returns {this} - The joins.
    */
@@ -254,6 +293,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs limit.
    * @param {number} value - Value to use.
    * @returns {this} - The limit.
    */
@@ -263,6 +303,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs offset.
    * @param {number} value - Value to use.
    * @returns {this} - The offset.
    */
@@ -272,6 +313,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs order.
    * @param {OrderArgumentType} order - Order.
    * @returns {this} - The order.
    */
@@ -292,6 +334,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs page.
    * @param {number} pageNumber - Page number.
    * @returns {this} - The page.
    */
@@ -302,6 +345,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs per page.
    * @param {number} perPage - Page size.
    * @returns {this} - The per page.
    */
@@ -317,7 +361,6 @@ export default class VelociousDatabaseQuery {
    * chaining order (`page(n).perPage(pp)` vs `perPage(pp).page(n)`) no
    * longer determines which perPage value wins — the last value of
    * each setter always takes effect.
-   *
    * @returns {void}
    */
   _applyPagination() {
@@ -331,6 +374,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs reorder.
    * @param {OrderArgumentType} order - Order.
    * @returns {this} - The reorder.
    */
@@ -340,7 +384,10 @@ export default class VelociousDatabaseQuery {
     return this
   }
 
-  /** @returns {this} - The reverse order.  */
+  /**
+   * Runs reverse order.
+   * @returns {this} - The reverse order.
+   */
   reverseOrder() {
     for (const order of this._orders) {
       order.setReverseOrder(true)
@@ -350,6 +397,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs distinct.
    * @param {boolean} [value] - Value to use.
    * @returns {this} - The distinct.
    */
@@ -376,6 +424,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs select.
    * @param {SelectArgumentType} select - Select.
    * @returns {this} - The select.
    */
@@ -400,6 +449,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs execute query.
    * @param {object} [args] - Options object.
    * @param {string} [args.logName] - Query log name.
    * @returns {Promise<Array<object>>} Array of results from the database
@@ -411,12 +461,16 @@ export default class VelociousDatabaseQuery {
     return results
   }
 
-  /** @returns {Promise<Array<object>>} Array of results from the database */
+  /**
+   * Runs results.
+   * @returns {Promise<Array<object>>} Array of results from the database
+   */
   async results() {
     return await this._executeQuery()
   }
 
   /**
+   * Runs query log name.
    * @param {string} operation - Query operation.
    * @returns {string} - Query log name.
    */
@@ -432,6 +486,7 @@ export default class VelociousDatabaseQuery {
   toSql() { return this.driver.queryToSql(this) }
 
   /**
+   * Runs where.
    * @param {WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
@@ -439,7 +494,9 @@ export default class VelociousDatabaseQuery {
     if (typeof where == "string") {
       this._wheres.push(new WherePlain(this, where))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      this._wheres.push(new WhereHash(this, /** @type {import("./where-hash.js").WhereHash} */ (where)))
+      this._wheres.push(new WhereHash(this, /**
+                                             * Narrows the runtime value to the documented type.
+                                              @type {import("./where-hash.js").WhereHash} */ (where)))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
@@ -448,6 +505,7 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs where not.
    * @param {WhereArgumentType} where - Where.
    * @returns {this} This query instance
    */
@@ -455,7 +513,9 @@ export default class VelociousDatabaseQuery {
     if (typeof where == "string") {
       this._wheres.push(new WhereNot(new WherePlain(this, where)))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      this._wheres.push(new WhereNot(new WhereHash(this, /** @type {import("./where-hash.js").WhereHash} */ (where))))
+      this._wheres.push(new WhereNot(new WhereHash(this, /**
+                                                          * Narrows the runtime value to the documented type.
+                                                           @type {import("./where-hash.js").WhereHash} */ (where))))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }

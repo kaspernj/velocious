@@ -5,7 +5,9 @@ import splitSqlStatements from "../../../../../../utils/split-sql-statements.js"
 
 /** Node CLI command for loading DB structure SQL files. */
 export default class DbSchemaLoad extends BaseCommand {
-  /** @returns {Promise<void>} */
+  /**
+   * Runs execute.
+    @returns {Promise<void>} */
   async execute() {
     await this.getConfiguration().ensureConnections({name: "DB schema load"}, async (dbs) => {
       const dbDir = path.join(this.directory(), "db")
@@ -21,6 +23,7 @@ export default class DbSchemaLoad extends BaseCommand {
   }
 
   /**
+   * Runs load structure sql.
    * @param {object} args - Options object.
    * @param {import("../../../../../../database/drivers/base.js").default} args.db - Database connection.
    * @param {string} args.structureSql - Structure SQL to load.
@@ -49,15 +52,18 @@ export default class DbSchemaLoad extends BaseCommand {
   }
 
   /**
+   * Runs executable connection.
    * @param {import("../../../../../../database/drivers/base.js").default} db - Database connection.
-   * @returns {{exec: (sql: string) => Promise<unknown>} | undefined} - Connection with exec support.
+   * @returns {{exec: (sql: string) => Promise<?>} | undefined} - Connection with exec support.
    */
   executableConnection(db) {
-    const dbWithConnection = /** @type {import("../../../../../../database/drivers/base.js").default & {connection?: unknown}} */ (db)
+    const dbWithConnection = /**
+                              * Narrows the runtime value to the documented type.
+                               @type {import("../../../../../../database/drivers/base.js").default & {connection?: ?}} */ (db)
     const connection = dbWithConnection.connection
 
     if (connection && typeof connection == "object" && "exec" in connection && typeof connection.exec == "function") {
-      return /** @type {{exec: (sql: string) => Promise<unknown>}} */ (connection)
+      return /** Narrows the runtime value to the documented type. @type {{exec: (sql: string) => Promise<?>}} */ (connection)
     }
   }
 }

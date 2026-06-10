@@ -1,8 +1,9 @@
 // @ts-check
 
 /**
+ * AddColumnArgsType type.
  * @typedef {object} AddColumnArgsType
- * @property {any} [default] - Default value for the column.
+ * @property {?} [default] - Default value for the column.
  * @property {object} [foreignKey] - Foreign key definition for the column.
  * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
  * @property {boolean} [null] - Whether the column allows null values.
@@ -10,16 +11,19 @@
  * @property {boolean} [unique] - Whether the column enforces uniqueness.
  */
 /**
+ * CreateTableIdArgsType type.
  * @typedef {object} CreateTableIdArgsType
- * @property {any} [default] - Default value for the ID column.
+ * @property {?} [default] - Default value for the ID column.
  * @property {string} [type] - Column type for the ID column.
  */
 /**
+ * CreateTableArgsType type.
  * @typedef {object} CreateTableArgsType
  * @property {boolean} [ifNotExists] - Skip creation if the table already exists.
  * @property {CreateTableIdArgsType | false} [id] - ID column options or false to skip ID.
  */
 /**
+ * CreateTableCallbackType type.
  * @typedef {(table: TableData) => void} CreateTableCallbackType
  */
 
@@ -32,6 +36,7 @@ export {NotImplementedError}
 
 export default class VelociousDatabaseMigration {
   /**
+   * Runs on databases.
    * @param {string[]} databaseIdentifiers - Database identifiers.
    * @returns {void} - No return value.
    */
@@ -39,12 +44,16 @@ export default class VelociousDatabaseMigration {
     this._databaseIdentifiers = databaseIdentifiers
   }
 
-  /** @returns {string[] | undefined} - The database identifiers.  */
+  /**
+   * Runs get database identifiers.
+   * @returns {string[] | undefined} - The database identifiers.
+   */
   static getDatabaseIdentifiers() {
     return this._databaseIdentifiers
   }
 
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {string} args.databaseIdentifier - Database identifier.
@@ -65,7 +74,10 @@ export default class VelociousDatabaseMigration {
     return this._databaseIdentifier
   }
 
-  /** @returns {import("../drivers/base.js").default} - The driver.  */
+  /**
+   * Runs get driver.
+   * @returns {import("../drivers/base.js").default} - The driver.
+   */
   getDriver() { return this._db }
   connection() { return this.getDriver() }
 
@@ -82,6 +94,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs execute.
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../drivers/base.js").QueryResultType>} - Resolves with the execute.
    */
@@ -90,6 +103,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs add column.
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    * @param {string} columnType - Column type.
@@ -112,6 +126,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs remove column.
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    * @returns {Promise<void>} - Resolves when complete.
@@ -130,12 +145,14 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * AddIndexArgsType type.
    * @typedef {object} AddIndexArgsType
    * @property {boolean} [ifNotExists] - Skip creation if the index already exists.
    * @property {string} [name] - Explicit index name to use.
    * @property {boolean} [unique] - Whether the index should be unique.
    */
   /**
+   * Runs add index.
    * @param {string} tableName - Table name.
    * @param {string | Array<string | import("../table-data/table-column.js").default>} columns - Column name or array of column names.
    * @param {AddIndexArgsType} [args] - Options object.
@@ -158,6 +175,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * AddForeignKeyArgsType type.
    * @typedef {object} AddForeignKeyArgsType
    * @property {string} [columnName] - Override the derived FK column name (default: `${reference_underscored}_id`).
    * @property {string} [name] - Override the derived constraint name (default: `fk_${tableName}_${referenceName}`).
@@ -165,6 +183,7 @@ export default class VelociousDatabaseMigration {
    * @property {string} [referencedTableName] - Override the derived referenced table (default: pluralized `referenceName`).
    */
   /**
+   * Runs add foreign key.
    * @param {string} tableName - Table the FK lives on.
    * @param {string} referenceName - Singular reference name. Defaults derive
    *   the FK column as `${reference}_id`, the referenced table by pluralizing
@@ -198,6 +217,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs add reference.
    * @param {string} tableName - Table name.
    * @param {string} referenceName - Reference name.
    * @param {object} args - Options object.
@@ -225,6 +245,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs remove reference.
    * @param {string} tableName - Table name.
    * @param {string} referenceName - Reference name.
    * @returns {Promise<void>} - Resolves when complete.
@@ -236,6 +257,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs change column null.
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    * @param {boolean} nullable - Whether nullable.
@@ -254,6 +276,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs column exists.
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    * @returns {Promise<boolean>} - Resolves with Whether column exists.
@@ -277,7 +300,6 @@ export default class VelociousDatabaseMigration {
    * position column (INT NOT NULL) if absent and creates a UNIQUE index on
    * (scope, position). This is the schema-side counterpart of
    * `Model.actsAsList()`.
-   *
    * @param {string} tableName - Table name.
    * @param {string} positionColumn - Column name for the position (e.g. "row_number").
    * @param {object} options - Options.
@@ -295,12 +317,14 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Creates a table with default options.
    * @overload
    * @param {string} tableName - Table name.
    * @param {CreateTableCallbackType} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
   /**
+   * Creates a table with explicit options.
    * @overload
    * @param {string} tableName - Table name.
    * @param {CreateTableArgsType} args - Options object.
@@ -308,6 +332,7 @@ export default class VelociousDatabaseMigration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   /**
+   * Runs create table.
    * @param {string} tableName - Table name.
    * @param {CreateTableArgsType | CreateTableCallbackType} arg1 - Arg1.
    * @param {CreateTableCallbackType | undefined} [arg2] - Arg2.
@@ -381,6 +406,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs drop table.
    * @param {string} tableName - Table name.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -389,6 +415,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs rename column.
    * @param {string} tableName - Table name.
    * @param {string} oldColumnName - Previous column name.
    * @param {string} newColumnName - New column name.
@@ -399,6 +426,7 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs table exists.
    * @param {string} tableName - Table name.
    * @returns {Promise<boolean>} - Resolves with Whether table exists.
    */
@@ -408,4 +436,3 @@ export default class VelociousDatabaseMigration {
     return exists
   }
 }
-

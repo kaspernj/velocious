@@ -2,6 +2,7 @@
 
 export default class VelociousDatabaseQueryWhereBase {
   /**
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -9,6 +10,7 @@ export default class VelociousDatabaseQueryWhereBase {
   }
 
   /**
+   * Runs get query.
    * @returns {import("./index.js").default} - The query.
    */
   getQuery() {
@@ -18,6 +20,7 @@ export default class VelociousDatabaseQueryWhereBase {
   }
 
   /**
+   * Runs set query.
    * @param {import("./index.js").default} query - Query instance.
    */
   setQuery(query) {
@@ -25,6 +28,7 @@ export default class VelociousDatabaseQueryWhereBase {
   }
 
   /**
+   * Runs to sql.
    * @abstract
    * @returns {string} - SQL string.
    */

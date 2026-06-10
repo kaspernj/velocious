@@ -4,12 +4,14 @@ import path from "node:path"
 import toImportSpecifier from "../../../../utils/to-import-specifier.js"
 
 /**
+ * RunScriptContext type.
  * @typedef {import("./cli-command-context.js").CliCommandContext} RunScriptContext
  */
 
 /**
+ * Runs import run script function.
  * @param {string} filePath - Absolute path to script file.
- * @returns {Promise<(context: RunScriptContext) => Promise<unknown>>} - The default-exported async function.
+ * @returns {Promise<(context: RunScriptContext) => Promise<?>>} - The default-exported async function.
  */
 async function importRunScriptFunction(filePath) {
   const scriptImport = await import(toImportSpecifier(filePath))
@@ -24,7 +26,10 @@ async function importRunScriptFunction(filePath) {
 
 /** Node command for running a custom script file in initialized app/DB context. */
 export default class RunScriptCommand extends BaseCommand {
-  /** @returns {Promise<unknown>} - Resolves with the script function result. */
+  /**
+   * Runs execute.
+   * @returns {Promise<?>} - Resolves with the script function result.
+   */
   async execute() {
     const configuration = this.getConfiguration()
     const scriptPath = this.scriptFilePath()
@@ -42,7 +47,10 @@ export default class RunScriptCommand extends BaseCommand {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves when runtime initialization is complete. */
+  /**
+   * Runs initialize runtime.
+   * @returns {Promise<void>} - Resolves when runtime initialization is complete.
+   */
   async initializeRuntime() {
     const configuration = this.getConfiguration()
 
@@ -53,7 +61,10 @@ export default class RunScriptCommand extends BaseCommand {
     }
   }
 
-  /** @returns {string} - Absolute path to the user-provided script file. */
+  /**
+   * Runs script file path.
+   * @returns {string} - Absolute path to the user-provided script file.
+   */
   scriptFilePath() {
     const filePath = this.processArgs?.[1]
 
@@ -64,7 +75,10 @@ export default class RunScriptCommand extends BaseCommand {
     return path.resolve(this.directory(), filePath)
   }
 
-  /** @returns {RunScriptContext} - Runtime context passed to the script function. */
+  /**
+   * Runs build run script context.
+   * @returns {RunScriptContext} - Runtime context passed to the script function.
+   */
   buildRunScriptContext() {
     return buildCliCommandContext(this, 2)
   }

@@ -1,4 +1,5 @@
 /**
+ * CliCommandContext type.
  * @typedef {object} CliCommandContext
  * @property {import("../../../../configuration.js").default} configuration - Configuration instance.
  * @property {import("../../../../database/drivers/base.js").default | undefined} db - Default database connection.
@@ -7,6 +8,7 @@
  */
 
 /**
+ * Runs build cli command context.
  * @param {import("../../../../cli/base-command.js").default} command - Command building the context.
  * @param {number} argsOffset - Number of process args to omit.
  * @returns {CliCommandContext} - Runtime context passed to CLI command scripts.
@@ -15,7 +17,9 @@ export default function buildCliCommandContext(command, argsOffset) {
   const configuration = command.getConfiguration()
   const dbs = configuration.getCurrentConnections()
   const identifiers = Object.keys(dbs)
-  /** @type {string[]} */
+  /**
+   * Process args.
+    @type {string[]} */
   const processArgs = command.processArgs || []
 
   return {

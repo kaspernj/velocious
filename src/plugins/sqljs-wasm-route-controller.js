@@ -4,7 +4,8 @@ import path from "node:path"
 import Controller from "../controller.js"
 
 /**
- * @param {unknown} assetFileName - Asset file name.
+ * Runs valid asset file name.
+ * @param {?} assetFileName - Asset file name.
  * @returns {boolean} - Whether asset file name is safe.
  */
 function validAssetFileName(assetFileName) {
@@ -16,6 +17,7 @@ function validAssetFileName(assetFileName) {
 }
 
 /**
+ * Runs normalize sql js asset file name.
  * @param {string} assetFileName - Requested sql.js asset file name.
  * @returns {string} - Normalized sql.js asset file name.
  */
@@ -29,7 +31,10 @@ function normalizeSqlJsAssetFileName(assetFileName) {
 
 /** Serves sql.js assets from the backend for sqlite-web locateFile callbacks. */
 export default class SqlJsWasmRouteController extends Controller {
-  /** @returns {Promise<void>} - Resolves when complete. */
+  /**
+   * Runs show.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
   async show() {
     const {sqlJsAssetFileName, sqlJsDistDirectory} = this.params()
 
@@ -47,7 +52,9 @@ export default class SqlJsWasmRouteController extends Controller {
     try {
       await fs.access(assetPath)
     } catch (error) {
-      const ensuredError = /** @type {{code?: string}} */ (error)
+      const ensuredError = /**
+                            * Narrows the runtime value to the documented type.
+                             @type {{code?: string}} */ (error)
 
       if (ensuredError.code === "ENOENT") {
         await this.render({json: {errorMessage: "Not found", status: "error"}, status: "not-found"})

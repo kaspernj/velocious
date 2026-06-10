@@ -12,6 +12,7 @@ export default class TestFilesFinder {
   static IGNORED_NAMES = [".git", "node_modules"]
 
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.directory - Directory path.
    * @param {string[]} [args.directories] - Directories.
@@ -36,34 +37,51 @@ export default class TestFilesFinder {
     this.findingCount = 0
     this.processArgs = processArgs
 
-    /** @type {string[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {string[]} */
     this.foundFiles = []
 
-    /** @type {Record<number, Promise<void>>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<number, Promise<void>>} */
     this.findingPromises = {}
 
-    /** @type {string[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {string[]} */
     this.testArgs = this.processArgs.filter((processArg, index) => index != 0)
 
-    /** @type {string[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {string[]} */
     this.directoryArgs = []
 
-    /** @type {string[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {string[]} */
     this.directoryFullPaths = []
 
-    /** @type {string[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {string[]} */
     this.fileArgs = []
 
-    /** @type {string[]} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {string[]} */
     this.explicitFiles = []
 
-    /** @type {Record<string, number[]>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Record<string, number[]>} */
     this.lineFiltersByFile = {}
 
     this._argsPrepared = false
   }
 
   /**
+   * Runs find test files.
    * @returns {Promise<string[]>} - Resolves with the test files.
    */
   async findTestFiles() {
@@ -93,10 +111,14 @@ export default class TestFilesFinder {
     return Array.from(new Set(this.foundFiles))
   }
 
-  /** @returns {Record<string, number[]>} - Line filters by file. */
+  /**
+   * Runs get line filters by file.
+   * @returns {Record<string, number[]>} - Line filters by file.
+   */
   getLineFiltersByFile() { return this.lineFiltersByFile }
 
   /**
+   * Runs finding promises length.
    * @returns {number} - The ing promises length.
    */
   findingPromisesLength() { return Object.keys(this.findingPromises).length }
@@ -108,6 +130,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs wait for finding promises iteration.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async waitForFindingPromisesIteration() {
@@ -123,6 +146,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs with finding count.
    * @param {function() : Promise<void>} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -143,6 +167,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs find test files in dir.
    * @param {string} dir - Dir.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -171,6 +196,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs is file matching requirements.
    * @param {string} file - File.
    * @param {string} localPath - Local path.
    * @returns {boolean} - Whether file matching requirements.
@@ -203,6 +229,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs looks like test file.
    * @param {string} file - File.
    * @returns {boolean} - Whether looks like test file.
    */
@@ -211,6 +238,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs prepare args.
    * @returns {Promise<void>} - Resolves when test args are prepared.
    */
   async prepareArgs() {
@@ -276,6 +304,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs add line filter.
    * @param {string} filePath - File path.
    * @param {number} line - Line number.
    * @returns {void} - No return value.
@@ -293,6 +322,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs split line arg.
    * @param {string} testArg - Test arg.
    * @returns {{cleanArg: string, line?: number}} - Cleaned arg and line.
    */
@@ -313,6 +343,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs ensure trailing slash.
    * @param {string} localPath - Local path.
    * @returns {string} - Normalized local path with trailing slash.
    */
@@ -322,6 +353,7 @@ export default class TestFilesFinder {
   }
 
   /**
+   * Runs to local path.
    * @param {string} fullPath - Full path.
    * @returns {string} - Local path relative to the base directory.
    */

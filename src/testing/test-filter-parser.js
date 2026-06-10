@@ -7,6 +7,7 @@ const GROUPS_FLAGS = new Set(["--groups"])
 const GROUP_NUMBER_FLAGS = new Set(["--group-number"])
 
 /**
+ * Runs split tags.
  * @param {string | undefined} value - Tag argument value.
  * @returns {string[]} - Tags list.
  */
@@ -20,6 +21,7 @@ function splitTags(value) {
 }
 
 /**
+ * Runs escape reg exp.
  * @param {string} value - Value.
  * @returns {string} - Escaped value for regex.
  */
@@ -28,6 +30,7 @@ function escapeRegExp(value) {
 }
 
 /**
+ * Runs the normalizeExamplePatterns helper.
  * @param {string[]} patterns - Patterns.
  * @returns {RegExp[]} - Normalized patterns.
  */
@@ -48,6 +51,7 @@ export function normalizeExamplePatterns(patterns) {
 }
 
 /**
+ * ParseFiltersResult type.
  * @typedef {object} ParseFiltersResult
  * @property {string[]} includeTags - Tags to include.
  * @property {string[]} excludeTags - Tags to exclude.
@@ -58,6 +62,7 @@ export function normalizeExamplePatterns(patterns) {
  */
 
 /**
+ * Runs the parseFilters helper.
  * @param {string[]} processArgs - Process args.
  * @returns {ParseFiltersResult} - Parsed tags, group options, and process args.
  */
@@ -67,9 +72,13 @@ export function parseFilters(processArgs) {
   const filteredProcessArgs = processArgs.length > 0 ? [processArgs[0]] : []
   const examplePatterns = []
 
-  /** @type {number | undefined} */
+  /**
+   * Defines groups.
+    @type {number | undefined} */
   let groups
-  /** @type {number | undefined} */
+  /**
+   * Defines groupNumber.
+    @type {number | undefined} */
   let groupNumber
 
   let inRestArgs = false

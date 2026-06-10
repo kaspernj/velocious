@@ -4,6 +4,7 @@ import {normalizeSqlStatement} from "../structure-sql/utils.js"
 
 export default class VelociousDatabaseDriversMysqlStructureSql {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    */
@@ -12,6 +13,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
+   * Runs to sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {
@@ -48,6 +50,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
+   * Runs is maria db.
    * @returns {Promise<boolean>} - Resolves with Whether maria db.
    */
   async _isMariaDb() {
@@ -61,7 +64,8 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
-   * @param {Record<string, any> | undefined} row - Row data.
+   * Runs mysql create statement.
+   * @param {Record<string, ?> | undefined} row - Row data.
    * @returns {string | null} - SQL string.
    */
   _mysqlCreateStatement(row) {
@@ -77,6 +81,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   }
 
   /**
+   * Runs strip auto increment.
    * @param {string} statement - Statement.
    * @returns {string} - Statement without auto increment.
    */

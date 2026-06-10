@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * OptionsObjectArgsType type.
  * @typedef {object} OptionsObjectArgsType
  * @property {string} columnQuote - Quote character for column names.
  * @property {string} indexQuote - Quote character for index names.
@@ -11,6 +12,7 @@
 
 export default class VelociousDatabaseQueryParserOptions {
   /**
+   * Runs constructor.
    * @param {OptionsObjectArgsType} options - Options object.
    */
   constructor(options) {
@@ -24,7 +26,8 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
-   * @param {any} value - Value to use.
+   * Runs quote.
+   * @param {?} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -34,6 +37,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
+   * Runs quote database name.
    * @param {string} databaseName - Database name.
    * @returns {string} - The quote database name.
    */
@@ -44,6 +48,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
+   * Runs quote column name.
    * @param {string} columnName - Column name.
    * @returns {string} - The quote column name.
    */
@@ -55,6 +60,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
+   * Runs quote index name.
    * @param {string} indexName - Index name.
    * @returns {string} - The quote index name.
    */
@@ -65,8 +71,9 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
+   * Runs quote string.
    * @abstract
-   * @param {any} string - String.
+   * @param {?} string - String.
    * @returns {string} - The quote string.
    */
   quoteString(string) { // eslint-disable-line no-unused-vars
@@ -74,6 +81,7 @@ export default class VelociousDatabaseQueryParserOptions {
   }
 
   /**
+   * Runs quote table name.
    * @param {string} tableName - Table name.
    * @returns {string} - The quote table name.
    */

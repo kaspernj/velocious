@@ -4,6 +4,7 @@ import FromBase from "./from-base.js"
 
 export default class VelociousDatabaseQueryFromTable extends FromBase {
   /**
+   * Runs constructor.
    * @param {string} tableName - Table name.
    */
   constructor(tableName) {

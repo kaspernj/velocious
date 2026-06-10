@@ -1,6 +1,7 @@
 // @ts-check
 
 /**
+ * Runs base methods forward.
  * @param {typeof import("./base.js").default} PoolBase - Pool base.
  * @returns {void} - No return value.
  */
@@ -27,12 +28,20 @@ export default function baseMethodsForward(PoolBase) {
     "updateSql"
   ]
 
-  const prototype = /** @type {Record<string, (...args: any[]) => unknown>} */ (/** @type {unknown} */ (PoolBase.prototype))
+  const prototype = /**
+                     * Narrows the runtime value to the documented type.
+                      @type {Record<string, (...args: Array<?>) => ?>} */ (/**
+                                                                            * Narrows the runtime value to the documented type.
+                                                                             @type {?} */ (PoolBase.prototype))
 
   for (const forwardMethod of forwardMethods) {
     prototype[forwardMethod] = function(...args) {
       const connection = this.getCurrentConnection()
-      const connectionRecord = /** @type {Record<string, (...args: any[]) => unknown>} */ (/** @type {unknown} */ (connection))
+      const connectionRecord = /**
+                                * Narrows the runtime value to the documented type.
+                                 @type {Record<string, (...args: Array<?>) => ?>} */ (/**
+                                                                                       * Narrows the runtime value to the documented type.
+                                                                                        @type {?} */ (connection))
       const connectionMethod = connectionRecord[forwardMethod]
 
       if (!connectionMethod) throw new Error(`${forwardMethod} isn't defined on driver`)

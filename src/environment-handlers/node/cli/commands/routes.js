@@ -7,6 +7,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
   output = ""
 
   /**
+   * Runs normalize action name.
    * @param {string} actionName - Raw route action name.
    * @returns {string} - Normalized method name.
    */
@@ -30,6 +31,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
   }
 
   /**
+   * Runs print routes.
    * @param {import("../../../../routes/base-route.js").default} route - Route.
    * @param {number} [level] - Level.
    * @returns {void} - No return value.
@@ -47,6 +49,7 @@ export default class VelociousCliCommandsServer extends BaseCommand{
   }
 
   /**
+   * Runs log.
    * @param {string} content - Content.
    * @returns {void} - No return value.
    */

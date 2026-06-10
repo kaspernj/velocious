@@ -2,6 +2,7 @@
 
 export default class UploadedFile {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.fieldName - Field name.
    * @param {string} args.filename - Filename.
@@ -25,10 +26,11 @@ export default class UploadedFile {
   size() { return this.sizeValue }
 
   /**
+   * Runs save to.
    * @param {string} _destinationPath - Destination path.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async saveTo(_destinationPath) { // eslint-disable-line no-unused-vars
+  async saveTo(_destinationPath) {
     throw new Error("Not implemented")
   }
 }

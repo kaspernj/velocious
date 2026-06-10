@@ -11,13 +11,16 @@
  */
 export default class VelociousWebsocketChannelSubscribers {
   constructor() {
-    /** @type {Map<string, Set<(payload: any, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Map<string, Set<(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
     this._subscribers = new Map()
   }
 
   /**
+   * Runs subscribe.
    * @param {string} channel - Channel name to subscribe to.
-   * @param {(payload: any, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Callback invoked for each event on the channel.
+   * @param {(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Callback invoked for each event on the channel.
    * @returns {() => void} - Unsubscribe function.
    */
   subscribe(channel, callback) {
@@ -37,8 +40,9 @@ export default class VelociousWebsocketChannelSubscribers {
   }
 
   /**
+   * Runs unsubscribe.
    * @param {string} channel - Channel name.
-   * @param {(payload: any, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Previously registered callback.
+   * @param {(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>} callback - Previously registered callback.
    * @returns {void}
    */
   unsubscribe(channel, callback) {
@@ -54,6 +58,7 @@ export default class VelociousWebsocketChannelSubscribers {
   }
 
   /**
+   * Runs has subscribers.
    * @param {string} channel - Channel name.
    * @returns {boolean} - Whether any subscribers exist for the channel.
    */
@@ -67,7 +72,7 @@ export default class VelociousWebsocketChannelSubscribers {
    * Dispatch an event to all subscribers of the channel.
    * @param {object} args - Event args.
    * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Event payload.
+   * @param {?} args.payload - Event payload.
    * @param {string} [args.createdAt] - Event creation time.
    * @param {string} [args.eventId] - Event identifier.
    * @returns {Promise<void>} - Resolves when all subscribers have completed.
@@ -87,8 +92,12 @@ export default class VelociousWebsocketChannelSubscribers {
       try {
         const result = callback(payload, meta)
 
-        if (result && typeof (/** @type {Promise<void>} */ (result)).then === "function") {
-          tasks.push(/** @type {Promise<void>} */ (result))
+        if (result && typeof (/**
+                               * Narrows the runtime value to the documented type.
+                                @type {Promise<void>} */ (result)).then === "function") {
+          tasks.push(/**
+                      * Narrows the runtime value to the documented type.
+                       @type {Promise<void>} */ (result))
         }
       } catch (error) {
         // Don't let one subscriber's failure abort the others; surface via the returned promises instead.

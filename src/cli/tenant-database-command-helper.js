@@ -2,6 +2,7 @@
 
 export default class TenantDatabaseCommandHelper {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("./base-command.js").default} args.command - CLI command instance.
    * @param {string | undefined} args.identifier - Tenant database identifier.
@@ -15,7 +16,9 @@ export default class TenantDatabaseCommandHelper {
     this.provider = this.configuration.getTenantDatabaseProvider(identifier)
   }
 
-  /** @returns {void} */
+  /**
+   * Runs validate tenant database identifier.
+    @returns {void} */
   validateTenantDatabaseIdentifier() {
     const databaseConfiguration = this.configuration.getDatabaseConfiguration()[this.identifier]
 
@@ -36,12 +39,18 @@ export default class TenantDatabaseCommandHelper {
     }
   }
 
-  /** @returns {Promise<void>} - Resolves when app runtime is initialized. */
+  /**
+   * Runs initialize runtime.
+   * @returns {Promise<void>} - Resolves when app runtime is initialized.
+   */
   async initializeRuntime() {
     await this.configuration.initialize({type: "db-tenants"})
   }
 
-  /** @returns {Promise<unknown[]>} - Tenants. */
+  /**
+   * Runs list tenants.
+   * @returns {Promise<Array<?>>} - Tenants.
+   */
   async listTenants() {
     this.validateTenantDatabaseIdentifier()
     await this.initializeRuntime()
@@ -61,7 +70,8 @@ export default class TenantDatabaseCommandHelper {
   }
 
   /**
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: unknown}) : Promise<void>} callback - Callback.
+   * Runs each tenant.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Callback.
    * @returns {Promise<number>} - Number of tenants processed.
    */
   async eachTenant(callback) {
@@ -76,7 +86,9 @@ export default class TenantDatabaseCommandHelper {
       return tenants.length
     }
 
-    /** @type {Array<{error: Error, tenant: unknown}>} */
+    /**
+     * Failures.
+      @type {Array<{error: Error, tenant: ?}>} */
     const failures = []
     const workers = []
     let tenantIndex = 0
@@ -115,7 +127,10 @@ export default class TenantDatabaseCommandHelper {
     return tenants.length
   }
 
-  /** @returns {number} - Number of tenants to process concurrently. */
+  /**
+   * Runs parallel count.
+   * @returns {number} - Number of tenants to process concurrently.
+   */
   parallelCount() {
     const parsedProcessArgs = this.command.args?.parsedProcessArgs || {}
     let parallelArg = parsedProcessArgs.parallel
@@ -143,9 +158,10 @@ export default class TenantDatabaseCommandHelper {
   }
 
   /**
+   * Runs run tenant callback.
    * @param {object} args - Tenant callback args.
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: unknown}) : Promise<void>} args.callback - Callback.
-   * @param {unknown} args.tenant - Tenant.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} args.callback - Callback.
+   * @param {?} args.tenant - Tenant.
    * @returns {Promise<void>}
    */
   async runTenantCallback({callback, tenant}) {
@@ -162,12 +178,15 @@ export default class TenantDatabaseCommandHelper {
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
+   * Runs tenant label.
+   * @param {?} tenant - Tenant.
    * @returns {string} - Human readable tenant label.
    */
   tenantLabel(tenant) {
     if (tenant && typeof tenant === "object") {
-      const tenantObject = /** @type {{id?: unknown, name?: unknown, slug?: unknown}} */ (tenant)
+      const tenantObject = /**
+                            * Narrows the runtime value to the documented type.
+                             @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
 
       if (tenantObject.slug) return String(tenantObject.slug)
       if (tenantObject.name) return String(tenantObject.name)

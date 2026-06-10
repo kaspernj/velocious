@@ -3,10 +3,13 @@ import React from "react"
 import BrowserCli from "./browser-cli.js"
 import restArgsError from "../utils/rest-args-error.js"
 
-/** @type {{browserCli?: BrowserCli}} */
+/**
+ * Shared.
+  @type {{browserCli?: BrowserCli}} */
 const shared = {}
 
 /**
+ * Runs velocious use browser cli.
  * @param {object} args - Options object.
  * @param {import("../configuration.js").default} args.configuration - Configuration instance.
  * @returns {BrowserCli} browserCli

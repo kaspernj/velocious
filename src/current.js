@@ -5,6 +5,7 @@ import {CurrentConfigurationNotSetError} from "./configuration.js"
 
 export default class Current {
   /**
+   * Runs configuration.
    * @returns {import("./configuration.js").default} - Current configuration.
    */
   static configuration() {
@@ -12,6 +13,7 @@ export default class Current {
   }
 
   /**
+   * Runs ability.
    * @returns {import("./authorization/ability.js").default | undefined} - Current ability.
    */
   static ability() {
@@ -25,6 +27,7 @@ export default class Current {
   }
 
   /**
+   * Runs set ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability.
    * @returns {void} - No return value.
    */
@@ -33,16 +36,18 @@ export default class Current {
   }
 
   /**
+   * Runs with ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   static async withAbility(ability, callback) {
     return await this.configuration().runWithAbility(ability, callback)
   }
 
   /**
-   * @returns {unknown} - Current tenant.
+   * Runs tenant.
+   * @returns {?} - Current tenant.
    */
   static tenant() {
     try {
@@ -55,7 +60,8 @@ export default class Current {
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
+   * Runs set tenant.
+   * @param {?} tenant - Tenant.
    * @returns {void} - No return value.
    */
   static setTenant(tenant) {
@@ -63,9 +69,10 @@ export default class Current {
   }
 
   /**
-   * @param {unknown} tenant - Tenant.
-   * @param {() => Promise<any>} callback - Callback.
-   * @returns {Promise<any>} - Callback result.
+   * Runs with tenant.
+   * @param {?} tenant - Tenant.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
    */
   static async withTenant(tenant, callback) {
     return await this.configuration().runWithTenant(tenant, callback)

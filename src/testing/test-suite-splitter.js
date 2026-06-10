@@ -4,12 +4,14 @@ import path from "path"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
+ * SplitterFileEntry type.
  * @typedef {object} SplitterFileEntry
  * @property {string} filePath - Absolute file path.
  * @property {number} weight - Computed weight for load balancing.
  */
 
 /**
+ * GroupBucket type.
  * @typedef {object} GroupBucket
  * @property {number} totalWeight - Accumulated weight.
  * @property {string[]} files - Files assigned to this group.
@@ -38,6 +40,7 @@ const BROWSER_SPEC_MULTIPLIER = 2
  */
 export default class TestSuiteSplitter {
   /**
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {number} args.groups - Total number of groups.
    * @param {number} args.groupNumber - Which group to return (1-indexed).
@@ -135,7 +138,9 @@ export default class TestSuiteSplitter {
    * @returns {GroupBucket[]} - Array of group buckets.
    */
   distributeGreedily(sortedFiles) {
-    /** @type {GroupBucket[]} */
+    /**
+     * Buckets.
+      @type {GroupBucket[]} */
     const buckets = []
 
     for (let i = 0; i < this._groups; i++) {

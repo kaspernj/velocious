@@ -7,16 +7,22 @@ import initSqlJs from "sql.js"
 import Base from "./base.js"
 
 /**
- * @typedef {{query: (sql: string) => Promise<Record<string, unknown>[]>, close: () => Promise<void>}} SqliteWebConnection
+ * VelociousDatabaseDriversSqliteWeb class.
+ * @typedef {{query: (sql: string) => Promise<Record<string, ?>[]>, close: () => Promise<void>}} SqliteWebConnection
  */
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
-  /** @type {BetterLocalStorage | undefined} */
+  /**
+   * Better local storage.
+    @type {BetterLocalStorage | undefined} */
   betterLocalStorage = undefined
-  /** @type {ConnectionSqlJs | undefined} */
+  /**
+   * Connection.
+    @type {ConnectionSqlJs | undefined} */
   _connection = undefined
 
   /**
+   * Runs sql js locate file.
    * @returns {(file: string) => string} - locateFile callback for sql.js.
    */
   sqlJsLocateFile() {
@@ -52,10 +58,13 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     await this.getConnection().close()
   }
 
-  /** @returns {ConnectionSqlJs | SqliteWebConnection} - The connection.  */
+  /**
+   * Runs get connection.
+   * @returns {ConnectionSqlJs | SqliteWebConnection} - The connection.
+   */
   getConnection() {
     if (this.args?.getConnection) {
-      return /** @type {SqliteWebConnection} */ (this.args.getConnection())
+      return /** Narrows the runtime value to the documented type. @type {SqliteWebConnection} */ (this.args.getConnection())
     } else {
       if (!this._connection) throw new Error("SQLite web connection has not been initialized")
       return this._connection
@@ -71,8 +80,9 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   }
 
   /**
+   * Runs query actual.
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, any>[]>} - Resolves with the query actual.
+   * @returns {Promise<Record<string, ?>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     const result = await this.getConnection().query(sql)

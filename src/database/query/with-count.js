@@ -1,14 +1,16 @@
 // @ts-check
 
 /**
- * @typedef {Object} WithCountEntry
+ * WithCountEntry type.
+ * @typedef {object} WithCountEntry
  * @property {string} attributeName - Attribute to set on each parent record holding the count.
  * @property {string} relationshipName - Has-many relationship whose rows are counted.
- * @property {Record<string, unknown> | undefined} where - Optional extra where clause applied to the count query.
+ * @property {Record<string, ?> | undefined} where - Optional extra where clause applied to the count query.
  */
 
 /**
- * @typedef {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, unknown>}>} WithCountSpec
+ * Defines this typedef.
+ * @typedef {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} WithCountSpec
  */
 
 /**
@@ -22,7 +24,6 @@
  *   {projects: true}                                   → one entry (attr = "projectsCount")
  *   {activeMembersCount:                               → custom attribute name
  *     {relationship: "users", where: {active: true}}}
- *
  * @param {WithCountSpec} spec - User-supplied spec.
  * @returns {WithCountEntry[]} - Normalized entries.
  */
@@ -44,7 +45,9 @@ export function normalizeWithCount(spec) {
   }
 
   if (typeof spec === "object") {
-    /** @type {WithCountEntry[]} */
+    /**
+     * Entries.
+      @type {WithCountEntry[]} */
     const entries = []
 
     for (const [key, value] of Object.entries(spec)) {
@@ -58,7 +61,9 @@ export function normalizeWithCount(spec) {
       }
 
       if (typeof value === "object" && value !== null) {
-        /** @type {{relationship?: string, where?: Record<string, unknown>}} */
+        /**
+         * Options.
+          @type {{relationship?: string, where?: Record<string, ?>}} */
         const options = value
         entries.push({
           attributeName: key,
@@ -78,6 +83,7 @@ export function normalizeWithCount(spec) {
 }
 
 /**
+ * Runs entry from name.
  * @param {string} name - Relationship name (attribute name is derived by appending "Count").
  * @returns {WithCountEntry}
  */
@@ -94,7 +100,6 @@ function entryFromName(name) {
  * the resulting counts as attributes on each record. Mirrors the
  * Preloader's data-flow shape — one grouped count query per entry, then
  * `setAttribute` on each parent.
- *
  * @param {object} args - Options.
  * @param {import("../record/index.js").default[]} args.models - Loaded parent records.
  * @param {typeof import("../record/index.js").default} args.modelClass - Parent model class.
@@ -105,18 +110,24 @@ export async function runWithCount({models, modelClass, entries}) {
   if (models.length === 0 || entries.length === 0) return
 
   const primaryKey = modelClass.primaryKey()
-  const parentIds = models.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
+  const parentIds = models.map((model) => /**
+                                           * Narrows the runtime value to the documented type.
+                                            @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     const counts = await countForEntry({entries, entry, modelClass, parentIds})
 
     for (const model of models) {
-      const modelPrimaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
+      const modelPrimaryKeyValue = /**
+                                    * Narrows the runtime value to the documented type.
+                                     @type {string | number} */ (model.readColumn(primaryKey))
       // Tolerate driver differences in numeric return types: SQLite
       // returns integers as JS numbers, but MySQL's raw driver can
       // return count primary keys as strings. Try both.
       const resolvedCount = counts.has(modelPrimaryKeyValue)
-        ? /** @type {number} */ (counts.get(modelPrimaryKeyValue))
+        ? /**
+           * Narrows the runtime value to the documented type.
+            @type {number} */ (counts.get(modelPrimaryKeyValue))
         : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
 
       // Counts go on the record's dedicated association-count map,
@@ -129,6 +140,7 @@ export async function runWithCount({models, modelClass, entries}) {
 }
 
 /**
+ * Runs count for entry.
  * @param {object} args - Options.
  * @param {WithCountEntry[]} args.entries - All entries, used for error context only.
  * @param {WithCountEntry} args.entry - Entry being evaluated.
@@ -156,7 +168,9 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   }
 
   const foreignKey = relationship.getForeignKey()
-  /** @type {Record<string, unknown>} */
+  /**
+   * Where conditions.
+    @type {Record<string, ?>} */
   const whereConditions = {[foreignKey]: parentIds}
 
   if (relationship.getPolymorphic && relationship.getPolymorphic()) {
@@ -182,15 +196,21 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   countQuery.select(`${quotedTable}.${quotedFk} AS parent_id`)
   countQuery.select("COUNT(*) AS count_value")
 
-  const rows = /** @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
+  const rows = /**
+                * Narrows the runtime value to the documented type.
+                 @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
     await countQuery._executeQuery()
   )
 
-  /** @type {Map<string | number, number>} */
+  /**
+   * Counts.
+    @type {Map<string | number, number>} */
   const counts = new Map()
 
   for (const row of rows) {
-    const parentId = /** @type {string | number} */ (row.parent_id)
+    const parentId = /**
+                      * Narrows the runtime value to the documented type.
+                       @type {string | number} */ (row.parent_id)
     const countValue = Number(row.count_value) || 0
     counts.set(parentId, countValue)
   }

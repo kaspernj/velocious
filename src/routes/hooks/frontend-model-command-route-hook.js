@@ -6,6 +6,7 @@ const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.js", import.meta.url).href
 
 /**
+ * Runs frontend model command route hook.
  * @param {object} args - Hook args.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {string} args.currentPath - Request path without query.
@@ -33,7 +34,9 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   })
 
   if (customCommandMatch) {
-    /** @type {Record<string, any>} */
+    /**
+     * Params.
+      @type {Record<string, ?>} */
     const params = {
       frontendModelCustomCommandMethodName: customCommandMatch.methodName,
       frontendModelCustomCommandScope: customCommandMatch.scope,
@@ -82,6 +85,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
 }
 
 /**
+ * Runs normalize path.
  * @param {string} path - Path value.
  * @returns {string} - Normalized path with leading slash and no trailing slash.
  */

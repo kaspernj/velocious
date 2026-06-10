@@ -1,7 +1,8 @@
 // @ts-check
 
 /**
- * @param {any} error - Error instance.
+ * Runs ensure error.
+ * @param {?} error - Error instance.
  * @returns {Error} - The error.
  */
 export default function ensureError(error) {

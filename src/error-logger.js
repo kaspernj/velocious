@@ -1,8 +1,9 @@
 // @ts-check
 
 /**
- * @param {(...args: any[]) => Promise<void>} callback - Callback function.
- * @returns {(...args: any[]) => Promise<void>} - The error logger.
+ * Runs error logger.
+ * @param {(...args: Array<?>) => Promise<void>} callback - Callback function.
+ * @returns {(...args: Array<?>) => Promise<void>} - The error logger.
  */
 export default function errorLogger(callback) {
   return async function(...args) {

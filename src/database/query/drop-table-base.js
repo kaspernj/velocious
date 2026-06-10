@@ -5,6 +5,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {boolean} [args.cascade] - Whether cascade.
    * @param {import("./../drivers/base.js").default} args.driver - Database driver instance.
@@ -22,6 +23,7 @@ export default class VelociousDatabaseQueryDropTableBase extends QueryBase {
   }
 
   /**
+   * Runs to sqls.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {

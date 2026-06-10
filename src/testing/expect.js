@@ -13,17 +13,21 @@ import {
 
 export default class Expect extends BaseExpect {
   /**
-   * @param {any} object - Object.
+   * Runs constructor.
+   * @param {?} object - Object.
    */
   constructor(object) {
     super()
     this._object = object
 
-    /** @type {Array<Expect | ExpectToChange>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Array<Expect | ExpectToChange>} */
     this.expectations = []
   }
 
   /**
+   * Runs and change.
    * @param {function(): Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The and change.
    */
@@ -32,6 +36,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Returns not.
    * @returns {this} - A value.
    */
   get not() {
@@ -41,7 +46,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result - Result.
+   * Runs to be.
+   * @param {?} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -63,6 +69,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be less than.
    * @param {number} result - Result.
    * @returns {void} - No return value.
    */
@@ -89,6 +96,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be less than or equal.
    * @param {number} result - Result.
    * @returns {void} - No return value.
    */
@@ -115,6 +123,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be greater than.
    * @param {number} result - Result.
    * @returns {void} - No return value.
    */
@@ -141,6 +150,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be greater than or equal.
    * @param {number} result - Result.
    * @returns {void} - No return value.
    */
@@ -167,6 +177,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be close to.
    * @param {number} result - Result.
    * @param {number} [precision] - Decimal precision.
    * @returns {void} - No return value.
@@ -202,6 +213,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to have length.
    * @param {number} result - Expected length.
    * @returns {void} - No return value.
    */
@@ -228,6 +240,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be defined.
    * @returns {void} - No return value.
    */
   toBeDefined() {
@@ -247,7 +260,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {new (...args: any[]) => any} klass - Class constructor to check against (e.g. a built-in like Error).
+   * Runs to be instance of.
+   * @param {new (...args: Array<?>) => ?} klass - Class constructor to check against (e.g. a built-in like Error).
    * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
@@ -259,6 +273,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be false.
    * @returns {void} - No return value.
    */
   toBeFalse() {
@@ -266,6 +281,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be null.
    * @returns {void} - No return value.
    */
   toBeNull() {
@@ -273,6 +289,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be undefined.
    * @returns {void} - No return value.
    */
   toBeUndefined() {
@@ -280,6 +297,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be true.
    * @returns {void} - No return value.
    */
   toBeTrue() {
@@ -287,6 +305,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to be truthy.
    * @returns {void} - No return value.
    */
   toBeTruthy() {
@@ -304,6 +323,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to change.
    * @param {function(): Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The change.
    */
@@ -318,7 +338,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} valueToContain - Value to contain.
+   * Runs to contain.
+   * @param {?} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
@@ -360,7 +381,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} valueToContain - Value to contain.
+   * Runs to contain equal.
+   * @param {?} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContainEqual(valueToContain) {
@@ -384,7 +406,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {any} result - Result.
+   * Runs to equal.
+   * @param {?} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -422,7 +445,9 @@ export default class Expect extends BaseExpect {
     }
 
     if (isObjectContaining(result)) {
-      const expectedValue = /** @type {any} */ (result).value
+      const expectedValue = /**
+                             * Narrows the runtime value to the documented type.
+                              @type {?} */ (result).value
       const {matches, differences} = matchObject(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -441,7 +466,11 @@ export default class Expect extends BaseExpect {
     }
 
     if (isArrayContaining(result)) {
-      const expectedValue = /** @type {any[]} */ (/** @type {any} */ (result).value)
+      const expectedValue = /**
+                             * Narrows the runtime value to the documented type.
+                              @type {Array<?>} */ (/**
+                                                    * Narrows the runtime value to the documented type.
+                                                     @type {?} */ (result).value)
       const {matches, differences} = matchArrayContaining(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -512,6 +541,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to match.
    * @param {RegExp} regex - Regex.
    * @returns {void} - No return value.
    */
@@ -535,7 +565,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, any> | any[]} expected - Expected partial object.
+   * Runs to match object.
+   * @param {Record<string, ?> | Array<?>} expected - Expected partial object.
    * @returns {void} - No return value.
    */
   toMatchObject(expected) {
@@ -559,6 +590,7 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to throw error.
    * @template T extends Error
    * @param {string|T} expectedError - Expected error.
    * @returns {Promise<void>} - Resolves when complete.
@@ -604,7 +636,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {string|RegExp|Error|((new (...args: unknown[]) => Error))} [expected] - Expected error.
+   * Runs to throw.
+   * @param {string|RegExp|Error|((new (...args: Array<?>) => Error))} [expected] - Expected error.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async toThrow(expected) {
@@ -668,7 +701,8 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @returns {Promise<any>} - Resolves with the execute.
+   * Runs execute.
+   * @returns {Promise<?>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -693,22 +727,29 @@ export default class Expect extends BaseExpect {
   }
 
   /**
-   * @param {Record<string, any>} result - Result.
+   * Runs to have attributes.
+   * @param {Record<string, ?>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
     if (this._not) throw new Error("not stub")
 
-    /** @type {Record<string, any[]>} */
+    /**
+     * Differences.
+      @type {Record<string, Array<?>>} */
     const differences = {}
-    const objectAsRecord = /** @type {Record<string, unknown>} */ (this._object)
+    const objectAsRecord = /**
+                            * Narrows the runtime value to the documented type.
+                             @type {Record<string, ?>} */ (this._object)
 
     for (const key in result) {
       const value = result[key]
 
       if (!(key in objectAsRecord)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
 
-      const objectValue = /** @type {() => unknown} */ (objectAsRecord[key])()
+      const objectValue = /**
+                           * Narrows the runtime value to the documented type.
+                            @type {() => ?} */ (objectAsRecord[key])()
 
       if (value != objectValue) {
         differences[key] = [value, objectValue]

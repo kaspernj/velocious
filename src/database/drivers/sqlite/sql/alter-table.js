@@ -10,6 +10,7 @@ import TableRebuilder from "../table-rebuilder.js"
 
 export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable extends AlterTableBase {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../base.js").default} args.driver - Database driver instance.
    * @param {import("../../../table-data/index.js").default} args.tableData - Table data.
@@ -25,6 +26,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
   }
 
   /**
+   * Runs to sqls.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSQLs() {
@@ -75,11 +77,15 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
    */
   _buildTargetSchema(currentTableData, alterTableData) {
     const targetTableData = new TableData(currentTableData.getName())
-    /** @type {Array<[string, string]>} */
+    /**
+     * Column pairs.
+      @type {Array<[string, string]>} */
     const columnPairs = []
     const alterColumns = alterTableData.getColumns()
     const existingNames = new Set(currentTableData.getColumns().map((column) => column.getName()))
-    /** @type {Map<string, string>} */
+    /**
+     * Column renames.
+      @type {Map<string, string>} */
     const columnRenames = new Map()
 
     for (const alterColumn of alterColumns) {

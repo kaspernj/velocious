@@ -5,32 +5,38 @@ import {isPlainObject} from "is-plain-object"
 import {resolveFrontendModelClass} from "../frontend-models/model-registry.js"
 
 /**
+ * RansackPredicate type.
  * @typedef {"cont" | "end" | "eq" | "gt" | "gteq" | "in" | "lt" | "lteq" | "not_eq" | "not_in" | "null" | "start"} RansackPredicate
  */
 
 /**
+ * RansackCombinator type.
  * @typedef {"and" | "or"} RansackCombinator
  */
 
 /**
+ * RansackModelClass type.
  * @typedef {typeof import("../database/record/index.js").default | typeof import("../frontend-models/base.js").default} RansackModelClass
  */
 
 /**
+ * RansackAttribute type.
  * @typedef {object} RansackAttribute
  * @property {string} attributeName - Resolved attribute name.
  * @property {string[]} path - Resolved relationship path.
  */
 
 /**
+ * RansackCondition type.
  * @typedef {object} RansackCondition
  * @property {RansackAttribute[]} attributes - Resolved attributes to test.
  * @property {RansackCombinator} combinator - How multiple attributes are combined.
  * @property {RansackPredicate} predicate - Parsed Ransack predicate.
- * @property {any} value - Normalized value.
+ * @property {?} value - Normalized value.
  */
 
 /**
+ * RansackGroup type.
  * @typedef {object} RansackGroup
  * @property {RansackCombinator} combinator - How entries inside this group are combined.
  * @property {RansackCondition[]} conditions - Conditions in this group.
@@ -53,8 +59,9 @@ const supportedPredicates = [
 ]
 
 /**
+ * Runs the normalizeRansackParams helper.
  * @param {RansackModelClass} modelClass - Model class.
- * @param {Record<string, any>} params - Ransack-style params hash.
+ * @param {Record<string, ?>} params - Ransack-style params hash.
  * @returns {RansackCondition[]} - Normalized conditions.
  */
 // fallow-ignore-next-line unused-export
@@ -63,8 +70,9 @@ export function normalizeRansackParams(modelClass, params) {
 }
 
 /**
+ * Runs the normalizeRansackGroup helper.
  * @param {RansackModelClass} modelClass - Model class.
- * @param {Record<string, any>} params - Ransack-style params hash.
+ * @param {Record<string, ?>} params - Ransack-style params hash.
  * @returns {RansackGroup} - Normalized group.
  */
 export function normalizeRansackGroup(modelClass, params) {
@@ -72,7 +80,9 @@ export function normalizeRansackGroup(modelClass, params) {
     throw new Error(`ransack params must be a plain object, got: ${typeof params}`)
   }
 
-  /** @type {RansackGroup} */
+  /**
+   * Normalized.
+    @type {RansackGroup} */
   const normalized = {
     combinator: normalizeRansackCombinator(params.m, "and"),
     conditions: [],
@@ -104,10 +114,11 @@ export function normalizeRansackGroup(modelClass, params) {
 const SKIP_RANSACK_CONDITION = Symbol("skip-ransack-condition")
 
 /**
+ * Runs normalize simple ransack condition.
  * @param {object} args - Options.
  * @param {string} args.key - Simple Ransack key.
  * @param {RansackModelClass} args.modelClass - Model class.
- * @param {any} args.rawValue - Raw condition value.
+ * @param {?} args.rawValue - Raw condition value.
  * @returns {RansackCondition | null} - Normalized condition, or null when skipped.
  */
 function normalizeSimpleRansackCondition({key, modelClass, rawValue}) {
@@ -135,13 +146,16 @@ function normalizeSimpleRansackCondition({key, modelClass, rawValue}) {
 }
 
 /**
+ * Runs normalize advanced ransack conditions.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Model class.
- * @param {unknown} args.value - Advanced conditions collection.
+ * @param {?} args.value - Advanced conditions collection.
  * @returns {RansackCondition[]} - Normalized conditions.
  */
 function normalizeAdvancedRansackConditions({modelClass, value}) {
-  /** @type {RansackCondition[]} */
+  /**
+   * Conditions.
+    @type {RansackCondition[]} */
   const conditions = []
 
   for (const entry of normalizeRansackCollection(value, "conditions")) {
@@ -159,7 +173,9 @@ function normalizeAdvancedRansackConditions({modelClass, value}) {
       throw new Error(`Unsupported ransack predicate in condition: ${predicateValue}`)
     }
 
-    const predicate = /** @type {RansackPredicate} */ (predicateValue)
+    const predicate = /**
+                       * Narrows the runtime value to the documented type.
+                        @type {RansackPredicate} */ (predicateValue)
     const rawValue = advancedRansackConditionValue({predicate, value: entry.v})
     const normalizedValue = normalizeRansackValue({predicate, value: rawValue})
 
@@ -179,13 +195,16 @@ function normalizeAdvancedRansackConditions({modelClass, value}) {
 }
 
 /**
+ * Runs normalize advanced ransack groups.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Model class.
- * @param {unknown} args.value - Advanced groups collection.
+ * @param {?} args.value - Advanced groups collection.
  * @returns {RansackGroup[]} - Normalized groups.
  */
 function normalizeAdvancedRansackGroups({modelClass, value}) {
-  /** @type {RansackGroup[]} */
+  /**
+   * Groupings.
+    @type {RansackGroup[]} */
   const groupings = []
 
   for (const entry of normalizeRansackCollection(value, "groupings")) {
@@ -200,7 +219,8 @@ function normalizeAdvancedRansackGroups({modelClass, value}) {
 }
 
 /**
- * @param {unknown} value - Candidate combinator.
+ * Runs normalize ransack combinator.
+ * @param {?} value - Candidate combinator.
  * @param {RansackCombinator} defaultValue - Default combinator.
  * @returns {RansackCombinator} - Normalized combinator.
  */
@@ -212,9 +232,10 @@ function normalizeRansackCombinator(value, defaultValue) {
 }
 
 /**
- * @param {unknown} value - Candidate collection.
+ * Runs normalize ransack collection.
+ * @param {?} value - Candidate collection.
  * @param {string} name - Collection name for errors.
- * @returns {unknown[]} - Collection values in stable order.
+ * @returns {Array<?>} - Collection values in stable order.
  */
 function normalizeRansackCollection(value, name) {
   if (value === undefined || value === null || value === "") return []
@@ -239,10 +260,11 @@ function normalizeRansackCollection(value, name) {
 }
 
 /**
+ * Runs advanced ransack condition value.
  * @param {object} args - Options.
  * @param {RansackPredicate} args.predicate - Parsed predicate.
- * @param {unknown} args.value - Advanced condition value.
- * @returns {unknown} - Value passed to predicate normalization.
+ * @param {?} args.value - Advanced condition value.
+ * @returns {?} - Value passed to predicate normalization.
  */
 function advancedRansackConditionValue({predicate, value}) {
   if (predicate === "in" || predicate === "not_in") return value
@@ -255,14 +277,17 @@ function advancedRansackConditionValue({predicate, value}) {
 }
 
 /**
+ * Runs resolve ransack attributes from advanced value.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Model class.
- * @param {unknown} args.value - Advanced attribute value.
+ * @param {?} args.value - Advanced attribute value.
  * @returns {RansackAttribute[]} - Resolved attributes.
  */
 function resolveRansackAttributesFromAdvancedValue({modelClass, value}) {
   const values = normalizeAdvancedAttributeValues(value)
-  /** @type {RansackAttribute[]} */
+  /**
+   * Attributes.
+    @type {RansackAttribute[]} */
   const attributes = []
 
   for (const attributeValue of values) {
@@ -277,7 +302,8 @@ function resolveRansackAttributesFromAdvancedValue({modelClass, value}) {
 }
 
 /**
- * @param {unknown} value - Advanced attribute value.
+ * Runs normalize advanced attribute values.
+ * @param {?} value - Advanced attribute value.
  * @returns {string[]} - Attribute path strings.
  */
 function normalizeAdvancedAttributeValues(value) {
@@ -295,7 +321,8 @@ function normalizeAdvancedAttributeValues(value) {
 }
 
 /**
- * @param {unknown} value - Advanced attribute entry.
+ * Runs normalize advanced attribute value.
+ * @param {?} value - Advanced attribute entry.
  * @returns {string} - Attribute path string.
  */
 function normalizeAdvancedAttributeValue(value) {
@@ -309,6 +336,7 @@ function normalizeAdvancedAttributeValue(value) {
 }
 
 /**
+ * Runs resolve ransack attributes.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Model class.
  * @param {string} args.value - Attribute path value.
@@ -332,6 +360,7 @@ function resolveRansackAttributes({modelClass, value}) {
 }
 
 /**
+ * Runs model class at path.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Root model class.
  * @param {string[]} args.path - Relationship path.
@@ -354,13 +383,16 @@ function modelClassAtPath({modelClass, path}) {
 }
 
 /**
+ * Runs resolve ransack path.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Current model class.
  * @param {string} args.value - Remaining path value.
  * @returns {{attributeValue: string, path: string[]}} - Resolved relationship path and remaining attribute value.
  */
 function resolveRansackPath({modelClass, value}) {
-  /** @type {string[]} */
+  /**
+   * Path.
+    @type {string[]} */
   const path = []
   let currentModelClass = modelClass
   let remainingValue = value
@@ -393,6 +425,7 @@ function resolveRansackPath({modelClass, value}) {
 }
 
 /**
+ * Runs find relationship prefix.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Current model class.
  * @param {string} args.value - Remaining value to match.
@@ -460,6 +493,7 @@ function stripRelationshipCandidate(value, candidate) {
 }
 
 /**
+ * Runs relationship candidates.
  * @param {string} relationshipName - Relationship name.
  * @returns {string[]} - Candidate tokens for matching.
  */
@@ -468,6 +502,7 @@ function relationshipCandidates(relationshipName) {
 }
 
 /**
+ * Runs resolve attribute name.
  * @param {object} args - Options.
  * @param {RansackModelClass} args.modelClass - Model class.
  * @param {string} args.value - Attribute candidate.
@@ -484,16 +519,23 @@ function resolveAttributeName({modelClass, value}) {
 }
 
 /**
+ * Runs relationship entries.
  * @param {RansackModelClass} modelClass - Model class.
  * @returns {Record<string, {targetModelClass: RansackModelClass}>} - Relationship entries keyed by name.
  */
 function relationshipEntries(modelClass) {
-  if (typeof /** @type {any} */ (modelClass).getRelationshipsMap === "function") {
+  if (typeof /**
+              * Narrows the runtime value to the documented type.
+               @type {?} */ (modelClass).getRelationshipsMap === "function") {
     return backendRelationshipEntries(modelClass)
   }
 
-  if (typeof /** @type {any} */ (modelClass).relationshipDefinitions === "function" &&
-    typeof /** @type {any} */ (modelClass).relationshipModelClasses === "function") {
+  if (typeof /**
+              * Narrows the runtime value to the documented type.
+               @type {?} */ (modelClass).relationshipDefinitions === "function" &&
+    typeof /**
+            * Narrows the runtime value to the documented type.
+             @type {?} */ (modelClass).relationshipModelClasses === "function") {
     return frontendRelationshipEntries(modelClass)
   }
 
@@ -501,13 +543,18 @@ function relationshipEntries(modelClass) {
 }
 
 /**
+ * Runs backend relationship entries.
  * @param {RansackModelClass} modelClass - Backend model class.
  * @returns {Record<string, {targetModelClass: RansackModelClass}>} - Relationship entries keyed by name.
  */
 function backendRelationshipEntries(modelClass) {
-  /** @type {Record<string, {targetModelClass: RansackModelClass}>} */
+  /**
+   * Entries.
+    @type {Record<string, {targetModelClass: RansackModelClass}>} */
   const entries = {}
-  const relationshipsMap = /** @type {any} */ (modelClass).getRelationshipsMap()
+  const relationshipsMap = /**
+                            * Narrows the runtime value to the documented type.
+                             @type {?} */ (modelClass).getRelationshipsMap()
 
   for (const relationshipName of Object.keys(relationshipsMap)) {
     const relationship = relationshipsMap[relationshipName]
@@ -525,14 +572,21 @@ function backendRelationshipEntries(modelClass) {
 }
 
 /**
+ * Runs frontend relationship entries.
  * @param {RansackModelClass} modelClass - Frontend model class.
  * @returns {Record<string, {targetModelClass: RansackModelClass}>} - Relationship entries keyed by name.
  */
 function frontendRelationshipEntries(modelClass) {
-  /** @type {Record<string, {targetModelClass: RansackModelClass}>} */
+  /**
+   * Entries.
+    @type {Record<string, {targetModelClass: RansackModelClass}>} */
   const entries = {}
-  const definitions = /** @type {any} */ (modelClass).relationshipDefinitions()
-  const relationshipModelClasses = /** @type {any} */ (modelClass).relationshipModelClasses()
+  const definitions = /**
+                       * Narrows the runtime value to the documented type.
+                        @type {?} */ (modelClass).relationshipDefinitions()
+  const relationshipModelClasses = /**
+                                    * Narrows the runtime value to the documented type.
+                                     @type {?} */ (modelClass).relationshipModelClasses()
 
   for (const relationshipName of Object.keys(definitions)) {
     const targetModelClass = resolveFrontendModelClass(relationshipModelClasses[relationshipName])
@@ -546,19 +600,30 @@ function frontendRelationshipEntries(modelClass) {
 }
 
 /**
+ * Runs attribute entries.
  * @param {RansackModelClass} modelClass - Model class.
  * @returns {Record<string, string>} - Attribute-to-column entries keyed by attribute name.
  */
 function attributeEntries(modelClass) {
-  if (typeof /** @type {any} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
-    return /** @type {Record<string, string>} */ ((/** @type {any} */ (modelClass).getAttributeNameToColumnNameMap()))
+  if (typeof /**
+              * Narrows the runtime value to the documented type.
+               @type {?} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
+    return /** Narrows the runtime value to the documented type. @type {Record<string, string>} */ ((/**
+                                                                                                      * Narrows the runtime value to the documented type.
+                                                                                                       @type {?} */ (modelClass).getAttributeNameToColumnNameMap()))
   }
 
-  const resourceConfig = typeof /** @type {any} */ (modelClass).resourceConfig === "function"
-    ? /** @type {any} */ (modelClass).resourceConfig()
+  const resourceConfig = typeof /**
+                                 * Narrows the runtime value to the documented type.
+                                  @type {?} */ (modelClass).resourceConfig === "function"
+    ? /**
+       * Narrows the runtime value to the documented type.
+        @type {?} */ (modelClass).resourceConfig()
     : {}
   const attributes = resourceConfig.attributes
-  /** @type {Record<string, string>} */
+  /**
+   * Entries.
+    @type {Record<string, string>} */
   const entries = {}
 
   if (Array.isArray(attributes)) {
@@ -577,6 +642,7 @@ function attributeEntries(modelClass) {
 }
 
 /**
+ * Runs matches attribute value.
  * @param {object} args - Options.
  * @param {string} args.attributeName - Attribute name.
  * @param {string} args.columnName - Column name.
@@ -593,6 +659,7 @@ function matchesAttributeValue({attributeName, columnName, value}) {
 }
 
 /**
+ * Runs parse ransack key.
  * @param {string} key - Ransack key.
  * @returns {{pathValue: string, predicate: RansackPredicate} | null} - Parsed key.
  */
@@ -609,7 +676,9 @@ function parseRansackKey(key) {
 
     return {
       pathValue,
-      predicate: /** @type {RansackPredicate} */ (predicate)
+      predicate: /**
+                  * Narrows the runtime value to the documented type.
+                   @type {RansackPredicate} */ (predicate)
     }
   }
 
@@ -626,7 +695,9 @@ function parseRansackKey(key) {
 
     return {
       pathValue,
-      predicate: /** @type {RansackPredicate} */ (predicate)
+      predicate: /**
+                  * Narrows the runtime value to the documented type.
+                   @type {RansackPredicate} */ (predicate)
     }
   }
 
@@ -634,6 +705,7 @@ function parseRansackKey(key) {
 }
 
 /**
+ * Runs snake to camel suffix.
  * @param {string} value - Snake-case predicate.
  * @returns {string} - CamelCase predicate suffix used in ransack keys.
  */
@@ -644,10 +716,11 @@ function snakeToCamelSuffix(value) {
 }
 
 /**
+ * Runs normalize ransack value.
  * @param {object} args - Options.
  * @param {RansackPredicate} args.predicate - Parsed predicate.
- * @param {any} args.value - Raw value.
- * @returns {any} - Normalized value.
+ * @param {?} args.value - Raw value.
+ * @returns {?} - Normalized value.
  */
 function normalizeRansackValue({predicate, value}) {
   if (predicate === "null") {
@@ -664,7 +737,8 @@ function normalizeRansackValue({predicate, value}) {
 }
 
 /**
- * @param {unknown} value - Candidate null predicate value.
+ * Runs normalize ransack null value.
+ * @param {?} value - Candidate null predicate value.
  * @returns {boolean | typeof SKIP_RANSACK_CONDITION} - Normalized value.
  */
 function normalizeRansackNullValue(value) {
@@ -674,8 +748,9 @@ function normalizeRansackNullValue(value) {
 }
 
 /**
- * @param {unknown} value - Candidate list predicate value.
- * @returns {any[] | typeof SKIP_RANSACK_CONDITION} - Normalized value.
+ * Runs normalize ransack list value.
+ * @param {?} value - Candidate list predicate value.
+ * @returns {Array<?> | typeof SKIP_RANSACK_CONDITION} - Normalized value.
  */
 function normalizeRansackListValue(value) {
   const normalizedArray = normalizeRansackArray(value)
@@ -683,13 +758,18 @@ function normalizeRansackListValue(value) {
   return normalizedArray.length < 1 ? SKIP_RANSACK_CONDITION : normalizedArray
 }
 
-/** @type {Set<unknown>} */
+/**
+ * Ransack true values.
+  @type {Set<?>} */
 const ransackTrueValues = new Set([true, 1, "1", "true"])
-/** @type {Set<unknown>} */
+/**
+ * Ransack false values.
+  @type {Set<?>} */
 const ransackFalseValues = new Set([false, 0, "0", "false"])
 
 /**
- * @param {unknown} value - Candidate boolean.
+ * Runs normalize ransack boolean.
+ * @param {?} value - Candidate boolean.
  * @returns {boolean | null} - Normalized boolean or null when blank.
  */
 function normalizeRansackBoolean(value) {
@@ -701,7 +781,8 @@ function normalizeRansackBoolean(value) {
 }
 
 /**
- * @param {unknown} value - Candidate value.
+ * Runs ransack value is blank.
+ * @param {?} value - Candidate value.
  * @returns {boolean} - Whether value should be ignored as blank.
  */
 function ransackValueIsBlank(value) {
@@ -709,8 +790,9 @@ function ransackValueIsBlank(value) {
 }
 
 /**
- * @param {unknown} value - Candidate array-ish value.
- * @returns {any[]} - Normalized array values.
+ * Runs normalize ransack array.
+ * @param {?} value - Candidate array-ish value.
+ * @returns {Array<?>} - Normalized array values.
  */
 function normalizeRansackArray(value) {
   if (Array.isArray(value)) {
@@ -727,6 +809,7 @@ function normalizeRansackArray(value) {
 }
 
 /**
+ * RansackSort type.
  * @typedef {object} RansackSort
  * @property {string} attribute - Resolved attribute name.
  * @property {"asc" | "desc"} direction - Sort direction.
@@ -741,7 +824,9 @@ function normalizeRansackArray(value) {
 export function parseRansackSort(modelClass, sortString) {
   const segments = sortString.split(",").map((segment) => segment.trim()).filter((segment) => segment.length > 0)
 
-  /** @type {RansackSort[]} */
+  /**
+   * Sorts.
+    @type {RansackSort[]} */
   const sorts = []
 
   for (const segment of segments) {
@@ -766,6 +851,7 @@ export function parseRansackSort(modelClass, sortString) {
 }
 
 /**
+ * Runs uniqunize.
  * @param {string[]} values - Input values.
  * @returns {string[]} - Unique values in original order.
  */

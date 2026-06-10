@@ -7,16 +7,20 @@ import VelociousJob from "./job.js"
 
 export default class BackgroundJobRegistry {
   /**
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    */
   constructor({configuration}) {
     this.configuration = configuration
-    /** @type {Map<string, typeof VelociousJob>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Map<string, typeof VelociousJob>} */
     this.jobsByName = new Map()
   }
 
   /**
+   * Runs load.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async load() {
@@ -35,6 +39,7 @@ export default class BackgroundJobRegistry {
   }
 
   /**
+   * Runs get job by name.
    * @param {string} jobName - Job name.
    * @returns {typeof VelociousJob} - Job class.
    */
@@ -49,6 +54,7 @@ export default class BackgroundJobRegistry {
   }
 
   /**
+   * Runs load jobs from directory.
    * @param {string} jobsDir - Directory with job files.
    * @param {object} args - Options.
    * @param {boolean} args.skipDuplicates - Whether to skip duplicate job names.

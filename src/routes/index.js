@@ -10,6 +10,7 @@ export default class VelociousRoutes {
   rootRoute = new RootRoute()
 
   /**
+   * Runs draw.
    * @param {function(import("./root-route.js").default) : void} callback - Callback function.
    * @returns {void} - No return value.
    */
@@ -20,13 +21,18 @@ export default class VelociousRoutes {
   /**
    * Collects all `route.mount(...)` registrations across the route tree so the
    * configuration can apply them when the routes are set.
-   * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} - Declared mounts.
+   * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} - Declared mounts.
    */
   getMounts() {
-    /** @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, any>}>} */
+    /**
+     * Collected.
+      @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
     const collected = []
 
-    /** @param {import("./base-route.js").default} route - Route to visit. */
+    /**
+     * Visit.
+     * @param {import("./base-route.js").default} route - Route to visit.
+     */
     const visit = (route) => {
       if (typeof route.getMounts === "function") {
         collected.push(...route.getMounts())

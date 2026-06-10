@@ -4,7 +4,10 @@ import BaseCommand from "../../../base-command.js"
 import TenantDatabaseCommandHelper from "../../../tenant-database-command-helper.js"
 
 export default class DbTenantsCheck extends BaseCommand {
-  /** @returns {Promise<{identifier: string, tenantCount: number} | void>} - Result in test mode. */
+  /**
+   * Runs execute.
+   * @returns {Promise<{identifier: string, tenantCount: number} | void>} - Result in test mode.
+   */
   async execute() {
     const helper = new TenantDatabaseCommandHelper({
       command: this,

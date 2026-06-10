@@ -1,6 +1,7 @@
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
+ * VelociousCliCommandArgs type.
  * @typedef {object} VelociousCliCommandArgs
  * @property {import("../configuration.js").default} [configuration] - Configuration instance for the CLI.
  * @property {Record<string, string | number | boolean | undefined>} [parsedProcessArgs] - Parsed CLI arguments.
@@ -10,6 +11,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousCliBaseCommand {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {VelociousCliCommandArgs} args.args - Options object.
    * @param {import("./index.js").default} args.cli - Cli.
@@ -26,26 +28,35 @@ export default class VelociousCliBaseCommand {
     this.processArgs = args.processArgs
   }
 
-  /** @returns {string} - The directory.  */
+  /**
+   * Runs directory.
+   * @returns {string} - The directory.
+   */
   directory() { return this.getConfiguration().getDirectory() }
 
   /**
+   * Runs execute.
    * @abstract
-   * @returns {Promise<any>} - Resolves with the execute.
+   * @returns {Promise<?>} - Resolves with the execute.
    */
   execute() {
     throw new Error("execute not implemented")
   }
 
   /**
+   * Runs get configuration.
    * @returns {import("../configuration.js").default} - The configuration.
    */
   getConfiguration() { return this._configuration }
 
-  /** @returns {import("../environment-handlers/base.js").default} - The environment handler.  */
+  /**
+   * Runs get environment handler.
+   * @returns {import("../environment-handlers/base.js").default} - The environment handler.
+   */
   getEnvironmentHandler() { return this._environmentHandler }
 
   /**
+   * Runs initialize.
    * @abstract
    * @returns {Promise<void>} - Resolves when complete.
    */

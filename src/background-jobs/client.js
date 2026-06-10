@@ -5,6 +5,7 @@ import BackgroundJobsSocketRequest from "./socket-request.js"
 
 export default class BackgroundJobsClient {
   /**
+   * Runs constructor.
    * @param {object} [args] - Options.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    */
@@ -13,9 +14,10 @@ export default class BackgroundJobsClient {
   }
 
   /**
+   * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
-   * @param {any[]} args.args - Job args.
+   * @param {Array<?>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<string>} - Job id.
    */

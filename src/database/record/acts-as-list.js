@@ -4,10 +4,14 @@
 
 import * as inflection from "inflection"
 
-/** @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks. */
+/**
+ * Acts as list shifting.
+ * @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks.
+ */
 const ACTS_AS_LIST_SHIFTING = Symbol("actsAsListShifting")
 
 /**
+ * Runs set shifting flag.
  * @param {import("./index.js").default} record - Model instance.
  * @param {boolean} value - Flag value.
  */
@@ -17,6 +21,7 @@ function setShiftingFlag(record, value) {
 }
 
 /**
+ * Runs is shifting.
  * @param {import("./index.js").default} record - Model instance.
  * @returns {boolean}
  */
@@ -34,7 +39,6 @@ function isShifting(record) {
  * Callers must also ensure a UNIQUE index on (scopeColumn, positionColumn)
  * exists in the database schema — use `Migration.addActsAsList()` for the
  * corresponding schema setup.
- *
  * @param {typeof import("./index.js").default} modelClass - The model class.
  * @param {string} positionColumn - camelCase name of the position attribute (e.g. "rowNumber").
  * @param {object} options - Options.
@@ -62,17 +66,37 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 
     const posColumn = inflection.underscore(positionColumn)
     const scopeCol = inflection.underscore(scope)
-    const rawAttributes = /** @type {Record<string, any>} */ (record._attributes || {})
-    const changes = /** @type {Record<string, any>} */ (record._changes || {})
+    const rawAttributes = /**
+                           * Narrows the runtime value to the documented type.
+                            @type {Record<string, ?>} */ (record._attributes || {})
+    const changes = /**
+                     * Narrows the runtime value to the documented type.
+                      @type {Record<string, ?>} */ (record._changes || {})
     const posChanged = posColumn in changes
     const scopeChanged = scopeCol in changes
 
     if (!posChanged && !scopeChanged) return
 
-    const oldPosition = posChanged ? /** @type {number} */ (rawAttributes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
-    const newPosition = posChanged ? /** @type {number} */ (changes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
-    const oldScopeValue = scopeChanged ? /** @type {number} */ (rawAttributes[scopeCol]) : /** @type {number} */ (record.readAttribute(scope))
-    const newScopeValue = scopeChanged ? /** @type {number} */ (changes[scopeCol]) : /** @type {number} */ (record.readAttribute(scope))
+    const oldPosition = posChanged ? /**
+                                      * Narrows the runtime value to the documented type.
+                                       @type {number} */ (rawAttributes[posColumn]) : /**
+                                                                                       * Narrows the runtime value to the documented type.
+                                                                                        @type {number} */ (record.readAttribute(positionColumn))
+    const newPosition = posChanged ? /**
+                                      * Narrows the runtime value to the documented type.
+                                       @type {number} */ (changes[posColumn]) : /**
+                                                                                 * Narrows the runtime value to the documented type.
+                                                                                  @type {number} */ (record.readAttribute(positionColumn))
+    const oldScopeValue = scopeChanged ? /**
+                                          * Narrows the runtime value to the documented type.
+                                           @type {number} */ (rawAttributes[scopeCol]) : /**
+                                                                                          * Narrows the runtime value to the documented type.
+                                                                                           @type {number} */ (record.readAttribute(scope))
+    const newScopeValue = scopeChanged ? /**
+                                          * Narrows the runtime value to the documented type.
+                                           @type {number} */ (changes[scopeCol]) : /**
+                                                                                    * Narrows the runtime value to the documented type.
+                                                                                     @type {number} */ (record.readAttribute(scope))
 
     if (oldPosition == null || newPosition == null) return
     if (newPosition === oldPosition && newScopeValue === oldScopeValue) return
@@ -124,7 +148,6 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
  * Bumps positions UP by 1 in the range [fromPosition, toPosition) within the
  * same scope. Updates in descending order to avoid intermediate UNIQUE
  * constraint violations.
- *
  * @param {object} args - Arguments.
  * @param {import("./index.js").default} args.record - The model instance whose scope is the source of truth.
  * @param {string} args.positionColumn - camelCase position attribute name.
@@ -135,7 +158,9 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
  * @returns {Promise<void>}
  */
 async function shiftPositionsUp({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+                      * Narrows the runtime value to the documented type.
+                       @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
@@ -181,7 +206,6 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
  * Bumps positions DOWN by 1 in the range [fromPosition, toPosition) within
  * the same scope. Updates in ascending order to avoid intermediate UNIQUE
  * constraint violations.
- *
  * @param {object} args - Arguments.
  * @param {import("./index.js").default} args.record - The model instance whose scope is the source of truth.
  * @param {string} args.positionColumn - camelCase position attribute name.
@@ -192,7 +216,9 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
  * @returns {Promise<void>}
  */
 async function shiftPositionsDown({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+                      * Narrows the runtime value to the documented type.
+                       @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
@@ -236,7 +262,6 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
 
 /**
  * Returns the highest current position value in the record's scope.
- *
  * @param {object} args - Arguments.
  * @param {import("./index.js").default} args.record - The model instance whose scope is the source of truth.
  * @param {string} args.positionColumn - camelCase position attribute name.
@@ -245,7 +270,9 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
  * @returns {Promise<number>} - Highest position in scope, or 0 when scope is empty.
  */
 async function highestPositionInScope({record, positionColumn, scope, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+                      * Narrows the runtime value to the documented type.
+                       @type {typeof import("./index.js").default} */ (record.constructor)
   const scopeUnderscore = inflection.underscore(scope)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
@@ -268,7 +295,6 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
  * to the loaded belongsTo relationship. This is needed during beforeCreate
  * because the FK attribute may not be set until _createNewRecord flushes
  * _belongsToChanges.
- *
  * @param {import("./index.js").default} record - Model instance.
  * @param {string} scope - camelCase scope attribute name (e.g. "projectId").
  * @returns {string | number | null}
@@ -276,9 +302,11 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
 function resolveScopeValue(record, scope) {
   const attrValue = record.readAttribute(scope)
 
-  if (attrValue != null) return /** @type {string | number} */ (attrValue)
+  if (attrValue != null) return /** Narrows the runtime value to the documented type. @type {string | number} */ (attrValue)
 
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+                      * Narrows the runtime value to the documented type.
+                       @type {typeof import("./index.js").default} */ (record.constructor)
   const relationships = modelClass.getRelationshipsMap()
 
   for (const relationshipName in relationships) {
@@ -304,7 +332,6 @@ function resolveScopeValue(record, scope) {
 /**
  * Moves the record to a temporary position outside the normal range so
  * that surrounding position shifts do not hit unique constraint violations.
- *
  * @param {object} args - Arguments.
  * @param {import("./index.js").default} args.record - Model instance.
  * @param {string} args.positionColumn - camelCase position attribute.
@@ -313,7 +340,9 @@ function resolveScopeValue(record, scope) {
  * @returns {Promise<void>}
  */
 async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
-  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const modelClass = /**
+                      * Narrows the runtime value to the documented type.
+                       @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)

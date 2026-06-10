@@ -3,6 +3,7 @@
 import fs from "fs/promises"
 
 /**
+ * Runs file exists.
  * @param {string} path - Path.
  * @returns {Promise<boolean>} - Resolves with Whether the operation succeeded.
  */

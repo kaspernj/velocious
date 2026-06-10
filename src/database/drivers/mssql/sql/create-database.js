@@ -4,6 +4,7 @@ import CreateDatabaseBase from "../../../query/create-database-base.js"
 
 export default class VelociousDatabaseConnectionDriversMssqlSqlCreateDatabase extends CreateDatabaseBase {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../base.js").default} args.driver - Database driver instance.
    * @param {string} args.databaseName - Database name.

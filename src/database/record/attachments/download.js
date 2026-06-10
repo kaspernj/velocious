@@ -1,10 +1,9 @@
 // @ts-check
 
-/**
- * Downloaded attachment payload wrapper.
- */
+/** Downloaded attachment payload wrapper. */
 export default class RecordAttachmentDownload {
   /**
+   * Runs constructor.
    * @param {object} args - Options.
    * @param {string} args.id - Attachment id.
    * @param {string} args.filename - Filename.
@@ -14,24 +13,37 @@ export default class RecordAttachmentDownload {
    * @param {string | null} [args.url] - Resolvable URL.
    */
   constructor({byteSize, content, contentType, filename, id, url = null}) {
-    this.idValue = id
-    this.filenameValue = filename
-    this.contentTypeValue = contentType
-    this.byteSizeValue = byteSize
-    this.contentValue = content
-    this.urlValue = url
+    this.values = {byteSize, content, contentType, filename, id, url}
   }
 
-  /** @returns {number} - File size in bytes. */
-  byteSize() { return this.byteSizeValue }
-  /** @returns {Buffer} - File content. */
-  content() { return this.contentValue }
-  /** @returns {string | null} - Content type. */
-  contentType() { return this.contentTypeValue }
-  /** @returns {string} - Filename. */
-  filename() { return this.filenameValue }
-  /** @returns {string} - Attachment id. */
-  id() { return this.idValue }
-  /** @returns {string | null} - Resolvable attachment URL. */
-  url() { return this.urlValue }
+  /**
+   * Runs byte size.
+   * @returns {number} - File size in bytes.
+   */
+  byteSize() { return this.values.byteSize }
+  /**
+   * Runs content.
+   * @returns {Buffer} - File content.
+   */
+  content() { return this.values.content }
+  /**
+   * Runs content type.
+   * @returns {string | null} - Content type.
+   */
+  contentType() { return this.values.contentType }
+  /**
+   * Runs filename.
+   * @returns {string} - Filename.
+   */
+  filename() { return this.values.filename }
+  /**
+   * Runs id.
+   * @returns {string} - Attachment id.
+   */
+  id() { return this.values.id }
+  /**
+   * Runs url.
+   * @returns {string | null} - Resolvable attachment URL.
+   */
+  url() { return this.values.url }
 }

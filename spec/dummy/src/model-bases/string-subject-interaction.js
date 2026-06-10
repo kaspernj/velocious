@@ -110,7 +110,7 @@ export default class StringSubjectInteractionBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
   buildSubject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

@@ -4,6 +4,7 @@ import BackgroundJobsClient from "./client.js"
 
 export default class VelociousJob {
   /**
+   * Runs job name.
    * @returns {string} - Job name.
    */
   static jobName() {
@@ -11,7 +12,8 @@ export default class VelociousJob {
   }
 
   /**
-   * @param {...any} args - Job args.
+   * Runs perform later.
+   * @param {...?} args - Job args.
    * @returns {Promise<string>} - Job id.
    */
   static async performLater(...args) {
@@ -26,8 +28,9 @@ export default class VelociousJob {
   }
 
   /**
+   * Runs perform later with options.
    * @param {object} args - Options.
-   * @param {any[]} args.args - Job args.
+   * @param {Array<?>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<string>} - Job id.
    */
@@ -42,8 +45,9 @@ export default class VelociousJob {
   }
 
   /**
-   * @param {any[]} args - Job args.
-   * @returns {{jobArgs: any[], jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
+   * Runs split args and options.
+   * @param {Array<?>} args - Job args.
+   * @returns {{jobArgs: Array<?>, jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
    */
   static _splitArgsAndOptions(args) {
     if (args.length === 0) {
@@ -54,7 +58,9 @@ export default class VelociousJob {
     const isOptionsArg = lastArg && typeof lastArg === "object" && !Array.isArray(lastArg) && "jobOptions" in lastArg
 
     if (isOptionsArg) {
-      const {jobOptions} = /** @type {{jobOptions: import("./types.js").BackgroundJobOptions}} */ (lastArg)
+      const {jobOptions} = /**
+                            * Narrows the runtime value to the documented type.
+                             @type {{jobOptions: import("./types.js").BackgroundJobOptions}} */ (lastArg)
       return {jobArgs: args.slice(0, -1), jobOptions: jobOptions || {}}
     }
 

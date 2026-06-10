@@ -6,6 +6,7 @@ import LoggerConsoleOutput from "./outputs/console-output.js"
 /** Console logger configuration wrapper. */
 export default class ConsoleLogger extends BaseLogger {
   /**
+   * Runs constructor.
    * @param {object} [args] - Options object.
    * @param {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} [args.levels] - Levels to emit.
    */
@@ -15,6 +16,7 @@ export default class ConsoleLogger extends BaseLogger {
   }
 
   /**
+   * Runs to output config.
    * @returns {import("../configuration-types.js").LoggingOutputConfig} - Output config.
    */
   toOutputConfig() {

@@ -3,9 +3,10 @@
 /** Framework error with optional client-safe message exposure flag. */
 export default class VelociousError extends Error {
   /**
+   * Runs constructor.
    * @param {string} message - Error message.
    * @param {object} [args] - Options.
-   * @param {unknown} [args.cause] - Error cause.
+   * @param {?} [args.cause] - Error cause.
    * @param {string} [args.code] - Optional error code.
    * @param {boolean} [args.safeToExpose] - Whether the message is safe to return to clients.
    */
@@ -20,9 +21,10 @@ export default class VelociousError extends Error {
   }
 
   /**
+   * Runs safe.
    * @param {string} message - Error message.
    * @param {object} [args] - Options.
-   * @param {unknown} [args.cause] - Error cause.
+   * @param {?} [args.cause] - Error cause.
    * @param {string} [args.code] - Optional error code.
    * @returns {VelociousError} - Client-safe error instance.
    */

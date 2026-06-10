@@ -8,6 +8,7 @@ import TableColumn from "../table-data/table-column.js"
 
 export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {boolean} [args.ifNotExists] - Whether if not exists.
@@ -24,6 +25,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
   }
 
   /**
+   * Runs to sql.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async toSql() {

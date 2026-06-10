@@ -1,17 +1,26 @@
 // @ts-check
 
-/** @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+/**
+ * LoggingOutputPayload type.
+  @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 /** Logger file output. */
 export default class LoggerFileOutput {
-  /** @type {import("../../configuration.js").default | undefined} */
+  /**
+   * Configuration.
+    @type {import("../../configuration.js").default | undefined} */
   _configuration = undefined
-  /** @type {string | undefined} */
+  /**
+   * File path.
+    @type {string | undefined} */
   _filePath = undefined
-  /** @type {(() => import("../../configuration.js").default | undefined) | undefined} */
+  /**
+   * Get configuration.
+    @type {(() => import("../../configuration.js").default | undefined) | undefined} */
   _getConfiguration = undefined
 
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} [args.configuration] - Configuration instance.
    * @param {() => import("../../configuration.js").default | undefined} [args.getConfiguration] - Configuration resolver.
@@ -23,7 +32,10 @@ export default class LoggerFileOutput {
     this._filePath = filePath
   }
 
-  /** @param {LoggingOutputPayload} payload - Log payload. */
+  /**
+   * Runs write.
+   * @param {LoggingOutputPayload} payload - Log payload.
+   */
   async write({message}) {
     if (!this._filePath) return
 

@@ -4,9 +4,11 @@ import restArgsError from "../../../utils/rest-args-error.js"
 import * as inflection from "inflection"
 
 /**
- * @typedef {(query: import("../../query/model-class-query.js").default<any>) => (import("../../query/model-class-query.js").default<any> | void)} RelationshipScopeCallback
+ * RelationshipScopeCallback type.
+ * @typedef {(query: import("../../query/model-class-query.js").default<?>) => (import("../../query/model-class-query.js").default<?> | void)} RelationshipScopeCallback
  */
 /**
+ * RelationshipBaseArgsType type.
  * @typedef {object} RelationshipBaseArgsType
  * @property {boolean} [autoload] - Whether to auto-batch-preload siblings when this relationship is lazy-loaded. Default true.
  * @property {string} [className] - Name of the related model class.
@@ -25,7 +27,10 @@ import * as inflection from "inflection"
  */
 
 export default class VelociousDatabaseRecordBaseRelationship {
-  /** @param {RelationshipBaseArgsType} args - Relationship definition arguments. */
+  /**
+   * Runs constructor.
+   * @param {RelationshipBaseArgsType} args - Relationship definition arguments.
+   */
   constructor({autoload, className, counterCache, dependent, foreignKey, inverseOf, klass, modelClass, primaryKey = "id", polymorphic, relationshipName, scope, through, type, ...restArgs}) {
     restArgsError(restArgs)
 
@@ -52,18 +57,28 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this.type = type
   }
 
-  /** @returns {boolean} Whether this relationship auto-batch-preloads siblings on lazy access. */
+  /**
+   * Runs get autoload.
+   * @returns {boolean} Whether this relationship auto-batch-preloads siblings on lazy access.
+   */
   getAutoload() { return this._autoload }
 
   getConfiguration() { return this.modelClass._getConfiguration() }
 
-  /** @returns {boolean} Whether a counter cache column is synced on the parent. */
+  /**
+   * Runs get counter cache.
+   * @returns {boolean} Whether a counter cache column is synced on the parent.
+   */
   getCounterCache() { return this._counterCache }
 
-  /** @returns {string | undefined} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc. */
+  /**
+   * Runs get dependent.
+   * @returns {string | undefined} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc.
+   */
   getDependent() { return this._dependent }
 
   /**
+   * Runs get foreign key.
    * @abstract
    * @returns {string} The name of the foreign key, e.g. "user_id", "post_id" etc.
    */
@@ -72,6 +87,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
   }
 
   /**
+   * Runs get inverse of.
    * @abstract
    * @returns {string | undefined} The name of the inverse relationship, e.g. "posts", "comments" etc.
    */
@@ -79,16 +95,26 @@ export default class VelociousDatabaseRecordBaseRelationship {
     throw new Error("getInverseOf not implemented")
   }
 
-  /** @returns {typeof import("../index.js").default} - The model class.  */
+  /**
+   * Runs get model class.
+   * @returns {typeof import("../index.js").default} - The model class.
+   */
   getModelClass() { return this.modelClass }
 
-  /** @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc. */
+  /**
+   * Runs get relationship name.
+   * @returns {string} The name of the relationship, e.g. "posts", "user", "comments" etc.
+   */
   getRelationshipName() { return this.relationshipName }
 
-  /** @returns {RelationshipScopeCallback | undefined} - The scope callback. */
+  /**
+   * Runs get scope.
+   * @returns {RelationshipScopeCallback | undefined} - The scope callback.
+   */
   getScope() { return this._scope }
 
   /**
+   * Runs apply scope.
    * @template T
    * @param {T} query - Query instance.
    * @returns {T} - Scoped query.
@@ -98,17 +124,27 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
     if (!scope) return query
 
-    const scopedQuery = /** @type {T | void} */ (scope.call(query, /** @type {import("../../query/model-class-query.js").default<any>} */ (query)))
+    const scopedQuery = /**
+                         * Narrows the runtime value to the documented type.
+                          @type {T | void} */ (scope.call(query, /**
+                                                                  * Narrows the runtime value to the documented type.
+                                                                   @type {import("../../query/model-class-query.js").default<?>} */ (query)))
 
     return scopedQuery || query
   }
 
-  /** @returns {boolean} - Whether polymorphic.  */
+  /**
+   * Runs get polymorphic.
+   * @returns {boolean} - Whether polymorphic.
+   */
   getPolymorphic() {
     return this._polymorphic || false
   }
 
-  /** @returns {string} - The polymorphic type column.  */
+  /**
+   * Runs get polymorphic type column.
+   * @returns {string} - The polymorphic type column.
+   */
   getPolymorphicTypeColumn() {
     if (!this.getPolymorphic()) {
       throw new Error(`${this.modelClass.name}#${this.relationshipName} isn't polymorphic`)
@@ -129,13 +165,22 @@ export default class VelociousDatabaseRecordBaseRelationship {
     return this._polymorphicTypeColumn
   }
 
-  /** @returns {string} The name of the foreign key, e.g. "id" etc. */
+  /**
+   * Runs get primary key.
+   * @returns {string} The name of the foreign key, e.g. "id" etc.
+   */
   getPrimaryKey() { return this._primaryKey }
 
-  /** @returns {string} The type of the relationship, e.g. "has_many", "belongs_to", "has_one", "has_and_belongs_to_many" etc. */
+  /**
+   * Runs get type.
+   * @returns {string} The type of the relationship, e.g. "has_many", "belongs_to", "has_one", "has_and_belongs_to_many" etc.
+   */
   getType() { return this.type }
 
-  /** @returns {typeof import("../index.js").default | undefined} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class. */
+  /**
+   * Runs get target model class.
+   * @returns {typeof import("../index.js").default | undefined} The target model class for this relationship, e.g. if the relationship is "posts" then the target model class is the Post class.
+   */
   getTargetModelClass() {
     if (this.getPolymorphic() && this.type == "belongsTo") {
       return undefined

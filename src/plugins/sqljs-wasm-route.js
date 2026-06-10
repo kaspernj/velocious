@@ -7,18 +7,21 @@ const sqlJsEntryPath = require.resolve("sql.js")
 const sqlJsDistDirectory = path.dirname(sqlJsEntryPath)
 
 /**
+ * InstallSqlJsWasmRouteArgs type.
  * @typedef {object} InstallSqlJsWasmRouteArgs
  * @property {import("../configuration.js").default} configuration - Velocious configuration instance.
  * @property {string} [routePrefix] - Route prefix used for sql.js asset serving.
  */
 
 /**
+ * SqlJsLocateFileFromBackendArgs type.
  * @typedef {object} SqlJsLocateFileFromBackendArgs
  * @property {string} backendBaseUrl - Backend base URL (for example `https://api.example.com`).
  * @property {string} [routePrefix] - Route prefix used for sql.js asset serving.
  */
 
 /**
+ * Runs normalize route prefix.
  * @param {string} routePrefix - Route prefix input.
  * @returns {string} - Normalized route prefix.
  */

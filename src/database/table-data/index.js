@@ -5,24 +5,34 @@ import TableIndex from "./table-index.js"
 import TableReference from "./table-reference.js"
 
 /**
+ * TableDataArgsType type.
  * @typedef {object} TableDataArgsType
  * @property {boolean} ifNotExists - Whether to create the table only if it does not exist.
  */
 
 export default class TableData {
-  /** @type {TableColumn[]} */
+  /**
+   * Columns.
+    @type {TableColumn[]} */
   _columns = []
 
-  /** @type {import("./table-foreign-key.js").default[]} */
+  /**
+   * Foreign keys.
+    @type {import("./table-foreign-key.js").default[]} */
   _foreignKeys = []
 
-  /** @type {TableIndex[]} */
+  /**
+   * Indexes.
+    @type {TableIndex[]} */
   _indexes = []
 
-  /** @type {TableReference[]} */
+  /**
+   * References.
+    @type {TableReference[]} */
   _references = []
 
   /**
+   * Runs constructor.
    * @param {string} name - Name.
    * @param {TableDataArgsType} [args] - Options object.
    */
@@ -34,6 +44,7 @@ export default class TableData {
   }
 
   /**
+   * Runs add column.
    * @param {string|TableColumn} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    */
@@ -48,52 +59,62 @@ export default class TableData {
   }
 
   /**
+   * Runs get columns.
    * @returns {TableColumn[]} - The columns.
    */
   getColumns() { return this._columns }
 
   /**
+   * Runs add foreign key.
    * @param {import("./table-foreign-key.js").default} foreignKey - Foreign key.
    */
   addForeignKey(foreignKey) { this._foreignKeys.push(foreignKey) }
 
   /**
+   * Runs get foreign keys.
    * @returns {import("./table-foreign-key.js").default[]} - The foreign keys.
    */
   getForeignKeys() { return this._foreignKeys }
 
   /**
+   * Runs add index.
    * @param {TableIndex} index - Index value.
    */
   addIndex(index) { this._indexes.push(index) }
 
   /**
+   * Runs get indexes.
    * @returns {TableIndex[]} - The indexes.
    */
   getIndexes() { return this._indexes }
 
   /**
+   * Runs get name.
    * @returns {string} - The name.
    */
   getName() { return this._name }
 
   /**
+   * Runs set name.
    * @param {string} newName - New name.
    * @returns {void} - No return value.
    */
   setName(newName) { this._name = newName }
 
   /**
+   * Runs get if not exists.
    * @returns {boolean} - Whether if not exists.
    */
   getIfNotExists() { return this.args?.ifNotExists || false }
 
   /**
+   * Runs get references.
    * @returns {TableReference[]} - The references.
    */
   getReferences() { return this._references }
 
   /**
+   * Runs bigint.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -101,6 +122,7 @@ export default class TableData {
   bigint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "bigint"}, args)) }
 
   /**
+   * Runs blob.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -108,6 +130,7 @@ export default class TableData {
   blob(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "blob"}, args)) }
 
   /**
+   * Runs boolean.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -115,6 +138,7 @@ export default class TableData {
   boolean(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "boolean"}, args)) }
 
   /**
+   * Runs datetime.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -122,6 +146,7 @@ export default class TableData {
   datetime(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "datetime"}, args)) }
 
   /**
+   * Runs decimal.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -129,6 +154,7 @@ export default class TableData {
   decimal(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "decimal"}, args)) }
 
   /**
+   * Runs integer.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -136,6 +162,7 @@ export default class TableData {
   integer(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "integer"}, args)) }
 
   /**
+   * Runs json.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -143,6 +170,7 @@ export default class TableData {
   json(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "json"}, args)) }
 
   /**
+   * Runs tinyint.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -150,6 +178,7 @@ export default class TableData {
   tinyint(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "tinyint"}, args)) }
 
   /**
+   * Runs references.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -177,6 +206,7 @@ export default class TableData {
   }
 
   /**
+   * Runs string.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -184,6 +214,7 @@ export default class TableData {
   string(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "string"}, args)) }
 
   /**
+   * Runs text.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
@@ -191,6 +222,7 @@ export default class TableData {
   text(name, args) { this.addColumn(name, Object.assign({isNewColumn: true, type: "text"}, args)) }
 
   /**
+   * Runs timestamps.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.
    */
@@ -200,6 +232,7 @@ export default class TableData {
   }
 
   /**
+   * Runs uuid.
    * @param {string} name - Name.
    * @param {import("./table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {void} - No return value.

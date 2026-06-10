@@ -4,6 +4,7 @@ import {normalizeSqlStatement} from "../structure-sql/utils.js"
 
 export default class VelociousDatabaseDriversSqliteStructureSql {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    */
@@ -12,6 +13,7 @@ export default class VelociousDatabaseDriversSqliteStructureSql {
   }
 
   /**
+   * Runs to sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async toSql() {

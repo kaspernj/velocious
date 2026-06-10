@@ -5,6 +5,7 @@ import TableData from "../../../database/table-data/index.js"
 
 export default class DbCreate extends DbBaseCommand{
   /**
+   * Runs execute.
    * @returns {Promise<void | Array<object>>} - Resolves with SQL statements when running in dry mode.
    */
   async execute() {
@@ -36,6 +37,7 @@ export default class DbCreate extends DbBaseCommand{
   }
 
   /**
+   * Runs create database.
    * @param {string} databaseIdentifier - Database identifier.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -48,6 +50,7 @@ export default class DbCreate extends DbBaseCommand{
   }
 
   /**
+   * Runs create schema migrations table.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async createSchemaMigrationsTable() {

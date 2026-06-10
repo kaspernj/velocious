@@ -6,7 +6,10 @@ import Migrator from "../../../../database/migrator.js"
 import TenantDatabaseCommandHelper from "../../../tenant-database-command-helper.js"
 
 export default class DbTenantsMigrate extends BaseCommand {
-  /** @returns {Promise<{identifier: string, migrationCount: number, tenantCount: number} | void>} - Result in test mode. */
+  /**
+   * Runs execute.
+   * @returns {Promise<{identifier: string, migrationCount: number, tenantCount: number} | void>} - Result in test mode.
+   */
   async execute() {
     const helper = new TenantDatabaseCommandHelper({
       command: this,

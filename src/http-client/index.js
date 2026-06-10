@@ -7,6 +7,7 @@ import Logger from "../logger.js"
 
 export default class HttpClient {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {boolean} [args.debug] - Whether debug.
    * @param {Array<import("./header.js").default>} [args.headers] - Header list.
@@ -33,6 +34,7 @@ export default class HttpClient {
   }
 
   /**
+   * Runs get.
    * @param {string} path - Path.
    * @param {object} [options] - Options object.
    * @param {Array<import("./header.js").default>} [options.headers] - Header list.
@@ -86,6 +88,7 @@ export default class HttpClient {
   }
 
   /**
+   * On connection data.
    * @param {Buffer} data - Data payload.
    */
   onConnectionData = (data) => {
@@ -99,6 +102,7 @@ export default class HttpClient {
   }
 
   /**
+   * On connection error.
    * @param {Error} error - Error instance.
    */
   onConnectionError = (error) => {

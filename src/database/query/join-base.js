@@ -4,6 +4,7 @@ export default class VelociousDatabaseQueryJoinBase {
   pretty = false
 
   /**
+   * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() {
@@ -11,6 +12,7 @@ export default class VelociousDatabaseQueryJoinBase {
   }
 
   /**
+   * Runs get query.
    * @returns {import("./index.js").default} - The query.
    */
   getQuery() {
@@ -20,6 +22,7 @@ export default class VelociousDatabaseQueryJoinBase {
   }
 
   /**
+   * Runs set pretty.
    * @param {boolean} value - Value to use.
    */
   setPretty(value) {
@@ -27,6 +30,7 @@ export default class VelociousDatabaseQueryJoinBase {
   }
 
   /**
+   * Runs set query.
    * @param {import("./index.js").default} query - Query instance.
    */
   setQuery(query) {

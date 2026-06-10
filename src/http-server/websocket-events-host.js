@@ -4,7 +4,9 @@ import {websocketEventLogStoreForConfiguration} from "./websocket-event-log-stor
 
 export class VelociousHttpServerWebsocketEventsHost {
   constructor() {
-    /** @type {Set<import("./worker-handler/index.js").default>} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {Set<import("./worker-handler/index.js").default>} */
     this.handlers = new Set()
     this.publishQueue = Promise.resolve()
   }
@@ -15,7 +17,6 @@ export class VelociousHttpServerWebsocketEventsHost {
    * when a request handler needs to guarantee its broadcast is persisted
    * before responding — without this, the HTTP response can return before
    * the async event-log write finishes.
-   *
    * @returns {Promise<void>}
    */
   async awaitPendingBroadcasts() {
@@ -23,6 +24,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Runs register.
    * @param {import("./worker-handler/index.js").default} handler - Handler instance.
    * @returns {() => void} - The register.
    */
@@ -33,14 +35,17 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Runs publish.
    * @param {object | string} channelOrArgs - Channel name or options object.
-   * @param {any} [payloadArg] - Payload data when channel is passed separately.
+   * @param {?} [payloadArg] - Payload data when channel is passed separately.
    * @returns {void} - No return value.
    */
   publish(channelOrArgs, payloadArg) {
     const publishArgs = typeof channelOrArgs === "string"
       ? {channel: channelOrArgs, payload: payloadArg}
-      : /** @type {{channel: string, payload: any}} */ (channelOrArgs)
+      : /**
+         * Narrows the runtime value to the documented type.
+          @type {{channel: string, payload: ?}} */ (channelOrArgs)
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
@@ -62,11 +67,10 @@ export class VelociousHttpServerWebsocketEventsHost {
    * Fan a V2 channel broadcast out to every registered worker handler.
    * Persists the event to the event-log store (if the channel is marked
    * interested) so clients can resume from a `lastEventId` checkpoint.
-   *
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Routing filter params.
-   * @param {any} args.body - Message body.
+   * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
+   * @param {?} args.body - Message body.
    * @returns {void}
    */
   broadcastV2({body, broadcastParams, channel}) {
@@ -90,6 +94,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Runs queue publish.
    * @param {() => Promise<void>} callback - Publish work to run in order.
    * @param {string} errorMessage - Message logged when publish work fails.
    * @returns {void}
@@ -113,8 +118,9 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Runs persist v2 event if needed.
    * @param {object} args - Options.
-   * @param {any} args.body - Event body.
+   * @param {?} args.body - Event body.
    * @param {string} args.channel - Channel name.
    * @returns {Promise<{createdAt: string, id: string} | null>}
    */
@@ -123,9 +129,10 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Runs persist event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Payload data.
+   * @param {?} args.payload - Payload data.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistEventIfNeeded({channel, payload}) {
@@ -133,9 +140,10 @@ export class VelociousHttpServerWebsocketEventsHost {
   }
 
   /**
+   * Runs persist channel event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {any} args.payload - Payload data.
+   * @param {?} args.payload - Payload data.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistChannelEventIfNeeded({channel, payload}) {

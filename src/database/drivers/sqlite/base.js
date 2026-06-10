@@ -18,14 +18,21 @@ import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
-  /** @type {number | undefined} */
+  /**
+   * Version major.
+    @type {number | undefined} */
   versionMajor = undefined
-  /** @type {number | undefined} */
+  /**
+   * Version minor.
+    @type {number | undefined} */
   versionMinor = undefined
-  /** @type {number | undefined} */
+  /**
+   * Version patch.
+    @type {number | undefined} */
   versionPatch = undefined
 
   /**
+   * Runs alter table sqls.
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -37,6 +44,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs create index sqls.
    * @param {import("../base.js").CreateIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
@@ -48,6 +56,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs create table sql.
    * @abstract
    * @param {import("../../table-data/index.js").default} tableData - Table data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
@@ -72,12 +81,15 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs drop table sqls.
    * @param {string} tableName - Table name.
    * @param {import("../base.js").DropTableSqlArgsType} [args] - Options object.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args = {}) {
-    const driver = /** @type {import("../base.js").default} */ (this)
+    const driver = /**
+                    * Narrows the runtime value to the documented type.
+                     @type {import("../base.js").default} */ (this)
     const dropArgs = Object.assign({tableName, driver}, args)
     const dropTable = new DropTable(dropArgs)
 
@@ -85,30 +97,38 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs delete sql.
    * @param {import("../base.js").DeleteSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   deleteSql(args) { return new Delete(Object.assign({driver: this}, args)).toSql() }
 
   /**
+   * Runs get type.
    * @returns {string} - The type.
    */
   getType() { return "sqlite" }
 
   /**
+   * Runs insert sql.
    * @param {import("../base.js").InsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   insertSql(args) { return new Insert(Object.assign({driver: this}, args)).toSql() }
 
-  /** @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.  */
+  /**
+   * Runs get tables.
+   * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
+   */
   async getTables() {
     return await this._cachedSchemaMetadata("tables", async () => {
       const result = await this.query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       const tables = []
 
       for (const row of result) {
-        const table = new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
+        const table = new Table({driver: this, row: /**
+                                                     * Narrows the runtime value to the documented type.
+                                                      @type {Record<string, string | number | null>} */ (row)})
 
         tables.push(table)
       }
@@ -118,9 +138,10 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs insert multiple.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) {
@@ -135,14 +156,21 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs supports multiple insert values.
    * @returns {boolean} - Whether supports multiple insert values.
    */
   supportsMultipleInsertValues() {
-    /** @type {number} */
+    /**
+     * Version major.
+      @type {number} */
     const versionMajor = this.versionMajor || 0
-    /** @type {number} */
+    /**
+     * Version minor.
+      @type {number} */
     const versionMinor = this.versionMinor || 0
-    /** @type {number} */
+    /**
+     * Version patch.
+      @type {number} */
     const versionPatch = this.versionPatch || 0
 
     if (versionMajor >= 4) return true
@@ -153,12 +181,17 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs supports insert into returning.
    * @returns {boolean} - Whether supports insert into returning.
    */
   supportsInsertIntoReturning() {
-    /** @type {number} */
+    /**
+     * Version major.
+      @type {number} */
     const versionMajor = this.versionMajor || 0
-    /** @type {number} */
+    /**
+     * Version minor.
+      @type {number} */
     const versionMinor = this.versionMinor || 0
 
     if (versionMajor >= 4) return true
@@ -168,9 +201,10 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs insert multiple with single insert.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
@@ -181,18 +215,23 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs insert multiple with transaction.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<unknown>>} rows - Rows to insert.
+   * @param {Array<Array<?>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithTransaction(tableName, columns, rows) {
     this._assertNotReadOnly()
-    /** @type {string[]} */
+    /**
+     * Sqls.
+      @type {string[]} */
     const sqls = []
 
     for (const row of rows) {
-      /** @type {Record<string, any>} */
+      /**
+       * Data.
+        @type {Record<string, ?>} */
       const data = {}
 
       for (const columnIndex in columns) {
@@ -227,11 +266,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs primary key type.
    * @returns {string} - The type of the primary key for this driver.
    */
   primaryKeyType() { return "integer" } // Because bigint on SQLite doesn't support auto increment
 
   /**
+   * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
    */
@@ -257,8 +298,9 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
-   * @param {any} value - Value to use.
-   * @returns {any} - The escape.
+   * Runs escape.
+   * @param {?} value - Value to use.
+   * @returns {?} - The escape.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -274,6 +316,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs retryable database error.
    * @param {Error} error - Error instance.
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
@@ -288,7 +331,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * @param {any} value - Value to use.
+   * Runs quote.
+   * @param {?} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {
@@ -296,25 +340,28 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
     const type = typeof value
 
-    if (type == "number") return /** @type {number} */ (value)
+    if (type == "number") return /** Narrows the runtime value to the documented type. @type {number} */ (value)
     if (type != "string") value = String(value)
 
     return escapeString(value, null)
   }
 
   /**
+   * Runs update sql.
    * @param {import("../base.js").UpdateSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   updateSql({conditions, data, tableName}) { return new Update({conditions, data, driver: this, tableName}).toSql() }
 
   /**
+   * Runs upsert sql.
    * @param {import("../base.js").UpsertSqlArgsType} args - Options object.
    * @returns {string} - SQL string.
    */
   upsertSql(args) { return new Upsert({...args, driver: this}).toSql() }
 
   /**
+   * Runs structure sql.
    * @returns {Promise<string | null>} - Resolves with SQL string.
    */
   async structureSql() {
@@ -331,7 +378,6 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    *
    * The owning driver instance is recorded so that `releaseAdvisoryLock`
    * can refuse to release a lock that was acquired by someone else.
-   *
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
@@ -350,16 +396,22 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
       await new Promise((resolve) => {
         const waiters = state.waitersByName.get(name) || []
-        /** @type {NodeJS.Timeout | null} */
+        /**
+         * Timeout handle.
+          @type {NodeJS.Timeout | null} */
         let timeoutHandle = null
-        /** @type {(() => void) | null} */
+        /**
+         * Remove and resolve.
+          @type {(() => void) | null} */
         let removeAndResolve = null
 
         removeAndResolve = () => {
           if (timeoutHandle) clearTimeout(timeoutHandle)
 
           const current = state.waitersByName.get(name) || []
-          const index = current.indexOf(/** @type {() => void} */ (removeAndResolve))
+          const index = current.indexOf(/**
+                                         * Narrows the runtime value to the documented type.
+                                          @type {() => void} */ (removeAndResolve))
 
           if (index >= 0) current.splice(index, 1)
           if (current.length === 0) state.waitersByName.delete(name)
@@ -388,6 +440,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs try acquire advisory lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
@@ -407,7 +460,6 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * returns `false`, matching the "you can only release locks you own"
    * contract of MySQL's `RELEASE_LOCK` and PostgreSQL's
    * `pg_advisory_unlock`.
-   *
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this driver and has now been released.
    */
@@ -432,6 +484,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Runs is advisory lock held.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any driver instance currently holds the lock.
    */
@@ -448,7 +501,6 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
  * `ownersByName` maps each held lock name to the driver instance that
  * acquired it so `releaseAdvisoryLock` can reject releases from drivers
  * that do not own the lock.
- *
  * @type {{ownersByName: Map<string, VelociousDatabaseDriversSqliteBase>, waitersByName: Map<string, Array<() => void>>}}
  */
 VelociousDatabaseDriversSqliteBase._advisoryLockState = {

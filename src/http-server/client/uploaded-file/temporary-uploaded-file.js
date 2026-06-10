@@ -5,6 +5,7 @@ import UploadedFile from "./uploaded-file.js"
 
 export default class TemporaryUploadedFile extends UploadedFile {
   /**
+   * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.path - Path.
    * @param {string} args.fieldName - Field name.
@@ -21,6 +22,7 @@ export default class TemporaryUploadedFile extends UploadedFile {
   getPath() { return this.pathValue }
 
   /**
+   * Runs save to.
    * @param {string} destinationPath - Destination path.
    * @returns {Promise<void>} - Resolves when complete.
    */

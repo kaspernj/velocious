@@ -110,7 +110,7 @@ export default class ActsAsListItemBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, any>} [attributes]
+   * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars

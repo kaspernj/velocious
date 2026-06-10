@@ -37,18 +37,20 @@ const FIELDS = [
 ]
 
 /**
+ * ParsedCron type.
  * @typedef {object} ParsedCron
  * @property {Set<number>} minute - Allowed minute values (0-59).
  * @property {Set<number>} hour - Allowed hour values (0-23).
  * @property {Set<number>} dayOfMonth - Allowed day-of-month values (1-31).
  * @property {Set<number>} month - Allowed month values (1-12).
  * @property {Set<number>} dayOfWeek - Allowed day-of-week values (0-6, 0=Sun).
- * @property {boolean} dayOfMonthRestricted - True when the dayOfMonth field is not `*`.
- * @property {boolean} dayOfWeekRestricted - True when the dayOfWeek field is not `*`.
+ * @property {boolean} dayOfMonthRestricted - True when the dayOfMonth field is not `?`.
+ * @property {boolean} dayOfWeekRestricted - True when the dayOfWeek field is not `?`.
  * @property {string} expression - Original expression for diagnostics.
  */
 
 /**
+ * Runs the parseCronExpression helper.
  * @param {string} expression - Cron expression or shortcut.
  * @returns {ParsedCron}
  */
@@ -58,7 +60,9 @@ export function parseCronExpression(expression) {
   }
 
   const trimmed = expression.trim().toLowerCase()
-  const expanded = SHORTCUTS[/** @type {keyof typeof SHORTCUTS} */ (trimmed)] || trimmed
+  const expanded = SHORTCUTS[/**
+                              * Narrows the runtime value to the documented type.
+                               @type {keyof typeof SHORTCUTS} */ (trimmed)] || trimmed
   const fields = expanded.split(/\s+/)
 
   if (fields.length !== 5) {
@@ -84,6 +88,7 @@ export function parseCronExpression(expression) {
 }
 
 /**
+ * Runs normalize day of week.
  * @param {Set<number>} dayOfWeek
  * @returns {Set<number>}
  */
@@ -97,6 +102,7 @@ function normalizeDayOfWeek(dayOfWeek) {
 }
 
 /**
+ * Runs parse field.
  * @param {string} field - Field expression.
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Whole cron expression for error messages.
@@ -113,6 +119,7 @@ function parseField(field, fieldSpec, expression) {
 }
 
 /**
+ * Runs add part values.
  * @param {string} part - Single comma-separated chunk.
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
@@ -138,6 +145,7 @@ function addPartValues(part, fieldSpec, expression, result) {
 }
 
 /**
+ * Runs parse step.
  * @param {string} value - Step value.
  * @param {{name: string, min: number, max: number}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
@@ -154,7 +162,8 @@ function parseStep(value, fieldSpec, expression) {
 }
 
 /**
- * @param {string} rangePart - Range portion (before any `/`).
+ * Runs parse range.
+ * @param {string} rangePart - Range portion (before ? `/`).
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
  * @param {boolean} hasStep - Whether the part had a `/step` suffix.
@@ -185,6 +194,7 @@ function parseRange(rangePart, fieldSpec, expression, hasStep) {
 }
 
 /**
+ * Runs parse value.
  * @param {string} rawValue - Raw value (may be a name).
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
@@ -220,7 +230,6 @@ const MAX_NEXT_FIRE_ITERATIONS = 5 * 366 * 24 * 60
  * Operates at minute granularity. Bails out with an error after five
  * years of search, which only happens if the expression matches no
  * real time (e.g., `0 0 31 2 *` — Feb 31st).
- *
  * @param {ParsedCron} parsed - Parsed cron expression.
  * @param {Date} from - Reference Date — the next match is strictly after this.
  * @returns {Date}
@@ -241,6 +250,7 @@ export function nextCronFireDate(parsed, from) {
 }
 
 /**
+ * Runs candidate matches.
  * @param {Date} candidate - Candidate Date (in local time).
  * @param {ParsedCron} parsed - Parsed expression.
  * @returns {boolean}

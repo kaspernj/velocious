@@ -6,21 +6,28 @@ import {currentConfiguration} from "./current-configuration.js"
 import {formatValue} from "./utils/format-value.js"
 import restArgsError from "./utils/rest-args-error.js"
 
-/** @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
+/**
+ * LogLevel type.
+  @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
 
 const DEFAULT_LOGGING_CONFIGURATION = {
   console: true,
   file: false,
-  /** @type {LogLevel[]} */
+  /**
+   * Types the following value.
+    @type {LogLevel[]} */
   levels: ["info", "warn", "error"]
 }
 
-/** @type {LogLevel[]} */
+/**
+ * Level order.
+  @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
- * @param {...any|function() : Array<any>} messages - Messages.
- * @returns {Array<any>} - Either the function result or the messages
+ * Runs function or messages.
+ * @param {...?|function() : Array<?>} messages - Messages.
+ * @returns {Array<?>} - Either the function result or the messages
  */
 function functionOrMessages(...messages) {
   if (messages.length === 1 && typeof messages[0] == "function") {
@@ -33,7 +40,7 @@ function functionOrMessages(...messages) {
 
 /**
  * Format a single value for inclusion in a log message.
- * @param {any} value - Value to format.
+ * @param {?} value - Value to format.
  * @returns {string} - String representation.
  */
 function formatPart(value) {
@@ -56,8 +63,7 @@ function formatPart(value) {
  * messages are interpolated into it in order (like `console.log` /
  * `util.format`). Any leftover messages are appended with a space
  * separator. Otherwise, all parts are joined with spaces.
- *
- * @param {Array<any>} messages - User-supplied message parts.
+ * @param {Array<?>} messages - User-supplied message parts.
  * @returns {string} - The formatted user message.
  */
 function formatUserMessages(messages) {
@@ -110,9 +116,8 @@ function formatUserMessages(messages) {
 
 /**
  * Converts a logger subject and message parts into a single log line.
- *
  * @param {string} subject - Logger subject / category prefix.
- * @param {...any} messages - User-supplied message parts (supports printf-style format specifiers on the first part).
+ * @param {...?} messages - User-supplied message parts (supports printf-style format specifiers on the first part).
  * @returns {string} - The formatted log line.
  */
 function messagesToMessage(subject, ...messages) {
@@ -125,6 +130,7 @@ function messagesToMessage(subject, ...messages) {
 }
 
 /**
+ * Runs resolve logging configuration.
  * @param {import("./configuration.js").default | undefined} configuration - Configuration instance.
  * @returns {Required<Pick<import("./configuration-types.js").LoggingConfiguration, "console" | "file" | "levels">> & Partial<Pick<import("./configuration-types.js").LoggingConfiguration, "filePath" | "outputs">>} - The logging configuration.
  */
@@ -156,6 +162,7 @@ function resolveLoggingConfiguration(configuration) {
 }
 
 /**
+ * Runs is level allowed.
  * @param {object} args - Options object.
  * @param {LogLevel} args.level - Level.
  * @param {LogLevel[]} args.allowedLevels - Allowed levels.
@@ -171,6 +178,7 @@ function isLevelAllowed({level, allowedLevels, debugFlag}) {
 }
 
 /**
+ * Runs resolve logging outputs.
  * @param {object} args - Options object.
  * @param {import("./configuration-types.js").LoggingConfiguration} args.loggingConfiguration - Logging configuration.
  * @param {import("./configuration.js").default | undefined} args.configuration - Configuration instance.
@@ -180,13 +188,17 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
   if (Array.isArray(loggingConfiguration.outputs)) return loggingConfiguration.outputs
 
   if (Array.isArray(loggingConfiguration.loggers)) {
-    /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+    /**
+     * Logger outputs.
+      @type {import("./configuration-types.js").LoggingOutputConfig[]} */
     const loggerOutputs = []
 
     for (const logger of loggingConfiguration.loggers) {
       if (!logger) continue
 
-      const loggerConfig = /** @type {any} */ (logger)
+      const loggerConfig = /**
+                            * Types the following value.
+                             @type {?} */ (logger)
 
       if (typeof loggerConfig.toOutputConfig === "function") {
         loggerOutputs.push(loggerConfig.toOutputConfig({configuration}))
@@ -216,7 +228,9 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
     return loggerOutputs
   }
 
-  /** @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+  /**
+   * Outputs.
+    @type {import("./configuration-types.js").LoggingOutputConfig[]} */
   const outputs = []
   if (loggingConfiguration.console !== false) {
     outputs.push({
@@ -240,6 +254,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
 }
 
 /**
+ * Runs is output level allowed.
  * @param {object} args - Options object.
  * @param {LogLevel} args.level - Level.
  * @param {import("./configuration-types.js").LoggingOutputConfig} args.outputConfig - Output configuration.
@@ -262,6 +277,7 @@ function isOutputLevelAllowed({level, outputConfig, loggingConfiguration, debugF
 }
 
 /**
+ * Runs enabled output configs.
  * @param {object} args - Options object.
  * @param {LogLevel} args.level - Level.
  * @param {import("./configuration-types.js").LoggingOutputConfig[]} args.outputs - Output configurations.
@@ -278,6 +294,7 @@ function enabledOutputConfigs({level, outputs, loggingConfiguration, debugFlag})
 }
 
 /**
+ * Runs write log.
  * @param {object} args - Options object.
  * @param {string} args.subject - Log subject.
  * @param {LogLevel} args.level - Level.
@@ -300,11 +317,17 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
   if (enabledOutputs.length === 0) return
 
   const writes = []
-  /** @type {Array<any> | undefined} */
+  /**
+   * Types the following value.
+    @type {Array<?> | undefined} */
   let resolvedMessages
-  /** @type {string | undefined} */
+  /**
+   * Types the following value.
+    @type {string | undefined} */
   let message
-  /** @type {import("./configuration-types.js").LoggingOutputPayload | null} */
+  /**
+   * Payload.
+    @type {import("./configuration-types.js").LoggingOutputPayload | null} */
   let payload = null
 
   for (const outputConfig of enabledOutputs) {
@@ -332,6 +355,7 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
 
 export default class Logger {
   /**
+   * Runs constructor.
    * @param {string | object} object - Object.
    * @param {object} args - Options object.
    * @param {import("./configuration.js").default} [args.configuration] - Configuration instance.
@@ -354,11 +378,14 @@ export default class Logger {
   }
 
   /**
+   * Runs get configuration.
    * @returns {import("./configuration.js").default} - The configuration.
    */
   getConfiguration() {
     if (!this._configuration) {
-      const objectWithConfig = /** @type {{configuration?: import("./configuration.js").default}} */ (this._object)
+      const objectWithConfig = /**
+                                * Types the following value.
+                                 @type {{configuration?: import("./configuration.js").default}} */ (this._object)
       this._configuration = objectWithConfig?.configuration || currentConfiguration()
     }
 
@@ -366,6 +393,7 @@ export default class Logger {
   }
 
   /**
+   * Runs safe configuration.
    * @returns {import("./configuration.js").default | undefined} - The safe configuration.
    */
   _safeConfiguration() {
@@ -377,6 +405,7 @@ export default class Logger {
   }
 
   /**
+   * Runs is level enabled.
    * @param {LogLevel} level - Level.
    * @returns {boolean} - Whether any configured output emits this level.
    */
@@ -394,7 +423,8 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * Runs debug.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debug(...messages) {
@@ -402,7 +432,8 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * Runs info.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async info(...messages) {
@@ -410,7 +441,8 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * Runs debug low level.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async debugLowLevel(...messages) {
@@ -418,7 +450,8 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * Runs log.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async log(...messages) {
@@ -426,7 +459,8 @@ export default class Logger {
   }
 
   /**
-   * @param {any[]} messages - Messages.
+   * Runs error.
+   * @param {Array<?>} messages - Messages.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async error(...messages) {
@@ -434,6 +468,7 @@ export default class Logger {
   }
 
   /**
+   * Runs set debug.
    * @param {boolean} newValue - New value.
    * @returns {void} - No return value.
    */
@@ -442,6 +477,7 @@ export default class Logger {
   }
 
   /**
+   * Runs warn.
    * @type {(...args: Parameters<typeof functionOrMessages>) => Promise<void>}
    */
   async warn(...messages) {
@@ -449,6 +485,7 @@ export default class Logger {
   }
 
   /**
+   * Runs write.
    * @param {object} args - Options object.
    * @param {LogLevel} args.level - Level.
    * @param {Parameters<typeof functionOrMessages>} args.messages - Messages.

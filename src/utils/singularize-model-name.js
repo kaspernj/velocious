@@ -1,6 +1,7 @@
 import * as inflection from "inflection"
 
 /**
+ * Runs singularize model name.
  * @param {string} modelName - Model name.
  * @returns {string} - The singularize model name.
  */

@@ -6,6 +6,7 @@ import EventEmitter from "../utils/event-emitter.js"
 import {publishToInProcessPeers, registerInProcessPeer} from "./in-process-broker.js"
 
 /**
+ * BeaconBroadcastHandler type.
  * @typedef {function(import("./types.js").BeaconBroadcastMessage): void} BeaconBroadcastHandler
  */
 
@@ -24,6 +25,7 @@ import {publishToInProcessPeers, registerInProcessPeer} from "./in-process-broke
  */
 export default class InProcessBeaconClient extends EventEmitter {
   /**
+   * Runs constructor.
    * @param {object} [args] - Options.
    * @param {string} [args.peerType] - Optional human-readable peer label.
    * @param {string} [args.peerId] - Optional explicit peer id (defaults to a random UUID).
@@ -33,17 +35,28 @@ export default class InProcessBeaconClient extends EventEmitter {
     this.peerType = peerType
     this.peerId = peerId || randomUUID()
     this._connected = false
-    /** @type {(() => void) | undefined} */
+    /**
+     * Narrows the runtime value to the documented type.
+      @type {(() => void) | undefined} */
     this._unregister = undefined
   }
 
-  /** @returns {string} - Peer id. */
+  /**
+   * Runs get peer id.
+   * @returns {string} - Peer id.
+   */
   getPeerId() { return this.peerId }
 
-  /** @returns {boolean} - Whether the peer is registered with the broker. */
+  /**
+   * Runs is connected.
+   * @returns {boolean} - Whether the peer is registered with the broker.
+   */
   isConnected() { return this._connected }
 
-  /** @returns {boolean} - Whether the peer is ready to publish through the broker. */
+  /**
+   * Runs is ready.
+   * @returns {boolean} - Whether the peer is ready to publish through the broker.
+   */
   isReady() { return this._connected }
 
   /**
@@ -72,14 +85,16 @@ export default class InProcessBeaconClient extends EventEmitter {
    * `BeaconClient` semantics.
    * @param {object} args - Broadcast args.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, any>} args.broadcastParams - Routing params.
-   * @param {any} args.body - Message body.
+   * @param {Record<string, ?>} args.broadcastParams - Routing params.
+   * @param {?} args.body - Message body.
    * @returns {boolean} - True when the broadcast was queued.
    */
   publish({channel, broadcastParams, body}) {
     if (!this._connected) return false
 
-    /** @type {import("./types.js").BeaconBroadcastMessage} */
+    /**
+     * Message.
+      @type {import("./types.js").BeaconBroadcastMessage} */
     const message = {
       type: "broadcast",
       channel,
@@ -112,7 +127,10 @@ export default class InProcessBeaconClient extends EventEmitter {
     this.emit("broadcast", message)
   }
 
-  /** @returns {Promise<void>} - Unregisters from the broker. */
+  /**
+   * Runs close.
+   * @returns {Promise<void>} - Unregisters from the broker.
+   */
   async close() {
     if (this._unregister) this._unregister()
     this._unregister = undefined
