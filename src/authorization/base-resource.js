@@ -11,8 +11,8 @@ export default class AuthorizationBaseResource {
    * Runs constructor.
    * @param {object} args - Resource args.
    * @param {import("./ability.js").default} [args.ability] - Ability instance.
-   * @param {Record<string, ?>} [args.context] - Ability context.
-   * @param {Record<string, ?>} [args.locals] - Ability locals.
+   * @param {import("../configuration-types.js").VelociousLooseObject} [args.context] - Ability context.
+   * @param {import("../configuration-types.js").VelociousLooseObject} [args.locals] - Ability locals.
    */
   constructor({ability, context = {}, locals = {}}) {
     this.ability = ability
@@ -95,7 +95,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs get context.
-   * @returns {Record<string, ?>} - Ability context.
+   * @returns {import("../configuration-types.js").VelociousLooseObject} - Ability context.
    */
   getContext() {
     return this.context
@@ -103,7 +103,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs get locals.
-   * @returns {Record<string, ?>} - Ability locals.
+   * @returns {import("../configuration-types.js").VelociousLooseObject} - Ability locals.
    */
   getLocals() {
     return this.locals
@@ -111,7 +111,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs current user.
-   * @returns {?} - Current user from context.
+   * @returns {import("../configuration-types.js").VelociousLooseObject | null | undefined} - Current user from context.
    */
   currentUser() {
     return this.context.currentUser
@@ -127,7 +127,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs params.
-   * @returns {Record<string, ?> | undefined} - Params from context.
+   * @returns {import("../configuration-types.js").VelociousLooseObject | undefined} - Params from context.
    */
   params() {
     return this.context.params

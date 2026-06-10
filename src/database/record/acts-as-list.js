@@ -239,7 +239,7 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
-    .order(positionColumnName)
+    .order({column: positionColumnName, direction: "ASC"})
 
   if (toPosition != null) {
     query = query.where(`${positionColumnSql} < ${connection.quote(toPosition)}`)

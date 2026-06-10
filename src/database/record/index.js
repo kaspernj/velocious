@@ -38,7 +38,7 @@ import UUID from "pure-uuid"
 
 /**
  * AttachmentDriverConstructor type.
- * @typedef {new (...args: Array<?>) => Record<string, ?>} AttachmentDriverConstructor
+ * @typedef {import("../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor
  */
 
 class ValidationError extends Error {

@@ -9,7 +9,7 @@ import * as inflection from "inflection"
  * @property {import("../controller.js").default} controller - Frontend-model controller instance.
  * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
  * @property {string} modelName - Model name.
- * @property {Record<string, ?>} params - Request params.
+ * @property {import("../configuration-types.js").VelociousLooseObject} params - Request params.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration (or raw input shape during early bootstrap).
  */
 
@@ -17,11 +17,11 @@ import * as inflection from "inflection"
  * FrontendModelResourceAbilityArgs type.
  * @typedef {object} FrontendModelResourceAbilityArgs
  * @property {import("../authorization/ability.js").default} [ability] - Ability instance when the resource is used directly for authorization.
- * @property {Record<string, ?>} [context] - Ability context.
- * @property {Record<string, ?>} [locals] - Ability locals.
+ * @property {import("../configuration-types.js").VelociousLooseObject} [context] - Ability context.
+ * @property {import("../configuration-types.js").VelociousLooseObject} [locals] - Ability locals.
  * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
  * @property {string} [modelName] - Optional model name override.
- * @property {Record<string, ?>} [params] - Optional params override.
+ * @property {import("../configuration-types.js").VelociousLooseObject} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
  */
 
@@ -29,6 +29,11 @@ import * as inflection from "inflection"
  * Base class for backend frontend-model resources.
  */
 export default class FrontendModelBaseResource extends AuthorizationBaseResource {
+  /**
+   * Backing model class.
+    @type {typeof import("../database/record/index.js").default | undefined} */
+  static ModelClass = undefined
+
   /**
    * Attributes.
     @type {Record<string, ?> | string[] | undefined} */
@@ -127,6 +132,14 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
+   * Runs static model class.
+   * @returns {typeof import("../database/record/index.js").default | undefined} - Backing model class.
+   */
+  static modelClass() {
+    return this.ModelClass
+  }
+
+  /**
    * Runs controller instance.
    * @returns {import("../controller.js").default} - Controller instance.
    */
@@ -160,7 +173,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs params.
-   * @returns {Record<string, ?>} - Params.
+   * @returns {import("../configuration-types.js").VelociousLooseObject} - Params.
    */
   params() { return this.paramsValue || super.params() || {} }
 
@@ -227,10 +240,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs authorized query.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
-   * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - Authorized query.
+   * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
+   * @returns {import("../database/query/model-class-query.js").default<MC>} - Authorized query.
    */
   authorizedQuery(action) {
-    return this.typedControllerInstance().frontendModelAuthorizedQuery(action)
+    return /** Narrows the authorized query to the resource's model class. @type {import("../database/query/model-class-query.js").default<MC>} */ (this.typedControllerInstance().frontendModelAuthorizedQuery(action))
   }
 
   /**
