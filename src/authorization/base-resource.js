@@ -30,24 +30,26 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs can.
+   * @template {typeof import("../database/record/index.js").default} MC
    * @param {string | string[]} actions - Ability action(s).
-   * @param {import("./ability.js").AbilityConditionsType} [conditions] - Conditions.
+   * @param {import("./ability.js").AbilityConditionsType<MC>} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   can(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "can"})
-    this.requiredAbility().can(actions, this.requiredModelClass(), conditions)
+    this.requiredAbility().can(actions, this.requiredModelClass(), /** Narrows conditions to the runtime resource model class. @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
    * Runs cannot.
+   * @template {typeof import("../database/record/index.js").default} MC
    * @param {string | string[]} actions - Ability action(s).
-   * @param {import("./ability.js").AbilityConditionsType} [conditions] - Conditions.
+   * @param {import("./ability.js").AbilityConditionsType<MC>} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   cannot(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "cannot"})
-    this.requiredAbility().cannot(actions, this.requiredModelClass(), conditions)
+    this.requiredAbility().cannot(actions, this.requiredModelClass(), /** Narrows conditions to the runtime resource model class. @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**

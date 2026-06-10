@@ -4,7 +4,9 @@ import BaseResource from "./base-resource.js"
 
 /**
  * Defines this typedef.
-  @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>)} AbilityConditionsType */
+ * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
+ * @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<MC>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: MC}) => void | import("../database/query/model-class-query.js").default<MC>)} AbilityConditionsType
+ */
 
 /**
  * AbilityRuleType type.
