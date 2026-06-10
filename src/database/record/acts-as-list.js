@@ -110,14 +110,15 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     if (scopeChanged && oldScopeValue !== newScopeValue) {
       let targetPosition = newPosition
 
-      // When only the scope changes without a new position, append to the
-      // end of the new scope.
+      // When only the scope changes without a new position, append to the end
+      // of the new scope. There is no target-scope row to shift out of the way.
       if (!posChanged) {
         const highestNew = await highestPositionInScope({record, positionColumn, scope, scopeValue: newScopeValue})
         const nextPos = highestNew + 1
 
-        targetPosition = nextPos
         record.setAttribute(positionColumn, nextPos)
+        await shiftPositionsDown({record, positionColumn, scope, scopeValue: oldScopeValue, fromPosition: oldPosition + 1})
+        return
       }
 
       await shiftPositionsDown({record, positionColumn, scope, scopeValue: oldScopeValue, fromPosition: oldPosition + 1})

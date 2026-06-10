@@ -163,6 +163,28 @@ describe("Record - acts as list", {tags: ["dummy"]}, () => {
     expect(itemsB[2].position()).toEqual(3)
   })
 
+  it("appends without shifting target rows when moving between scopes without a new position", async () => {
+    const projectA = await Project.create({name: "List Project I1"})
+    const projectB = await Project.create({name: "List Project I2"})
+
+    await ActsAsListItem.create({name: "A1", project: projectA})
+    const itemA2 = await ActsAsListItem.create({name: "A2", project: projectA})
+    await ActsAsListItem.create({name: "A3", project: projectA})
+
+    await ActsAsListItem.create({name: "B1", project: projectB})
+    await ActsAsListItem.create({name: "B2", project: projectB})
+
+    await itemA2.update({projectId: projectB.id()})
+
+    const itemsB = await ActsAsListItem
+      .where({projectId: projectB.id()})
+      .order("position")
+      .toArray()
+
+    expect(itemsB.map((item) => item.name())).toEqual(["B1", "B2", "A2"])
+    expect(itemsB.map((item) => item.position())).toEqual([1, 2, 3])
+  })
+
   it("shifts existing rows when inserting at an occupied position", async () => {
     const project = await Project.create({name: "List Project H"})
 
