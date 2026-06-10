@@ -202,7 +202,7 @@
  */
 
 /**
- * @typedef {Record<string, ?> & {[key: string]: ?}} VelociousLooseObject
+ * @typedef {Record<string, unknown> & {configuration?: import("./configuration.js").default, currentUser?: Record<string, unknown> | null, params?: Record<string, unknown>, request?: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default}} VelociousLooseObject
  */
 
 /**
