@@ -1917,7 +1917,7 @@ class VelociousDatabaseRecord {
         continue
       }
 
-      const model = instanceRelationship.loaded()
+      const model = instanceRelationship.getLoadedOrUndefined()
 
       if (model) {
         if (model instanceof VelociousDatabaseRecord) {
