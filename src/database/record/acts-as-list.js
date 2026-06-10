@@ -31,6 +31,23 @@ function isShifting(record) {
 }
 
 /**
+ * Resolves the actual database column name for a given attribute name using
+ * the model's attribute-to-column mapping, just like the rest of the record
+ * layer. Falls back to underscoring only when the model has no explicit
+ * mapping for the attribute (e.g. it isn't registered as a column).
+ * @param {typeof import("./index.js").default} modelClass - The model class.
+ * @param {string} attributeName - camelCase attribute name (e.g. "rowNumber").
+ * @returns {string} - The resolved database column name for the attribute.
+ */
+function columnNameForAttribute(modelClass, attributeName) {
+  const columnName = modelClass.getAttributeNameToColumnNameMap()[attributeName]
+
+  if (columnName) return columnName
+
+  return inflection.underscore(attributeName)
+}
+
+/**
  * Registers gap-less positional list callbacks on a model class to maintain
  * a gap-less positional list. When a record is inserted, updated, or
  * destroyed, the surrounding positions are shifted so the list stays compact
@@ -64,8 +81,11 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     if (isShifting(record)) return
     if (!record.isPersisted()) return
 
-    const posColumn = inflection.underscore(positionColumn)
-    const scopeCol = inflection.underscore(scope)
+    const modelClass = /**
+                        * Narrows the runtime value to the documented type.
+                         @type {typeof import("./index.js").default} */ (record.constructor)
+    const posColumn = columnNameForAttribute(modelClass, positionColumn)
+    const scopeCol = columnNameForAttribute(modelClass, scope)
     const rawAttributes = /**
                            * Narrows the runtime value to the documented type.
                             @type {Record<string, ?>} */ (record._attributes || {})
@@ -165,20 +185,20 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const scopeUnderscore = inflection.underscore(scope)
+  const scopeColumnName = columnNameForAttribute(modelClass, scope)
 
   if (resolvedScopeValue == null) return
 
-  const positionUnderscore = inflection.underscore(positionColumn)
-  const positionColumnSql = connection.quoteColumn(positionUnderscore)
-  const scopeColumnSql = connection.quoteColumn(scopeUnderscore)
+  const positionColumnName = columnNameForAttribute(modelClass, positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionColumnName)
+  const scopeColumnSql = connection.quoteColumn(scopeColumnName)
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in descending order so we bump the highest first
   let query = modelClass
     .select(positionColumn)
-    .where({[scopeUnderscore]: resolvedScopeValue})
+    .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
     .order(`${positionColumnSql} DESC`)
 
@@ -223,22 +243,22 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const scopeUnderscore = inflection.underscore(scope)
+  const scopeColumnName = columnNameForAttribute(modelClass, scope)
 
   if (resolvedScopeValue == null) return
 
-  const positionUnderscore = inflection.underscore(positionColumn)
-  const positionColumnSql = connection.quoteColumn(positionUnderscore)
-  const scopeColumnSql = connection.quoteColumn(scopeUnderscore)
+  const positionColumnName = columnNameForAttribute(modelClass, positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionColumnName)
+  const scopeColumnSql = connection.quoteColumn(scopeColumnName)
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in ascending order so we shift the lowest gap first
   let query = modelClass
     .select(positionColumn)
-    .where({[scopeUnderscore]: resolvedScopeValue})
+    .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
-    .order(positionUnderscore)
+    .order(positionColumnName)
 
   if (toPosition != null) {
     query = query.where(`${positionColumnSql} < ${connection.quote(toPosition)}`)
@@ -275,16 +295,16 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
-  const scopeUnderscore = inflection.underscore(scope)
-  const positionUnderscore = inflection.underscore(positionColumn)
-  const positionColumnSql = connection.quoteColumn(positionUnderscore)
+  const scopeColumnName = columnNameForAttribute(modelClass, scope)
+  const positionColumnName = columnNameForAttribute(modelClass, positionColumn)
+  const positionColumnSql = connection.quoteColumn(positionColumnName)
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 
   if (resolvedScopeValue == null) return 0
 
   const rows = await modelClass
     .select(positionColumn)
-    .where({[scopeUnderscore]: resolvedScopeValue})
+    .where({[scopeColumnName]: resolvedScopeValue})
     .order(`${positionColumnSql} DESC`)
     .limit(1)
     .toArray()
@@ -355,8 +375,8 @@ async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
 
   const highest = await highestPositionInScope({record, positionColumn, scope, scopeValue: resolvedScopeValue})
   const tempPosition = highest + 10000
-  const positionColumnSql = connection.quoteColumn(inflection.underscore(positionColumn))
-  const scopeColumnSql = connection.quoteColumn(inflection.underscore(scope))
+  const positionColumnSql = connection.quoteColumn(columnNameForAttribute(modelClass, positionColumn))
+  const scopeColumnSql = connection.quoteColumn(columnNameForAttribute(modelClass, scope))
   const tableSql = connection.quoteTable(tableName)
   const pkSql = connection.quoteColumn("id")
 
