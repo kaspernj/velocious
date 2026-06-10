@@ -31,7 +31,7 @@ export default class AuthorizationBaseResource {
   /**
    * Runs can.
    * @param {string | string[]} actions - Ability action(s).
-   * @param {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} [conditions] - Conditions.
+   * @param {import("./ability.js").AbilityConditionsType} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   can(actions, conditions) {
@@ -42,7 +42,7 @@ export default class AuthorizationBaseResource {
   /**
    * Runs cannot.
    * @param {string | string[]} actions - Ability action(s).
-   * @param {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<?>, args: {ability: import("./ability.js").default, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<?>)} [conditions] - Conditions.
+   * @param {import("./ability.js").AbilityConditionsType} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   cannot(actions, conditions) {

@@ -262,7 +262,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs define scope.
    * @param {(...args: Array<?>) => ?} callback - Scope callback.
-   * @returns {((...args: Array<?>) => import("../query/model-class-query.js").default<?>) & {scope: (...args: Array<?>) => import("../../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   * @returns {((...args: Array<?>) => import("../query/model-class-query.js").default<typeof VelociousDatabaseRecord>) & {scope: (...args: Array<?>) => import("../../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
    */
   static defineScope(callback) {
     return defineModelScope({
@@ -527,7 +527,7 @@ class VelociousDatabaseRecord {
 
   /**
    * RelationshipScopeCallback type.
-   * @typedef {(query: import("../query/model-class-query.js").default) => (import("../query/model-class-query.js").default | void)} RelationshipScopeCallback
+   * @typedef {(query: import("../query/model-class-query.js").default<typeof VelociousDatabaseRecord>) => (import("../query/model-class-query.js").default<typeof VelociousDatabaseRecord> | void)} RelationshipScopeCallback
    */
   /**
    * RelationshipDataArgumentType type.

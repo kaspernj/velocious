@@ -5,7 +5,7 @@ import * as inflection from "inflection"
 
 /**
  * RelationshipScopeCallback type.
- * @typedef {(query: import("../../query/model-class-query.js").default<?>) => (import("../../query/model-class-query.js").default<?> | void)} RelationshipScopeCallback
+ * @typedef {(query: import("../../query/model-class-query.js").default<typeof import("../index.js").default>) => (import("../../query/model-class-query.js").default<typeof import("../index.js").default> | void)} RelationshipScopeCallback
  */
 /**
  * RelationshipBaseArgsType type.
@@ -128,7 +128,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
                          * Narrows the runtime value to the documented type.
                           @type {T | void} */ (scope.call(query, /**
                                                                   * Narrows the runtime value to the documented type.
-                                                                   @type {import("../../query/model-class-query.js").default<?>} */ (query)))
+                                                                    @type {import("../../query/model-class-query.js").default<typeof import("../index.js").default>} */ (query)))
 
     return scopedQuery || query
   }
