@@ -56,6 +56,13 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     const TargetModelClass = this.getTargetModelClass()
 
     if (!TargetModelClass) throw new Error("Can't load without a target model")
+    if (foreignModelID === null || foreignModelID === undefined || foreignModelID === "") {
+      this.setLoaded(undefined)
+      this.setDirty(false)
+      this.setPreloaded(true)
+
+      return this.loaded()
+    }
 
     const primaryKey = TargetModelClass.primaryKey()
     /**
