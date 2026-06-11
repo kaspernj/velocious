@@ -3,6 +3,38 @@ import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 
+/** Maps an effective column type to the JSDoc type used in generated base models.
+ *  @type {Record<string, string>} */
+const jsDocTypeByColumnType = {
+  bigint: "number",
+  bit: "number",
+  blob: "string",
+  boolean: "boolean",
+  char: "string",
+  "character varying": "string",
+  date: "Date",
+  datetime: "Date",
+  decimal: "number",
+  float: "number",
+  int: "number",
+  integer: "number",
+  json: "Record<string, ?>",
+  longtext: "string",
+  mediumtext: "string",
+  numeric: "number",
+  nvarchar: "string",
+  smallint: "number",
+  text: "string",
+  "timestamp without time zone": "Date",
+  tinyint: "number",
+  tinytext: "string",
+  uuid: "string",
+  varchar: "string"
+}
+
+/** Effective column types whose generated setter additionally accepts a string. */
+const setterStringInputColumnTypes = new Set(["date", "datetime", "timestamp without time zone"])
+
 export default class DbGenerateModel extends BaseCommand {
   async execute() {
     await this.getConfiguration().initializeModels()
@@ -92,7 +124,7 @@ export default class DbGenerateModel extends BaseCommand {
       for (const column of columns) {
         const camelizedColumnName = inflection.camelize(column.getName(), true)
         const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
-        const jsdocType = this.jsDocTypeFromColumn(column)
+        const jsdocType = this.jsDocTypeFromColumn(column, modelClass)
 
         if (methodsCount > 0) {
           fileContent += "\n"
@@ -106,7 +138,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         fileContent += `  ${camelizedColumnName}() { return this.readAttribute("${camelizedColumnName}") }\n\n`
 
-        const setterJsdocType = this.jsDocSetterTypeFromColumn(column)
+        const setterJsdocType = this.jsDocSetterTypeFromColumn(column, modelClass)
 
         if (setterJsdocType) {
           fileContent += "  /**\n"
@@ -135,7 +167,7 @@ export default class DbGenerateModel extends BaseCommand {
           let translationJsdocType
 
           if (column) {
-            translationJsdocType = this.jsDocTypeFromColumn(column)
+            translationJsdocType = this.jsDocTypeFromColumn(column, TranslationClass)
           }
 
           if (translationJsdocType && column) {
@@ -330,38 +362,35 @@ export default class DbGenerateModel extends BaseCommand {
   /**
    * Runs js doc type from column.
    * @param {import("../../../../../database/drivers/base-column.js").default} column - Column.
+   * @param {typeof import("../../../../../database/record/index.js").default} modelClass - Model class owning the column (for declared attribute casts).
    * @returns {string | undefined} - The js doc type from column.
    */
-  jsDocTypeFromColumn(column) {
-    const type = column.getType()
+  jsDocTypeFromColumn(column, modelClass) {
+    const type = modelClass.getColumnTypeByName(column.getName())
+    const jsDocType = type ? jsDocTypeByColumnType[type] : undefined
 
-    if (type == "boolean") {
-      return "boolean"
-    } else if (type == "json") {
-      return "Record<string, ?>"
-    } else if (["blob", "char", "nvarchar", "varchar", "text", "tinytext", "mediumtext", "longtext", "uuid", "character varying"].includes(type)) {
-      return "string"
-    } else if (["bit", "bigint", "decimal", "float", "int", "integer", "numeric", "smallint", "tinyint"].includes(type)) {
-      return "number"
-    } else if (["date", "datetime", "timestamp without time zone"].includes(type)) {
-      return "Date"
-    } else {
+    if (!jsDocType) {
       console.error(`Unknown column type: ${type}`)
+
+      return undefined
     }
+
+    return jsDocType
   }
 
   /**
    * Runs js doc setter type from column.
    * @param {import("../../../../../database/drivers/base-column.js").default} column - Column.
+   * @param {typeof import("../../../../../database/record/index.js").default} modelClass - Model class owning the column (for declared attribute casts).
    * @returns {string | undefined} - The js doc setter type from column.
    */
-  jsDocSetterTypeFromColumn(column) {
-    const type = column.getType()
+  jsDocSetterTypeFromColumn(column, modelClass) {
+    const type = modelClass.getColumnTypeByName(column.getName())
 
-    if (["date", "datetime", "timestamp without time zone"].includes(type)) {
+    if (type && setterStringInputColumnTypes.has(type)) {
       return "Date | string"
     }
 
-    return this.jsDocTypeFromColumn(column)
+    return this.jsDocTypeFromColumn(column, modelClass)
   }
 }
