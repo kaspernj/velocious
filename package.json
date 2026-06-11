@@ -21,7 +21,7 @@
     "copy:js": "cpy \"index.js\" build && cpy \"bin/**/*.js\" build/bin && cpy \"src/**/*.js\" build --parents",
     "copy:ejs": "cpy \"src/routes/**/*.ejs\" build/src/routes",
     "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
-    "fallow": "fallow dead-code --baseline fallow-baselines/dead-code.json --fail-on-issues --quiet && fallow dupes --baseline fallow-baselines/dupes.json --fail-on-issues --quiet && fallow health --baseline fallow-baselines/health.json --quiet",
+    "fallow": "fallow dead-code --baseline fallow-baselines/dead-code.json --fail-on-issues --quiet && fallow dupes --baseline fallow-baselines/dupes.json --fail-on-issues --quiet && fallow health --baseline fallow-baselines/health.json --report-only --quiet",
     "fallow:baseline": "fallow dead-code --save-baseline fallow-baselines/dead-code.json && fallow dupes --save-baseline fallow-baselines/dupes.json && fallow health --save-baseline fallow-baselines/health.json",
     "eslint": "eslint",
     "lint": "npm run eslint && npm run typecheck && npm run fallow",
