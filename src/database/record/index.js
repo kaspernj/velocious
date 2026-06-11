@@ -14,7 +14,7 @@
 /**
  * Model class constructor type used for static `this` typing.
  * @template {VelociousDatabaseRecord} T
- * @typedef {{new (...args: Array<?>): T}} ModelConstructor
+ * @typedef {{new (...args: Array<never>): T}} ModelConstructor
  */
 
 import timeout from "awaitery/build/timeout.js"
