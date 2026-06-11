@@ -13,6 +13,7 @@ export default class DbGenerateModel extends BaseCommand {
     const modelsDir = `${rootDirectory}/src/models`
     const baseModelsDir = `${rootDirectory}/src/model-bases`
     const modelClasses = this.getConfiguration().getModelClasses()
+    const allowMissingTables = Boolean(this.processArgs?.includes("--allow-missing-tables"))
     let devMode = false
 
     if (baseModelsDir.includes("/spec/dummy/src/model-bases")) {
@@ -29,6 +30,14 @@ export default class DbGenerateModel extends BaseCommand {
       await this.getConfiguration().ensureConnections({name: "Generate base models"}, async () => {
         for (const modelClassName in modelClasses) {
         const modelClass = modelClasses[modelClassName]
+        const table = await modelClass.connection().getTableByName(modelClass.tableName(), {throwError: !allowMissingTables})
+
+        if (!table) {
+          console.warn(`Skipping base model for '${modelClass.name}': table '${modelClass.tableName()}' was not found (--allow-missing-tables). Keeping any existing base model.`)
+
+          continue
+        }
+
         const modelName = inflection.dasherize(modelClassName)
         const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
         const modelBaseFileName = `${inflection.dasherize(inflection.underscore(modelName))}.js`
@@ -76,10 +85,6 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
         fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
       }
-
-      const table = await modelClass.connection().getTableByName(modelClass.tableName())
-
-      if (!table) throw new Error(`Could not find table for model '${modelClass.name}'`)
 
       const columns = await table.getColumns()
       let methodsCount = 0
@@ -160,7 +165,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `   * @param {${setterParamType}} newValue\n`
           fileContent += `   * @returns {void}\n`
           fileContent += "   */\n"
-          fileContent += `  ${setterName}(newValue) { return this._setTranslatedAttribute("${name}", this._getConfiguration().getLocale(), newValue) } // eslint-disable-line no-unused-vars\n`
+          fileContent += `  ${setterName}(newValue) { return this._setTranslatedAttribute("${name}", this._getConfiguration().getLocale(), newValue) }\n`
           methodsCount++
 
           for (const locale of this.getConfiguration().getLocales()) {
@@ -183,7 +188,7 @@ export default class DbGenerateModel extends BaseCommand {
             fileContent += `   * @param {${setterParamType}} newValue\n`
             fileContent += `   * @returns {void}\n`
             fileContent += "   */\n"
-            fileContent += `  ${localeSetterName}(newValue) { return this._setTranslatedAttribute("${name}", "${locale}", newValue) } // eslint-disable-line no-unused-vars\n`
+            fileContent += `  ${localeSetterName}(newValue) { return this._setTranslatedAttribute("${name}", "${locale}", newValue) }\n`
             methodsCount++
 
             const localeHasName = `has${inflection.camelize(localeMethodName)}`
@@ -241,7 +246,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "   * @param {Record<string, ?>} [attributes]\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
-          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
+          fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { void attributes; throw new Error("Not implemented") }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -262,7 +267,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `   * @param {import("${modelFilePath}").default} newModel\n`
           fileContent += `   * @returns {void}\n`
           fileContent += "   */\n"
-          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModel) { void newModel; throw new Error("Not implemented") }\n`
         } else if (relationship.getType() == "hasMany") {
           let recordImport
 
@@ -304,7 +309,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `   * @param {Array<import("${recordImport}").default>} newModels\n`
           fileContent += "   * @returns {void}\n"
           fileContent += "   */\n"
-          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars\n`
+          fileContent += `  set${inflection.camelize(relationship.getRelationshipName())}(newModels) { void newModels; throw new Error("Not implemented") }\n`
         } else {
           throw new Error(`Unknown relationship type: ${relationship.getType()}`)
         }
