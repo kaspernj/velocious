@@ -143,6 +143,8 @@ export default class VelociousConfiguration {
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
     this._backendProjects = backendProjects || []
+    /** @type {Array<(args: {context: ?, error: Error, request: ?}) => Promise<Record<string, ?> | void> | Record<string, ?> | void>} */
+    this._clientErrorPayloadReporters = []
     this.cors = cors
     this._cookieSecret = cookieSecret
     this.database = database
@@ -2380,6 +2382,35 @@ export default class VelociousConfiguration {
    */
   getErrorEvents() {
     return this._errorEvents
+  }
+
+  /**
+   * Registers a reporter that can add client-safe metadata to frontend-model error payloads.
+   * @param {(args: {context: ?, error: Error, request: ?}) => Promise<Record<string, ?> | void> | Record<string, ?> | void} reporter - Reporter callback.
+   * @returns {void}
+   */
+  addClientErrorPayloadReporter(reporter) {
+    this._clientErrorPayloadReporters.push(reporter)
+  }
+
+  /**
+   * Runs registered client error payload reporters.
+   * @param {{context: ?, error: Error, request: ?}} args - Reporter args.
+   * @returns {Promise<Record<string, ?>>} - Merged client-safe reporter payload.
+   */
+  async clientErrorPayloadForError(args) {
+    /** @type {Record<string, ?>} */
+    const payload = {}
+
+    for (const reporter of this._clientErrorPayloadReporters) {
+      const reporterPayload = await reporter(args)
+
+      if (reporterPayload && typeof reporterPayload === "object") {
+        Object.assign(payload, reporterPayload)
+      }
+    }
+
+    return payload
   }
 
   /**

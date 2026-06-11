@@ -478,80 +478,89 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(UnrequestedLazyFrontendModel.isInitialized()).toEqual(false)
   })
 
+  /**
+   * @returns {{requests: Array<{commandType: string, model: string, payload: Record<string, any>, requestId: string}>}} - Params for an invalid shared frontend-model request.
+   */
+  function unknownSharedFrontendModelRequestParams() {
+    return {
+      requests: [{
+        commandType: "index",
+        model: "UnknownModel",
+        payload: {},
+        requestId: "request-1"
+      }]
+    }
+  }
+
+  /**
+   * @param {Record<string, any>} payload - Shared frontend-model API payload.
+   * @returns {Record<string, any>} - The first response payload.
+   */
+  function expectSingleSharedFrontendModelResponse(payload) {
+    expect(payload.status).toEqual("success")
+    expect(payload.responses.length).toEqual(1)
+
+    return payload.responses[0].response
+  }
+
   it("keeps unexpected shared frontend-model failures generic in production", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production")
     const payload = await runFrontendApi({
       configuration,
-      params: {
-        requests: [{
-          commandType: "index",
-          model: "UnknownModel",
-          payload: {},
-          requestId: "request-1"
-        }]
-      }
+      params: unknownSharedFrontendModelRequestParams()
     })
 
-    expect(payload.status).toEqual("success")
-    expect(payload.responses.length).toEqual(1)
-    expectGenericFrontendModelError(payload.responses[0].response)
+    expectGenericFrontendModelError(expectSingleSharedFrontendModelResponse(payload))
   })
 
   it("keeps unexpected shared frontend-model failures generic in staging by default", async () => {
     const configuration = buildFrontendModelControllerConfiguration("staging")
     const payload = await runFrontendApi({
       configuration,
-      params: {
-        requests: [{
-          commandType: "index",
-          model: "UnknownModel",
-          payload: {},
-          requestId: "request-1"
-        }]
-      }
+      params: unknownSharedFrontendModelRequestParams()
     })
 
-    expect(payload.status).toEqual("success")
-    expect(payload.responses.length).toEqual(1)
-    expectGenericFrontendModelError(payload.responses[0].response)
+    expectGenericFrontendModelError(expectSingleSharedFrontendModelResponse(payload))
   })
 
   it("returns debug details for unexpected shared frontend-model failures when staging opts in", async () => {
     const configuration = buildFrontendModelControllerConfiguration("staging", {exposeInternalErrorsToClients: true})
     const payload = await runFrontendApi({
       configuration,
-      params: {
-        requests: [{
-          commandType: "index",
-          model: "UnknownModel",
-          payload: {},
-          requestId: "request-1"
-        }]
-      }
+      params: unknownSharedFrontendModelRequestParams()
     })
 
-    expect(payload.status).toEqual("success")
-    expect(payload.responses.length).toEqual(1)
-    expectDebugFrontendModelError(payload.responses[0].response, /No frontend model resource configuration/)
+    expectDebugFrontendModelError(expectSingleSharedFrontendModelResponse(payload), /No frontend model resource configuration/)
+  })
+
+  it("adds registered client error reporter payloads to shared frontend-model failures", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production")
+
+    configuration.addClientErrorPayloadReporter(async ({error}) => {
+      expect(error.message).toMatch(/No frontend model resource configuration/)
+
+      return {bugReportUrl: "https://tensorbuzz.test/bugs/1"}
+    })
+
+    const payload = await runFrontendApi({
+      configuration,
+      params: unknownSharedFrontendModelRequestParams()
+    })
+
+    const response = expectSingleSharedFrontendModelResponse(payload)
+
+    expectGenericFrontendModelError(response)
+    expect(response.bugReportUrl).toEqual("https://tensorbuzz.test/bugs/1")
   })
 
   it("keeps unexpected shared frontend-model failures generic in production when debug details are enabled", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production", {exposeInternalErrorsToClients: true})
     const payload = await runFrontendApi({
       configuration,
-      params: {
-        requests: [{
-          commandType: "index",
-          model: "UnknownModel",
-          payload: {},
-          requestId: "request-1"
-        }]
-      }
+      params: unknownSharedFrontendModelRequestParams()
     })
 
-    expect(payload.status).toEqual("success")
-    expect(payload.responses.length).toEqual(1)
-    expectGenericFrontendModelError(payload.responses[0].response)
+    expectGenericFrontendModelError(expectSingleSharedFrontendModelResponse(payload))
   })
 
   it("applies preload params to frontendIndex query", async () => {
