@@ -3,6 +3,8 @@ import Cli from "../../../../src/cli/index.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
+import os from "os"
+import path from "path"
 import fs from "fs/promises"
 import * as ts from "typescript"
 
@@ -89,5 +91,44 @@ describe("Cli - generate - base-models", () => {
     expect(setterPattern.test(taskContents)).toBeTrue()
     expect(activeReturnPattern.test(projectDetailContents)).toBeTrue()
     expect(activeSetterPattern.test(projectDetailContents)).toBeTrue()
+  })
+
+  it("infers concrete model types in lifecycle callbacks", {tags: ["mssql"]}, async () => {
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:base-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const sourceText = `
+      import Task from "${dummyDirectory()}/src/models/task.js"
+
+      Task.beforeValidation((task) => {
+        task.name()
+      })
+    `
+    const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-lifecycle-callback-type-check-"))
+    const sourcePath = `${tmpDirectory}/index.js`
+    await fs.writeFile(sourcePath, sourceText)
+
+    const program = ts.createProgram([sourcePath], {
+      allowJs: true,
+      checkJs: true,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      target: ts.ScriptTarget.ES2024
+    })
+    const diagnostics = ts.getPreEmitDiagnostics(program)
+    const relevantDiagnostics = diagnostics.filter((diagnostic) => {
+      const fileName = diagnostic.file?.fileName || ""
+
+      return fileName === sourcePath || fileName.includes("src/database/record/index.js")
+    })
+
+    expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
   })
 })
