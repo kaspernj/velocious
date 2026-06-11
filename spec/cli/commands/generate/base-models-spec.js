@@ -131,4 +131,39 @@ describe("Cli - generate - base-models", () => {
 
     expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
   })
+
+  it("accepts concrete frontend-model resources in typed registries", async () => {
+    const projectRoot = path.resolve(import.meta.dirname, "../../../..")
+    const sourceText = `
+      // @ts-check
+
+      /** @import {FrontendModelResourceClassType} from "${projectRoot}/src/configuration-types.js" */
+
+      import FrontendModelBaseResource from "${projectRoot}/src/frontend-model-resource/base-resource.js"
+
+      class ProjectResource extends FrontendModelBaseResource {}
+
+      /** @type {Record<string, FrontendModelResourceClassType>} */
+      const resources = {
+        Project: ProjectResource
+      }
+
+      resources.Project
+    `
+    const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-resource-class-type-check-"))
+    const sourcePath = `${tmpDirectory}/index.js`
+    await fs.writeFile(sourcePath, sourceText)
+
+    const program = ts.createProgram([sourcePath], {
+      allowJs: true,
+      checkJs: true,
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      target: ts.ScriptTarget.ES2024
+    })
+    const diagnostics = ts.getPreEmitDiagnostics(program)
+    const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnostic.file?.fileName === sourcePath)
+
+    expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+  })
 })
