@@ -5,7 +5,7 @@ import FrontendModelBaseResource from "../frontend-model-resource/base-resource.
 import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
-const registeredConfigurationsByModelClass = new WeakMap()
+const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
 
 /** Shared channel name for all frontend-model lifecycle subscriptions. */
@@ -149,16 +149,14 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
     if (!modelClass) continue
 
-    let registeredConfigurations = registeredConfigurationsByModelClass.get(modelClass)
+    // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
+    // single backend project/config in production, so per-config registration only differs in tests where
+    // the same model class is reachable from multiple configs — there it attaches duplicate beforeCreate/
+    // afterSave/afterDestroy hooks that double-fire broadcasts (and leak across specs). The hooks read the
+    // model's runtime configuration when broadcasting, so a single registration is sufficient.
+    if (modelClassesWithRegisteredHooks.has(modelClass)) continue
 
-    if (!registeredConfigurations) {
-      registeredConfigurations = new WeakSet()
-      registeredConfigurationsByModelClass.set(modelClass, registeredConfigurations)
-    }
-
-    if (registeredConfigurations.has(configuration)) continue
-
-    registeredConfigurations.add(configuration)
+    modelClassesWithRegisteredHooks.add(modelClass)
 
     modelClass.beforeCreate((model) => {
       /**
@@ -181,7 +179,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       if (action !== "create" && action !== "update") return
 
       void model.getModelClass().connection().afterCommit(async () => {
-        broadcastFrontendModelEvent(configuration, modelName, {
+        broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
           action,
           id: model.id(),
           record: model.attributes()
@@ -192,7 +190,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
     modelClass.afterDestroy((model) => {
       void model.getModelClass().connection().afterCommit(async () => {
-        broadcastFrontendModelEvent(configuration, modelName, {
+        broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
           action: "destroy",
           id: model.id()
         })
