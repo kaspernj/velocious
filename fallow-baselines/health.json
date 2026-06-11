@@ -838,7 +838,7 @@
         "count": 8
       },
       "crap_moderate": {
-        "count": 23
+        "count": 25
       }
     },
     "src/database/record/instance-relationships/base.js": {
@@ -949,9 +949,6 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 1
-      },
-      "crap_moderate": {
         "count": 1
       }
     },
@@ -1541,8 +1538,8 @@
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/belongs-to.js:complexity",
     "src/jobs/mail-delivery.js:circular dependency",
-    "src/database/query/preloader/has-many.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
+    "src/database/query/preloader/has-many.js:complexity",
     "src/database/query/query-data.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
     "src/testing/test-filter-parser.js:complexity",

@@ -41,6 +41,12 @@ import UUID from "pure-uuid"
  * @typedef {import("../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor
  */
 
+/** Stored values that a declared `"boolean"` cast reads back as `true`. */
+const declaredBooleanTruthyValues = new Set([1, true, "1"])
+
+/** Stored values that a declared `"boolean"` cast reads back as `false`. */
+const declaredBooleanFalsyValues = new Set([0, false, "0"])
+
 class ValidationError extends Error {
   /**
    * Narrows the runtime value to the documented type.
@@ -1644,7 +1650,7 @@ class VelociousDatabaseRecord {
       normalizedValue = this._normalizeDateValue(newValue)
     }
 
-    normalizedValue = this._normalizeSqliteBooleanValue({columnType, value: normalizedValue})
+    normalizedValue = this._normalizeBooleanValueForWrite({attributeName: name, columnType, value: normalizedValue})
 
     if (this._attributes[columnName] != normalizedValue) {
       this._clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue)
@@ -1757,6 +1763,26 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Normalizes a boolean value before storing. A declared `"boolean"` attribute cast
+   * stores booleans as 1/0 for ALL drivers; otherwise the sqlite-only normalizer applies.
+   * @param {object} args - Options object.
+   * @param {string} args.attributeName - Attribute name being written.
+   * @param {string | undefined} args.columnType - Column type.
+   * @param {?} args.value - Value to normalize.
+   * @returns {?} - Normalized value.
+   */
+  _normalizeBooleanValueForWrite({attributeName, columnType, value}) {
+    if (this.getModelClass().getAttributeCast(attributeName) === "boolean") {
+      if (value === true) return 1
+      if (value === false) return 0
+
+      return value
+    }
+
+    return this._normalizeSqliteBooleanValue({columnType, value})
+  }
+
+  /**
    * Runs get columns.
    * @returns {import("../drivers/base-column.js").default[]} - The columns.
    */
@@ -1801,6 +1827,14 @@ class VelociousDatabaseRecord {
       for (const column of this.getColumns()) {
         this._columnTypeByName[column.getName()] = column.getType()
       }
+    }
+
+    const attributeName = this.getColumnNameToAttributeNameMap()[name]
+
+    if (attributeName) {
+      const cast = this.getAttributeCast(attributeName)
+
+      if (cast) return cast
     }
 
     return this._columnTypeByName[name]
@@ -2137,6 +2171,45 @@ class VelociousDatabaseRecord {
    */
   static setPrimaryKey(primaryKey) {
     this._primaryKey = primaryKey
+  }
+
+  /**
+   * Returns this class's own attribute-cast map, creating it on the class itself
+   * (never inherited from a parent) so subclasses don't share the same object.
+   * @returns {Record<string, string>} - Declared casts keyed by attribute name.
+   */
+  static getAttributeCastsMap() {
+    if (!Object.prototype.hasOwnProperty.call(this, "_attributeCasts") || !this._attributeCasts) {
+      /**
+       * Narrows the runtime value to the documented type.
+        @type {Record<string, string>} */
+      this._attributeCasts = {}
+    }
+
+    return this._attributeCasts
+  }
+
+  /**
+   * Declares a Rails-style per-attribute cast so a column whose introspected type
+   * isn't what the app wants (e.g. an MSSQL `bit` mapped to `number`) can be
+   * exposed as another type with real runtime conversion. Currently fully
+   * implements the `"boolean"` cast (0/1 <-> false/true); other types only record
+   * the label so the effective type and generated typings reflect them.
+   * @param {string} attributeName - Attribute name (camelCase), e.g. `"sichtbarVVK"`.
+   * @param {string} type - Declared type, e.g. `"boolean"`.
+   * @returns {void} - No return value.
+   */
+  static attribute(attributeName, type) {
+    this.getAttributeCastsMap()[attributeName] = type
+  }
+
+  /**
+   * Returns the declared cast type for an attribute, if any.
+   * @param {string} attributeName - Attribute name (camelCase).
+   * @returns {string | undefined} - Declared cast type, or undefined when none is declared.
+   */
+  static getAttributeCast(attributeName) {
+    return this.getAttributeCastsMap()[attributeName]
   }
 
   /**
@@ -3582,7 +3655,6 @@ class VelociousDatabaseRecord {
    */
   readColumn(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
-    const column = this.getModelClass().getColumnsHash()[attributeName]
     let result
 
     if (attributeName in this._changes) {
@@ -3593,15 +3665,42 @@ class VelociousDatabaseRecord {
       throw new Error(`No such attribute or not selected ${this.constructor.name}#${attributeName}`)
     }
 
-    const columnType = column?.getType()
+    const columnType = this.getModelClass().getColumnTypeByName(attributeName)
 
     if (columnType && this.getModelClass()._isDateLikeType(columnType)) {
       result = this._normalizeDateValueForRead(result)
     }
 
-    result = this._normalizeBooleanValueForRead({columnType, value: result})
+    result = this._normalizeBooleanValueForRead({columnName: attributeName, columnType, value: result})
 
     return result
+  }
+
+  /**
+   * Resolves any declared per-attribute cast for a database column name.
+   * @param {string} columnName - Database column name.
+   * @returns {string | undefined} - Declared cast type, or undefined when none is declared.
+   */
+  _declaredAttributeCastForColumn(columnName) {
+    const attributeName = this.getModelClass().getColumnNameToAttributeNameMap()[columnName]
+
+    if (!attributeName) return undefined
+
+    return this.getModelClass().getAttributeCast(attributeName)
+  }
+
+  /**
+   * Converts a stored value to a real boolean for a declared `"boolean"` cast.
+   * Leaves null/undefined untouched; treats 1/true/"1" as true and 0/false/"0" as false.
+   * @param {?} value - Stored database value.
+   * @returns {?} - Converted boolean, or the original value when not recognized.
+   */
+  _castDeclaredBooleanForRead(value) {
+    if (value === null || value === undefined) return value
+    if (declaredBooleanTruthyValues.has(value)) return true
+    if (declaredBooleanFalsyValues.has(value)) return false
+
+    return value
   }
 
   /**
@@ -3616,13 +3715,20 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * Runs normalize boolean value for read.
+   * Runs normalize boolean value for read. A declared `"boolean"` attribute cast converts the
+   * stored value (e.g. an MSSQL `bit` 0/1) to a real boolean; otherwise the existing
+   * introspected-type normalization applies (no behaviour change for non-declared columns).
    * @param {object} args - Options object.
+   * @param {string} args.columnName - Database column name being read.
    * @param {string | undefined} args.columnType - Column type.
    * @param {?} args.value - Value to normalize.
    * @returns {?} - Normalized value.
    */
-  _normalizeBooleanValueForRead({columnType, value}) {
+  _normalizeBooleanValueForRead({columnName, columnType, value}) {
+    if (this._declaredAttributeCastForColumn(columnName) === "boolean") {
+      return this._castDeclaredBooleanForRead(value)
+    }
+
     if (!columnType) return value
     if (columnType.toLowerCase() !== "boolean") return value
     if (value === 1) return true
