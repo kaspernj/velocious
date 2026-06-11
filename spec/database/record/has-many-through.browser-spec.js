@@ -6,6 +6,8 @@ import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
 import Configuration from "../../../src/configuration.js"
 
+Project.hasMany("commentsThroughTasks", {className: "Comment", through: "tasks"})
+
 describe("database - record - hasMany through", {tags: ["dummy"]}, () => {
   it("loads comments through tasks", async () => {
     await Configuration.current().ensureConnections(async () => {
@@ -22,6 +24,21 @@ describe("database - record - hasMany through", {tags: ["dummy"]}, () => {
 
         expect(comments.length).toBe(2)
         expect(comments.map((comment) => comment.body())).toEqual(["first", "second"])
+    })
+  })
+
+  it("uses the target belongs-to foreign key for default through relationships", async () => {
+    await Configuration.current().ensureConnections(async () => {
+        const project = await Project.create({creatingUserReference: "creator-2"})
+        const task = await Task.create({projectId: project.id(), name: "Task C"})
+
+        await Comment.create({taskId: task.id(), body: "third"})
+        await project.getRelationshipByName("commentsThroughTasks").load()
+
+        const comments = project.getRelationshipByName("commentsThroughTasks").loaded()
+
+        expect(comments.length).toBe(1)
+        expect(comments[0].body()).toEqual("third")
     })
   })
 })

@@ -4,6 +4,27 @@ import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
+/**
+ * Resolves the target column that references the through model.
+ * @param {import("../../record/relationships/has-many.js").default} relationship - Has-many through relationship.
+ * @param {typeof import("../../record/index.js").default} throughModelClass - Model used by the through relationship.
+ * @param {typeof import("../../record/index.js").default} targetModelClass - Model loaded by the through relationship.
+ * @returns {string} Target model foreign key column.
+ */
+export function hasManyThroughTargetForeignKey(relationship, throughModelClass, targetModelClass) {
+  for (const targetRelationship of targetModelClass.getRelationships()) {
+    if (targetRelationship.getType() != "belongsTo") continue
+
+    const relationshipTargetModelClass = targetRelationship.getTargetModelClass()
+
+    if (relationshipTargetModelClass === throughModelClass) {
+      return targetRelationship.getForeignKey()
+    }
+  }
+
+  return relationship.getForeignKey()
+}
+
 export default class VelociousDatabaseQueryPreloaderHasMany {
   /**
    * Runs constructor.
@@ -90,7 +111,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
-    const targetForeignKey = this.relationship.getForeignKey()
+    const targetForeignKey = hasManyThroughTargetForeignKey(this.relationship, throughModelClass, targetModelClass)
     const {modelsToLoad, satisfiedTargets} = this._partition(targetModelClass, [targetForeignKey])
 
     if (modelsToLoad.length == 0) return satisfiedTargets
