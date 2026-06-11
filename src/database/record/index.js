@@ -3698,9 +3698,12 @@ class VelociousDatabaseRecord {
    */
   readColumn(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
+    const belongsToChanges = this._belongsToChanges()
     let result
 
-    if (attributeName in this._changes) {
+    if (attributeName in belongsToChanges) {
+      result = belongsToChanges[attributeName]
+    } else if (attributeName in this._changes) {
       result = this._changes[attributeName]
     } else if (attributeName in this._attributes) {
       result = this._attributes[attributeName]
