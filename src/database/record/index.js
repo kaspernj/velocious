@@ -621,7 +621,7 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`${relationshipName}OrLoad`] = async function() {
-        return await this.relationshipOrLoad(relationshipName)
+        return await this.relationshipOrLoad(relationshipName, {preloadTranslations: true})
       }
 
       prototype[`set${inflection.camelize(relationshipName)}`] = function(/**
@@ -991,12 +991,37 @@ class VelociousDatabaseRecord {
   /**
    * Runs relationship or load.
    * @param {string} relationshipName - Relationship name.
+   * @param {{preloadTranslations?: boolean}} [options] - Load options.
    * @returns {Promise<?>} - Loaded relationship value.
    */
-  async relationshipOrLoad(relationshipName) {
+  async relationshipOrLoad(relationshipName, options = {}) {
     const relationship = this.getRelationshipByName(relationshipName)
+    let loaded = await relationship.autoloadOrLoad()
 
-    return await relationship.autoloadOrLoad()
+    if (options.preloadTranslations) {
+      loaded = await this._preloadLoadedRelationshipTranslations({loaded, relationship})
+    }
+
+    return loaded
+  }
+
+  /**
+   * Preloads translations on a loaded relationship target when available.
+   * @param {object} args - Options.
+   * @param {?} args.loaded - Loaded relationship value.
+   * @param {import("./instance-relationships/base.js").default} args.relationship - Relationship instance.
+   * @returns {Promise<?>} - Relationship value after translation preload.
+   */
+  async _preloadLoadedRelationshipTranslations({loaded, relationship}) {
+    if (!loaded || !loaded.isPersisted() || !await loaded.getModelClass().hasTranslationsTable()) return loaded
+
+    const translationsRelationship = loaded.getRelationshipByName("translations")
+
+    if (translationsRelationship.getPreloaded()) return loaded
+
+    await loaded.preload({translations: {}})
+
+    return relationship.loaded()
   }
 
   /**
@@ -1677,9 +1702,8 @@ class VelociousDatabaseRecord {
 
     normalizedValue = this._normalizeBooleanValueForWrite({attributeName: name, columnType, value: normalizedValue})
 
-    this._clearBelongsToRelationshipForChangedForeignKey(columnName)
-
     if (this._attributes[columnName] != normalizedValue) {
+      this._clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue)
       this._changes[columnName] = normalizedValue
     }
   }
@@ -1687,10 +1711,13 @@ class VelociousDatabaseRecord {
   /**
    * Clears loaded belongs-to caches when callers assign the foreign key directly.
    * @param {string} columnName - Changed database column name.
+   * @param {?} normalizedValue - New normalized column value.
    * @returns {void} - No return value.
    */
-  _clearBelongsToRelationshipForChangedForeignKey(columnName) {
+  _clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue) {
     for (const relationship of this._belongsToRelationshipsForForeignKey(columnName)) {
+      if (this._belongsToRelationshipMatchesForeignKeyValue({normalizedValue, relationship})) continue
+
       this._clearLoadedBelongsToRelationship(relationship)
     }
   }
@@ -1722,6 +1749,23 @@ class VelociousDatabaseRecord {
     const foreignKeyAttribute = this.getModelClass().getColumnNameToAttributeNameMap()[foreignKey]
 
     return foreignKey == columnName || foreignKeyAttribute == columnName
+  }
+
+  /**
+   * Runs belongs to relationship matches foreign key value.
+   * @param {object} args - Relationship cache arguments.
+   * @param {?} args.normalizedValue - New normalized column value.
+   * @param {?} args.relationship - Relationship instance.
+   * @returns {boolean} - Whether the loaded related record still matches the changed foreign key.
+   */
+  _belongsToRelationshipMatchesForeignKeyValue({normalizedValue, relationship}) {
+    const loaded = relationship.getLoadedOrUndefined()
+
+    if (!loaded) return false
+    if (Array.isArray(loaded)) return false
+    if (!relationship.getTargetModelClass()) return false
+
+    return loaded.readColumn(relationship.getPrimaryKey()) == normalizedValue
   }
 
   /**

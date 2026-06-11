@@ -291,7 +291,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}")) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}", {preloadTranslations: true})) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"

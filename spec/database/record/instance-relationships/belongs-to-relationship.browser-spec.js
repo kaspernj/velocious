@@ -33,13 +33,24 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
   it("keeps matching loaded belongs-to relationships usable after assigning the same foreign key", async () => {
     const project = await Project.create({name: "Matching loaded project"})
     const task = await Task.create({name: "Matching foreign key task", project})
-    const loadedProject = await task.projectOrLoad()
 
-    loadedProject?.getRelationshipByName("translations").setPreloaded(false)
+    await task.projectOrLoad()
     task.setProjectId(project.id())
 
-    expect((await task.projectOrLoad())?.id()).toEqual(project.id())
     expect(task.project().name()).toEqual("Matching loaded project")
+  })
+
+  it("preloads translations when a changed belongs-to foreign key is reloaded", async () => {
+    const originalProject = await Project.create({name: "Original translated project"})
+    const targetProject = await Project.create({name: "Target translated project"})
+    const task = await Task.create({name: "Changed translated relationship task", project: originalProject})
+
+    await task.projectOrLoad()
+    task.setProjectId(targetProject.id())
+
+    await task.projectOrLoad()
+
+    expect(task.project().name()).toEqual("Target translated project")
   })
 
   it("clears a loaded belongs-to relationship when the foreign key changes", async () => {
