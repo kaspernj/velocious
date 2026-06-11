@@ -305,10 +305,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       return await this.paginatedCount()
     }
 
-    // Models without a single primary key (composite-key tables) count via COUNT(*), not COUNT(<table>.id).
-    const primaryKeyColumn = this.getModelClass().primaryKey()
+    // Models without a single primary key (setPrimaryKey(null), e.g. composite-key legacy tables)
+    // count via COUNT(*), not COUNT(<table>.id) — primaryKey() falls back to "id" for those.
     const distinctPrefix = this._distinct ? "DISTINCT " : ""
-    let sql = primaryKeyColumn ? `COUNT(${distinctPrefix}${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(primaryKeyColumn)})` : "COUNT(*)"
+    let sql = this.getModelClass().hasPrimaryKey()
+      ? `COUNT(${distinctPrefix}${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
+      : "COUNT(*)"
 
     if (this.driver.getType() == "pgsql") sql += "::int"
 
