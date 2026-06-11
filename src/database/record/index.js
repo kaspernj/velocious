@@ -999,20 +999,18 @@ class VelociousDatabaseRecord {
     let loaded = await relationship.autoloadOrLoad()
 
     if (options.preloadTranslations) {
-      loaded = await this._preloadLoadedRelationshipTranslations({loaded, relationship})
+      loaded = await this._preloadLoadedRelationshipTranslations(loaded)
     }
 
     return loaded
   }
 
   /**
-   * Preloads translations on a loaded relationship target when available.
-   * @param {object} args - Options.
-   * @param {?} args.loaded - Loaded relationship value.
-   * @param {import("./instance-relationships/base.js").default} args.relationship - Relationship instance.
+   * Preloads translations on a loaded relationship target when explicitly requested.
+   * @param {?} loaded - Loaded relationship value.
    * @returns {Promise<?>} - Relationship value after translation preload.
    */
-  async _preloadLoadedRelationshipTranslations({loaded, relationship}) {
+  async _preloadLoadedRelationshipTranslations(loaded) {
     if (!loaded || !loaded.isPersisted() || !await loaded.getModelClass().hasTranslationsTable()) return loaded
 
     const translationsRelationship = loaded.getRelationshipByName("translations")
@@ -1021,7 +1019,7 @@ class VelociousDatabaseRecord {
 
     await loaded.preload({translations: {}})
 
-    return relationship.loaded()
+    return loaded
   }
 
   /**
@@ -3903,7 +3901,14 @@ class VelociousDatabaseRecord {
     await this._applyInsertResult({data, insertResult, primaryKey, primaryKeyType})
     this.setIsNewRecord(false)
 
-    // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
+    this._markLoadedRelationshipsPreloadedAfterCreate()
+  }
+
+  /**
+   * Marks only relationships with in-memory loaded values as preloaded after create.
+   * @returns {void} - No return value.
+   */
+  _markLoadedRelationshipsPreloadedAfterCreate() {
     for (const relationship of this.getModelClass().getRelationships()) {
       const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
 
@@ -3911,7 +3916,9 @@ class VelociousDatabaseRecord {
         instanceRelationship.setLoaded([])
       }
 
-      instanceRelationship.setPreloaded(true)
+      if (instanceRelationship.getLoadedOrUndefined() !== undefined) {
+        instanceRelationship.setPreloaded(true)
+      }
     }
   }
 
