@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.431",
+  "version": "1.0.432",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -18,7 +18,7 @@
     "all-checks": "npm run lint && npm run test",
     "build": "node scripts/clean-build.js && npm run compile",
     "compile": "tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
-    "copy:js": "cpy \"index.js\" build && cpy \"bin/**/*.js\" build/bin && cpy \"src/**/*.js\" build/src",
+    "copy:js": "cpy \"index.js\" build && cpy \"bin/**/*.js\" build/bin && cpy \"src/**/*.js\" build --parents",
     "copy:ejs": "cpy \"src/routes/**/*.ejs\" build/src/routes",
     "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
     "fallow": "fallow dead-code --baseline fallow-baselines/dead-code.json --fail-on-issues --quiet && fallow dupes --baseline fallow-baselines/dupes.json --fail-on-issues --quiet && fallow health --baseline fallow-baselines/health.json --quiet",
