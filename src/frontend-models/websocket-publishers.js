@@ -24,7 +24,7 @@ export function frontendModelBroadcastChannelName(modelName) {
  * Builds a frontend models map from the configuration's ability resources.
  * Each resource class with a static ModelClass property is keyed by model name.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
- * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
+ * @returns {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} - Resource definitions keyed by model name.
  */
 /**
  * Runs resolve ability resources list.
@@ -59,12 +59,12 @@ async function resolveAbilityResourcesList(configuration) {
 /**
  * Runs frontend model resources from ability resources list.
  * @param {import("../configuration-types.js").AbilityResourceClassType[]} abilityResources - Ability resource classes.
- * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
+ * @returns {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} - Resource definitions keyed by model name.
  */
 function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
   /**
    * Resources.
-    @type {Record<string, typeof FrontendModelBaseResource>} */
+    @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   const resources = {}
 
   if (!abilityResources || abilityResources.length === 0) return resources
@@ -81,7 +81,7 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
     if (resourceClass.prototype instanceof FrontendModelBaseResource) {
       const modelClass = /**
                           * Narrows the runtime value to the documented type.
-                           @type {typeof FrontendModelBaseResource} */ (resourceClass).ModelClass
+                           @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass).ModelClass
 
       if (!modelClass) {
         throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
@@ -95,7 +95,7 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
 
       resources[modelName] = /**
                               * Narrows the runtime value to the documented type.
-                               @type {typeof FrontendModelBaseResource} */ (resourceClass)
+                               @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass)
     } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
       // Authorization-only resource — valid but not relevant for WebSocket publishing
     } else {
@@ -116,7 +116,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
   /**
    * All frontend models.
-    @type {Record<string, typeof FrontendModelBaseResource>} */
+    @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   let allFrontendModels = {}
 
   for (const backendProject of configuration.getBackendProjects()) {

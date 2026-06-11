@@ -8,7 +8,7 @@ import {validateFrontendModelResourceCommandName} from "./resource-config-valida
 /**
  * Runs the frontendModelResourcesForBackendProject helper.
  * @param {import("../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
- * @returns {Record<string, typeof FrontendModelBaseResource>} - Resource definitions keyed by model name.
+ * @returns {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} - Resource definitions keyed by model name.
  */
 export function frontendModelResourcesForBackendProject(backendProject) {
   const resources = backendProject.frontendModels
@@ -27,7 +27,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
 /**
  * Runs the frontendModelResourceDefinitionIsClass helper.
  * @param {?} value - Candidate resource definition.
- * @returns {value is typeof FrontendModelBaseResource} - Whether value is a resource class.
+ * @returns {value is import("../configuration-types.js").FrontendModelResourceClassType} - Whether value is a resource class.
  */
 export function frontendModelResourceDefinitionIsClass(value) {
   return typeof value === "function" && (value === FrontendModelBaseResource || value.prototype instanceof FrontendModelBaseResource)
@@ -36,7 +36,7 @@ export function frontendModelResourceDefinitionIsClass(value) {
 /**
  * Runs the frontendModelResourceClassFromDefinition helper.
  * @param {?} resourceDefinition - Resource definition.
- * @returns {typeof FrontendModelBaseResource | null} - Resource class when definition is class-based.
+ * @returns {import("../configuration-types.js").FrontendModelResourceClassType | null} - Resource class when definition is class-based.
  */
 export function frontendModelResourceClassFromDefinition(resourceDefinition) {
   return frontendModelResourceDefinitionIsClass(resourceDefinition) ? resourceDefinition : null

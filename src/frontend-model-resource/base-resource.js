@@ -27,6 +27,7 @@ import * as inflection from "inflection"
 
 /**
  * Base class for backend frontend-model resources.
+ * @template {typeof import("../database/record/index.js").default} [out TModelClass=typeof import("../database/record/index.js").default]
  */
 export default class FrontendModelBaseResource extends AuthorizationBaseResource {
   /**
@@ -99,6 +100,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Runs typed controller instance.
    * @returns {import("../controller.js").default & {
    *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+   *   frontendModelAbilityAction: (action: string) => string,
+   *   currentAbility: () => import("../authorization/ability.js").default | undefined,
    *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
    *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
    *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, unknown>>
@@ -151,14 +154,14 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs model class.
-   * @returns {typeof import("../database/record/index.js").default} - Model class.
+   * @returns {TModelClass} - Model class.
    */
   modelClass() {
     if (!this.modelClassValue) {
       throw new Error(`${this.constructor.name} requires a model class.`)
     }
 
-    return this.modelClassValue
+    return /** @type {TModelClass} */ (this.modelClassValue)
   }
 
   /**
@@ -246,6 +249,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   authorizedQuery(action) {
     return /** Narrows the authorized query to the resource's model class. @type {import("../database/query/model-class-query.js").default<MC>} */ (this.typedControllerInstance().frontendModelAuthorizedQuery(action))
   }
+
 
   /**
    * Runs supports pluck.
