@@ -301,16 +301,17 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<number>} - Resolves with the count.
    */
   async count() {
-    if (this._limit !== null || this._offset !== null) {
+    // Pagination, or a model with no single primary key (setPrimaryKey(null), e.g. composite-key
+    // legacy tables with no id column), count via the subquery form. It references no primary-key
+    // column and preserves DISTINCT over joins — which a bare COUNT(*) would not (it would count
+    // joined duplicate rows instead of distinct root rows). primaryKey() falls back to "id" for the
+    // no-pk case, so hasPrimaryKey() is used to detect it.
+    if (this._limit !== null || this._offset !== null || !this.getModelClass().hasPrimaryKey()) {
       return await this.paginatedCount()
     }
 
-    // Models without a single primary key (setPrimaryKey(null), e.g. composite-key legacy tables)
-    // count via COUNT(*), not COUNT(<table>.id) — primaryKey() falls back to "id" for those.
     const distinctPrefix = this._distinct ? "DISTINCT " : ""
-    let sql = this.getModelClass().hasPrimaryKey()
-      ? `COUNT(${distinctPrefix}${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
-      : "COUNT(*)"
+    let sql = `COUNT(${distinctPrefix}${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
 
     if (this.driver.getType() == "pgsql") sql += "::int"
 
