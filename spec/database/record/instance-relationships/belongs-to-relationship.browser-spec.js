@@ -1,5 +1,6 @@
 import Project from "../../../dummy/src/models/project.js"
 import Task from "../../../dummy/src/models/task.js"
+import Comment from "../../../dummy/src/models/comment.js"
 
 describe("Record - instance relationships - belongs to relationship", {tags: ["dummy"]}, () => {
   it("loads a relationship", async () => {
@@ -41,6 +42,64 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
 
     expect(reloadedProject?.id()).toEqual(targetProject.id())
     expect(task.project().id()).toEqual(targetProject.id())
+  })
+
+  it("returns an assigned belongs-to relationship before a new record is saved", async () => {
+    const project = await Project.create()
+    const task = new Task({name: "Unsaved assigned relationship task", project})
+
+    expect(task.projectId()).toEqual(project.id())
+
+    const loadedProject = await task.projectOrLoad()
+
+    expect(loadedProject?.id()).toEqual(project.id())
+  })
+
+  it("returns undefined for an unloaded belongs-to relationship with no foreign key", async () => {
+    const task = new Task({name: "Unsaved task without relationship"})
+
+    const loadedProject = await task.projectOrLoad()
+
+    expect(loadedProject).toBeUndefined()
+  })
+
+  it("keeps assigned belongs-to relationships available inside create lifecycle callbacks", async () => {
+    const previousLifecycleCallbacks = Task._lifecycleCallbacks
+    const project = await Project.create()
+    let callbackProjectId
+
+    Task._lifecycleCallbacks = {}
+    Task.beforeValidation(async (task) => {
+      callbackProjectId = (await task.projectOrLoad())?.id()
+    })
+
+    try {
+      await Task.create({name: "Lifecycle assigned relationship task", project})
+
+      expect(callbackProjectId).toEqual(project.id())
+    } finally {
+      Task._lifecycleCallbacks = previousLifecycleCallbacks
+    }
+  })
+
+  it("keeps assigned belongs-to relationships available from OrLoad inside create lifecycle callbacks", async () => {
+    const previousLifecycleCallbacks = Comment._lifecycleCallbacks
+    const project = await Project.create()
+    const task = await Task.create({name: "Comment parent task", project})
+    let callbackTaskId
+
+    Comment._lifecycleCallbacks = {}
+    Comment.beforeValidation(async (comment) => {
+      callbackTaskId = (await comment.taskOrLoad())?.id()
+    })
+
+    try {
+      await Comment.create({body: "Comment body", task})
+
+      expect(callbackTaskId).toEqual(task.id())
+    } finally {
+      Comment._lifecycleCallbacks = previousLifecycleCallbacks
+    }
   })
 
   it("force reloads a changed belongs-to relationship inside lifecycle callbacks", async () => {
