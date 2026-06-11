@@ -1763,8 +1763,10 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * Normalizes a boolean value before storing. A declared `"boolean"` attribute cast
-   * stores booleans as 1/0 for ALL drivers; otherwise the sqlite-only normalizer applies.
+   * Normalizes a boolean value before storing. A declared `"boolean"` attribute cast stores
+   * booleans as 1/0 only for integer-backed columns (e.g. an MSSQL `bit`). Columns whose
+   * underlying type is already a native boolean (e.g. Postgres `boolean`) keep `true`/`false`
+   * so the driver can emit the proper boolean literal; otherwise the sqlite-only normalizer applies.
    * @param {object} args - Options object.
    * @param {string} args.attributeName - Attribute name being written.
    * @param {string | undefined} args.columnType - Column type.
@@ -1772,14 +1774,30 @@ class VelociousDatabaseRecord {
    * @returns {?} - Normalized value.
    */
   _normalizeBooleanValueForWrite({attributeName, columnType, value}) {
-    if (this.getModelClass().getAttributeCast(attributeName) === "boolean") {
-      if (value === true) return 1
-      if (value === false) return 0
-
-      return value
+    if (!this.getModelClass()._declaredBooleanStoresAsInteger(attributeName)) {
+      return this._normalizeSqliteBooleanValue({columnType, value})
     }
 
-    return this._normalizeSqliteBooleanValue({columnType, value})
+    if (value === true) return 1
+    if (value === false) return 0
+
+    return value
+  }
+
+  /**
+   * Whether a declared `"boolean"` attribute cast is backed by an integer column (e.g. an MSSQL
+   * `bit`), so booleans must be stored as 1/0. A native boolean column (e.g. Postgres `boolean`)
+   * returns false and keeps `true`/`false` for the driver.
+   * @param {string} attributeName - Attribute name.
+   * @returns {boolean} - Whether the declared boolean is stored as an integer.
+   */
+  static _declaredBooleanStoresAsInteger(attributeName) {
+    if (this.getAttributeCast(attributeName) !== "boolean") return false
+
+    const columnName = this.getAttributeNameToColumnNameMap()[attributeName]
+    const introspectedType = columnName ? this.getColumnsHash()[columnName]?.getType() : undefined
+
+    return typeof introspectedType === "string" && introspectedType.toLowerCase() !== "boolean"
   }
 
   /**

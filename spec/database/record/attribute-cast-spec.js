@@ -14,6 +14,16 @@ CastBitRecord._columns = [
 CastBitRecord._databaseType = "mssql"
 CastBitRecord.attribute("flag", "boolean")
 
+class CastNativeBooleanRecord extends Record {}
+
+CastNativeBooleanRecord._initialized = true
+CastNativeBooleanRecord._attributeNameToColumnName = {enabled: "enabled"}
+CastNativeBooleanRecord._columnNameToAttributeName = {enabled: "enabled"}
+CastNativeBooleanRecord._columnTypeByName = {enabled: "boolean"}
+CastNativeBooleanRecord._columns = [{getName: () => "enabled", getType: () => "boolean"}]
+CastNativeBooleanRecord._databaseType = "postgresql"
+CastNativeBooleanRecord.attribute("enabled", "boolean")
+
 describe("Record - attribute cast", {databaseCleaning: {transaction: true}}, () => {
   it("exposes the declared cast as the effective column type", () => {
     expect(CastBitRecord.getAttributeCast("flag")).toEqual("boolean")
@@ -38,6 +48,16 @@ describe("Record - attribute cast", {databaseCleaning: {transaction: true}}, () 
 
     record._setColumnAttribute("flag", false)
     expect(record._changes.Flag).toEqual(0)
+  })
+
+  it("keeps true/false for a declared boolean on a native boolean column (e.g. Postgres)", () => {
+    const record = new CastNativeBooleanRecord()
+
+    record._setColumnAttribute("enabled", true)
+    expect(record._changes.enabled).toEqual(true)
+
+    record._setColumnAttribute("enabled", false)
+    expect(record._changes.enabled).toEqual(false)
   })
 
   it("reads a declared boolean column back as a real boolean", () => {
