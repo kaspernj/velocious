@@ -906,8 +906,11 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
       continue
     }
 
-    const setterName = `set${inflection.camelize(attributeName)}`
-    const resourceSetterName = `${setterName}Attribute`
+    const modelClass = /** Narrows the runtime value to the documented type. @type {?} */ (receiver).constructor
+    const resolvedAttributeName = (modelClass && typeof modelClass.resolveAttributeName === "function" && modelClass.resolveAttributeName(attributeName)) || attributeName
+    const requestedSetterName = `set${inflection.camelize(resolvedAttributeName)}`
+    const setterName = (modelClass && typeof modelClass.findMemberNameInsensitive === "function" && modelClass.findMemberNameInsensitive(receiver, requestedSetterName)) || requestedSetterName
+    const resourceSetterName = `set${inflection.camelize(attributeName)}Attribute`
 
     if (setterName in receiver) {
       writableAttributes[attributeName] = value
