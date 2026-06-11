@@ -1,4 +1,5 @@
 import BaseCommand from "../../../../../cli/base-command.js"
+import deburrColumnName from "../../../../../utils/deburr-column-name.js"
 import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
@@ -141,8 +142,9 @@ export default class DbGenerateModel extends BaseCommand {
       let methodsCount = 0
 
       for (const column of columns) {
-        const camelizedColumnName = inflection.camelize(column.getName(), true)
-        const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
+        const deburredColumnName = deburrColumnName(column.getName())
+        const camelizedColumnName = inflection.camelize(deburredColumnName, true)
+        const camelizedColumnNameBigFirst = inflection.camelize(deburredColumnName)
         const jsdocType = this.jsDocTypeFromColumn(column, modelClass)
 
         if (methodsCount > 0) {

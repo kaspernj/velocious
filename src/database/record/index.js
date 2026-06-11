@@ -30,6 +30,7 @@ import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
 import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
+import deburrColumnName from "../../utils/deburr-column-name.js"
 import ModelClassQuery from "../query/model-class-query.js"
 import Preloader from "../query/preloader.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../../record-payload-values.js"
@@ -1350,8 +1351,9 @@ class VelociousDatabaseRecord {
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
 
-      const camelizedColumnName = inflection.camelize(column.getName(), true)
-      const camelizedColumnNameBigFirst = inflection.camelize(column.getName())
+      const deburredColumnName = deburrColumnName(column.getName())
+      const camelizedColumnName = inflection.camelize(deburredColumnName, true)
+      const camelizedColumnNameBigFirst = inflection.camelize(deburredColumnName)
 
       attributeNameToColumnName[camelizedColumnName] = column.getName()
       columnNameToAttributeName[column.getName()] = camelizedColumnName
