@@ -254,7 +254,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return this.relationshipOrLoad("${relationship.getRelationshipName()}") }\n`
+          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -296,7 +296,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {Promise<Array<import("${recordImport}").default>>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return this.relationshipOrLoad("${relationship.getRelationshipName()}") }\n`
+          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<Array<import("${recordImport}").default>>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
