@@ -266,11 +266,15 @@ class VelociousDatabaseRecord {
    * @returns {string} - Mapped column name, or the underscored attribute name when no mapping exists.
    */
   static getColumnNameForAttributeName(attributeName) {
-    const columnName = this.getAttributeNameToColumnNameMap()[attributeName]
+    const map = this.getAttributeNameToColumnNameMap()
+    // Accept either the ASCII attribute name or the raw (umlaut/acronym) column name by deburring to
+    // the same normalized attribute the map is keyed by, so both stay compatible.
+    const normalizedAttributeName = inflection.camelize(deburrColumnName(attributeName), true)
+    const columnName = map[attributeName] ?? map[normalizedAttributeName]
 
     if (columnName) return columnName
 
-    return inflection.underscore(attributeName)
+    return inflection.underscore(normalizedAttributeName)
   }
 
   /**
@@ -1666,7 +1670,9 @@ class VelociousDatabaseRecord {
    * @returns {void} - No return value.
    */
   setAttribute(name, newValue) {
-    const setterName = `set${inflection.camelize(name)}`
+    // Deburr so a raw column name ("VA_ÜbAttributID", "IP") resolves to the same setter the model base
+    // generates from the deburred column name (setVAUebattributid, setIp).
+    const setterName = `set${inflection.camelize(deburrColumnName(name))}`
     const dynamicThis = /**
                          * Narrows the runtime value to the documented type.
                           @type {Record<string, (value: ?) => void>} */ (/**
