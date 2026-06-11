@@ -67,6 +67,19 @@ services:
     mem_limit: 4096m
     restart_policy: on-failure
 builds:
+  lint:
+    name: Lint
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - sleep 5
+      - npm run lint
+      - npm run typecheck
+      - npm run fallow
+  browser_tests:
+    name: Browser Tests
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - npm run test:browser
   mariadb_1:
     depends_on:
       - mariadb
@@ -202,19 +215,6 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
       - npm run test -- --groups 3 --group-number 3
-  lint:
-    name: Lint
-    script:
-      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
-      - sleep 5
-      - npm run lint
-      - npm run typecheck
-      - npm run fallow
-  browser_tests:
-    name: Browser Tests
-    script:
-      - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
-      - npm run test:browser
   expo_build:
     name: Expo Build
     script:
