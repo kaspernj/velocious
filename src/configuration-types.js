@@ -292,7 +292,7 @@
  */
 
 /**
- * @typedef {typeof import("./frontend-model-resource/base-resource.js").default} FrontendModelResourceClassType
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, never> & {new (args: ConstructorParameters<typeof import("./frontend-model-resource/base-resource.js").default>[0]): import("./frontend-model-resource/base-resource.js").default}} FrontendModelResourceClassType
  */
 
 /**
