@@ -1,6 +1,7 @@
 // @ts-check
 
 import * as inflection from "inflection"
+import deburrColumnName from "./utils/deburr-column-name.js"
 import Controller from "./controller.js"
 import Response from "./http-server/client/response.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
@@ -1829,7 +1830,7 @@ export default class FrontendModelController extends Controller {
    */
   resolveFrontendModelColumnName(modelClass, key) {
     const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
-    const columnName = attributeNameToColumnNameMap[key]
+    const columnName = attributeNameToColumnNameMap[key] ?? attributeNameToColumnNameMap[inflection.camelize(deburrColumnName(key), true)]
 
     if (columnName) return columnName
 

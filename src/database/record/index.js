@@ -1695,7 +1695,8 @@ class VelociousDatabaseRecord {
     this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass()._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
 
-    const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[name]
+    const map = this.getModelClass().getAttributeNameToColumnNameMap()
+    const columnName = map[name] ?? map[inflection.camelize(deburrColumnName(name), true)]
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${name}`)
 
@@ -3546,9 +3547,10 @@ class VelociousDatabaseRecord {
    */
   readAttribute(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
-    const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
+    const map = this.getModelClass().getAttributeNameToColumnNameMap()
+    const columnName = map[attributeName] ?? map[inflection.camelize(deburrColumnName(attributeName), true)]
 
-    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
+    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(map).join(", ")}`)
 
     return /** @type {V} */ (this.readColumn(columnName))
   }
