@@ -54,4 +54,17 @@ describe("Record - preloader - has many through", {tags: ["dummy"]}, () => {
     expect(p2Comments.length).toBe(1)
     expect(p2Comments[0].body()).toEqual("comment for project 2")
   })
+
+  it("preloads through targets using the target belongs-to foreign key", async () => {
+    const project = await Project.create({})
+    const task = await Task.create({projectId: project.id(), name: "Task C"})
+
+    await Comment.create({taskId: task.id(), body: "third"})
+
+    const foundProject = /** @type {Project} */ (await Project.preload({commentsThroughTasks: true}).find(project.id()))
+    const comments = /** @type {Comment[]} */ (foundProject.getRelationshipByName("commentsThroughTasks").loaded())
+
+    expect(comments.length).toBe(1)
+    expect(comments[0].body()).toEqual("third")
+  })
 })

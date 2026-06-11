@@ -4,6 +4,34 @@ import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
+/**
+ * Resolves the target column that references the through model.
+ * @param {import("../../record/relationships/has-many.js").default} relationship - Has-many through relationship.
+ * @param {typeof import("../../record/index.js").default} throughModelClass - Model used by the through relationship.
+ * @param {typeof import("../../record/index.js").default} targetModelClass - Model loaded by the through relationship.
+ * @returns {string} Target model foreign key column.
+ */
+export function hasManyThroughTargetForeignKey(relationship, throughModelClass, targetModelClass) {
+  // An explicit foreign key on the has-many names the exact target column that references the
+  // through model — honor it. The target can have several belongs-to pointing at the through model
+  // (e.g. a default plus an alternate), so picking the first match would otherwise be ambiguous.
+  const explicitForeignKey = relationship.getExplicitForeignKey()
+
+  if (explicitForeignKey) return explicitForeignKey
+
+  for (const targetRelationship of targetModelClass.getRelationships()) {
+    if (targetRelationship.getType() != "belongsTo") continue
+
+    const relationshipTargetModelClass = targetRelationship.getTargetModelClass()
+
+    if (relationshipTargetModelClass === throughModelClass) {
+      return targetRelationship.getForeignKey()
+    }
+  }
+
+  return relationship.getForeignKey()
+}
+
 export default class VelociousDatabaseQueryPreloaderHasMany {
   /**
    * Runs constructor.
@@ -90,7 +118,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
 
-    const targetForeignKey = this.relationship.getForeignKey()
+    const targetForeignKey = hasManyThroughTargetForeignKey(this.relationship, throughModelClass, targetModelClass)
     const {modelsToLoad, satisfiedTargets} = this._partition(targetModelClass, [targetForeignKey])
 
     if (modelsToLoad.length == 0) return satisfiedTargets

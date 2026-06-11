@@ -1,6 +1,7 @@
 // @ts-check
 
 import BaseInstanceRelationship from "./base.js"
+import {hasManyThroughTargetForeignKey} from "../../query/preloader/has-many.js"
 
 /**
  * A generic query over some model type.
@@ -192,7 +193,11 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
       const throughForeignKey = throughRelationship.getForeignKey()
       const throughPrimaryKey = throughRelationship.getPrimaryKey()
-      const targetForeignKey = this.getForeignKey()
+      const targetForeignKey = hasManyThroughTargetForeignKey(
+        /** @type {import("../relationships/has-many.js").default} */ (this.getRelationship()),
+        throughModelClass,
+        TargetModelClass
+      )
       const targetTable = TargetModelClass.tableName()
       const throughTable = throughModelClass.tableName()
       const driver = TargetModelClass.connection()

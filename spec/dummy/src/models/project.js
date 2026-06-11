@@ -11,6 +11,7 @@ Project.hasOne("activeProjectDetail", function() { return this.where({isActive: 
 Project.hasMany("interactions", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Project.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Project.hasMany("comments", {className: "Comment", through: "tasks", foreignKey: "task_id"})
+Project.hasMany("commentsThroughTasks", {className: "Comment", through: "tasks"})
 Project.translates("name")
 
 Project.beforeValidation((record) => {
