@@ -2292,6 +2292,16 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Whether the model has a single primary key column. `setPrimaryKey(null)` (e.g. composite-key
+   * legacy tables) declares no single primary key; `primaryKey()` still falls back to "id" for the
+   * default case, so callers that must distinguish "no primary key" use this instead.
+   * @returns {boolean} - False only when the primary key was explicitly set to null.
+   */
+  static hasPrimaryKey() {
+    return this._primaryKey !== null
+  }
+
+  /**
    * Runs save.
    * @returns {Promise<void>} - Resolves when complete.
    */
