@@ -28,7 +28,7 @@ async function appendInlineAndWait(outputPath) {
 
 describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => {
   it("processes inline jobs in order", async () => {
-    const {main, worker} = await startBackgroundJobs()
+    const {main, worker} = await startBackgroundJobs({workerOptions: {maxConcurrentInlineJobs: 1}})
     const outputPath = await outputPathFor("queue")
 
     await AppendJob.performLaterWithOptions({
