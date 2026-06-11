@@ -8,6 +8,24 @@ import path from "path"
 import fs from "fs/promises"
 import * as ts from "typescript"
 
+async function expectSourceTypechecks(sourceText, tmpPrefix, diagnosticFilter) {
+  const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), tmpPrefix))
+  const sourcePath = `${tmpDirectory}/index.js`
+  await fs.writeFile(sourcePath, sourceText)
+
+  const program = ts.createProgram([sourcePath], {
+    allowJs: true,
+    checkJs: true,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    target: ts.ScriptTarget.ES2024
+  })
+  const diagnostics = ts.getPreEmitDiagnostics(program)
+  const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnosticFilter({diagnostic, sourcePath}))
+
+  expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+}
+
 describe("Cli - generate - base-models", () => {
   it("generates base models with valid JSDoc casts", {tags: ["mssql"]}, async () => {
     const cli = new Cli({
@@ -111,25 +129,11 @@ describe("Cli - generate - base-models", () => {
         task.name()
       })
     `
-    const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-lifecycle-callback-type-check-"))
-    const sourcePath = `${tmpDirectory}/index.js`
-    await fs.writeFile(sourcePath, sourceText)
-
-    const program = ts.createProgram([sourcePath], {
-      allowJs: true,
-      checkJs: true,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      target: ts.ScriptTarget.ES2024
-    })
-    const diagnostics = ts.getPreEmitDiagnostics(program)
-    const relevantDiagnostics = diagnostics.filter((diagnostic) => {
+    await expectSourceTypechecks(sourceText, "velocious-lifecycle-callback-type-check-", ({diagnostic, sourcePath}) => {
       const fileName = diagnostic.file?.fileName || ""
 
       return fileName === sourcePath || fileName.includes("src/database/record/index.js")
     })
-
-    expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
   })
 
   it("accepts concrete frontend-model resources in typed registries", async () => {
@@ -150,20 +154,6 @@ describe("Cli - generate - base-models", () => {
 
       typedResources.Project
     `
-    const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-resource-class-type-check-"))
-    const sourcePath = `${tmpDirectory}/index.js`
-    await fs.writeFile(sourcePath, sourceText)
-
-    const program = ts.createProgram([sourcePath], {
-      allowJs: true,
-      checkJs: true,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      target: ts.ScriptTarget.ES2024
-    })
-    const diagnostics = ts.getPreEmitDiagnostics(program)
-    const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnostic.file?.fileName === sourcePath)
-
-    expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+    await expectSourceTypechecks(sourceText, "velocious-resource-class-type-check-", ({diagnostic, sourcePath}) => diagnostic.file?.fileName === sourcePath)
   })
 })
