@@ -46,6 +46,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this._counterCache = counterCache || false
     this._dependent = dependent
     this.foreignKey = foreignKey
+    this._explicitForeignKey = foreignKey
     this._inverseOf = inverseOf
     this.klass = klass
     this.modelClass = modelClass
@@ -76,6 +77,14 @@ export default class VelociousDatabaseRecordBaseRelationship {
    * @returns {string | undefined} What will be done when the parent record is destroyed. E.g. "destroy", "nullify", "restrict" etc.
    */
   getDependent() { return this._dependent }
+
+  /**
+   * The foreign key explicitly passed when the relationship was declared, if any. Unlike
+   * `getForeignKey()` this never falls back to a computed default, so callers can tell whether the
+   * developer named a specific column (e.g. to disambiguate multiple belongs-to on a through target).
+   * @returns {string | undefined} - The explicitly declared foreign key, or undefined.
+   */
+  getExplicitForeignKey() { return this._explicitForeignKey }
 
   /**
    * Runs get foreign key.

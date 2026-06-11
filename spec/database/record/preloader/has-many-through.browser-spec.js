@@ -2,8 +2,6 @@ import Comment from "../../../dummy/src/models/comment.js"
 import Project from "../../../dummy/src/models/project.js"
 import Task from "../../../dummy/src/models/task.js"
 
-Project.hasMany("commentsThroughTasks", {className: "Comment", through: "tasks"})
-
 describe("Record - preloader - has many through", {tags: ["dummy"]}, () => {
   it("preloads through-relationship models", async () => {
     const project = await Project.create({})

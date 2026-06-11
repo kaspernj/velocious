@@ -12,6 +12,13 @@ import restArgsError from "../../../utils/rest-args-error.js"
  * @returns {string} Target model foreign key column.
  */
 export function hasManyThroughTargetForeignKey(relationship, throughModelClass, targetModelClass) {
+  // An explicit foreign key on the has-many names the exact target column that references the
+  // through model — honor it. The target can have several belongs-to pointing at the through model
+  // (e.g. a default plus an alternate), so picking the first match would otherwise be ambiguous.
+  const explicitForeignKey = relationship.getExplicitForeignKey()
+
+  if (explicitForeignKey) return explicitForeignKey
+
   for (const targetRelationship of targetModelClass.getRelationships()) {
     if (targetRelationship.getType() != "belongsTo") continue
 
