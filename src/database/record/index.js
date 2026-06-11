@@ -3847,8 +3847,6 @@ class VelociousDatabaseRecord {
       throw new Error(`No insertSql on ${this.getModelClass().connection().constructor.name}`)
     }
 
-    const createdAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "created_at")
-    const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
     const data = Object.assign({}, this._belongsToChanges(), this.rawAttributes())
     const primaryKey = this.getModelClass().primaryKey()
     const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
@@ -3856,14 +3854,7 @@ class VelociousDatabaseRecord {
     const driverSupportsDefaultUUID = typeof this._connection().supportsDefaultPrimaryKeyUUID == "function" && this._connection().supportsDefaultPrimaryKeyUUID()
     const isUUIDPrimaryKey = primaryKeyType?.includes("uuid")
     const shouldAssignUUIDPrimaryKey = isUUIDPrimaryKey && !driverSupportsDefaultUUID
-    const currentDate = new Date()
-
-    if (createdAtColumn && (data.created_at === undefined || data.created_at === null || data.created_at === "")) {
-      data.created_at = currentDate
-    }
-    if (updatedAtColumn && (data.updated_at === undefined || data.updated_at === null || data.updated_at === "")) {
-      data.updated_at = currentDate
-    }
+    this._setDefaultTimestampValues(data)
 
     const columnNames = this.getModelClass().getColumnNames()
     const hasUserProvidedPrimaryKey = data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
@@ -3881,18 +3872,7 @@ class VelociousDatabaseRecord {
     })
     const insertResult = await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
 
-    if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
-      this._attributes = insertResult[0]
-      this._changes = {}
-    } else if (primaryKeyType == "uuid" && data[primaryKey] !== undefined) {
-      this._attributes = Object.assign({}, data)
-      this._changes = {}
-    } else {
-      const id = await this._connection().lastInsertID()
-
-      await this._reloadWithId(id)
-    }
-
+    await this._applyInsertResult({data, insertResult, primaryKey, primaryKeyType})
     this.setIsNewRecord(false)
 
     // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
@@ -3904,6 +3884,47 @@ class VelociousDatabaseRecord {
       }
 
       instanceRelationship.setPreloaded(true)
+    }
+  }
+
+  /**
+   * Applies the database insert response to this record.
+   * @param {object} options - Insert result options.
+   * @param {Record<string, ?>} options.data - Inserted data.
+   * @param {?} options.insertResult - Result returned from the connection.
+   * @param {string} options.primaryKey - Primary key column name.
+   * @param {string | undefined} options.primaryKeyType - Primary key column type.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _applyInsertResult({data, insertResult, primaryKey, primaryKeyType}) {
+    if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
+      this._attributes = insertResult[0]
+      this._changes = {}
+    } else if (primaryKeyType == "uuid" && data[primaryKey] !== undefined) {
+      this._attributes = Object.assign({}, data)
+      this._changes = {}
+    } else {
+      const id = await this._connection().lastInsertID()
+
+      await this._reloadWithId(id)
+    }
+  }
+
+  /**
+   * Sets timestamp defaults for a new record insert.
+   * @param {Record<string, ?>} data - Column-keyed data.
+   * @returns {void} - No return value.
+   */
+  _setDefaultTimestampValues(data) {
+    const createdAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "created_at")
+    const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
+    const currentDate = new Date()
+
+    if (createdAtColumn && (data.created_at === undefined || data.created_at === null || data.created_at === "")) {
+      data.created_at = currentDate
+    }
+    if (updatedAtColumn && (data.updated_at === undefined || data.updated_at === null || data.updated_at === "")) {
+      data.updated_at = currentDate
     }
   }
 

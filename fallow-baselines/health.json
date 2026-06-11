@@ -826,7 +826,7 @@
     },
     "src/database/record/index.js": {
       "complexity_critical": {
-        "count": 5
+        "count": 4
       },
       "complexity_high": {
         "count": 1
@@ -835,7 +835,7 @@
         "count": 7
       },
       "crap_high": {
-        "count": 8
+        "count": 10
       },
       "crap_moderate": {
         "count": 25
@@ -1508,8 +1508,8 @@
   },
   "runtime_coverage_findings": [],
   "target_keys": [
-    "src/utils/split-sql-statements.js:complexity",
     "src/database/table-data/table-column.js:high impact",
+    "src/utils/split-sql-statements.js:complexity",
     "src/frontend-models/base.js:complexity",
     "src/frontend-model-controller.js:complexity",
     "src/database/record/index.js:complexity",
@@ -1519,8 +1519,8 @@
     "src/database/drivers/base.js:complexity",
     "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/query/preloader.js:complexity",
-    "src/database/query/create-table-base.js:complexity",
     "src/testing/test-runner.js:complexity",
+    "src/database/query/create-table-base.js:complexity",
     "src/frontend-model-resource/base-resource.js:complexity",
     "src/database/drivers/mssql/structure-sql.js:complexity",
     "src/http-server/worker-handler/index.js:complexity",
@@ -1530,15 +1530,15 @@
     "src/database/drivers/sqlite/sql/alter-table.js:complexity",
     "src/database/migrator.js:complexity",
     "src/testing/test-files-finder.js:complexity",
-    "src/utils/format-value.js:high impact",
     "src/database/drivers/mysql/structure-sql.js:untested risk",
+    "src/utils/format-value.js:high impact",
     "src/mailer/base.js:circular dependency",
     "src/environment-handlers/node/cli/commands/test.js:complexity",
     "src/database/record/attachments/normalize-input.js:complexity",
     "spec/dummy/src/config/testing.js:untested risk",
     "src/database/query/preloader/belongs-to.js:complexity",
-    "src/jobs/mail-delivery.js:circular dependency",
     "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
+    "src/jobs/mail-delivery.js:circular dependency",
     "src/database/query/preloader/has-many.js:complexity",
     "src/database/query/query-data.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
