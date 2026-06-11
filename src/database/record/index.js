@@ -7,7 +7,14 @@
 
 /**
  * LifecycleCallbackType type.
- * @typedef {((model: VelociousDatabaseRecord) => void | Promise<void>) | string} LifecycleCallbackType
+ * @template {VelociousDatabaseRecord} [T=VelociousDatabaseRecord]
+ * @typedef {((model: T) => void | Promise<void>) | string} LifecycleCallbackType
+ */
+
+/**
+ * Model class constructor type used for static `this` typing.
+ * @template {VelociousDatabaseRecord} T
+ * @typedef {{new (...args: Array<?>): T}} ModelConstructor
  */
 
 import timeout from "awaitery/build/timeout.js"
@@ -428,83 +435,101 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before validation.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeValidation(callback) {
-    this.registerLifecycleCallback("beforeValidation", callback)
+    this.registerLifecycleCallback("beforeValidation", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before save.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeSave(callback) {
-    this.registerLifecycleCallback("beforeSave", callback)
+    this.registerLifecycleCallback("beforeSave", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before create.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeCreate(callback) {
-    this.registerLifecycleCallback("beforeCreate", callback)
+    this.registerLifecycleCallback("beforeCreate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before update.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeUpdate(callback) {
-    this.registerLifecycleCallback("beforeUpdate", callback)
+    this.registerLifecycleCallback("beforeUpdate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before destroy.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeDestroy(callback) {
-    this.registerLifecycleCallback("beforeDestroy", callback)
+    this.registerLifecycleCallback("beforeDestroy", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after save.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterSave(callback) {
-    this.registerLifecycleCallback("afterSave", callback)
+    this.registerLifecycleCallback("afterSave", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after create.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterCreate(callback) {
-    this.registerLifecycleCallback("afterCreate", callback)
+    this.registerLifecycleCallback("afterCreate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after update.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterUpdate(callback) {
-    this.registerLifecycleCallback("afterUpdate", callback)
+    this.registerLifecycleCallback("afterUpdate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after destroy.
-   * @param {LifecycleCallbackType} callback - Callback function or instance method name.
+   * @template {VelociousDatabaseRecord} T
+   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
+   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterDestroy(callback) {
-    this.registerLifecycleCallback("afterDestroy", callback)
+    this.registerLifecycleCallback("afterDestroy", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
