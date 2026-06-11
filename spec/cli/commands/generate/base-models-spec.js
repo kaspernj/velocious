@@ -144,11 +144,17 @@ describe("Cli - generate - base-models", () => {
       class ProjectResource extends FrontendModelBaseResource {}
 
       /** @type {Record<string, FrontendModelResourceClassType>} */
-      const resources = {
+      const typedResources = {
         Project: ProjectResource
       }
 
-      resources.Project
+      /** @type {Record<string, typeof FrontendModelBaseResource>} */
+      const baseResources = {
+        Project: ProjectResource
+      }
+
+      typedResources.Project
+      baseResources.Project
     `
     const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-resource-class-type-check-"))
     const sourcePath = `${tmpDirectory}/index.js`

@@ -1677,8 +1677,9 @@ class VelociousDatabaseRecord {
 
     normalizedValue = this._normalizeBooleanValueForWrite({attributeName: name, columnType, value: normalizedValue})
 
+    this._clearBelongsToRelationshipForChangedForeignKey(columnName)
+
     if (this._attributes[columnName] != normalizedValue) {
-      this._clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue)
       this._changes[columnName] = normalizedValue
     }
   }
@@ -1686,13 +1687,10 @@ class VelociousDatabaseRecord {
   /**
    * Clears loaded belongs-to caches when callers assign the foreign key directly.
    * @param {string} columnName - Changed database column name.
-   * @param {?} normalizedValue - New normalized column value.
    * @returns {void} - No return value.
    */
-  _clearBelongsToRelationshipForChangedForeignKey(columnName, normalizedValue) {
+  _clearBelongsToRelationshipForChangedForeignKey(columnName) {
     for (const relationship of this._belongsToRelationshipsForForeignKey(columnName)) {
-      if (this._belongsToRelationshipMatchesForeignKeyValue({normalizedValue, relationship})) continue
-
       this._clearLoadedBelongsToRelationship(relationship)
     }
   }
@@ -1720,24 +1718,10 @@ class VelociousDatabaseRecord {
   _belongsToRelationshipUsesForeignKey({columnName, relationship}) {
     if (relationship.getType() != "belongsTo") return false
 
-    return relationship.getForeignKey() == columnName
-  }
+    const foreignKey = relationship.getForeignKey()
+    const foreignKeyAttribute = this.getModelClass().getColumnNameToAttributeNameMap()[foreignKey]
 
-  /**
-   * Runs belongs to relationship matches foreign key value.
-   * @param {object} args - Relationship cache arguments.
-   * @param {?} args.normalizedValue - New normalized column value.
-   * @param {?} args.relationship - Relationship instance.
-   * @returns {boolean} - Whether the loaded related record still matches the changed foreign key.
-   */
-  _belongsToRelationshipMatchesForeignKeyValue({normalizedValue, relationship}) {
-    const loaded = relationship.getLoadedOrUndefined()
-
-    if (!loaded) return false
-    if (Array.isArray(loaded)) return false
-    if (!relationship.getTargetModelClass()) return false
-
-    return loaded.readColumn(relationship.getPrimaryKey()) == normalizedValue
+    return foreignKey == columnName || foreignKeyAttribute == columnName
   }
 
   /**

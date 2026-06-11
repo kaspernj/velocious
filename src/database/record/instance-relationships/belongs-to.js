@@ -75,6 +75,9 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     let query = TargetModelClass.where(whereArgs)
 
     query = this.applyScope(query)
+    if (Object.keys(TargetModelClass.getTranslationsMap()).length > 0) {
+      query = query.preload({translations: {}})
+    }
 
     const foreignModel = await query.first()
 
