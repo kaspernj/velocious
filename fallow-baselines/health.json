@@ -1027,13 +1027,13 @@
         "count": 9
       },
       "crap_critical": {
-        "count": 16
+        "count": 15
       },
       "crap_high": {
-        "count": 14
+        "count": 15
       },
       "crap_moderate": {
-        "count": 11
+        "count": 12
       }
     },
     "src/frontend-models/preloader.js": {
@@ -1511,47 +1511,44 @@
   },
   "runtime_coverage_findings": [],
   "target_keys": [
-    "src/frontend-models/base.js:dead code",
-    "src/frontend-models/websocket-publishers.js:dead code",
-    "src/database/table-data/table-column.js:high impact",
     "src/utils/split-sql-statements.js:complexity",
+    "src/database/table-data/table-column.js:high impact",
+    "src/frontend-models/base.js:complexity",
     "src/frontend-model-controller.js:complexity",
     "src/database/record/index.js:complexity",
     "src/routes/resolver.js:complexity",
-    "src/testing/test.js:dead code",
-    "src/database/query/model-class-query.js:complexity",
     "src/http-server/client/websocket-session.js:complexity",
+    "src/database/query/model-class-query.js:complexity",
     "src/database/drivers/base.js:complexity",
     "src/database/drivers/pgsql/structure-sql.js:untested risk",
     "src/database/query/preloader.js:complexity",
+    "src/database/query/create-table-base.js:complexity",
     "src/testing/test-runner.js:complexity",
     "src/frontend-model-resource/base-resource.js:complexity",
-    "src/database/query/create-table-base.js:complexity",
     "src/database/drivers/mssql/structure-sql.js:complexity",
     "src/http-server/worker-handler/index.js:complexity",
     "src/routes/resource-route.js:complexity",
-    "src/database/query/insert-base.js:complexity",
     "src/database/query/alter-table-base.js:complexity",
+    "src/database/query/insert-base.js:complexity",
     "src/database/drivers/sqlite/sql/alter-table.js:complexity",
-    "src/testing/test-files-finder.js:complexity",
     "src/database/migrator.js:complexity",
+    "src/testing/test-files-finder.js:complexity",
+    "src/utils/format-value.js:high impact",
     "src/database/drivers/mysql/structure-sql.js:untested risk",
-    "src/database/record/attachments/normalize-input.js:complexity",
     "src/mailer/base.js:circular dependency",
-    "src/frontend-models/outgoing-event-buffer.js:dead code",
-    "src/database/query/where-model-class-hash.js:complexity",
-    "src/utils/format-value.js:untested risk",
-    "src/database/query/preloader/belongs-to.js:complexity",
     "src/environment-handlers/node/cli/commands/test.js:complexity",
+    "src/database/record/attachments/normalize-input.js:complexity",
     "spec/dummy/src/config/testing.js:untested risk",
-    "src/database/query/preloader/has-many.js:complexity",
+    "src/database/query/preloader/belongs-to.js:complexity",
     "src/jobs/mail-delivery.js:circular dependency",
-    "src/database/query/query-data.js:complexity",
+    "src/database/query/preloader/has-many.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/base-models.js:complexity",
+    "src/database/query/query-data.js:complexity",
     "src/environment-handlers/node/cli/commands/generate/frontend-models.js:complexity",
+    "src/testing/test-filter-parser.js:complexity",
     "src/http-server/client/request-buffer/index.js:complexity",
     "src/testing/expect.js:complexity",
-    "src/testing/test-filter-parser.js:complexity",
+    "src/database/query/where-model-class-hash.js:complexity",
     "src/http-client/response.js:complexity",
     "spec/mailers/smtp-mailer-backend-spec.js:complexity"
   ]
