@@ -292,7 +292,7 @@
  */
 
 /**
- * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, never> & {new (args: ConstructorParameters<typeof import("./frontend-model-resource/base-resource.js").default>[0]): import("./frontend-model-resource/base-resource.js").default<typeof import("./database/record/index.js").default>}} FrontendModelResourceClassType
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, never> & {new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs): import("./frontend-model-resource/base-resource.js").default<typeof import("./database/record/index.js").default>}} FrontendModelResourceClassType
  */
 
 /**

@@ -30,6 +30,40 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     expect(task.project().id()).toEqual(targetProject.id())
   })
 
+  it("keeps matching loaded belongs-to relationships usable after assigning the same foreign key", async () => {
+    const project = await Project.create({name: "Matching loaded project"})
+    const task = await Task.create({name: "Matching foreign key task", project})
+
+    await task.projectOrLoad()
+    task.setProjectId(project.id())
+
+    expect(task.project().name()).toEqual("Matching loaded project")
+  })
+
+  it("preloads translations when explicitly requested for a reloaded changed belongs-to foreign key", async () => {
+    const originalProject = await Project.create({name: "Original translated project"})
+    const targetProject = await Project.create({name: "Target translated project"})
+    const task = await Task.create({name: "Changed translated relationship task", project: originalProject})
+
+    await task.projectOrLoad()
+    task.setProjectId(targetProject.id())
+
+    await task.relationshipOrLoad("project", {preloadTranslations: true})
+
+    expect(task.project().name()).toEqual("Target translated project")
+  })
+
+  it("does not treat a saved foreign key as a loaded belongs-to relationship", async () => {
+    const project = await Project.create({name: "Assigned foreign key project"})
+    const task = await Task.create({name: "Assigned foreign key task", projectId: project.id()})
+
+    expect(() => task.project()).toThrowError("Task#project hasn't been preloaded")
+
+    const loadedProject = await task.projectOrLoad()
+
+    expect(loadedProject?.id()).toEqual(project.id())
+  })
+
   it("clears a loaded belongs-to relationship when the foreign key changes", async () => {
     const originalProject = await Project.create()
     const targetProject = await Project.create()

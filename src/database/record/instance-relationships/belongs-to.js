@@ -51,19 +51,36 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     if (batched) return this.loaded()
 
-    const foreignKey = this.getForeignKey()
-    const foreignModelID = this.getModel().readColumn(foreignKey)
-    const TargetModelClass = this.getTargetModelClass()
+    await this._loadForeignModelOrBlank()
+    this.setDirty(false)
+    this.setPreloaded(true)
 
-    if (!TargetModelClass) throw new Error("Can't load without a target model")
+    return this.loaded()
+  }
+
+  /**
+   * Loads the foreign model, or marks the relationship blank for empty keys.
+   * @returns {Promise<void>} - Resolves after the loaded value is assigned.
+   */
+  async _loadForeignModelOrBlank() {
+    const TargetModelClass = this._getTargetModelClassOrFail()
+    const foreignModelID = this._readForeignModelID()
+
     if (foreignModelID === null || foreignModelID === undefined || foreignModelID === "") {
       this.setLoaded(undefined)
-      this.setDirty(false)
-      this.setPreloaded(true)
-
-      return this.loaded()
+    } else {
+      this.setLoaded(await this._loadForeignModel({foreignModelID, TargetModelClass}))
     }
+  }
 
+  /**
+   * Loads the related model from the foreign key value.
+   * @param {object} args - Options.
+   * @param {string | number | null | undefined} args.foreignModelID - Foreign model ID.
+   * @param {TMC} args.TargetModelClass - Target model class.
+   * @returns {Promise<InstanceType<TMC> | undefined>} - Loaded foreign model.
+   */
+  async _loadForeignModel({foreignModelID, TargetModelClass}) {
     const primaryKey = TargetModelClass.primaryKey()
     /**
      * Where args.
@@ -72,20 +89,31 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     whereArgs[primaryKey] = foreignModelID
 
-    let query = TargetModelClass.where(whereArgs)
-
-    query = this.applyScope(query)
+    const query = this.applyScope(TargetModelClass.where(whereArgs))
 
     const foreignModel = await query.first()
 
-    if (foreignModel) {
-      this.setLoaded(foreignModel)
-    } else {
-      this.setLoaded(undefined)
-    }
-    this.setDirty(false)
-    this.setPreloaded(true)
-
-    return this.loaded()
+    return foreignModel || undefined
   }
+
+  /**
+   * Gets the required target model class.
+   * @returns {TMC} - Target model class.
+   */
+  _getTargetModelClassOrFail() {
+    const TargetModelClass = this.getTargetModelClass()
+
+    if (!TargetModelClass) throw new Error("Can't load without a target model")
+
+    return TargetModelClass
+  }
+
+  /**
+   * Reads the current foreign key value from the parent record.
+   * @returns {string | number | null | undefined} - Foreign model ID.
+   */
+  _readForeignModelID() {
+    return this.getModel().readColumn(this.getForeignKey())
+  }
+
 }

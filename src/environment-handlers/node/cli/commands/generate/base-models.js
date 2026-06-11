@@ -3,8 +3,10 @@ import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 
-/** Maps an effective column type to the JSDoc type used in generated base models.
- *  @type {Record<string, string>} */
+/**
+ * Maps an effective column type to the JSDoc type used in generated base models.
+ * @type {Record<string, string>}
+ */
 const jsDocTypeByColumnType = {
   bigint: "number",
   bit: "number",
@@ -34,6 +36,23 @@ const jsDocTypeByColumnType = {
 
 /** Effective column types whose generated setter additionally accepts a string. */
 const setterStringInputColumnTypes = new Set(["date", "datetime", "timestamp without time zone"])
+
+/**
+ * Generates a base-model relationship method.
+ * @param {{abstract?: boolean, body: string, name: string, param?: {name: string, type: string}, returns: string}} args - Method parts.
+ * @returns {string} - Generated method source.
+ */
+function generatedRelationshipMethod({abstract = false, body, name, param, returns}) {
+  let fileContent = "  /**\n"
+
+  if (abstract) fileContent += "   * @abstract\n"
+  if (param) fileContent += `   * @param {${param.type}} ${param.name}\n`
+  fileContent += `   * @returns {${returns}}\n`
+  fileContent += "   */\n"
+  fileContent += `  ${name}(${param ? param.name : ""}) { ${body} }\n`
+
+  return fileContent
+}
 
 export default class DbGenerateModel extends BaseCommand {
   async execute() {
@@ -291,7 +310,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}")) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}", {preloadTranslations: true})) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"
@@ -323,17 +342,19 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += `  ${relationship.getRelationshipName()}Loaded() { return /** @type {Array<import("${recordImport}").default>} */ (this.getRelationshipByName("${relationship.getRelationshipName()}").loaded()) }\n`
 
           fileContent += "\n"
-          fileContent += "  /**\n"
-          fileContent += "   * @abstract\n"
-          fileContent += `   * @returns {Promise<Array<import("${recordImport}").default>>}\n`
-          fileContent += "   */\n"
-          fileContent += `  load${inflection.camelize(relationship.getRelationshipName())}() { throw new Error("Not implemented") }\n`
+          fileContent += generatedRelationshipMethod({
+            abstract: true,
+            body: "throw new Error(\"Not implemented\")",
+            name: `load${inflection.camelize(relationship.getRelationshipName())}`,
+            returns: `Promise<Array<import("${recordImport}").default>>`
+          })
 
           fileContent += "\n"
-          fileContent += "  /**\n"
-          fileContent += `   * @returns {Promise<Array<import("${recordImport}").default>>}\n`
-          fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<Array<import("${recordImport}").default>>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}")) }\n`
+          fileContent += generatedRelationshipMethod({
+            body: `return /** @type {Promise<Array<import("${recordImport}").default>>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}"))`,
+            name: `${relationship.getRelationshipName()}OrLoad`,
+            returns: `Promise<Array<import("${recordImport}").default>>`
+          })
 
           fileContent += "\n"
           fileContent += "  /**\n"

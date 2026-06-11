@@ -108,7 +108,7 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/user.js").default | undefined>}
    */
-  userOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("user")) }
+  userOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("user", {preloadTranslations: true})) }
 
   /**
    * @abstract

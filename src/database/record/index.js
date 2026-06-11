@@ -621,7 +621,7 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`${relationshipName}OrLoad`] = async function() {
-        return await this.relationshipOrLoad(relationshipName)
+        return await this.relationshipOrLoad(relationshipName, {preloadTranslations: true})
       }
 
       prototype[`set${inflection.camelize(relationshipName)}`] = function(/**
@@ -991,12 +991,35 @@ class VelociousDatabaseRecord {
   /**
    * Runs relationship or load.
    * @param {string} relationshipName - Relationship name.
+   * @param {{preloadTranslations?: boolean}} [options] - Load options.
    * @returns {Promise<?>} - Loaded relationship value.
    */
-  async relationshipOrLoad(relationshipName) {
+  async relationshipOrLoad(relationshipName, options = {}) {
     const relationship = this.getRelationshipByName(relationshipName)
+    let loaded = await relationship.autoloadOrLoad()
 
-    return await relationship.autoloadOrLoad()
+    if (options.preloadTranslations) {
+      loaded = await this._preloadLoadedRelationshipTranslations(loaded)
+    }
+
+    return loaded
+  }
+
+  /**
+   * Preloads translations on a loaded relationship target when explicitly requested.
+   * @param {?} loaded - Loaded relationship value.
+   * @returns {Promise<?>} - Relationship value after translation preload.
+   */
+  async _preloadLoadedRelationshipTranslations(loaded) {
+    if (!loaded || !loaded.isPersisted() || !await loaded.getModelClass().hasTranslationsTable()) return loaded
+
+    const translationsRelationship = loaded.getRelationshipByName("translations")
+
+    if (translationsRelationship.getPreloaded()) return loaded
+
+    await loaded.preload({translations: {}})
+
+    return loaded
   }
 
   /**
@@ -1720,7 +1743,10 @@ class VelociousDatabaseRecord {
   _belongsToRelationshipUsesForeignKey({columnName, relationship}) {
     if (relationship.getType() != "belongsTo") return false
 
-    return relationship.getForeignKey() == columnName
+    const foreignKey = relationship.getForeignKey()
+    const foreignKeyAttribute = this.getModelClass().getColumnNameToAttributeNameMap()[foreignKey]
+
+    return foreignKey == columnName || foreignKeyAttribute == columnName
   }
 
   /**
@@ -3875,7 +3901,14 @@ class VelociousDatabaseRecord {
     await this._applyInsertResult({data, insertResult, primaryKey, primaryKeyType})
     this.setIsNewRecord(false)
 
-    // Mark all relationships as preloaded, since we don't expect anything to have magically appeared since we created the record.
+    this._markLoadedRelationshipsPreloadedAfterCreate()
+  }
+
+  /**
+   * Marks only relationships with in-memory loaded values as preloaded after create.
+   * @returns {void} - No return value.
+   */
+  _markLoadedRelationshipsPreloadedAfterCreate() {
     for (const relationship of this.getModelClass().getRelationships()) {
       const instanceRelationship = this.getRelationshipByName(relationship.getRelationshipName())
 
@@ -3883,7 +3916,9 @@ class VelociousDatabaseRecord {
         instanceRelationship.setLoaded([])
       }
 
-      instanceRelationship.setPreloaded(true)
+      if (instanceRelationship.getLoadedOrUndefined() !== undefined) {
+        instanceRelationship.setPreloaded(true)
+      }
     }
   }
 

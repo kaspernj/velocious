@@ -330,18 +330,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const ModelClass = this.modelClass()
     const model = new ModelClass()
 
-    await ModelClass.transaction(async () => {
-      await this._assignWithVirtualSetters(model, filtered)
-      await model.save()
-
-      if (options.nestedAttributes) {
-        await this._applyNestedAttributes(model, options.nestedAttributes, options.controller || null, permit)
-      }
-    })
-
-    await this._preloadNestedWritableRelationships(model, permit)
-
-    return model
+    return await this._saveWithNestedAttributes({filtered, model, options, permit})
   }
 
   /**
@@ -363,9 +352,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   async update(model, attributes, options = {}) {
     const permit = parsePermittedParams(this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: attributes}))
     const filtered = filterWritableFrontendModelAttributes(model, attributes, this, permit.attributes)
-    const ModelClass = this.modelClass()
 
-    await ModelClass.transaction(async () => {
+    return await this._saveWithNestedAttributes({filtered, model, options, permit})
+  }
+
+  /**
+   * Saves a model and applies nested attributes in one transaction.
+   * @param {{filtered: Record<string, ?>, model: import("../database/record/index.js").default, options: {controller?: ?, nestedAttributes?: Record<string, ?> | null}, permit: {attributes: string[], nested: Record<string, ?>}}} args - Save arguments.
+   * @returns {Promise<import("../database/record/index.js").default>} - Saved model.
+   */
+  async _saveWithNestedAttributes({filtered, model, options, permit}) {
+    await this.modelClass().transaction(async () => {
       await this._assignWithVirtualSetters(model, filtered)
       await model.save()
 
