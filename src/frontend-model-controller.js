@@ -2741,10 +2741,11 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model client error payload for error.
    * @param {?} error - Caught error.
-   * @returns {Record<string, ?>} - Client payload for the current environment.
+   * @returns {Promise<Record<string, ?>>} - Client payload for the current environment.
    */
-  frontendModelClientErrorPayloadForError(error) {
+  async frontendModelClientErrorPayloadForError(error) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
 
     let validationErrorsPayload = {}
 
@@ -2778,7 +2779,14 @@ export default class FrontendModelController extends Controller {
         error
       }),
       ...(velociousMetadata ? {velocious: velociousMetadata} : {}),
-      ...validationErrorsPayload
+      ...validationErrorsPayload,
+      ...(await this.getConfiguration().clientErrorPayloadForError({
+        context: {
+          controller: this.constructor.name
+        },
+        error: normalizedError,
+        request: this.getRequest()
+      }))
     }
   }
 
@@ -2845,7 +2853,7 @@ export default class FrontendModelController extends Controller {
       await this.render({
         json: /**
                * Types the following value.
-                @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(this.frontendModelClientErrorPayloadForError(error)))
+                @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error)))
       })
     }
   }
@@ -3122,7 +3130,7 @@ export default class FrontendModelController extends Controller {
 
         responses.push({
           requestId,
-          response: this.frontendModelClientErrorPayloadForError(error)
+          response: await this.frontendModelClientErrorPayloadForError(error)
         })
       }
     }
@@ -3348,7 +3356,7 @@ export default class FrontendModelController extends Controller {
       await this.render({
         json: /**
                * Types the following value.
-                @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(this.frontendModelClientErrorPayloadForError(error)))
+                @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error)))
       })
     }
   }

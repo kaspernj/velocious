@@ -1,0 +1,1 @@
+Add `Configuration#addClientErrorPayloadReporter` so backend apps can attach client-safe metadata, such as bug-report URLs, to frontend-model error responses without exposing internal exception details.

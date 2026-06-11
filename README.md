@@ -583,6 +583,16 @@ const configuration = new Configuration({
 
 This opt-in is ignored in `production`; production frontend-model responses never include internal exception details.
 
+Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, and a small `context` object, and should only return fields that are safe for clients to see. This is useful for attaching an error-reporting URL while keeping the normal production error message generic:
+
+```js
+configuration.addClientErrorPayloadReporter(async ({error, request, context}) => {
+  const report = await reportErrorToService({error, request, context})
+
+  return {bugReportUrl: report.url}
+})
+```
+
 For sqlite web databases, Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
 
 ```js
