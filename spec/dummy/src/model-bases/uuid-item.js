@@ -90,12 +90,12 @@ export default class UuidItemBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
-  uuidInteractionsOrLoad() { return this.relationshipOrLoad("uuidInteractions") }
+  uuidInteractionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("uuidInteractions")) }
 
   /**
    * @abstract
    * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
    * @returns {void}
    */
-  setUuidInteractions(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setUuidInteractions(newModels) { void newModels; throw new Error("Not implemented") }
 }

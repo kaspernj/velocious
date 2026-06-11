@@ -97,7 +97,7 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/user.js").default}
    */
-  buildUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildUser(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -108,12 +108,12 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/user.js").default | undefined>}
    */
-  userOrLoad() { return this.relationshipOrLoad("user") }
+  userOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("user")) }
 
   /**
    * @abstract
    * @param {import("../models/user.js").default} newModel
    * @returns {void}
    */
-  setUser(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setUser(newModel) { void newModel; throw new Error("Not implemented") }
 }

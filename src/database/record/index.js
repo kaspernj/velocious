@@ -3377,12 +3377,12 @@ class VelociousDatabaseRecord {
     return this.getModelClass().tableName()
   }
 
-  /* eslint-disable jsdoc/reject-any-type -- `readAttribute` is a dynamic, by-name accessor: the value depends on the column type and can be replaced by a user-defined getter override on the model (Rails/ActiveRecord style), so `any` is the honest return type. The typed contract lives in the generated attribute getters, which declare each column's concrete type. */
   /**
    * Reads an attribute value from the record. Read dynamically by name, so the value can be any
    * column type and may be overridden by a user-defined getter on the model.
+   * @template V
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {any} - The attribute value.
+   * @returns {V} The attribute value, typed by the caller's accessor contract.
    */
   readAttribute(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -3390,9 +3390,8 @@ class VelociousDatabaseRecord {
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
 
-    return this.readColumn(columnName)
+    return /** @type {V} */ (this.readColumn(columnName))
   }
-  /* eslint-enable jsdoc/reject-any-type */
 
   /**
    * Read an association count attached by `.withCount(...)`. Counts are

@@ -90,12 +90,12 @@ export default class StringSubjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
-  stringSubjectInteractionsOrLoad() { return this.relationshipOrLoad("stringSubjectInteractions") }
+  stringSubjectInteractionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("stringSubjectInteractions")) }
 
   /**
    * @abstract
    * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
    * @returns {void}
    */
-  setStringSubjectInteractions(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setStringSubjectInteractions(newModels) { void newModels; throw new Error("Not implemented") }
 }
