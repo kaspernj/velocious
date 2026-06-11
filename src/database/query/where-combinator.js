@@ -21,7 +21,6 @@ export default class VelociousDatabaseQueryWhereCombinator extends WhereBase {
    * Returns the toSql result.
    * @returns {string} - SQL string.
    */
-  // fallow-ignore-next-line unused-class-member
   toSql() {
     if (this.wheres.length < 1) return "(1=1)"
 

@@ -113,7 +113,7 @@ export default class UserBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
-  buildCreatedProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildCreatedProject(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -124,14 +124,14 @@ export default class UserBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project.js").default | undefined>}
    */
-  createdProjectOrLoad() { return this.relationshipOrLoad("createdProject") }
+  createdProjectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("createdProject")) }
 
   /**
    * @abstract
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
-  setCreatedProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setCreatedProject(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/authentication-token.js").default>}
@@ -152,14 +152,14 @@ export default class UserBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../models/authentication-token.js").default>>}
    */
-  authenticationTokensOrLoad() { return this.relationshipOrLoad("authenticationTokens") }
+  authenticationTokensOrLoad() { return /** @type {Promise<Array<import("../models/authentication-token.js").default>>} */ (this.relationshipOrLoad("authenticationTokens")) }
 
   /**
    * @abstract
    * @param {Array<import("../models/authentication-token.js").default>} newModels
    * @returns {void}
    */
-  setAuthenticationTokens(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setAuthenticationTokens(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/user.js").default, typeof import("../models/project.js").default>}
@@ -180,12 +180,12 @@ export default class UserBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../models/project.js").default>>}
    */
-  createdProjectsOrLoad() { return this.relationshipOrLoad("createdProjects") }
+  createdProjectsOrLoad() { return /** @type {Promise<Array<import("../models/project.js").default>>} */ (this.relationshipOrLoad("createdProjects")) }
 
   /**
    * @abstract
    * @param {Array<import("../models/project.js").default>} newModels
    * @returns {void}
    */
-  setCreatedProjects(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setCreatedProjects(newModels) { void newModels; throw new Error("Not implemented") }
 }

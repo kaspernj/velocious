@@ -1347,6 +1347,18 @@ function frontendModelTransportPath(url) {
 }
 
 /**
+ * Runs frontend model request headers.
+ * @returns {Record<string, string>} - Headers for frontend-model HTTP requests.
+ */
+function frontendModelRequestHeaders() {
+  const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
+    ? (frontendModelTransportConfig.requestHeaders() || {})
+    : (frontendModelTransportConfig.requestHeaders || {})
+
+  return {"Content-Type": "application/json", ...dynamicHeaders}
+}
+
+/**
  * Runs perform shared frontend model api request.
  * @param {Record<string, ?>} requestPayload - Shared request payload.
  * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
@@ -1355,10 +1367,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload)
   const websocketClient = frontendModelTransportConfig.websocketClient
   const url = frontendModelApiUrl()
-  const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
-    ? (frontendModelTransportConfig.requestHeaders() || {})
-    : (frontendModelTransportConfig.requestHeaders || {})
-  const mergedHeaders = {"Content-Type": "application/json", ...dynamicHeaders}
+  const mergedHeaders = frontendModelRequestHeaders()
 
   if (websocketClient) {
     const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
@@ -1379,36 +1388,49 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const responseText = await response.text()
 
   if (!response.ok) {
-    // Surface the backend's friendly errorMessage envelope (the
-    // `{status: "error", errorMessage: "..."}` shape every controller
-    // ships on its 4xx/5xx responses) instead of the generic status
-    // string. Fall through to the status-only message when the body is
-    // missing, non-JSON, or has no usable errorMessage field.
-    const responseContentType = response.headers.get("content-type")
-
-    if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
-      /**
-       * Defines errorBody.
-        @type {Record<string, ?> | null} */
-      let errorBody
-
-      try {
-        errorBody = JSON.parse(responseText)
-      } catch {
-        errorBody = null
-      }
-
-      if (errorBody && typeof errorBody.errorMessage === "string" && errorBody.errorMessage.trim().length > 0) {
-        throw new Error(errorBody.errorMessage.trim())
-      }
-    }
-
-    throw new Error(`Request failed (${response.status}) for shared frontend model API`)
+    throwFrontendModelHttpError({
+      commandLabel: "shared frontend model API",
+      response,
+      responseText
+    })
   }
 
   const json = responseText.length > 0 ? JSON.parse(responseText) : {}
 
   return /** Narrows the runtime value to the documented type. @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
+}
+
+/**
+ * Throws a frontend-model HTTP error with backend-provided envelope details when available.
+ * @param {{commandLabel: string, response: Response, responseText: string}} args - Error response details.
+ * @returns {never}
+ */
+function throwFrontendModelHttpError({commandLabel, response, responseText}) {
+  // Surface the backend's friendly errorMessage envelope (the
+  // `{status: "error", errorMessage: "..."}` shape every controller
+  // ships on its 4xx/5xx responses) instead of the generic status
+  // string. Fall through to the status-only message when the body is
+  // missing, non-JSON, or has no usable errorMessage field.
+  const responseContentType = response.headers.get("content-type")
+
+  if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
+    /**
+     * Defines errorBody.
+      @type {Record<string, ?> | null} */
+    let errorBody
+
+    try {
+      errorBody = JSON.parse(responseText)
+    } catch {
+      errorBody = null
+    }
+
+    if (errorBody && typeof errorBody.errorMessage === "string" && errorBody.errorMessage.trim().length > 0) {
+      throw new Error(errorBody.errorMessage.trim())
+    }
+  }
+
+  throw new Error(`Request failed (${response.status}) for ${commandLabel}`)
 }
 
 /**
@@ -3584,11 +3606,7 @@ export default class FrontendModelBase {
      * Payload.
       @type {Record<string, ?>} */
     const payload = {
-      // For creates, send all assigned attributes — the user-set hash typically
-      // only contains writable fields. For updates, send only changed
-      // attributes so server-side strict permits don't reject framework-managed
-      // fields like `id`/`createdAt`/`updatedAt` that the resource never lists.
-      attributes: isNew ? this.attributes() : this._changedAttributesForSave()
+      attributes: this._changedAttributesForSave()
     }
 
     if (!isNew) {
@@ -3614,10 +3632,10 @@ export default class FrontendModelBase {
 
   /**
    * Returns the subset of `_attributes` whose value has diverged from
-   * `_persistedAttributes`. Used by `save()` on the update path so the server
-   * receives only the fields the caller actually changed — avoiding strict
-   * permit rejections on framework-managed fields like `id`, `createdAt`,
-   * `updatedAt` that the resource never lists in `permittedParams`.
+   * `_persistedAttributes`. Used by `save()` so the server receives only the
+   * fields the caller actually changed — avoiding strict permit rejections on
+   * framework-managed fields like `id`, `createdAt`, `updatedAt`, or owner
+   * foreign keys that the resource never lists in `permittedParams`.
    * @returns {Record<string, ?>} - Changed attributes hash.
    */
   _changedAttributesForSave() {
@@ -3626,11 +3644,23 @@ export default class FrontendModelBase {
       @type {Record<string, ?>} */
     const changedAttributes = {}
 
-    for (const [attributeName, [, currentValue]] of Object.entries(this.changes())) {
+    for (const [attributeName, [previousValue, currentValue]] of Object.entries(this.changes())) {
+      if (this.isNewRecord() && previousValue === undefined && currentValue === null) continue
+
       changedAttributes[attributeName] = currentValue
     }
 
     return changedAttributes
+  }
+
+  /**
+   * Marks the current value for an attribute as already persisted so the next
+   * save does not send it unless the caller changes it again.
+   * @param {string} attributeName - Attribute to mark unchanged.
+   * @returns {void}
+   */
+  markAttributeUnchanged(attributeName) {
+    this._persistedAttributes[attributeName] = cloneFrontendModelAttributes({value: this._attributes[attributeName]}).value
   }
 
   /**
@@ -3825,17 +3855,20 @@ export default class FrontendModelBase {
       const directResponse = await fetch(url, {
         body: JSON.stringify(serializedPayload),
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: frontendModelRequestHeaders(),
         method: "POST"
       })
 
+      const directResponseText = await directResponse.text()
+
       if (!directResponse.ok) {
-        throw new Error(`Request failed (${directResponse.status}) for ${this.name}#${commandType}`)
+        throwFrontendModelHttpError({
+          commandLabel: `${this.name}#${commandType}`,
+          response: directResponse,
+          responseText: directResponseText
+        })
       }
 
-      const directResponseText = await directResponse.text()
       const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
       const decodedDirectResponse = /**
                                      * Narrows the runtime value to the documented type.
@@ -3925,9 +3958,12 @@ export default class FrontendModelBase {
 
     if (!hasErrorMessage && !hasOnlyStatus && !hasErrorEnvelopeKeys && looksLikeRawModelPayload) return
 
-    const errorMessage = hasErrorMessage
+    const debugErrorMessage = typeof response.debugErrorMessage === "string" && response.debugErrorMessage.length > 0
+      ? response.debugErrorMessage
+      : null
+    const errorMessage = debugErrorMessage || (hasErrorMessage
       ? response.errorMessage
-      : `Request failed for ${this.name}#${commandType}`
+      : `Request failed for ${this.name}#${commandType}`)
 
     const error = /**
                    * Narrows the runtime value to the documented type.

@@ -148,7 +148,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/user.js").default}
    */
-  buildCreatingUser(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildCreatingUser(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -159,14 +159,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/user.js").default | undefined>}
    */
-  creatingUserOrLoad() { return this.relationshipOrLoad("creatingUser") }
+  creatingUserOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("creatingUser")) }
 
   /**
    * @abstract
    * @param {import("../models/user.js").default} newModel
    * @returns {void}
    */
-  setCreatingUser(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setCreatingUser(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
@@ -187,14 +187,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../models/task.js").default>>}
    */
-  tasksOrLoad() { return this.relationshipOrLoad("tasks") }
+  tasksOrLoad() { return /** @type {Promise<Array<import("../models/task.js").default>>} */ (this.relationshipOrLoad("tasks")) }
 
   /**
    * @abstract
    * @param {Array<import("../models/task.js").default>} newModels
    * @returns {void}
    */
-  setTasks(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setTasks(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
@@ -215,14 +215,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../models/task.js").default>>}
    */
-  doneTasksOrLoad() { return this.relationshipOrLoad("doneTasks") }
+  doneTasksOrLoad() { return /** @type {Promise<Array<import("../models/task.js").default>>} */ (this.relationshipOrLoad("doneTasks")) }
 
   /**
    * @abstract
    * @param {Array<import("../models/task.js").default>} newModels
    * @returns {void}
    */
-  setDoneTasks(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setDoneTasks(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../models/project-detail.js").default}
@@ -234,7 +234,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project-detail.js").default}
    */
-  buildProjectDetail(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildProjectDetail(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -245,14 +245,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
-  projectDetailOrLoad() { return this.relationshipOrLoad("projectDetail") }
+  projectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("projectDetail")) }
 
   /**
    * @abstract
    * @param {import("../models/project-detail.js").default} newModel
    * @returns {void}
    */
-  setProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setProjectDetail(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../models/project-detail.js").default}
@@ -264,7 +264,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project-detail.js").default}
    */
-  buildActiveProjectDetail(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildActiveProjectDetail(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -275,14 +275,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
-  activeProjectDetailOrLoad() { return this.relationshipOrLoad("activeProjectDetail") }
+  activeProjectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("activeProjectDetail")) }
 
   /**
    * @abstract
    * @param {import("../models/project-detail.js").default} newModel
    * @returns {void}
    */
-  setActiveProjectDetail(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setActiveProjectDetail(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../../../../src/database/record/index.js").default>}
@@ -303,14 +303,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
-  interactionsOrLoad() { return this.relationshipOrLoad("interactions") }
+  interactionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("interactions")) }
 
   /**
    * @abstract
    * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
    * @returns {void}
    */
-  setInteractions(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setInteractions(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("velocious/build/src/database/record/index.js").default}
@@ -322,7 +322,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
-  buildPrimaryInteraction(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildPrimaryInteraction(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -333,14 +333,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
-  primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
+  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
 
   /**
    * @abstract
    * @param {import("velocious/build/src/database/record/index.js").default} newModel
    * @returns {void}
    */
-  setPrimaryInteraction(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setPrimaryInteraction(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/comment.js").default>}
@@ -361,14 +361,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../models/comment.js").default>>}
    */
-  commentsOrLoad() { return this.relationshipOrLoad("comments") }
+  commentsOrLoad() { return /** @type {Promise<Array<import("../models/comment.js").default>>} */ (this.relationshipOrLoad("comments")) }
 
   /**
    * @abstract
    * @param {Array<import("../models/comment.js").default>} newModels
    * @returns {void}
    */
-  setComments(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setComments(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>}
@@ -389,14 +389,14 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../model-bases/project-translation.js").default>>}
    */
-  translationsOrLoad() { return this.relationshipOrLoad("translations") }
+  translationsOrLoad() { return /** @type {Promise<Array<import("../model-bases/project-translation.js").default>>} */ (this.relationshipOrLoad("translations")) }
 
   /**
    * @abstract
    * @param {Array<import("../model-bases/project-translation.js").default>} newModels
    * @returns {void}
    */
-  setTranslations(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setTranslations(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../model-bases/project-translation.js").default}
@@ -408,7 +408,7 @@ export default class ProjectBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../model-bases/project-translation.js").default}
    */
-  buildCurrentTranslation(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildCurrentTranslation(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -419,12 +419,12 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../model-bases/project-translation.js").default | undefined>}
    */
-  currentTranslationOrLoad() { return this.relationshipOrLoad("currentTranslation") }
+  currentTranslationOrLoad() { return /** @type {Promise<import("../model-bases/project-translation.js").default | undefined>} */ (this.relationshipOrLoad("currentTranslation")) }
 
   /**
    * @abstract
    * @param {import("../model-bases/project-translation.js").default} newModel
    * @returns {void}
    */
-  setCurrentTranslation(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setCurrentTranslation(newModel) { void newModel; throw new Error("Not implemented") }
 }

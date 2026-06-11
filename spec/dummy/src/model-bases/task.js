@@ -129,7 +129,7 @@ export default class TaskBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
-  buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildProject(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -140,14 +140,14 @@ export default class TaskBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project.js").default | undefined>}
    */
-  projectOrLoad() { return this.relationshipOrLoad("project") }
+  projectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("project")) }
 
   /**
    * @abstract
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
-  setProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setProject(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../../../../src/database/record/index.js").default>}
@@ -168,14 +168,14 @@ export default class TaskBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
    */
-  interactionsOrLoad() { return this.relationshipOrLoad("interactions") }
+  interactionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("interactions")) }
 
   /**
    * @abstract
    * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
    * @returns {void}
    */
-  setInteractions(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setInteractions(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("velocious/build/src/database/record/index.js").default}
@@ -187,7 +187,7 @@ export default class TaskBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
-  buildPrimaryInteraction(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildPrimaryInteraction(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -198,14 +198,14 @@ export default class TaskBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
-  primaryInteractionOrLoad() { return this.relationshipOrLoad("primaryInteraction") }
+  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
 
   /**
    * @abstract
    * @param {import("velocious/build/src/database/record/index.js").default} newModel
    * @returns {void}
    */
-  setPrimaryInteraction(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setPrimaryInteraction(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../models/comment.js").default>}
@@ -226,12 +226,12 @@ export default class TaskBase extends DatabaseRecord {
   /**
    * @returns {Promise<Array<import("../models/comment.js").default>>}
    */
-  commentsOrLoad() { return this.relationshipOrLoad("comments") }
+  commentsOrLoad() { return /** @type {Promise<Array<import("../models/comment.js").default>>} */ (this.relationshipOrLoad("comments")) }
 
   /**
    * @abstract
    * @param {Array<import("../models/comment.js").default>} newModels
    * @returns {void}
    */
-  setComments(newModels) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setComments(newModels) { void newModels; throw new Error("Not implemented") }
 }

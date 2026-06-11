@@ -202,6 +202,14 @@
  */
 
 /**
+ * @typedef {Record<string, unknown> & {configuration?: import("./configuration.js").default, currentUser?: Record<string, unknown> | null, params?: Record<string, unknown>, request?: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default}} VelociousLooseObject
+ */
+
+/**
+ * @typedef {new (args: {attachmentName?: string, configuration: import("./configuration.js").default, modelClass?: typeof import("./database/record/index.js").default, name?: string, options?: Record<string, ?>}) => object} AttachmentDriverConstructor
+ */
+
+/**
  * @typedef {object} ScheduledBackgroundJobsConfiguration
  * @property {Record<string, ScheduledBackgroundJobConfiguration>} jobs - Scheduled jobs keyed by name.
  */
@@ -213,7 +221,7 @@
 /**
  * @typedef {object} AttachmentDriverConfiguration
  * @property {function({configuration: import("./configuration.js").default, name: string, options: Record<string, ?>}) : Record<string, ?>} [create] - Optional factory for a custom attachment driver instance.
- * @property {new (...args: Array<?>) => Record<string, ?>} [driverClass] - Optional custom attachment driver class.
+ * @property {AttachmentDriverConstructor} [driverClass] - Optional custom attachment driver class.
  * @property {Record<string, ?>} [instance] - Optional custom attachment driver instance.
  */
 

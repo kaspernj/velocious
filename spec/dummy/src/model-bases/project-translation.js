@@ -113,7 +113,7 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
-  buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildProject(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -124,12 +124,12 @@ export default class ProjectTranslationBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project.js").default | undefined>}
    */
-  ProjectOrLoad() { return this.relationshipOrLoad("Project") }
+  ProjectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("Project")) }
 
   /**
    * @abstract
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
-  setProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setProject(newModel) { void newModel; throw new Error("Not implemented") }
 }

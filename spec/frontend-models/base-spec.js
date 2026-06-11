@@ -25,7 +25,7 @@ function buildTestModelClass() {
      */
     static resourceConfig() {
       return {
-        attributes: ["id", "name", "email"],
+        attributes: ["id", "name", "email", "userId"],
         commands: ["create", "destroy", "find", "index", "update"],
         primaryKey: "id"
       }
@@ -37,11 +37,29 @@ function buildTestModelClass() {
     /** @returns {any} */
     name() { return this.readAttribute("name") }
 
+    /** @returns {any} */
+    email() { return this.readAttribute("email") }
+
+    /** @returns {any} */
+    userId() { return this.readAttribute("userId") }
+
+    /**
+     * @param {any} newValue
+     * @returns {any}
+     */
+    setEmail(newValue) { return this.setAttribute("email", newValue) }
+
     /**
      * @param {any} newValue
      * @returns {any}
      */
     setName(newValue) { return this.setAttribute("name", newValue) }
+
+    /**
+     * @param {any} newValue
+     * @returns {any}
+     */
+    setUserId(newValue) { return this.setAttribute("userId", newValue) }
   }
 
   return User
@@ -1425,6 +1443,20 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }
   })
 
+  it("raises debug error messages from non-production error status payloads", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({debugErrorMessage: "Database relation is missing.", errorMessage: "Request failed.", status: "error"})
+
+    try {
+      await expect(async () => {
+        await User.find(123)
+      }).toThrow(/Database relation is missing\./)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("does not treat raw model status attributes as command errors for fetch transport", async () => {
     const User = buildTestModelClass()
     const fetchStub = stubFetch({models: [{id: 5, name: "Domain status model", status: "error"}]})
@@ -2313,6 +2345,56 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     const user = new User({email: "draft@example.com", name: "Draft"})
 
     try {
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "draft@example.com", name: "Draft"}
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("save() on the create path does not send unchanged attributes", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "draft@example.com", id: 9, name: "Draft", userId: 12}})
+    const user = new User()
+
+    try {
+      user.setUserId(null)
+      user.markAttributeUnchanged("userId")
+      user.setEmail("draft@example.com")
+      user.setName("Draft")
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([
+        {
+          body: {
+            attributes: {email: "draft@example.com", name: "Draft"}
+          },
+          url: "/frontend-models"
+        }
+      ])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("save() on the create path omits null attributes that were never explicitly persisted", async () => {
+    const User = buildTestModelClass()
+    const fetchStub = stubFetch({model: {email: "draft@example.com", id: 9, name: "Draft", userId: 12}})
+    const user = new User({userId: null})
+
+    try {
+      user.setEmail("draft@example.com")
+      user.setName("Draft")
       await user.save()
 
       expect(fetchStub.calls).toEqual([

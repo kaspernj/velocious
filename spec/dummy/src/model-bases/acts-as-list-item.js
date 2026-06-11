@@ -113,7 +113,7 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/project.js").default}
    */
-  buildProject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildProject(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -124,12 +124,12 @@ export default class ActsAsListItemBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project.js").default | undefined>}
    */
-  projectOrLoad() { return this.relationshipOrLoad("project") }
+  projectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("project")) }
 
   /**
    * @abstract
    * @param {import("../models/project.js").default} newModel
    * @returns {void}
    */
-  setProject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setProject(newModel) { void newModel; throw new Error("Not implemented") }
 }

@@ -11,8 +11,8 @@ export default class AuthorizationBaseResource {
    * Runs constructor.
    * @param {object} args - Resource args.
    * @param {import("./ability.js").default} [args.ability] - Ability instance.
-   * @param {Record<string, ?>} [args.context] - Ability context.
-   * @param {Record<string, ?>} [args.locals] - Ability locals.
+   * @param {import("../configuration-types.js").VelociousLooseObject} [args.context] - Ability context.
+   * @param {import("../configuration-types.js").VelociousLooseObject} [args.locals] - Ability locals.
    */
   constructor({ability, context = {}, locals = {}}) {
     this.ability = ability
@@ -30,24 +30,26 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs can.
+   * @template {typeof import("../database/record/index.js").default} MC
    * @param {string | string[]} actions - Ability action(s).
-   * @param {import("./ability.js").AbilityConditionsType} [conditions] - Conditions.
+   * @param {import("./ability.js").AbilityConditionsType<MC>} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   can(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "can"})
-    this.requiredAbility().can(actions, this.requiredModelClass(), conditions)
+    this.requiredAbility().can(actions, this.requiredModelClass(), /** Narrows conditions to the runtime resource model class. @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
    * Runs cannot.
+   * @template {typeof import("../database/record/index.js").default} MC
    * @param {string | string[]} actions - Ability action(s).
-   * @param {import("./ability.js").AbilityConditionsType} [conditions] - Conditions.
+   * @param {import("./ability.js").AbilityConditionsType<MC>} [conditions] - Conditions.
    * @returns {void} - No return value.
    */
   cannot(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "cannot"})
-    this.requiredAbility().cannot(actions, this.requiredModelClass(), conditions)
+    this.requiredAbility().cannot(actions, this.requiredModelClass(), /** Narrows conditions to the runtime resource model class. @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
@@ -93,7 +95,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs get context.
-   * @returns {Record<string, ?>} - Ability context.
+   * @returns {import("../configuration-types.js").VelociousLooseObject} - Ability context.
    */
   getContext() {
     return this.context
@@ -101,7 +103,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs get locals.
-   * @returns {Record<string, ?>} - Ability locals.
+   * @returns {import("../configuration-types.js").VelociousLooseObject} - Ability locals.
    */
   getLocals() {
     return this.locals
@@ -109,7 +111,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs current user.
-   * @returns {?} - Current user from context.
+   * @returns {import("../configuration-types.js").VelociousLooseObject | null | undefined} - Current user from context.
    */
   currentUser() {
     return this.context.currentUser
@@ -125,7 +127,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs params.
-   * @returns {Record<string, ?> | undefined} - Params from context.
+   * @returns {import("../configuration-types.js").VelociousLooseObject | undefined} - Params from context.
    */
   params() {
     return this.context.params

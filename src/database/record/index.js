@@ -38,7 +38,7 @@ import UUID from "pure-uuid"
 
 /**
  * AttachmentDriverConstructor type.
- * @typedef {new (...args: Array<?>) => Record<string, ?>} AttachmentDriverConstructor
+ * @typedef {import("../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor
  */
 
 class ValidationError extends Error {
@@ -3378,9 +3378,11 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * Reads an attribute value from the record.
+   * Reads an attribute value from the record. Read dynamically by name, so the value can be any
+   * column type and may be overridden by a user-defined getter on the model.
+   * @template V
    * @param {string} attributeName The name of the attribute to read. This is the attribute name, not the column name.
-   * @returns {?} - The attribute.
+   * @returns {V} The attribute value, typed by the caller's accessor contract.
    */
   readAttribute(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
@@ -3388,7 +3390,7 @@ class VelociousDatabaseRecord {
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
 
-    return this.readColumn(columnName)
+    return /** @type {V} */ (this.readColumn(columnName))
   }
 
   /**

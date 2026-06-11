@@ -113,7 +113,7 @@ export default class InteractionBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
-  buildSubject(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildSubject(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -124,12 +124,12 @@ export default class InteractionBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
-  subjectOrLoad() { return this.relationshipOrLoad("subject") }
+  subjectOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("subject")) }
 
   /**
    * @abstract
    * @param {import("velocious/build/src/database/record/index.js").default} newModel
    * @returns {void}
    */
-  setSubject(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setSubject(newModel) { void newModel; throw new Error("Not implemented") }
 }

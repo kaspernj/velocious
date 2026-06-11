@@ -8,7 +8,7 @@ const ATTACHMENTS_TABLE = "velocious_attachments"
 
 /**
  * AttachmentDriverConstructor type.
-  @typedef {new (...args: Array<?>) => Record<string, ?>} AttachmentDriverConstructor */
+  @typedef {import("../../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor */
 /**
  * Stores by configuration.
   @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */

@@ -1,10 +1,10 @@
 // @ts-check
 
-import BaseResource from "./base-resource.js"
-
 /**
  * Defines this typedef.
-  @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: typeof import("../database/record/index.js").default}) => void | import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>)} AbilityConditionsType */
+ * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
+ * @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<MC>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: MC}) => void | import("../database/query/model-class-query.js").default<MC>)} AbilityConditionsType
+ */
 
 /**
  * AbilityRuleType type.
@@ -47,7 +47,7 @@ export default class VelociousAuthorizationAbility {
    * @param {object} args - Ability args.
    * @param {Record<string, ?>} [args.context] - Ability context.
    * @param {Record<string, ?>} [args.locals] - Ability locals.
-   * @param {Array<typeof BaseResource>} [args.resources] - Resource classes.
+   * @param {Array<typeof import("./base-resource.js").default>} [args.resources] - Resource classes.
    */
   constructor({context = {}, locals = {}, resources} = {}) {
     this.context = context
@@ -67,7 +67,7 @@ export default class VelociousAuthorizationAbility {
 
   /**
    * Auto-resolves resource classes from the configuration's backendProjects when no explicit resources are provided.
-   * @returns {Array<typeof BaseResource>}
+   * @returns {Array<typeof import("./base-resource.js").default>} Resolved resource classes.
    */
   _resolveResourcesFromConfiguration() {
     const configuration = this.context?.configuration
@@ -78,7 +78,7 @@ export default class VelociousAuthorizationAbility {
 
     /**
      * Resolved.
-      @type {Array<typeof BaseResource>} */
+      @type {Array<typeof import("./base-resource.js").default>} */
     const resolved = []
     const backendProjects = configuration.getBackendProjects()
 
@@ -88,7 +88,7 @@ export default class VelociousAuthorizationAbility {
       if (!frontendModels || typeof frontendModels !== "object") continue
 
       for (const resourceDefinition of Object.values(frontendModels)) {
-        if (typeof resourceDefinition === "function" && resourceDefinition.prototype instanceof BaseResource) {
+        if (typeof resourceDefinition === "function" && typeof resourceDefinition.modelClass === "function") {
           resolved.push(resourceDefinition)
         }
       }

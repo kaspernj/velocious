@@ -97,7 +97,7 @@ export default class CommentBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/task.js").default}
    */
-  buildTask(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildTask(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -108,14 +108,14 @@ export default class CommentBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/task.js").default | undefined>}
    */
-  taskOrLoad() { return this.relationshipOrLoad("task") }
+  taskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("task")) }
 
   /**
    * @abstract
    * @param {import("../models/task.js").default} newModel
    * @returns {void}
    */
-  setTask(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setTask(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../models/task.js").default}
@@ -127,7 +127,7 @@ export default class CommentBase extends DatabaseRecord {
    * @param {Record<string, ?>} [attributes]
    * @returns {import("../models/task.js").default}
    */
-  buildDoneTask(attributes) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  buildDoneTask(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
@@ -138,12 +138,12 @@ export default class CommentBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/task.js").default | undefined>}
    */
-  doneTaskOrLoad() { return this.relationshipOrLoad("doneTask") }
+  doneTaskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("doneTask")) }
 
   /**
    * @abstract
    * @param {import("../models/task.js").default} newModel
    * @returns {void}
    */
-  setDoneTask(newModel) { throw new Error("Not implemented") } // eslint-disable-line no-unused-vars
+  setDoneTask(newModel) { void newModel; throw new Error("Not implemented") }
 }
