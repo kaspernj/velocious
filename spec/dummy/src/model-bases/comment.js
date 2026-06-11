@@ -108,7 +108,7 @@ export default class CommentBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/task.js").default | undefined>}
    */
-  taskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("task")) }
+  taskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("task", {preloadTranslations: true})) }
 
   /**
    * @abstract
@@ -138,7 +138,7 @@ export default class CommentBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/task.js").default | undefined>}
    */
-  doneTaskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("doneTask")) }
+  doneTaskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("doneTask", {preloadTranslations: true})) }
 
   /**
    * @abstract

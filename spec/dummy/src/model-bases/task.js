@@ -198,7 +198,7 @@ export default class TaskBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
-  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
+  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction", {preloadTranslations: true})) }
 
   /**
    * @abstract

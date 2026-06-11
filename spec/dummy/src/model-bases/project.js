@@ -159,7 +159,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/user.js").default | undefined>}
    */
-  creatingUserOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("creatingUser")) }
+  creatingUserOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("creatingUser", {preloadTranslations: true})) }
 
   /**
    * @abstract
@@ -245,7 +245,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
-  projectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("projectDetail")) }
+  projectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("projectDetail", {preloadTranslations: true})) }
 
   /**
    * @abstract
@@ -275,7 +275,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
-  activeProjectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("activeProjectDetail")) }
+  activeProjectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("activeProjectDetail", {preloadTranslations: true})) }
 
   /**
    * @abstract
@@ -333,7 +333,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
-  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
+  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction", {preloadTranslations: true})) }
 
   /**
    * @abstract
@@ -419,7 +419,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../model-bases/project-translation.js").default | undefined>}
    */
-  currentTranslationOrLoad() { return /** @type {Promise<import("../model-bases/project-translation.js").default | undefined>} */ (this.relationshipOrLoad("currentTranslation")) }
+  currentTranslationOrLoad() { return /** @type {Promise<import("../model-bases/project-translation.js").default | undefined>} */ (this.relationshipOrLoad("currentTranslation", {preloadTranslations: true})) }
 
   /**
    * @abstract

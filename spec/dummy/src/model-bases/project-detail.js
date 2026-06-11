@@ -124,7 +124,7 @@ export default class ProjectDetailBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project.js").default | undefined>}
    */
-  projectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("project")) }
+  projectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("project", {preloadTranslations: true})) }
 
   /**
    * @abstract

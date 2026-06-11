@@ -91,7 +91,9 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     const query = this.applyScope(TargetModelClass.where(whereArgs))
 
-    return /** Narrows the runtime value to the documented type. @type {Promise<InstanceType<TMC> | undefined>} */ (query.first())
+    const foreignModel = await query.first()
+
+    return foreignModel || undefined
   }
 
   /**
