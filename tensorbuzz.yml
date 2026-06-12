@@ -6,6 +6,7 @@ before_install:
   - sudo apt-get install -y nodejs
 before_script:
   - git clean -fd spec src
+  - git clean -fdx spec/dummy/db
   - npm install
 environment:
   NODE_ENV: test

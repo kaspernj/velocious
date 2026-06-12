@@ -2660,7 +2660,7 @@ export default class FrontendModelBase {
    * `openConnection`. Apps use this for per-session state/messaging
    * that doesn't fit the pub/sub Channel model (locale, presence).
    * @param {string} connectionType - Name the server registered the class under.
-   * @param {{params?: Record<string, ?>, onConnect?: () => void, onMessage?: (body: Record<string, any>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options and event handlers.
+   * @param {{params?: Record<string, ?>, onConnect?: () => void, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options and event handlers.
    * @returns {{ready: Promise<void>, close: () => void}} - Websocket connection handle.
    */
   static openWebsocketConnection(connectionType, options) {
@@ -2679,7 +2679,7 @@ export default class FrontendModelBase {
    * Subscribes to a pub/sub `WebsocketChannel`. Thin wrapper around
    * the internal client's `subscribeChannel`.
    * @param {string} channelType - Channel class name registered on the server.
-   * @param {{params?: Record<string, ?>, onMessage?: (body: Record<string, any>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel subscription options and event handlers.
+   * @param {{params?: Record<string, ?>, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel subscription options and event handlers.
    * @returns {{ready: Promise<void>, close: () => void}} - Websocket channel handle from the configured client.
    */
   static subscribeWebsocketChannel(channelType, options) {
