@@ -31,6 +31,7 @@ import HasOneRelationship from "./relationships/has-one.js"
 import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
 import deburrColumnName from "../../utils/deburr-column-name.js"
+import isDate from "../../utils/is-date.js"
 import ModelClassQuery from "../query/model-class-query.js"
 import Preloader from "../query/preloader.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../../record-payload-values.js"
@@ -2234,7 +2235,7 @@ class VelociousDatabaseRecord {
       normalizedValue = this._normalizeDateStringForInsert(normalizedValue)
     }
 
-    if (normalizedValue instanceof Date) {
+    if (isDate(normalizedValue)) {
       const configuration = this._getConfiguration()
       const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
       const offsetMs = offsetMinutes * 60 * 1000
@@ -3904,7 +3905,7 @@ class VelociousDatabaseRecord {
     const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
     const offsetMs = offsetMinutes * 60 * 1000
 
-    if (value instanceof Date) {
+    if (isDate(value)) {
       return new Date(value.getTime() + offsetMs)
     }
 
@@ -4063,7 +4064,7 @@ class VelociousDatabaseRecord {
 
       const value = data[columnName]
 
-      if (!(value instanceof Date)) continue
+      if (!isDate(value)) continue
 
       data[columnName] = new Date(value.getTime() - offsetMs)
     }
