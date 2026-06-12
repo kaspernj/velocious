@@ -1828,15 +1828,12 @@ export default class FrontendModelController extends Controller {
    * @returns {string | undefined} - Resolved DB column name, or `undefined`.
    */
   resolveFrontendModelColumnName(modelClass, key) {
-    const attributeNameToColumnNameMap = modelClass.getAttributeNameToColumnNameMap()
-    const columnName = attributeNameToColumnNameMap[key]
+    const resolvedAttributeName = modelClass.resolveAttributeName(key)
 
-    if (columnName) return columnName
+    if (resolvedAttributeName) return modelClass.getAttributeNameToColumnNameMap()[resolvedAttributeName]
 
-    // Fall back: check whether the key is already a raw DB column name.
-    const columnNameToAttributeNameMap = modelClass.getColumnNameToAttributeNameMap()
-
-    if (columnNameToAttributeNameMap[key]) return key
+    // Fall back: the key may already be a raw DB column name not present in the attribute map.
+    if (modelClass.getColumnNameToAttributeNameMap()[key]) return key
 
     return undefined
   }

@@ -21,8 +21,6 @@ export class RansackUser extends FrontendModelBase {
   email() { return this.readAttribute("email") }
 }
 
-FrontendModelBase.registerModel(RansackUser)
-
 /** @returns {void} */
 export function resetRansackTransport() {
   FrontendModelBase.configureTransport({
@@ -36,5 +34,10 @@ export function resetRansackTransport() {
  * @returns {void}
  */
 export function configureRansackTransport(url) {
+  // Register RansackUser (modelName "User") lazily, when a ransack spec actually configures its
+  // transport, rather than at module load. Registering at module load globally clobbered the real
+  // "User" frontend model for every other spec loaded in the same run (e.g. base http integration
+  // hydration), since the test runner loads all spec modules up front.
+  FrontendModelBase.registerModel(RansackUser)
   FrontendModelBase.configureTransport({url})
 }

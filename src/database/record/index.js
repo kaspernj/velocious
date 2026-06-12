@@ -266,11 +266,75 @@ class VelociousDatabaseRecord {
    * @returns {string} - Mapped column name, or the underscored attribute name when no mapping exists.
    */
   static getColumnNameForAttributeName(attributeName) {
-    const columnName = this.getAttributeNameToColumnNameMap()[attributeName]
+    const resolvedAttributeName = this.resolveAttributeName(attributeName)
 
-    if (columnName) return columnName
+    if (resolvedAttributeName) return this.getAttributeNameToColumnNameMap()[resolvedAttributeName]
 
-    return inflection.underscore(attributeName)
+    return inflection.underscore(inflection.camelize(deburrColumnName(attributeName), true))
+  }
+
+  /**
+   * Resolves an incoming attribute or column name to the canonical attribute name this model exposes.
+   * Accepts the canonical (deburred) attribute name, a raw umlaut/acronym column name, a pre-deburr
+   * camelization, and camelCase casing variants (e.g. "vAFunktionID" vs "vAFunktionid"). Returns null
+   * when nothing matches, so callers keep their own not-found handling.
+   * @param {string} name - Attribute name or column name to resolve.
+   * @returns {string | null} - Canonical attribute name, or null.
+   */
+  static resolveAttributeName(name) {
+    const attributeNameToColumnNameMap = this.getAttributeNameToColumnNameMap()
+
+    if (name in attributeNameToColumnNameMap) return name
+
+    const normalizedAttributeName = inflection.camelize(deburrColumnName(name), true)
+
+    if (normalizedAttributeName in attributeNameToColumnNameMap) return normalizedAttributeName
+
+    const columnNameToAttributeNameMap = this.getColumnNameToAttributeNameMap()
+
+    if (name in columnNameToAttributeNameMap) return columnNameToAttributeNameMap[name]
+
+    // Final fallback: match camelCase casing variants against the model's generated accessors. These
+    // exist on the prototype before runtime initialization (unlike the attribute map), so this also
+    // resolves names looked up during create, before the map is built. inflection lower-cases trailing
+    // acronyms ("ID" -> "id"), so "vAFunktionID"/"VA_FunktionID" still resolve to "vAFunktionid".
+    const lowerNormalizedAttributeName = normalizedAttributeName.toLowerCase()
+    let prototype = this.prototype
+
+    while (prototype && prototype !== Object.prototype) {
+      for (const accessorName of Object.getOwnPropertyNames(prototype)) {
+        if (accessorName.toLowerCase() === lowerNormalizedAttributeName) return accessorName
+      }
+
+      prototype = Object.getPrototypeOf(prototype)
+    }
+
+    return null
+  }
+
+  /**
+   * Finds the member name on a target's prototype chain matching `memberName`, falling back to a
+   * case-insensitive match. Resolves setters when a read-only attribute alias differs only in camelCase
+   * casing from the generated accessor (e.g. a "vAFunktionID" alias whose setter is "setVAFunktionid").
+   * @param {object} target - Instance or prototype to search.
+   * @param {string} memberName - Member name to find.
+   * @returns {string | null} - Matching member name, or null when absent.
+   */
+  static findMemberNameInsensitive(target, memberName) {
+    if (memberName in target) return memberName
+
+    const lowerMemberName = memberName.toLowerCase()
+    let current = target
+
+    while (current && current !== Object.prototype) {
+      for (const candidateName of Object.getOwnPropertyNames(current)) {
+        if (candidateName.toLowerCase() === lowerMemberName) return candidateName
+      }
+
+      current = Object.getPrototypeOf(current)
+    }
+
+    return null
   }
 
   /**
@@ -1666,7 +1730,11 @@ class VelociousDatabaseRecord {
    * @returns {void} - No return value.
    */
   setAttribute(name, newValue) {
-    const setterName = `set${inflection.camelize(name)}`
+    // Resolve raw column names ("VA_ÜbAttributID", "IP") and casing variants ("vAFunktionID") to the
+    // canonical attribute the model base generates its setter from (setVAUebattributid, setIp, …).
+    const canonicalName = this.getModelClass().resolveAttributeName(name) ?? name
+    const requestedSetterName = `set${inflection.camelize(canonicalName)}`
+    const setterName = this.getModelClass().findMemberNameInsensitive(this, requestedSetterName)
     const dynamicThis = /**
                          * Narrows the runtime value to the documented type.
                           @type {Record<string, (value: ?) => void>} */ (/**
@@ -1675,7 +1743,7 @@ class VelociousDatabaseRecord {
 
     this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
-    if (!(setterName in this)) throw new Error(`No such setter method: ${this.constructor.name}#${setterName}`)
+    if (!setterName) throw new Error(`No such setter method: ${this.constructor.name}#${requestedSetterName}`)
 
     dynamicThis[setterName](newValue)
   }
@@ -1689,7 +1757,8 @@ class VelociousDatabaseRecord {
     this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass()._attributeNameToColumnName) throw new Error("No attribute-to-column mapping. Has record been initialized?")
 
-    const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[name]
+    const resolvedName = this.getModelClass().resolveAttributeName(name)
+    const columnName = resolvedName ? this.getModelClass().getAttributeNameToColumnNameMap()[resolvedName] : undefined
 
     if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${name}`)
 
@@ -3540,9 +3609,11 @@ class VelociousDatabaseRecord {
    */
   readAttribute(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
-    const columnName = this.getModelClass().getAttributeNameToColumnNameMap()[attributeName]
+    const map = this.getModelClass().getAttributeNameToColumnNameMap()
+    const resolvedAttributeName = this.getModelClass().resolveAttributeName(attributeName)
+    const columnName = resolvedAttributeName ? map[resolvedAttributeName] : undefined
 
-    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(this.getModelClass().getAttributeNameToColumnNameMap()).join(", ")}`)
+    if (!columnName) throw new Error(`Couldn't figure out column name for attribute: ${attributeName} from these mappings: ${Object.keys(map).join(", ")}`)
 
     return /** @type {V} */ (this.readColumn(columnName))
   }
