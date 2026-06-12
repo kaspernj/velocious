@@ -2512,7 +2512,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Resolves a relationship foreign-key column to this model's public attribute name.
-   * @param {import("./instance-relationships/base.js").default<?, ?>} instanceRelationship - Relationship instance.
+   * @param {import("./instance-relationships/base.js").default<typeof VelociousDatabaseRecord, typeof VelociousDatabaseRecord>} instanceRelationship - Relationship instance.
    * @returns {string} Attribute name accepted by setAttribute/assign.
    */
   _relationshipForeignKeyAttribute(instanceRelationship) {
