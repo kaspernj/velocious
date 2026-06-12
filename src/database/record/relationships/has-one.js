@@ -13,7 +13,9 @@ export default class VelociousDatabaseRecordHasOneRelationship extends BaseRelat
       this.foreignKey = `${inflection.underscore(this.modelClass.getModelName())}_id`
     }
 
-    return this.modelClass.getAttributeNameToColumnNameMap()[this.foreignKey] || this.foreignKey
+    const targetModelClass = this.className || this.klass ? this.getTargetModelClass() : undefined
+
+    return targetModelClass?.getAttributeNameToColumnNameMap()[this.foreignKey] || this.foreignKey
   }
 
   /**

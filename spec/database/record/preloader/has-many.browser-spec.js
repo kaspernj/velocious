@@ -23,6 +23,15 @@ describe("Record - preloader - has many", {tags: ["dummy"]}, () => {
     expect(createdProjectsIDs).toEqual([])
   })
 
+  it("resolves explicit camel case foreign keys against the target model", async () => {
+    const project = await Project.create({})
+    const task = await project.tasks().create({name: "Review task"})
+    const foundProject = /** @type {Project} */ (await Project.preload({reviewTasks: true}).find(project.id()))
+    const reviewTasks = /** @type {import("../../../dummy/src/models/task.js").default[]} */ (foundProject.getRelationshipByName("reviewTasks").loaded())
+
+    expect(reviewTasks.map((reviewTask) => reviewTask.id())).toEqual([task.id()])
+  })
+
   it("preloads polymorphic has many relationships", async () => {
     const project = await Project.create({})
     await Interaction.create({kind: "Wrong type", subjectId: project.id(), subjectType: "Task"})

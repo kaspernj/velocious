@@ -12,6 +12,15 @@ describe("Record - preloader - has one", {tags: ["dummy"]}, () => {
     expect(foundUser.createdProject().id()).toEqual([project.id()])
   })
 
+  it("resolves explicit camel case foreign keys against the target model", async () => {
+    const project = await Project.create({})
+    const task = await project.tasks().create({name: "Review task"})
+    const foundProject = /** @type {Project} */ (await Project.preload({reviewTask: true}).find(project.id()))
+    const reviewTask = /** @type {Task | undefined} */ (foundProject.getRelationshipByName("reviewTask").loaded())
+
+    expect(reviewTask?.id()).toEqual(task.id())
+  })
+
   it("preloads polymorphic has one relationships", async () => {
     const project = await Project.create({})
     const task = await Task.create({name: "Poly has one task", project})
