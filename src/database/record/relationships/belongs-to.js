@@ -21,7 +21,7 @@ export default class VelociousDatabaseRecordBelongsToRelationship extends BaseRe
       }
     }
 
-    return this.foreignKey
+    return this.modelClass.getAttributeNameToColumnNameMap()[this.foreignKey] || this.foreignKey
   }
 
   /**

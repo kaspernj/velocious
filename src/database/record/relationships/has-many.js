@@ -13,7 +13,7 @@ export default class VelociousDatabaseRecordHasManyRelationship extends BaseRela
       this.foreignKey = `${inflection.underscore(this.modelClass.getModelName())}_id`
     }
 
-    return this.foreignKey
+    return this.modelClass.getAttributeNameToColumnNameMap()[this.foreignKey] || this.foreignKey
   }
 
   /**
