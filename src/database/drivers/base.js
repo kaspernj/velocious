@@ -103,6 +103,7 @@
 
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import { getDatabaseAnnotations } from "../annotations.js"
+import isDate from "../../utils/is-date.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
@@ -644,7 +645,9 @@ export default class VelociousDatabaseDriversBase {
       return value ? 1 : 0
     }
 
-    if (value instanceof Date) {
+    // isDate instead of instanceof: a Date created in another realm (e.g. the console REPL) would
+    // fail instanceof, skip this conversion, and serialize as an empty SQL value downstream.
+    if (isDate(value)) {
       return strftime("%F %T.%L", value)
     }
 

@@ -8,6 +8,7 @@ import CliCommandsGenerateBaseModels from "./node/cli/commands/generate/base-mod
 import CliCommandsGenerateFrontendModels from "./node/cli/commands/generate/frontend-models.js"
 import CliCommandsGenerateMigration from "./node/cli/commands/generate/migration.js"
 import CliCommandsGenerateModel from "./node/cli/commands/generate/model.js"
+import CliCommandsLintRelationships from "./node/cli/commands/lint/relationships.js"
 import CliCommandsRoutes from "./node/cli/commands/routes.js"
 import CliCommandsServer from "./node/cli/commands/server.js"
 import CliCommandsTest from "./node/cli/commands/test.js"
@@ -507,6 +508,15 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsGenerateModel(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
+  }
+
+  /**
+   * Runs cli commands lint relationships.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<?>} - Resolves with the command result.
+   */
+  async cliCommandsLintRelationships(command) {
+    return await this.forwardCommand(command, CliCommandsLintRelationships)
   }
 
   /**
