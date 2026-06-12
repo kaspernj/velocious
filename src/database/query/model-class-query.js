@@ -301,12 +301,13 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<number>} - Resolves with the count.
    */
   async count() {
-    // Pagination, or a model with no single primary key (setPrimaryKey(null), e.g. composite-key
-    // legacy tables with no id column), count via the subquery form. It references no primary-key
-    // column and preserves DISTINCT over joins — which a bare COUNT(*) would not (it would count
-    // joined duplicate rows instead of distinct root rows). primaryKey() falls back to "id" for the
-    // no-pk case, so hasPrimaryKey() is used to detect it.
-    if (this._limit !== null || this._offset !== null || !this.getModelClass().hasPrimaryKey()) {
+    // Pagination, or a model with no single primary-key column — setPrimaryKey(null) or a composite
+    // setPrimaryKey([...]) on legacy tables — counts via the subquery form. It references no
+    // primary-key column and preserves DISTINCT over joins — which a bare COUNT(*) would not (it
+    // would count joined duplicate rows instead of distinct root rows). primaryKey() falls back to
+    // "id" for the no-pk case, so hasPrimaryKey() is used to detect it, and an array primary key
+    // cannot be quoted as a single COUNT(column).
+    if (this._limit !== null || this._offset !== null || !this.getModelClass().hasPrimaryKey() || Array.isArray(this.getModelClass().primaryKey())) {
       return await this.paginatedCount()
     }
 

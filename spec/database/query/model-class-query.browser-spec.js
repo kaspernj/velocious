@@ -1,6 +1,7 @@
 import Comment from "../../dummy/src/models/comment.js"
 import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
+import Record from "../../../src/database/record/index.js"
 import Task from "../../dummy/src/models/task.js"
 import UuidInteraction from "../../dummy/src/models/uuid-interaction.js"
 import UuidItem from "../../dummy/src/models/uuid-item.js"
@@ -85,6 +86,23 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(limitedCount).toEqual(2)
     expect(offsetCount).toEqual(1)
     expect(pageCount).toEqual(1)
+  })
+
+  it("counts records on a model with a composite array primary key", async () => {
+    class CompositePkTask extends Record {}
+
+    CompositePkTask.setTableName("tasks")
+    CompositePkTask.setPrimaryKey(["name", "project_id"])
+
+    const project = await Project.create({nameEn: "Composite count", nameDe: "Zusammengesetzte Anzahl"})
+    await Task.create({name: "Composite count task 1", project})
+    await Task.create({name: "Composite count task 2", project})
+
+    // An array primary key cannot be quoted as a single COUNT(column), so count() must use the
+    // subquery form instead of generating COUNT(`tasks`.`name,project_id`).
+    const count = await CompositePkTask.count()
+
+    expect(count).toEqual(2)
   })
 
   it("orders records with a structured column descriptor", async () => {
