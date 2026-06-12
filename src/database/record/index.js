@@ -14,7 +14,7 @@
 /**
  * Model class constructor type used for static `this` typing.
  * @template {VelociousDatabaseRecord} T
- * @typedef {{new (...args: Array<never>): T}} ModelConstructor
+ * @typedef {{new (changes?: Record<string, unknown>): T}} ModelConstructor
  */
 
 import timeout from "awaitery/build/timeout.js"
@@ -501,9 +501,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before validation.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeValidation(callback) {
@@ -512,9 +512,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before save.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeSave(callback) {
@@ -523,9 +523,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before create.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeCreate(callback) {
@@ -534,9 +534,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before update.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeUpdate(callback) {
@@ -545,9 +545,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before destroy.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeDestroy(callback) {
@@ -556,9 +556,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs after save.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterSave(callback) {
@@ -567,9 +567,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs after create.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterCreate(callback) {
@@ -578,9 +578,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs after update.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterUpdate(callback) {
@@ -589,9 +589,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs after destroy.
-   * @template {VelociousDatabaseRecord} T
-   * @this {ModelConstructor<T> & typeof VelociousDatabaseRecord}
-   * @param {LifecycleCallbackType<T>} callback - Callback function or instance method name.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterDestroy(callback) {
@@ -2438,7 +2438,7 @@ class VelociousDatabaseRecord {
           if (model.isChanged()) {
             await model.save()
 
-            const foreignKey = instanceRelationship.getForeignKey()
+            const foreignKey = this._relationshipForeignKeyAttribute(instanceRelationship)
 
             this.setAttribute(foreignKey, model.id())
 
@@ -2493,7 +2493,7 @@ class VelociousDatabaseRecord {
 
       if (loaded) {
         for (const model of loaded) {
-          const foreignKey = instanceRelationship.getForeignKey()
+          const foreignKey = model._relationshipForeignKeyAttribute(instanceRelationship)
 
           model.setAttribute(foreignKey, this.id())
 
@@ -2508,6 +2508,17 @@ class VelociousDatabaseRecord {
     }
 
     return relationships
+  }
+
+  /**
+   * Resolves a relationship foreign-key column to this model's public attribute name.
+   * @param {import("./instance-relationships/base.js").default<?, ?>} instanceRelationship - Relationship instance.
+   * @returns {string} Attribute name accepted by setAttribute/assign.
+   */
+  _relationshipForeignKeyAttribute(instanceRelationship) {
+    const foreignKey = instanceRelationship.getForeignKey()
+
+    return this.getModelClass().getColumnNameToAttributeNameMap()[foreignKey] || foreignKey
   }
 
   /**
@@ -2535,7 +2546,7 @@ class VelociousDatabaseRecord {
       }
 
       for (const model of loaded) {
-        const foreignKey = instanceRelationship.getForeignKey()
+        const foreignKey = model._relationshipForeignKeyAttribute(instanceRelationship)
 
         model.setAttribute(foreignKey, this.id())
 

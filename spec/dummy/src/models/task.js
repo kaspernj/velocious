@@ -22,6 +22,7 @@ class Task extends TaskBase {
 }
 
 Task.belongsTo("project", {counterCache: true})
+Task.belongsTo("reviewProject", {className: "Project", foreignKey: "projectId"})
 Task.hasMany("interactions", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Task.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Task.hasMany("comments")

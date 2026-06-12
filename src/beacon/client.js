@@ -225,14 +225,20 @@ export default class BeaconClient extends EventEmitter {
       this._reconnectTimer = undefined
     }
 
-    if (this._socket) {
-      const socket = this._socket
+    const socket = this._socket
 
-      await new Promise((resolve) => {
-        socket.once("close", () => resolve(undefined))
-        socket.end()
-      })
-    }
+    if (!socket) return
+
+    this._socket = undefined
+    this._jsonSocket = undefined
+
+    if (socket.destroyed) return
+
+    await new Promise((resolve) => {
+      socket.once("close", () => resolve(undefined))
+      socket.end()
+      socket.destroySoon()
+    })
   }
 
   /**

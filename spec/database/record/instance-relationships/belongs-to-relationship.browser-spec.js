@@ -17,6 +17,18 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     expect(foundTask.project().id()).toEqual(project.id())
   })
 
+  it("normalizes explicit camelCase foreign keys to database column names", async () => {
+    const project = await Project.create({name: "Camel foreign key project"})
+    const task = await Task.create({name: "Camel foreign key task", reviewProject: project})
+
+    expect(task.projectId()).toEqual(project.id())
+    expect(task.reviewProject().id()).toEqual(project.id())
+
+    const reloadedTask = /** @type {Task} */ (await Task.find(task.id()))
+
+    expect((await reloadedTask.reviewProjectOrLoad())?.id()).toEqual(project.id())
+  })
+
   it("force reloads a belongs-to relationship after the foreign key changes", async () => {
     const originalProject = await Project.create()
     const targetProject = await Project.create()

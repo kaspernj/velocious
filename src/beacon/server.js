@@ -37,6 +37,11 @@ export default class BeaconServer {
      * Narrows the runtime value to the documented type.
       @type {net.Server | undefined} */
     this.server = undefined
+    /**
+     * Accepted sockets, including connections that have not completed the hello handshake yet.
+     * @type {Set<net.Socket>}
+     */
+    this.sockets = new Set()
   }
 
   /**
@@ -68,6 +73,10 @@ export default class BeaconServer {
       peer.close()
     }
 
+    for (const socket of this.sockets) {
+      socket.destroy()
+    }
+
     if (!this.server) return
 
     const {server} = this
@@ -97,6 +106,7 @@ export default class BeaconServer {
    * @returns {void}
    */
   _handleConnection(socket) {
+    this.sockets.add(socket)
     const jsonSocket = new JsonSocket(socket)
     /**
      * Defines peerId.
@@ -104,6 +114,7 @@ export default class BeaconServer {
     let peerId
 
     const cleanup = () => {
+      this.sockets.delete(socket)
       this.peers.delete(jsonSocket)
     }
 

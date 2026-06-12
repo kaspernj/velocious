@@ -129,8 +129,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
     expect(taskContents).toContain("/** @returns {TaskAttributes[\"identifier\"]} - Attribute value. */")
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
-    expect(taskContents).toContain("identifier() { return this.readAttribute(\"identifier\") }")
-    expect(taskContents).toContain("setIdentifier(newValue) { return this.setAttribute(\"identifier\", newValue) }")
+    expect(taskContents).toContain("identifier() { return /** @type {TaskAttributes[\"identifier\"]} */ (this.readAttribute(\"identifier\")) }")
+    expect(taskContents).toContain("setIdentifier(newValue) { return /** @type {TaskAttributes[\"identifier\"]} */ (this.setAttribute(\"identifier\", newValue)) }")
     expect(taskContents.includes("import Project from")).toEqual(false)
     expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */")
     expect(taskContents).toContain("static relationshipDefinitions()")
@@ -178,8 +178,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("async refreshProfile(...commandArguments)")
     expect(userContents).toContain("payload: User.normalizeCustomCommandPayloadArguments(commandArguments)")
     expect(userContents).toContain("commandName: \"refresh-profile\"")
-    expect(userContents).toContain("email() { return this.readAttribute(\"email\") }")
-    expect(userContents).toContain("setEmail(newValue) { return this.setAttribute(\"email\", newValue) }")
+    expect(userContents).toContain("email() { return /** @type {UserAttributes[\"email\"]} */ (this.readAttribute(\"email\")) }")
+    expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
   })
 
   it("generates typed attribute typedefs from attribute metadata", async () => {

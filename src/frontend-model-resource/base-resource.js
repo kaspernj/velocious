@@ -9,7 +9,7 @@ import * as inflection from "inflection"
  * @property {import("../controller.js").default} controller - Frontend-model controller instance.
  * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
  * @property {string} modelName - Model name.
- * @property {import("../configuration-types.js").VelociousLooseObject} params - Request params.
+ * @property {import("../configuration-types.js").VelociousParams} params - Request params.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration (or raw input shape during early bootstrap).
  */
 
@@ -21,13 +21,13 @@ import * as inflection from "inflection"
  * @property {import("../configuration-types.js").VelociousLooseObject} [locals] - Ability locals.
  * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
  * @property {string} [modelName] - Optional model name override.
- * @property {import("../configuration-types.js").VelociousLooseObject} [params] - Optional params override.
+ * @property {import("../configuration-types.js").VelociousParams} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
  */
 
 /**
  * Base class for backend frontend-model resources.
- * @template {typeof import("../database/record/index.js").default} [out TModelClass=typeof import("../database/record/index.js").default]
+ * @template {typeof import("../database/record/index.js").default} [TModelClass=typeof import("../database/record/index.js").default]
  */
 export default class FrontendModelBaseResource extends AuthorizationBaseResource {
   /**
@@ -99,10 +99,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs typed controller instance.
    * @returns {import("../controller.js").default & {
-   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<TModelClass>,
    *   frontendModelAbilityAction: (action: string) => string,
    *   currentAbility: () => import("../authorization/ability.js").default | undefined,
-   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<TModelClass>,
    *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
    *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, unknown>>
    * }} - Controller instance with frontend-model helpers.
@@ -176,9 +176,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs params.
-   * @returns {import("../configuration-types.js").VelociousLooseObject} - Params.
+   * @returns {import("../configuration-types.js").VelociousParams} - Params.
    */
-  params() { return this.paramsValue || super.params() || {} }
+  params() { return /** @type {import("../configuration-types.js").VelociousParams} */ (this.paramsValue || super.params() || {}) }
 
   /**
    * Runs resource configuration.
@@ -243,11 +243,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs authorized query.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
-   * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
-   * @returns {import("../database/query/model-class-query.js").default<MC>} - Authorized query.
+   * @returns {import("../database/query/model-class-query.js").default<TModelClass>} - Authorized query.
    */
   authorizedQuery(action) {
-    return /** Narrows the authorized query to the resource's model class. @type {import("../database/query/model-class-query.js").default<MC>} */ (this.typedControllerInstance().frontendModelAuthorizedQuery(action))
+    return this.typedControllerInstance().frontendModelAuthorizedQuery(action)
   }
 
 
