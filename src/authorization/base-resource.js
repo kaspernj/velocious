@@ -127,7 +127,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs params.
-   * @returns {import("../configuration-types.js").VelociousLooseObject | undefined} - Params from context.
+   * @returns {import("../configuration-types.js").VelociousParams | undefined} - Params from context.
    */
   params() {
     return this.context.params

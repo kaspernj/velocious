@@ -34,7 +34,7 @@ export default class VelociousController {
    * @param {string} args.action - Action.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {string} args.controller - Controller.
-   * @param {object} args.params - Parameters object.
+   * @param {Record<string, ?>} args.params - Parameters object.
    * @param {import("./http-server/client/request.js").default} args.request - Request object.
    * @param {import("./http-server/client/response.js").default} args.response - Response object.
    * @param {string} args.viewPath - View path.
