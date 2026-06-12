@@ -105,6 +105,54 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(count).toEqual(2)
   })
 
+  it("sums grouped counts on a model with a composite array primary key", async () => {
+    class CompositePkTask extends Record {}
+
+    CompositePkTask.setTableName("tasks")
+    CompositePkTask.setPrimaryKey(["name", "project_id"])
+
+    const project1 = await Project.create({nameEn: "Composite group 1", nameDe: "Zusammengesetzte Gruppe 1"})
+    const project2 = await Project.create({nameEn: "Composite group 2", nameDe: "Zusammengesetzte Gruppe 2"})
+
+    await Task.create({name: "Composite group task 1", project: project1})
+    await Task.create({name: "Composite group task 2", project: project1})
+    await Task.create({name: "Composite group task 3", project: project2})
+    await Task.create({name: "Composite group task 4", project: project2})
+
+    // Starting a query chain with group() doesn't lazy-initialize the model like count() does.
+    await CompositePkTask.count()
+
+    // A grouped count must sum each group's row count (matching the single-primary-key behavior),
+    // not count one subquery row per group.
+    const count = await CompositePkTask.group("tasks.project_id").count()
+
+    expect(count).toEqual(4)
+  })
+
+  it("rejects grouped distinct counts on a model with a composite array primary key", async () => {
+    class CompositePkTask extends Record {}
+
+    CompositePkTask.setTableName("tasks")
+    CompositePkTask.setPrimaryKey(["name", "project_id"])
+
+    const project = await Project.create({nameEn: "Composite distinct group", nameDe: "Zusammengesetzte eindeutige Gruppe"})
+
+    await Task.create({name: "Composite distinct group task", project})
+
+    // Starting a query chain with group() doesn't lazy-initialize the model like count() does.
+    await CompositePkTask.count()
+
+    let countError
+
+    try {
+      await CompositePkTask.group("tasks.project_id").distinct().count()
+    } catch (error) {
+      countError = error
+    }
+
+    expect(countError?.message).toContain("Can't count a grouped distinct query on CompositePkTask")
+  })
+
   it("orders records with a structured column descriptor", async () => {
     const project = await Project.create({nameEn: "Structured order", nameDe: "Strukturierte Reihenfolge"})
     await Task.create({name: "Bravo structured order", project})

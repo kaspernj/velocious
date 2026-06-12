@@ -301,18 +301,30 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<number>} - Resolves with the count.
    */
   async count() {
-    // Pagination, or a model with no single primary-key column — setPrimaryKey(null) or a composite
-    // setPrimaryKey([...]) on legacy tables — counts via the subquery form. It references no
-    // primary-key column and preserves DISTINCT over joins — which a bare COUNT(*) would not (it
-    // would count joined duplicate rows instead of distinct root rows). primaryKey() falls back to
-    // "id" for the no-pk case, so hasPrimaryKey() is used to detect it, and an array primary key
-    // cannot be quoted as a single COUNT(column).
-    if (this._limit !== null || this._offset !== null || !this.getModelClass().hasPrimaryKey() || Array.isArray(this.getModelClass().primaryKey())) {
+    // A model without a single primary-key column — setPrimaryKey(null) or a composite
+    // setPrimaryKey([...]) on legacy tables — has no column COUNT can reference (an array primary key
+    // cannot be quoted as a single COUNT(column), and primaryKey() falls back to "id" for the no-pk
+    // case, so hasPrimaryKey() detects that one).
+    const hasSingleColumnPrimaryKey = this.getModelClass().hasPrimaryKey() && !Array.isArray(this.getModelClass().primaryKey())
+
+    // Pagination, or an ungrouped query on a model with no single primary-key column, counts via the
+    // subquery form. It references no primary-key column and preserves DISTINCT over joins — which a
+    // bare COUNT(*) would not (it would count joined duplicate rows instead of distinct root rows).
+    // A grouped query stays on the per-group flow below, because the subquery form would count one
+    // row per group instead of summing each group's row count.
+    if (this._limit !== null || this._offset !== null || (!hasSingleColumnPrimaryKey && this._groups.length == 0)) {
       return await this.paginatedCount()
     }
 
+    if (!hasSingleColumnPrimaryKey && this._distinct) {
+      throw new Error(`Can't count a grouped distinct query on ${this.getModelClass().name} because it has no single primary-key column to count distinct values of`)
+    }
+
     const distinctPrefix = this._distinct ? "DISTINCT " : ""
-    let sql = `COUNT(${distinctPrefix}${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())})`
+    const countExpression = hasSingleColumnPrimaryKey
+      ? `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())}`
+      : "*"
+    let sql = `COUNT(${distinctPrefix}${countExpression})`
 
     if (this.driver.getType() == "pgsql") sql += "::int"
 
