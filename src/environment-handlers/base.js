@@ -244,6 +244,16 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * Runs cli commands lint relationships.
+   * @abstract
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<?>} - Resolves with the command result.
+   */
+  async cliCommandsLintRelationships(_command) {
+    throw new Error("cliCommandsLintRelationships not implemented")
+  }
+
+  /**
    * Runs cli commands routes.
    * @abstract
    * @param {import("../cli/base-command.js").default} _command - Command.
