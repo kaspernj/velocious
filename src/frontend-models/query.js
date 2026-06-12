@@ -1414,7 +1414,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs sort.
-   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
+   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
   sort(sort) {
@@ -1425,7 +1425,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs order.
-   * @param {string | string[] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} order - Order definition(s).
+   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} order - Order definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
   order(order) {

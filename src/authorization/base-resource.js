@@ -111,7 +111,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs current user.
-   * @returns {import("../configuration-types.js").VelociousLooseObject | null | undefined} - Current user from context.
+   * @returns {unknown} - Current user from context.
    */
   currentUser() {
     return this.context.currentUser
