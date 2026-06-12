@@ -373,14 +373,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       fileContent += "\n"
       fileContent += `  /** @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value. */\n`
-      fileContent += `  ${camelizedAttribute}() { return this.readAttribute(${JSON.stringify(attribute.name)}) }\n`
+      fileContent += `  ${camelizedAttribute}() { return /** @type {${attributesTypeName}[${JSON.stringify(attribute.name)}]} */ (this.readAttribute(${JSON.stringify(attribute.name)})) }\n`
 
       fileContent += "\n"
       fileContent += "  /**\n"
       fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attribute.name)}]} newValue - New attribute value.\n`
       fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Assigned value.\n`
       fileContent += "   */\n"
-      fileContent += `  set${camelizedAttributeUpper}(newValue) { return this.setAttribute(${JSON.stringify(attribute.name)}, newValue) }\n`
+      fileContent += `  set${camelizedAttributeUpper}(newValue) { return /** @type {${attributesTypeName}[${JSON.stringify(attribute.name)}]} */ (this.setAttribute(${JSON.stringify(attribute.name)}, newValue)) }\n`
     }
 
     for (const methodName of Object.keys(collectionCommands)) {
