@@ -2420,6 +2420,8 @@ class VelociousDatabaseRecord {
       })
     })
 
+    this._assignedAttributeNames = undefined
+
     return result
   }
 
@@ -4186,6 +4188,7 @@ class VelociousDatabaseRecord {
 
     this._attributes = reloadedModel.rawAttributes()
     this._changes = {}
+    this._assignedAttributeNames = undefined
   }
 
   /**

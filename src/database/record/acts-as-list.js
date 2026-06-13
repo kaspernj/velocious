@@ -164,15 +164,19 @@ async function placeMovedRecord({record, positionColumn, scope, scopeValue, posi
   const tableSql = connection.quoteTable(modelClass._getTable().getName())
   const scopeCol = modelClass.getColumnNameForAttributeName(scope)
   const posCol = modelClass.getColumnNameForAttributeName(positionColumn)
+  const preservedChanges = {...record._changes}
   const scopeColumnSql = connection.quoteColumn(scopeCol)
   const positionColumnSql = connection.quoteColumn(posCol)
   const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
+
+  delete preservedChanges[scopeCol]
+  delete preservedChanges[posCol]
 
   await connection.query(
     `UPDATE ${tableSql} SET ${scopeColumnSql} = ${connection.quote(scopeValue)}, ${positionColumnSql} = ${connection.quote(position)} WHERE ${primaryKeySql} = ${connection.quote(record.id())}`
   )
   await record._reloadWithId(record.id())
-  record._changes = {}
+  record._changes = preservedChanges
   clearBelongsToChangeForScope(record)
 }
 
@@ -230,8 +234,13 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
     .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
     .where(`${positionColumnSql} > 0`)
-    .where(`${primaryKeySql} != ${connection.quote(excludeRecordId || record.id())}`)
     .order(`${positionColumnSql} DESC`)
+
+  const recordIdToExclude = excludeRecordId || (record.isPersisted() ? record.id() : null)
+
+  if (recordIdToExclude != null) {
+    query = query.where(`${primaryKeySql} != ${connection.quote(recordIdToExclude)}`)
+  }
 
   if (toPosition != null) {
     query = query.where(`${positionColumnSql} < ${connection.quote(toPosition)}`)

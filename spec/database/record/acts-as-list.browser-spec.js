@@ -238,6 +238,41 @@ describe("Record - acts as list", {tags: ["dummy"]}, () => {
     expect(itemsB.map((item) => item.position())).toEqual([1, 2])
   })
 
+  it("preserves other attributes during explicit cross-scope moves", async () => {
+    const projectA = await Project.create({name: "List Project L1"})
+    const projectB = await Project.create({name: "List Project L2"})
+
+    const itemA1 = await ActsAsListItem.create({name: "A1", project: projectA})
+    await ActsAsListItem.create({name: "B1", project: projectB})
+
+    await itemA1.update({name: "Renamed", projectId: projectB.id(), position: 1})
+
+    const reloaded = await ActsAsListItem.find(itemA1.id())
+
+    expect(reloaded.name()).toEqual("Renamed")
+    expect(reloaded.projectId()).toEqual(projectB.id())
+    expect(reloaded.position()).toEqual(1)
+  })
+
+  it("does not reuse explicit position assignment tracking across updates", async () => {
+    const projectA = await Project.create({name: "List Project M1"})
+    const projectB = await Project.create({name: "List Project M2"})
+
+    const itemA1 = await ActsAsListItem.create({name: "A1", project: projectA})
+    await ActsAsListItem.create({name: "B1", project: projectB})
+
+    await itemA1.update({position: 1})
+    await itemA1.update({projectId: projectB.id()})
+
+    const itemsB = await ActsAsListItem
+      .where({projectId: projectB.id()})
+      .order("position")
+      .toArray()
+
+    expect(itemsB.map((item) => item.name())).toEqual(["B1", "A1"])
+    expect(itemsB.map((item) => item.position())).toEqual([1, 2])
+  })
+
   it("shifts existing rows when inserting at an occupied position", async () => {
     const project = await Project.create({name: "List Project H"})
 
