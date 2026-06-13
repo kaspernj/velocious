@@ -3967,7 +3967,7 @@ export default class FrontendModelBase {
 
     const error = /**
                    * Narrows the runtime value to the documented type.
-                    @type {Error & {velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>}} */ (new Error(errorMessage))
+                    @type {Error & {velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>, debugErrorClass?: string, debugBacktrace?: string[]}} */ (new Error(errorMessage))
     if (response.velocious && typeof response.velocious === "object") {
       error.velocious = response.velocious
     }
@@ -3976,6 +3976,16 @@ export default class FrontendModelBase {
     }
     if (response.validationErrors && typeof response.validationErrors === "object") {
       error.validationErrors = response.validationErrors
+    }
+    // Forward server-provided debug detail (included only when the backend
+    // deems the requester allowed to see it, e.g. an admin) so callers can
+    // render the real error class and stack trace instead of the generic
+    // client-safe message.
+    if (typeof response.debugErrorClass === "string") {
+      error.debugErrorClass = response.debugErrorClass
+    }
+    if (Array.isArray(response.debugBacktrace)) {
+      error.debugBacktrace = response.debugBacktrace
     }
     throw error
   }
