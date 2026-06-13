@@ -67,15 +67,12 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
                          @type {typeof import("./index.js").default} */ (record.constructor)
     const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
     const scopeCol = modelClass.getColumnNameForAttributeName(scope)
-    const rawAttributes = /**
-                           * Narrows the runtime value to the documented type.
-                            @type {Record<string, ?>} */ (record._attributes || {})
-    const changes = /**
-                      * Narrows the runtime value to the documented type.
-                       @type {Record<string, ?>} */ (record._changes || {})
-    const assignedAttributeNames = /**
-                                    * Narrows the runtime value to the documented type.
-                                     @type {Set<string>} */ (record._assignedAttributeNames || new Set())
+    /** @type {Record<string, ?>} */
+    const rawAttributes = record._attributes || {}
+    /** @type {Record<string, ?>} */
+    const changes = record._changes || {}
+    /** @type {Set<string>} */
+    const assignedAttributeNames = record._assignedAttributeNames || new Set()
     const posChanged = posColumn in changes
     const scopeChanged = scopeCol in changes
     const posAssigned = assignedAttributeNames.has(positionColumn)

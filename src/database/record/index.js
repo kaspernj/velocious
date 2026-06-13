@@ -437,7 +437,8 @@ class VelociousDatabaseRecord {
 
   /**
    * Attribute names explicitly assigned in the current update call.
-    @type {Set<string> | undefined} */
+    @type {Set<string> | undefined}
+   */
   _assignedAttributeNames = undefined
 
   /**
