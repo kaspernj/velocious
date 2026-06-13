@@ -7,7 +7,7 @@ const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
  * @typedef {object} ModelScopeDescriptor
  * @property {true} [velociousModelScopeDescriptor] - Internal marker.
  * @property {(...args: Array<?>) => ?} callback - Scope callback.
- * @property {typeof import("../database/record/index.js").default | typeof import("../frontend-models/base.js").default} modelClass - Owning model class.
+ * @property {typeof import("../database/record/index.js").default | import("../frontend-models/base.js").FrontendModelClass} modelClass - Owning model class.
  * @property {Array<?>} scopeArgs - Scope arguments.
  */
 
@@ -15,7 +15,7 @@ const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
  * Runs the defineModelScope helper.
  * @param {object} args - Definition arguments.
  * @param {(...args: Array<?>) => ?} args.callback - Scope callback.
- * @param {typeof import("../database/record/index.js").default | typeof import("../frontend-models/base.js").default} args.modelClass - Owning model class.
+ * @param {typeof import("../database/record/index.js").default | import("../frontend-models/base.js").FrontendModelClass} args.modelClass - Owning model class.
  * @param {() => ?} args.startQuery - Factory that returns a fresh query for the owning model class.
  * @returns {((...args: Array<?>) => ?) & {scope: (...args: Array<?>) => ModelScopeDescriptor}} - Scope helper.
  */
