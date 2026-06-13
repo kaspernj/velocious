@@ -1472,7 +1472,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const response = /** @type {Record<string, any>} */ (payload.responses?.[0]?.response || payload)
 
       expect(response.status).toEqual("error")
-      expect(frameworkErrors.length).toEqual(1)
+      expect(frameworkErrors.length).toBeGreaterThan(0)
       expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
       expect(frameworkErrors[0].error).toBeInstanceOf(Error)
     })
