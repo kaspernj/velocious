@@ -120,9 +120,9 @@ export default class VelociousRoutesResolver {
     }
 
     const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute})
-    const skipControllerConnections = routeResolverHookMatch?.skipControllerConnections === true
-    const skipAbilityResolution = routeResolverHookMatch?.skipAbilityResolution === true
-    const skipTenantResolution = routeResolverHookMatch?.skipTenantResolution === true
+    let skipControllerConnections = routeResolverHookMatch?.skipControllerConnections === true
+    let skipAbilityResolution = routeResolverHookMatch?.skipAbilityResolution === true
+    let skipTenantResolution = routeResolverHookMatch?.skipTenantResolution === true
     const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
     const actionParam = this.params.action
     const controllerParam = this.params.controller
@@ -151,21 +151,24 @@ export default class VelociousRoutesResolver {
       viewPath = routeHookViewPath || `${this.configuration.getDirectory()}/src/routes/${controller}`
       this.routeHookControllerClass = routeHookControllerClass
     } else if (!matchResult) {
-        const __filename = fileURLToPath(import.meta.url)
-        const __dirname = dirname(__filename)
-        const requestedPath = currentPath.replace(/^\//, "") || "_root"
-        const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
+      const __filename = fileURLToPath(import.meta.url)
+      const __dirname = dirname(__filename)
+      const requestedPath = currentPath.replace(/^\//, "") || "_root"
+      const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
 
-        const logger = this.logger
+      const logger = this.logger
 
-        if (!logger) throw new Error("Logger not initialized")
+      if (!logger) throw new Error("Logger not initialized")
 
-        await logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+      await logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
 
-        controller = "errors"
-        controllerPath = "./built-in/errors/controller.js"
-        action = "notFound"
-        viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
+      controller = "errors"
+      controllerPath = "./built-in/errors/controller.js"
+      action = "notFound"
+      skipAbilityResolution = true
+      skipControllerConnections = true
+      skipTenantResolution = true
+      viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
     } else if (action) {
       if (!controller) controller = "_root"
 

@@ -352,6 +352,26 @@ describe("database - pool - async tracked multi connection reuse", () => {
     })
   })
 
+  it("defaults to a bounded max connection cap", async () => {
+    await withIsolatedPool(async (pool) => {
+      delete pool.getConfiguration().pool
+
+      expect(pool.maxConnections()).toEqual(10)
+    })
+  })
+
+  it("uses configured max connection caps and allows explicit unbounded pools", async () => {
+    await withIsolatedPool(async (pool) => {
+      pool.getConfiguration().pool = {max: 3}
+
+      expect(pool.maxConnections()).toEqual(3)
+
+      pool.getConfiguration().pool = {max: null}
+
+      expect(pool.maxConnections()).toEqual(undefined)
+    })
+  })
+
   it("hands a matching idle connection to pending checkouts before waiting for spawn capacity", async () => {
     await withIsolatedPool(async (pool) => {
       pool.getConfiguration().pool = {idleTimeoutMillis: 0, max: 1}

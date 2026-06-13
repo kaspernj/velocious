@@ -6,6 +6,7 @@ import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
 const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
 const CONNECTION_CHECKED_OUT_AT = Symbol("velociousConnectionCheckedOutAt")
+const DEFAULT_MAX_CONNECTIONS = 10
 const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
 
 /**
@@ -285,9 +286,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   maxConnections() {
     const value = this.getConfiguration().pool?.max
 
+    if (value === null) return
     if (this.validMaxConnections(value)) return value
 
-    return
+    return DEFAULT_MAX_CONNECTIONS
   }
 
   /**
