@@ -1,6 +1,33 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
+/**
+ * Attributes accepted when creating or updating ActsAsListItem records.
+ * @typedef {object} ActsAsListItemWriteAttributes
+ * @property {number} [id] - Value for the id attribute.
+ * @property {number} [projectId] - Value for the projectId attribute.
+ * @property {number | null} [position] - Value for the position attribute.
+ * @property {string | null} [name] - Value for the name attribute.
+ * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
+ * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ */
+
 export default class ActsAsListItemBase extends DatabaseRecord {
+  /**
+   * Creates a ActsAsListItem record.
+   * @template {typeof ActsAsListItemBase} T
+   * @this {T}
+   * @param {ActsAsListItemWriteAttributes} [attributes] - Attributes for the new record.
+   * @returns {Promise<InstanceType<T>>} - Persisted record.
+   */
+  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this ActsAsListItem record.
+   * @param {ActsAsListItemWriteAttributes} attributes - Attributes to assign before saving.
+   * @returns {Promise<void>} - Resolves when the record is saved.
+   */
+  async update(attributes) { return await super.update(attributes) }
+
   /**
    * @returns {typeof import("../models/acts-as-list-item.js").default}
    */

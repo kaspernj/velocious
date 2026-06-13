@@ -1,8 +1,8 @@
 import BaseResource from "../../../../src/authorization/base-resource.js"
-import Comment from "../models/comment.js"
+import Interaction from "../models/interaction.js"
 
-export default class CommentFrontendModelAbilityResource extends BaseResource {
-  static ModelClass = Comment
+export default class InteractionFrontendModelAbilityResource extends BaseResource {
+  static ModelClass = Interaction
 
   /** @returns {void} */
   abilities() {

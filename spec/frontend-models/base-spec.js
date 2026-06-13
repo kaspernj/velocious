@@ -229,7 +229,7 @@ function buildUserUpdateResponseFixture() {
  */
 function buildSharedWebsocketAttachmentFixture() {
   const Task = buildAttachmentTestModelClass()
-  const task = new Task({id: 10, name: "Task"})
+  const task = Task.instantiateFromResponse({id: 10, name: "Task"})
   const originalFetch = globalThis.fetch
   /** @type {FetchCall[]} */
   const fetchCalls = []
@@ -2092,7 +2092,7 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
   it("updates attachments using update attachment attributes", async () => {
     const Task = buildAttachmentTestModelClass()
     const fetchStub = stubFetch({model: {id: 10, name: "Task"}})
-    const task = new Task({id: 10, name: "Task"})
+    const task = Task.instantiateFromResponse({id: 10, name: "Task"})
 
     try {
       await task.update({
@@ -2105,15 +2105,17 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(fetchStub.calls).toEqual([
         {
           body: {
-            attachment: {
-              contentBase64: "YQ==",
-              contentType: null,
-              filename: "a.txt"
+            attachments: {
+              descriptionFile: {
+                contentBase64: "YQ==",
+                contentType: null,
+                filename: "a.txt"
+              }
             },
-            attachmentName: "descriptionFile",
+            attributes: {},
             id: 10
           },
-          url: "/tasks/attach"
+          url: "/tasks/update"
         }
       ])
     } finally {
@@ -2134,7 +2136,22 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       })
 
       expect(websocketCalls).toEqual([])
-      expectAttachmentUploadFetchCalls(fetchCalls)
+      expect(fetchCalls).toEqual([
+        {
+          body: {
+            attachments: {
+              descriptionFile: {
+                contentBase64: "YQ==",
+                contentType: null,
+                filename: "a.txt"
+              }
+            },
+            attributes: {},
+            id: 10
+          },
+          url: "/tasks/update"
+        }
+      ])
     } finally {
       restore()
     }
@@ -2621,15 +2638,16 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
         /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} */
         static resourceConfig() {
           return {
+            attachments: {descriptionFile: {type: "hasOne"}},
             attributes: ["id", "projectId", "name"],
-            nestedAttributes: {comments: {allowDestroy: true}},
+            nestedAttributes: {comments: {allowDestroy: true}, project: {}},
             primaryKey: "id"
           }
         }
         /** @returns {Record<string, typeof FrontendModelBase>} */
-        static relationshipModelClasses() { return {comments: Comment} }
-        /** @returns {Record<string, {type: "hasMany"}>} */
-        static relationshipDefinitions() { return {comments: {type: "hasMany"}} }
+        static relationshipModelClasses() { return {comments: Comment, project: Project} }
+        /** @returns {Record<string, {type: "belongsTo" | "hasMany"}>} */
+        static relationshipDefinitions() { return {comments: {type: "hasMany"}, project: {type: "belongsTo"}} }
         /** @returns {any} */
         id() { return this.readAttribute("id") }
         /** @returns {any} */
@@ -2722,6 +2740,69 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
               nestedAttributes: {
                 comments: [{attributes: {body: "first!"}}]
               }
+            }
+          ]
+        })
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+
+    it("emits submitted Rails-style belongs-to nested attributes", async () => {
+      const {Task} = buildNestedTestClasses()
+      const fetchStub = stubFetch({model: {id: 8, name: "Design", projectId: 6}})
+
+      try {
+        const task = new Task({
+          name: "Design",
+          projectAttributes: {name: "Launch"}
+        })
+
+        await task.save()
+
+        expect(fetchStub.calls.length).toEqual(1)
+        expect(fetchStub.calls[0].body.nestedAttributes).toEqual({
+          project: [{attributes: {name: "Launch"}}]
+        })
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+
+    it("emits nested attachment payloads from submitted Rails-style child attributes", async () => {
+      const {Project} = buildNestedTestClasses()
+      const fetchStub = stubFetch({model: {id: 7, name: "Launch"}})
+
+      try {
+        const project = new Project({
+          name: "Launch",
+          tasksAttributes: [
+            {
+              descriptionFile: {
+                contentBase64: "YXR0YWNobWVudA==",
+                filename: "nested.txt"
+              },
+              name: "Design"
+            }
+          ]
+        })
+
+        await project.save()
+
+        expect(fetchStub.calls.length).toEqual(1)
+        expect(fetchStub.calls[0].body.nestedAttributes).toEqual({
+          tasks: [
+            {
+              attachments: {
+                descriptionFile: {
+                  contentBase64: "YXR0YWNobWVudA==",
+                  contentType: null,
+                  filename: "nested.txt"
+                }
+              },
+              attributes: {name: "Design"}
             }
           ]
         })

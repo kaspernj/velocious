@@ -10,6 +10,7 @@ import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
+import Interaction from "../dummy/src/models/interaction.js"
 import Project from "../dummy/src/models/project.js"
 import Record from "../../src/database/record/index.js"
 import Request from "../../src/http-server/client/request.js"
@@ -48,7 +49,7 @@ async function postFrontendModel(path, payload) {
 }
 
 /**
- * @param {"destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
+ * @param {"create" | "destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
  * @param {Record<string, any>} payload - Command payload.
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
@@ -1128,6 +1129,102 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(downloadedAttachment.filename()).toEqual("my-doc.doc")
       expect(downloadedAttachment.content().toString()).toEqual("attachment-content")
+    })
+  })
+
+  it("creates belongs-to nested attributes before saving the parent", async () => {
+    await Dummy.run(async () => {
+      const payload = await postSharedTaskFrontendModelCommand("create", {
+        attributes: {
+          name: "Nested belongs-to task",
+          projectAttributes: {name: "Nested belongs-to project"}
+        }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.id).toBeDefined()
+
+      const persisted = await Task.find(payload.model.id)
+      const project = await persisted.projectOrLoad()
+
+      expect(persisted.name()).toEqual("Nested belongs-to task")
+      expect(project.name()).toEqual("Nested belongs-to project")
+      expect(persisted.projectId()).toEqual(project.id())
+    })
+  })
+
+  it("creates has-many nested attributes with child attachments and grandchildren", async () => {
+    await Dummy.run(async () => {
+      const payload = await postSharedProjectFrontendModelCommand("create", {
+        attributes: {
+          name: "Nested parent project",
+          tasksAttributes: [
+            {
+              commentsAttributes: [{body: "Nested child comment"}],
+              descriptionFile: {
+                contentBase64: Buffer.from("nested-attachment-content").toString("base64"),
+                filename: "nested-task.doc"
+              },
+              name: "Nested child task"
+            }
+          ]
+        }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.id).toBeDefined()
+
+      const task = await Task.findBy({name: "Nested child task", projectId: payload.model.id})
+      expect(task).toBeDefined()
+      if (!task) throw new Error("Expected nested child task to be persisted")
+
+      const comment = await Comment.findBy({body: "Nested child comment", taskId: task.id()})
+      const downloadedAttachment = await task.descriptionFile().download()
+
+      expect(comment).toBeDefined()
+      expect(downloadedAttachment.filename()).toEqual("nested-task.doc")
+      expect(downloadedAttachment.content().toString()).toEqual("nested-attachment-content")
+    })
+  })
+
+  it("creates and scopes polymorphic has-many nested attributes", async () => {
+    await Dummy.run(async () => {
+      const createPayload = await postSharedProjectFrontendModelCommand("create", {
+        attributes: {
+          interactionsAttributes: [{kind: "Nested project interaction"}],
+          name: "Nested polymorphic project"
+        }
+      })
+
+      expect(createPayload.status).toEqual("success")
+      expect(createPayload.model.id).toBeDefined()
+
+      const projectInteraction = await Interaction.findBy({
+        kind: "Nested project interaction",
+        subjectId: createPayload.model.id,
+        subjectType: "Project"
+      })
+
+      expect(projectInteraction).toBeDefined()
+      if (!projectInteraction) throw new Error("Expected nested polymorphic child to be persisted")
+
+      const foreignInteraction = await Interaction.create({
+        kind: "Foreign task interaction",
+        subjectId: createPayload.model.id,
+        subjectType: "Task"
+      })
+      const updatePayload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {
+          interactionsAttributes: [{id: foreignInteraction.id(), kind: "Incorrectly updated"}],
+          name: "Nested polymorphic project"
+        },
+        id: createPayload.model.id
+      })
+      const reloadedForeignInteraction = await Interaction.find(foreignInteraction.id())
+
+      expect(updatePayload.status).toEqual("error")
+      expect(updatePayload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(reloadedForeignInteraction.kind()).toEqual("Foreign task interaction")
     })
   })
 

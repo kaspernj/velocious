@@ -7,7 +7,7 @@
 
 /**
  * LifecycleCallbackType type.
- * @template {VelociousDatabaseRecord} [T=VelociousDatabaseRecord]
+ * @template [T=VelociousDatabaseRecord]
  * @typedef {((model: T) => void | Promise<void>) | string} LifecycleCallbackType
  */
 
@@ -507,101 +507,101 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs before validation.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeValidation(callback) {
-    this.registerLifecycleCallback("beforeValidation", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "beforeValidation", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before save.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeSave(callback) {
-    this.registerLifecycleCallback("beforeSave", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "beforeSave", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before create.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeCreate(callback) {
-    this.registerLifecycleCallback("beforeCreate", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "beforeCreate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before update.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeUpdate(callback) {
-    this.registerLifecycleCallback("beforeUpdate", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "beforeUpdate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs before destroy.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static beforeDestroy(callback) {
-    this.registerLifecycleCallback("beforeDestroy", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "beforeDestroy", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after save.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterSave(callback) {
-    this.registerLifecycleCallback("afterSave", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "afterSave", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after create.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterCreate(callback) {
-    this.registerLifecycleCallback("afterCreate", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "afterCreate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after update.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterUpdate(callback) {
-    this.registerLifecycleCallback("afterUpdate", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "afterUpdate", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**
    * Runs after destroy.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {LifecycleCallbackType<InstanceType<MC>>} callback - Callback function or instance method name.
+   * @template R
+   * @this {new (...args: Array<?>) => R}
+   * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
   static afterDestroy(callback) {
-    this.registerLifecycleCallback("afterDestroy", /** @type {LifecycleCallbackType} */ (callback))
+    VelociousDatabaseRecord.registerLifecycleCallback.call(this, "afterDestroy", /** @type {LifecycleCallbackType} */ (callback))
   }
 
   /**

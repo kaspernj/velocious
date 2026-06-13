@@ -1,6 +1,33 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
+/**
+ * Attributes accepted when creating or updating UuidInteraction records.
+ * @typedef {object} UuidInteractionWriteAttributes
+ * @property {number} [id] - Value for the id attribute.
+ * @property {string} [subjectId] - Value for the subjectId attribute.
+ * @property {string | null} [subjectType] - Value for the subjectType attribute.
+ * @property {string | null} [kind] - Value for the kind attribute.
+ * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
+ * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ */
+
 export default class UuidInteractionBase extends DatabaseRecord {
+  /**
+   * Creates a UuidInteraction record.
+   * @template {typeof UuidInteractionBase} T
+   * @this {T}
+   * @param {UuidInteractionWriteAttributes} [attributes] - Attributes for the new record.
+   * @returns {Promise<InstanceType<T>>} - Persisted record.
+   */
+  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this UuidInteraction record.
+   * @param {UuidInteractionWriteAttributes} attributes - Attributes to assign before saving.
+   * @returns {Promise<void>} - Resolves when the record is saved.
+   */
+  async update(attributes) { return await super.update(attributes) }
+
   /**
    * @returns {typeof import("../models/uuid-interaction.js").default}
    */

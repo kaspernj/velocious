@@ -228,7 +228,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       ? modelConfig.attachments
       : {}
     const attributesTypeName = `${className}Attributes`
+    const createAttributesTypeName = `${className}CreateAttributes`
+    const updateAttributesTypeName = `${className}UpdateAttributes`
     const attributeNames = attributes.map((attribute) => attribute.name)
+    const permittedCreateParams = this.permittedParamsForGenerator(resourceClass || null, "create")
+    const permittedUpdateParams = this.permittedParamsForGenerator(resourceClass || null, "update")
+    const nestedWriteTypes = this.nestedWriteTypesForModel({className, permittedParams: permittedCreateParams.concat(permittedUpdateParams), relationships})
     const builtInCollectionCommands = {
       create: modelConfig.builtInCollectionCommands.create || "create",
       index: modelConfig.builtInCollectionCommands.index || "index"
@@ -268,8 +273,32 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += ` * @property {${attribute.jsDocType}} ${attribute.name} - Attribute value.\n`
     }
     fileContent += " */\n"
+    for (const nestedWriteType of nestedWriteTypes) {
+      fileContent += "/**\n"
+      fileContent += ` * Attributes accepted for nested ${nestedWriteType.relationshipName} writes.\n`
+      fileContent += ` * @typedef {object} ${nestedWriteType.typeName}\n`
+      for (const nestedAttribute of nestedWriteType.attributes) {
+        fileContent += ` * @property {${nestedAttribute.type}} [${nestedAttribute.name}] - Nested ${nestedAttribute.name} value.\n`
+      }
+      fileContent += " */\n"
+    }
+    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams: permittedCreateParams, typeName: createAttributesTypeName})
+    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams: permittedUpdateParams, typeName: updateAttributesTypeName})
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
+    fileContent += "  /**\n"
+    fileContent += `   * Creates a ${className}.\n`
+    fileContent += `   * @param {${createAttributesTypeName}} [attributes] - Attributes for the new model.\n`
+    fileContent += `   * @returns {Promise<${className}>} - Persisted model.\n`
+    fileContent += "   */\n"
+    fileContent += `  static async create(attributes = {}) { return /** @type {Promise<${className}>} */ (super.create(attributes)) }\n\n`
+
+    fileContent += "  /**\n"
+    fileContent += `   * Updates this ${className}.\n`
+    fileContent += `   * @param {${updateAttributesTypeName}} [newAttributes] - Attributes to assign before saving.\n`
+    fileContent += `   * @returns {Promise<${className}>} - Updated model.\n`
+    fileContent += "   */\n"
+    fileContent += `  async update(newAttributes = {}) { return /** @type {Promise<${className}>} */ (super.update(newAttributes)) }\n\n`
     fileContent += "  /** @returns {FrontendModelResourceConfig} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"
@@ -520,6 +549,146 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return content
+  }
+
+  /**
+   * Runs write attributes typedef.
+   * @param {object} args - Arguments.
+   * @param {Array<{jsDocType: string, name: string}>} args.attributes - Generated read attributes.
+   * @param {string} args.attributesTypeName - Generated read attributes typedef name.
+   * @param {Array<{attributes: Array<{name: string, type: string}>, relationshipName: string, typeName: string}>} args.nestedWriteTypes - Nested write typedefs.
+   * @param {Array<string | Record<string, ?>>} args.permittedParams - Resource permitted params spec.
+   * @param {string} args.typeName - Typedef name.
+   * @returns {string} - Generated typedef source.
+   */
+  writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams, typeName}) {
+    let output = "/**\n"
+
+    output += ` * Attributes accepted by ${typeName}.\n`
+    output += ` * @typedef {object} ${typeName}\n`
+
+    const attributesByName = new Map(attributes.map((attribute) => [attribute.name, attribute]))
+    const nestedWriteTypesByKey = new Map(nestedWriteTypes.map((nestedWriteType) => [`${nestedWriteType.relationshipName}Attributes`, nestedWriteType]))
+
+    for (const entry of permittedParams) {
+      if (typeof entry == "string") {
+        const attribute = attributesByName.get(entry)
+        const type = attribute ? `${attributesTypeName}[${JSON.stringify(attribute.name)}]` : "?"
+
+        output += ` * @property {${type}} [${entry}] - Permitted ${entry} value.\n`
+      } else if (entry && typeof entry == "object" && !Array.isArray(entry)) {
+        for (const key of Object.keys(entry)) {
+          const nestedWriteType = nestedWriteTypesByKey.get(key)
+          const type = nestedWriteType ? `Array<${nestedWriteType.typeName}>` : "Array<Record<string, ?>>"
+
+          output += ` * @property {${type}} [${key}] - Permitted nested ${key} values.\n`
+        }
+      }
+    }
+
+    output += " */\n"
+
+    return output
+  }
+
+  /**
+   * Runs nested write types for model.
+   * @param {object} args - Arguments.
+   * @param {string} args.className - Frontend model class name.
+   * @param {Array<string | Record<string, ?>>} args.permittedParams - Combined permitted params specs.
+   * @param {Array<{autoload: boolean, relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}>} args.relationships - Generated relationships.
+   * @returns {Array<{attributes: Array<{name: string, type: string}>, relationshipName: string, typeName: string}>} - Nested write typedefs.
+   */
+  nestedWriteTypesForModel({className, permittedParams, relationships}) {
+    const relationshipsByName = new Map(relationships.map((relationship) => [relationship.relationshipName, relationship]))
+    const nestedWriteTypesByName = new Map()
+
+    for (const entry of permittedParams) {
+      if (!entry || typeof entry != "object" || Array.isArray(entry)) continue
+
+      for (const key of Object.keys(entry)) {
+        if (!key.endsWith("Attributes")) continue
+        const relationshipName = key.slice(0, -"Attributes".length)
+        const nestedSpec = entry[key]
+        const relationship = relationshipsByName.get(relationshipName)
+        let targetModelClass
+
+        if (relationship) {
+          try {
+            targetModelClass = this.getConfiguration().getModelClass(relationship.targetClassName)
+          } catch {
+            targetModelClass = undefined
+          }
+        }
+
+        if (nestedWriteTypesByName.has(relationshipName)) continue
+
+        nestedWriteTypesByName.set(relationshipName, {
+          attributes: this.nestedWriteAttributesForSpec({nestedSpec, targetModelClass}),
+          relationshipName,
+          typeName: `${className}${inflection.camelize(relationshipName)}NestedAttributes`
+        })
+      }
+    }
+
+    return Array.from(nestedWriteTypesByName.values())
+  }
+
+  /**
+   * Runs nested write attributes for spec.
+   * @param {object} args - Arguments.
+   * @param {?} args.nestedSpec - Nested permit spec.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.targetModelClass - Target backend model class.
+   * @returns {Array<{name: string, type: string}>} - Nested write attributes.
+   */
+  nestedWriteAttributesForSpec({nestedSpec, targetModelClass}) {
+    if (!Array.isArray(nestedSpec)) return []
+
+    return nestedSpec.filter((entry) => typeof entry == "string").map((attributeName) => {
+      const attributeConfig = this.frontendAttributeConfigForModelAttribute({attributeName, modelClass: targetModelClass})
+
+      return {
+        name: attributeName,
+        type: attributeConfig ? this.jsDocTypeForFrontendAttribute({attributeConfig}) : "?"
+      }
+    })
+  }
+
+  /**
+   * Runs permitted params for generator.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null} resourceClass - Resource class.
+   * @param {"create" | "update"} action - Write action.
+   * @returns {Array<string | Record<string, ?>>} - Permitted params spec.
+   */
+  permittedParamsForGenerator(resourceClass, action) {
+    if (!resourceClass || typeof resourceClass !== "function") return []
+
+    const prototypeWithMethod = /**
+                                 * Resource prototype.
+                                 * @type {{permittedParams?: (arg?: object) => Array<string | Record<string, ?>>}}
+                                 */ (resourceClass.prototype)
+
+    if (typeof prototypeWithMethod?.permittedParams !== "function") return []
+
+    try {
+      const instance = new resourceClass({
+        ability: undefined,
+        context: {},
+        locals: {},
+        modelClass: resourceClass.ModelClass,
+        modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
+        params: {},
+        resourceConfiguration: /**
+                                * Resource configuration.
+                                * @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration}
+                                */ ({attributes: []})
+      })
+      const spec = instance.permittedParams({action, ability: undefined, locals: {}, params: {}})
+
+      return Array.isArray(spec) ? spec : []
+    } catch (error) {
+      throw new Error(`Failed to invoke ${resourceClass.name}.permittedParams() while generating frontend model write types: ${error instanceof Error ? error.message : String(error)}`, {cause: error})
+    }
   }
 
   /**

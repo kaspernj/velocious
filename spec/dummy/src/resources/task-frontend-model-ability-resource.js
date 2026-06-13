@@ -17,7 +17,7 @@ export default class TaskFrontendModelAbilityResource extends BaseResource {
         query.where(`tasks.project_id IN (SELECT projects.id FROM projects WHERE projects.creating_user_reference = ${query.driver.quote(applySubqueryScope)})`)
       })
     } else {
-      this.can(["destroy", "read", "update"])
+      this.can(["create", "destroy", "read", "update"])
     }
 
     const deniedAction = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_DENY_ACTION

@@ -61,7 +61,11 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     if (!ModelClass) return false
 
     const ability = await configuration.resolveAbility?.({
-      params: {model: modelName},
+      // Forward the subscriber's params (e.g. authenticationToken) so token-authenticated clients
+      // resolve the same ability they would over HTTP. Without this only session/cookie auth on the
+      // upgrade request works, and param-based auth (like a scanner passing an authenticationToken)
+      // is dropped — leaving such subscribers with a guest ability and no read rule.
+      params: {...this.params, model: modelName},
       request: /**
                 * Narrows the runtime value to the documented type.
                  @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
@@ -116,6 +120,15 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const hasEventFilters = this._hasEventFilterParams()
 
     if (!this._hasProjectionParams() && !hasEventFilters) {
+      // Even unfiltered subscriptions must respect the subscriber's ability. A create/update carries
+      // the record, so only deliver it when the record is within the authenticated ability's scope.
+      // Destroys (and bodies without a usable id) carry no record, so pass them through unchanged.
+      if (body && typeof body === "object" && (body.action === "create" || body.action === "update") && body.id !== undefined && body.id !== null) {
+        const FrontendModelController = await this._frontendModelControllerClass()
+
+        if (!await this._eventIsAccessible(body.id, FrontendModelController)) return
+      }
+
       this.sendMessage(body, meta)
       return
     }
@@ -344,6 +357,25 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
+   * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
+   * @param {string | number} id - Event record id.
+   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+   * @returns {Promise<boolean>} True when the record is readable by this subscription.
+   */
+  async _eventIsAccessible(id, FrontendModelController) {
+    const controller = this._frontendModelController(FrontendModelController)
+
+    await controller.ensureFrontendModelClassInitialized()
+
+    const ModelClass = controller.frontendModelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+
+    return Boolean(await query.first())
+  }
+
+  /**
    * Runs matched event filter keys for event id.
    * @param {string | number} id - Event record id.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
@@ -389,7 +421,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const primaryKey = ModelClass.primaryKey()
     const where = controller.frontendModelWhere()
     const joins = controller.frontendModelJoins()
-    let query = ModelClass.where({[ModelClass.tableName()]: {[primaryKey]: id}})
+    // Start from the subscriber's authorized scope so a filter can only ever match records the
+    // subscription's ability permits to read.
+    let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
 
     if (where) controller.applyFrontendModelWhere({query, where})
     if (joins) controller.applyFrontendModelJoins({joins, query})
@@ -414,7 +448,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
     const ModelClass = controller.frontendModelClass()
     const primaryKey = ModelClass.primaryKey()
-    let query = ModelClass.where({[ModelClass.tableName()]: {[primaryKey]: id}})
+    // Reload through the subscriber's authorized scope so projected records are only ever sent for
+    // rows the subscription's ability permits to read.
+    let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
     const preload = controller.frontendModelPreload()
 
     if (preload) query = query.preload(preload)

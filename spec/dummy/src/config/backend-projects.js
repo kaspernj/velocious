@@ -1,6 +1,7 @@
 import wait from "awaitery/build/wait.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import Comment from "../models/comment.js"
+import Interaction from "../models/interaction.js"
 import Project from "../models/project.js"
 import Task from "../models/task.js"
 import User from "../models/user.js"
@@ -32,9 +33,15 @@ class TaskFrontendResource extends FrontendModelBaseResource {
     return typeof name === "string" ? name.toUpperCase() : null
   }
 
-  /** @returns {Array<string>} - Permit spec for Task writes. */
+  /** @returns {Array<string | Record<string, ?>>} - Permit spec for Task writes. */
   permittedParams() {
-    return ["name", "isDone", "descriptionFile"]
+    return [
+      "name",
+      "isDone",
+      "descriptionFile",
+      {commentsAttributes: ["id", "_destroy", "body"]},
+      {projectAttributes: ["name"]}
+    ]
   }
 }
 
@@ -49,13 +56,36 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
       attributes: ["id", {name: "name", selectedByDefault: false}],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      relationships: ["creatingUser", "tasks"]
+      relationships: ["creatingUser", "interactions", "tasks"]
     }
   }
 
-  /** @returns {Array<string>} - Permit spec for Project writes (name is translated). */
+  /** @returns {Array<string | Record<string, ?>>} - Permit spec for Project writes (name is translated). */
   permittedParams() {
-    return ["name"]
+    return [
+      "name",
+      {interactionsAttributes: ["id", "_destroy", "kind"]},
+      {tasksAttributes: ["id", "_destroy", "name", "isDone", "descriptionFile", {commentsAttributes: ["id", "_destroy", "body"]}]}
+    ]
+  }
+}
+
+class InteractionFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Interaction
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: ["read", "create", "update", "destroy"],
+      attributes: ["id", "kind", "subjectId", "subjectType"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find", "update", "destroy"]
+    }
+  }
+
+  /** @returns {Array<string>} - Permit spec for Interaction writes. */
+  permittedParams() {
+    return ["kind"]
   }
 }
 
@@ -129,11 +159,16 @@ class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: ["read"],
+      abilities: ["read", "create", "update", "destroy"],
       attributes: ["id", "body"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"]
     }
+  }
+
+  /** @returns {Array<string>} - Permit spec for Comment writes. */
+  permittedParams() {
+    return ["body"]
   }
 }
 
@@ -143,6 +178,7 @@ const backendProjects = [
     path: "/tmp/example-backend",
     frontendModels: {
       Comment: SystemTestCommentFrontendResource,
+      Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,
       User: UserFrontendResource

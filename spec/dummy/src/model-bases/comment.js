@@ -1,6 +1,32 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
+/**
+ * Attributes accepted when creating or updating Comment records.
+ * @typedef {object} CommentWriteAttributes
+ * @property {number} [id] - Value for the id attribute.
+ * @property {number} [taskId] - Value for the taskId attribute.
+ * @property {string | null} [body] - Value for the body attribute.
+ * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
+ * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ */
+
 export default class CommentBase extends DatabaseRecord {
+  /**
+   * Creates a Comment record.
+   * @template {typeof CommentBase} T
+   * @this {T}
+   * @param {CommentWriteAttributes} [attributes] - Attributes for the new record.
+   * @returns {Promise<InstanceType<T>>} - Persisted record.
+   */
+  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this Comment record.
+   * @param {CommentWriteAttributes} attributes - Attributes to assign before saving.
+   * @returns {Promise<void>} - Resolves when the record is saved.
+   */
+  async update(attributes) { return await super.update(attributes) }
+
   /**
    * @returns {typeof import("../models/comment.js").default}
    */

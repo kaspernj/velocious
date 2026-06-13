@@ -1,6 +1,36 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
+/**
+ * Attributes accepted when creating or updating Task records.
+ * @typedef {object} TaskWriteAttributes
+ * @property {number} [id] - Value for the id attribute.
+ * @property {number} [projectId] - Value for the projectId attribute.
+ * @property {string | null} [name] - Value for the name attribute.
+ * @property {string | null} [description] - Value for the description attribute.
+ * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
+ * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ * @property {boolean | null} [isDone] - Value for the isDone attribute.
+ * @property {Array<import("./comment.js").CommentWriteAttributes & {_destroy?: boolean}>} [commentsAttributes] - Nested comments attributes.
+ * @property {import("./project.js").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.
+ */
+
 export default class TaskBase extends DatabaseRecord {
+  /**
+   * Creates a Task record.
+   * @template {typeof TaskBase} T
+   * @this {T}
+   * @param {TaskWriteAttributes} [attributes] - Attributes for the new record.
+   * @returns {Promise<InstanceType<T>>} - Persisted record.
+   */
+  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this Task record.
+   * @param {TaskWriteAttributes} attributes - Attributes to assign before saving.
+   * @returns {Promise<void>} - Resolves when the record is saved.
+   */
+  async update(attributes) { return await super.update(attributes) }
+
   /**
    * @returns {typeof import("../models/task.js").default}
    */
@@ -148,6 +178,36 @@ export default class TaskBase extends DatabaseRecord {
    * @returns {void}
    */
   setProject(newModel) { void newModel; throw new Error("Not implemented") }
+
+  /**
+   * @returns {import("../models/project.js").default}
+   */
+  reviewProject() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("reviewProject").loaded()) }
+
+  /**
+   * @abstract
+   * @param {Record<string, ?>} [attributes]
+   * @returns {import("../models/project.js").default}
+   */
+  buildReviewProject(attributes) { void attributes; throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {Promise<import("../models/project.js").default | undefined>}
+   */
+  loadReviewProject() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/project.js").default | undefined>}
+   */
+  reviewProjectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("reviewProject", {preloadTranslations: true})) }
+
+  /**
+   * @abstract
+   * @param {import("../models/project.js").default} newModel
+   * @returns {void}
+   */
+  setReviewProject(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../../../../src/database/record/index.js").default>}

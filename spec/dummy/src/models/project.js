@@ -15,6 +15,8 @@ Project.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "sub
 Project.hasMany("comments", {className: "Comment", through: "tasks", foreignKey: "task_id"})
 Project.hasMany("commentsThroughTasks", {className: "Comment", through: "tasks"})
 Project.translates("name")
+Project.acceptsNestedAttributesFor("tasks", {allowDestroy: true})
+Project.acceptsNestedAttributesFor("interactions", {allowDestroy: true})
 
 Project.beforeValidation((record) => {
   if (record.readAttribute("tasksCount") == null) {

@@ -109,14 +109,16 @@
 - Idempotent: a relationship already preloaded is skipped (no request); when `select`/`selectsExtra` name attributes that are not yet loaded on the cached target, it re-fetches to widen them. Pass `{force: true}` to always re-fetch.
 
 ## Nested attributes on `save()`
-- Parents can save dirty `hasMany` children in the same request via Rails-style nested-attribute writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc.
+- Parents can save dirty `hasMany`, `hasOne`, and `belongsTo` relationships in the same request via Rails-style nested-attribute writes. See [nested-attributes.md](nested-attributes.md) for the full feature doc.
 - Requires a two-layer opt-in: `Model.acceptsNestedAttributesFor(name, options)` on the backend `Record` subclass (policy: `allowDestroy`, `limit`, `rejectIf`) and an overridden `permittedParams(arg)` method on the resource (flat Rails-style array mixing attribute names with `{<relationshipName>Attributes: [...]}` objects).
 - `markForDestruction()` / `markedForDestruction()` on any frontend-model instance flags a loaded child for destruction on the next parent `save()`. To actually destroy, include `"_destroy"` in the nested permit AND set `allowDestroy: true` on the model.
 - The `save()` walker includes only dirty children (new / changed / marked-for-destruction / with dirty descendants); loaded-but-untouched children are omitted.
+- Rails-style direct keys are supported in normal attributes, for example `Task.create({name: "Design", projectAttributes: {name: "Launch"}})` and `Project.create({name: "Launch", tasksAttributes: [{name: "Design"}]})`.
 
 ## Record parity helpers
 - `save()` is available for create/update flows (`create` when new record, `update` when persisted). With nested attributes enabled, it also carries dirty children in the same request.
 - `create(attributes)` is available on frontend model classes.
+- Generated frontend models narrow `create(attributes)` and `update(attributes)` JSDoc input types from the resource's `permittedParams(arg)` result. Permitted nested keys such as `tasksAttributes` are included when declared in the permit; permitted virtual or attachment fields without generated attribute metadata are typed as `?`.
 - `isNewRecord()`, `isPersisted()`, `changes()`, and `isChanged()` are available on frontend model instances.
 - Relationship parity helpers are available via `loadRelationship(name)` / `relationshipOrLoad(name)` / `setRelationship(name, value)` and generated `loadXxx` / `xxxOrLoad` / `setXxx` methods where applicable.
 - Has-many relationship helpers support `await model.relationshipName().toArray()` to reuse preloaded data and `await model.relationshipName().load()` to force a refresh.
@@ -152,6 +154,7 @@ useUpdatedEvent(
 - Backend attachment command mapping supports `attach`, `download`, and `url` command names in resource `commands`.
 - Frontend attachment input supports `File`/`Blob` (`arrayBuffer()`), bytes, and `{contentBase64, filename?, contentType?}` payloads.
 - Frontend attachment input does not support `{path: ...}`.
+- Setting an attachment field in `create`, `update`, or `save()` queues it into that model's mutation payload. Nested attributes can include attachment fields when the nested permit lists that attachment name.
 
 ## Condition validation rules
 - Reject `undefined` condition values.
@@ -169,4 +172,5 @@ useUpdatedEvent(
 - Frontend model files in app projects are generated artifacts.
 - Fix generator/source behavior in Velocious instead of hand-editing generated output.
 - Generated files should include valid JSDoc typing.
+- Generated backend model bases include JSDoc write-attribute typedefs for `create(attributes)` and `update(attributes)` based on the model table columns, including `id`, `createdAt`, and `updatedAt` when those columns exist. Relationships declared with `acceptsNestedAttributesFor(...)` also appear as nested `<relationship>Attributes` properties that reference the target model's generated write type, so nested attributes recurse through the target model's own accepted nested attributes. `allowDestroy: true` intersects `_destroy?: boolean` into that nested input type.
 - Generated shared-endpoint models should emit stable `resourceConfig().modelName` metadata so production-minified class names do not break backend model lookup.

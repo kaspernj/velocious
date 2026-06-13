@@ -16,6 +16,7 @@ import path from "path"
 import requireContext from "require-context"
 import SingleMultiUsePool from "../../../../src/database/pool/single-multi-use.js"
 import CommentFrontendModelAbilityResource from "../resources/comment-frontend-model-ability-resource.js"
+import InteractionFrontendModelAbilityResource from "../resources/interaction-frontend-model-ability-resource.js"
 import ProjectFrontendModelAbilityResource from "../resources/project-frontend-model-ability-resource.js"
 import TaskFrontendModelAbilityResource from "../resources/task-frontend-model-ability-resource.js"
 import UserFrontendModelAbilityResource from "../resources/user-frontend-model-ability-resource.js"
@@ -74,7 +75,7 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
 
   return new Ability({
     context: {configuration, params, request, response},
-    resources: [TaskFrontendModelAbilityResource, UserFrontendModelAbilityResource, ProjectFrontendModelAbilityResource, CommentFrontendModelAbilityResource]
+    resources: [TaskFrontendModelAbilityResource, UserFrontendModelAbilityResource, ProjectFrontendModelAbilityResource, CommentFrontendModelAbilityResource, InteractionFrontendModelAbilityResource]
   })
 }
 

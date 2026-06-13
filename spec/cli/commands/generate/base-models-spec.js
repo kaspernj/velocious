@@ -109,6 +109,15 @@ describe("Cli - generate - base-models", () => {
     expect(setterPattern.test(taskContents)).toBeTrue()
     expect(activeReturnPattern.test(projectDetailContents)).toBeTrue()
     expect(activeSetterPattern.test(projectDetailContents)).toBeTrue()
+    expect(taskContents).toContain("@typedef {object} TaskWriteAttributes")
+    expect(taskContents).toContain("@property {number} [id] - Value for the id attribute.")
+    expect(taskContents).toContain("@property {Date | string | null} [createdAt] - Value for the createdAt attribute.")
+    expect(taskContents).toContain("@property {Array<import(\"./comment.js\").CommentWriteAttributes & {_destroy?: boolean}>} [commentsAttributes] - Nested comments attributes.")
+    expect(taskContents).toContain("@property {import(\"./project.js\").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.")
+    expect(taskContents).toContain("@param {TaskWriteAttributes} [attributes] - Attributes for the new record.")
+    expect(taskContents).toContain("@param {TaskWriteAttributes} attributes - Attributes to assign before saving.")
+    expect(taskContents.includes("@returns {Promise<DatabaseRecord>} - Persisted record.")).toEqual(false)
+    expect(taskContents.includes("@param {Record<string, ?>} [attributes] - Attributes for the new record.")).toEqual(false)
   })
 
   it("infers concrete model types in lifecycle callbacks", {tags: ["mssql"]}, async () => {
