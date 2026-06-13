@@ -1453,4 +1453,28 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(response.debugErrorClass).toBeUndefined()
     })
   })
+
+  it("emits framework-error for unexpected frontend-model failures so they are not silently swallowed", async () => {
+    await Dummy.run(async () => {
+      const configuration = buildFrontendModelControllerConfiguration("production")
+      /** @type {any[]} */
+      const frameworkErrors = []
+
+      configuration.getErrorEvents().on("framework-error", (/** @type {any} */ payload) => frameworkErrors.push(payload))
+
+      const payload = await runFrontendApi({
+        configuration,
+        params: {
+          modelName: "Task",
+          requests: [{commandType: "find", model: "Task", payload: {id: -1}, requestId: "find-request"}]
+        }
+      })
+      const response = /** @type {Record<string, any>} */ (payload.responses?.[0]?.response || payload)
+
+      expect(response.status).toEqual("error")
+      expect(frameworkErrors.length).toBeGreaterThan(0)
+      expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
+      expect(frameworkErrors[0].error).toBeInstanceOf(Error)
+    })
+  })
 })

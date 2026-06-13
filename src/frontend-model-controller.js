@@ -218,6 +218,14 @@ function frontendModelClientMessageForError(error) {
     return error.message
   }
 
+  // Validation failures are expected user-flow errors. Always forward the
+  // validation summary so the client shows the real reason (e.g. "Name can't
+  // be blank") instead of the generic "Request failed." message, regardless of
+  // whether the raising code also attached error.velocious metadata.
+  if (error instanceof ValidationError) {
+    return error.message
+  }
+
   if (frontendModelErrorHasVelociousMetadata(error) && error instanceof Error) {
     return error.message
   }
@@ -2827,6 +2835,24 @@ export default class FrontendModelController extends Controller {
       model: resolvedModel,
       requestId
     }])
+
+    // Surface genuinely unexpected backend failures on the framework-error
+    // channel so process-level bug reporters capture them, instead of the
+    // controller silently swallowing them behind the generic "Request
+    // failed." client message. Developer-annotated user-flow errors
+    // (`error.velocious` metadata — handled by the early return above),
+    // validation errors, and deliberately client-safe VelociousErrors are
+    // expected and must NOT be reported as framework errors.
+    if (!(error instanceof ValidationError) && !(error instanceof VelociousError && error.safeToExpose)) {
+      const errorPayload = {
+        context: {action, commandType, frontendModelEndpoint: true, model: resolvedModel, requestId},
+        error: error instanceof Error ? error : new Error(String(error)),
+        request: this.getRequest()
+      }
+
+      this.getConfiguration().getErrorEvents().emit("framework-error", errorPayload)
+      this.getConfiguration().getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
+    }
   }
 
   /**
