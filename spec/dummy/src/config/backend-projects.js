@@ -1,6 +1,7 @@
 import wait from "awaitery/build/wait.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import Comment from "../models/comment.js"
+import Interaction from "../models/interaction.js"
 import Project from "../models/project.js"
 import Task from "../models/task.js"
 import User from "../models/user.js"
@@ -55,7 +56,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
       attributes: ["id", {name: "name", selectedByDefault: false}],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      relationships: ["creatingUser", "tasks"]
+      relationships: ["creatingUser", "interactions", "tasks"]
     }
   }
 
@@ -63,8 +64,28 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
   permittedParams() {
     return [
       "name",
+      {interactionsAttributes: ["id", "_destroy", "kind"]},
       {tasksAttributes: ["id", "_destroy", "name", "isDone", "descriptionFile", {commentsAttributes: ["id", "_destroy", "body"]}]}
     ]
+  }
+}
+
+class InteractionFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Interaction
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: ["read", "create", "update", "destroy"],
+      attributes: ["id", "kind", "subjectId", "subjectType"],
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find", "update", "destroy"]
+    }
+  }
+
+  /** @returns {Array<string>} - Permit spec for Interaction writes. */
+  permittedParams() {
+    return ["kind"]
   }
 }
 
@@ -157,6 +178,7 @@ const backendProjects = [
     path: "/tmp/example-backend",
     frontendModels: {
       Comment: SystemTestCommentFrontendResource,
+      Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,
       User: UserFrontendResource

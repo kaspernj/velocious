@@ -895,7 +895,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
       if (context.relationship.getType() === "belongsTo") continue
 
-      const foreignKey = this._foreignKeyAttributeForModel(context.relationship, context.targetModelClass)
+      const parentLinkAttributes = this._parentLinkAttributesForNestedChild({
+        parent,
+        relationship: context.relationship,
+        targetModelClass: context.targetModelClass
+      })
 
       const destroyEntries = []
       const updateEntries = []
@@ -922,9 +926,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           ability: context.ability,
           action: "destroy",
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
-          foreignKey,
           id: entry.id,
           parent,
+          parentLinkAttributes,
           relationshipName,
           targetModelClass: context.targetModelClass
         })
@@ -937,9 +941,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           ability: context.ability,
           action: "update",
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
-          foreignKey,
           id: entry.id,
           parent,
+          parentLinkAttributes,
           relationshipName,
           targetModelClass: context.targetModelClass
         })
@@ -960,7 +964,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       for (const entry of createEntries) {
         const child = new context.targetModelClass()
 
-        child.assign({[foreignKey]: parent.id()})
+        child.assign(parentLinkAttributes)
         await context.childResource._assignNestedEntryToChild({
           child,
           childWritableAttributes: context.childWritableAttributes,
@@ -1017,6 +1021,40 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const foreignKey = relationship.getForeignKey()
 
     return modelClass.getColumnNameToAttributeNameMap()[foreignKey] || foreignKey
+  }
+
+  /**
+   * Returns the FK attributes that bind a nested child to its parent.
+   * @param {object} args - Parent-link inputs.
+   * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
+   * @param {import("../database/record/relationships/base.js").default} args.relationship - Relationship metadata.
+   * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
+   * @returns {Record<string, string | number>} Attributes that scope the child to the parent.
+   */
+  _parentLinkAttributesForNestedChild({parent, relationship, targetModelClass}) {
+    const foreignKey = this._foreignKeyAttributeForModel(relationship, targetModelClass)
+    /** @type {Record<string, string | number>} */
+    const attributes = {[foreignKey]: /** @type {string | number} */ (parent.id())}
+
+    if (relationship.getPolymorphic()) {
+      const typeAttribute = this._polymorphicTypeAttributeForModel(relationship, targetModelClass)
+
+      attributes[typeAttribute] = parent.getModelClass().getModelName()
+    }
+
+    return attributes
+  }
+
+  /**
+   * Converts a relationship's polymorphic type column/name to a child attribute name.
+   * @param {import("../database/record/relationships/base.js").default} relationship - Relationship metadata.
+   * @param {typeof import("../database/record/index.js").default} modelClass - Model class containing the type column.
+   * @returns {string} Polymorphic type attribute name.
+   */
+  _polymorphicTypeAttributeForModel(relationship, modelClass) {
+    const typeColumn = relationship.getPolymorphicTypeColumn()
+
+    return modelClass.getColumnNameToAttributeNameMap()[typeColumn] || typeColumn
   }
 
   /**
@@ -1081,16 +1119,16 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
    * @param {"update" | "destroy"} args.action - Frontend action.
    * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
-   * @param {string} args.foreignKey - Foreign-key attribute on the child pointing to the parent.
    * @param {string | number} args.id - Child id from the payload.
    * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
+   * @param {Record<string, string | number>} args.parentLinkAttributes - Attributes that scope the child to the parent.
    * @param {string} args.relationshipName - Parent's relationship name (for error messages).
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
    * @returns {Promise<import("../database/record/index.js").default>} - Authorized, parent-linked child model.
    */
-  async _findScopedChild({ability, action, childResourceConfiguration, foreignKey, id, parent, relationshipName, targetModelClass}) {
+  async _findScopedChild({ability, action, childResourceConfiguration, id, parent, parentLinkAttributes, relationshipName, targetModelClass}) {
     const primaryKey = targetModelClass.primaryKey()
-    const lookup = {[primaryKey]: id, [foreignKey]: parent.id()}
+    const lookup = {[primaryKey]: id, ...parentLinkAttributes}
     const query = ability
       ? /**
          * Narrows the runtime value to the documented type.

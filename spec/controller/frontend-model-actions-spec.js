@@ -10,6 +10,7 @@ import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
+import Interaction from "../dummy/src/models/interaction.js"
 import Project from "../dummy/src/models/project.js"
 import Record from "../../src/database/record/index.js"
 import Request from "../../src/http-server/client/request.js"
@@ -1183,6 +1184,47 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(comment).toBeDefined()
       expect(downloadedAttachment.filename()).toEqual("nested-task.doc")
       expect(downloadedAttachment.content().toString()).toEqual("nested-attachment-content")
+    })
+  })
+
+  it("creates and scopes polymorphic has-many nested attributes", async () => {
+    await Dummy.run(async () => {
+      const createPayload = await postSharedProjectFrontendModelCommand("create", {
+        attributes: {
+          interactionsAttributes: [{kind: "Nested project interaction"}],
+          name: "Nested polymorphic project"
+        }
+      })
+
+      expect(createPayload.status).toEqual("success")
+      expect(createPayload.model.id).toBeDefined()
+
+      const projectInteraction = await Interaction.findBy({
+        kind: "Nested project interaction",
+        subjectId: createPayload.model.id,
+        subjectType: "Project"
+      })
+
+      expect(projectInteraction).toBeDefined()
+      if (!projectInteraction) throw new Error("Expected nested polymorphic child to be persisted")
+
+      const foreignInteraction = await Interaction.create({
+        kind: "Foreign task interaction",
+        subjectId: createPayload.model.id,
+        subjectType: "Task"
+      })
+      const updatePayload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {
+          interactionsAttributes: [{id: foreignInteraction.id(), kind: "Incorrectly updated"}],
+          name: "Nested polymorphic project"
+        },
+        id: createPayload.model.id
+      })
+      const reloadedForeignInteraction = await Interaction.find(foreignInteraction.id())
+
+      expect(updatePayload.status).toEqual("error")
+      expect(updatePayload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(reloadedForeignInteraction.kind()).toEqual("Foreign task interaction")
     })
   })
 

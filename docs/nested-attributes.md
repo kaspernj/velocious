@@ -187,8 +187,8 @@ For each nested entry:
 
 1. **Model gate** — throws if the parent model hasn't declared `acceptsNestedAttributesFor` for the relationship.
 2. **Resource gate** — throws if the parent's `permittedParams` doesn't include `{<relationshipName>Attributes: [...]}` for that relationship.
-3. **Relationship shape** — `belongsTo` accepts one object, `hasOne` accepts one object, and `hasMany` accepts an array. Polymorphic and `through` relationships are not supported for nested writes.
-4. **Lookup** (updates and destroys only): queries the **child model class** directly (never through the parent controller's scoping), filters by `{[primaryKey]: entry.id, [foreignKey]: parent.id()}` for has-one/has-many, and applies the child resource's own ability mapping for the requested action. Belongs-to lookups are authorized by id without parent scoping because the foreign key lives on the parent. Missing-or-foreign-parent-or-not-authorized collapses to a single clear error that rolls the transaction back.
+3. **Relationship shape** — `belongsTo` accepts one object, `hasOne` accepts one object, and `hasMany` accepts an array. Polymorphic `hasOne` / `hasMany` writes are supported; polymorphic `belongsTo` and `through` relationships are not supported for nested writes.
+4. **Lookup** (updates and destroys only): queries the **child model class** directly (never through the parent controller's scoping), filters by `{[primaryKey]: entry.id, [foreignKey]: parent.id()}` for has-one/has-many, adds the type column for polymorphic relationships, and applies the child resource's own ability mapping for the requested action. Belongs-to lookups are authorized by id without parent scoping because the foreign key lives on the parent. Missing-or-foreign-parent-or-not-authorized collapses to a single clear error that rolls the transaction back.
 5. **Authorization**: always via the **child resource's** own `abilities` mapping — never the parent's. Custom mappings like `{update: "manage"}` are honored.
 6. **Attribute filtering**: runs through the **parent's** permit for that relationship (api_maker semantics), so the parent's `permittedParams` is the single source of truth for what attributes can be written on a nested child.
 7. **Attachments**: attachment keys listed in the nested permit are queued on the child before the child `save()`, so attachment persistence participates in the same transaction lifecycle.
@@ -207,7 +207,7 @@ Before nested attributes, the idiomatic way to update a parent with children was
 
 ## Limitations
 
-- Polymorphic and `through` relationships are not supported for nested writes. They throw with a clear message.
+- Polymorphic `hasOne` / `hasMany` relationships are supported and automatically scope the child type column. Polymorphic `belongsTo` and `through` relationships are not supported for nested writes.
 - No built-in server-side `limit` enforcement beyond the optional policy `limit` and client payload size.
 - The client's post-save reconciliation replaces the relationship array with the server's authoritative set; any external references you held to the pre-save child instances can go stale.
 
