@@ -33,7 +33,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
     return typeof name === "string" ? name.toUpperCase() : null
   }
 
-  /** @returns {Array<string>} - Permit spec for Task writes. */
+  /** @returns {Array<string | Record<string, ?>>} - Permit spec for Task writes. */
   permittedParams() {
     return [
       "name",
@@ -60,7 +60,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
     }
   }
 
-  /** @returns {Array<string>} - Permit spec for Project writes (name is translated). */
+  /** @returns {Array<string | Record<string, ?>>} - Permit spec for Project writes (name is translated). */
   permittedParams() {
     return [
       "name",

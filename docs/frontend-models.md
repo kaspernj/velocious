@@ -118,6 +118,7 @@
 ## Record parity helpers
 - `save()` is available for create/update flows (`create` when new record, `update` when persisted). With nested attributes enabled, it also carries dirty children in the same request.
 - `create(attributes)` is available on frontend model classes.
+- Generated frontend models narrow `create(attributes)` and `update(attributes)` JSDoc input types from the resource's `permittedParams(arg)` result. Permitted nested keys such as `tasksAttributes` are included when declared in the permit; permitted virtual or attachment fields without generated attribute metadata are typed as `?`.
 - `isNewRecord()`, `isPersisted()`, `changes()`, and `isChanged()` are available on frontend model instances.
 - Relationship parity helpers are available via `loadRelationship(name)` / `relationshipOrLoad(name)` / `setRelationship(name, value)` and generated `loadXxx` / `xxxOrLoad` / `setXxx` methods where applicable.
 - Has-many relationship helpers support `await model.relationshipName().toArray()` to reuse preloaded data and `await model.relationshipName().load()` to force a refresh.
@@ -171,4 +172,5 @@ useUpdatedEvent(
 - Frontend model files in app projects are generated artifacts.
 - Fix generator/source behavior in Velocious instead of hand-editing generated output.
 - Generated files should include valid JSDoc typing.
+- Generated backend model bases include JSDoc write-attribute typedefs for `create(attributes)` and `update(attributes)` based on the model table columns, including `id`, `createdAt`, and `updatedAt` when those columns exist. Relationships declared with `acceptsNestedAttributesFor(...)` also appear as nested `<relationship>Attributes` properties that reference the target model's generated write type, so nested attributes recurse through the target model's own accepted nested attributes. `allowDestroy: true` intersects `_destroy?: boolean` into that nested input type.
 - Generated shared-endpoint models should emit stable `resourceConfig().modelName` metadata so production-minified class names do not break backend model lookup.

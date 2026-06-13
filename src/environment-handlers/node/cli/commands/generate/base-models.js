@@ -115,11 +115,47 @@ export default class DbGenerateModel extends BaseCommand {
           velociousPath = "velocious/build/src"
         }
 
+        const columns = await table.getColumns()
+        const writeAttributeTypeName = `${modelNameCamelized}WriteAttributes`
+        const nestedWriteAttributes = this.nestedWriteAttributesForModel({modelClass})
+
         fileContent += `import DatabaseRecord from "${velociousPath}/database/record/index.js"\n\n`
+        fileContent += "/**\n"
+        fileContent += ` * Attributes accepted when creating or updating ${modelNameCamelized} records.\n`
+        fileContent += ` * @typedef {object} ${writeAttributeTypeName}\n`
+        for (const column of columns) {
+          const deburredColumnName = deburrColumnName(column.getName())
+          const camelizedColumnName = inflection.camelize(deburredColumnName, true)
+          const setterJsdocType = this.jsDocSetterTypeFromColumn(column, modelClass)
+
+          if (setterJsdocType) {
+            fileContent += ` * @property {${setterJsdocType}${column.getNull() ? " | null" : ""}} [${camelizedColumnName}] - Value for the ${camelizedColumnName} attribute.\n`
+          }
+        }
+        for (const nestedWriteAttribute of nestedWriteAttributes) {
+          fileContent += ` * @property {${nestedWriteAttribute.propertyType}} [${nestedWriteAttribute.propertyName}] - Nested ${nestedWriteAttribute.relationshipName} attributes.\n`
+        }
+        fileContent += " */\n\n"
 
         const hasManyRelationFilePath = `${velociousPath}/database/record/instance-relationships/has-many.js`
 
         fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
+
+        fileContent += "  /**\n"
+        fileContent += `   * Creates a ${modelNameCamelized} record.\n`
+        fileContent += `   * @template {typeof ${modelNameCamelized}Base} T\n`
+        fileContent += "   * @this {T}\n"
+        fileContent += `   * @param {${writeAttributeTypeName}} [attributes] - Attributes for the new record.\n`
+        fileContent += "   * @returns {Promise<InstanceType<T>>} - Persisted record.\n"
+        fileContent += "   */\n"
+        fileContent += "  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }\n\n"
+
+        fileContent += "  /**\n"
+        fileContent += `   * Updates this ${modelNameCamelized} record.\n`
+        fileContent += `   * @param {${writeAttributeTypeName}} attributes - Attributes to assign before saving.\n`
+        fileContent += "   * @returns {Promise<void>} - Resolves when the record is saved.\n"
+        fileContent += "   */\n"
+        fileContent += "  async update(attributes) { return await super.update(attributes) }\n\n"
 
       // --- getModelClass() override (fixes polymorphic typing in JS/JSDoc) ---
       if (await fileExists(sourceModelFullFilePath)) {
@@ -138,7 +174,6 @@ export default class DbGenerateModel extends BaseCommand {
         fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
       }
 
-      const columns = await table.getColumns()
       let methodsCount = 0
 
       for (const column of columns) {
@@ -415,5 +450,36 @@ export default class DbGenerateModel extends BaseCommand {
     }
 
     return this.jsDocTypeFromColumn(column, modelClass)
+  }
+
+  /**
+   * Runs nested write attributes for model.
+   * @param {object} args - Arguments.
+   * @param {typeof import("../../../../../database/record/index.js").default} args.modelClass - Model class.
+   * @returns {Array<{propertyName: string, propertyType: string, relationshipName: string}>} - Nested write attributes.
+   */
+  nestedWriteAttributesForModel({modelClass}) {
+    const acceptedNestedAttributes = modelClass._acceptedNestedAttributes || {}
+    const nestedWriteAttributes = []
+
+    for (const relationshipName of Object.keys(acceptedNestedAttributes)) {
+      const relationship = modelClass.getRelationshipByName(relationshipName)
+      const relationshipType = relationship.getType()
+      const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) throw new Error(`Relationship '${relationshipName}' on '${modelClass.getModelName()}' has no target model class`)
+
+      const targetModelFileName = inflection.dasherize(inflection.underscore(targetModelClass.getModelName()))
+      const targetWriteTypeName = `${inflection.camelize(targetModelClass.getModelName().replaceAll("-", "_"))}WriteAttributes`
+      const nestedType = `import("./${targetModelFileName}.js").${targetWriteTypeName}${acceptedNestedAttributes[relationshipName]?.allowDestroy ? " & {_destroy?: boolean}" : ""}`
+
+      nestedWriteAttributes.push({
+        propertyName: `${relationshipName}Attributes`,
+        propertyType: relationshipType == "hasMany" ? `Array<${nestedType}>` : nestedType,
+        relationshipName
+      })
+    }
+
+    return nestedWriteAttributes
   }
 }

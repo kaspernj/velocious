@@ -1,6 +1,34 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
+/**
+ * Attributes accepted when creating or updating Project records.
+ * @typedef {object} ProjectWriteAttributes
+ * @property {number} [id] - Value for the id attribute.
+ * @property {string | null} [creatingUserReference] - Value for the creatingUserReference attribute.
+ * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
+ * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ * @property {number} [tasksCount] - Value for the tasksCount attribute.
+ * @property {Array<import("./task.js").TaskWriteAttributes & {_destroy?: boolean}>} [tasksAttributes] - Nested tasks attributes.
+ * @property {Array<import("./interaction.js").InteractionWriteAttributes & {_destroy?: boolean}>} [interactionsAttributes] - Nested interactions attributes.
+ */
+
 export default class ProjectBase extends DatabaseRecord {
+  /**
+   * Creates a Project record.
+   * @template {typeof ProjectBase} T
+   * @this {T}
+   * @param {ProjectWriteAttributes} [attributes] - Attributes for the new record.
+   * @returns {Promise<InstanceType<T>>} - Persisted record.
+   */
+  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this Project record.
+   * @param {ProjectWriteAttributes} attributes - Attributes to assign before saving.
+   * @returns {Promise<void>} - Resolves when the record is saved.
+   */
+  async update(attributes) { return await super.update(attributes) }
+
   /**
    * @returns {typeof import("../models/project.js").default}
    */
@@ -225,6 +253,34 @@ export default class ProjectBase extends DatabaseRecord {
   setDoneTasks(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
+   */
+  reviewTasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>} */ (this.getRelationshipByName("reviewTasks")) }
+
+  /**
+   * @returns {Array<import("../models/task.js").default>}
+   */
+  reviewTasksLoaded() { return /** @type {Array<import("../models/task.js").default>} */ (this.getRelationshipByName("reviewTasks").loaded()) }
+
+  /**
+   * @abstract
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  loadReviewTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  reviewTasksOrLoad() { return /** @type {Promise<Array<import("../models/task.js").default>>} */ (this.relationshipOrLoad("reviewTasks")) }
+
+  /**
+   * @abstract
+   * @param {Array<import("../models/task.js").default>} newModels
+   * @returns {void}
+   */
+  setReviewTasks(newModels) { void newModels; throw new Error("Not implemented") }
+
+  /**
    * @returns {import("../models/project-detail.js").default}
    */
   projectDetail() { return /** @type {import("../models/project-detail.js").default} */ (this.getRelationshipByName("projectDetail").loaded()) }
@@ -283,6 +339,36 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {void}
    */
   setActiveProjectDetail(newModel) { void newModel; throw new Error("Not implemented") }
+
+  /**
+   * @returns {import("../models/task.js").default}
+   */
+  reviewTask() { return /** @type {import("../models/task.js").default} */ (this.getRelationshipByName("reviewTask").loaded()) }
+
+  /**
+   * @abstract
+   * @param {Record<string, ?>} [attributes]
+   * @returns {import("../models/task.js").default}
+   */
+  buildReviewTask(attributes) { void attributes; throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {Promise<import("../models/task.js").default | undefined>}
+   */
+  loadReviewTask() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<import("../models/task.js").default | undefined>}
+   */
+  reviewTaskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("reviewTask", {preloadTranslations: true})) }
+
+  /**
+   * @abstract
+   * @param {import("../models/task.js").default} newModel
+   * @returns {void}
+   */
+  setReviewTask(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../../../../src/database/record/index.js").default>}
@@ -369,6 +455,34 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {void}
    */
   setComments(newModels) { void newModels; throw new Error("Not implemented") }
+
+  /**
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/comment.js").default>}
+   */
+  commentsThroughTasks() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/comment.js").default>} */ (this.getRelationshipByName("commentsThroughTasks")) }
+
+  /**
+   * @returns {Array<import("../models/comment.js").default>}
+   */
+  commentsThroughTasksLoaded() { return /** @type {Array<import("../models/comment.js").default>} */ (this.getRelationshipByName("commentsThroughTasks").loaded()) }
+
+  /**
+   * @abstract
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
+   */
+  loadCommentsThroughTasks() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/comment.js").default>>}
+   */
+  commentsThroughTasksOrLoad() { return /** @type {Promise<Array<import("../models/comment.js").default>>} */ (this.relationshipOrLoad("commentsThroughTasks")) }
+
+  /**
+   * @abstract
+   * @param {Array<import("../models/comment.js").default>} newModels
+   * @returns {void}
+   */
+  setCommentsThroughTasks(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../model-bases/project-translation.js").default>}

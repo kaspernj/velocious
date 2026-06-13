@@ -11,8 +11,30 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  * @property {any} reference - Attribute value.
  * @property {any} email - Attribute value.
  */
+/**
+ * Attributes accepted by UserCreateAttributes.
+ * @typedef {object} UserCreateAttributes
+ */
+/**
+ * Attributes accepted by UserUpdateAttributes.
+ * @typedef {object} UserUpdateAttributes
+ */
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
+  /**
+   * Creates a User.
+   * @param {UserCreateAttributes} [attributes] - Attributes for the new model.
+   * @returns {Promise<User>} - Persisted model.
+   */
+  static async create(attributes = {}) { return /** @type {Promise<User>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this User.
+   * @param {UserUpdateAttributes} [newAttributes] - Attributes to assign before saving.
+   * @returns {Promise<User>} - Updated model.
+   */
+  async update(newAttributes = {}) { return /** @type {Promise<User>} */ (super.update(newAttributes)) }
+
   /** @returns {FrontendModelResourceConfig} - Resource config. */
   static resourceConfig() {
     return {
@@ -26,22 +48,22 @@ export default class User extends FrontendModelBase {
   }
 
   /** @returns {UserAttributes["reference"]} - Attribute value. */
-  reference() { return this.readAttribute("reference") }
+  reference() { return /** @type {UserAttributes["reference"]} */ (this.readAttribute("reference")) }
 
   /**
    * @param {UserAttributes["reference"]} newValue - New attribute value.
    * @returns {UserAttributes["reference"]} - Assigned value.
    */
-  setReference(newValue) { return this.setAttribute("reference", newValue) }
+  setReference(newValue) { return /** @type {UserAttributes["reference"]} */ (this.setAttribute("reference", newValue)) }
 
   /** @returns {UserAttributes["email"]} - Attribute value. */
-  email() { return this.readAttribute("email") }
+  email() { return /** @type {UserAttributes["email"]} */ (this.readAttribute("email")) }
 
   /**
    * @param {UserAttributes["email"]} newValue - New attribute value.
    * @returns {UserAttributes["email"]} - Assigned value.
    */
-  setEmail(newValue) { return this.setAttribute("email", newValue) }
+  setEmail(newValue) { return /** @type {UserAttributes["email"]} */ (this.setAttribute("email", newValue)) }
 }
 
 FrontendModelBase.registerModel(User)

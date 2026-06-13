@@ -1,6 +1,32 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
+/**
+ * Attributes accepted when creating or updating AuthenticationToken records.
+ * @typedef {object} AuthenticationTokenWriteAttributes
+ * @property {number} [id] - Value for the id attribute.
+ * @property {string | null} [userToken] - Value for the userToken attribute.
+ * @property {number | null} [userId] - Value for the userId attribute.
+ * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
+ * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ */
+
 export default class AuthenticationTokenBase extends DatabaseRecord {
+  /**
+   * Creates a AuthenticationToken record.
+   * @template {typeof AuthenticationTokenBase} T
+   * @this {T}
+   * @param {AuthenticationTokenWriteAttributes} [attributes] - Attributes for the new record.
+   * @returns {Promise<InstanceType<T>>} - Persisted record.
+   */
+  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
+
+  /**
+   * Updates this AuthenticationToken record.
+   * @param {AuthenticationTokenWriteAttributes} attributes - Attributes to assign before saving.
+   * @returns {Promise<void>} - Resolves when the record is saved.
+   */
+  async update(attributes) { return await super.update(attributes) }
+
   /**
    * @returns {typeof import("../models/authentication-token.js").default}
    */
