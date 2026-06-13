@@ -1,0 +1,1 @@
+Fix `actsAsList` moves that change scope while explicitly assigning the same numeric position as the old row. Velocious now treats explicitly assigned positions as move targets even when the value matches the previous position, shifts the destination scope, and keeps row shifts scoped to concrete row ids.

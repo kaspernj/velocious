@@ -71,10 +71,14 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
                            * Narrows the runtime value to the documented type.
                             @type {Record<string, ?>} */ (record._attributes || {})
     const changes = /**
-                     * Narrows the runtime value to the documented type.
-                      @type {Record<string, ?>} */ (record._changes || {})
+                      * Narrows the runtime value to the documented type.
+                       @type {Record<string, ?>} */ (record._changes || {})
+    const assignedAttributeNames = /**
+                                    * Narrows the runtime value to the documented type.
+                                     @type {Set<string>} */ (record._assignedAttributeNames || new Set())
     const posChanged = posColumn in changes
     const scopeChanged = scopeCol in changes
+    const posAssigned = assignedAttributeNames.has(positionColumn)
 
     if (!posChanged && !scopeChanged) return
 
@@ -102,18 +106,13 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     if (oldPosition == null || newPosition == null) return
     if (newPosition === oldPosition && newScopeValue === oldScopeValue) return
 
-    // Move the record out of the way before shifting others to avoid
-    // intermediate UNIQUE constraint violations. Use the old scope value
-    // for the move-out-of-way because the record is still in the old scope.
-    await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue})
-    setShiftingFlag(record, false)
-
     if (scopeChanged && oldScopeValue !== newScopeValue) {
-      let targetPosition = newPosition
-
       // When only the scope changes without a new position, append to the end
       // of the new scope. There is no target-scope row to shift out of the way.
-      if (!posChanged) {
+      if (!posAssigned) {
+        await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue})
+        setShiftingFlag(record, false)
+
         const highestNew = await highestPositionInScope({record, positionColumn, scope, scopeValue: newScopeValue})
         const nextPos = highestNew + 1
 
@@ -122,10 +121,16 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
         return
       }
 
+      await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue, targetScopeValue: newScopeValue})
+      setShiftingFlag(record, false)
       await shiftPositionsDown({record, positionColumn, scope, scopeValue: oldScopeValue, fromPosition: oldPosition + 1})
-      await shiftPositionsUp({record, positionColumn, scope, scopeValue: newScopeValue, fromPosition: targetPosition})
+      await shiftPositionsUp({record, positionColumn, scope, scopeValue: newScopeValue, fromPosition: newPosition, excludeRecordId: record.id()})
+      await placeMovedRecord({record, positionColumn, scope, scopeValue: newScopeValue, position: newPosition})
       return
     }
+
+    await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue})
+    setShiftingFlag(record, false)
 
     if (newPosition < oldPosition) {
       await shiftPositionsUp({record, positionColumn, scope, fromPosition: newPosition, toPosition: oldPosition})
@@ -147,6 +152,49 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 }
 
 /**
+ * Places a moved row after surrounding rows have shifted.
+ * @param {object} args - Arguments.
+ * @param {import("./index.js").default} args.record - Model instance.
+ * @param {string} args.positionColumn - Position attribute name.
+ * @param {string} args.scope - Scope attribute name.
+ * @param {string | number} args.scopeValue - Destination scope value.
+ * @param {number} args.position - Destination position.
+ * @returns {Promise<void>} Resolves after placement.
+ */
+async function placeMovedRecord({record, positionColumn, scope, scopeValue, position}) {
+  const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+  const connection = modelClass.connection()
+  const tableSql = connection.quoteTable(modelClass._getTable().getName())
+  const scopeCol = modelClass.getColumnNameForAttributeName(scope)
+  const posCol = modelClass.getColumnNameForAttributeName(positionColumn)
+  const scopeColumnSql = connection.quoteColumn(scopeCol)
+  const positionColumnSql = connection.quoteColumn(posCol)
+  const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
+
+  await connection.query(
+    `UPDATE ${tableSql} SET ${scopeColumnSql} = ${connection.quote(scopeValue)}, ${positionColumnSql} = ${connection.quote(position)} WHERE ${primaryKeySql} = ${connection.quote(record.id())}`
+  )
+  await record._reloadWithId(record.id())
+  record._changes = {}
+  clearBelongsToChangeForScope(record)
+}
+
+/**
+ * Clears dirty belongs-to state for the scope FK after direct placement.
+ * @param {import("./index.js").default} record - Model instance.
+ * @returns {void} Nothing.
+ */
+function clearBelongsToChangeForScope(record) {
+  for (const relationshipName in record._instanceRelationships || {}) {
+    const relationship = record._instanceRelationships[relationshipName]
+
+    if (relationship.getType() !== "belongsTo") continue
+
+    relationship.setDirty(false)
+  }
+}
+
+/**
  * Bumps positions UP by 1 in the range [fromPosition, toPosition) within the
  * same scope. Updates in descending order to avoid intermediate UNIQUE
  * constraint violations.
@@ -157,9 +205,10 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
  * @param {number} args.fromPosition - Starting position (inclusive).
  * @param {number} [args.toPosition] - Ending position (exclusive).
  * @param {string | number} [args.scopeValue] - Explicit scope value.
+ * @param {string | number} [args.excludeRecordId] - Record id to exclude from shifts.
  * @returns {Promise<void>}
  */
-async function shiftPositionsUp({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
+async function shiftPositionsUp({record, positionColumn, scope, fromPosition, toPosition, scopeValue, excludeRecordId}) {
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
@@ -173,14 +222,18 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
   const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const scopeColumnSql = connection.quoteColumn(scopeColumnName)
+  const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in descending order so we bump the highest first
   let query = modelClass
+    .select(modelClass.primaryKey())
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
+    .where(`${positionColumnSql} > 0`)
+    .where(`${primaryKeySql} != ${connection.quote(excludeRecordId || record.id())}`)
     .order(`${positionColumnSql} DESC`)
 
   if (toPosition != null) {
@@ -196,7 +249,7 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
       const currentPos = Number(row.readAttribute(positionColumn))
 
       await connection.query(
-        `UPDATE ${tableSql} SET ${positionColumnSql} = ${positionColumnSql} + 1 WHERE ${scopeColumnSql} = ${quotedScope} AND ${positionColumnSql} = ${connection.quote(currentPos)}`
+        `UPDATE ${tableSql} SET ${positionColumnSql} = ${positionColumnSql} + 1 WHERE ${primaryKeySql} = ${connection.quote(row.id())} AND ${scopeColumnSql} = ${quotedScope} AND ${positionColumnSql} = ${connection.quote(currentPos)}`
       )
     }
   } finally {
@@ -231,14 +284,18 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
   const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const scopeColumnSql = connection.quoteColumn(scopeColumnName)
+  const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in ascending order so we shift the lowest gap first
   let query = modelClass
+    .select(modelClass.primaryKey())
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
+    .where(`${positionColumnSql} > 0`)
+    .where(`${primaryKeySql} != ${connection.quote(record.id())}`)
     .order({column: positionColumnName, direction: "ASC"})
 
   if (toPosition != null) {
@@ -254,7 +311,7 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
       const currentPos = Number(row.readAttribute(positionColumn))
 
       await connection.query(
-        `UPDATE ${tableSql} SET ${positionColumnSql} = ${positionColumnSql} - 1 WHERE ${scopeColumnSql} = ${quotedScope} AND ${positionColumnSql} = ${connection.quote(currentPos)}`
+        `UPDATE ${tableSql} SET ${positionColumnSql} = ${positionColumnSql} - 1 WHERE ${primaryKeySql} = ${connection.quote(row.id())} AND ${scopeColumnSql} = ${quotedScope} AND ${positionColumnSql} = ${connection.quote(currentPos)}`
       )
     }
   } finally {
@@ -342,21 +399,23 @@ function resolveScopeValue(record, scope) {
  * @param {import("./index.js").default} args.record - Model instance.
  * @param {string} args.positionColumn - camelCase position attribute.
  * @param {string} args.scope - camelCase scope attribute.
- * @param {string | number | null} [args.scopeValue] - Explicit scope value (defaults to resolveScopeValue).
+ * @param {string | number | null} [args.scopeValue] - Scope containing the record before move-out.
+ * @param {string | number | null} [args.targetScopeValue] - Temporary scope value to assign.
  * @returns {Promise<void>}
  */
-async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
+async function moveOutOfWay({record, positionColumn, scope, scopeValue, targetScopeValue}) {
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
                        @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
+  const resolvedTargetScopeValue = targetScopeValue != null ? targetScopeValue : resolvedScopeValue
 
   if (resolvedScopeValue == null) return
+  if (resolvedTargetScopeValue == null) return
 
-  const highest = await highestPositionInScope({record, positionColumn, scope, scopeValue: resolvedScopeValue})
-  const tempPosition = highest + 10000
+  const tempPosition = -record.id()
   const positionColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(positionColumn))
   const scopeColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(scope))
   const tableSql = connection.quoteTable(tableName)
@@ -366,7 +425,7 @@ async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
 
   try {
     await connection.query(
-      `UPDATE ${tableSql} SET ${positionColumnSql} = ${connection.quote(tempPosition)} WHERE ${scopeColumnSql} = ${connection.quote(resolvedScopeValue)} AND ${pkSql} = ${connection.quote(record.id())}`
+      `UPDATE ${tableSql} SET ${scopeColumnSql} = ${connection.quote(resolvedTargetScopeValue)}, ${positionColumnSql} = ${connection.quote(tempPosition)} WHERE ${scopeColumnSql} = ${connection.quote(resolvedScopeValue)} AND ${pkSql} = ${connection.quote(record.id())}`
     )
   } finally {
     // Don't clear the flag here — the caller will do that after shifts

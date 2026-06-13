@@ -185,6 +185,59 @@ describe("Record - acts as list", {tags: ["dummy"]}, () => {
     expect(itemsB.map((item) => item.position())).toEqual([1, 2, 3])
   })
 
+  it("moves to an explicit position between scopes", async () => {
+    const projectA = await Project.create({name: "List Project J1"})
+    const projectB = await Project.create({name: "List Project J2"})
+
+    await ActsAsListItem.create({name: "A1", project: projectA})
+    const itemA2 = await ActsAsListItem.create({name: "A2", project: projectA})
+    await ActsAsListItem.create({name: "A3", project: projectA})
+
+    await ActsAsListItem.create({name: "B1", project: projectB})
+    await ActsAsListItem.create({name: "B2", project: projectB})
+
+    await itemA2.update({projectId: projectB.id(), position: 1})
+
+    const itemsA = await ActsAsListItem
+      .where({projectId: projectA.id()})
+      .order("position")
+      .toArray()
+    const itemsB = await ActsAsListItem
+      .where({projectId: projectB.id()})
+      .order("position")
+      .toArray()
+
+    expect(itemsA.map((item) => item.name())).toEqual(["A1", "A3"])
+    expect(itemsA.map((item) => item.position())).toEqual([1, 2])
+    expect(itemsB.map((item) => item.name())).toEqual(["A2", "B1", "B2"])
+    expect(itemsB.map((item) => item.position())).toEqual([1, 2, 3])
+  })
+
+  it("moves the first row to an explicit position between scopes", async () => {
+    const projectA = await Project.create({name: "List Project K1"})
+    const projectB = await Project.create({name: "List Project K2"})
+
+    const itemA1 = await ActsAsListItem.create({name: "A1", project: projectA})
+    await ActsAsListItem.create({name: "A2", project: projectA})
+    await ActsAsListItem.create({name: "B1", project: projectB})
+
+    await itemA1.update({projectId: projectB.id(), position: 1})
+
+    const itemsA = await ActsAsListItem
+      .where({projectId: projectA.id()})
+      .order("position")
+      .toArray()
+    const itemsB = await ActsAsListItem
+      .where({projectId: projectB.id()})
+      .order("position")
+      .toArray()
+
+    expect(itemsA.map((item) => item.name())).toEqual(["A2"])
+    expect(itemsA.map((item) => item.position())).toEqual([1])
+    expect(itemsB.map((item) => item.name())).toEqual(["A1", "B1"])
+    expect(itemsB.map((item) => item.position())).toEqual([1, 2])
+  })
+
   it("shifts existing rows when inserting at an occupied position", async () => {
     const project = await Project.create({name: "List Project H"})
 

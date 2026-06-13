@@ -436,6 +436,11 @@ class VelociousDatabaseRecord {
   _changes = {}
 
   /**
+   * Attribute names explicitly assigned in the current update call.
+    @type {Set<string> | undefined} */
+  _assignedAttributeNames = undefined
+
+  /**
    * Columns as hash.
     @type {Record<string, import("../drivers/base-column.js").default>} */
   _columnsAsHash = {}
@@ -3374,7 +3379,9 @@ class VelociousDatabaseRecord {
    * @returns {void} - No return value.
    */
   assign(attributesToAssign) {
+    this._assignedAttributeNames ||= new Set()
     for (const attributeToAssign in attributesToAssign) {
+      this._assignedAttributeNames.add(attributeToAssign)
       this.setAttribute(attributeToAssign, attributesToAssign[attributeToAssign])
     }
   }
