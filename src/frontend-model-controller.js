@@ -465,22 +465,45 @@ function frontendModelAttachmentParams(params) {
 /**
  * Extract mutation attributes shared by create and update commands.
  * @param {Record<string, ?>} params - Frontend-model request params.
- * @returns {{attributes: Record<string, ?>, nestedAttributes: Record<string, ?> | null} | string} - Mutation attributes or validation error message.
+ * @returns {{attributes: Record<string, ?>, attachments: Record<string, ?> | null, nestedAttributes: Record<string, ?> | null} | string} - Mutation attributes or validation error message.
  */
 function frontendModelMutationAttributes(params) {
   const attributes = params.attributes
 
-  if (!attributes || typeof attributes !== "object") {
+  if (!isPlainObject(attributes)) {
     return "Expected model attributes."
   }
 
+  /** @type {Record<string, ?>} */
+  const regularAttributes = {}
+  /** @type {Record<string, ?>} */
+  const nestedAttributes = {}
+
+  for (const [attributeName, value] of Object.entries(attributes)) {
+    if (attributeName.endsWith("Attributes")) {
+      const relationshipName = attributeName.slice(0, -"Attributes".length)
+
+      if (!relationshipName) return `Invalid nested attributes key: ${attributeName}`
+      nestedAttributes[relationshipName] = value
+    } else {
+      regularAttributes[attributeName] = value
+    }
+  }
+
+  if (params.nestedAttributes !== undefined) {
+    if (!isPlainObject(params.nestedAttributes)) return "Expected nestedAttributes to be an object."
+
+    Object.assign(nestedAttributes, params.nestedAttributes)
+  }
+
+  if (params.attachments !== undefined && !isPlainObject(params.attachments)) {
+    return "Expected attachments to be an object."
+  }
+
   return {
-    attributes,
-    nestedAttributes: params.nestedAttributes && typeof params.nestedAttributes === "object"
-      ? /**
-         * Types the following value.
-          @type {Record<string, ?>} */ (params.nestedAttributes)
-      : null
+    attributes: regularAttributes,
+    attachments: params.attachments === undefined ? null : params.attachments,
+    nestedAttributes: Object.keys(nestedAttributes).length > 0 ? nestedAttributes : null
   }
 }
 
@@ -1036,11 +1059,12 @@ export default class FrontendModelController extends Controller {
    * Runs frontend model create record.
    * @param {Record<string, ?>} attributes - Create attributes.
    * @param {Record<string, ?> | null} [nestedAttributes] - Optional nested-attribute payload for cascading writes.
+   * @param {Record<string, ?> | null} [attachments] - Optional attachment payloads keyed by attachment name.
    * @returns {Promise<import("./database/record/index.js").default | null>} - Created model when authorized.
    */
-  async frontendModelCreateRecord(attributes, nestedAttributes = null) {
+  async frontendModelCreateRecord(attributes, nestedAttributes = null, attachments = null) {
     const resource = this.frontendModelResourceInstance()
-    const model = await resource.create(attributes, {nestedAttributes, controller: this})
+    const model = await resource.create(attributes, {attachments, nestedAttributes, controller: this})
 
     const authorizedModels = await this.frontendModelFilterAuthorizedModels({action: "create", models: [model]})
 
@@ -2943,7 +2967,11 @@ export default class FrontendModelController extends Controller {
       const mutationAttributes = frontendModelMutationAttributes(params)
       if (typeof mutationAttributes === "string") return this.frontendModelErrorPayload(mutationAttributes)
 
-      const model = await this.frontendModelCreateRecord(mutationAttributes.attributes, mutationAttributes.nestedAttributes)
+      const model = await this.frontendModelCreateRecord(
+        mutationAttributes.attributes,
+        mutationAttributes.nestedAttributes,
+        mutationAttributes.attachments
+      )
 
       if (!model) {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
@@ -3056,7 +3084,11 @@ export default class FrontendModelController extends Controller {
         return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
       }
 
-      const updatedModel = await resource.update(model, mutationAttributes.attributes, {nestedAttributes: mutationAttributes.nestedAttributes, controller: this})
+      const updatedModel = await resource.update(model, mutationAttributes.attributes, {
+        attachments: mutationAttributes.attachments,
+        controller: this,
+        nestedAttributes: mutationAttributes.nestedAttributes
+      })
       const serializedModel = await resource.serialize(updatedModel, "update")
 
       return frontendModelSerializedModelSuccess(serializedModel)

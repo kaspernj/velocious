@@ -6,6 +6,6 @@ export default class CommentFrontendModelAbilityResource extends BaseResource {
 
   /** @returns {void} */
   abilities() {
-    this.can("read")
+    this.can(["create", "destroy", "read", "update"])
   }
 }

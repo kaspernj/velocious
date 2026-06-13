@@ -34,7 +34,13 @@ class TaskFrontendResource extends FrontendModelBaseResource {
 
   /** @returns {Array<string>} - Permit spec for Task writes. */
   permittedParams() {
-    return ["name", "isDone", "descriptionFile"]
+    return [
+      "name",
+      "isDone",
+      "descriptionFile",
+      {commentsAttributes: ["id", "_destroy", "body"]},
+      {projectAttributes: ["name"]}
+    ]
   }
 }
 
@@ -55,7 +61,10 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
 
   /** @returns {Array<string>} - Permit spec for Project writes (name is translated). */
   permittedParams() {
-    return ["name"]
+    return [
+      "name",
+      {tasksAttributes: ["id", "_destroy", "name", "isDone", "descriptionFile", {commentsAttributes: ["id", "_destroy", "body"]}]}
+    ]
   }
 }
 
@@ -129,11 +138,16 @@ class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      abilities: ["read"],
+      abilities: ["read", "create", "update", "destroy"],
       attributes: ["id", "body"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"]
     }
+  }
+
+  /** @returns {Array<string>} - Permit spec for Comment writes. */
+  permittedParams() {
+    return ["body"]
   }
 }
 

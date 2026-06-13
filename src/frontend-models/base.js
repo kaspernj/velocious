@@ -25,6 +25,10 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
+ * Attachment input accepted by frontend-model attachment helpers before normalization.
+ * @typedef {Record<string, ?> | {arrayBuffer: () => Promise<ArrayBuffer>, type?: string, name?: string} | null | undefined} FrontendModelAttachmentInput
+ */
+/**
  * Defines this typedef.
  * @typedef {{attributes?: string[], builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
  */
@@ -615,6 +619,17 @@ function frontendModelPayloadContainsAttachmentUpload(value) {
 }
 
 /**
+ * Returns the concrete frontend-model class for an instance.
+ * @param {FrontendModelBase} model - Frontend model instance.
+ * @returns {typeof FrontendModelBase} Concrete frontend-model class.
+ */
+function frontendModelClassFor(model) {
+  const constructorValue = model.constructor
+
+  return /** @type {typeof FrontendModelBase} */ (constructorValue)
+}
+
+/**
  * Runs normalize frontend attachment input.
  * @param {?} input - Attachment input.
  * @returns {Promise<Record<string, ?>>} - Transport-safe attachment payload.
@@ -692,6 +707,12 @@ async function normalizeFrontendAttachmentInput(input) {
  */
 export class FrontendModelAttachmentHandle {
   /**
+   * Pending attachment inputs queued for the next model save.
+   * @type {FrontendModelAttachmentInput[]}
+   */
+  pendingInputs = []
+
+  /**
    * Runs constructor.
    * @param {object} args - Options.
    * @param {FrontendModelBase} args.model - Model instance.
@@ -703,14 +724,69 @@ export class FrontendModelAttachmentHandle {
   }
 
   /**
+   * Queue attachment input for the parent model's next save.
+   * @param {FrontendModelAttachmentInput | FrontendModelAttachmentInput[]} input - Attachment input.
+   * @returns {void}
+   */
+  queueAttach(input) {
+    const ModelClass = frontendModelClassFor(this.model)
+    const attachmentDefinition = ModelClass.attachmentDefinition(this.attachmentName)
+
+    if (attachmentDefinition?.type === "hasOne") {
+      if (Array.isArray(input)) {
+        const lastInput = input[input.length - 1]
+
+        this.pendingInputs = typeof lastInput === "undefined" ? [] : [lastInput]
+      } else {
+        this.pendingInputs = [input]
+      }
+      return
+    }
+
+    if (Array.isArray(input)) {
+      this.pendingInputs.push(...input)
+    } else {
+      this.pendingInputs.push(input)
+    }
+  }
+
+  /**
+   * Whether this attachment has queued inputs for the next model save.
+   * @returns {boolean} Whether any pending inputs exist.
+   */
+  hasPendingAttachments() {
+    return this.pendingInputs.length > 0
+  }
+
+  /**
+   * Builds the save payload for queued attachment inputs.
+   * @returns {Promise<Record<string, ?> | Record<string, ?>[] | undefined>} Normalized attachment payload.
+   */
+  async pendingAttachmentsPayload() {
+    if (this.pendingInputs.length === 0) return undefined
+
+    const ModelClass = frontendModelClassFor(this.model)
+    const attachmentDefinition = ModelClass.attachmentDefinition(this.attachmentName)
+
+    if (attachmentDefinition?.type === "hasMany") {
+      return await Promise.all(this.pendingInputs.map(async (input) => await normalizeFrontendAttachmentInput(input)))
+    }
+
+    return await normalizeFrontendAttachmentInput(this.pendingInputs[this.pendingInputs.length - 1])
+  }
+
+  /** Clears queued attachment inputs after a successful model save. */
+  clearPendingAttachments() {
+    this.pendingInputs = []
+  }
+
+  /**
    * Runs attach.
    * @param {?} input - Attachment input.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(input) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = frontendModelClassFor(this.model)
     const normalizedInput = await normalizeFrontendAttachmentInput(input)
     const response = await ModelClass.executeCommand("attach", {
       attachment: normalizedInput,
@@ -727,9 +803,7 @@ export class FrontendModelAttachmentHandle {
    * @returns {Promise<FrontendModelAttachmentDownload | null>} - Downloaded attachment payload.
    */
   async download(attachmentId) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = frontendModelClassFor(this.model)
     const response = await ModelClass.executeCommand("download", frontendModelAttachmentCommandPayload(this, attachmentId))
     const attachmentPayload = response.attachment
 
@@ -755,9 +829,7 @@ export class FrontendModelAttachmentHandle {
    * @returns {Promise<string | null>} - Resolvable attachment URL.
    */
   async url(attachmentId) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = frontendModelClassFor(this.model)
     const response = await ModelClass.executeCommand("url", frontendModelAttachmentCommandPayload(this, attachmentId))
 
     if (typeof response.url === "string" && response.url.length > 0) {
@@ -772,9 +844,7 @@ export class FrontendModelAttachmentHandle {
    * @returns {string} - Download URL for this attachment on the configured backend.
    */
   downloadUrl() {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.model.constructor)
+    const ModelClass = frontendModelClassFor(this.model)
     const commandName = ModelClass.commandName("download")
     const resourcePath = ModelClass.resourcePath()
     const commandUrl = frontendModelCommandUrl(resourcePath, commandName)
@@ -1655,6 +1725,11 @@ export default class FrontendModelBase {
     @type {Record<string, FrontendModelAttachmentHandle>} */
   _attachments
   /**
+   * Rails-style nested attribute payloads queued for the next save.
+   * @type {Record<string, ?>}
+   */
+  _pendingNestedAttributes
+  /**
    * Narrows the runtime value to the documented type.
     @type {Set<string> | null} */
   _selectedAttributes
@@ -1681,14 +1756,13 @@ export default class FrontendModelBase {
    * @param {Record<string, ?>} [attributes] - Initial attributes.
    */
   constructor(attributes = {}) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
 
     ModelClass.ensureGeneratedAttachmentMethods()
     this._attributes = {}
     this._relationships = {}
     this._attachments = {}
+    this._pendingNestedAttributes = {}
     this._selectedAttributes = null
     this._isNewRecord = true
     this._markedForDestruction = false
@@ -1811,6 +1885,23 @@ export default class FrontendModelBase {
   }
 
   /**
+   * Resolves a Rails-style nested attributes key to a configured relationship.
+   * @this {typeof FrontendModelBase}
+   * @param {string} attributeName - Candidate attribute name, such as `tasksAttributes`.
+   * @returns {string | null} Relationship name when nested attributes are configured.
+   */
+  static nestedAttributesRelationshipName(attributeName) {
+    if (!attributeName.endsWith("Attributes")) return null
+
+    const relationshipName = attributeName.slice(0, -"Attributes".length)
+    const nestedAttributesConfig = this.resourceConfig().nestedAttributes || {}
+
+    return Object.prototype.hasOwnProperty.call(nestedAttributesConfig, relationshipName)
+      ? relationshipName
+      : null
+  }
+
+  /**
    * Runs relationship model class.
    * @this {typeof FrontendModelBase}
    * @param {string} relationshipName - Relationship name.
@@ -1915,9 +2006,7 @@ export default class FrontendModelBase {
    */
   getRelationshipByName(relationshipName) {
     if (!this._relationships[relationshipName]) {
-      const ModelClass = /**
-                          * Narrows the runtime value to the documented type.
-                           @type {typeof FrontendModelBase} */ (this.constructor)
+      const ModelClass = frontendModelClassFor(this)
       const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
       const targetModelClass = ModelClass.relationshipModelClass(relationshipName)
 
@@ -1937,9 +2026,7 @@ export default class FrontendModelBase {
    * @returns {FrontendModelAttachmentHandle} - Attachment helper.
    */
   getAttachmentByName(attachmentName) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const attachmentDefinition = ModelClass.attachmentDefinition(attachmentName)
 
     if (!attachmentDefinition) {
@@ -1962,9 +2049,7 @@ export default class FrontendModelBase {
    * @returns {Promise<?>} - Loaded relationship value.
    */
   async loadRelationship(relationshipName) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const id = this.primaryKeyValue()
     const reloadedModel = await ModelClass
       .preload([relationshipName])
@@ -2024,9 +2109,7 @@ export default class FrontendModelBase {
   async _tryCohortPreload(relationshipName) {
     if (!FrontendModelBase.getAutoload()) return false
 
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const cohort = this._loadCohort
 
     if (!cohort || cohort.length <= 1) return false
@@ -2101,9 +2184,7 @@ export default class FrontendModelBase {
    * @returns {?} - Assigned relationship value.
    */
   setRelationship(relationshipName, relationshipValue) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
 
     if (!relationshipDefinition) {
@@ -2152,9 +2233,7 @@ export default class FrontendModelBase {
    * @returns {number | string} - Primary key value.
    */
   primaryKeyValue() {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const value = this.readAttribute(ModelClass.primaryKey())
 
     if (value === undefined || value === null) {
@@ -2296,6 +2375,19 @@ export default class FrontendModelBase {
    * @returns {?} - Assigned value.
    */
   setAttribute(attributeName, newValue) {
+    const ModelClass = frontendModelClassFor(this)
+    const nestedAttributesRelationshipName = ModelClass.nestedAttributesRelationshipName(attributeName)
+
+    if (nestedAttributesRelationshipName) {
+      this._pendingNestedAttributes[nestedAttributesRelationshipName] = newValue
+      return newValue
+    }
+
+    if (ModelClass.attachmentDefinition(attributeName)) {
+      this.getAttachmentByName(attributeName).queueAttach(newValue)
+      return newValue
+    }
+
     const previousValue = this._attributes[attributeName]
 
     this._attributes[attributeName] = newValue
@@ -2330,9 +2422,7 @@ export default class FrontendModelBase {
   _invalidateRelationshipsForAttribute(attributeName) {
     if (!this._relationships || Object.keys(this._relationships).length === 0) return
 
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const definitions = typeof ModelClass.relationshipDefinitions === "function" ? ModelClass.relationshipDefinitions() : {}
 
     for (const relationshipName of Object.keys(this._relationships)) {
@@ -3099,9 +3189,7 @@ export default class FrontendModelBase {
     const self = /**
                   * Narrows the runtime value to the documented type.
                    @type {?} */ (this)
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
     const entry = {callback, ...frontendModelEventOptionsPayload(ModelClass, options)}
@@ -3133,9 +3221,7 @@ export default class FrontendModelBase {
     const self = /**
                   * Narrows the runtime value to the documented type.
                    @type {?} */ (this)
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
 
     assertNoDestroyEventFilter(ModelClass, options)
 
@@ -3511,50 +3597,9 @@ export default class FrontendModelBase {
    * @returns {Promise<this>} - Updated model.
    */
   async update(newAttributes = {}) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
-    const attachmentDefinitions = ModelClass.attachmentDefinitions()
-    /**
-     * Regular attributes.
-      @type {Record<string, ?>} */
-    const regularAttributes = {}
-    /**
-     * Pending attachments.
-      @type {Array<{attachmentName: string, value: ?}>} */
-    const pendingAttachments = []
+    this.assignAttributes(newAttributes)
 
-    for (const [attributeName, attributeValue] of Object.entries(newAttributes)) {
-      if (attachmentDefinitions[attributeName]) {
-        if (attributeValue !== undefined && attributeValue !== null) {
-          pendingAttachments.push({attachmentName: attributeName, value: attributeValue})
-        }
-      } else {
-        regularAttributes[attributeName] = attributeValue
-      }
-    }
-
-    if (Object.keys(regularAttributes).length > 0) {
-      this.assignAttributes(regularAttributes)
-      const changedAttributes = Object.fromEntries(
-        Object.entries(this.changes()).map(([attributeName, [, currentValue]]) => [attributeName, currentValue])
-      )
-
-      const response = await ModelClass.executeCommand("update", {
-        attributes: changedAttributes,
-        id: this.primaryKeyValue()
-      })
-
-      this.assignAttributes(ModelClass.attributesFromResponse(response))
-      this.setIsNewRecord(false)
-      this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
-    }
-
-    for (const pendingAttachment of pendingAttachments) {
-      await this.getAttachmentByName(pendingAttachment.attachmentName).attach(pendingAttachment.value)
-    }
-
-    return this
+    return await this.save()
   }
 
   /**
@@ -3563,9 +3608,7 @@ export default class FrontendModelBase {
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(attachmentInput) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const attachmentDefinitions = ModelClass.attachmentDefinitions()
     const attachmentNames = Object.keys(attachmentDefinitions)
     let attachmentName = attachmentNames[0]
@@ -3597,9 +3640,7 @@ export default class FrontendModelBase {
    * @returns {Promise<this>} - Saved model.
    */
   async save() {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const isNew = this.isNewRecord()
     const commandType = isNew ? "create" : "update"
     /**
@@ -3613,10 +3654,16 @@ export default class FrontendModelBase {
       payload.id = this.primaryKeyValue()
     }
 
-    const nestedAttributes = this._buildNestedAttributesPayload()
+    const nestedAttributes = await this._buildNestedAttributesPayload()
 
     if (nestedAttributes && Object.keys(nestedAttributes).length > 0) {
       payload.nestedAttributes = nestedAttributes
+    }
+
+    const attachments = await this._buildAttachmentsPayload()
+
+    if (Object.keys(attachments).length > 0) {
+      payload.attachments = attachments
     }
 
     const response = await ModelClass.executeCommand(commandType, payload)
@@ -3624,6 +3671,8 @@ export default class FrontendModelBase {
     this.assignAttributes(ModelClass.attributesFromResponse(response))
     this.setIsNewRecord(false)
     this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
+    this._pendingNestedAttributes = {}
+    this._clearPendingAttachments()
 
     this._reconcileNestedAttributesFromResponse(response)
 
@@ -3668,13 +3717,37 @@ export default class FrontendModelBase {
    * @returns {Promise<void>} - Resolves when destroyed on backend.
    */
   async destroy() {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
 
     await ModelClass.executeCommand("destroy", {
       id: this.primaryKeyValue()
     })
+  }
+
+  /**
+   * Builds the attachment payload queued on this model for the next save.
+   * @returns {Promise<Record<string, ?>>} Attachment payload keyed by attachment name.
+   */
+  async _buildAttachmentsPayload() {
+    /** @type {Record<string, ?>} */
+    const payload = {}
+
+    for (const attachmentName of Object.keys(this._attachments)) {
+      const attachmentPayload = await this._attachments[attachmentName].pendingAttachmentsPayload()
+
+      if (attachmentPayload !== undefined) {
+        payload[attachmentName] = attachmentPayload
+      }
+    }
+
+    return payload
+  }
+
+  /** Clears queued attachment inputs after a successful save. */
+  _clearPendingAttachments() {
+    for (const attachmentName of Object.keys(this._attachments)) {
+      this._attachments[attachmentName].clearPendingAttachments()
+    }
   }
 
   /**
@@ -3689,12 +3762,10 @@ export default class FrontendModelBase {
    *
    * Loaded but untouched records are omitted so nested save preserves Rails-style
    * "children not referenced in payload are left alone" semantics.
-   * @returns {Record<string, Array<Record<string, ?>>>} - Per-relationship list of nested-attribute entries.
+   * @returns {Promise<Record<string, Array<Record<string, ?>>>>} - Per-relationship list of nested-attribute entries.
    */
-  _buildNestedAttributesPayload() {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+  async _buildNestedAttributesPayload() {
+    const ModelClass = frontendModelClassFor(this)
     const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
@@ -3706,20 +3777,34 @@ export default class FrontendModelBase {
     const payload = {}
 
     for (const relationshipName of Object.keys(nestedAttributesConfig)) {
+      /** @type {Array<Record<string, ?>>} */
+      const entries = []
       const relationship = this._relationships[relationshipName]
 
-      if (!relationship || !(relationship instanceof FrontendModelHasManyRelationship)) continue
-      if (!Array.isArray(relationship._loadedValue) || relationship._loadedValue.length === 0) continue
+      if (relationship instanceof FrontendModelHasManyRelationship && Array.isArray(relationship._loadedValue)) {
+        for (const child of relationship._loadedValue) {
+          const childEntry = await child._nestedAttributesEntryForParentSave()
 
-      /**
-       * Entries.
-        @type {Array<Record<string, ?>>} */
-      const entries = []
+          if (childEntry) entries.push(childEntry)
+        }
+      } else if (relationship instanceof FrontendModelSingularRelationship && relationship.getPreloaded()) {
+        const child = relationship.loaded()
 
-      for (const child of relationship._loadedValue) {
-        const childEntry = child._nestedAttributesEntryForParentSave()
+        if (child instanceof FrontendModelBase) {
+          const childEntry = await child._nestedAttributesEntryForParentSave()
 
-        if (childEntry) entries.push(childEntry)
+          if (childEntry) entries.push(childEntry)
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(this._pendingNestedAttributes, relationshipName)) {
+        entries.push(
+          ...await this._nestedAttributesPayloadForSubmittedValue(
+            ModelClass,
+            relationshipName,
+            this._pendingNestedAttributes[relationshipName]
+          )
+        )
       }
 
       if (entries.length > 0) {
@@ -3734,39 +3819,162 @@ export default class FrontendModelBase {
    * Builds the payload entry for this child when walked by a parent's
    * `_buildNestedAttributesPayload`. Returns `null` when the child has no
    * dirty state and no dirty descendants, so the parent can omit it.
-   * @returns {Record<string, ?> | null} - Nested-attribute entry or null if clean.
+   * @returns {Promise<Record<string, ?> | null>} - Nested-attribute entry or null if clean.
    */
-  _nestedAttributesEntryForParentSave() {
+  async _nestedAttributesEntryForParentSave() {
     if (this.markedForDestruction()) {
       if (this.isNewRecord()) return null
       return {id: this.primaryKeyValue(), _destroy: true}
     }
 
-    const nestedAttributes = this._buildNestedAttributesPayload()
+    const nestedAttributes = await this._buildNestedAttributesPayload()
     const hasNestedDirty = Object.keys(nestedAttributes).length > 0
+    const attachments = await this._buildAttachmentsPayload()
+    const hasAttachments = Object.keys(attachments).length > 0
 
     if (this.isNewRecord()) {
       /**
        * Entry.
         @type {Record<string, ?>} */
-      const entry = {attributes: this.attributes()}
+      const entry = {}
+      const attributes = this._changedAttributesForSave()
 
+      if (Object.keys(attributes).length > 0) entry.attributes = attributes
+      if (hasAttachments) entry.attachments = attachments
       if (hasNestedDirty) entry.nestedAttributes = nestedAttributes
 
       return entry
     }
 
-    if (!this.isChanged() && !hasNestedDirty) return null
+    if (!this.isChanged() && !hasNestedDirty && !hasAttachments) return null
 
     /**
      * Entry.
       @type {Record<string, ?>} */
     const entry = {id: this.primaryKeyValue()}
 
-    if (this.isChanged()) entry.attributes = this.attributes()
+    if (this.isChanged()) entry.attributes = this._changedAttributesForSave()
+    if (hasAttachments) entry.attachments = attachments
     if (hasNestedDirty) entry.nestedAttributes = nestedAttributes
 
     return entry
+  }
+
+  /**
+   * Builds nested entries from a Rails-style submitted `*Attributes` value.
+   * @param {typeof FrontendModelBase} ModelClass - Parent model class.
+   * @param {string} relationshipName - Nested relationship name.
+   * @param {?} value - Submitted nested attributes value.
+   * @returns {Promise<Array<Record<string, ?>>>} Nested entries for the transport payload.
+   */
+  async _nestedAttributesPayloadForSubmittedValue(ModelClass, relationshipName, value) {
+    const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
+    const TargetModelClass = ModelClass.relationshipModelClass(relationshipName)
+
+    if (!relationshipDefinition) {
+      throw new Error(`Unknown nested relationship: ${ModelClass.name}#${relationshipName}`)
+    }
+    if (!TargetModelClass) {
+      throw new Error(`No target model class configured for ${ModelClass.name}#${relationshipName}`)
+    }
+
+    if (relationshipTypeIsCollection(relationshipDefinition.type)) {
+      if (!Array.isArray(value)) {
+        throw new Error(`${ModelClass.name}#${relationshipName}Attributes must be an array`)
+      }
+
+      return await Promise.all(
+        value.map(async (entry) => await this._nestedAttributesEntryPayloadForSubmittedValue(TargetModelClass, entry))
+      )
+    }
+
+    if (value == null) return []
+    if (Array.isArray(value)) {
+      throw new Error(`${ModelClass.name}#${relationshipName}Attributes must be an object`)
+    }
+
+    return [await this._nestedAttributesEntryPayloadForSubmittedValue(TargetModelClass, value)]
+  }
+
+  /**
+   * Converts one submitted Rails-style nested attributes object into transport payload shape.
+   * @param {typeof FrontendModelBase} ModelClass - Nested child model class.
+   * @param {?} submittedEntry - Submitted nested attributes entry.
+   * @returns {Promise<Record<string, ?>>} Transport nested-attributes entry.
+   */
+  async _nestedAttributesEntryPayloadForSubmittedValue(ModelClass, submittedEntry) {
+    if (!frontendAttachmentValueIsPlainObject(submittedEntry)) {
+      throw new Error(`${ModelClass.name} nested attributes entries must be objects`)
+    }
+
+    /** @type {Record<string, ?>} */
+    const entry = {}
+    /** @type {Record<string, ?>} */
+    const attributes = {}
+    /** @type {Record<string, ?>} */
+    const attachments = {}
+    /** @type {Record<string, Array<Record<string, ?>>>} */
+    const nestedAttributes = {}
+
+    for (const [attributeName, value] of Object.entries(submittedEntry)) {
+      if (attributeName === "id" || attributeName === "_destroy") {
+        entry[attributeName] = value
+        continue
+      }
+
+      const nestedRelationshipName = ModelClass.nestedAttributesRelationshipName(attributeName)
+
+      if (nestedRelationshipName) {
+        nestedAttributes[nestedRelationshipName] = await this._nestedAttributesPayloadForSubmittedValue(
+          ModelClass,
+          nestedRelationshipName,
+          value
+        )
+        continue
+      }
+
+      if (ModelClass.attachmentDefinition(attributeName)) {
+        attachments[attributeName] = await this._attachmentPayloadForSubmittedValue(ModelClass, attributeName, value)
+        continue
+      }
+
+      attributes[attributeName] = value
+    }
+
+    if (Object.keys(attributes).length > 0) entry.attributes = attributes
+    if (Object.keys(attachments).length > 0) entry.attachments = attachments
+    if (Object.keys(nestedAttributes).length > 0) entry.nestedAttributes = nestedAttributes
+
+    return entry
+  }
+
+  /**
+   * Normalizes a submitted attachment value for transport.
+   * @param {typeof FrontendModelBase} ModelClass - Model class owning the attachment.
+   * @param {string} attachmentName - Attachment name.
+   * @param {?} value - Submitted attachment value.
+   * @returns {Promise<Record<string, ?> | Record<string, ?>[]>} Normalized attachment payload.
+   */
+  async _attachmentPayloadForSubmittedValue(ModelClass, attachmentName, value) {
+    const attachmentDefinition = ModelClass.attachmentDefinition(attachmentName)
+
+    if (attachmentDefinition?.type === "hasMany") {
+      const values = Array.isArray(value) ? value : [value]
+
+      return await Promise.all(values.map(async (entry) => await normalizeFrontendAttachmentInput(entry)))
+    }
+
+    if (Array.isArray(value)) {
+      const lastValue = value[value.length - 1]
+
+      if (lastValue === undefined) {
+        throw new Error(`${ModelClass.name}#${attachmentName} attachment array cannot be empty`)
+      }
+
+      return await normalizeFrontendAttachmentInput(lastValue)
+    }
+
+    return await normalizeFrontendAttachmentInput(value)
   }
 
   /**
@@ -3779,9 +3987,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _reconcileNestedAttributesFromResponse(response) {
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                         @type {typeof FrontendModelBase} */ (this.constructor)
+    const ModelClass = frontendModelClassFor(this)
     const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 

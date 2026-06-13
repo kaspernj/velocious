@@ -48,7 +48,7 @@ async function postFrontendModel(path, payload) {
 }
 
 /**
- * @param {"destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
+ * @param {"create" | "destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
  * @param {Record<string, any>} payload - Command payload.
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
@@ -1128,6 +1128,61 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(downloadedAttachment.filename()).toEqual("my-doc.doc")
       expect(downloadedAttachment.content().toString()).toEqual("attachment-content")
+    })
+  })
+
+  it("creates belongs-to nested attributes before saving the parent", async () => {
+    await Dummy.run(async () => {
+      const payload = await postSharedTaskFrontendModelCommand("create", {
+        attributes: {
+          name: "Nested belongs-to task",
+          projectAttributes: {name: "Nested belongs-to project"}
+        }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.id).toBeDefined()
+
+      const persisted = await Task.find(payload.model.id)
+      const project = await persisted.projectOrLoad()
+
+      expect(persisted.name()).toEqual("Nested belongs-to task")
+      expect(project.name()).toEqual("Nested belongs-to project")
+      expect(persisted.projectId()).toEqual(project.id())
+    })
+  })
+
+  it("creates has-many nested attributes with child attachments and grandchildren", async () => {
+    await Dummy.run(async () => {
+      const payload = await postSharedProjectFrontendModelCommand("create", {
+        attributes: {
+          name: "Nested parent project",
+          tasksAttributes: [
+            {
+              commentsAttributes: [{body: "Nested child comment"}],
+              descriptionFile: {
+                contentBase64: Buffer.from("nested-attachment-content").toString("base64"),
+                filename: "nested-task.doc"
+              },
+              name: "Nested child task"
+            }
+          ]
+        }
+      })
+
+      expect(payload.status).toEqual("success")
+      expect(payload.model.id).toBeDefined()
+
+      const task = await Task.findBy({name: "Nested child task", projectId: payload.model.id})
+      expect(task).toBeDefined()
+      if (!task) throw new Error("Expected nested child task to be persisted")
+
+      const comment = await Comment.findBy({body: "Nested child comment", taskId: task.id()})
+      const downloadedAttachment = await task.descriptionFile().download()
+
+      expect(comment).toBeDefined()
+      expect(downloadedAttachment.filename()).toEqual("nested-task.doc")
+      expect(downloadedAttachment.content().toString()).toEqual("nested-attachment-content")
     })
   })
 
