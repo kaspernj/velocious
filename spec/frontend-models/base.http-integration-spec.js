@@ -560,6 +560,60 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("scopes unfiltered model lifecycle events by the subscriber's ability", async () => {
+    const previousScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
+
+    process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = "scope-owner"
+
+    try {
+      await Dummy.run(async () => {
+        const websocketClient = new WebsocketClient()
+        const ownedProject = await ProjectRecord.create({creatingUserReference: "scope-owner", name: "Scoped owned project"})
+        const foreignProject = await ProjectRecord.create({creatingUserReference: "other-owner", name: "Scoped foreign project"})
+        const ownedTask = await TaskRecord.create({name: "Scoped owned original", project: ownedProject})
+        const foreignTask = await TaskRecord.create({name: "Scoped foreign original", project: foreignProject})
+
+        configureWebsocketSharedTransport(websocketClient)
+
+        /** @type {Array<string>} */
+        const updates = []
+        // Unfiltered subscription: only the subscriber's ability scope may gate delivery.
+        const offUpdate = await Task.onUpdate((event) => {
+          updates.push(String(event.id))
+        })
+
+        try {
+          foreignTask.setName("Scoped foreign renamed")
+          await foreignTask.save()
+          await wait(100)
+
+          // The foreign task is outside the ability's subquery scope, so its event must not arrive.
+          expect(updates).toEqual([])
+
+          ownedTask.setName("Scoped owned renamed")
+          await ownedTask.save()
+
+          await waitFor(() => {
+            if (updates.length < 1) throw new Error(`Expected scoped onUpdate but got ${updates.length}`)
+          })
+          await wait(100)
+
+          expect(updates).toEqual([String(ownedTask.id())])
+        } finally {
+          offUpdate()
+          resetFrontendModelTransport()
+          await websocketClient.close()
+        }
+      })
+    } finally {
+      if (previousScope === undefined) {
+        delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
+      } else {
+        process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = previousScope
+      }
+    }
+  })
+
   it("rejects tampered frontend-model event filter params", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
