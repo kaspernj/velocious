@@ -117,4 +117,40 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
 
     expect(sentFrames).toEqual([])
   })
+
+  it("forwards the subscriber's auth params to resolveAbility", async () => {
+    /** @type {Array<Record<string, unknown>>} */
+    const resolveAbilityParams = []
+    const abilityStub = {
+      loadAbilitiesForModelClass: () => {},
+      rulesFor: () => [{effect: "allow"}]
+    }
+    const configuration = {
+      getModelClasses: () => ({Task: class Task {}}),
+      resolveAbility: async (/** @type {{params: Record<string, unknown>}} */ {params}) => {
+        resolveAbilityParams.push(params)
+
+        return abilityStub
+      }
+    }
+    const channel = new FrontendModelWebsocketChannel({
+      params: {authenticationToken: "token-123", model: "Task"},
+      session: /** @type {any} */ ({
+        configuration,
+        getMetadata: () => ({}),
+        upgradeRequest: {
+          headers: () => ({}),
+          remoteAddress: () => "127.0.0.1"
+        }
+      }),
+      subscriptionId: "auth-forwarding"
+    })
+
+    const allowed = await channel.canSubscribe()
+
+    expect(allowed).toEqual(true)
+    expect(resolveAbilityParams.length).toEqual(1)
+    expect(resolveAbilityParams[0].authenticationToken).toEqual("token-123")
+    expect(resolveAbilityParams[0].model).toEqual("Task")
+  })
 })

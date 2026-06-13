@@ -61,7 +61,11 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     if (!ModelClass) return false
 
     const ability = await configuration.resolveAbility?.({
-      params: {model: modelName},
+      // Forward the subscriber's params (e.g. authenticationToken) so token-authenticated clients
+      // resolve the same ability they would over HTTP. Without this only session/cookie auth on the
+      // upgrade request works, and param-based auth (like a scanner passing an authenticationToken)
+      // is dropped — leaving such subscribers with a guest ability and no read rule.
+      params: {...this.params, model: modelName},
       request: /**
                 * Narrows the runtime value to the documented type.
                  @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
