@@ -11,22 +11,6 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class UuidItemBase extends DatabaseRecord {
   /**
-   * Creates a UuidItem record.
-   * @template {typeof UuidItemBase} T
-   * @this {T}
-   * @param {UuidItemWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this UuidItem record.
-   * @param {UuidItemWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
-  /**
    * @returns {typeof import("../models/uuid-item.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

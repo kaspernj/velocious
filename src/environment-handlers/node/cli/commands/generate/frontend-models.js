@@ -286,19 +286,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams: permittedUpdateParams, typeName: updateAttributesTypeName})
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
-    fileContent += "  /**\n"
-    fileContent += `   * Creates a ${className}.\n`
-    fileContent += `   * @param {${createAttributesTypeName}} [attributes] - Attributes for the new model.\n`
-    fileContent += `   * @returns {Promise<${className}>} - Persisted model.\n`
-    fileContent += "   */\n"
-    fileContent += `  static async create(attributes = {}) { return /** @type {Promise<${className}>} */ (super.create(attributes)) }\n\n`
-
-    fileContent += "  /**\n"
-    fileContent += `   * Updates this ${className}.\n`
-    fileContent += `   * @param {${updateAttributesTypeName}} [newAttributes] - Attributes to assign before saving.\n`
-    fileContent += `   * @returns {Promise<${className}>} - Updated model.\n`
-    fileContent += "   */\n"
-    fileContent += `  async update(newAttributes = {}) { return /** @type {Promise<${className}>} */ (super.update(newAttributes)) }\n\n`
     fileContent += "  /** @returns {FrontendModelResourceConfig} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"

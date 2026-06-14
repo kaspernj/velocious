@@ -13,22 +13,6 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class ProjectTranslationBase extends DatabaseRecord {
   /**
-   * Creates a ProjectTranslation record.
-   * @template {typeof ProjectTranslationBase} T
-   * @this {T}
-   * @param {ProjectTranslationWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this ProjectTranslation record.
-   * @param {ProjectTranslationWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
-  /**
    * @returns {typeof ProjectTranslationBase}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

@@ -21,20 +21,6 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
-  /**
-   * Creates a User.
-   * @param {UserCreateAttributes} [attributes] - Attributes for the new model.
-   * @returns {Promise<User>} - Persisted model.
-   */
-  static async create(attributes = {}) { return /** @type {Promise<User>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this User.
-   * @param {UserUpdateAttributes} [newAttributes] - Attributes to assign before saving.
-   * @returns {Promise<User>} - Updated model.
-   */
-  async update(newAttributes = {}) { return /** @type {Promise<User>} */ (super.update(newAttributes)) }
-
   /** @returns {FrontendModelResourceConfig} - Resource config. */
   static resourceConfig() {
     return {
