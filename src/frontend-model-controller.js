@@ -2605,8 +2605,17 @@ export default class FrontendModelController extends Controller {
                           * Types the following value.
                            @type {typeof import("./database/record/index.js").default} */ (model.constructor)
       const relationshipsMap = modelClass.getRelationshipsMap()
+      const resource = this._serializationResourceInstanceForModel(model)
+      const resourceConfiguration = resource ? resource.resourceConfiguration() : null
+      const exposedRelationships = new Set(
+        resourceConfiguration && Array.isArray(resourceConfiguration.relationships)
+          ? resourceConfiguration.relationships
+          : []
+      )
 
       for (const relationshipName in relationshipsMap) {
+        if (!exposedRelationships.has(relationshipName)) continue
+
         const relationship = model.getRelationshipByName(relationshipName)
 
         if (!relationship.getPreloaded()) continue

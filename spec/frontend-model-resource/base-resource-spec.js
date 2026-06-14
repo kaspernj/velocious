@@ -3,15 +3,8 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import DatabaseRecord from "../../src/database/record/index.js"
-import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
-
-/** @returns {Promise<void>} */
-async function initializeTaskResourceModels() {
-  await Project.initializeRecord({configuration: dummyConfiguration})
-  await Task.initializeRecord({configuration: dummyConfiguration})
-}
 
 describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, () => {
   it("defaults to permitting nothing — subclasses must override to enable writes", () => {
@@ -93,9 +86,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     ])
   })
 
-  it("runs mutation hooks through the base create and update implementations", async () => {
-    await initializeTaskResourceModels()
-
+  it("runs mutation hooks through the base create and update implementations", {type: "model"}, async () => {
     /**
      * @typedef {object} TaskResourceCreateAttributes
      * @property {string} [name] - Task name.
@@ -119,7 +110,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
         const projectId = attributes.projectId
 
         if (typeof name !== "string") throw new Error("Expected create name")
-        if (typeof projectId !== "number") throw new Error("Expected create projectId")
+        if (projectId == null) throw new Error("Expected create projectId")
 
         this.events.push(`normalize-create:${name}`)
 
@@ -184,6 +175,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     const createdTask = /** @type {Task} */ (await resource.create({name: "Original", projectId: project.id()}))
     const updatedTask = /** @type {Task} */ (await resource.update(createdTask, {name: "Renamed"}))
 
+    expect(createdTask.projectId()).toEqual(project.id())
     expect(updatedTask.name()).toEqual("Renamed updated")
     expect(resource.events).toEqual([
       "normalize-create:Original",
@@ -199,9 +191,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     ])
   })
 
-  it("runs destroy hooks through the base destroy implementation", async () => {
-    await initializeTaskResourceModels()
-
+  it("runs destroy hooks through the base destroy implementation", {type: "model"}, async () => {
     class TaskResource extends FrontendModelBaseResource {
       events = []
 

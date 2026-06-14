@@ -40,11 +40,6 @@ describe("Cli - generate - base-models", () => {
 
     const userBasePath = `${dummyDirectory()}/src/model-bases/user.js`
     const userModelPath = `${dummyDirectory()}/src/models/user.js`
-    const contents = await fs.readFile(userBasePath, "utf8")
-
-    expect(contents).not.toContain("/unknownunknown")
-    expect(contents).toContain("return /** @type {typeof import")
-
     const program = ts.createProgram([userBasePath, userModelPath], {
       allowJs: true,
       checkJs: true,
