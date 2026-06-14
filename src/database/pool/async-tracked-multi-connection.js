@@ -8,6 +8,7 @@ const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt
 const CONNECTION_CHECKED_OUT_AT = Symbol("velociousConnectionCheckedOutAt")
 const DEFAULT_MAX_CONNECTIONS = 10
 const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
+const DEFAULT_CHECKOUT_TIMEOUT_MILLIS = 10000
 
 /**
  * PendingCheckout type.
@@ -18,6 +19,9 @@ const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
  * @property {string} reuseKey - Database configuration reuse key needed by the checkout.
  * @property {(connection: import("../drivers/base.js").default) => void} resolve - Resolves with an activated connection.
  * @property {(error: Error) => void} reject - Rejects when checkout cannot complete.
+ * @property {number | null} timeoutAt - Timestamp when the checkout will time out, or null when disabled.
+ * @property {number | null} timeoutMillis - Milliseconds to wait before rejecting, or null when disabled.
+ * @property {ReturnType<typeof setTimeout> | undefined} timeoutTimer - Timer that rejects the pending checkout.
  */
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
@@ -293,6 +297,28 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Runs checkout timeout millis.
+   * @returns {number | null} - Pending checkout timeout in milliseconds, or null when disabled.
+   */
+  checkoutTimeoutMillis() {
+    const value = this.getConfiguration().pool?.checkoutTimeoutMillis
+
+    if (value === null) return null
+    if (this.validCheckoutTimeoutMillis(value)) return value
+
+    return DEFAULT_CHECKOUT_TIMEOUT_MILLIS
+  }
+
+  /**
+   * Runs valid checkout timeout millis.
+   * @param {?} value - Candidate checkout timeout.
+   * @returns {value is number} - Whether the value is a valid timeout.
+   */
+  validCheckoutTimeoutMillis(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+  }
+
+  /**
    * Runs valid max connections.
    * @param {?} value - Candidate max connection count.
    * @returns {value is number} - Whether the value is a valid max connection count.
@@ -361,7 +387,23 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   async waitForCheckout(databaseConfig, reuseKey, options = {}) {
     return await new Promise((resolve, reject) => {
-      this.pendingCheckouts.push({databaseConfig, enqueuedAt: Date.now(), options, reject, resolve, reuseKey})
+      const enqueuedAt = Date.now()
+      const timeoutMillis = this.checkoutTimeoutMillis()
+      /** @type {PendingCheckout} */
+      const checkout = {
+        databaseConfig,
+        enqueuedAt,
+        options,
+        reject,
+        resolve,
+        reuseKey,
+        timeoutAt: timeoutMillis === null ? null : enqueuedAt + timeoutMillis,
+        timeoutMillis,
+        timeoutTimer: undefined
+      }
+
+      checkout.timeoutTimer = this.startPendingCheckoutTimeout(checkout)
+      this.pendingCheckouts.push(checkout)
       void this.drainPendingCheckouts().catch((error) => {
         const checkoutError = error instanceof Error ? error : new Error("Failed to drain pending database connection checkouts.", {cause: error})
 
@@ -400,17 +442,19 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       const checkout = this.pendingCheckouts[0]
 
       if (await this.closeIdleConnectionForPendingCheckoutCapacity(checkout)) continue
+      if (!this.pendingCheckouts.includes(checkout)) continue
       if (this.canSpawnConnection()) {
-        this.pendingCheckouts.shift()
+        this.removePendingCheckoutAt(0)
         await this.spawnAndResolvePendingCheckout(checkout)
         continue
       }
 
       const reapedConnection = await this.idleConnectionForPendingCheckout(checkout)
 
+      if (!this.pendingCheckouts.includes(checkout)) continue
       if (!reapedConnection) return
 
-      this.pendingCheckouts.shift()
+      this.removePendingCheckoutAt(0)
       await this.resolvePendingCheckout(checkout, reapedConnection)
     }
   }
@@ -426,13 +470,78 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
       if (!connection) continue
 
-      this.pendingCheckouts.splice(index, 1)
+      this.removePendingCheckoutAt(index)
       await this.resolvePendingCheckout(checkout, connection)
 
       return true
     }
 
     return false
+  }
+
+  /**
+   * Runs remove pending checkout at.
+   * @param {number} index - Pending checkout index.
+   * @returns {PendingCheckout} - Removed checkout.
+   */
+  removePendingCheckoutAt(index) {
+    const checkout = this.pendingCheckouts.splice(index, 1)[0]
+
+    this.clearPendingCheckoutTimeout(checkout)
+
+    return checkout
+  }
+
+  /**
+   * Runs start pending checkout timeout.
+   * @param {PendingCheckout} checkout - Pending checkout to time out.
+   * @returns {ReturnType<typeof setTimeout> | undefined} - Timer, if timeout is enabled.
+   */
+  startPendingCheckoutTimeout(checkout) {
+    if (checkout.timeoutMillis === null) return undefined
+
+    const timer = setTimeout(() => {
+      this.timeoutPendingCheckout(checkout)
+    }, checkout.timeoutMillis)
+
+    return timer
+  }
+
+  /**
+   * Runs timeout pending checkout.
+   * @param {PendingCheckout} checkout - Pending checkout to reject.
+   * @returns {void}
+   */
+  timeoutPendingCheckout(checkout) {
+    const index = this.pendingCheckouts.indexOf(checkout)
+
+    if (index === -1) return
+
+    this.removePendingCheckoutAt(index)
+    checkout.reject(this.pendingCheckoutTimeoutError(checkout))
+  }
+
+  /**
+   * Runs pending checkout timeout error.
+   * @param {PendingCheckout} checkout - Timed-out checkout.
+   * @returns {Error} - Timeout error.
+   */
+  pendingCheckoutTimeoutError(checkout) {
+    const checkoutName = checkout.options.name ? ` Checkout name: ${JSON.stringify(checkout.options.name)}.` : ""
+
+    return new Error(`Timed out after ${checkout.timeoutMillis}ms waiting for database connection checkout from pool "${this.identifier}".${checkoutName}`)
+  }
+
+  /**
+   * Runs clear pending checkout timeout.
+   * @param {PendingCheckout} checkout - Pending checkout.
+   * @returns {void}
+   */
+  clearPendingCheckoutTimeout(checkout) {
+    if (!checkout.timeoutTimer) return
+
+    clearTimeout(checkout.timeoutTimer)
+    checkout.timeoutTimer = undefined
   }
 
   /**
@@ -472,6 +581,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (connection) return connection
 
     await this.reapIdleConnections()
+    if (!this.pendingCheckouts.includes(checkout)) return
+
     connection = this.takeIdleConnectionForReuseKey(checkout.reuseKey, {includeOpenTransactions: false})
 
     return connection
@@ -762,14 +873,17 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Runs pending checkout debug snapshots.
    * @param {number} now - Current timestamp.
-   * @returns {Array<Record<string, ?>>} - Pending checkout snapshots.
+   * @returns {import("./base.js").DatabasePoolPendingCheckoutDebugSnapshot[]} - Pending checkout snapshots.
    */
   pendingCheckoutDebugSnapshots(now) {
     return this.pendingCheckouts.map((checkout, index) => ({
       checkoutName: checkout.options.name,
       enqueuedAt: checkout.enqueuedAt,
       index,
+      remainingTimeoutMs: checkout.timeoutAt === null ? null : Math.max(0, checkout.timeoutAt - now),
       reuseKey: checkout.reuseKey,
+      timeoutAt: checkout.timeoutAt,
+      timeoutMillis: checkout.timeoutMillis,
       waitingForMs: Math.max(0, now - checkout.enqueuedAt)
     }))
   }
@@ -1131,6 +1245,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.pendingCheckouts = []
 
     for (const checkout of pendingCheckouts) {
+      this.clearPendingCheckoutTimeout(checkout)
       checkout.reject(error)
     }
   }

@@ -387,7 +387,10 @@ describe("database - pool - async tracked multi connection reuse", () => {
           options: {},
           reject,
           resolve,
-          reuseKey
+          reuseKey,
+          timeoutAt: null,
+          timeoutMillis: null,
+          timeoutTimer: undefined
         })
       }).then((connection) => {
         pendingResolved = true

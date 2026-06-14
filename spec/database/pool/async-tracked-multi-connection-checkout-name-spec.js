@@ -12,6 +12,9 @@ import wait from "awaitery/build/wait.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
 class CheckoutNameFailingSqliteDriver extends SqliteDriver {
+  /** @type {number} */
+  static closeDelayMillis = 0
+
   /**
    * @param {string | undefined} name - Human-readable name for this active checkout.
    * @returns {Promise<void>} - Resolves when complete.
@@ -21,10 +24,20 @@ class CheckoutNameFailingSqliteDriver extends SqliteDriver {
 
     await super.setConnectionCheckoutName(name)
   }
+
+  /** @returns {Promise<void>} - Resolves after the connection closes. */
+  async close() {
+    if (CheckoutNameFailingSqliteDriver.closeDelayMillis > 0) await wait(CheckoutNameFailingSqliteDriver.closeDelayMillis)
+
+    await super.close()
+  }
 }
 
-/** @returns {Promise<Configuration>} - Configuration backed by a temp SQLite database. */
-async function testConfiguration() {
+/**
+ * @param {import("../../../src/configuration-types.js").DatabasePoolConfiguration} [poolConfig] - Pool config.
+ * @returns {Promise<Configuration>} - Configuration backed by a temp SQLite database.
+ */
+async function testConfiguration(poolConfig = {max: 1}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-pool-checkout-name-"))
 
   return new Configuration({
@@ -34,7 +47,7 @@ async function testConfiguration() {
           driver: CheckoutNameFailingSqliteDriver,
           migrations: false,
           name: "pool-checkout-name-test",
-          pool: {max: 1},
+          pool: poolConfig,
           poolType: AsyncTrackedMultiConnection,
           type: "sqlite"
         }
@@ -50,10 +63,11 @@ async function testConfiguration() {
 
 /**
  * @param {(pool: AsyncTrackedMultiConnection) => Promise<void>} callback - Spec body.
+ * @param {import("../../../src/configuration-types.js").DatabasePoolConfiguration} [poolConfig] - Pool config.
  * @returns {Promise<void>} - Resolves after closing database connections.
  */
-async function withCheckoutNamePool(callback) {
-  const configuration = await testConfiguration()
+async function withCheckoutNamePool(callback, poolConfig = {max: 1}) {
+  const configuration = await testConfiguration(poolConfig)
 
   try {
     const pool = configuration.getDatabasePool("default")
@@ -129,5 +143,109 @@ describe("database - pool - async tracked multi connection checkout names", () =
 
       await pool.checkin(secondConnection)
     })
+  })
+
+  it("uses default, configured, and disabled checkout timeouts", async () => {
+    await withCheckoutNamePool(async (pool) => {
+      expect(pool.checkoutTimeoutMillis()).toBe(10000)
+
+      pool.getConfiguration().pool = {checkoutTimeoutMillis: 25, max: 1}
+      expect(pool.checkoutTimeoutMillis()).toBe(25)
+
+      pool.getConfiguration().pool = {checkoutTimeoutMillis: null, max: 1}
+      expect(pool.checkoutTimeoutMillis()).toBe(null)
+    })
+  })
+
+  it("rejects a queued checkout when the checkout timeout expires", async () => {
+    await withCheckoutNamePool(async (pool) => {
+      const firstConnection = await pool.checkout({name: "long checkout"})
+      const queuedCheckout = pool.checkout({name: "waiting checkout"})
+
+      await wait(0)
+
+      const timeoutTimer = pool.pendingCheckouts[0]?.timeoutTimer
+
+      if (!timeoutTimer || typeof timeoutTimer !== "object" || typeof timeoutTimer.hasRef !== "function") {
+        throw new Error("Expected pending checkout timeout timer")
+      }
+
+      expect((/** @type {{hasRef: () => boolean}} */ (timeoutTimer)).hasRef()).toBe(true)
+
+      await timeout({timeout: 2000}, async () => {
+        try {
+          await queuedCheckout
+          throw new Error("Queued checkout unexpectedly resolved")
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error)
+          expect(/** @type {Error} */ (error).message).toEqual("Timed out after 20ms waiting for database connection checkout from pool \"default\". Checkout name: \"waiting checkout\".")
+        }
+      })
+
+      expect(pool.pendingCheckouts.length).toBe(0)
+
+      await pool.checkin(firstConnection)
+    }, {checkoutTimeoutMillis: 20, max: 1})
+  })
+
+  it("keeps later queued checkouts when an earlier checkout times out during capacity cleanup", async () => {
+    await withCheckoutNamePool(async (pool) => {
+      const oldConfigConnection = await pool.checkout({name: "old config checkout"})
+
+      await pool.checkin(oldConfigConnection)
+
+      pool.getConfiguration().name = "pool-checkout-name-timeout-survivor"
+      CheckoutNameFailingSqliteDriver.closeDelayMillis = 50
+
+      try {
+        const databaseConfig = pool.getConfiguration()
+        const reuseKey = pool.getConfigurationReuseKey()
+
+        pool.getConfiguration().pool = {checkoutTimeoutMillis: 10, max: 1}
+
+        const timedOutCheckout = pool.waitForCheckout(databaseConfig, reuseKey, {name: "timed out checkout"})
+
+        pool.getConfiguration().pool = {checkoutTimeoutMillis: null, max: 1}
+
+        const survivingCheckout = pool.waitForCheckout(databaseConfig, reuseKey, {name: "surviving checkout"})
+
+        await timeout({timeout: 2000}, async () => {
+          try {
+            await timedOutCheckout
+            throw new Error("Queued checkout unexpectedly resolved")
+          } catch (error) {
+            expect(error).toBeInstanceOf(Error)
+            expect(/** @type {Error} */ (error).message).toEqual("Timed out after 10ms waiting for database connection checkout from pool \"default\". Checkout name: \"timed out checkout\".")
+          }
+        })
+
+        const survivingConnection = await timeout({timeout: 2000}, async () => await survivingCheckout)
+
+        await pool.checkin(survivingConnection)
+      } finally {
+        CheckoutNameFailingSqliteDriver.closeDelayMillis = 0
+      }
+    }, {checkoutTimeoutMillis: 10, max: 1})
+  })
+
+  it("leaves queued checkouts waiting when checkout timeout is disabled", async () => {
+    await withCheckoutNamePool(async (pool) => {
+      const firstConnection = await pool.checkout({name: "long checkout"})
+      const queuedCheckout = pool.checkout({name: "waiting checkout"})
+
+      await wait(0.02)
+
+      const snapshot = pool.getDebugSnapshot()
+
+      expect(snapshot.pendingCheckoutCount).toBe(1)
+      expect(snapshot.pendingCheckouts?.[0]?.timeoutMillis).toBe(null)
+      expect(snapshot.pendingCheckouts?.[0]?.remainingTimeoutMs).toBe(null)
+
+      await pool.checkin(firstConnection)
+
+      const secondConnection = await queuedCheckout
+
+      await pool.checkin(secondConnection)
+    }, {checkoutTimeoutMillis: null, max: 1})
   })
 })

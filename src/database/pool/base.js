@@ -13,6 +13,19 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  */
 
 /**
+ * DatabasePoolPendingCheckoutDebugSnapshot type.
+ * @typedef {object} DatabasePoolPendingCheckoutDebugSnapshot
+ * @property {string | undefined} checkoutName - Human-readable checkout name.
+ * @property {number} enqueuedAt - Timestamp when the checkout started waiting.
+ * @property {number} index - Pending checkout queue index.
+ * @property {number | null} remainingTimeoutMs - Milliseconds before the checkout times out, or null when disabled.
+ * @property {string} reuseKey - Database configuration reuse key needed by the checkout.
+ * @property {number | null} timeoutAt - Timestamp when the checkout will time out, or null when disabled.
+ * @property {number | null} timeoutMillis - Timeout configured for the checkout, or null when disabled.
+ * @property {number} waitingForMs - Milliseconds already spent waiting.
+ */
+
+/**
  * DatabasePoolDebugSnapshot type.
  * @typedef {object} DatabasePoolDebugSnapshot
  * @property {Record<string, ?>} configuration - Sanitized resolved database configuration.
@@ -21,7 +34,7 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {number} idleCount - Number of idle connections.
  * @property {string} identifier - Database identifier.
  * @property {number} inUseCount - Number of checked-out connections.
- * @property {Array<Record<string, ?>>} [pendingCheckouts] - Waiting checkout snapshots.
+ * @property {Array<DatabasePoolPendingCheckoutDebugSnapshot>} [pendingCheckouts] - Waiting checkout snapshots.
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
  * @property {string} poolClass - Pool class name.
  */
