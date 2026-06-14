@@ -281,12 +281,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs max connections.
-   * @returns {number | undefined} - Configured max live connections.
+   * @returns {number | null} - Configured max live connections.
    */
   maxConnections() {
     const value = this.getConfiguration().pool?.max
 
-    if (value === null) return
+    if (value === null) return null
     if (this.validMaxConnections(value)) return value
 
     return DEFAULT_MAX_CONNECTIONS
@@ -322,7 +322,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   canSpawnConnection() {
     const maxConnections = this.maxConnections()
 
-    return maxConnections === undefined || this.liveConnectionCount() < maxConnections
+    return maxConnections === null || this.liveConnectionCount() < maxConnections
   }
 
   /**
