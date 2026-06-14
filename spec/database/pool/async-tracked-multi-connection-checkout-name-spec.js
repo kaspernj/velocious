@@ -162,6 +162,16 @@ describe("database - pool - async tracked multi connection checkout names", () =
       const firstConnection = await pool.checkout({name: "long checkout"})
       const queuedCheckout = pool.checkout({name: "waiting checkout"})
 
+      await wait(0)
+
+      const timeoutTimer = pool.pendingCheckouts[0]?.timeoutTimer
+
+      if (!timeoutTimer || typeof timeoutTimer !== "object" || typeof timeoutTimer.hasRef !== "function") {
+        throw new Error("Expected pending checkout timeout timer")
+      }
+
+      expect((/** @type {{hasRef: () => boolean}} */ (timeoutTimer)).hasRef()).toBe(true)
+
       await timeout({timeout: 2000}, async () => {
         try {
           await queuedCheckout

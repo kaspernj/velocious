@@ -504,8 +504,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       this.timeoutPendingCheckout(checkout)
     }, checkout.timeoutMillis)
 
-    if (typeof timer.unref === "function") timer.unref()
-
     return timer
   }
 
