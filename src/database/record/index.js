@@ -222,6 +222,10 @@ class TenantDatabaseScopeError extends Error {
   }
 }
 
+/**
+ * Base database record.
+ * @template {Record<string, ?>} [WriteAttributes=Record<string, ?>]
+ */
 class VelociousDatabaseRecord {
   /**
    * Narrows the runtime value to the documented type.
@@ -1150,17 +1154,18 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs create.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {Record<string, ?>} [attributes] - Attributes.
-   * @returns {Promise<InstanceType<MC>>} - Resolves with the create.
+   * @template {Record<string, ?>} CreateAttributes
+   * @template {VelociousDatabaseRecord<CreateAttributes>} Model
+   * @this {{new (changes?: CreateAttributes): Model} & typeof VelociousDatabaseRecord}
+   * @param {CreateAttributes} [attributes] - Attributes.
+   * @returns {Promise<Model>} - Resolves with the create.
    */
   static async create(attributes) {
     await this.ensureInitialized()
 
     const record = /**
                     * Narrows the runtime value to the documented type.
-                     @type {InstanceType<MC>} */ (new this(attributes))
+                     @type {Model} */ (new this(attributes))
 
     await record.save()
 
@@ -3353,9 +3358,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs constructor.
-   * @param {Record<string, ?>} changes - Changes.
+   * @param {WriteAttributes} changes - Changes.
    */
-  constructor(changes = {}) {
+  constructor(changes = /** @type {WriteAttributes} */ ({})) {
     this.getModelClass()._assertHasBeenInitialized()
     this._attributes = {}
     this._changes = {}
@@ -4256,7 +4261,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the attributes to the record and saves it.
-   * @param {object} attributesToAssign - The attributes to assign to the record.
+   * @param {WriteAttributes} attributesToAssign - The attributes to assign to the record.
    */
   async update(attributesToAssign) {
     if (attributesToAssign) this.assign(attributesToAssign)

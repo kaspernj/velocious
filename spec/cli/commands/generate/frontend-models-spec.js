@@ -9,8 +9,10 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
+import os from "os"
 import path from "node:path"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
+import * as ts from "typescript"
 
 class CallFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
@@ -76,6 +78,31 @@ User.setPrimaryKey("reference")
 class Call extends DatabaseRecord {}
 
 /**
+ * Typechecks source text and fails on diagnostics matched by the filter.
+ * @param {string} sourceText - Source text to check.
+ * @param {string} tmpPrefix - Temporary directory prefix.
+ * @param {function({diagnostic: ts.Diagnostic, sourcePath: string}): boolean} diagnosticFilter - Relevant diagnostic filter.
+ * @returns {Promise<void>}
+ */
+async function expectSourceTypechecks(sourceText, tmpPrefix, diagnosticFilter) {
+  const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), tmpPrefix))
+  const sourcePath = `${tmpDirectory}/index.js`
+  await fs.writeFile(sourcePath, sourceText)
+
+  const program = ts.createProgram([sourcePath], {
+    allowJs: true,
+    checkJs: true,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    target: ts.ScriptTarget.ES2024
+  })
+  const diagnostics = ts.getPreEmitDiagnostics(program)
+  const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnosticFilter({diagnostic, sourcePath}))
+
+  expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+}
+
+/**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
  * @param {function({configuration: Configuration}) : Promise<void>} [args.initializeModels] - Model initializer.
@@ -118,47 +145,61 @@ describe("Cli - generate - frontend-models", () => {
 
     expect(taskContents).toContain("class Task extends FrontendModelBase")
     expect(taskContents).toContain("@typedef {import(\"../../../../src/frontend-models/base.js\").FrontendModelResourceConfig} FrontendModelResourceConfig")
+    expect(taskContents).toContain("@typedef {import(\"../../../../src/frontend-models/base.js\").FrontendModelAttributeValue} FrontendModelAttributeValue")
+    expect(taskContents).not.toContain("FrontendModelTransportValue")
     expect(taskContents).toContain("/** @returns {FrontendModelResourceConfig} - Resource config. */")
-    expect(taskContents.includes("path:")).toEqual(false)
+    expect(taskContents).not.toContain("path:")
     expect(taskContents).toContain("attributes: [\n")
     expect(taskContents).toContain("      \"id\",\n")
     expect(taskContents).toContain("      \"identifier\",\n")
     expect(taskContents).toContain("      \"name\",\n")
-    expect(taskContents.includes("builtInCollectionCommands")).toEqual(false)
-    expect(taskContents.includes("builtInMemberCommands")).toEqual(false)
+    expect(taskContents).not.toContain("builtInCollectionCommands")
+    expect(taskContents).not.toContain("builtInMemberCommands")
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
     expect(taskContents).toContain("@typedef {object} TaskCreateAttributes")
     expect(taskContents).toContain("@property {TaskAttributes[\"name\"]} [name] - Permitted name value.")
     expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
-    expect(taskContents).toContain("@property {?} [descriptionFile] - Permitted descriptionFile value.")
+    expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
-    expect(taskContents).toContain("@param {TaskCreateAttributes} [attributes] - Attributes for the new model.")
-    expect(taskContents).toContain("@param {TaskUpdateAttributes} [newAttributes] - Attributes to assign before saving.")
+    expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")
+    expect(taskContents).toContain("export {Task}")
+    expect(taskContents).toContain("export default /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelClass<Task, TaskAttributes, TaskCreateAttributes>} */ (Task)")
+    expect(taskContents).not.toContain("static async create(attributes = {})")
+    expect(taskContents).not.toContain("async update(newAttributes = {})")
+    expect(taskContents).not.toContain("_createAttributesType")
+    expect(taskContents).not.toContain("_updateAttributesType")
     expect(taskContents).toContain("/** @returns {TaskAttributes[\"identifier\"]} - Attribute value. */")
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
     expect(taskContents).toContain("identifier() { return /** @type {TaskAttributes[\"identifier\"]} */ (this.readAttribute(\"identifier\")) }")
     expect(taskContents).toContain("setIdentifier(newValue) { return /** @type {TaskAttributes[\"identifier\"]} */ (this.setAttribute(\"identifier\", newValue)) }")
-    expect(taskContents.includes("import Project from")).toEqual(false)
+    expect(taskContents).not.toContain("import Project from")
     expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */")
     expect(taskContents).toContain("static relationshipDefinitions()")
     expect(taskContents).toContain("project: \"Project\",")
     expect(taskContents).toContain("FrontendModelBase.registerModel(Task)")
     expect(taskContents).toContain("project: {type: \"belongsTo\"}")
-    expect(taskContents).toContain("project() { return /** @type {import(\"./project.js\").default | null} */ (this.getRelationshipByName(\"project\").loaded()) }")
-    expect(taskContents).toContain("async loadProject() { return /** @type {Promise<import(\"./project.js\").default | null>} */ (this.loadRelationship(\"project\")) }")
-    expect(taskContents).toContain("async projectOrLoad() { return /** @type {Promise<import(\"./project.js\").default | null>} */ (this.relationshipOrLoad(\"project\")) }")
-    expect(taskContents).toContain("setProject(model) { return /** @type {import(\"./project.js\").default | null} */ (this.setRelationship(\"project\", model)) }")
+    expect(taskContents).toContain("projectRelationship() { return /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelSingularRelationship<Task, import(\"./project.js\").Project, import(\"./project.js\").ProjectCreateAttributes>} */ (this.getRelationshipByName(\"project\")) }")
+    expect(taskContents).toContain("project() { return this.projectRelationship().loaded() }")
+    expect(taskContents).toContain("@param {import(\"./project.js\").ProjectCreateAttributes} [attributes] - Attributes for the new related model.")
+    expect(taskContents).toContain("async loadProject() { return await this.projectRelationship().load() }")
+    expect(taskContents).toContain("async projectOrLoad() { return await this.projectRelationship().orLoad() }")
+    expect(taskContents).toContain("* @returns {void}\n   */\n  setProject(model) { this.projectRelationship().setLoaded(model) }")
+    expect(taskContents).not.toContain("Record<string, ?>")
+    expect(taskContents).not.toContain("...?")
 
-    expect(projectContents.includes("import Task from")).toEqual(false)
+    expect(projectContents).not.toContain("import Task from")
     expect(projectContents).toContain("@typedef {object} ProjectTasksNestedAttributes")
-    expect(projectContents).toContain("@property {?} [name] - Nested name value.")
+    expect(projectContents).toContain("@property {FrontendModelAttributeValue} [name] - Nested name value.")
     expect(projectContents).toContain("@property {Array<ProjectTasksNestedAttributes>} [tasksAttributes] - Permitted nested tasksAttributes values.")
     expect(projectContents).toContain("tasks: \"Task\",")
     expect(projectContents).toContain("FrontendModelBase.registerModel(Project)")
     expect(projectContents).toContain("tasks: {type: \"hasMany\"}")
-    expect(projectContents).toContain("tasks() { return /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelHasManyRelationship<typeof import(\"./project.js\").default, typeof import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\")) }")
-    expect(projectContents).toContain("tasksLoaded() { return /** @type {Array<import(\"./task.js\").default>} */ (this.getRelationshipByName(\"tasks\").loaded()) }")
-    expect(projectContents).toContain("async loadTasks() { return /** @type {Promise<Array<import(\"./task.js\").default>>} */ (this.loadRelationship(\"tasks\")) }")
+    expect(projectContents).toContain("tasksRelationship() { return /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelHasManyRelationship<Project, import(\"./task.js\").Task, import(\"./task.js\").TaskCreateAttributes>} */ (this.getRelationshipByName(\"tasks\")) }")
+    expect(projectContents).toContain("tasks() { return this.tasksRelationship() }")
+    expect(projectContents).toContain("tasksLoaded() { return this.tasksRelationship().loaded() }")
+    expect(projectContents).toContain("async loadTasks() { return await this.tasksRelationship().load() }")
+    expect(projectContents).not.toContain("Record<string, ?>")
+    expect(projectContents).not.toContain("...?")
 
     const indexPath = `${dummyDirectory()}/src/frontend-models/index.js`
     const indexContents = await fs.readFile(indexPath, "utf8")
@@ -192,6 +233,45 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
   })
 
+  it("keeps generated frontend write attributes on inherited create and update", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({backendProjectsList: backendProjects}),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const sourceText = `
+      import Task from "${dummyDirectory()}/src/frontend-models/task.js"
+
+      async function checkWrites() {
+        await Task.create({name: "Generated typing works"})
+        // @ts-expect-error unknown create attributes must stay rejected
+        await Task.create({typo: "Generated typing works"})
+
+        const task = new Task()
+        await task.update({name: "Generated typing works"})
+        // @ts-expect-error unknown update attributes must stay rejected
+        await task.update({typo: "Generated typing works"})
+      }
+
+      checkWrites()
+    `
+
+    await expectSourceTypechecks(sourceText, "velocious-frontend-write-attributes-type-check-", ({diagnostic, sourcePath}) => {
+      const fileName = diagnostic.file?.fileName || ""
+
+      return fileName === sourcePath
+        || fileName.includes("/src/frontend-models/base.js")
+        || fileName.includes("/spec/dummy/src/frontend-models/task.js")
+    })
+  })
+
   it("generates typed attribute typedefs from attribute metadata", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
@@ -214,10 +294,11 @@ describe("Cli - generate - frontend-models", () => {
 
     const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
 
+    expect(callContents).toContain("@typedef {import(\"../../../../src/frontend-models/base.js\").FrontendModelTransportValue} FrontendModelTransportValue")
     expect(callContents).toContain("@property {string} id - Attribute value.")
     expect(callContents).toContain("@property {Date | null} startedAt - Attribute value.")
     expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
-    expect(callContents).toContain("@property {Record<string, any> | null} metadata - Attribute value.")
+    expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
     expect(callContents).toContain("@property {boolean} active - Attribute value.")
     expect(callContents).toContain("@property {Date | null} endedAt - Attribute value.")
   })
@@ -268,7 +349,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {string} id - Attribute value.")
     expect(callContents).toContain("@property {Date | null} startedAt - Attribute value.")
     expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
-    expect(callContents).toContain("@property {Record<string, any> | null} metadata - Attribute value.")
+    expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
     expect(callContents).toContain("@property {boolean} active - Attribute value.")
   })
 
@@ -382,7 +463,7 @@ describe("Cli - generate - frontend-models", () => {
 
     /** Resource that opts in to nested writes for two relationships through permittedParams. */
     class ProjectWithNestedResource extends FrontendModelBaseResource {
-      /** @returns {Array<string | Record<string, any>>} */
+      /** @returns {Array<string | Record<string, Array<string>>>} */
       permittedParams() {
         return [
           "name",
@@ -446,7 +527,7 @@ describe("Cli - generate - frontend-models", () => {
 
     const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
 
-    expect(userContents.includes("nestedAttributes:")).toEqual(false)
+    expect(userContents).not.toContain("nestedAttributes:")
   })
 
   it("writes generated frontend models to backendProject.frontendModelsOutputPath", async () => {

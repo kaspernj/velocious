@@ -14,23 +14,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {import("./project.js").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.
  */
 
+/** @augments {DatabaseRecord<TaskWriteAttributes>} */
 export default class TaskBase extends DatabaseRecord {
-  /**
-   * Creates a Task record.
-   * @template {typeof TaskBase} T
-   * @this {T}
-   * @param {TaskWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this Task record.
-   * @param {TaskWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
   /**
    * @returns {typeof import("../models/task.js").default}
    */

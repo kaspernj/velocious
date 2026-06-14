@@ -11,23 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<ProjectTranslationWriteAttributes>} */
 export default class ProjectTranslationBase extends DatabaseRecord {
-  /**
-   * Creates a ProjectTranslation record.
-   * @template {typeof ProjectTranslationBase} T
-   * @this {T}
-   * @param {ProjectTranslationWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this ProjectTranslation record.
-   * @param {ProjectTranslationWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
   /**
    * @returns {typeof ProjectTranslationBase}
    */

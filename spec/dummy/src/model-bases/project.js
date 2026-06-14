@@ -12,23 +12,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Array<import("./interaction.js").InteractionWriteAttributes & {_destroy?: boolean}>} [interactionsAttributes] - Nested interactions attributes.
  */
 
+/** @augments {DatabaseRecord<ProjectWriteAttributes>} */
 export default class ProjectBase extends DatabaseRecord {
-  /**
-   * Creates a Project record.
-   * @template {typeof ProjectBase} T
-   * @this {T}
-   * @param {ProjectWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this Project record.
-   * @param {ProjectWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
   /**
    * @returns {typeof import("../models/project.js").default}
    */

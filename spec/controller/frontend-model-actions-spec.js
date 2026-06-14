@@ -1470,6 +1470,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(payload.models.length).toEqual(1)
       expect(payload.models[0].name).toEqual("Select test project")
+      expect(payload.models[0].__preloadedRelationships).toEqual(undefined)
     })
   })
 

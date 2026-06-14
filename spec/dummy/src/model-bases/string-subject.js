@@ -9,23 +9,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<StringSubjectWriteAttributes>} */
 export default class StringSubjectBase extends DatabaseRecord {
-  /**
-   * Creates a StringSubject record.
-   * @template {typeof StringSubjectBase} T
-   * @this {T}
-   * @param {StringSubjectWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this StringSubject record.
-   * @param {StringSubjectWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
   /**
    * @returns {typeof import("../models/string-subject.js").default}
    */

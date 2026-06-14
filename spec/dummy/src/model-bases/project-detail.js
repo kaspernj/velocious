@@ -11,23 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {boolean | null} [isActive] - Value for the isActive attribute.
  */
 
+/** @augments {DatabaseRecord<ProjectDetailWriteAttributes>} */
 export default class ProjectDetailBase extends DatabaseRecord {
-  /**
-   * Creates a ProjectDetail record.
-   * @template {typeof ProjectDetailBase} T
-   * @this {T}
-   * @param {ProjectDetailWriteAttributes} [attributes] - Attributes for the new record.
-   * @returns {Promise<InstanceType<T>>} - Persisted record.
-   */
-  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this ProjectDetail record.
-   * @param {ProjectDetailWriteAttributes} attributes - Attributes to assign before saving.
-   * @returns {Promise<void>} - Resolves when the record is saved.
-   */
-  async update(attributes) { return await super.update(attributes) }
-
   /**
    * @returns {typeof import("../models/project-detail.js").default}
    */

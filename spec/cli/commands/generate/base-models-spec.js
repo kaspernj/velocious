@@ -40,11 +40,6 @@ describe("Cli - generate - base-models", () => {
 
     const userBasePath = `${dummyDirectory()}/src/model-bases/user.js`
     const userModelPath = `${dummyDirectory()}/src/models/user.js`
-    const contents = await fs.readFile(userBasePath, "utf8")
-
-    expect(contents.includes("/unknownunknown")).toEqual(false)
-    expect(contents.includes("return /** @type {typeof import")).toEqual(true)
-
     const program = ts.createProgram([userBasePath, userModelPath], {
       allowJs: true,
       checkJs: true,
@@ -114,10 +109,43 @@ describe("Cli - generate - base-models", () => {
     expect(taskContents).toContain("@property {Date | string | null} [createdAt] - Value for the createdAt attribute.")
     expect(taskContents).toContain("@property {Array<import(\"./comment.js\").CommentWriteAttributes & {_destroy?: boolean}>} [commentsAttributes] - Nested comments attributes.")
     expect(taskContents).toContain("@property {import(\"./project.js\").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.")
-    expect(taskContents).toContain("@param {TaskWriteAttributes} [attributes] - Attributes for the new record.")
-    expect(taskContents).toContain("@param {TaskWriteAttributes} attributes - Attributes to assign before saving.")
-    expect(taskContents.includes("@returns {Promise<DatabaseRecord>} - Persisted record.")).toEqual(false)
-    expect(taskContents.includes("@param {Record<string, ?>} [attributes] - Attributes for the new record.")).toEqual(false)
+    expect(taskContents).toContain("/** @augments {DatabaseRecord<TaskWriteAttributes>} */")
+    expect(taskContents).not.toContain("static async create(attributes)")
+    expect(taskContents).not.toContain("async update(attributes)")
+    expect(taskContents).not.toContain("_writeAttributesType")
+    expect(taskContents).not.toContain("@returns {Promise<DatabaseRecord>} - Persisted record.")
+    expect(taskContents).not.toContain("@param {Record<string, ?>} [attributes] - Attributes for the new record.")
+  })
+
+  it("keeps generated backend write attributes on inherited create and update", {tags: ["mssql"]}, async () => {
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:base-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const sourceText = `
+      import Task from "${dummyDirectory()}/src/models/task.js"
+
+      async function checkWrites() {
+        await Task.create({name: "Generated typing works"})
+        // @ts-expect-error unknown create attributes must stay rejected
+        await Task.create({typo: "Generated typing works"})
+
+        const task = new Task()
+        await task.update({name: "Generated typing works"})
+        // @ts-expect-error unknown update attributes must stay rejected
+        await task.update({typo: "Generated typing works"})
+      }
+
+      checkWrites()
+    `
+
+    await expectSourceTypechecks(sourceText, "velocious-backend-write-attributes-type-check-", ({diagnostic, sourcePath}) => diagnostic.file?.fileName === sourcePath)
   })
 
   it("infers concrete model types in lifecycle callbacks", {tags: ["mssql"]}, async () => {

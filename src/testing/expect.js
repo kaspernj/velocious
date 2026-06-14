@@ -406,6 +406,15 @@ export default class Expect extends BaseExpect {
   }
 
   /**
+   * Runs to include.
+   * @param {?} valueToInclude - Value to include.
+   * @returns {void} - No return value.
+   */
+  toInclude(valueToInclude) {
+    this.toContain(valueToInclude)
+  }
+
+  /**
    * Runs to equal.
    * @param {?} result - Result.
    * @returns {void} - No return value.

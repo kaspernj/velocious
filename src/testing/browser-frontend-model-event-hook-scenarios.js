@@ -106,7 +106,7 @@ async function renderElement(element) {
 
 /**
  * Runs build fake model class.
- * @returns {{ModelClass: typeof FrontendModelBase, subscriptions: FakeSubscriptions}} - Fake model class setup.
+ * @returns {{ModelClass: import("../frontend-models/base.js").FrontendModelClass<FrontendModelBase>, subscriptions: FakeSubscriptions}} - Fake model class setup.
  */
 function buildFakeModelClass() {
   const subscriptions = buildFakeSubscriptions()

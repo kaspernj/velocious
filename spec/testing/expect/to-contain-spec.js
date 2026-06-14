@@ -6,6 +6,7 @@ describe("Expect#toContain", {databaseCleaning: {transaction: true}}, () => {
   it("passes for arrays and strings that contain the value", () => {
     expect([1, 2, 3]).toContain(2)
     expect("hello").toContain("ell")
+    expect("hello").toInclude("ell")
   })
 
   it("fails when the value is not contained", async () => {
@@ -17,9 +18,16 @@ describe("Expect#toContain", {databaseCleaning: {transaction: true}}, () => {
   it("supports negated contains checks", async () => {
     expect([1, 2, 3]).not.toContain(4)
     expect("hello").not.toContain("world")
+    expect("hello").not.toInclude("world")
 
     await expect(() => {
       expect([1, 2, 3]).not.toContain(2)
     }).toThrowError("[1,2,3] was unexpected to contain 2")
+  })
+
+  it("uses the same failure messages through toInclude", async () => {
+    await expect(() => {
+      expect("hello").toInclude("world")
+    }).toThrowError('"hello" doesn\'t contain "world"')
   })
 })

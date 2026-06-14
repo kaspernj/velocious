@@ -139,23 +139,8 @@ export default class DbGenerateModel extends BaseCommand {
 
         const hasManyRelationFilePath = `${velociousPath}/database/record/instance-relationships/has-many.js`
 
+        fileContent += `/** @augments {DatabaseRecord<${writeAttributeTypeName}>} */\n`
         fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
-
-        fileContent += "  /**\n"
-        fileContent += `   * Creates a ${modelNameCamelized} record.\n`
-        fileContent += `   * @template {typeof ${modelNameCamelized}Base} T\n`
-        fileContent += "   * @this {T}\n"
-        fileContent += `   * @param {${writeAttributeTypeName}} [attributes] - Attributes for the new record.\n`
-        fileContent += "   * @returns {Promise<InstanceType<T>>} - Persisted record.\n"
-        fileContent += "   */\n"
-        fileContent += "  static async create(attributes) { return /** @type {Promise<InstanceType<T>>} */ (super.create(attributes)) }\n\n"
-
-        fileContent += "  /**\n"
-        fileContent += `   * Updates this ${modelNameCamelized} record.\n`
-        fileContent += `   * @param {${writeAttributeTypeName}} attributes - Attributes to assign before saving.\n`
-        fileContent += "   * @returns {Promise<void>} - Resolves when the record is saved.\n"
-        fileContent += "   */\n"
-        fileContent += "  async update(attributes) { return await super.update(attributes) }\n\n"
 
       // --- getModelClass() override (fixes polymorphic typing in JS/JSDoc) ---
       if (await fileExists(sourceModelFullFilePath)) {

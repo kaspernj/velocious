@@ -4,12 +4,16 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  * Frontend model resource config.
  * @typedef {import("../../../../src/frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig
  */
+/**
+ * Fallback attribute value type for generated fields without narrower metadata.
+ * @typedef {import("../../../../src/frontend-models/base.js").FrontendModelAttributeValue} FrontendModelAttributeValue
+ */
 
 /**
  * UserAttributes type.
  * @typedef {object} UserAttributes
- * @property {any} reference - Attribute value.
- * @property {any} email - Attribute value.
+ * @property {FrontendModelAttributeValue} reference - Attribute value.
+ * @property {FrontendModelAttributeValue} email - Attribute value.
  */
 /**
  * Attributes accepted by UserCreateAttributes.
@@ -19,22 +23,11 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  * Attributes accepted by UserUpdateAttributes.
  * @typedef {object} UserUpdateAttributes
  */
-/** Frontend model for User. */
-export default class User extends FrontendModelBase {
-  /**
-   * Creates a User.
-   * @param {UserCreateAttributes} [attributes] - Attributes for the new model.
-   * @returns {Promise<User>} - Persisted model.
-   */
-  static async create(attributes = {}) { return /** @type {Promise<User>} */ (super.create(attributes)) }
-
-  /**
-   * Updates this User.
-   * @param {UserUpdateAttributes} [newAttributes] - Attributes to assign before saving.
-   * @returns {Promise<User>} - Updated model.
-   */
-  async update(newAttributes = {}) { return /** @type {Promise<User>} */ (super.update(newAttributes)) }
-
+/**
+ * Frontend model for User.
+ * @augments {FrontendModelBase<UserAttributes, UserCreateAttributes, UserUpdateAttributes>}
+ */
+class User extends FrontendModelBase {
   /** @returns {FrontendModelResourceConfig} - Resource config. */
   static resourceConfig() {
     return {
@@ -67,3 +60,7 @@ export default class User extends FrontendModelBase {
 }
 
 FrontendModelBase.registerModel(User)
+
+export {User}
+
+export default /** @type {import("../../../../src/frontend-models/base.js").FrontendModelClass<User, UserAttributes, UserCreateAttributes>} */ (User)
