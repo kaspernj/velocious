@@ -47,12 +47,14 @@
  * @property {number | null} [pool.max] - Maximum number of connections. Set null to disable the cap.
  * @property {number} [pool.min] - Minimum number of connections.
  * @property {number} [pool.idleTimeoutMillis] - Idle timeout before releasing a connection.
+ * @property {number | null} [pool.checkoutTimeoutMillis] - Timeout while waiting for an available connection after the max connection cap is reached. Set null to wait indefinitely.
  * @property {string} [server] - SQL server hostname.
  * @property {string} [user] - SQL username.
  */
 
 /**
  * @typedef {object} DatabasePoolConfiguration
+ * @property {number | null} [checkoutTimeoutMillis] - Timeout while a checkout waits for an available async-tracked connection after the max live connection cap is reached. Set null to wait indefinitely. Default: 10000.
  * @property {number | null} [idleTimeoutMillis] - Idle timeout before closing a checked-in async-tracked connection. Set null to disable idle reaping. Default: 5000.
  * @property {number | null} [max] - Maximum live async-tracked connections for this pool. Defaults to 10. Extra checkouts wait until a matching connection is checked in or capacity is freed. Set null to disable the cap.
  */

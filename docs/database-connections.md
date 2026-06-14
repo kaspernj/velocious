@@ -22,6 +22,8 @@ When a current connection scope already exists, `ensureConnections` reuses it an
 
 `AsyncTrackedMultiConnection` pools default to a maximum of `10` live database connections per configured pool. Configure `database.<environment>.<identifier>.pool.max` when a process needs a different cap. Set `pool.max` to `null` only for deliberately unbounded pools; leaving the value out keeps the default cap and protects long-running processes from exhausting the database server.
 
+When every allowed connection is checked out, additional checkouts wait for a compatible connection to be checked in or for capacity to be freed. Waiting checkouts time out after `10000` ms by default. Configure `database.<environment>.<identifier>.pool.checkoutTimeoutMillis` to change that wait, or set it to `null` to wait indefinitely.
+
 Velocious adds checkout names and active database annotations to SQL comments while a query is executing. This makes active queries easier to identify in process/activity views such as `SHOW FULL PROCESSLIST`, PostgreSQL `pg_stat_activity.query`, and SQL Server request SQL text:
 
 ```sql
@@ -46,4 +48,4 @@ For MySQL and MariaDB, Velocious also writes the active checkout name to the ses
 
 For PostgreSQL, Velocious sets `application_name` to the active checkout name and resets it when the connection is checked in. This exposes the checkout owner in `pg_stat_activity.application_name`, including idle checked-out sessions.
 
-When the built-in [Debug Endpoint](debug-endpoint.md) is enabled, its database pool snapshots include live checkout names, active query annotations, transaction depth, schema-cache sizes, in-use checkout timing (`checkedOutAt`/`checkedOutForMs`), checked-in idle timing (`checkedInAt`/`idleForMs`), and pending checkout timing (`pendingCheckouts[].enqueuedAt`/`waitingForMs`) for Velocious-owned connections.
+When the built-in [Debug Endpoint](debug-endpoint.md) is enabled, its database pool snapshots include live checkout names, active query annotations, transaction depth, schema-cache sizes, in-use checkout timing (`checkedOutAt`/`checkedOutForMs`), checked-in idle timing (`checkedInAt`/`idleForMs`), and pending checkout timing (`pendingCheckouts[].enqueuedAt`/`waitingForMs`/`remainingTimeoutMs`) for Velocious-owned connections.
