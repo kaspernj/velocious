@@ -222,6 +222,10 @@ class TenantDatabaseScopeError extends Error {
   }
 }
 
+/**
+ * Base database record.
+ * @template {Record<string, ?>} [WriteAttributes=Record<string, ?>]
+ */
 class VelociousDatabaseRecord {
   /**
    * Narrows the runtime value to the documented type.
@@ -429,12 +433,6 @@ class VelociousDatabaseRecord {
    * Attributes.
     @type {Record<string, ?>} */
   _attributes = {}
-
-  /**
-   * Type anchor for inherited static write methods.
-   * @type {Record<string, ?> | undefined}
-   */
-  _writeAttributesType = undefined
 
   /**
    * Changes.
@@ -1156,10 +1154,10 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs create.
-   * @template {object} WriteAttributesForCreate
-   * @template {VelociousDatabaseRecord & {_writeAttributesType?: WriteAttributesForCreate}} Model
-   * @this {{new (changes?: Record<string, ?>): Model, prototype: {_writeAttributesType?: WriteAttributesForCreate}} & typeof VelociousDatabaseRecord}
-   * @param {WriteAttributesForCreate} [attributes] - Attributes.
+   * @template {Record<string, ?>} CreateAttributes
+   * @template {VelociousDatabaseRecord<CreateAttributes>} Model
+   * @this {{new (changes?: CreateAttributes): Model} & typeof VelociousDatabaseRecord}
+   * @param {CreateAttributes} [attributes] - Attributes.
    * @returns {Promise<Model>} - Resolves with the create.
    */
   static async create(attributes) {
@@ -3360,9 +3358,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs constructor.
-   * @param {Record<string, ?>} changes - Changes.
+   * @param {WriteAttributes} changes - Changes.
    */
-  constructor(changes = {}) {
+  constructor(changes = /** @type {WriteAttributes} */ ({})) {
     this.getModelClass()._assertHasBeenInitialized()
     this._attributes = {}
     this._changes = {}
@@ -4263,9 +4261,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the attributes to the record and saves it.
-   * @template {object} WriteAttributesForUpdate
-   * @this {VelociousDatabaseRecord & {_writeAttributesType?: WriteAttributesForUpdate}}
-   * @param {WriteAttributesForUpdate} attributesToAssign - The attributes to assign to the record.
+   * @param {WriteAttributes} attributesToAssign - The attributes to assign to the record.
    */
   async update(attributesToAssign) {
     if (attributesToAssign) this.assign(attributesToAssign)

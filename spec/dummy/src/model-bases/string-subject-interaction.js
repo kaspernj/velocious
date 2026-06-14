@@ -11,13 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<StringSubjectInteractionWriteAttributes>} */
 export default class StringSubjectInteractionBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {StringSubjectInteractionWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/string-subject-interaction.js").default}
    */

@@ -9,13 +9,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<UuidItemWriteAttributes>} */
 export default class UuidItemBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {UuidItemWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/uuid-item.js").default}
    */

@@ -11,13 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {boolean | null} [isActive] - Value for the isActive attribute.
  */
 
+/** @augments {DatabaseRecord<ProjectDetailWriteAttributes>} */
 export default class ProjectDetailBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {ProjectDetailWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/project-detail.js").default}
    */

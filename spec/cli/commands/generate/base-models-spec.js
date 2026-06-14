@@ -42,8 +42,8 @@ describe("Cli - generate - base-models", () => {
     const userModelPath = `${dummyDirectory()}/src/models/user.js`
     const contents = await fs.readFile(userBasePath, "utf8")
 
-    expect(contents.includes("/unknownunknown")).toEqual(false)
-    expect(contents.includes("return /** @type {typeof import")).toEqual(true)
+    expect(contents).not.toContain("/unknownunknown")
+    expect(contents).toContain("return /** @type {typeof import")
 
     const program = ts.createProgram([userBasePath, userModelPath], {
       allowJs: true,
@@ -114,11 +114,12 @@ describe("Cli - generate - base-models", () => {
     expect(taskContents).toContain("@property {Date | string | null} [createdAt] - Value for the createdAt attribute.")
     expect(taskContents).toContain("@property {Array<import(\"./comment.js\").CommentWriteAttributes & {_destroy?: boolean}>} [commentsAttributes] - Nested comments attributes.")
     expect(taskContents).toContain("@property {import(\"./project.js\").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.")
-    expect(taskContents).toContain("@type {TaskWriteAttributes | undefined}")
-    expect(taskContents.includes("static async create(attributes)")).toEqual(false)
-    expect(taskContents.includes("async update(attributes)")).toEqual(false)
-    expect(taskContents.includes("@returns {Promise<DatabaseRecord>} - Persisted record.")).toEqual(false)
-    expect(taskContents.includes("@param {Record<string, ?>} [attributes] - Attributes for the new record.")).toEqual(false)
+    expect(taskContents).toContain("/** @augments {DatabaseRecord<TaskWriteAttributes>} */")
+    expect(taskContents).not.toContain("static async create(attributes)")
+    expect(taskContents).not.toContain("async update(attributes)")
+    expect(taskContents).not.toContain("_writeAttributesType")
+    expect(taskContents).not.toContain("@returns {Promise<DatabaseRecord>} - Persisted record.")
+    expect(taskContents).not.toContain("@param {Record<string, ?>} [attributes] - Attributes for the new record.")
   })
 
   it("keeps generated backend write attributes on inherited create and update", {tags: ["mssql"]}, async () => {

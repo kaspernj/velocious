@@ -14,13 +14,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {import("./project.js").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.
  */
 
+/** @augments {DatabaseRecord<TaskWriteAttributes>} */
 export default class TaskBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {TaskWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/task.js").default}
    */

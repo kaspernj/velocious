@@ -5,9 +5,28 @@ import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
 
 /**
+ * Built-in frontend-model resource action.
+ * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelResourceAction
+ */
+
+/**
+ * Frontend-model controller methods used by resources.
+ * @typedef {import("../controller.js").default & {
+ *   currentAbility: () => import("../authorization/ability.js").default | undefined,
+ *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
+ *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
+ *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
+ *   frontendModelResourceConfigurationForModelClass: (modelClass: typeof import("../database/record/index.js").default) => FrontendModelResolvedResourceConfiguration | null,
+ *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, object | string | number | boolean | null>>
+ * }} FrontendModelResourceController
+ */
+
+/**
  * FrontendModelResourceControllerArgs type.
  * @typedef {object} FrontendModelResourceControllerArgs
- * @property {import("../controller.js").default} controller - Frontend-model controller instance.
+ * @property {FrontendModelResourceController} controller - Frontend-model controller instance.
  * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
  * @property {string} modelName - Model name.
  * @property {import("../configuration-types.js").VelociousParams} params - Request params.
@@ -33,6 +52,31 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {string} modelName - Frontend model name.
  * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Resource class.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration.
+ */
+
+/**
+ * Transport-safe value accepted in frontend-model resource mutation payloads.
+ * Nested object/array values are intentionally opaque because TypeScript rejects
+ * recursive JSDoc typedefs for this transport payload contract.
+ * @typedef {import("../frontend-models/base.js").FrontendModelTransportValue | import("../database/record/index.js").default | Record<string, unknown> | Array<unknown>} FrontendModelResourcePayloadValue
+ */
+
+/**
+ * Attribute payload accepted by frontend-model resource mutations.
+ * @typedef {Record<string, FrontendModelResourcePayloadValue>} FrontendModelResourceAttributePayload
+ */
+
+/**
+ * Options passed while saving frontend-model resource mutations.
+ * @typedef {object} FrontendModelResourceSaveOptions
+ * @property {FrontendModelResourceAttributePayload | null} [attachments] - Uploaded attachment attributes.
+ * @property {FrontendModelResourceController | null} [controller] - Controller handling the mutation.
+ * @property {FrontendModelResourceAttributePayload | null} [nestedAttributes] - Nested attributes payload.
+ */
+
+/**
+ * Normalized nested attributes entry.
+ * @typedef {FrontendModelResourceAttributePayload & {id?: string | number, _destroy?: boolean, attributes?: FrontendModelResourceAttributePayload, attachments?: FrontendModelResourceAttributePayload, nestedAttributes?: FrontendModelResourceAttributePayload}} FrontendModelResourceNestedEntry
  */
 
 /**
@@ -108,17 +152,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs typed controller instance.
-   * @returns {import("../controller.js").default & {
-   *   frontendModelAuthorizedQuery: (action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url") => import("../database/query/model-class-query.js").default<TModelClass>,
-   *   frontendModelAbilityAction: (action: string) => string,
-   *   currentAbility: () => import("../authorization/ability.js").default | undefined,
-   *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<TModelClass>,
-   *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
-   *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, unknown>>
-   * }} - Controller instance with frontend-model helpers.
+   * @returns {FrontendModelResourceController} - Controller instance with frontend-model helpers.
    */
   typedControllerInstance() {
-    return /** Narrows the runtime value to the documented type. @type {?} */ (this.controller)
+    return /** Narrows the runtime value to the documented type. @type {FrontendModelResourceController} */ (this.controller)
   }
 
   /**
@@ -245,6 +282,118 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
+   * Normalizes create attributes before permission filtering and saving.
+   * @param {FrontendModelResourceAttributePayload} attributes - Incoming create attributes.
+   * @param {FrontendModelResourceSaveOptions} options - Save options.
+   * @returns {FrontendModelResourceAttributePayload | Promise<FrontendModelResourceAttributePayload>} - Normalized attributes.
+   */
+  normalizeCreateAttributes(attributes, options) {
+    void options
+
+    return attributes
+  }
+
+  /**
+   * Normalizes update attributes before permission filtering and saving.
+   * @param {import("../database/record/index.js").default} model - Existing model.
+   * @param {FrontendModelResourceAttributePayload} attributes - Incoming update attributes.
+   * @param {FrontendModelResourceSaveOptions} options - Save options.
+   * @returns {FrontendModelResourceAttributePayload | Promise<FrontendModelResourceAttributePayload>} - Normalized attributes.
+   */
+  normalizeUpdateAttributes(model, attributes, options) {
+    void model
+    void options
+
+    return attributes
+  }
+
+  /**
+   * Runs before create.
+   * @param {import("../database/record/index.js").default} model - New model before assignment/save.
+   * @param {FrontendModelResourceAttributePayload} attributes - Normalized create attributes.
+   * @param {FrontendModelResourceSaveOptions} options - Save options.
+   * @returns {void | Promise<void>} - Resolves when the hook finishes.
+   */
+  beforeCreate(model, attributes, options) {
+    void model
+    void attributes
+    void options
+  }
+
+  /**
+   * Runs after create.
+   * @param {import("../database/record/index.js").default} model - Created model.
+   * @param {FrontendModelResourceAttributePayload} attributes - Normalized create attributes.
+   * @param {FrontendModelResourceSaveOptions} options - Save options.
+   * @returns {void | Promise<void>} - Resolves when the hook finishes.
+   */
+  afterCreate(model, attributes, options) {
+    void model
+    void attributes
+    void options
+  }
+
+  /**
+   * Runs before update.
+   * @param {import("../database/record/index.js").default} model - Existing model before assignment/save.
+   * @param {FrontendModelResourceAttributePayload} attributes - Normalized update attributes.
+   * @param {FrontendModelResourceSaveOptions} options - Save options.
+   * @returns {void | Promise<void>} - Resolves when the hook finishes.
+   */
+  beforeUpdate(model, attributes, options) {
+    void model
+    void attributes
+    void options
+  }
+
+  /**
+   * Runs after update.
+   * @param {import("../database/record/index.js").default} model - Updated model.
+   * @param {FrontendModelResourceAttributePayload} attributes - Normalized update attributes.
+   * @param {FrontendModelResourceSaveOptions} options - Save options.
+   * @returns {void | Promise<void>} - Resolves when the hook finishes.
+   */
+  afterUpdate(model, attributes, options) {
+    void model
+    void attributes
+    void options
+  }
+
+  /**
+   * Runs before destroy.
+   * @param {import("../database/record/index.js").default} model - Model before destroy.
+   * @returns {void | Promise<void>} - Resolves when the hook finishes.
+   */
+  beforeDestroy(model) {
+    void model
+  }
+
+  /**
+   * Runs after destroy.
+   * @param {import("../database/record/index.js").default} model - Destroyed model.
+   * @returns {void | Promise<void>} - Resolves when the hook finishes.
+   */
+  afterDestroy(model) {
+    void model
+  }
+
+  /**
+   * Wraps create/update/destroy resource mutations.
+   * @template Result
+   * @param {object} args - Transaction args.
+   * @param {"create" | "update" | "destroy"} args.action - Mutation action.
+   * @param {import("../database/record/index.js").default} args.model - Mutated model.
+   * @param {() => Promise<Result>} args.callback - Mutation callback.
+   * @returns {Promise<Result>} - Callback result.
+   */
+  async runMutationTransaction({action, model, callback}) {
+    void action
+    void model
+
+    return await callback()
+  }
+
+  /**
    * Runs primary key.
    * @returns {string} - Primary key.
    */
@@ -252,11 +401,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs authorized query.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Ability action.
+   * @param {FrontendModelResourceAction} action - Ability action.
    * @returns {import("../database/query/model-class-query.js").default<TModelClass>} - Authorized query.
    */
   authorizedQuery(action) {
-    return this.typedControllerInstance().frontendModelAuthorizedQuery(action)
+    // Narrows the controller query to this resource's model class.
+    return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelAuthorizedQuery(action))
   }
 
 
@@ -329,18 +479,30 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs create.
-   * @param {Record<string, ?>} attributes - Create attributes.
-   * @param {{attachments?: Record<string, ?> | null, controller?: ?, nestedAttributes?: Record<string, ?> | null}} [options] - Save options.
+   * @param {FrontendModelResourceAttributePayload} attributes - Create attributes.
+   * @param {FrontendModelResourceSaveOptions} [options] - Save options.
    * @returns {Promise<import("../database/record/index.js").default>} - Created model.
    */
   async create(attributes, options = {}) {
-    const attachmentSplit = this._extractAttachmentAttributes(attributes, options.attachments ?? null)
-    const permit = parsePermittedParams(this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: attributes}))
+    const normalizedAttributes = await this.normalizeCreateAttributes(attributes, options)
+    const attachmentSplit = this._extractAttachmentAttributes(normalizedAttributes, options.attachments ?? null)
+    const permit = parsePermittedParams(this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: normalizedAttributes}))
     const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attachmentSplit.attributes, this, permit.attributes)
     const ModelClass = this.modelClass()
     const model = new ModelClass()
 
-    return await this._saveWithNestedAttributes({filtered, model, options: {...options, attachments: attachmentSplit.attachments}, permit})
+    return await this.runMutationTransaction({
+      action: "create",
+      model,
+      callback: async () => {
+        await this.beforeCreate(model, normalizedAttributes, options)
+        const savedModel = await this._saveWithNestedAttributes({filtered, model, options: {...options, attachments: attachmentSplit.attachments}, permit})
+
+        await this.afterCreate(savedModel, normalizedAttributes, options)
+
+        return savedModel
+      }
+    })
   }
 
   /**
@@ -355,21 +517,33 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs update.
    * @param {import("../database/record/index.js").default} model - Existing model.
-   * @param {Record<string, ?>} attributes - Update attributes.
-   * @param {{attachments?: Record<string, ?> | null, controller?: ?, nestedAttributes?: Record<string, ?> | null}} [options] - Save options.
+   * @param {FrontendModelResourceAttributePayload} attributes - Update attributes.
+   * @param {FrontendModelResourceSaveOptions} [options] - Save options.
    * @returns {Promise<import("../database/record/index.js").default>} - Updated model.
    */
   async update(model, attributes, options = {}) {
-    const attachmentSplit = this._extractAttachmentAttributes(attributes, options.attachments ?? null)
-    const permit = parsePermittedParams(this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: attributes}))
+    const normalizedAttributes = await this.normalizeUpdateAttributes(model, attributes, options)
+    const attachmentSplit = this._extractAttachmentAttributes(normalizedAttributes, options.attachments ?? null)
+    const permit = parsePermittedParams(this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: normalizedAttributes}))
     const filtered = filterWritableFrontendModelAttributes(model, attachmentSplit.attributes, this, permit.attributes)
 
-    return await this._saveWithNestedAttributes({filtered, model, options: {...options, attachments: attachmentSplit.attachments}, permit})
+    return await this.runMutationTransaction({
+      action: "update",
+      model,
+      callback: async () => {
+        await this.beforeUpdate(model, normalizedAttributes, options)
+        const savedModel = await this._saveWithNestedAttributes({filtered, model, options: {...options, attachments: attachmentSplit.attachments}, permit})
+
+        await this.afterUpdate(savedModel, normalizedAttributes, options)
+
+        return savedModel
+      }
+    })
   }
 
   /**
    * Saves a model and applies nested attributes in one transaction.
-   * @param {{filtered: Record<string, ?>, model: import("../database/record/index.js").default, options: {attachments?: Record<string, ?> | null, controller?: ?, nestedAttributes?: Record<string, ?> | null}, permit: {attributes: string[], nested: Record<string, ?>}}} args - Save arguments.
+   * @param {{filtered: Record<string, ?>, model: import("../database/record/index.js").default, options: FrontendModelResourceSaveOptions, permit: {attributes: string[], nested: Record<string, ?>}}} args - Save arguments.
    * @returns {Promise<import("../database/record/index.js").default>} - Saved model.
    */
   async _saveWithNestedAttributes({filtered, model, options, permit}) {
@@ -516,7 +690,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Sets a translated attribute on a model via the translations relationship.
    * @param {import("../database/record/index.js").default} model - Model instance.
    * @param {string} name - Attribute name.
-   * @param {?} value - Attribute value.
+   * @param {FrontendModelResourcePayloadValue} value - Attribute value.
    * @returns {Promise<void>}
    */
   async _setTranslatedAttributeOnModel(model, name, value) {
@@ -569,7 +743,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<void>} - No return value.
    */
   async destroy(model) {
-    await model.destroy()
+    await this.runMutationTransaction({
+      action: "destroy",
+      model,
+      callback: async () => {
+        await this.beforeDestroy(model)
+        await model.destroy()
+        await this.afterDestroy(model)
+      }
+    })
   }
 
   /**
@@ -589,10 +771,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {object} args - Nested relationship inputs.
    * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
    * @param {string} args.relationshipName - Relationship receiving nested attributes.
-   * @param {?} args.rawEntries - Raw nested entries from the request payload.
+   * @param {FrontendModelResourcePayloadValue} args.rawEntries - Raw nested entries from the request payload.
    * @param {{attributes: string[], nested: Record<string, ?>}} args.childPermit - Parsed child permit.
-   * @param {?} args.controller - Controller instance for child resource lookup.
-   * @returns {{ability: import("../authorization/ability.js").default | undefined, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<Record<string, ?>>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
+   * @param {FrontendModelResourceController | null | undefined} args.controller - Controller instance for child resource lookup.
+   * @returns {{ability: import("../authorization/ability.js").default | undefined, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
    */
   _nestedRelationshipContext({parent, relationshipName, rawEntries, childPermit, controller}) {
     const parentModelClass = parent.getModelClass()
@@ -631,7 +813,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     const childResource = new childResourceConfig.resourceClass({
       ability: this.ability,
-      controller,
+      controller: controller || undefined,
       context: this.context || {},
       locals: this.locals || {},
       modelClass: targetModelClass,
@@ -663,10 +845,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Normalizes nested entries for collection and singular relationships.
    * @param {object} args - Nested entries inputs.
-   * @param {?} args.rawEntries - Raw nested entries value.
+   * @param {FrontendModelResourcePayloadValue} args.rawEntries - Raw nested entries value.
    * @param {string} args.relationshipName - Relationship name.
    * @param {string} args.relationshipType - Relationship type.
-   * @returns {Array<Record<string, ?>>} Normalized nested entry objects.
+   * @returns {Array<FrontendModelResourceNestedEntry>} Normalized nested entry objects.
    */
   _nestedRelationshipEntries({rawEntries, relationshipName, relationshipType}) {
     if (relationshipType === "hasMany") {
@@ -677,7 +859,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       return rawEntries.map((entry) => {
         if (!isPlainObject(entry)) throw new Error(`nestedAttributes['${relationshipName}'] entries must be objects.`)
 
-        return entry
+        // Narrows the plain-object payload to a normalized nested-entry object.
+        return /** @type {FrontendModelResourceNestedEntry} */ (entry)
       })
     }
 
@@ -686,14 +869,16 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       return rawEntries.map((entry) => {
         if (!isPlainObject(entry)) throw new Error(`nestedAttributes['${relationshipName}'] entries must be objects.`)
 
-        return entry
+        // Narrows the plain-object payload to a normalized nested-entry object.
+        return /** @type {FrontendModelResourceNestedEntry} */ (entry)
       })
     }
     if (!isPlainObject(rawEntries)) {
       throw new Error(`Expected object for nestedAttributes['${relationshipName}'] but got: ${typeof rawEntries}`)
     }
 
-    return [rawEntries]
+    // Narrows the plain-object payload to a normalized nested-entry object.
+    return [/** @type {FrontendModelResourceNestedEntry} */ (rawEntries)]
   }
 
   /**
@@ -702,25 +887,38 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * fields (`{name, file, commentsAttributes}`).
    * @param {object} args - Normalization inputs.
    * @param {{attributes: string[], nested: Record<string, ?>}} args.childPermit - Parsed child permit spec.
-   * @param {Record<string, ?>} args.entry - Raw nested entry.
+   * @param {FrontendModelResourceNestedEntry} args.entry - Raw nested entry.
    * @param {string} args.relationshipName - Relationship name for error messages.
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
-   * @returns {Record<string, ?>} Normalized nested entry.
+   * @returns {FrontendModelResourceNestedEntry} Normalized nested entry.
    */
   _normalizeNestedRelationshipEntry({childPermit, entry, relationshipName, targetModelClass}) {
-    /** @type {Record<string, ?>} */
+    /** @type {FrontendModelResourceAttributePayload} */
     const attributes = {}
-    /** @type {Record<string, ?>} */
+    /** @type {FrontendModelResourceAttributePayload} */
     const attachments = {}
-    /** @type {Record<string, ?>} */
+    /** @type {FrontendModelResourceAttributePayload} */
     const nestedAttributes = {}
-    /** @type {Record<string, ?>} */
+    /** @type {FrontendModelResourceNestedEntry} */
     const normalized = {}
     const attachmentDefinitions = targetModelClass.getAttachmentsMap?.() || {}
 
     for (const [attributeName, value] of Object.entries(entry)) {
-      if (attributeName === "id" || attributeName === "_destroy") {
-        normalized[attributeName] = value
+      if (attributeName === "id") {
+        if (typeof value !== "string" && typeof value !== "number") {
+          throw new Error(`nestedAttributes['${relationshipName}'] entry id must be a string or number.`)
+        }
+
+        normalized.id = value
+        continue
+      }
+
+      if (attributeName === "_destroy") {
+        if (typeof value !== "boolean") {
+          throw new Error(`nestedAttributes['${relationshipName}'] entry _destroy must be a boolean.`)
+        }
+
+        normalized._destroy = value
         continue
       }
 
@@ -771,8 +969,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Applies belongs-to nested attributes before the parent save so the parent FK can be set.
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
-   * @param {Record<string, ?>} nestedAttributes - Nested-attribute payload keyed by relationship name.
-   * @param {?} controller - Controller instance for resource resolution and authorization.
+   * @param {FrontendModelResourceAttributePayload} nestedAttributes - Nested-attribute payload keyed by relationship name.
+   * @param {FrontendModelResourceController | null | undefined} controller - Controller instance for resource resolution and authorization.
    * @param {{attributes: string[], nested: Record<string, ?>} | null} [parentPermit] - Parsed parent permit spec.
    * @returns {Promise<void>}
    */
@@ -802,13 +1000,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           if (!context.destroyPermitted) {
             throw new Error(`nestedAttributes['${relationshipName}'] entry requested _destroy but "_destroy" is not in the permit for this relationship.`)
           }
-          if (!entry.id) throw new Error(`nestedAttributes['${relationshipName}'] _destroy entry is missing an id.`)
+          const id = entry.id
+
+          if (id == undefined) throw new Error(`nestedAttributes['${relationshipName}'] _destroy entry is missing an id.`)
 
           const existing = await this._findNestedRecord({
             ability: context.ability,
             action: "destroy",
             childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
-            id: entry.id,
+            id,
             relationshipName,
             targetModelClass: context.targetModelClass
           })
@@ -818,12 +1018,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           continue
         }
 
-        const child = entry.id
+        const id = entry.id
+        const child = id != undefined
           ? await this._findNestedRecord({
             ability: context.ability,
             action: "update",
             childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
-            id: entry.id,
+            id,
             relationshipName,
             targetModelClass: context.targetModelClass
           })
@@ -837,7 +1038,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         await context.childResource._applyBelongsToNestedAttributes(child, entry.nestedAttributes || {}, controller, childPermit)
         await child.save()
 
-        if (!entry.id) {
+        if (id == undefined) {
           await this._authorizeCreatedChild({
             ability: context.ability,
             child,
@@ -869,8 +1070,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * (allowDestroy, limit, rejectIf) come from the MODEL's
    * `acceptedNestedAttributesFor(name)` declaration.
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
-   * @param {Record<string, ?>} nestedAttributes - Nested-attribute payload keyed by relationship name.
-   * @param {?} controller - Controller instance for resource resolution and authorization.
+   * @param {FrontendModelResourceAttributePayload} nestedAttributes - Nested-attribute payload keyed by relationship name.
+   * @param {FrontendModelResourceController | null | undefined} controller - Controller instance for resource resolution and authorization.
    * @param {{attributes: string[], nested: Record<string, ?>} | null} [parentPermit] - Parsed parent permit spec.
    * @returns {Promise<void>}
    */
@@ -922,11 +1123,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       }
 
       for (const entry of destroyEntries) {
+        const id = entry.id
+
+        if (id == undefined) {
+          throw new Error(`nestedAttributes['${relationshipName}'] _destroy entry is missing an id.`)
+        }
+
         const existing = await this._findScopedChild({
           ability: context.ability,
           action: "destroy",
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
-          id: entry.id,
+          id,
           parent,
           parentLinkAttributes,
           relationshipName,
@@ -937,11 +1144,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       }
 
       for (const entry of updateEntries) {
+        const id = entry.id
+
+        if (id == undefined) {
+          throw new Error(`nestedAttributes['${relationshipName}'] update entry is missing an id.`)
+        }
+
         const existing = await this._findScopedChild({
           ability: context.ability,
           action: "update",
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
-          id: entry.id,
+          id,
           parent,
           parentLinkAttributes,
           relationshipName,

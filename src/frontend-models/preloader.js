@@ -75,9 +75,10 @@ export default class FrontendModelPreloader {
       if (!reloadedModel) continue
 
       for (const relationshipName of topLevelRelationships) {
-        const value = reloadedModel.getRelationshipByName(relationshipName).loaded()
+        const sourceRelationship = reloadedModel.getRelationshipByName(relationshipName)
+        const targetRelationship = model.getRelationshipByName(relationshipName)
 
-        model.getRelationshipByName(relationshipName).setLoaded(value)
+        targetRelationship.copyLoadedFrom(sourceRelationship)
       }
     }
   }

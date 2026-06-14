@@ -139,12 +139,8 @@ export default class DbGenerateModel extends BaseCommand {
 
         const hasManyRelationFilePath = `${velociousPath}/database/record/instance-relationships/has-many.js`
 
+        fileContent += `/** @augments {DatabaseRecord<${writeAttributeTypeName}>} */\n`
         fileContent += `export default class ${modelNameCamelized}Base extends DatabaseRecord {\n`
-        fileContent += "  /**\n"
-        fileContent += "   * Type anchor for inherited write methods.\n"
-        fileContent += `   * @type {${writeAttributeTypeName} | undefined}\n`
-        fileContent += "   */\n"
-        fileContent += "  _writeAttributesType = undefined\n\n"
 
       // --- getModelClass() override (fixes polymorphic typing in JS/JSDoc) ---
       if (await fileExists(sourceModelFullFilePath)) {

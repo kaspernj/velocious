@@ -11,13 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<UuidInteractionWriteAttributes>} */
 export default class UuidInteractionBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {UuidInteractionWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/uuid-interaction.js").default}
    */

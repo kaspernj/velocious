@@ -11,13 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<ProjectTranslationWriteAttributes>} */
 export default class ProjectTranslationBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {ProjectTranslationWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof ProjectTranslationBase}
    */

@@ -11,13 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<ActsAsListItemWriteAttributes>} */
 export default class ActsAsListItemBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {ActsAsListItemWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/acts-as-list-item.js").default}
    */

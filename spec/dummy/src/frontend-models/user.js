@@ -4,12 +4,16 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  * Frontend model resource config.
  * @typedef {import("../../../../src/frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig
  */
+/**
+ * Fallback attribute value type for generated fields without narrower metadata.
+ * @typedef {import("../../../../src/frontend-models/base.js").FrontendModelAttributeValue} FrontendModelAttributeValue
+ */
 
 /**
  * UserAttributes type.
  * @typedef {object} UserAttributes
- * @property {any} reference - Attribute value.
- * @property {any} email - Attribute value.
+ * @property {FrontendModelAttributeValue} reference - Attribute value.
+ * @property {FrontendModelAttributeValue} email - Attribute value.
  */
 /**
  * Attributes accepted by UserCreateAttributes.
@@ -19,20 +23,11 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  * Attributes accepted by UserUpdateAttributes.
  * @typedef {object} UserUpdateAttributes
  */
-/** Frontend model for User. */
-export default class User extends FrontendModelBase {
-  /**
-   * Type anchor for inherited static create.
-   * @type {UserCreateAttributes | undefined}
-   */
-  _createAttributesType = undefined
-
-  /**
-   * Type anchor for inherited update.
-   * @type {UserUpdateAttributes | undefined}
-   */
-  _updateAttributesType = undefined
-
+/**
+ * Frontend model for User.
+ * @augments {FrontendModelBase<UserAttributes, UserCreateAttributes, UserUpdateAttributes>}
+ */
+class User extends FrontendModelBase {
   /** @returns {FrontendModelResourceConfig} - Resource config. */
   static resourceConfig() {
     return {
@@ -65,3 +60,7 @@ export default class User extends FrontendModelBase {
 }
 
 FrontendModelBase.registerModel(User)
+
+export {User}
+
+export default /** @type {import("../../../../src/frontend-models/base.js").FrontendModelClass<User, UserAttributes, UserCreateAttributes>} */ (User)

@@ -11,13 +11,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  */
 
+/** @augments {DatabaseRecord<UserWriteAttributes>} */
 export default class UserBase extends DatabaseRecord {
-  /**
-   * Type anchor for inherited write methods.
-   * @type {UserWriteAttributes | undefined}
-   */
-  _writeAttributesType = undefined
-
   /**
    * @returns {typeof import("../models/user.js").default}
    */
