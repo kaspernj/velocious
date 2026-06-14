@@ -13,6 +13,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class ProjectTranslationBase extends DatabaseRecord {
   /**
+   * Type anchor for inherited write methods.
+   * @type {ProjectTranslationWriteAttributes | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * @returns {typeof ProjectTranslationBase}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

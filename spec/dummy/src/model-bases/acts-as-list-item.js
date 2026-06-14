@@ -13,6 +13,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class ActsAsListItemBase extends DatabaseRecord {
   /**
+   * Type anchor for inherited write methods.
+   * @type {ActsAsListItemWriteAttributes | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * @returns {typeof import("../models/acts-as-list-item.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

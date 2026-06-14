@@ -286,6 +286,16 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams: permittedUpdateParams, typeName: updateAttributesTypeName})
     fileContent += `/** Frontend model for ${className}. */\n`
     fileContent += `export default class ${className} extends FrontendModelBase {\n`
+    fileContent += "  /**\n"
+    fileContent += "   * Type anchor for inherited static create.\n"
+    fileContent += `   * @type {${createAttributesTypeName} | undefined}\n`
+    fileContent += "   */\n"
+    fileContent += "  _createAttributesType = undefined\n\n"
+    fileContent += "  /**\n"
+    fileContent += "   * Type anchor for inherited update.\n"
+    fileContent += `   * @type {${updateAttributesTypeName} | undefined}\n`
+    fileContent += "   */\n"
+    fileContent += "  _updateAttributesType = undefined\n\n"
     fileContent += "  /** @returns {FrontendModelResourceConfig} - Resource config. */\n"
     fileContent += "  static resourceConfig() {\n"
     fileContent += "    return {\n"

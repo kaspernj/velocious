@@ -431,6 +431,12 @@ class VelociousDatabaseRecord {
   _attributes = {}
 
   /**
+   * Type anchor for inherited static write methods.
+   * @type {Record<string, ?> | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * Changes.
     @type {Record<string, ?>} */
   _changes = {}
@@ -1150,17 +1156,18 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs create.
-   * @template {typeof VelociousDatabaseRecord} MC
-   * @this {MC}
-   * @param {Record<string, ?>} [attributes] - Attributes.
-   * @returns {Promise<InstanceType<MC>>} - Resolves with the create.
+   * @template {object} WriteAttributesForCreate
+   * @template {VelociousDatabaseRecord & {_writeAttributesType?: WriteAttributesForCreate}} Model
+   * @this {{new (changes?: Record<string, ?>): Model, prototype: {_writeAttributesType?: WriteAttributesForCreate}} & typeof VelociousDatabaseRecord}
+   * @param {WriteAttributesForCreate} [attributes] - Attributes.
+   * @returns {Promise<Model>} - Resolves with the create.
    */
   static async create(attributes) {
     await this.ensureInitialized()
 
     const record = /**
                     * Narrows the runtime value to the documented type.
-                     @type {InstanceType<MC>} */ (new this(attributes))
+                     @type {Model} */ (new this(attributes))
 
     await record.save()
 
@@ -4256,7 +4263,9 @@ class VelociousDatabaseRecord {
 
   /**
    * Assigns the attributes to the record and saves it.
-   * @param {object} attributesToAssign - The attributes to assign to the record.
+   * @template {object} WriteAttributesForUpdate
+   * @this {VelociousDatabaseRecord & {_writeAttributesType?: WriteAttributesForUpdate}}
+   * @param {WriteAttributesForUpdate} attributesToAssign - The attributes to assign to the record.
    */
   async update(attributesToAssign) {
     if (attributesToAssign) this.assign(attributesToAssign)

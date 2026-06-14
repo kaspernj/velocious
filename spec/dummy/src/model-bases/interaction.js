@@ -13,6 +13,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class InteractionBase extends DatabaseRecord {
   /**
+   * Type anchor for inherited write methods.
+   * @type {InteractionWriteAttributes | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * @returns {typeof import("../models/interaction.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

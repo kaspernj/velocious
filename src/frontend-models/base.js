@@ -34,11 +34,13 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Frontend model constructor type.
- * @typedef {{new (attributes?: Record<string, ?>): FrontendModelBase}} FrontendModelConstructor
+ * @template {FrontendModelBase} [T=FrontendModelBase]
+ * @typedef {{new (attributes?: Record<string, ?>): T}} FrontendModelConstructor
  */
 /**
  * Frontend model static side without generated per-model create overloads.
- * @typedef {FrontendModelConstructor & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
+ * @template {FrontendModelBase} [T=FrontendModelBase]
+ * @typedef {FrontendModelConstructor<T> & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
  */
 /**
  * FrontendModelTransportConfig type.
@@ -1724,6 +1726,16 @@ export default class FrontendModelBase {
    * Narrows the runtime value to the documented type.
     @type {Record<string, ?>} */
   _attributes
+  /**
+   * Type anchor for inherited static create.
+   * @type {Record<string, ?> | undefined}
+   */
+  _createAttributesType
+  /**
+   * Type anchor for inherited update.
+   * @type {Record<string, ?> | undefined}
+   */
+  _updateAttributesType
   /**
    * Narrows the runtime value to the documented type.
     @type {Record<string, FrontendModelHasManyRelationship<FrontendModelClass, FrontendModelClass> | FrontendModelSingularRelationship<FrontendModelClass, FrontendModelClass>>} */
@@ -3422,15 +3434,16 @@ export default class FrontendModelBase {
 
   /**
    * Runs create.
-   * @template {FrontendModelClass} T
-   * @this {T}
-   * @param {Record<string, ?>} [attributes] - Initial attributes.
-   * @returns {Promise<InstanceType<T>>} - Persisted model.
+   * @template {object} CreateAttributesForCreate
+   * @template {FrontendModelBase & {_createAttributesType?: CreateAttributesForCreate}} Model
+   * @this {FrontendModelConstructor<Model> & {prototype: {_createAttributesType?: CreateAttributesForCreate}}}
+   * @param {CreateAttributesForCreate} [attributes] - Initial attributes.
+   * @returns {Promise<Model>} - Persisted model.
    */
-  static async create(attributes = {}) {
+  static async create(attributes) {
     const model = /**
                    * Narrows the runtime value to the documented type.
-                    @type {InstanceType<T>} */ (new this(attributes))
+                    @type {Model} */ (new this(attributes || /** @type {CreateAttributesForCreate} */ ({})))
 
     await model.save()
 
@@ -3601,13 +3614,15 @@ export default class FrontendModelBase {
 
   /**
    * Runs update.
-   * @param {Record<string, ?>} [newAttributes] - New values to assign before update.
+   * @template {object} UpdateAttributesForUpdate
+   * @this {FrontendModelBase & {_updateAttributesType?: UpdateAttributesForUpdate}}
+   * @param {UpdateAttributesForUpdate} [newAttributes] - New values to assign before update.
    * @returns {Promise<this>} - Updated model.
    */
-  async update(newAttributes = {}) {
-    this.assignAttributes(newAttributes)
+  async update(newAttributes) {
+    this.assignAttributes(newAttributes || /** @type {UpdateAttributesForUpdate} */ ({}))
 
-    return await this.save()
+    return /** @type {this} */ (await this.save())
   }
 
   /**

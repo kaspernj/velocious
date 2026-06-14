@@ -9,8 +9,10 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
 import fs from "fs/promises"
+import os from "os"
 import path from "node:path"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
+import * as ts from "typescript"
 
 class CallFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
@@ -76,6 +78,31 @@ User.setPrimaryKey("reference")
 class Call extends DatabaseRecord {}
 
 /**
+ * Typechecks source text and fails on diagnostics matched by the filter.
+ * @param {string} sourceText - Source text to check.
+ * @param {string} tmpPrefix - Temporary directory prefix.
+ * @param {function({diagnostic: ts.Diagnostic, sourcePath: string}): boolean} diagnosticFilter - Relevant diagnostic filter.
+ * @returns {Promise<void>}
+ */
+async function expectSourceTypechecks(sourceText, tmpPrefix, diagnosticFilter) {
+  const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), tmpPrefix))
+  const sourcePath = `${tmpDirectory}/index.js`
+  await fs.writeFile(sourcePath, sourceText)
+
+  const program = ts.createProgram([sourcePath], {
+    allowJs: true,
+    checkJs: true,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    target: ts.ScriptTarget.ES2024
+  })
+  const diagnostics = ts.getPreEmitDiagnostics(program)
+  const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnosticFilter({diagnostic, sourcePath}))
+
+  expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+}
+
+/**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
  * @param {function({configuration: Configuration}) : Promise<void>} [args.initializeModels] - Model initializer.
@@ -132,6 +159,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
     expect(taskContents).toContain("@property {?} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
+    expect(taskContents).toContain("@type {TaskCreateAttributes | undefined}")
+    expect(taskContents).toContain("@type {TaskUpdateAttributes | undefined}")
     expect(taskContents.includes("static async create(attributes = {})")).toEqual(false)
     expect(taskContents.includes("async update(newAttributes = {})")).toEqual(false)
     expect(taskContents).toContain("/** @returns {TaskAttributes[\"identifier\"]} - Attribute value. */")
@@ -190,6 +219,45 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("commandName: \"refresh-profile\"")
     expect(userContents).toContain("email() { return /** @type {UserAttributes[\"email\"]} */ (this.readAttribute(\"email\")) }")
     expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
+  })
+
+  it("keeps generated frontend write attributes on inherited create and update", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({backendProjectsList: backendProjects}),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const sourceText = `
+      import Task from "${dummyDirectory()}/src/frontend-models/task.js"
+
+      async function checkWrites() {
+        await Task.create({name: "Generated typing works"})
+        // @ts-expect-error unknown create attributes must stay rejected
+        await Task.create({typo: "Generated typing works"})
+
+        const task = new Task()
+        await task.update({name: "Generated typing works"})
+        // @ts-expect-error unknown update attributes must stay rejected
+        await task.update({typo: "Generated typing works"})
+      }
+
+      checkWrites()
+    `
+
+    await expectSourceTypechecks(sourceText, "velocious-frontend-write-attributes-type-check-", ({diagnostic, sourcePath}) => {
+      const fileName = diagnostic.file?.fileName || ""
+
+      return fileName === sourcePath
+        || fileName.includes("/src/frontend-models/base.js")
+        || fileName.includes("/spec/dummy/src/frontend-models/task.js")
+    })
   })
 
   it("generates typed attribute typedefs from attribute metadata", async () => {

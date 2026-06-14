@@ -21,6 +21,18 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /** Frontend model for User. */
 export default class User extends FrontendModelBase {
+  /**
+   * Type anchor for inherited static create.
+   * @type {UserCreateAttributes | undefined}
+   */
+  _createAttributesType = undefined
+
+  /**
+   * Type anchor for inherited update.
+   * @type {UserUpdateAttributes | undefined}
+   */
+  _updateAttributesType = undefined
+
   /** @returns {FrontendModelResourceConfig} - Resource config. */
   static resourceConfig() {
     return {

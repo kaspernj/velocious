@@ -13,6 +13,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class UuidInteractionBase extends DatabaseRecord {
   /**
+   * Type anchor for inherited write methods.
+   * @type {UuidInteractionWriteAttributes | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * @returns {typeof import("../models/uuid-interaction.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

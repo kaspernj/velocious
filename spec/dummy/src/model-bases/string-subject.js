@@ -11,6 +11,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class StringSubjectBase extends DatabaseRecord {
   /**
+   * Type anchor for inherited write methods.
+   * @type {StringSubjectWriteAttributes | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * @returns {typeof import("../models/string-subject.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases

@@ -11,6 +11,12 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 export default class UuidItemBase extends DatabaseRecord {
   /**
+   * Type anchor for inherited write methods.
+   * @type {UuidItemWriteAttributes | undefined}
+   */
+  _writeAttributesType = undefined
+
+  /**
    * @returns {typeof import("../models/uuid-item.js").default}
    */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
