@@ -368,7 +368,7 @@ describe("database - pool - async tracked multi connection reuse", () => {
 
       pool.getConfiguration().pool = {max: null}
 
-      expect(pool.maxConnections()).toEqual(undefined)
+      expect(pool.maxConnections()).toEqual(null)
     })
   })
 
