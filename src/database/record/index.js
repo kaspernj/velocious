@@ -13,7 +13,7 @@
 
 /**
  * Model class constructor type used for static `this` typing.
- * @template {VelociousDatabaseRecord} T
+ * @template T
  * @typedef {{new (changes?: Record<string, unknown>): T}} ModelConstructor
  */
 
@@ -508,7 +508,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs before validation.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -519,7 +519,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs before save.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -530,7 +530,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs before create.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -541,7 +541,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs before update.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -552,7 +552,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs before destroy.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -563,7 +563,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs after save.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -574,7 +574,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs after create.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -585,7 +585,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs after update.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */
@@ -596,7 +596,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs after destroy.
    * @template R
-   * @this {new (...args: Array<?>) => R}
+   * @this {ModelConstructor<R>}
    * @param {LifecycleCallbackType<R>} callback - Callback function or instance method name.
    * @returns {void}
    */

@@ -9,7 +9,7 @@ import useModelClassEvent from "./use-model-class-event.js"
 
 /**
  * FrontendModelClass type.
-  @typedef {typeof import("./base.js").default} FrontendModelClass */
+  @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
 /**
  * FrontendModelInstance type.
   @typedef {import("./base.js").default} FrontendModelInstance */

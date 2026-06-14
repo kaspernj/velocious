@@ -44,7 +44,7 @@
  * @property {boolean} [options.trustServerCertificate] - Whether to trust the server certificate (MSSQL).
  * @property {string} [password] - Password for the SQL user.
  * @property {object} [pool] - Connection pool configuration.
- * @property {number} [pool.max] - Maximum number of connections.
+ * @property {number | null} [pool.max] - Maximum number of connections. Set null to disable the cap.
  * @property {number} [pool.min] - Minimum number of connections.
  * @property {number} [pool.idleTimeoutMillis] - Idle timeout before releasing a connection.
  * @property {string} [server] - SQL server hostname.
@@ -54,7 +54,7 @@
 /**
  * @typedef {object} DatabasePoolConfiguration
  * @property {number | null} [idleTimeoutMillis] - Idle timeout before closing a checked-in async-tracked connection. Set null to disable idle reaping. Default: 5000.
- * @property {number} [max] - Maximum live async-tracked connections for this pool. Extra checkouts wait until a matching connection is checked in or capacity is freed.
+ * @property {number | null} [max] - Maximum live async-tracked connections for this pool. Defaults to 10. Extra checkouts wait until a matching connection is checked in or capacity is freed. Set null to disable the cap.
  */
 
 /**

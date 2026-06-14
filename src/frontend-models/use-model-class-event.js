@@ -7,7 +7,7 @@ import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js
 
 /**
  * FrontendModelClass type.
-  @typedef {typeof import("./base.js").default} FrontendModelClass */
+  @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
 /**
  * FrontendModelInstance type.
   @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */

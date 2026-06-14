@@ -16,7 +16,7 @@ import {resolveFrontendModelClass} from "../frontend-models/model-registry.js"
 
 /**
  * RansackModelClass type.
- * @typedef {typeof import("../database/record/index.js").default | typeof import("../frontend-models/base.js").default} RansackModelClass
+ * @typedef {typeof import("../database/record/index.js").default | import("../frontend-models/base.js").FrontendModelClass} RansackModelClass
  */
 
 /**

@@ -20,6 +20,8 @@ await configuration.ensureConnections({name: "invoice cleanup"}, async (dbs) => 
 
 When a current connection scope already exists, `ensureConnections` reuses it and keeps the existing checkout name.
 
+`AsyncTrackedMultiConnection` pools default to a maximum of `10` live database connections per configured pool. Configure `database.<environment>.<identifier>.pool.max` when a process needs a different cap. Set `pool.max` to `null` only for deliberately unbounded pools; leaving the value out keeps the default cap and protects long-running processes from exhausting the database server.
+
 Velocious adds checkout names and active database annotations to SQL comments while a query is executing. This makes active queries easier to identify in process/activity views such as `SHOW FULL PROCESSLIST`, PostgreSQL `pg_stat_activity.query`, and SQL Server request SQL text:
 
 ```sql

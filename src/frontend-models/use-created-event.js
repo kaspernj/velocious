@@ -2,7 +2,7 @@
 
 import useModelClassEvent from "./use-model-class-event.js"
 
-/** @typedef {typeof import("./base.js").default} FrontendModelClass */
+/** @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
 /** @typedef {import("./use-model-class-event.js").FrontendModelCreateUpdateEventPayload} FrontendModelCreateEventPayload */
 /** @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseCreatedEventOptions */
 /** @typedef {(payload: FrontendModelCreateEventPayload) => void} FrontendModelCreateEventCallback */

@@ -37,11 +37,11 @@ import isPlainObject from "../utils/plain-object.js"
  */
 /**
  * Defines this typedef.
- * @typedef {FrontendModelProjectionOptions & {query?: FrontendModelQuery<typeof import("./base.js").default>}} FrontendModelEventOptionsObject
+ * @typedef {FrontendModelProjectionOptions & {query?: FrontendModelQuery<import("./base.js").FrontendModelClass>}} FrontendModelEventOptionsObject
  */
 /**
  * FrontendModelEventOptions type.
- * @typedef {FrontendModelEventOptionsObject | FrontendModelQuery<typeof import("./base.js").default>} FrontendModelEventOptions
+ * @typedef {FrontendModelEventOptionsObject | FrontendModelQuery<import("./base.js").FrontendModelClass>} FrontendModelEventOptions
  */
 /**
  * FrontendModelProjectionPayload type.
@@ -955,7 +955,7 @@ export function normalizePluck(pluck) {
 
 /**
  * Runs frontend model resource attributes.
- * @param {typeof import("./base.js").default} modelClass - Model class.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Model class.
  * @returns {Set<string>} - Resource attribute names.
  */
 function frontendModelResourceAttributes(modelClass) {
@@ -977,9 +977,9 @@ function frontendModelResourceAttributes(modelClass) {
 
 /**
  * Runs frontend model pluck target model class.
- * @param {typeof import("./base.js").default} modelClass - Root model class.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Root model class.
  * @param {string[]} path - Relationship path.
- * @returns {typeof import("./base.js").default} - Target model class for path.
+ * @returns {import("./base.js").FrontendModelClass} - Target model class for path.
  */
 function frontendModelPluckTargetModelClass(modelClass, path) {
   let targetModelClass = modelClass
@@ -1011,7 +1011,7 @@ function frontendModelPluckTargetModelClass(modelClass, path) {
 /**
  * Runs validate pluck definitions.
  * @param {object} args - Pluck validation args.
- * @param {typeof import("./base.js").default} args.modelClass - Root model class.
+ * @param {import("./base.js").FrontendModelClass} args.modelClass - Root model class.
  * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
  * @returns {FrontendModelPluck[]} - Validated pluck descriptors.
  */
@@ -1075,7 +1075,7 @@ function reverseSortDirection(direction) {
 
 /**
  * Query wrapper for frontend model commands.
- * @template {typeof import("./base.js").default} T
+ * @template {import("./base.js").FrontendModelClass} T
  */
 export default class FrontendModelQuery {
   /**
@@ -2145,7 +2145,7 @@ function frontendModelEventFilterKey(payload) {
 
 /**
  * Runs apply frontend model projection options.
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Query receiving projection options.
+ * @param {FrontendModelQuery<import("./base.js").FrontendModelClass>} query - Query receiving projection options.
  * @param {FrontendModelProjectionOptions} options - Projection options.
  * @returns {void}
  */
@@ -2160,8 +2160,8 @@ function applyFrontendModelProjectionOptions(query, options) {
 
 /**
  * Runs assert frontend model event query class.
- * @param {typeof import("./base.js").default} modelClass - Expected frontend model class.
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Expected frontend model class.
+ * @param {FrontendModelQuery<import("./base.js").FrontendModelClass>} query - Event query.
  * @returns {void}
  */
 function assertFrontendModelEventQueryClass(modelClass, query) {
@@ -2183,9 +2183,9 @@ function assertFrontendModelEventOptionsObject(options) {
 
 /**
  * Runs cloned frontend model event query.
- * @param {typeof import("./base.js").default} modelClass - Frontend model class.
- * @param {FrontendModelQuery<typeof import("./base.js").default>} query - Event query.
- * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Cloned query used by event subscriptions.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Frontend model class.
+ * @param {FrontendModelQuery<import("./base.js").FrontendModelClass>} query - Event query.
+ * @returns {FrontendModelQuery<import("./base.js").FrontendModelClass>} - Cloned query used by event subscriptions.
  */
 function clonedFrontendModelEventQuery(modelClass, query) {
   assertFrontendModelEventQueryClass(modelClass, query)
@@ -2195,9 +2195,9 @@ function clonedFrontendModelEventQuery(modelClass, query) {
 
 /**
  * Runs frontend model event query from options object.
- * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Frontend model class.
  * @param {FrontendModelEventOptionsObject} options - Event options object.
- * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Query used by event subscriptions.
+ * @returns {FrontendModelQuery<import("./base.js").FrontendModelClass>} - Query used by event subscriptions.
  */
 function frontendModelEventQueryFromOptionsObject(modelClass, options) {
   if (options.query !== undefined && !(options.query instanceof FrontendModelQuery)) {
@@ -2215,9 +2215,9 @@ function frontendModelEventQueryFromOptionsObject(modelClass, options) {
 
 /**
  * Runs frontend model event query.
- * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Frontend model class.
  * @param {FrontendModelEventOptions} [options] - Event query or projection options.
- * @returns {FrontendModelQuery<typeof import("./base.js").default>} - Normalized query used by event subscriptions.
+ * @returns {FrontendModelQuery<import("./base.js").FrontendModelClass>} - Normalized query used by event subscriptions.
  */
 function frontendModelEventQuery(modelClass, options = {}) {
   if (options instanceof FrontendModelQuery) return clonedFrontendModelEventQuery(modelClass, options)
@@ -2236,7 +2236,7 @@ function frontendModelEventQuery(modelClass, options = {}) {
 
 /**
  * Runs the frontendModelEventOptionsPayload helper.
- * @param {typeof import("./base.js").default} modelClass - Frontend model class.
+ * @param {import("./base.js").FrontendModelClass} modelClass - Frontend model class.
  * @param {FrontendModelEventOptions} [options] - Event query or projection options.
  * @returns {FrontendModelEventOptionsPayload} - Normalized event subscription payload.
  */

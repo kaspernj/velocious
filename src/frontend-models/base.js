@@ -33,6 +33,14 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @typedef {{attributes?: string[], builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
  */
 /**
+ * Frontend model constructor type.
+ * @typedef {{new (attributes?: Record<string, ?>): FrontendModelBase}} FrontendModelConstructor
+ */
+/**
+ * Frontend model static side without generated per-model create overloads.
+ * @typedef {FrontendModelConstructor & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
+ */
+/**
  * FrontendModelTransportConfig type.
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. This should be the shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`).
@@ -61,7 +69,7 @@ const QUERY_DATA_KEY = "__queryData"
 const ABILITIES_KEY = "__abilities"
 /**
  * Pending shared frontend model requests.
-  @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: typeof FrontendModelBase, payload: Record<string, ?>, requestId: string, resolve: (response: Record<string, ?>) => void, reject: (error: ?) => void, resourcePath?: string | null}>} */
+  @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ?>, requestId: string, resolve: (response: Record<string, ?>) => void, reject: (error: ?) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
@@ -208,7 +216,7 @@ async function flushBufferedOutgoingEventsAfterReconnect() {
 
 /**
  * Runs default frontend model resource path.
- * @param {typeof FrontendModelBase} modelClass - Frontend model class.
+ * @param {FrontendModelClass} modelClass - Frontend model class.
  * @returns {string} - Default resource path for the model class.
  */
 function defaultFrontendModelResourcePath(modelClass) {
@@ -230,8 +238,8 @@ export class AttributeNotSelectedError extends Error {
 
 /**
  * Lightweight singular relationship state holder for frontend model instances.
- * @template {typeof FrontendModelBase} S
- * @template {typeof FrontendModelBase} T
+ * @template {FrontendModelClass} S
+ * @template {FrontendModelClass} T
  */
 export class FrontendModelSingularRelationship {
   /**
@@ -300,8 +308,8 @@ export class FrontendModelSingularRelationship {
 
 /**
  * Lightweight has-many relationship state holder for frontend model instances.
- * @template {typeof FrontendModelBase} S
- * @template {typeof FrontendModelBase} T
+ * @template {FrontendModelClass} S
+ * @template {FrontendModelClass} T
  */
 export class FrontendModelHasManyRelationship {
   /**
@@ -621,12 +629,12 @@ function frontendModelPayloadContainsAttachmentUpload(value) {
 /**
  * Returns the concrete frontend-model class for an instance.
  * @param {FrontendModelBase} model - Frontend model instance.
- * @returns {typeof FrontendModelBase} Concrete frontend-model class.
+ * @returns {FrontendModelClass} Concrete frontend-model class.
  */
 function frontendModelClassFor(model) {
   const constructorValue = model.constructor
 
-  return /** @type {typeof FrontendModelBase} */ (constructorValue)
+  return /** @type {FrontendModelClass} */ (constructorValue)
 }
 
 /**
@@ -901,7 +909,7 @@ const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
  * Defines this typedef.
- * @typedef {{callback: (payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
+ * @typedef {{callback: (payload: {id: string, model: FrontendModelBase}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
  */
 /**
  * Defines this typedef.
@@ -1051,7 +1059,7 @@ function frontendModelEventEntryMatches(entry, matchedEventFilterKeys) {
 
 /**
  * Runs assert no destroy event filter.
- * @param {typeof FrontendModelBase} ModelClass - Event model class.
+ * @param {FrontendModelClass} ModelClass - Event model class.
  * @param {import("./query.js").FrontendModelEventOptions} options - Event options.
  * @returns {void}
  */
@@ -1077,7 +1085,7 @@ function assertNoDestroyEventFilter(ModelClass, options) {
 class FrontendModelEventSubscription {
   /**
    * Runs constructor.
-   * @param {typeof FrontendModelBase} ModelClass - Frontend model class for this subscription bucket.
+   * @param {FrontendModelClass} ModelClass - Frontend model class for this subscription bucket.
    */
   constructor(ModelClass) {
     this.ModelClass = ModelClass
@@ -1095,7 +1103,7 @@ class FrontendModelEventSubscription {
     this.classDestroyCallbacks = new Set()
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, {instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}>} */
+      @type {Map<string, {instance: FrontendModelBase, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}>} */
     this.instanceListeners = new Map()
     /**
      * Narrows the runtime value to the documented type.
@@ -1333,12 +1341,12 @@ class FrontendModelEventSubscription {
 
 /**
  * Frontend model event subscriptions.
-  @type {WeakMap<typeof FrontendModelBase, FrontendModelEventSubscription>} */
+  @type {WeakMap<FrontendModelClass, FrontendModelEventSubscription>} */
 const frontendModelEventSubscriptions = new WeakMap()
 
 /**
  * Runs ensure frontend model event subscription.
- * @param {typeof FrontendModelBase} ModelClass - Model class.
+ * @param {FrontendModelClass} ModelClass - Model class.
  * @returns {FrontendModelEventSubscription} - Per-class subscription helper.
  */
 function ensureFrontendModelEventSubscription(ModelClass) {
@@ -1356,8 +1364,8 @@ function ensureFrontendModelEventSubscription(ModelClass) {
  * Runs ensure frontend model instance listener.
  * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
  * @param {string} id - Model id.
- * @param {InstanceType<typeof FrontendModelBase>} instance - Listener instance.
- * @returns {{instance: InstanceType<typeof FrontendModelBase>, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}} - Instance listener bucket.
+ * @param {FrontendModelBase} instance - Listener instance.
+ * @returns {{instance: FrontendModelBase, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}} - Instance listener bucket.
  */
 function ensureFrontendModelInstanceListener(sub, id, instance) {
   let listener = sub.instanceListeners.get(id)
@@ -1718,7 +1726,7 @@ export default class FrontendModelBase {
   _attributes
   /**
    * Narrows the runtime value to the documented type.
-    @type {Record<string, FrontendModelHasManyRelationship<typeof FrontendModelBase, typeof FrontendModelBase> | FrontendModelSingularRelationship<typeof FrontendModelBase, typeof FrontendModelBase>>} */
+    @type {Record<string, FrontendModelHasManyRelationship<FrontendModelClass, FrontendModelClass> | FrontendModelSingularRelationship<FrontendModelClass, FrontendModelClass>>} */
   _relationships
   /**
    * Narrows the runtime value to the documented type.
@@ -1772,7 +1780,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs ensure generated attachment methods.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {void} - Ensures attachment helper methods exist on the prototype.
    */
   static ensureGeneratedAttachmentMethods() {
@@ -1806,8 +1814,8 @@ export default class FrontendModelBase {
 
   /**
    * Runs relationship model classes.
-   * @this {typeof FrontendModelBase}
-   * @returns {Record<string, typeof FrontendModelBase | string>} - Relationship model classes (or class name strings) keyed by relationship name.
+   * @this {FrontendModelClass}
+   * @returns {Record<string, FrontendModelClass | string>} - Relationship model classes (or class name strings) keyed by relationship name.
    */
   static relationshipModelClasses() {
     return {}
@@ -1815,7 +1823,7 @@ export default class FrontendModelBase {
 
   /**
    * Register a frontend model class so it can be resolved by name in relationship lookups.
-   * @param {typeof FrontendModelBase} modelClass - Model class to register.
+   * @param {FrontendModelClass} modelClass - Model class to register.
    * @returns {void}
    */
   static registerModel(modelClass) {
@@ -1825,7 +1833,7 @@ export default class FrontendModelBase {
   /**
    * Runs define scope.
    * @param {(...args: Array<?>) => ?} callback - Scope callback.
-   * @returns {((...args: Array<?>) => import("./query.js").default<typeof FrontendModelBase>) & {scope: (...args: Array<?>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   * @returns {((...args: Array<?>) => import("./query.js").default<FrontendModelClass>) & {scope: (...args: Array<?>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
    */
   static defineScope(callback) {
     return defineModelScope({
@@ -1837,8 +1845,8 @@ export default class FrontendModelBase {
 
   /**
    * Resolve a relationship model class value that may be a class reference or a string name.
-   * @param {typeof FrontendModelBase | string | null | undefined} value - Class or class name.
-   * @returns {typeof FrontendModelBase | null} - Resolved model class.
+   * @param {FrontendModelClass | string | null | undefined} value - Class or class name.
+   * @returns {FrontendModelClass | null} - Resolved model class.
    */
   static resolveModelClass(value) {
     return resolveFrontendModelClass(value)
@@ -1846,7 +1854,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs relationship definitions.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {Record<string, {type: "belongsTo" | "hasOne" | "hasMany", autoload?: boolean}>} - Relationship definitions keyed by relationship name.
    */
   static relationshipDefinitions() {
@@ -1855,7 +1863,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs attachment definitions.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {Record<string, FrontendModelAttachmentDefinition>} - Attachment definitions keyed by attachment name.
    */
   static attachmentDefinitions() {
@@ -1864,7 +1872,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs attachment definition.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {string} attachmentName - Attachment name.
    * @returns {FrontendModelAttachmentDefinition | null} - Attachment definition.
    */
@@ -1874,7 +1882,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs relationship definition.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {string} relationshipName - Relationship name.
    * @returns {{type: "belongsTo" | "hasOne" | "hasMany", autoload?: boolean} | null} - Relationship definition.
    */
@@ -1886,7 +1894,7 @@ export default class FrontendModelBase {
 
   /**
    * Resolves a Rails-style nested attributes key to a configured relationship.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {string} attributeName - Candidate attribute name, such as `tasksAttributes`.
    * @returns {string | null} Relationship name when nested attributes are configured.
    */
@@ -1903,9 +1911,9 @@ export default class FrontendModelBase {
 
   /**
    * Runs relationship model class.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {string} relationshipName - Relationship name.
-   * @returns {typeof FrontendModelBase | null} - Target relationship model class.
+   * @returns {FrontendModelClass | null} - Target relationship model class.
    */
   static relationshipModelClass(relationshipName) {
     const relationshipModelClasses = this.relationshipModelClasses()
@@ -2002,7 +2010,7 @@ export default class FrontendModelBase {
   /**
    * Runs get relationship by name.
    * @param {string} relationshipName - Relationship name.
-   * @returns {FrontendModelHasManyRelationship<typeof FrontendModelBase, typeof FrontendModelBase> | FrontendModelSingularRelationship<typeof FrontendModelBase, typeof FrontendModelBase>} - Relationship state object.
+   * @returns {FrontendModelHasManyRelationship<FrontendModelClass, FrontendModelClass> | FrontendModelSingularRelationship<FrontendModelClass, FrontendModelClass>} - Relationship state object.
    */
   getRelationshipByName(relationshipName) {
     if (!this._relationships[relationshipName]) {
@@ -2068,7 +2076,7 @@ export default class FrontendModelBase {
    * required columns present are left untouched unless `force` is set. Carries
    * the query's preload graph, select, selectsExtra, withCount, abilities, and
    * queryData when re-fetching.
-   * @param {import("./query.js").default<typeof FrontendModelBase> | import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
+   * @param {import("./query.js").default<FrontendModelClass> | import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} queryOrSpec - Preload source.
    * @param {{force?: boolean}} [options] - Options.
    * @returns {Promise<void>} - Resolves when preloading completes.
    */
@@ -2221,7 +2229,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs primary key.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {string} - Primary key name.
    */
   static primaryKey() {
@@ -2442,7 +2450,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs resource path.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {string} - Derived resource path.
    */
   static resourcePath() {
@@ -2454,7 +2462,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs command name.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {FrontendModelCommandType} commandType - Command type.
    * @returns {string} - Resolved command name.
    */
@@ -2475,7 +2483,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs normalize custom command payload arguments.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {Array<?>} args - Command arguments.
    * @returns {Record<string, ?>} - Command payload.
    */
@@ -2510,7 +2518,7 @@ export default class FrontendModelBase {
    * Returns the model name, preferring an explicit `static modelName` declaration
    * over the JavaScript class `.name` property. This allows minified builds to
    * preserve correct model names without relying on `keep_classnames`.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {string} - The model name.
    */
   static getModelName() {
@@ -2802,7 +2810,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs attributes from response.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {object} response - Response payload.
    * @returns {Record<string, ?>} - Attributes from payload.
    */
@@ -2814,7 +2822,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs model data from response.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {object} response - Response payload.
    * @returns {{abilities: Record<string, boolean>, attributes: Record<string, ?>, associationCounts: Record<string, number>, queryData: Record<string, ?>, preloadedRelationships: Record<string, ?>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, abilities, and the selected-attributes set.
    */
@@ -2884,7 +2892,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs apply preloaded relationships.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {FrontendModelBase} model - Model instance.
    * @param {Record<string, ?>} preloadedRelationships - Preloaded relationship payload.
    * @returns {void}
@@ -2905,9 +2913,9 @@ export default class FrontendModelBase {
 
   /**
    * Runs instantiate relationship value.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {?} relationshipPayload - Relationship payload value.
-   * @param {typeof FrontendModelBase | null} targetModelClass - Target model class.
+   * @param {FrontendModelClass | null} targetModelClass - Target model class.
    * @returns {?} - Instantiated relationship value.
    */
   static instantiateRelationshipValue(relationshipPayload, targetModelClass) {
@@ -2920,7 +2928,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs instantiate from response.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?> | InstanceType<T>} response - Response payload, or an already-hydrated instance of this class.
    * @returns {InstanceType<T>} - New model instance, or the same instance unchanged if it was already hydrated.
@@ -2973,7 +2981,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {number | string} id - Record identifier.
    * @returns {Promise<InstanceType<T>>} - Resolved model.
@@ -2984,7 +2992,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find by.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
@@ -2995,7 +3003,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find by or fail.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
    * @returns {Promise<InstanceType<T>>} - Found model.
@@ -3006,7 +3014,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs to array.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
@@ -3016,7 +3024,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs load.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {Promise<InstanceType<T>[]>} - Loaded model instances.
    */
@@ -3026,7 +3034,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs all.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
    */
@@ -3036,7 +3044,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs where.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Root-model where conditions.
    * @returns {import("./query.js").default<T>} - Query with where conditions.
@@ -3047,7 +3055,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs joins.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?> | Array<Record<string, ?>>} joins - Relationship descriptor joins.
    * @returns {import("./query.js").default<T>} - Query with joins.
@@ -3058,7 +3066,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs limit.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {number} value - Maximum number of records.
    * @returns {import("./query.js").default<T>} - Query with limit.
@@ -3069,7 +3077,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs offset.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {number} value - Number of records to skip.
    * @returns {import("./query.js").default<T>} - Query with offset.
@@ -3080,7 +3088,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs page.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {number} pageNumber - 1-based page number.
    * @returns {import("./query.js").default<T>} - Query with page applied.
@@ -3091,7 +3099,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs per page.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {number} value - Number of records per page.
    * @returns {import("./query.js").default<T>} - Query with page size.
@@ -3102,7 +3110,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs count.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {Promise<number>} - Number of loaded model instances.
    */
@@ -3116,8 +3124,8 @@ export default class FrontendModelBase {
    * accepted, future `create` events for this model are delivered
    * without re-checking per-record visibility. Query options can still
    * narrow which events reach this callback.
-   * @this {typeof FrontendModelBase}
-   * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @this {FrontendModelClass}
+   * @param {(payload: {id: string, model: FrontendModelBase}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -3136,8 +3144,8 @@ export default class FrontendModelBase {
 
   /**
    * Class-level hook fired when any record of this model is updated.
-   * @this {typeof FrontendModelBase}
-   * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @this {FrontendModelClass}
+   * @param {(payload: {id: string, model: FrontendModelBase}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -3156,7 +3164,7 @@ export default class FrontendModelBase {
 
   /**
    * Class-level hook fired when any record of this model is destroyed.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {(payload: {id: string}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
@@ -3181,7 +3189,7 @@ export default class FrontendModelBase {
    * instance's attributes are auto-merged with the broadcast payload
    * before the callback runs, so callers can read fresh values via
    * `this.someAttr()` without re-fetching.
-   * @param {(payload: {id: string, model: InstanceType<typeof FrontendModelBase>}) => void} callback - Event callback.
+   * @param {(payload: {id: string, model: FrontendModelBase}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -3248,7 +3256,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs pluck.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {...(string | string[] | Record<string, ?> | Array<Record<string, ?>>)} columns - Pluck definition(s).
    * @returns {Promise<Array<?>>} - Plucked values.
@@ -3259,7 +3267,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs search.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
@@ -3273,7 +3281,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs ransack.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} params - Ransack-style params hash.
    * @returns {FrontendModelQuery<T>} - Query builder with Ransack filters applied.
@@ -3284,7 +3292,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs sort.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with sort definitions.
@@ -3295,7 +3303,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs order.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with sort definitions.
@@ -3306,7 +3314,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs group.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {string | string[] | Record<string, ?> | Array<Record<string, ?>>} group - Group definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with group definitions.
@@ -3317,7 +3325,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs distinct.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {boolean} [value] - Whether to request distinct rows.
    * @returns {FrontendModelQuery<T>} - Query builder with distinct flag.
@@ -3328,7 +3336,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs query.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {FrontendModelQuery<T>} - Query builder.
    */
@@ -3338,7 +3346,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs preload.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord>} preload - Preload graph.
    * @returns {FrontendModelQuery<T>} - Query with preload.
@@ -3349,7 +3357,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs select.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, string[] | string> | string | string[]} select - Model-aware attribute select map or root-model shorthand.
    * @returns {FrontendModelQuery<T>} - Query with selected attributes.
@@ -3360,7 +3368,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs selects extra.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, string[] | string> | string | string[]} select - Extra attributes to load in addition to the defaults, keyed by model name or root-model shorthand.
    * @returns {FrontendModelQuery<T>} - Query with extra selected attributes.
@@ -3371,7 +3379,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs first.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {Promise<InstanceType<T> | null>} - First model or null.
    */
@@ -3381,7 +3389,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs last.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @returns {Promise<InstanceType<T> | null>} - Last model or null.
    */
@@ -3391,7 +3399,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find or initialize by.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
    * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
@@ -3402,7 +3410,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find or create by.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} conditions - Attribute match conditions.
    * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save when created.
@@ -3414,7 +3422,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs create.
-   * @template {typeof FrontendModelBase} T
+   * @template {FrontendModelClass} T
    * @this {T}
    * @param {Record<string, ?>} [attributes] - Initial attributes.
    * @returns {Promise<InstanceType<T>>} - Persisted model.
@@ -3431,7 +3439,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs assert find by conditions.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {Record<string, ?>} conditions - findBy conditions.
    * @returns {void}
    */
@@ -3445,7 +3453,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs matches find by conditions.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {FrontendModelBase} model - Candidate model.
    * @param {Record<string, ?>} conditions - Match conditions.
    * @returns {boolean} - Whether the model matches all conditions.
@@ -3475,7 +3483,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find by condition value matches.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {?} actualValue - Actual model value.
    * @param {?} expectedValue - Expected find condition value.
    * @returns {boolean} - Whether values match.
@@ -3543,7 +3551,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find by primitive values match.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {?} actualValue - Actual model value.
    * @param {?} expectedValue - Expected find condition value.
    * @returns {boolean} - Whether primitive values match after safe coercion.
@@ -3574,7 +3582,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs find by numeric string matches number.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {string} numericString - Numeric string value.
    * @param {number} expectedNumber - Number value.
    * @returns {boolean} - Whether values represent the same number.
@@ -3862,7 +3870,7 @@ export default class FrontendModelBase {
 
   /**
    * Builds nested entries from a Rails-style submitted `*Attributes` value.
-   * @param {typeof FrontendModelBase} ModelClass - Parent model class.
+   * @param {FrontendModelClass} ModelClass - Parent model class.
    * @param {string} relationshipName - Nested relationship name.
    * @param {?} value - Submitted nested attributes value.
    * @returns {Promise<Array<Record<string, ?>>>} Nested entries for the transport payload.
@@ -3898,7 +3906,7 @@ export default class FrontendModelBase {
 
   /**
    * Converts one submitted Rails-style nested attributes object into transport payload shape.
-   * @param {typeof FrontendModelBase} ModelClass - Nested child model class.
+   * @param {FrontendModelClass} ModelClass - Nested child model class.
    * @param {?} submittedEntry - Submitted nested attributes entry.
    * @returns {Promise<Record<string, ?>>} Transport nested-attributes entry.
    */
@@ -3950,7 +3958,7 @@ export default class FrontendModelBase {
 
   /**
    * Normalizes a submitted attachment value for transport.
-   * @param {typeof FrontendModelBase} ModelClass - Model class owning the attachment.
+   * @param {FrontendModelClass} ModelClass - Model class owning the attachment.
    * @param {string} attachmentName - Attachment name.
    * @param {?} value - Submitted attachment value.
    * @returns {Promise<Record<string, ?> | Record<string, ?>[]>} Normalized attachment payload.
@@ -4014,7 +4022,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs execute command.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {FrontendModelCommandType} commandType - Command type.
    * @param {Record<string, ?>} payload - Command payload.
    * @returns {Promise<Record<string, ?>>} - Parsed JSON response.
@@ -4091,7 +4099,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs execute custom command.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {object} args - Command arguments.
    * @param {string} args.commandName - Raw command path segment.
    * @param {FrontendModelRequestCommandType} args.commandType - Logical command type for error handling.
@@ -4139,7 +4147,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs throw on error frontend model response.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @param {object} args - Arguments.
    * @param {FrontendModelRequestCommandType} args.commandType - Command type.
    * @param {Record<string, ?>} args.response - Decoded response.
@@ -4198,7 +4206,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs configured frontend model attribute names.
-   * @this {typeof FrontendModelBase}
+   * @this {FrontendModelClass}
    * @returns {Set<string>} - Configured frontend model attribute names.
    */
   static configuredFrontendModelAttributeNames() {

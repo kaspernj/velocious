@@ -1453,7 +1453,7 @@ database: {
 }
 ```
 
-`pool.max` caps live async-tracked connections for that pool. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
+`pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
 
 # Websockets
 
