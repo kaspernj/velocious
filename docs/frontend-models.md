@@ -13,6 +13,8 @@
 - `development` and `test` responses also include `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` for faster browser/system-test diagnosis.
 - Other non-production environments, such as `staging`, can opt into the same debug fields with `exposeInternalErrorsToClients: true` on the app `Configuration`.
 - `production` always keeps the generic response, even if `exposeInternalErrorsToClients` is set.
+- `configuration.addClientErrorPayloadReporter(...)` can append client-safe metadata to the error payload. For frontend-model endpoint failures, the reporter `context` includes `frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`.
+- Unexpected frontend-model failures are emitted on `configuration.getErrorEvents()` as `framework-error` and `all-error`. Expected user-flow errors, including validation errors, `safeToExpose` errors, `error.velocious` metadata, and non-empty `error.errorType`, are not emitted as framework errors.
 
 ### Validation errors
 - When a record validation fails during `create` or `update`, the frontend-model response includes structured per-attribute validation errors.

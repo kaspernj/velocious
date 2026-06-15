@@ -139,6 +139,14 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  * @property {number | null} perPage - Page size.
  */
 
+/**
+ * @typedef {import("./configuration-types.js").ClientErrorPayloadContext & {
+ *   action: string,
+ *   expectedError: boolean,
+ *   frontendModelEndpoint: true
+ * }} FrontendModelEndpointErrorContext
+ */
+
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
@@ -185,26 +193,72 @@ function frontendModelValidationErrorForError(error) {
  * user-facing: surface the message, forward the metadata, and skip
  * the noisy endpoint-error log.
  * @param {?} error - Caught error.
- * @returns {boolean}
+ * @returns {boolean} Whether the error has Velocious frontend metadata.
  */
 function frontendModelErrorHasVelociousMetadata(error) {
-  return Boolean(error && typeof error === "object" && /**
-                                                        * Types the following value.
-                                                        * @type {?} */ (error).velocious && typeof /**
-                                                                                                   * Types the following value.
-                                                                                                   * @type {?} */ (error).velocious === "object")
+  if (!error || typeof error !== "object") return false
+
+  /**
+   * Narrows the runtime value to an error metadata record.
+   * @type {{velocious?: Record<string, ?>}}
+   */
+  const errorRecord = error
+
+  return isPlainObject(errorRecord.velocious)
+}
+
+/**
+ * Whether the error has a frontend-model error type marker.
+ * @param {?} error - Caught error.
+ * @returns {boolean} Whether the error has an error type.
+ */
+function frontendModelErrorHasErrorType(error) {
+  if (!error || typeof error !== "object") return false
+
+  /**
+   * Narrows the runtime value to an error marker record.
+   * @type {{errorType?: string}}
+   */
+  const errorRecord = error
+
+  return typeof errorRecord.errorType === "string" && errorRecord.errorType.length > 0
+}
+
+/**
+ * Whether the error is an expected frontend-model user-flow failure.
+ * @param {?} error - Caught error.
+ * @returns {boolean} Whether the error is expected.
+ */
+function frontendModelExpectedError(error) {
+  if (error instanceof ValidationError) return true
+  if (error instanceof VelociousError && error.safeToExpose) return true
+  if (frontendModelErrorHasVelociousMetadata(error)) return true
+
+  return frontendModelErrorHasErrorType(error)
 }
 
 /**
  * Runs frontend model velocious metadata for error.
  * @param {?} error - Caught error.
- * @returns {Record<string, ?> | null}
+ * @returns {Record<string, ?> | null} Frontend-model Velocious metadata when present.
  */
 function frontendModelVelociousMetadataForError(error) {
-  if (!frontendModelErrorHasVelociousMetadata(error)) return null
-  return /** @type {Record<string, ?>} */ (/**
-                                            * Types the following value.
-                                            * @type {?} */ (error).velocious)
+  const errorCode = error instanceof VelociousError && error.safeToExpose && typeof error.code === "string" && error.code.length > 0
+    ? error.code
+    : null
+
+  if (!frontendModelErrorHasVelociousMetadata(error)) {
+    return errorCode ? {code: errorCode} : null
+  }
+
+  /**
+   * Narrows the runtime value to an error metadata record.
+   * @type {{velocious: Record<string, ?>}}
+   */
+  const errorRecord = error
+  const metadata = errorRecord.velocious
+
+  return errorCode ? {...metadata, code: errorCode} : metadata
 }
 
 /**
@@ -2776,11 +2830,41 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Builds frontend-model endpoint error context for logging and client payload reporters.
+   * @param {object} args - Error context args.
+   * @param {string} args.action - Endpoint/action label.
+   * @param {?} args.error - Caught error.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
+   * @param {string | undefined} [args.model] - Request model name when available.
+   * @param {string | undefined} [args.requestId] - Batch request id when available.
+   * @returns {FrontendModelEndpointErrorContext} Frontend-model endpoint error context.
+   */
+  frontendModelEndpointErrorContext({action, commandType, error, model, requestId}) {
+    let resolvedModel = model
+
+    if (!resolvedModel) {
+      const paramsModel = this.frontendModelParams().model
+      resolvedModel = typeof paramsModel === "string" && paramsModel.length > 0 ? paramsModel : undefined
+    }
+
+    return {
+      action,
+      commandType,
+      controller: this.constructor.name,
+      expectedError: frontendModelExpectedError(error),
+      frontendModelEndpoint: true,
+      model: resolvedModel,
+      requestId
+    }
+  }
+
+  /**
    * Runs frontend model client error payload for error.
    * @param {?} error - Caught error.
+   * @param {FrontendModelEndpointErrorContext | undefined} [endpointErrorContext] - Frontend-model endpoint error context.
    * @returns {Promise<Record<string, ?>>} - Client payload for the current environment.
    */
-  async frontendModelClientErrorPayloadForError(error) {
+  async frontendModelClientErrorPayloadForError(error, endpointErrorContext) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)
     const normalizedError = error instanceof Error ? error : new Error(String(error))
 
@@ -2818,9 +2902,7 @@ export default class FrontendModelController extends Controller {
       ...(velociousMetadata ? {velocious: velociousMetadata} : {}),
       ...validationErrorsPayload,
       ...(await this.getConfiguration().clientErrorPayloadForError({
-        context: {
-          controller: this.constructor.name
-        },
+        context: endpointErrorContext || {controller: this.constructor.name},
         error: normalizedError,
         request: this.getRequest()
       }))
@@ -2838,23 +2920,12 @@ export default class FrontendModelController extends Controller {
    * @returns {Promise<void>} - Resolves after logging.
    */
   async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
-    // Errors annotated with `error.velocious = {...}` are user-flow
-    // failures the developer has marked as expected (bad password,
-    // validation message, etc.). Surface the message + metadata to
-    // the client (handled by frontendModelClientErrorPayloadForError),
-    // but skip the error log so monitoring stays focused on real
-    // backend failures.
-    if (frontendModelErrorHasVelociousMetadata(error)) return
+    const errorContext = this.frontendModelEndpointErrorContext({action, commandType, error, model, requestId})
 
-    let resolvedModel = model
-
-    if (!resolvedModel) {
-      try {
-        resolvedModel = this.frontendModelParams().model
-      } catch {
-        resolvedModel = undefined
-      }
-    }
+    // Expected user-flow errors are surfaced to clients by
+    // frontendModelClientErrorPayloadForError, but skipped here so monitoring
+    // stays focused on real backend failures.
+    if (errorContext.expectedError) return
 
     const errorMessage = error instanceof Error
       ? `${error.message}\n${error.stack || ""}`
@@ -2864,27 +2935,22 @@ export default class FrontendModelController extends Controller {
       action,
       commandType,
       error: errorMessage,
-      model: resolvedModel,
+      model: errorContext.model,
       requestId
     }])
 
     // Surface genuinely unexpected backend failures on the framework-error
     // channel so process-level bug reporters capture them, instead of the
     // controller silently swallowing them behind the generic "Request
-    // failed." client message. Developer-annotated user-flow errors
-    // (`error.velocious` metadata — handled by the early return above),
-    // validation errors, and deliberately client-safe VelociousErrors are
-    // expected and must NOT be reported as framework errors.
-    if (!(error instanceof ValidationError) && !(error instanceof VelociousError && error.safeToExpose)) {
-      const errorPayload = {
-        context: {action, commandType, frontendModelEndpoint: true, model: resolvedModel, requestId},
-        error: error instanceof Error ? error : new Error(String(error)),
-        request: this.getRequest()
-      }
-
-      this.getConfiguration().getErrorEvents().emit("framework-error", errorPayload)
-      this.getConfiguration().getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
+    // failed." client message.
+    const errorPayload = {
+      context: errorContext,
+      error: error instanceof Error ? error : new Error(String(error)),
+      request: this.getRequest()
     }
+
+    this.getConfiguration().getErrorEvents().emit("framework-error", errorPayload)
+    this.getConfiguration().getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
   }
 
   /**
@@ -2903,12 +2969,14 @@ export default class FrontendModelController extends Controller {
                * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(responsePayload))
       })
     } catch (error) {
-      await this.frontendModelLogEndpointError({action, commandType: action, error})
+      const errorContext = this.frontendModelEndpointErrorContext({action, commandType: action, error})
+
+      await this.frontendModelLogEndpointError({action, commandType: action, error, model: errorContext.model})
 
       await this.render({
         json: /**
                * Types the following value.
-               * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error)))
+               * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext)))
       })
     }
   }
@@ -3183,7 +3251,7 @@ export default class FrontendModelController extends Controller {
           response: responsePayload || this.frontendModelErrorPayload("Action halted by beforeAction.")
         })
       } catch (error) {
-        await this.frontendModelLogEndpointError({
+        const errorContext = this.frontendModelEndpointErrorContext({
           action: "frontendApi",
           commandType,
           error,
@@ -3191,9 +3259,17 @@ export default class FrontendModelController extends Controller {
           requestId
         })
 
+        await this.frontendModelLogEndpointError({
+          action: errorContext.action,
+          commandType: errorContext.commandType,
+          error,
+          model: errorContext.model,
+          requestId: errorContext.requestId
+        })
+
         responses.push({
           requestId,
-          response: await this.frontendModelClientErrorPayloadForError(error)
+          response: await this.frontendModelClientErrorPayloadForError(error, errorContext)
         })
       }
     }
@@ -3414,12 +3490,14 @@ export default class FrontendModelController extends Controller {
                * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(responsePayload))
       })
     } catch (error) {
-      await this.frontendModelLogEndpointError({action: "frontendCustomCommand", commandType: "custom-command", error})
+      const errorContext = this.frontendModelEndpointErrorContext({action: "frontendCustomCommand", commandType: "custom-command", error})
+
+      await this.frontendModelLogEndpointError({action: errorContext.action, commandType: errorContext.commandType, error, model: errorContext.model})
 
       await this.render({
         json: /**
                * Types the following value.
-               * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error)))
+               * @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext)))
       })
     }
   }

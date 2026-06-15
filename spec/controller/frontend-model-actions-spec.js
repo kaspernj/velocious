@@ -17,6 +17,7 @@ import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
+import VelociousError from "../../src/velocious-error.js"
 
 const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
 
@@ -536,8 +537,11 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("adds registered client error reporter payloads to shared frontend-model failures", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production")
+    /** @type {import("../../src/configuration-types.js").ClientErrorPayloadContext[]} */
+    const reporterContexts = []
 
-    configuration.addClientErrorPayloadReporter(async ({error}) => {
+    configuration.addClientErrorPayloadReporter(async ({context, error}) => {
+      reporterContexts.push(context)
       expect(error.message).toMatch(/No frontend model resource configuration/)
 
       return {bugReportUrl: "https://tensorbuzz.test/bugs/1"}
@@ -552,6 +556,31 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
     expectGenericFrontendModelError(response)
     expect(response.bugReportUrl).toEqual("https://tensorbuzz.test/bugs/1")
+    expect(reporterContexts.length).toEqual(1)
+    expect(reporterContexts[0].action).toEqual("frontendApi")
+    expect(reporterContexts[0].commandType).toEqual("index")
+    expect(reporterContexts[0].expectedError).toEqual(false)
+    expect(reporterContexts[0].frontendModelEndpoint).toEqual(true)
+    expect(reporterContexts[0].model).toEqual("UnknownModel")
+    expect(reporterContexts[0].requestId).toEqual("request-1")
+  })
+
+  it("adds safe VelociousError codes to frontend-model client payload metadata", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production")
+    const controller = new FrontendModelController({
+      action: "frontendApi",
+      configuration,
+      controller: "frontend-models",
+      params: {},
+      request: new Request({client: {remoteAddress: "127.0.0.1"}, configuration}),
+      response: new Response({configuration}),
+      viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+    })
+    const payload = await controller.frontendModelClientErrorPayloadForError(VelociousError.safe("Ticket scan failed", {code: "ticket-scan-pah-too-long"}))
+
+    expect(payload.status).toEqual("error")
+    expect(payload.errorMessage).toEqual("Ticket scan failed")
+    expect(payload.velocious).toEqual({code: "ticket-scan-pah-too-long"})
   })
 
   it("keeps unexpected shared frontend-model failures generic in production when debug details are enabled", async () => {
