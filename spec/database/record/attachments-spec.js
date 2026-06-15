@@ -90,6 +90,19 @@ describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transactio
     expect(downloadedAttachments.map((attachment) => attachment.content().toString())).toEqual(["A", "B"])
   })
 
+  it("lists has-many attachment metadata without loading content", async () => {
+    const project = await Project.create({name: "Attachment project"})
+    const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+    await task.files().attach({content: "A", filename: "a.txt"})
+    await task.files().attach({content: "BB", filename: "b.txt"})
+
+    const metadata = await task.files().listMetadata()
+
+    expect(metadata.map((entry) => entry.filename)).toEqual(["a.txt", "b.txt"])
+    expect(metadata.map((entry) => entry.byteSize)).toEqual([1, 2])
+  })
+
   it("normalizes trailing slash filenames to basename values", async () => {
     const project = await Project.create({name: "Attachment project"})
     const task = await Task.create({name: "Attachment task", projectId: project.id()})

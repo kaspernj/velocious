@@ -6,7 +6,7 @@ import isPlainObject from "../utils/plain-object.js"
 
 /**
  * Built-in frontend-model resource action.
- * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelResourceAction
+ * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelResourceAction
  */
 
 /**
@@ -487,7 +487,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs supports pluck.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @returns {boolean | Promise<boolean>} - Whether pluck is supported.
    */
   supportsPluck(action) {
@@ -498,7 +498,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs supports count.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @returns {boolean | Promise<boolean>} - Whether count is supported.
    */
   supportsCount(action) {
@@ -510,7 +510,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs before action.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @returns {boolean | void | Promise<boolean | void>} - Continue processing unless false.
    */
   beforeAction(action) {
@@ -545,7 +545,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs find.
-   * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @param {string | number} id - Record id.
    * @returns {Promise<import("../database/record/index.js").default | null>} - Located model.
    */

@@ -50,7 +50,7 @@ async function postFrontendModel(path, payload) {
 }
 
 /**
- * @param {"create" | "destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
+ * @param {"create" | "destroy" | "find" | "index" | "update" | "attach" | "attachmentList" | "download" | "url"} commandType - Command.
  * @param {Record<string, any>} payload - Command payload.
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
@@ -1416,6 +1416,34 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(urlPayload.status).toEqual("success")
       expect(typeof urlPayload.url).toEqual("string")
       expect(urlPayload.url.startsWith("file://")).toEqual(true)
+    })
+  })
+
+  it("lists has-many attachment metadata through the frontend-model attachmentList endpoint", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attachment list endpoint")
+
+      await postSharedTaskFrontendModelCommand("attach", {
+        attachment: {contentBase64: Buffer.from("AA").toString("base64"), filename: "a.txt"},
+        attachmentName: "files",
+        id: task.id()
+      })
+      await postSharedTaskFrontendModelCommand("attach", {
+        attachment: {contentBase64: Buffer.from("BBB").toString("base64"), filename: "b.txt"},
+        attachmentName: "files",
+        id: task.id()
+      })
+
+      const listPayload = await postSharedTaskFrontendModelCommand("attachmentList", {
+        attachmentName: "files",
+        id: task.id()
+      })
+
+      expect(listPayload.status).toEqual("success")
+      expect(listPayload.attachments.map((entry) => entry.filename)).toEqual(["a.txt", "b.txt"])
+      expect(listPayload.attachments.map((entry) => entry.byteSize)).toEqual([2, 3])
+      expect(listPayload.attachments.every((entry) => typeof entry.id === "string" && entry.id.length > 0)).toEqual(true)
+      expect("contentBase64" in listPayload.attachments[0]).toEqual(false)
     })
   })
 

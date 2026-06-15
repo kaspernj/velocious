@@ -169,6 +169,7 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
   const normalizedBuiltInMemberCommands = normalizeFrontendModelBuiltInCommands({
     commandDefaults: {
       attach: "attach",
+      attachmentList: "attachmentList",
       destroy: "destroy",
       download: "download",
       find: "find",

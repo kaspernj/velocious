@@ -215,7 +215,7 @@
  * @typedef {object} ClientErrorPayloadContext
  * @property {string} controller - Controller class name.
  * @property {string} [action] - Controller action or endpoint label.
- * @property {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [commandType] - Frontend-model command type.
+ * @property {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url" | "custom-command"} [commandType] - Frontend-model command type.
  * @property {boolean} [expectedError] - Whether the error is an expected user-flow failure.
  * @property {boolean} [frontendModelEndpoint] - Whether the error came from the frontend-model endpoint.
  * @property {string} [model] - Frontend-model name from the failed request.
@@ -341,10 +341,10 @@
 
 /**
  * @typedef {object} FrontendModelResourceServerConfiguration
- * @property {function({action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default}) : (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
+ * @property {function({action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default}) : (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
  * @property {function({action: "index", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default}) : Promise<import("./database/record/index.js").default[]>} [records] - Records loader for frontendIndex.
  * @property {function({action: "index" | "find" | "create" | "update", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Record<string, ?> | Promise<Record<string, ?>>} [serialize] - Record serializer for response payloads.
- * @property {function({action: "find" | "update" | "destroy" | "attach" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) : Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy/attach/download/url actions.
+ * @property {function({action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) : Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy/attach/download/url actions.
  * @property {function({action: "create", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, attributes: Record<string, ?>}) : Promise<import("./database/record/index.js").default>} [create] - Custom create callback.
  * @property {function({action: "update", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default, attributes: Record<string, ?>}) : Promise<import("./database/record/index.js").default | void>} [update] - Custom update callback.
  * @property {function({action: "destroy", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Promise<void>} [destroy] - Custom destroy callback.

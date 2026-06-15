@@ -16,7 +16,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
 
 /**
  * FrontendModelCommandType type.
- * @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
+ * @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelCommandType */
 /**
  * FrontendModelRequestCommandType type.
  * @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -617,7 +617,7 @@ export class FrontendModelAttachmentDownload {
 /**
  * Runs frontend model attachment command payload.
  * @param {FrontendModelAttachmentHandle} attachment - Attachment wrapper.
- * @param {string | undefined} attachmentId - Optional has-many attachment id.
+ * @param {string} [attachmentId] - Optional has-many attachment id.
  * @returns {Record<string, ?>} - Command payload.
  */
 function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
@@ -969,6 +969,30 @@ export class FrontendModelAttachmentHandle {
     }
 
     return null
+  }
+
+  /**
+   * Runs list. Returns metadata for every attachment under this attachment name
+   * (no content bytes), so callers can enumerate has-many attachments and then
+   * download or link to each one by id.
+   * @returns {Promise<Array<{byteSize: number, contentType: string | null, filename: string, id: string, url: string | null}>>} - Attachment metadata entries.
+   */
+  async list() {
+    const ModelClass = frontendModelClassFor(this.model)
+    const response = await ModelClass.executeCommand("attachmentList", frontendModelAttachmentCommandPayload(this))
+    const attachments = Array.isArray(response.attachments) ? response.attachments : []
+
+    return attachments.map((attachment) => {
+      const byteSize = Number(attachment.byteSize)
+
+      return {
+        byteSize: Number.isFinite(byteSize) ? byteSize : 0,
+        contentType: typeof attachment.contentType === "string" && attachment.contentType.length > 0 ? attachment.contentType : null,
+        filename: typeof attachment.filename === "string" && attachment.filename.length > 0 ? attachment.filename : "attachment.bin",
+        id: typeof attachment.id === "string" ? attachment.id : "",
+        url: typeof attachment.url === "string" && attachment.url.length > 0 ? attachment.url : null
+      }
+    })
   }
 
   /**
