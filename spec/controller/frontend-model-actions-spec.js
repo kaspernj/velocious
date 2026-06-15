@@ -565,6 +565,49 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(reporterContexts[0].requestId).toEqual("request-1")
   })
 
+  it("renders and emits direct frontend-model errors when params parsing fails", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production")
+    const request = new Request({client: {remoteAddress: "127.0.0.1"}, configuration})
+    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
+    /** @type {Array<{context: {frontendModelEndpoint?: boolean}, error: Error}>} */
+    const frameworkErrors = []
+
+    configuration.getErrorEvents().on("framework-error", (payload) => {
+      frameworkErrors.push(/** @type {{context: {frontendModelEndpoint?: boolean}, error: Error}} */ (payload))
+    })
+    request.feed(Buffer.from([
+      "GET /frontend-models?broken[x=1 HTTP/1.1",
+      "Host: example.com",
+      "",
+      ""
+    ].join("\r\n"), "utf8"))
+
+    await donePromise
+
+    const response = new Response({configuration})
+    const controller = new FrontendModelController({
+      action: "frontendIndex",
+      configuration,
+      controller: "frontend-models",
+      params: {model: "Task"},
+      request,
+      response,
+      viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+    })
+
+    await controller.frontendIndex()
+
+    const body = response.getBody()
+    const responseText = typeof body === "string" ? body : Buffer.from(body).toString("utf8")
+    const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
+    const payload = /** @type {Record<string, import("../../src/frontend-models/query.js").FrontendModelTransportValue>} */ (deserializeFrontendModelTransportValue(responseJson))
+
+    expectGenericFrontendModelError(payload)
+    expect(frameworkErrors.length).toEqual(1)
+    expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
+    expect(frameworkErrors[0].error.message).toMatch(/Could not parse nested params key/)
+  })
+
   it("adds safe VelociousError codes to frontend-model client payload metadata", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production")
     const controller = new FrontendModelController({

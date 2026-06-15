@@ -2834,7 +2834,8 @@ export default class FrontendModelController extends Controller {
     let resolvedModel = model
 
     if (!resolvedModel) {
-      const paramsModel = this.frontendModelParams().model
+      const cachedParams = this._frontendModelParamsOverride || this._frontendModelParams
+      const paramsModel = cachedParams ? cachedParams.model : undefined
       resolvedModel = typeof paramsModel === "string" && paramsModel.length > 0 ? paramsModel : undefined
     }
 
