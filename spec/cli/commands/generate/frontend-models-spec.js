@@ -233,6 +233,10 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("commandName: \"refresh-profile\"")
     expect(userContents).toContain("email() { return /** @type {UserAttributes[\"email\"]} */ (this.readAttribute(\"email\")) }")
     expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
+    expect(userContents).toContain("@typedef {Record<string, never>} UserCreateAttributes")
+    expect(userContents).toContain("@typedef {Record<string, never>} UserUpdateAttributes")
+    expect(userContents).not.toContain("@typedef {object} UserCreateAttributes")
+    expect(userContents).not.toContain("@typedef {object} UserUpdateAttributes")
   })
 
   it("keeps generated frontend write attributes on inherited create and update", async () => {

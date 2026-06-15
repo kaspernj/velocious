@@ -18,6 +18,10 @@ import isPlainObject from "../utils/plain-object.js"
  * @typedef {null | boolean | number | string | object} FrontendModelTransportValue
  */
 /**
+ * FrontendModelAttributeValue type.
+ * @typedef {import("./base.js").FrontendModelAttributeValue} FrontendModelAttributeValue
+ */
+/**
  * Defines this typedef.
  * @typedef {{attributeName: string, relationshipName: string, where?: Record<string, FrontendModelTransportValue>}} FrontendModelWithCountPayloadEntry
  */
@@ -2094,9 +2098,9 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    const ModelClass = /** @type {new (attributes?: Record<string, ?>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
+    const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
 
-    return new ModelClass(normalizedConditions)
+    return new ModelClass(/** @type {Record<string, FrontendModelAttributeValue>} */ (normalizedConditions))
   }
 
   /**
@@ -2111,8 +2115,8 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    const ModelClass = /** @type {new (attributes?: Record<string, ?>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
-    const newModel = new ModelClass(normalizedConditions)
+    const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
+    const newModel = new ModelClass(/** @type {Record<string, FrontendModelAttributeValue>} */ (normalizedConditions))
 
     if (callback) {
       await callback(newModel)

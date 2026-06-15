@@ -69,7 +69,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
 /**
  * Create attributes accepted by a frontend model instance.
  * @template {FrontendModelBase} T
- * @typedef {T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, infer IgnoredUpdateAttributes> ? CreateAttributes : Record<string, FrontendModelAttributeValue>} FrontendModelCreateAttributesFor
+ * @typedef {T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, infer _UpdateAttributes> ? CreateAttributes : Record<string, FrontendModelAttributeValue>} FrontendModelCreateAttributesFor
  */
 /**
  * Loaded instance type for relationship helper generics. Older generated
