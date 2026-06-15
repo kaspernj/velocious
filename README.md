@@ -583,7 +583,7 @@ const configuration = new Configuration({
 
 This opt-in is ignored in `production`; production frontend-model responses never include internal exception details.
 
-Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, and a small `context` object, and should only return fields that are safe for clients to see. This is useful for attaching an error-reporting URL while keeping the normal production error message generic:
+Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, and a small `context` object, and should only return fields that are safe for clients to see. Frontend-model endpoint failures include `context.frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. This is useful for attaching an error-reporting URL while keeping the normal production error message generic:
 
 ```js
 configuration.addClientErrorPayloadReporter(async ({error, request, context}) => {
@@ -1597,7 +1597,7 @@ configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
 })
 ```
 
-Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`) rather than the generic one, and `error.velocious`-annotated / `safeToExpose` errors keep their own message — none of these reach the error bus.
+Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`) rather than the generic one, and `error.velocious`-annotated / `safeToExpose` / `errorType`-marked errors keep their expected-error status — none of these reach the error bus.
 
 ## Use the Websocket client API (HTTP-like)
 

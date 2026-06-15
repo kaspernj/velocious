@@ -143,7 +143,7 @@ export default class VelociousConfiguration {
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
     this._backendProjects = backendProjects || []
-    /** @type {Array<(args: {context: ?, error: Error, request: ?}) => Promise<Record<string, ?> | void> | Record<string, ?> | void>} */
+    /** @type {import("./configuration-types.js").ClientErrorPayloadReporterType[]} */
     this._clientErrorPayloadReporters = []
     this.cors = cors
     this._cookieSecret = cookieSecret
@@ -2386,7 +2386,7 @@ export default class VelociousConfiguration {
 
   /**
    * Registers a reporter that can add client-safe metadata to frontend-model error payloads.
-   * @param {(args: {context: ?, error: Error, request: ?}) => Promise<Record<string, ?> | void> | Record<string, ?> | void} reporter - Reporter callback.
+   * @param {import("./configuration-types.js").ClientErrorPayloadReporterType} reporter - Reporter callback.
    * @returns {void}
    */
   addClientErrorPayloadReporter(reporter) {
@@ -2395,11 +2395,11 @@ export default class VelociousConfiguration {
 
   /**
    * Runs registered client error payload reporters.
-   * @param {{context: ?, error: Error, request: ?}} args - Reporter args.
-   * @returns {Promise<Record<string, ?>>} - Merged client-safe reporter payload.
+   * @param {{context: import("./configuration-types.js").ClientErrorPayloadContext, error: Error, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined}} args - Reporter args.
+   * @returns {Promise<import("./configuration-types.js").ClientErrorPayloadReporterPayload>} - Merged client-safe reporter payload.
    */
   async clientErrorPayloadForError(args) {
-    /** @type {Record<string, ?>} */
+    /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
     const payload = {}
 
     for (const reporter of this._clientErrorPayloadReporters) {

@@ -32,6 +32,13 @@ class CustomFrontendModelCommandController extends Controller {
     error.velocious = {type: "UserError"}
     throw error
   }
+
+  /** @returns {Promise<void>} */
+  async rejectTypedInput() {
+    const error = /** @type {Error & {errorType?: string}} */ (new Error("Typed custom command rejection"))
+    error.errorType = "customCommandRejected"
+    throw error
+  }
 }
 
 describe("Controller frontend model custom commands", {databaseCleaning: {transaction: true}}, () => {
@@ -229,5 +236,66 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
     // user-flow failures, not backend bugs.
     const combinedWrites = writes.join("")
     expect(combinedWrites).not.toMatch(/Frontend model endpoint request failed/)
+  })
+
+  it("suppresses framework-error events for frontend-model custom command errors with errorType", async () => {
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: dummyDirectory(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    configuration.routes((routes) => {
+      routes.post("/custom-frontend-models/users/reject-typed-input", {to: [CustomFrontendModelCommandController, "rejectTypedInput"]})
+    })
+
+    /** @type {Array<{errorType?: string}>} */
+    const allErrors = []
+    configuration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))
+
+    const client = {remoteAddress: "127.0.0.1"}
+    const request = new Request({client, configuration})
+    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
+
+    request.feed(Buffer.from([
+      "POST /frontend-models HTTP/1.1",
+      "Host: example.com",
+      "Content-Length: 0",
+      "",
+      ""
+    ].join("\r\n"), "utf8"))
+
+    await donePromise
+
+    const response = new Response({configuration})
+    const controller = new FrontendModelController({
+      action: "frontendApi",
+      configuration,
+      controller: "frontend-models",
+      params: {
+        requests: [{
+          commandType: "reject-typed-input",
+          customPath: "/custom-frontend-models/users/reject-typed-input",
+          model: "User",
+          payload: {},
+          requestId: "request-1"
+        }]
+      },
+      request,
+      response,
+      viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+    })
+
+    await controller.frontendApi()
+    const responsePayload = JSON.parse(String(response.getBody()))
+
+    expect(responsePayload.responses[0].response.status).toEqual("error")
+    expect(responsePayload.responses[0].response.errorMessage).toEqual("Request failed.")
+    expect(allErrors.length).toEqual(0)
   })
 })

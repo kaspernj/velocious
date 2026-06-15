@@ -208,6 +208,29 @@
  */
 
 /**
+ * @typedef {Record<string, import("./frontend-models/query.js").FrontendModelTransportValue>} ClientErrorPayloadReporterPayload
+ */
+
+/**
+ * @typedef {object} ClientErrorPayloadContext
+ * @property {string} controller - Controller class name.
+ * @property {string} [action] - Controller action or endpoint label.
+ * @property {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [commandType] - Frontend-model command type.
+ * @property {boolean} [expectedError] - Whether the error is an expected user-flow failure.
+ * @property {boolean} [frontendModelEndpoint] - Whether the error came from the frontend-model endpoint.
+ * @property {string} [model] - Frontend-model name from the failed request.
+ * @property {string} [requestId] - Shared frontend-model request id.
+ */
+
+/**
+ * @typedef {function({
+ *   context: ClientErrorPayloadContext,
+ *   error: Error,
+ *   request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined
+ * }): Promise<ClientErrorPayloadReporterPayload | void> | ClientErrorPayloadReporterPayload | void} ClientErrorPayloadReporterType
+ */
+
+/**
  * @typedef {Record<string, unknown> & {configuration?: import("./configuration.js").default, currentUser?: unknown, params?: VelociousParams, request?: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default}} VelociousLooseObject
  */
 
