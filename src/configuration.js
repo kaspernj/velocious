@@ -2396,10 +2396,10 @@ export default class VelociousConfiguration {
   /**
    * Runs registered client error payload reporters.
    * @param {{context: import("./configuration-types.js").ClientErrorPayloadContext, error: Error, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined}} args - Reporter args.
-   * @returns {Promise<Record<string, ?>>} - Merged client-safe reporter payload.
+   * @returns {Promise<import("./configuration-types.js").ClientErrorPayloadReporterPayload>} - Merged client-safe reporter payload.
    */
   async clientErrorPayloadForError(args) {
-    /** @type {Record<string, ?>} */
+    /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
     const payload = {}
 
     for (const reporter of this._clientErrorPayloadReporters) {

@@ -192,41 +192,35 @@ function frontendModelValidationErrorForError(error) {
  * developer for the frontend" — the framework treats it as
  * user-facing: surface the message, forward the metadata, and skip
  * the noisy endpoint-error log.
- * @param {?} error - Caught error.
+ * @param {unknown} error - Caught error.
  * @returns {boolean} Whether the error has Velocious frontend metadata.
  */
 function frontendModelErrorHasVelociousMetadata(error) {
   if (!error || typeof error !== "object") return false
 
-  /**
-   * Narrows the runtime value to an error metadata record.
-   * @type {{velocious?: Record<string, ?>}}
-   */
-  const errorRecord = error
+  // Runtime checks above narrow this caught value to the metadata record shape.
+  const errorRecord = /** @type {{velocious?: import("./configuration-types.js").ClientErrorPayloadReporterPayload}} */ (error)
 
   return isPlainObject(errorRecord.velocious)
 }
 
 /**
  * Whether the error has a frontend-model error type marker.
- * @param {?} error - Caught error.
+ * @param {unknown} error - Caught error.
  * @returns {boolean} Whether the error has an error type.
  */
 function frontendModelErrorHasErrorType(error) {
   if (!error || typeof error !== "object") return false
 
-  /**
-   * Narrows the runtime value to an error marker record.
-   * @type {{errorType?: string}}
-   */
-  const errorRecord = error
+  // Runtime checks above narrow this caught value to the marker record shape.
+  const errorRecord = /** @type {{errorType?: string}} */ (error)
 
   return typeof errorRecord.errorType === "string" && errorRecord.errorType.length > 0
 }
 
 /**
  * Whether the error is an expected frontend-model user-flow failure.
- * @param {?} error - Caught error.
+ * @param {unknown} error - Caught error.
  * @returns {boolean} Whether the error is expected.
  */
 function frontendModelExpectedError(error) {
@@ -239,8 +233,8 @@ function frontendModelExpectedError(error) {
 
 /**
  * Runs frontend model velocious metadata for error.
- * @param {?} error - Caught error.
- * @returns {Record<string, ?> | null} Frontend-model Velocious metadata when present.
+ * @param {unknown} error - Caught error.
+ * @returns {import("./configuration-types.js").ClientErrorPayloadReporterPayload | null} Frontend-model Velocious metadata when present.
  */
 function frontendModelVelociousMetadataForError(error) {
   const errorCode = error instanceof VelociousError && error.safeToExpose && typeof error.code === "string" && error.code.length > 0
@@ -251,11 +245,8 @@ function frontendModelVelociousMetadataForError(error) {
     return errorCode ? {code: errorCode} : null
   }
 
-  /**
-   * Narrows the runtime value to an error metadata record.
-   * @type {{velocious: Record<string, ?>}}
-   */
-  const errorRecord = error
+  // frontendModelErrorHasVelociousMetadata guards the caught value before this cast.
+  const errorRecord = /** @type {{velocious: import("./configuration-types.js").ClientErrorPayloadReporterPayload}} */ (error)
   const metadata = errorRecord.velocious
 
   return errorCode ? {...metadata, code: errorCode} : metadata
@@ -263,7 +254,7 @@ function frontendModelVelociousMetadataForError(error) {
 
 /**
  * Runs frontend model client message for error.
- * @param {?} error - Caught error.
+ * @param {unknown} error - Caught error.
  * @returns {string} - Message safe to return to API clients.
  */
 function frontendModelClientMessageForError(error) {
@@ -291,8 +282,8 @@ function frontendModelClientMessageForError(error) {
  * @param {object} args - Arguments.
  * @param {import("./configuration.js").default} args.configuration - Current configuration.
  * @param {string} args.environment - Current environment.
- * @param {?} args.error - Caught error.
- * @returns {Record<string, ?>} - Optional debug payload for non-production environments.
+ * @param {unknown} args.error - Caught error.
+ * @returns {import("./configuration-types.js").ClientErrorPayloadReporterPayload} - Optional debug payload for non-production environments.
  */
 function frontendModelDebugPayloadForError({configuration, environment, error}) {
   const debugAllowed = frontendModelDebugErrorEnvironments.has(environment) || environment !== "production" && configuration.getExposeInternalErrorsToClients()
@@ -2833,7 +2824,7 @@ export default class FrontendModelController extends Controller {
    * Builds frontend-model endpoint error context for logging and client payload reporters.
    * @param {object} args - Error context args.
    * @param {string} args.action - Endpoint/action label.
-   * @param {?} args.error - Caught error.
+   * @param {unknown} args.error - Caught error.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
    * @param {string | undefined} [args.model] - Request model name when available.
    * @param {string | undefined} [args.requestId] - Batch request id when available.
@@ -2860,9 +2851,9 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model client error payload for error.
-   * @param {?} error - Caught error.
+   * @param {unknown} error - Caught error.
    * @param {FrontendModelEndpointErrorContext | undefined} [endpointErrorContext] - Frontend-model endpoint error context.
-   * @returns {Promise<Record<string, ?>>} - Client payload for the current environment.
+   * @returns {Promise<import("./configuration-types.js").ClientErrorPayloadReporterPayload>} - Client payload for the current environment.
    */
   async frontendModelClientErrorPayloadForError(error, endpointErrorContext) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)

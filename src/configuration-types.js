@@ -208,6 +208,10 @@
  */
 
 /**
+ * @typedef {Record<string, import("./frontend-models/query.js").FrontendModelTransportValue>} ClientErrorPayloadReporterPayload
+ */
+
+/**
  * @typedef {object} ClientErrorPayloadContext
  * @property {string} controller - Controller class name.
  * @property {string} [action] - Controller action or endpoint label.
@@ -223,7 +227,7 @@
  *   context: ClientErrorPayloadContext,
  *   error: Error,
  *   request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined
- * }): Promise<Record<string, ?> | void> | Record<string, ?> | void} ClientErrorPayloadReporterType
+ * }): Promise<ClientErrorPayloadReporterPayload | void> | ClientErrorPayloadReporterPayload | void} ClientErrorPayloadReporterType
  */
 
 /**
