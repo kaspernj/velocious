@@ -1089,7 +1089,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * Resolves frontend attribute config from explicit metadata, model columns, or resource method JSDoc.
+   * Resolves frontend attribute config from explicit metadata, resource methods, model columns, translated columns, or model accessor JSDoc.
    * @param {object} args - Arguments.
    * @param {string} args.attributeName - Frontend attribute name.
    * @param {string} args.className - Frontend model class name.
@@ -1103,10 +1103,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const inferredColumnConfig = inferredResourceConfig
       ? null
       : this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
-    const inferredModelAccessorConfig = inferredResourceConfig || inferredColumnConfig
+    const inferredTranslatedConfig = inferredResourceConfig || inferredColumnConfig
+      ? null
+      : this.frontendAttributeConfigForTranslatedAttribute({attributeName, modelClass, resourceClass})
+    const inferredModelAccessorConfig = inferredResourceConfig || inferredColumnConfig || inferredTranslatedConfig
       ? null
       : await this.frontendAttributeConfigForModelAccessor({attributeName, modelClass})
-    const inferredConfig = inferredResourceConfig || inferredColumnConfig || inferredModelAccessorConfig
+    const inferredConfig = inferredResourceConfig || inferredColumnConfig || inferredTranslatedConfig || inferredModelAccessorConfig
 
     if (configuredAttributeConfig && this.frontendAttributeConfigHasType(configuredAttributeConfig)) {
       return inferredConfig
@@ -1120,7 +1123,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         : inferredConfig
     }
 
-    throw new Error(`Could not infer JSDoc type for frontend model attribute '${className}#${attributeName}'. Add a backend model column, explicit resource metadata, or a @returns JSDoc type on ${resourceClass?.name || "the resource"}.${attributeName}Attribute().`)
+    throw new Error(`Could not infer JSDoc type for frontend model attribute '${className}#${attributeName}'. Add a backend model column, translation table column, explicit resource metadata, or a @returns JSDoc type on ${resourceClass?.name || "the resource"}.${attributeName}Attribute().`)
   }
 
   /**
@@ -1241,6 +1244,54 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     })
 
     return jsDocType ? {jsDocType: this.unwrappedPromiseJsDocType({jsDocType})} : null
+  }
+
+  /**
+   * Runs frontend attribute config for translated attribute.
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend model attribute name.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
+   * @returns {FrontendAttributeConfig | null} - Attribute config inferred from translated attribute columns.
+   */
+  frontendAttributeConfigForTranslatedAttribute({attributeName, modelClass, resourceClass}) {
+    if (!modelClass) return null
+    if (!this.frontendAttributeIsTranslated({attributeName, modelClass, resourceClass})) return null
+
+    const TranslationClass = modelClass.getTranslationClass()
+    const columnName = inflection.underscore(attributeName)
+
+    let column
+
+    try {
+      column = TranslationClass.getColumnsHash()[columnName]
+    } catch (error) {
+      if (error instanceof Error && (error.message.includes("hasn't been initialized yet") || error.message.includes("used before initialization"))) return null
+
+      throw error
+    }
+
+    return column ? this.frontendAttributeConfigForColumn({column}) : null
+  }
+
+  /**
+   * Runs frontend attribute is translated.
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend model attribute name.
+   * @param {typeof import("../../../../../database/record/index.js").default} args.modelClass - Backend model class.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
+   * @returns {boolean} - Whether the frontend attribute is translated.
+   */
+  frontendAttributeIsTranslated({attributeName, modelClass, resourceClass}) {
+    if (resourceClass) {
+      const translatedAttributes = resourceClass.translatedAttributes
+
+      if (Array.isArray(translatedAttributes) && translatedAttributes.includes(attributeName)) return true
+    }
+
+    const translations = modelClass._translations
+
+    return Boolean(translations && typeof translations == "object" && Object.prototype.hasOwnProperty.call(translations, attributeName))
   }
 
   /**
@@ -1723,11 +1774,25 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       throw error
     }
 
-    if (!column) return null
+    return column ? this.frontendAttributeConfigForColumn({column}) : null
+  }
+
+  /**
+   * Runs frontend attribute config for column.
+   * @param {object} args - Arguments.
+   * @param {import("../../../../../database/drivers/base-column.js").default} args.column - Database column.
+   * @returns {FrontendAttributeConfig} - Attribute config inferred from the database column.
+   */
+  frontendAttributeConfigForColumn({column}) {
+    const type = column.getType()
+
+    if (typeof type != "string" || type.length < 1) {
+      throw new Error(`Expected non-empty column type for frontend model attribute inference, got: ${type}`)
+    }
 
     return {
       null: column.getNull(),
-      type: String(column.getType())
+      type
     }
   }
 

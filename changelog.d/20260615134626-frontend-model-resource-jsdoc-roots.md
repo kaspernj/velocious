@@ -1,1 +1,1 @@
-Frontend-model generation now reads resource and model accessor JSDoc from configured backend project source roots and prefers resource attribute return types over backing column metadata.
+Frontend-model generation now reads resource and model accessor JSDoc from configured backend project source roots, prefers resource attribute return types over backing column metadata, and infers translated attributes from translation table columns.

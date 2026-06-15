@@ -53,6 +53,22 @@ class InferredCallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class TranslatedCall extends DatabaseRecord {}
+TranslatedCall.translates("title")
+const TranslatedCallTranslation = TranslatedCall.getTranslationClass()
+
+class TranslatedCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = TranslatedCall
+  static translatedAttributes = ["title"]
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: ["id", {name: "title", selectedByDefault: false}]
+    }
+  }
+}
+
 class UninferableCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
@@ -139,6 +155,35 @@ function configureCallColumns() {
     metadata: "metadata",
     startedAt: "started_at"
   }
+}
+
+/** @returns {void} */
+function configureTranslatedCallColumns() {
+  TranslatedCall._initialized = true
+  TranslatedCall._columns = [
+    new TableColumn("id", {null: false, type: "uuid"})
+  ]
+  TranslatedCall._attributeNameToColumnName = {
+    id: "id"
+  }
+  delete TranslatedCall._columnsAsHash
+  delete TranslatedCall._columnTypeByName
+  delete TranslatedCall._columnNameToAttributeName
+
+  TranslatedCallTranslation._initialized = true
+  TranslatedCallTranslation._columns = [
+    new TableColumn("id", {null: false, type: "uuid"}),
+    new TableColumn("locale", {null: false, type: "varchar"}),
+    new TableColumn("title", {null: true, type: "varchar"})
+  ]
+  TranslatedCallTranslation._attributeNameToColumnName = {
+    id: "id",
+    locale: "locale",
+    title: "title"
+  }
+  delete TranslatedCallTranslation._columnsAsHash
+  delete TranslatedCallTranslation._columnTypeByName
+  delete TranslatedCallTranslation._columnNameToAttributeName
 }
 
 /**
@@ -478,6 +523,37 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
     expect(callContents).toContain("@property {boolean} active - Attribute value.")
     expect(callContents).toContain("@property {number | null} eA - Attribute value.")
+  })
+
+  it("infers translated attribute typedefs from translation table columns", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    configureTranslatedCallColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            TranslatedCall: TranslatedCallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          TranslatedCall._configuration = configuration
+          TranslatedCallTranslation._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/translated-call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string | null} title - Attribute value.")
   })
 
   it("infers resource attribute typedefs from backend project source roots before backend model columns", async () => {
