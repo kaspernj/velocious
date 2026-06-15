@@ -64,12 +64,12 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @template {FrontendModelBase} [T=FrontendModelBase]
  * @template {Record<string, FrontendModelAttributeValue>} [Attributes=Record<string, FrontendModelAttributeValue>]
  * @template {Record<string, FrontendModelAttributeValue>} [CreateAttributes=Record<string, FrontendModelAttributeValue>]
- * @typedef {{new (attributes?: Attributes | CreateAttributes): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
+ * @typedef {{new (): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
  */
 /**
  * Create attributes accepted by a frontend model instance.
  * @template {FrontendModelBase} T
- * @typedef {T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, Record<string, FrontendModelAttributeValue>> ? CreateAttributes : Record<string, FrontendModelAttributeValue>} FrontendModelCreateAttributesFor
+ * @typedef {T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, infer IgnoredUpdateAttributes> ? CreateAttributes : Record<string, FrontendModelAttributeValue>} FrontendModelCreateAttributesFor
  */
 /**
  * Loaded instance type for relationship helper generics. Older generated
@@ -352,8 +352,8 @@ export class FrontendModelSingularRelationship {
       throw new Error(`No target model class configured for ${this.model.constructor.name}#${this.relationshipName}`)
     }
 
-    // Narrows the runtime value to the documented relationship model type.
-    const model = /** @type {FrontendModelRelationshipModel<T>} */ (new this.targetModelClass(attributes))
+    const ModelClass = /** @type {new (attributes?: TargetCreateAttributes) => FrontendModelRelationshipModel<T>} */ (this.targetModelClass)
+    const model = new ModelClass(attributes)
 
     this.setLoaded(model)
 
@@ -491,8 +491,8 @@ export class FrontendModelHasManyRelationship {
       throw new Error(`No target model class configured for ${this.model.constructor.name}#${this.relationshipName}`)
     }
 
-    // Narrows the runtime value to the documented relationship model type.
-    const model = /** @type {FrontendModelRelationshipModel<T>} */ (new this.targetModelClass(attributes))
+    const ModelClass = /** @type {new (attributes?: TargetCreateAttributes) => FrontendModelRelationshipModel<T>} */ (this.targetModelClass)
+    const model = new ModelClass(attributes)
 
     this.addToLoaded([model])
 
@@ -3111,9 +3111,9 @@ export default class FrontendModelBase {
     const queryData = modelData.queryData
     const abilities = modelData.abilities
     const selectedAttributes = modelData.selectedAttributes
-    const model = /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {InstanceType<T>} */ (new this(attributes))
+    const receiver = /** @type {unknown} */ (this)
+    const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (receiver)
+    const model = new ModelClass(attributes)
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
@@ -3579,14 +3579,15 @@ export default class FrontendModelBase {
 
   /**
    * Runs create.
-   * @template {new (attributes?: Record<string, FrontendModelAttributeValue>) => FrontendModelBase} ModelClass
+   * @template {FrontendModelClass} ModelClass
    * @this {ModelClass}
    * @param {FrontendModelCreateAttributesFor<InstanceType<ModelClass>>} [attributes] - Initial attributes.
    * @returns {Promise<InstanceType<ModelClass>>} - Persisted model.
    */
   static async create(attributes) {
-    // Narrows the constructed instance to the receiver's documented model type.
-    const model = /** @type {InstanceType<ModelClass>} */ (new this(attributes))
+    const receiver = /** @type {unknown} */ (this)
+    const ModelClass = /** @type {new (attributes?: FrontendModelCreateAttributesFor<InstanceType<ModelClass>>) => InstanceType<ModelClass>} */ (receiver)
+    const model = new ModelClass(attributes)
 
     await model.save()
 

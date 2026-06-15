@@ -17,11 +17,11 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
  */
 /**
  * Attributes accepted by UserCreateAttributes.
- * @typedef {object} UserCreateAttributes
+ * @typedef {Record<string, never>} UserCreateAttributes
  */
 /**
  * Attributes accepted by UserUpdateAttributes.
- * @typedef {object} UserUpdateAttributes
+ * @typedef {Record<string, never>} UserUpdateAttributes
  */
 /**
  * Frontend model for User.

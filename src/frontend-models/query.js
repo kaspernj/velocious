@@ -2094,7 +2094,9 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    return /** @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+    const ModelClass = /** @type {new (attributes?: Record<string, ?>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
+
+    return new ModelClass(normalizedConditions)
   }
 
   /**
@@ -2109,9 +2111,8 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    const newModel = /**
-                      * Narrows the runtime value to the documented type.
-                      * @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+    const ModelClass = /** @type {new (attributes?: Record<string, ?>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
+    const newModel = new ModelClass(normalizedConditions)
 
     if (callback) {
       await callback(newModel)

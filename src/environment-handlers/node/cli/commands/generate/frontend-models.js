@@ -602,10 +602,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {string} - Generated typedef source.
    */
   writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams, typeName}) {
-    let output = "/**\n"
+    const attributeLines = []
 
-    output += ` * Attributes accepted by ${typeName}.\n`
-    output += ` * @typedef {object} ${typeName}\n`
+    let output = "/**\n"
 
     const attributesByName = new Map(attributes.map((attribute) => [attribute.name, attribute]))
     const nestedWriteTypesByKey = new Map(nestedWriteTypes.map((nestedWriteType) => [`${nestedWriteType.relationshipName}Attributes`, nestedWriteType]))
@@ -622,17 +621,24 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const attribute = attributesByName.get(attributeName)
         const type = attribute ? `${attributesTypeName}[${JSON.stringify(attribute.name)}]` : "FrontendModelAttributeValue"
 
-        output += ` * @property {${type}} [${attributeName}] - Permitted ${attributeName} value.\n`
+        attributeLines.push(` * @property {${type}} [${attributeName}] - Permitted ${attributeName} value.\n`)
       } else if (entry && typeof entry == "object" && !Array.isArray(entry)) {
         for (const key of Object.keys(entry)) {
           const nestedWriteType = nestedWriteTypesByKey.get(key)
           const type = nestedWriteType ? `Array<${nestedWriteType.typeName}>` : "Array<object>"
 
-          output += ` * @property {${type}} [${key}] - Permitted nested ${key} values.\n`
+          attributeLines.push(` * @property {${type}} [${key}] - Permitted nested ${key} values.\n`)
         }
       }
     }
 
+    output += ` * Attributes accepted by ${typeName}.\n`
+    if (attributeLines.length === 0) {
+      output += ` * @typedef {Record<string, never>} ${typeName}\n`
+    } else {
+      output += ` * @typedef {object} ${typeName}\n`
+      output += attributeLines.join("")
+    }
     output += " */\n"
 
     return output

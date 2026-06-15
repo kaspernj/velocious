@@ -37,7 +37,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   permittedParams() {
     return [
       "name",
-      "is_done",
+      "isDone",
       "descriptionFile",
       {commentsAttributes: ["id", "_destroy", "body"]},
       {projectAttributes: ["name"]}

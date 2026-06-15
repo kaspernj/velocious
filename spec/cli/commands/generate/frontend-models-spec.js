@@ -250,6 +250,7 @@ describe("Cli - generate - frontend-models", () => {
 
     const sourceText = `
       import Task from "${dummyDirectory()}/src/frontend-models/task.js"
+      import User from "${dummyDirectory()}/src/frontend-models/user.js"
 
       async function checkWrites() {
         await Task.create({name: "Generated typing works"})
@@ -262,6 +263,16 @@ describe("Cli - generate - frontend-models", () => {
         await task.update({name: "Generated typing works"})
         // @ts-expect-error unknown update attributes must stay rejected
         await task.update({typo: "Generated typing works"})
+
+        await User.create()
+        await User.create({})
+        // @ts-expect-error empty create attributes must reject model fields
+        await User.create({email: "generated@example.com"})
+
+        const user = new User()
+        await user.update({})
+        // @ts-expect-error empty update attributes must reject model fields
+        await user.update({email: "generated@example.com"})
       }
 
       checkWrites()
@@ -273,6 +284,7 @@ describe("Cli - generate - frontend-models", () => {
       return fileName === sourcePath
         || fileName.includes("/src/frontend-models/base.js")
         || fileName.includes("/spec/dummy/src/frontend-models/task.js")
+        || fileName.includes("/spec/dummy/src/frontend-models/user.js")
     })
   })
 
