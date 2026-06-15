@@ -821,7 +821,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         ? payload.models[0].createdAt.toISOString()
         : payload.models[0].createdAt
 
-      expect(selectedCreatedAt).toEqual(baselineCreatedAt)
+      expect(baselineCreatedAt).toEqual(undefined)
+      expect(selectedCreatedAt).toEqual(task.createdAt()?.toISOString())
       expect(payload.models[0].name).toEqual(undefined)
     })
   })

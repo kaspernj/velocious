@@ -14,6 +14,7 @@ import isPlainObject from "../utils/plain-object.js"
  * @typedef {import("../controller.js").default & {
  *   currentAbility: () => import("../authorization/ability.js").default | undefined,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
+ *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
@@ -393,7 +394,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    */
   authorizedQuery(action) {
     // Narrows the controller query to this resource's model class.
-    return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelAuthorizedQuery(action))
+    return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelAbilityAuthorizedQuery(action))
   }
 
 

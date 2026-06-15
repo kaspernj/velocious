@@ -1,8 +1,8 @@
+import {frontendModelResourcesWithBuiltInsForBackendProject} from "../../../../src/frontend-models/built-in-resources.js"
 import {
   frontendModelActionForCommand,
   frontendModelCustomCommandForPath,
-  frontendModelResourcePath,
-  frontendModelResourcesForBackendProject
+  frontendModelResourcePath
 } from "../../../../src/frontend-models/resource-definition.js"
 
 /**
@@ -19,7 +19,7 @@ function isDirectFrontendModelCommandPath({backendProjects, currentPath}) {
   }
 
   for (const backendProject of backendProjects) {
-    const resources = frontendModelResourcesForBackendProject(backendProject)
+    const resources = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
 
     for (const modelName in resources) {
       const resourceDefinition = resources[modelName]

@@ -13,7 +13,11 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static resourceConfig() {
     return {
       abilities: ["read", "create", "update", "destroy"],
-      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", "updatedAt"],
+      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", {name: "projectId", selectedByDefault: false}, {name: "createdAt", selectedByDefault: false}, "updatedAt"],
+      attachments: {
+        descriptionFile: {type: "hasOne"},
+        files: {type: "hasMany"}
+      },
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find", "update", "destroy"],
       relationships: ["project", "comments"],
@@ -128,7 +132,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
   static resourceConfig() {
     return {
       abilities: ["read"],
-      attributes: ["id", "email", "name", "createdAt"],
+      attributes: ["id", "email", "name", {name: "reference", selectedByDefault: false}, "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],

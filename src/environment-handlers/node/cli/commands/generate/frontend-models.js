@@ -2,7 +2,8 @@ import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "fs/promises"
 import path from "node:path"
 import * as inflection from "inflection"
-import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "../../../../../frontend-models/resource-definition.js"
+import {frontendModelResourceIsBuiltIn, frontendModelResourcesWithBuiltInsForBackendProject} from "../../../../../frontend-models/built-in-resources.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition} from "../../../../../frontend-models/resource-definition.js"
 
 /**
  * Attribute metadata used for generated frontend-model JSDoc.
@@ -110,6 +111,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig, resourceClass})
 
         if (generatedModelNames.has(className)) {
+          if (frontendModelResourceIsBuiltIn({modelName: modelClassName, resourceDefinition: resources[modelClassName]})) {
+            continue
+          }
+
           throw new Error(`Duplicate frontend model definition for '${className}'`)
         }
 
@@ -191,7 +196,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {Record<string, import("../../../../../configuration-types.js").FrontendModelResourceDefinition>} - Resource definitions keyed by model class name.
    */
   resourcesForBackendProject(backendProject) {
-    return frontendModelResourcesForBackendProject(backendProject)
+    return frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
   }
 
   /**

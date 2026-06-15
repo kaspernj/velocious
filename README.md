@@ -447,6 +447,7 @@ Frontend-model `where(...)` supports nested relationship descriptors (for exampl
 Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
 Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
 Frontend-model `pluck(...)` validates attribute/path descriptors against configured model metadata and does not accept SQL fragments.
+Frontend-model query fields are limited to attributes exposed by the backend resource. Use `{name: "attributeName", selectedByDefault: false}` for fields that may be selected or filtered explicitly but should stay out of default payloads.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 
@@ -546,11 +547,14 @@ For frontend models, configure `resourceConfig().attachments` and use:
 await frontendTask.update({descriptionFile: file})
 const descriptionFile = await frontendTask.descriptionFile().download()
 const descriptionFileUrl = await frontendTask.descriptionFile().url()
+const descriptionFileMetadata = await frontendTask.descriptionFile().first()
+const filesMetadata = await frontendTask.files().toArray()
 await frontendTask.attach(file)
 ```
 
 Frontend model attachment input does not support `{path: ...}`.
 Use `File`/`Blob`/bytes/`contentBase64` payloads instead.
+Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
