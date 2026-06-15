@@ -101,6 +101,7 @@
 - `defineScope(...)` creates reusable named query scopes. Call `Model.scopeName(args...)` to start a new query, or `query.scope(Model.scopeName.scope(args...))` to apply the same scope to an existing frontend query.
 - Frontend scope callbacks receive `{query, modelClass}` plus `table: null` and `driver: null`; frontend scopes should stay descriptor-based (`where`, `joins`, `sort`, etc.) rather than building raw SQL.
 - `select({Model: ["attr"]})` narrows the serialized attributes per model (keyed by model name, or root-model shorthand). `selectsExtra({Model: ["attr"]})` keeps the default serialized attributes and loads the listed extras in addition — useful for attributes declared `selectedByDefault: false` on the backend resource.
+- Generated read-attribute JSDoc is inferred from backend columns, generated model accessors, or typed resource `${attributeName}Attribute(model)` methods. Resource entries that only add options such as `{name: "archivedAt", selectedByDefault: false}` do not need to repeat `type` or `null`; generation fails if a read attribute has no inferable type.
 
 ## Preloading onto loaded records
 - `await record.preload(Model.preload({...}).select({...}))` preloads relationship(s) onto a record already in memory, re-fetching the parent through its endpoint and caching the result so later accessors reuse it. Accepts a query or a raw preload spec (`"comments"`, `["comments", {project: true}]`).

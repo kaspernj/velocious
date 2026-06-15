@@ -12,8 +12,8 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
 /**
  * UserAttributes type.
  * @typedef {object} UserAttributes
- * @property {FrontendModelAttributeValue} reference - Attribute value.
- * @property {FrontendModelAttributeValue} email - Attribute value.
+ * @property {string | null} reference - Attribute value.
+ * @property {string} email - Attribute value.
  */
 /**
  * Attributes accepted by UserCreateAttributes.

@@ -11,8 +11,10 @@ import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigura
  * @property {string} [columnType] - Column type.
  * @property {string} [sqlType] - SQL type.
  * @property {string} [dataType] - Data type.
+ * @property {string} [jsDocType] - Exact JSDoc type.
  * @property {string} [name] - Attribute name when configured as an array entry.
  * @property {boolean} [null] - Whether null is allowed.
+ * @property {boolean} [selectedByDefault] - Whether the attribute is selected by default.
  * @property {() => string} [getType] - Returns column type.
  * @property {() => boolean} [getNull] - Returns whether null is allowed.
  */
@@ -23,6 +25,9 @@ import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigura
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
+  /** @type {Map<string, string> | null} */
+  _resourceMethodReturnTypes = null
+
   /**
    * Runs execute.
    * @returns {Promise<void>} - Resolves when files are generated.
@@ -97,7 +102,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
           throw new Error(`Invalid frontend model resource definition for '${className}'`)
         }
 
-        this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig, resourceClass: frontendModelResourceClassFromDefinition(resources[modelClassName])})
+        const resourceClass = frontendModelResourceClassFromDefinition(resources[modelClassName])
+
+        this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig, resourceClass})
 
         if (generatedModelNames.has(className)) {
           throw new Error(`Duplicate frontend model definition for '${className}'`)
@@ -105,12 +112,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
         generatedModelNames.add(className)
 
-        const fileContent = this.buildModelFileContent({
+        const fileContent = await this.buildModelFileContent({
           className,
           importPath,
-          modelClass: configuration.getModelClasses()[className],
+          modelClass: resourceClass?.ModelClass || configuration.getModelClasses()[className],
           modelConfig,
-          resourceClass: frontendModelResourceClassFromDefinition(resources[modelClassName])
+          resourceClass
         })
 
         await fs.writeFile(filePath, fileContent)
@@ -236,10 +243,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.modelConfig - Model configuration.
    * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null} [args.resourceClass] - Resource class.
-   * @returns {string} - Generated file content.
+   * @returns {Promise<string>} - Generated file content.
    */
-  buildModelFileContent({className, importPath, modelClass, modelConfig, resourceClass}) {
-    const attributes = this.attributeDefinitionsForModel({modelClass, modelConfig})
+  async buildModelFileContent({className, importPath, modelClass, modelConfig, resourceClass}) {
+    const attributes = await this.attributeDefinitionsForModel({className, modelClass, modelConfig, resourceClass})
     const relationships = this.relationshipsForModel({className, modelConfig, resourceClass})
     const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
       ? modelConfig.attachments
@@ -894,64 +901,131 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   /**
    * Runs attribute definitions for model.
    * @param {object} args - Arguments.
+   * @param {string} args.className - Frontend model class name.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.modelConfig - Model configuration.
-   * @returns {Array<{jsDocType: string, name: string}>} - Attribute definitions.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null} [args.resourceClass] - Resource class.
+   * @returns {Promise<Array<{jsDocType: string, name: string}>>} - Attribute definitions.
    */
-  attributeDefinitionsForModel({modelClass, modelConfig}) {
+  async attributeDefinitionsForModel({className, modelClass, modelConfig, resourceClass}) {
     let attributes = modelConfig.attributes
 
     // Auto-derive attributes from model columns when not explicitly defined
     if ((!attributes || (Array.isArray(attributes) && attributes.length === 0)) && modelClass) {
-      try {
-        const columns = modelClass.getColumns()
+      const columns = modelClass.getColumns()
 
-        if (Array.isArray(columns)) {
-          attributes = columns.map((column) => inflection.camelize(column.getName(), true))
-        }
-      } catch {
-        // Model may not be initialized yet
+      if (Array.isArray(columns)) {
+        attributes = columns.map((column) => inflection.camelize(column.getName(), true))
       }
     }
 
     if (Array.isArray(attributes)) {
-      return attributes.map((attributeDefinition) => {
+      const attributeDefinitions = []
+
+      for (const attributeDefinition of attributes) {
         /** @type {FrontendAttributeConfig | null} */
-        let attributeConfig = null
+        let configuredAttributeConfig = null
         let attributeName
 
         if (typeof attributeDefinition == "string") {
           attributeName = attributeDefinition
-          attributeConfig = this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
         } else if (attributeDefinition && typeof attributeDefinition == "object" && !Array.isArray(attributeDefinition)) {
-          attributeConfig = /** @type {FrontendAttributeConfig} */ (attributeDefinition)
-          attributeName = attributeConfig.name
+          configuredAttributeConfig = /** @type {FrontendAttributeConfig} */ (attributeDefinition)
+          attributeName = configuredAttributeConfig.name
         }
 
         if (typeof attributeName != "string" || attributeName.length < 1) {
           throw new Error(`Expected frontend model attribute array entries to be strings or objects with a name, got: ${JSON.stringify(attributeDefinition)}`)
         }
 
-        return {
+        const attributeConfig = await this.resolvedFrontendAttributeConfig({
+          attributeName,
+          className,
+          configuredAttributeConfig,
+          modelClass,
+          resourceClass
+        })
+
+        attributeDefinitions.push({
           jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig}),
           name: attributeName
-        }
-      })
+        })
+      }
+
+      return attributeDefinitions
     }
 
     if (!attributes || typeof attributes !== "object") {
       throw new Error(`Expected 'attributes' as array or object but got: ${attributes}`)
     }
 
-    return Object.keys(attributes).map((attributeName) => {
-      const attributeConfig = attributes[attributeName]
-      const normalizedAttributeConfig = attributeConfig && typeof attributeConfig === "object" ? attributeConfig : null
+    const attributeDefinitions = []
 
-      return {
+    for (const attributeName of Object.keys(attributes)) {
+      const attributeConfig = attributes[attributeName]
+      const configuredAttributeConfig = attributeConfig && typeof attributeConfig === "object"
+        ? /** @type {FrontendAttributeConfig} */ (attributeConfig)
+        : null
+      const normalizedAttributeConfig = await this.resolvedFrontendAttributeConfig({
+        attributeName,
+        className,
+        configuredAttributeConfig,
+        modelClass,
+        resourceClass
+      })
+
+      attributeDefinitions.push({
         jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig: normalizedAttributeConfig}),
         name: attributeName
-      }
-    })
+      })
+    }
+
+    return attributeDefinitions
+  }
+
+  /**
+   * Resolves frontend attribute config from explicit metadata, model columns, or resource method JSDoc.
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend attribute name.
+   * @param {string} args.className - Frontend model class name.
+   * @param {FrontendAttributeConfig | null} args.configuredAttributeConfig - Resource-provided attribute config.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
+   * @returns {Promise<FrontendAttributeConfig>} - Resolved frontend attribute config.
+   */
+  async resolvedFrontendAttributeConfig({attributeName, className, configuredAttributeConfig, modelClass, resourceClass}) {
+    const inferredColumnConfig = this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
+    const inferredModelAccessorConfig = inferredColumnConfig
+      ? null
+      : await this.frontendAttributeConfigForModelAccessor({attributeName, modelClass})
+    const inferredJsDocConfig = inferredColumnConfig
+      ? null
+      : await this.frontendAttributeConfigForResourceAttribute({attributeName, resourceClass})
+    const inferredConfig = inferredColumnConfig || inferredModelAccessorConfig || inferredJsDocConfig
+
+    if (configuredAttributeConfig && this.frontendAttributeConfigHasType(configuredAttributeConfig)) {
+      return inferredConfig
+        ? {...inferredConfig, ...configuredAttributeConfig}
+        : configuredAttributeConfig
+    }
+
+    if (inferredConfig) {
+      return configuredAttributeConfig
+        ? {...inferredConfig, ...configuredAttributeConfig}
+        : inferredConfig
+    }
+
+    throw new Error(`Could not infer JSDoc type for frontend model attribute '${className}#${attributeName}'. Add a backend model column, explicit resource metadata, or a @returns JSDoc type on ${resourceClass?.name || "the resource"}.${attributeName}Attribute().`)
+  }
+
+  /**
+   * Runs frontend attribute config has type.
+   * @param {FrontendAttributeConfig | null | undefined} attributeConfig - Attribute config.
+   * @returns {boolean} - Whether the config declares a type source.
+   */
+  frontendAttributeConfigHasType(attributeConfig) {
+    return typeof this.frontendAttributeTypeValue(attributeConfig) == "string"
+      || typeof attributeConfig?.jsDocType == "string"
   }
 
   /**
@@ -961,6 +1035,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {string} - JSDoc type.
    */
   jsDocTypeForFrontendAttribute({attributeConfig}) {
+    if (attributeConfig && typeof attributeConfig.jsDocType == "string" && attributeConfig.jsDocType.length > 0) {
+      return attributeConfig.jsDocType
+    }
+
     const jsDocType = this.jsDocTypeForFrontendAttributeBaseType(attributeConfig)
 
     if (!this.frontendAttributeCanBeNull(attributeConfig)) {
@@ -986,7 +1064,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       return "boolean"
     } else if (type == "json" || type == "jsonb") {
       return "FrontendModelTransportValue"
-    } else if (type && ["blob", "char", "nvarchar", "varchar", "text", "longtext", "uuid", "character varying"].includes(type)) {
+    } else if (type && ["blob", "char", "nvarchar", "varchar", "text", "longtext", "mediumtext", "tinytext", "uuid", "character varying"].includes(type)) {
       return "string"
     } else if (type && ["bit", "bigint", "decimal", "double", "double precision", "float", "int", "integer", "numeric", "real", "smallint", "tinyint"].includes(type)) {
       return "number"
@@ -1038,6 +1116,296 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * Runs frontend attribute config for resource attribute.
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend model attribute name.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
+   * @returns {Promise<FrontendAttributeConfig | null>} - Attribute config inferred from resource method JSDoc.
+   */
+  async frontendAttributeConfigForResourceAttribute({attributeName, resourceClass}) {
+    if (!resourceClass) return null
+
+    const methodName = `${attributeName}Attribute`
+    const ownerClassName = this.methodOwnerClassName({methodName, targetClass: resourceClass})
+
+    if (!ownerClassName) return null
+
+    const jsDocType = await this.resourceMethodReturnType({
+      methodName,
+      sourceClassName: ownerClassName
+    })
+
+    return jsDocType ? {jsDocType} : null
+  }
+
+  /**
+   * Runs frontend attribute config for model accessor.
+   * @param {object} args - Arguments.
+   * @param {string} args.attributeName - Frontend model attribute name.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
+   * @returns {Promise<FrontendAttributeConfig | null>} - Attribute config inferred from model accessor JSDoc.
+   */
+  async frontendAttributeConfigForModelAccessor({attributeName, modelClass}) {
+    if (!modelClass) return null
+
+    const ownerClassName = this.methodOwnerClassName({methodName: attributeName, targetClass: modelClass})
+
+    if (!ownerClassName) return null
+
+    const jsDocType = await this.resourceMethodReturnType({
+      methodName: attributeName,
+      sourceClassName: ownerClassName
+    })
+
+    return jsDocType ? {jsDocType} : null
+  }
+
+  /**
+   * Runs method owner class name.
+   * @param {object} args - Arguments.
+   * @param {string} args.methodName - Method name.
+   * @param {typeof import("../../../../../database/record/index.js").default | import("../../../../../configuration-types.js").FrontendModelResourceClassType} args.targetClass - Target class.
+   * @returns {string | null} - Class name that declares the method.
+   */
+  methodOwnerClassName({methodName, targetClass}) {
+    let prototype = targetClass.prototype
+
+    while (prototype && prototype !== Object.prototype) {
+      if (Object.prototype.hasOwnProperty.call(prototype, methodName)) {
+        const descriptor = Object.getOwnPropertyDescriptor(prototype, methodName)
+
+        if (typeof descriptor?.value != "function") return null
+
+        const constructorName = prototype.constructor?.name
+
+        if (typeof constructorName == "string" && constructorName.length > 0) return constructorName
+
+        return null
+      }
+
+      prototype = Object.getPrototypeOf(prototype)
+    }
+
+    return null
+  }
+
+  /**
+   * Runs resource method return type.
+   * @param {object} args - Arguments.
+   * @param {string} args.methodName - Method name.
+   * @param {string} args.sourceClassName - Source class name.
+   * @returns {Promise<string | null>} - JSDoc return type when documented.
+   */
+  async resourceMethodReturnType({methodName, sourceClassName}) {
+    const resourceMethodReturnTypes = await this.resourceMethodReturnTypes()
+    const returnTypeKey = `${sourceClassName}.${methodName}`
+
+    if (!resourceMethodReturnTypes.has(returnTypeKey)) return null
+
+    const returnType = resourceMethodReturnTypes.get(returnTypeKey)
+
+    if (typeof returnType != "string" || returnType.length < 1) {
+      throw new Error(`Expected non-empty JSDoc return type for ${returnTypeKey}`)
+    }
+
+    return returnType
+  }
+
+  /**
+   * Runs resource method return types.
+   * @returns {Promise<Map<string, string>>} - Resource method return types keyed by ClassName.methodName.
+   */
+  async resourceMethodReturnTypes() {
+    if (this._resourceMethodReturnTypes) return this._resourceMethodReturnTypes
+
+    const sourceDirectory = path.join(this.directory(), "src")
+    const sourceFiles = await this.javascriptFilesInDirectory(sourceDirectory)
+    const returnTypes = new Map()
+
+    for (const sourceFile of sourceFiles) {
+      const sourceText = await fs.readFile(sourceFile, "utf8")
+
+      this.addResourceMethodReturnTypesFromSource({returnTypes, sourceText})
+    }
+
+    this._resourceMethodReturnTypes = returnTypes
+
+    return returnTypes
+  }
+
+  /**
+   * Adds resource method return types from source.
+   * @param {object} args - Arguments.
+   * @param {Map<string, string>} args.returnTypes - Mutable return types map.
+   * @param {string} args.sourceText - Source text.
+   * @returns {void}
+   */
+  addResourceMethodReturnTypesFromSource({returnTypes, sourceText}) {
+    const classRegex = /class\s+([A-Za-z_$][\w$]*)\s+(?:extends\s+[^{]+)?\{/g
+    let classMatch
+
+    while ((classMatch = classRegex.exec(sourceText))) {
+      const className = classMatch[1]
+      const classBodyStart = classRegex.lastIndex
+      const classBodyEnd = this.matchingBraceIndex({openIndex: classBodyStart - 1, sourceText})
+
+      if (classBodyEnd == null) {
+        throw new Error(`Could not find closing brace for resource class '${className}' while reading frontend attribute JSDoc`)
+      }
+
+      const classBody = sourceText.slice(classBodyStart, classBodyEnd)
+      const jsDocRegex = /\/\*\*([\s\S]*?)\*\//g
+      let jsDocMatch
+
+      while ((jsDocMatch = jsDocRegex.exec(classBody))) {
+        const sourceAfterJsDoc = classBody.slice(jsDocRegex.lastIndex)
+        const methodMatch = sourceAfterJsDoc.match(/^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(/)
+
+        if (!methodMatch) continue
+
+        const methodName = methodMatch[1]
+
+        const returnType = this.jsDocReturnType(jsDocMatch[1])
+
+        if (returnType) {
+          returnTypes.set(`${className}.${methodName}`, returnType)
+        }
+      }
+
+      classRegex.lastIndex = classBodyEnd + 1
+    }
+  }
+
+  /**
+   * Runs js doc return type.
+   * @param {string} jsDocText - JSDoc text inside comment markers.
+   * @returns {string | null} - JSDoc return type when present.
+   */
+  jsDocReturnType(jsDocText) {
+    const returnsMatch = jsDocText.match(/@returns?\s*\{/)
+
+    if (!returnsMatch || returnsMatch.index == null) return null
+
+    const typeOpenIndex = returnsMatch.index + returnsMatch[0].length - 1
+    const typeCloseIndex = this.matchingBraceIndex({openIndex: typeOpenIndex, sourceText: jsDocText})
+
+    if (typeCloseIndex == null) {
+      throw new Error(`Could not parse JSDoc return type from: ${jsDocText}`)
+    }
+
+    const returnType = jsDocText.slice(typeOpenIndex + 1, typeCloseIndex).trim()
+
+    if (returnType.length < 1) {
+      throw new Error(`Expected non-empty JSDoc return type in: ${jsDocText}`)
+    }
+
+    return returnType
+  }
+
+  /**
+   * Runs javascript files in directory.
+   * @param {string} directory - Directory path.
+   * @returns {Promise<string[]>} - JavaScript source file paths.
+   */
+  async javascriptFilesInDirectory(directory) {
+    let entries
+
+    try {
+      entries = await fs.readdir(directory, {withFileTypes: true})
+    } catch (error) {
+      if (error && typeof error == "object" && "code" in error && error.code === "ENOENT") return []
+
+      throw error
+    }
+
+    const filePaths = []
+
+    for (const entry of entries) {
+      const entryPath = path.join(directory, entry.name)
+
+      if (entry.isDirectory()) {
+        filePaths.push(...await this.javascriptFilesInDirectory(entryPath))
+      } else if (entry.isFile() && /\.(mjs|js|jsx|ts)$/.test(entry.name)) {
+        filePaths.push(entryPath)
+      }
+    }
+
+    return filePaths
+  }
+
+  /**
+   * Finds a matching closing brace while respecting JavaScript strings and comments.
+   * @param {object} args - Arguments.
+   * @param {number} args.openIndex - Opening brace index.
+   * @param {string} args.sourceText - Source text.
+   * @returns {number | null} - Closing brace index when found.
+   */
+  matchingBraceIndex({openIndex, sourceText}) {
+    if (sourceText[openIndex] !== "{") {
+      throw new Error(`Expected opening brace at index ${openIndex}`)
+    }
+
+    let depth = 0
+    let inBlockComment = false
+    let inLineComment = false
+    let inString = ""
+
+    for (let index = openIndex; index < sourceText.length; index++) {
+      const char = sourceText[index]
+      const nextChar = sourceText[index + 1]
+      const previousChar = sourceText[index - 1]
+
+      if (inLineComment) {
+        if (char === "\n") inLineComment = false
+
+        continue
+      }
+
+      if (inBlockComment) {
+        if (char === "*" && nextChar === "/") {
+          inBlockComment = false
+          index++
+        }
+
+        continue
+      }
+
+      if (inString) {
+        if (char === inString && previousChar !== "\\") inString = ""
+
+        continue
+      }
+
+      if (char === "/" && nextChar === "/") {
+        inLineComment = true
+        index++
+        continue
+      }
+
+      if (char === "/" && nextChar === "*") {
+        inBlockComment = true
+        index++
+        continue
+      }
+
+      if (char === "\"" || char === "'" || char === "`") {
+        inString = char
+        continue
+      }
+
+      if (char === "{") {
+        depth++
+      } else if (char === "}") {
+        depth--
+
+        if (depth === 0) return index
+      }
+    }
+
+    return null
+  }
+
+  /**
    * Runs frontend attribute config for model attribute.
    * @param {object} args - Arguments.
    * @param {string} args.attributeName - Frontend model attribute name.
@@ -1049,13 +1417,40 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       return null
     }
 
-    const columnName = modelClass.getAttributeNameToColumnNameMap()[attributeName]
+    const resolvedAttributeName = modelClass.resolveAttributeName(attributeName)
+
+    if (!resolvedAttributeName) return null
+
+    let columnName
+
+    try {
+      columnName = modelClass.getAttributeNameToColumnNameMap()[resolvedAttributeName]
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("used before initialization")) return null
+
+      throw error
+    }
 
     if (!columnName) {
       return null
     }
 
-    return modelClass.getColumnsHash()[columnName] || null
+    let column
+
+    try {
+      column = modelClass.getColumnsHash()[columnName]
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("used before initialization")) return null
+
+      throw error
+    }
+
+    if (!column) return null
+
+    return {
+      null: column.getNull(),
+      type: String(column.getType())
+    }
   }
 
   /**

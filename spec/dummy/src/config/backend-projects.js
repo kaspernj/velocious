@@ -141,6 +141,15 @@ class UserFrontendResource extends FrontendModelBaseResource {
     return await this.lookupByEmail()
   }
 
+  /**
+   * User display name exposed by the dummy frontend model.
+   * @param {import("../models/user.js").default} model - User model.
+   * @returns {string | null}
+   */
+  nameAttribute(model) {
+    return model.email()
+  }
+
   /** @returns {Promise<{user: import("../models/user.js").default | null}>} */
   async refreshProfile() {
     const id = this.params().id

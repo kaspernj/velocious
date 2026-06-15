@@ -30,7 +30,43 @@ class CallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class Call extends DatabaseRecord {
+  /** @returns {number | null} */
+  ea() { return this.readAttribute("ea") }
+}
+
+class InferredCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: [
+        "id",
+        {name: "startedAt", selectedByDefault: false},
+        {name: "durationSeconds", selectedByDefault: false},
+        {name: "metadata", selectedByDefault: false},
+        {name: "active", selectedByDefault: false},
+        {name: "eA", selectedByDefault: false}
+      ]
+    }
+  }
+}
+
+class UninferableCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: ["unknownComputed"]
+    }
+  }
+}
+
 class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = backendProjects[0].frontendModels.Task.ModelClass
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -48,7 +84,10 @@ class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseRes
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: ["id", "name"],
+      attributes: {
+        id: {type: "integer"},
+        name: {type: "varchar", null: true}
+      },
       relationships: ["project"]
     }
   }
@@ -67,7 +106,10 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: ["reference", "email"]
+      attributes: [
+        {name: "reference", type: "varchar", null: true},
+        {name: "email", type: "varchar"}
+      ]
     }
   }
 }
@@ -75,7 +117,29 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
 class User extends DatabaseRecord {}
 User.setPrimaryKey("reference")
 
-class Call extends DatabaseRecord {}
+/** @returns {void} */
+function configureCallColumns() {
+  Call._initialized = true
+  Call._columns = [
+    new TableColumn("id", {null: false, type: "uuid"}),
+    new TableColumn("started_at", {null: true, type: "datetime"}),
+    new TableColumn("duration_seconds", {null: false, type: "integer"}),
+    new TableColumn("metadata", {null: true, type: "json"}),
+    new TableColumn("active", {null: false, type: "boolean"}),
+    new TableColumn("EA", {null: true, type: "integer"})
+  ]
+  delete Call._columnsAsHash
+  delete Call._columnTypeByName
+  delete Call._columnNameToAttributeName
+  Call._attributeNameToColumnName = {
+    active: "active",
+    durationSeconds: "duration_seconds",
+    ea: "EA",
+    id: "id",
+    metadata: "metadata",
+    startedAt: "started_at"
+  }
+}
 
 /**
  * Typechecks source text and fails on diagnostics matched by the filter.
@@ -160,6 +224,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@property {TaskAttributes[\"name\"]} [name] - Permitted name value.")
     expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
     expect(taskContents).not.toContain("[is_done]")
+    expect(taskContents).toContain("@property {string | null} nameUppercase - Attribute value.")
+    expect(taskContents).not.toContain("@property {FrontendModelAttributeValue} nameUppercase - Attribute value.")
     expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
     expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")
@@ -326,23 +392,7 @@ describe("Cli - generate - frontend-models", () => {
   it("infers typed attribute typedefs from backend model columns for array attributes", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
-    Call._initialized = true
-    Call._columns = [
-      new TableColumn("id", {null: false, type: "uuid"}),
-      new TableColumn("started_at", {null: true, type: "datetime"}),
-      new TableColumn("duration_seconds", {null: false, type: "integer"}),
-      new TableColumn("metadata", {null: true, type: "json"}),
-      new TableColumn("active", {null: false, type: "boolean"})
-    ]
-    Call._columnsAsHash = {}
-    Call._columnTypeByName = {}
-    Call._attributeNameToColumnName = {
-      active: "active",
-      durationSeconds: "duration_seconds",
-      id: "id",
-      metadata: "metadata",
-      startedAt: "started_at"
-    }
+    configureCallColumns()
 
     const cli = new Cli({
       configuration: buildConfiguration({
@@ -371,6 +421,67 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
     expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
     expect(callContents).toContain("@property {boolean} active - Attribute value.")
+  })
+
+  it("infers typed attribute typedefs from backend model columns for configured attribute entries", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    configureCallColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            Call: InferredCallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          Call._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string} id - Attribute value.")
+    expect(callContents).toContain("@property {Date | null} startedAt - Attribute value.")
+    expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
+    expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
+    expect(callContents).toContain("@property {boolean} active - Attribute value.")
+    expect(callContents).toContain("@property {number | null} eA - Attribute value.")
+  })
+
+  it("fails when a frontend attribute cannot be inferred from a column or resource method JSDoc", async () => {
+    configureCallColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            Call: UninferableCallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          Call._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/Could not infer JSDoc type for frontend model attribute 'Call#unknownComputed'/)
   })
 
   it("fails when no backend projects are configured", async () => {
@@ -494,7 +605,12 @@ describe("Cli - generate - frontend-models", () => {
 
       /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
       static resourceConfig() {
-        return {attributes: ["id", "name"]}
+        return {
+          attributes: {
+            id: {type: "integer"},
+            name: {type: "varchar", null: true}
+          }
+        }
       }
     }
 
