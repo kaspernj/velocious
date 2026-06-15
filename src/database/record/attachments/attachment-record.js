@@ -1,6 +1,7 @@
 // @ts-check
 
 import DatabaseRecord from "../index.js"
+import RecordAttachmentsStore from "./store.js"
 
 /** Frontend-readable metadata row for `velocious_attachments`. */
 export default class VelociousAttachment extends DatabaseRecord {
@@ -10,6 +11,22 @@ export default class VelociousAttachment extends DatabaseRecord {
    */
   static tableName() {
     return "velocious_attachments"
+  }
+
+  /**
+   * Ensures the framework-owned attachment table exists before loading metadata.
+   * @param {object} args - Options object.
+   * @param {import("../../../configuration.js").default} args.configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  static async initializeRecord({configuration}) {
+    const store = new RecordAttachmentsStore({
+      configuration,
+      databaseIdentifier: this.getConfiguredDatabaseIdentifier()
+    })
+
+    await store.ensureReady()
+    await super.initializeRecord({configuration})
   }
 
   /**
