@@ -225,6 +225,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
     expect(taskContents).not.toContain("[is_done]")
     expect(taskContents).toContain("@property {string | null} nameUppercase - Attribute value.")
+    expect(taskContents).toContain("@property {string | null} asyncNameUppercase - Attribute value.")
+    expect(taskContents).not.toContain("@property {Promise<string | null>} asyncNameUppercase - Attribute value.")
     expect(taskContents).not.toContain("@property {FrontendModelAttributeValue} nameUppercase - Attribute value.")
     expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")

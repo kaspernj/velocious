@@ -1135,7 +1135,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       sourceClassName: ownerClassName
     })
 
-    return jsDocType ? {jsDocType} : null
+    return jsDocType ? {jsDocType: this.unwrappedPromiseJsDocType({jsDocType})} : null
   }
 
   /**
@@ -1158,6 +1158,30 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     })
 
     return jsDocType ? {jsDocType} : null
+  }
+
+  /**
+   * Runs unwrapped promise js doc type.
+   * @param {object} args - Arguments.
+   * @param {string} args.jsDocType - JSDoc type to normalize.
+   * @returns {string} - The resolved value type for serialized frontend attributes.
+   */
+  unwrappedPromiseJsDocType({jsDocType}) {
+    const promisePrefix = "Promise<"
+
+    if (!jsDocType.startsWith(promisePrefix)) return jsDocType
+
+    if (!jsDocType.endsWith(">")) {
+      throw new Error(`Expected Promise JSDoc type to end with '>': ${jsDocType}`)
+    }
+
+    const resolvedType = jsDocType.slice(promisePrefix.length, -1).trim()
+
+    if (resolvedType.length < 1) {
+      throw new Error(`Expected Promise JSDoc type to contain a resolved type: ${jsDocType}`)
+    }
+
+    return resolvedType
   }
 
   /**

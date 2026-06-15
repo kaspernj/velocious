@@ -13,7 +13,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static resourceConfig() {
     return {
       abilities: ["read", "create", "update", "destroy"],
-      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "updatedAt"],
+      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "updatedAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find", "update", "destroy"],
       relationships: ["project", "comments"],
@@ -31,6 +31,16 @@ class TaskFrontendResource extends FrontendModelBaseResource {
     const name = model.readAttribute("name")
 
     return typeof name === "string" ? name.toUpperCase() : null
+  }
+
+  /**
+   * Virtual attribute resolved asynchronously before frontend serialization.
+   *
+   * @param {import("../models/task.js").default} model - Task model instance.
+   * @returns {Promise<string | null>}
+   */
+  async asyncNameUppercaseAttribute(model) {
+    return this.nameUppercaseAttribute(model)
   }
 
   /** @returns {Array<string | Record<string, ?>>} - Permit spec for Task writes. */
