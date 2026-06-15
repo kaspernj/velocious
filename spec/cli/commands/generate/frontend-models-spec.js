@@ -480,6 +480,80 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {number | null} eA - Attribute value.")
   })
 
+  it("infers resource attribute typedefs from backend project source roots before backend model columns", async () => {
+    const temporaryDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-backend-source-root")
+    const backendDirectory = `${temporaryDirectory}/backend`
+    const outputDirectory = `${temporaryDirectory}/output`
+    const resourcesDirectory = `${backendDirectory}/src/resources`
+    const repositoryDirectory = path.resolve(dummyDirectory(), "../..")
+
+    await fs.rm(temporaryDirectory, {force: true, recursive: true})
+    await fs.mkdir(resourcesDirectory, {recursive: true})
+    await fs.writeFile(`${resourcesDirectory}/report-resource.js`, `// @ts-check
+
+import DatabaseRecord from "${repositoryDirectory}/src/database/record/index.js"
+import FrontendModelBaseResource from "${repositoryDirectory}/src/frontend-model-resource/base-resource.js"
+import TableColumn from "${repositoryDirectory}/src/database/table-data/table-column.js"
+
+class Report extends DatabaseRecord {}
+Report._initialized = true
+Report._columns = [
+  new TableColumn("id", {null: false, type: "uuid"}),
+  new TableColumn("status_code", {null: false, type: "integer"})
+]
+Report._attributeNameToColumnName = {
+  id: "id",
+  statusCode: "status_code"
+}
+
+export default class ReportResource extends FrontendModelBaseResource {
+  static ModelClass = Report
+
+  /** @returns {import("${repositoryDirectory}/src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id", "statusCode"]
+    }
+  }
+
+  /**
+   * Formats the numeric status code for frontend display.
+   * @param {Report} model - Report model.
+   * @returns {string}
+   */
+  statusCodeAttribute(model) {
+    void model
+    return "HTTP 200"
+  }
+}
+`)
+
+    try {
+      const cli = new Cli({
+        configuration: buildConfiguration({
+          backendProjectsList: [{
+            path: backendDirectory,
+            frontendModelsOutputPath: outputDirectory
+          }]
+        }),
+        directory: dummyDirectory(),
+        environmentHandler: new EnvironmentHandlerNode(),
+        processArgs: ["g:frontend-models"],
+        testing: true
+      })
+
+      await cli.execute()
+
+      const reportContents = await fs.readFile(`${outputDirectory}/src/frontend-models/report.js`, "utf8")
+
+      expect(reportContents).toContain("@property {string} statusCode - Attribute value.")
+      expect(reportContents).not.toContain("@property {number} statusCode - Attribute value.")
+    } finally {
+      await fs.rm(temporaryDirectory, {force: true, recursive: true})
+    }
+  })
+
   it("fails when a frontend attribute cannot be inferred from a column or resource method JSDoc", async () => {
     configureCallColumns()
 

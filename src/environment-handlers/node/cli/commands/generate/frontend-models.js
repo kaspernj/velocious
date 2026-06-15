@@ -1099,14 +1099,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {Promise<FrontendAttributeConfig>} - Resolved frontend attribute config.
    */
   async resolvedFrontendAttributeConfig({attributeName, className, configuredAttributeConfig, modelClass, resourceClass}) {
-    const inferredColumnConfig = this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
-    const inferredModelAccessorConfig = inferredColumnConfig
+    const inferredResourceConfig = await this.frontendAttributeConfigForResourceAttribute({attributeName, resourceClass})
+    const inferredColumnConfig = inferredResourceConfig
+      ? null
+      : this.frontendAttributeConfigForModelAttribute({attributeName, modelClass})
+    const inferredModelAccessorConfig = inferredResourceConfig || inferredColumnConfig
       ? null
       : await this.frontendAttributeConfigForModelAccessor({attributeName, modelClass})
-    const inferredJsDocConfig = inferredColumnConfig
-      ? null
-      : await this.frontendAttributeConfigForResourceAttribute({attributeName, resourceClass})
-    const inferredConfig = inferredColumnConfig || inferredModelAccessorConfig || inferredJsDocConfig
+    const inferredConfig = inferredResourceConfig || inferredColumnConfig || inferredModelAccessorConfig
 
     if (configuredAttributeConfig && this.frontendAttributeConfigHasType(configuredAttributeConfig)) {
       return inferredConfig
@@ -1375,8 +1375,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   async resourceMethodReturnTypes() {
     if (this._resourceMethodReturnTypes) return this._resourceMethodReturnTypes
 
-    const sourceDirectory = path.join(this.directory(), "src")
-    const sourceFiles = await this.javascriptFilesInDirectory(sourceDirectory)
+    const sourceFiles = await this.frontendModelJsDocSourceFiles()
     const returnTypes = new Map()
 
     for (const sourceFile of sourceFiles) {
@@ -1397,8 +1396,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   async resourceMethodParameterTypes() {
     if (this._resourceMethodParameterTypes) return this._resourceMethodParameterTypes
 
-    const sourceDirectory = path.join(this.directory(), "src")
-    const sourceFiles = await this.javascriptFilesInDirectory(sourceDirectory)
+    const sourceFiles = await this.frontendModelJsDocSourceFiles()
     const parameterTypes = new Map()
 
     for (const sourceFile of sourceFiles) {
@@ -1410,6 +1408,36 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     this._resourceMethodParameterTypes = parameterTypes
 
     return parameterTypes
+  }
+
+  /**
+   * Runs frontend model JSDoc source files.
+   * @returns {Promise<string[]>} - JavaScript source files that can define frontend-model resources and model accessors.
+   */
+  async frontendModelJsDocSourceFiles() {
+    const sourceFiles = []
+
+    for (const sourceDirectory of this.frontendModelJsDocSourceDirectories()) {
+      sourceFiles.push(...await this.javascriptFilesInDirectory(sourceDirectory))
+    }
+
+    return sourceFiles
+  }
+
+  /**
+   * Runs frontend model JSDoc source directories.
+   * @returns {string[]} - Source directories to scan for generated frontend-model JSDoc.
+   */
+  frontendModelJsDocSourceDirectories() {
+    const sourceDirectories = new Set([path.join(this.directory(), "src")])
+
+    for (const backendProject of this.getConfiguration().getBackendProjects()) {
+      if (typeof backendProject.path == "string" && backendProject.path.length > 0) {
+        sourceDirectories.add(path.join(backendProject.path, "src"))
+      }
+    }
+
+    return Array.from(sourceDirectories)
   }
 
   /**
