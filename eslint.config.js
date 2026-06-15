@@ -1,14 +1,8 @@
 import js from "@eslint/js"
 import {jsdoc} from 'eslint-plugin-jsdoc'
+import jsdocTagLinesPlugin from "eslint-plugin-jsdoc-tag-lines"
 import globals from "globals"
 import {defineConfig} from "eslint/config"
-import jsdocTagLines from "./scripts/eslint-rules/jsdoc-tag-lines.js"
-
-const localPlugin = {
-  rules: {
-    "jsdoc-tag-lines": jsdocTagLines
-  }
-}
 
 export default defineConfig([
   {
@@ -29,10 +23,10 @@ export default defineConfig([
   {
     files: ["src/**/*.js"],
     plugins: {
-      velocious: localPlugin
+      "jsdoc-tag-lines": jsdocTagLinesPlugin
     },
     rules: {
-      "velocious/jsdoc-tag-lines": "error"
+      "jsdoc-tag-lines/jsdoc-tag-lines": "error"
     }
   },
   jsdoc({

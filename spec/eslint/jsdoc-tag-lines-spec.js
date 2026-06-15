@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import {Linter} from "eslint"
-import jsdocTagLines from "../../scripts/eslint-rules/jsdoc-tag-lines.js"
+import jsdocTagLinesPlugin from "eslint-plugin-jsdoc-tag-lines"
 
 /**
  * Runs the local JSDoc tag-line rule against source text.
@@ -20,14 +20,10 @@ function lintSource(source) {
         sourceType: "module"
       },
       plugins: {
-        velocious: {
-          rules: {
-            "jsdoc-tag-lines": jsdocTagLines
-          }
-        }
+        "jsdoc-tag-lines": jsdocTagLinesPlugin
       },
       rules: {
-        "velocious/jsdoc-tag-lines": "error"
+        "jsdoc-tag-lines/jsdoc-tag-lines": "error"
       }
     }
   ], {filename: "example.js"})
