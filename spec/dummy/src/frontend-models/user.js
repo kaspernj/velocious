@@ -12,7 +12,7 @@ import FrontendModelBase from "../../../../src/frontend-models/base.js"
 /**
  * UserAttributes type.
  * @typedef {object} UserAttributes
- * @property {string | null} reference - Attribute value.
+ * @property {string} reference - Attribute value.
  * @property {string} email - Attribute value.
  */
 /**
@@ -44,19 +44,19 @@ class User extends FrontendModelBase {
   reference() { return /** @type {UserAttributes["reference"]} */ (this.readAttribute("reference")) }
 
   /**
-   * @param {UserAttributes["reference"]} newValue - New attribute value.
-   * @returns {UserAttributes["reference"]} - Assigned value.
+   * @param {UserAttributes["reference"] | null} newValue - New attribute value.
+   * @returns {UserAttributes["reference"] | null} - Assigned value.
    */
-  setReference(newValue) { return /** @type {UserAttributes["reference"]} */ (this.setAttribute("reference", newValue)) }
+  setReference(newValue) { return /** @type {UserAttributes["reference"] | null} */ (this.setAttribute("reference", newValue)) }
 
   /** @returns {UserAttributes["email"]} - Attribute value. */
   email() { return /** @type {UserAttributes["email"]} */ (this.readAttribute("email")) }
 
   /**
-   * @param {UserAttributes["email"]} newValue - New attribute value.
-   * @returns {UserAttributes["email"]} - Assigned value.
+   * @param {UserAttributes["email"] | null} newValue - New attribute value.
+   * @returns {UserAttributes["email"] | null} - Assigned value.
    */
-  setEmail(newValue) { return /** @type {UserAttributes["email"]} */ (this.setAttribute("email", newValue)) }
+  setEmail(newValue) { return /** @type {UserAttributes["email"] | null} */ (this.setAttribute("email", newValue)) }
 }
 
 FrontendModelBase.registerModel(User)

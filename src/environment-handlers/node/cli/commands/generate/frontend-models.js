@@ -20,13 +20,16 @@ import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigura
  */
 /**
  * Permit spec returned by frontend-model resources during generation.
- * @typedef {Array<string | Record<string, object>>} FrontendModelGeneratorPermitSpec
+ * @typedef {Array<string | Record<string, FrontendModelGeneratorPermitSpec>>} FrontendModelGeneratorPermitSpec
  */
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
   /** @type {Map<string, string> | null} */
   _resourceMethodReturnTypes = null
+
+  /** @type {Map<string, string[]> | null} */
+  _resourceMethodParameterTypes = null
 
   /**
    * Runs execute.
@@ -318,8 +321,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
       fileContent += " */\n"
     }
-    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedCreateParams, typeName: createAttributesTypeName})
-    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedUpdateParams, typeName: updateAttributesTypeName})
+    fileContent += await this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedCreateParams, resourceClass, typeName: createAttributesTypeName})
+    fileContent += await this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedUpdateParams, resourceClass, typeName: updateAttributesTypeName})
     fileContent += "/**\n"
     fileContent += ` * Frontend model for ${className}.\n`
     fileContent += ` * @augments {FrontendModelBase<${attributesTypeName}, ${createAttributesTypeName}, ${updateAttributesTypeName}>}\n`
@@ -425,17 +428,24 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     for (const attribute of attributes) {
       const camelizedAttribute = inflection.camelize(attribute.name, true)
       const camelizedAttributeUpper = inflection.camelize(attribute.name)
+      const attributeType = `${attributesTypeName}[${JSON.stringify(attribute.name)}]`
+      const setterAttributeType = await this.frontendWriteAttributeType({
+        attribute,
+        attributeName: attribute.name,
+        attributesTypeName,
+        resourceClass
+      })
 
       fileContent += "\n"
-      fileContent += `  /** @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Attribute value. */\n`
-      fileContent += `  ${camelizedAttribute}() { return /** @type {${attributesTypeName}[${JSON.stringify(attribute.name)}]} */ (this.readAttribute(${JSON.stringify(attribute.name)})) }\n`
+      fileContent += `  /** @returns {${attributeType}} - Attribute value. */\n`
+      fileContent += `  ${camelizedAttribute}() { return /** @type {${attributeType}} */ (this.readAttribute(${JSON.stringify(attribute.name)})) }\n`
 
       fileContent += "\n"
       fileContent += "  /**\n"
-      fileContent += `   * @param {${attributesTypeName}[${JSON.stringify(attribute.name)}]} newValue - New attribute value.\n`
-      fileContent += `   * @returns {${attributesTypeName}[${JSON.stringify(attribute.name)}]} - Assigned value.\n`
+      fileContent += `   * @param {${setterAttributeType}} newValue - New attribute value.\n`
+      fileContent += `   * @returns {${setterAttributeType}} - Assigned value.\n`
       fileContent += "   */\n"
-      fileContent += `  set${camelizedAttributeUpper}(newValue) { return /** @type {${attributesTypeName}[${JSON.stringify(attribute.name)}]} */ (this.setAttribute(${JSON.stringify(attribute.name)}, newValue)) }\n`
+      fileContent += `  set${camelizedAttributeUpper}(newValue) { return /** @type {${setterAttributeType}} */ (this.setAttribute(${JSON.stringify(attribute.name)}, newValue)) }\n`
     }
 
     for (const methodName of Object.keys(collectionCommands)) {
@@ -604,11 +614,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {string} args.attributesTypeName - Generated read attributes typedef name.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Array<{attributes: Array<{name: string, type: string}>, relationshipName: string, typeName: string}>} args.nestedWriteTypes - Nested write typedefs.
-   * @param {Array<string | Record<string, object>>} args.permittedParams - Resource permitted params spec.
+   * @param {FrontendModelGeneratorPermitSpec} args.permittedParams - Resource permitted params spec.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
    * @param {string} args.typeName - Typedef name.
-   * @returns {string} - Generated typedef source.
+   * @returns {Promise<string>} - Generated typedef source.
    */
-  writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams, typeName}) {
+  async writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams, resourceClass, typeName}) {
     const attributeLines = []
 
     let output = "/**\n"
@@ -625,8 +636,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
         emittedAttributeNames.add(attributeName)
 
-        const attribute = attributesByName.get(attributeName)
-        const type = attribute ? `${attributesTypeName}[${JSON.stringify(attribute.name)}]` : "FrontendModelAttributeValue"
+        const type = await this.frontendWriteAttributeType({
+          attribute: attributesByName.get(attributeName),
+          attributeName,
+          attributesTypeName,
+          resourceClass
+        })
 
         attributeLines.push(` * @property {${type}} [${attributeName}] - Permitted ${attributeName} value.\n`)
       } else if (entry && typeof entry == "object" && !Array.isArray(entry)) {
@@ -649,6 +664,58 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     output += " */\n"
 
     return output
+  }
+
+  /**
+   * Runs frontend write attribute type.
+   * @param {{attribute: {jsDocType: string, name: string} | undefined, attributeName: string, attributesTypeName: string, resourceClass: import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined}} args - Arguments.
+   * @returns {Promise<string>} - JSDoc type for the permitted write field.
+   */
+  async frontendWriteAttributeType({attribute, attributeName, attributesTypeName, resourceClass}) {
+    const setterParameterType = await this.frontendWriteAttributeSetterParameterType({attributeName, resourceClass})
+
+    if (setterParameterType) return `${setterParameterType} | null`
+
+    if (!attribute) return "FrontendModelAttributeValue"
+
+    if (attribute.jsDocType.trim() === "null") return "FrontendModelAttributeValue"
+
+    return `${attributesTypeName}[${JSON.stringify(attribute.name)}] | null`
+  }
+
+  /**
+   * Runs frontend write attribute setter parameter type.
+   * @param {{attributeName: string, resourceClass: import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined}} args - Arguments.
+   * @returns {Promise<string | null>} - Setter value parameter type when it is useful for generation.
+   */
+  async frontendWriteAttributeSetterParameterType({attributeName, resourceClass}) {
+    if (!resourceClass?.name) return null
+
+    const methodName = `set${inflection.camelize(attributeName)}Attribute`
+    const parameterType = await this.resourceMethodParameterType({
+      methodName,
+      parameterIndex: 1,
+      sourceClassName: resourceClass.name
+    })
+
+    if (!parameterType) return null
+    if (this.isBroadGeneratedType(parameterType)) return null
+
+    return parameterType
+  }
+
+  /**
+   * Runs is broad generated type.
+   * @param {string} jsDocType - JSDoc type.
+   * @returns {boolean} - Whether the type is too broad to improve generated write typing.
+   */
+  isBroadGeneratedType(jsDocType) {
+    const normalizedType = jsDocType.trim()
+
+    return normalizedType === "?"
+      || normalizedType === "any"
+      || normalizedType === "object"
+      || normalizedType === "unknown"
   }
 
   /**
@@ -946,8 +1013,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
           resourceClass
         })
 
+        const frontendAttributeConfig = this.frontendAttributeConfigForGeneratedAttribute({
+          attributeConfig,
+          attributeName,
+          modelClass
+        })
+
         attributeDefinitions.push({
-          jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig}),
+          jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig: frontendAttributeConfig}),
           name: attributeName
         })
       }
@@ -973,14 +1046,46 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         modelClass,
         resourceClass
       })
+      const frontendAttributeConfig = this.frontendAttributeConfigForGeneratedAttribute({
+        attributeConfig: normalizedAttributeConfig,
+        attributeName,
+        modelClass
+      })
 
       attributeDefinitions.push({
-        jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig: normalizedAttributeConfig}),
+        jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig: frontendAttributeConfig}),
         name: attributeName
       })
     }
 
     return attributeDefinitions
+  }
+
+  /**
+   * Runs frontend attribute config for generated attribute.
+   * @param {{attributeConfig: FrontendAttributeConfig, attributeName: string, modelClass: typeof import("../../../../../database/record/index.js").default | undefined}} args - Arguments.
+   * @returns {FrontendAttributeConfig} - Attribute config used for generated JSDoc.
+   */
+  frontendAttributeConfigForGeneratedAttribute({attributeConfig, attributeName, modelClass}) {
+    if (!this.frontendAttributeIsModelPrimaryKey({attributeName, modelClass})) return attributeConfig
+
+    return {...attributeConfig, null: false}
+  }
+
+  /**
+   * Runs frontend attribute is model primary key.
+   * @param {{attributeName: string, modelClass: typeof import("../../../../../database/record/index.js").default | undefined}} args - Arguments.
+   * @returns {boolean} - Whether the attribute is the model primary key.
+   */
+  frontendAttributeIsModelPrimaryKey({attributeName, modelClass}) {
+    if (!modelClass) return false
+
+    const primaryKey = modelClass.primaryKey()
+
+    if (typeof primaryKey != "string" || primaryKey.length < 1) return false
+    if (attributeName === primaryKey) return true
+
+    return modelClass.resolveAttributeName(primaryKey) === attributeName
   }
 
   /**
@@ -1236,6 +1341,34 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * Runs resource method parameter type.
+   * @param {{methodName: string, parameterIndex: number, sourceClassName: string}} args - Arguments.
+   * @returns {Promise<string | null>} - JSDoc parameter type when documented.
+   */
+  async resourceMethodParameterType({methodName, parameterIndex, sourceClassName}) {
+    const resourceMethodParameterTypes = await this.resourceMethodParameterTypes()
+    const parameterTypesKey = `${sourceClassName}.${methodName}`
+
+    if (!resourceMethodParameterTypes.has(parameterTypesKey)) return null
+
+    const parameterTypes = resourceMethodParameterTypes.get(parameterTypesKey)
+
+    if (!parameterTypes) {
+      throw new Error(`Expected JSDoc parameter types for ${parameterTypesKey}`)
+    }
+
+    const parameterType = parameterTypes[parameterIndex]
+
+    if (parameterType === undefined) return null
+
+    if (parameterType.length < 1) {
+      throw new Error(`Expected non-empty JSDoc parameter type for ${parameterTypesKey} parameter ${parameterIndex}`)
+    }
+
+    return parameterType
+  }
+
+  /**
    * Runs resource method return types.
    * @returns {Promise<Map<string, string>>} - Resource method return types keyed by ClassName.methodName.
    */
@@ -1255,6 +1388,28 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     this._resourceMethodReturnTypes = returnTypes
 
     return returnTypes
+  }
+
+  /**
+   * Runs resource method parameter types.
+   * @returns {Promise<Map<string, string[]>>} - Resource method parameter types keyed by ClassName.methodName.
+   */
+  async resourceMethodParameterTypes() {
+    if (this._resourceMethodParameterTypes) return this._resourceMethodParameterTypes
+
+    const sourceDirectory = path.join(this.directory(), "src")
+    const sourceFiles = await this.javascriptFilesInDirectory(sourceDirectory)
+    const parameterTypes = new Map()
+
+    for (const sourceFile of sourceFiles) {
+      const sourceText = await fs.readFile(sourceFile, "utf8")
+
+      this.addResourceMethodParameterTypesFromSource({parameterTypes, sourceText})
+    }
+
+    this._resourceMethodParameterTypes = parameterTypes
+
+    return parameterTypes
   }
 
   /**
@@ -1301,6 +1456,46 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * Adds resource method parameter types from source.
+   * @param {{parameterTypes: Map<string, string[]>, sourceText: string}} args - Arguments.
+   * @returns {void}
+   */
+  addResourceMethodParameterTypesFromSource({parameterTypes, sourceText}) {
+    const classRegex = /class\s+([A-Za-z_$][\w$]*)\s+(?:extends\s+[^{]+)?\{/g
+    let classMatch
+
+    while ((classMatch = classRegex.exec(sourceText))) {
+      const className = classMatch[1]
+      const classBodyStart = classRegex.lastIndex
+      const classBodyEnd = this.matchingBraceIndex({openIndex: classBodyStart - 1, sourceText})
+
+      if (classBodyEnd == null) {
+        throw new Error(`Could not find closing brace for resource class '${className}' while reading frontend attribute JSDoc`)
+      }
+
+      const classBody = sourceText.slice(classBodyStart, classBodyEnd)
+      const jsDocRegex = /\/\*\*([\s\S]*?)\*\//g
+      let jsDocMatch
+
+      while ((jsDocMatch = jsDocRegex.exec(classBody))) {
+        const sourceAfterJsDoc = classBody.slice(jsDocRegex.lastIndex)
+        const methodMatch = sourceAfterJsDoc.match(/^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(/)
+
+        if (!methodMatch) continue
+
+        const methodName = methodMatch[1]
+        const jsDocParameterTypes = this.jsDocParameterTypes(jsDocMatch[1])
+
+        if (jsDocParameterTypes.length > 0) {
+          parameterTypes.set(`${className}.${methodName}`, jsDocParameterTypes)
+        }
+      }
+
+      classRegex.lastIndex = classBodyEnd + 1
+    }
+  }
+
+  /**
    * Runs js doc return type.
    * @param {string} jsDocText - JSDoc text inside comment markers.
    * @returns {string | null} - JSDoc return type when present.
@@ -1324,6 +1519,37 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return returnType
+  }
+
+  /**
+   * Runs js doc parameter types.
+   * @param {string} jsDocText - JSDoc text inside comment markers.
+   * @returns {string[]} - JSDoc parameter types in declaration order.
+   */
+  jsDocParameterTypes(jsDocText) {
+    const parameterTypes = []
+    const paramRegex = /@param\s*\{/g
+    let _paramMatch
+
+    while ((_paramMatch = paramRegex.exec(jsDocText))) {
+      const typeOpenIndex = paramRegex.lastIndex - 1
+      const typeCloseIndex = this.matchingBraceIndex({openIndex: typeOpenIndex, sourceText: jsDocText})
+
+      if (typeCloseIndex == null) {
+        throw new Error(`Could not parse JSDoc parameter type from: ${jsDocText}`)
+      }
+
+      const parameterType = jsDocText.slice(typeOpenIndex + 1, typeCloseIndex).trim()
+
+      if (parameterType.length < 1) {
+        throw new Error(`Expected non-empty JSDoc parameter type in: ${jsDocText}`)
+      }
+
+      parameterTypes.push(parameterType)
+      paramRegex.lastIndex = typeCloseIndex + 1
+    }
+
+    return parameterTypes
   }
 
   /**

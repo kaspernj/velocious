@@ -221,11 +221,13 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).not.toContain("builtInMemberCommands")
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
     expect(taskContents).toContain("@typedef {object} TaskCreateAttributes")
-    expect(taskContents).toContain("@property {TaskAttributes[\"name\"]} [name] - Permitted name value.")
-    expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
+    expect(taskContents).toContain("@property {TaskAttributes[\"name\"] | null} [name] - Permitted name value.")
+    expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"] | null} [isDone] - Permitted isDone value.")
+    expect(taskContents).toContain("@property {string | null} [downloadToken] - Permitted downloadToken value.")
     expect(taskContents).not.toContain("[is_done]")
     expect(taskContents).toContain("@property {string | null} nameUppercase - Attribute value.")
     expect(taskContents).toContain("@property {string | null} asyncNameUppercase - Attribute value.")
+    expect(taskContents).toContain("@property {null} downloadToken - Attribute value.")
     expect(taskContents).not.toContain("@property {Promise<string | null>} asyncNameUppercase - Attribute value.")
     expect(taskContents).not.toContain("@property {FrontendModelAttributeValue} nameUppercase - Attribute value.")
     expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
@@ -241,7 +243,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("/** @returns {TaskAttributes[\"identifier\"]} - Attribute value. */")
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
     expect(taskContents).toContain("identifier() { return /** @type {TaskAttributes[\"identifier\"]} */ (this.readAttribute(\"identifier\")) }")
-    expect(taskContents).toContain("setIdentifier(newValue) { return /** @type {TaskAttributes[\"identifier\"]} */ (this.setAttribute(\"identifier\", newValue)) }")
+    expect(taskContents).toContain("setIdentifier(newValue) { return /** @type {TaskAttributes[\"identifier\"] | null} */ (this.setAttribute(\"identifier\", newValue)) }")
+    expect(taskContents).toContain("setDownloadToken(newValue) { return /** @type {string | null} */ (this.setAttribute(\"downloadToken\", newValue)) }")
     expect(taskContents).not.toContain("import Project from")
     expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */")
     expect(taskContents).toContain("static relationshipDefinitions()")
@@ -300,7 +303,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("payload: User.normalizeCustomCommandPayloadArguments(commandArguments)")
     expect(userContents).toContain("commandName: \"refresh-profile\"")
     expect(userContents).toContain("email() { return /** @type {UserAttributes[\"email\"]} */ (this.readAttribute(\"email\")) }")
-    expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
+    expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"] | null} */ (this.setAttribute(\"email\", newValue)) }")
     expect(userContents).toContain("@typedef {Record<string, never>} UserCreateAttributes")
     expect(userContents).toContain("@typedef {Record<string, never>} UserUpdateAttributes")
     expect(userContents).not.toContain("@typedef {object} UserCreateAttributes")
@@ -326,15 +329,32 @@ describe("Cli - generate - frontend-models", () => {
 
       async function checkWrites() {
         await Task.create({name: "Generated typing works"})
+        await Task.create({name: null})
+        await Task.create({downloadToken: "download-token"})
         // @ts-expect-error unknown create attributes must stay rejected
         await Task.create({typo: "Generated typing works"})
         // @ts-expect-error read-only create attributes must stay rejected
         await Task.create({id: "read-only"})
+        // @ts-expect-error write-only setter JSDoc must keep string typing
+        await Task.create({downloadToken: {token: "bad"}})
 
         const task = new Task()
+        task.setId(null)
+        task.setDownloadToken("download-token")
+        task.setDownloadToken(null)
+        // @ts-expect-error write-only generated setter must reject object values
+        task.setDownloadToken({token: "bad"})
         await task.update({name: "Generated typing works"})
+        await task.update({isDone: null})
+        await task.update({downloadToken: null})
         // @ts-expect-error unknown update attributes must stay rejected
         await task.update({typo: "Generated typing works"})
+
+        const users = await User.where({email: "generated@example.com"}).toArray()
+        for (const loadedUser of users) {
+          loadedUser.email()
+        }
+        await User.findBy({email: "generated@example.com"})
 
         await User.create()
         await User.create({})
@@ -588,6 +608,7 @@ describe("Cli - generate - frontend-models", () => {
 
     const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
 
+    expect(userContents).toContain("@property {string} reference - Attribute value.")
     expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
