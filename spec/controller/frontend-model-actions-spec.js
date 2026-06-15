@@ -262,6 +262,28 @@ async function createTaskWithProject({projectName, taskName, creatingUserReferen
   }))
 }
 
+/** Task resource that customizes the base index query without replacing records/count. */
+class ScopedTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id", "name"],
+      builtInCollectionCommands: ["index"]
+    }
+  }
+
+  /**
+   * @param {{includePagination?: boolean, includeSort?: boolean}} [options] - Index-query options.
+   * @returns {import("../../src/database/query/model-class-query.js").default<typeof Task>} - Scoped index query.
+   */
+  indexQuery(options = {}) {
+    return /** @type {import("../../src/database/query/model-class-query.js").default<typeof Task>} */ (super.indexQuery(options).where({name: ["Scoped Alpha", "Scoped Bravo"]}))
+  }
+}
+
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("does not override scoped distinct when distinct param is omitted", async () => {
     await withTaskReadDistinctAbilityScope(async () => {
@@ -735,6 +757,45 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(limitOffsetPayload.models.map((model) => model.name)).toEqual(["Page Bravo"])
       expect(pagePayload.models.map((model) => model.name)).toEqual(["Page Bravo"])
+    })
+  })
+
+  it("lets resources customize frontendIndex queries while count ignores pagination and sort", async () => {
+    await Dummy.run(async () => {
+      const previousTaskResource = backendProjects[0].frontendModels.Task
+
+      backendProjects[0].frontendModels.Task = ScopedTaskFrontendResource
+
+      try {
+        await createTask("Other Charlie")
+        await createTask("Scoped Alpha")
+        await createTask("Scoped Bravo")
+
+        const recordsPayload = await postSharedTaskFrontendModelCommand("index", {
+          page: 1,
+          perPage: 1,
+          sort: "name asc"
+        })
+        const countPayload = await postSharedTaskFrontendModelCommand("index", {
+          count: true,
+          page: 1,
+          perPage: 1,
+          sort: "name desc"
+        })
+        const pluckPayload = await postSharedTaskFrontendModelCommand("index", {
+          pluck: ["name"],
+          sort: "name asc"
+        })
+
+        expect(recordsPayload.status).toEqual("success")
+        expect(recordsPayload.models.map((model) => model.name)).toEqual(["Scoped Alpha"])
+        expect(countPayload.status).toEqual("success")
+        expect(countPayload.count).toEqual(2)
+        expect(pluckPayload.status).toEqual("success")
+        expect(pluckPayload.values).toEqual(["Scoped Alpha", "Scoped Bravo"])
+      } finally {
+        backendProjects[0].frontendModels.Task = previousTaskResource
+      }
     })
   })
 

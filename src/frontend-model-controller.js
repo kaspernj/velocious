@@ -147,6 +147,14 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  * }} FrontendModelEndpointErrorContext
  */
 
+/**
+ * FrontendModelIndexQueryOptions type.
+ * @typedef {object} FrontendModelIndexQueryOptions
+ * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
+ * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
+ * @property {import("./frontend-model-resource/base-resource.js").default} [resource] - Resource providing query hooks.
+ */
+
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
@@ -1495,9 +1503,11 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model index query.
+   * @param {FrontendModelIndexQueryOptions} [options] - Index query options.
    * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
    */
-  frontendModelIndexQuery() {
+  frontendModelIndexQuery(options = {}) {
+    const {includePagination = true, includeSort = true, resource = this.frontendModelResourceInstance()} = options
     let query = this.frontendModelAuthorizedQuery("index")
     const preload = this.frontendModelPreload()
 
@@ -1510,7 +1520,9 @@ export default class FrontendModelController extends Controller {
     const pagination = this.frontendModelPagination()
     const distinct = this.frontendModelDistinct()
 
-    this.applyFrontendModelPagination({pagination, query})
+    if (includePagination) {
+      resource.applyFrontendModelIndexPagination({controller: this, pagination, query})
+    }
 
     if (distinct !== null) {
       query.distinct(distinct)
@@ -1533,7 +1545,7 @@ export default class FrontendModelController extends Controller {
     const searches = this.frontendModelSearches()
 
     for (const search of searches) {
-      this.applyFrontendModelSearch({query, search})
+      resource.applyFrontendModelIndexSearch({controller: this, query, search})
     }
 
     const groups = this.frontendModelGroup()
@@ -1548,9 +1560,9 @@ export default class FrontendModelController extends Controller {
 
     const sorts = this.frontendModelSort()
 
-    if (sorts.length > 0) {
+    if (includeSort && sorts.length > 0) {
       for (const sort of sorts) {
-        this.applyFrontendModelSort({query, sort})
+        resource.applyFrontendModelIndexSort({controller: this, query, sort})
       }
     }
 
@@ -3008,7 +3020,7 @@ export default class FrontendModelController extends Controller {
 
         const values = await this.frontendModelPluckValues({
           pluck,
-          query: this.frontendModelIndexQuery()
+          query: resource.indexQuery()
         })
 
         return {

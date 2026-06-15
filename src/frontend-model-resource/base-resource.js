@@ -13,14 +13,55 @@ import isPlainObject from "../utils/plain-object.js"
  * Frontend-model controller methods used by resources.
  * @typedef {import("../controller.js").default & {
  *   currentAbility: () => import("../authorization/ability.js").default | undefined,
+ *   applyFrontendModelPagination: (args: {pagination: FrontendModelResourcePagination, query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>}) => void,
+ *   applyFrontendModelSearch: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, search: FrontendModelResourceSearch}) => void,
+ *   applyFrontendModelSort: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, sort: FrontendModelResourceSort}) => void,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
  *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
- *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {resource?: FrontendModelBaseResource}) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
  *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
  *   frontendModelResourceConfigurationForModelClass: (modelClass: typeof import("../database/record/index.js").default) => FrontendModelResolvedResourceConfiguration | null,
  *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, object | string | number | boolean | null>>
  * }} FrontendModelResourceController
+ */
+
+/**
+ * Generic frontend-model index query passed to resource query hooks.
+ * @typedef {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} FrontendModelResourceAnyQuery
+ */
+
+/**
+ * Options for building a frontend-model resource index query.
+ * @typedef {object} FrontendModelResourceIndexQueryOptions
+ * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
+ * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
+ */
+
+/**
+ * FrontendModelResourcePagination type.
+ * @typedef {object} FrontendModelResourcePagination
+ * @property {number | null} limit - Maximum number of records.
+ * @property {number | null} offset - Number of records to skip.
+ * @property {number | null} page - 1-based page number.
+ * @property {number | null} perPage - Page size.
+ */
+
+/**
+ * FrontendModelResourceSearch type.
+ * @typedef {object} FrontendModelResourceSearch
+ * @property {string} column - Column or attribute name.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {string[]} path - Relationship path.
+ * @property {?} value - Search value.
+ */
+
+/**
+ * FrontendModelResourceSort type.
+ * @typedef {object} FrontendModelResourceSort
+ * @property {string} column - Attribute name to sort by.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
  */
 
 /**
@@ -396,6 +437,53 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelAuthorizedQuery(action))
   }
 
+  /**
+   * Runs index query.
+   * @param {FrontendModelResourceIndexQueryOptions} [options] - Query options.
+   * @returns {import("../database/query/model-class-query.js").default<TModelClass>} - Frontend-model index query.
+   */
+  indexQuery(options = {}) {
+    return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelIndexQuery({
+      ...options,
+      resource: this
+    }))
+  }
+
+  /**
+   * Applies frontend-model index pagination.
+   * @param {object} args - Pagination args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourcePagination} args.pagination - Pagination params.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelIndexPagination({controller, pagination, query}) {
+    controller.applyFrontendModelPagination({pagination, query})
+  }
+
+  /**
+   * Applies frontend-model index search.
+   * @param {object} args - Search args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @param {FrontendModelResourceSearch} args.search - Search params.
+   * @returns {void}
+   */
+  applyFrontendModelIndexSearch({controller, query, search}) {
+    controller.applyFrontendModelSearch({query, search})
+  }
+
+  /**
+   * Applies frontend-model index sort.
+   * @param {object} args - Sort args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @param {FrontendModelResourceSort} args.sort - Sort params.
+   * @returns {void}
+   */
+  applyFrontendModelIndexSort({controller, query, sort}) {
+    controller.applyFrontendModelSort({query, sort})
+  }
 
   /**
    * Runs supports pluck.
@@ -436,7 +524,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default[]>} - Records for index action.
    */
   async records() {
-    return await this.typedControllerInstance().frontendModelIndexQuery().toArray()
+    return await this.indexQuery().toArray()
   }
 
   /**
@@ -444,7 +532,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<number>} - Records count for index action.
    */
   async count() {
-    return await this.typedControllerInstance().frontendModelIndexQuery().count()
+    return await this.indexQuery({includePagination: false, includeSort: false}).count()
   }
 
   /**

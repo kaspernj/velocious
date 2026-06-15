@@ -376,6 +376,7 @@ export default new Configuration({
 ```
 
 `frontendModels` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
+Resource-level index customization should prefer `indexQuery()` or the pagination/search/sort hooks over replacing `records()`, so built-in pluck and aggregate count support can keep using the same query. See [`docs/frontend-model-resources.md`](docs/frontend-model-resources.md) for the resource extension points.
 
 Resources expose the full CRUD ability set (`create`, `destroy`, `read`, `update`) by default. To restrict the API surface — for example to a read-only resource — declare an explicit subset:
 
