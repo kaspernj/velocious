@@ -2,10 +2,10 @@
 
 /**
  * Tracked stack global.
-  @type {{withTrackedStack?: {withTrackedStack?: (stack: string | undefined, fn: () => Promise<?>) => Promise<?>, addTrackedStackToError?: (error: Error) => void}}} */
+ * @type {{withTrackedStack?: {withTrackedStack?: (stack: string | undefined, fn: () => Promise<?>) => Promise<?>, addTrackedStackToError?: (error: Error) => void}}} */
 const trackedStackGlobal = /**
                             * Narrows the runtime value to the documented type.
-                             @type {?} */ (globalThis)
+                            * @type {?} */ (globalThis)
 
 /**
  * Runs add tracked stack to error.
@@ -25,7 +25,7 @@ async function withTrackedStack(stackOrCallback, callback) {
   const tracked = trackedStackGlobal.withTrackedStack?.withTrackedStack
   const resolvedCallback = callback ?? /**
                                         * Narrows the runtime value to the documented type.
-                                         @type {() => Promise<?>} */ (stackOrCallback)
+                                        * @type {() => Promise<?>} */ (stackOrCallback)
   const stack = typeof stackOrCallback == "string" ? stackOrCallback : undefined
 
   if (tracked) {

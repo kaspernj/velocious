@@ -14,7 +14,7 @@ const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
 /**
  * Execution modes.
-  @type {import("./types.js").BackgroundJobExecutionMode[]} */
+ * @type {import("./types.js").BackgroundJobExecutionMode[]} */
 const EXECUTION_MODES = ["inline", "forked", "spawned"]
 
 export default class BackgroundJobsWorker {
@@ -31,11 +31,11 @@ export default class BackgroundJobsWorker {
   constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs} = {}) {
     /**
      * Narrows the runtime value to the documented type.
-      @type {Promise<import("../configuration.js").default>} */
+     * @type {Promise<import("../configuration.js").default>} */
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
     /**
      * Narrows the runtime value to the documented type.
-      @type {import("../configuration.js").default | undefined} */
+     * @type {import("../configuration.js").default | undefined} */
     this.configuration = undefined
     this.host = host
     this.port = port
@@ -50,7 +50,7 @@ export default class BackgroundJobsWorker {
       : undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {number | undefined} */
+     * @type {number | undefined} */
     this.maxConcurrentForkedJobsOverride = typeof maxConcurrentForkedJobs === "number" && maxConcurrentForkedJobs >= 1
       ? maxConcurrentForkedJobs
       : undefined
@@ -62,7 +62,7 @@ export default class BackgroundJobsWorker {
     this.maxConcurrentInlineJobs = this.maxConcurrentInlineJobsOverride || 4
     /**
      * Narrows the runtime value to the documented type.
-      @type {number} */
+     * @type {number} */
     this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
     /**
      * Grace period between SIGTERM and SIGKILL when reaping process runners that
@@ -76,11 +76,11 @@ export default class BackgroundJobsWorker {
     this.workerId = randomUUID()
     /**
      * Narrows the runtime value to the documented type.
-      @type {JsonSocket | undefined} */
+     * @type {JsonSocket | undefined} */
     this.jsonSocket = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {BackgroundJobsStatusReporter | undefined} */
+     * @type {BackgroundJobsStatusReporter | undefined} */
     this.statusReporter = undefined
     /**
      * Up to `this.maxConcurrentInlineJobs` of these run in parallel. They
@@ -275,10 +275,10 @@ export default class BackgroundJobsWorker {
     if (!payload.id) throw new Error("Background job payload missing id")
     /**
      * Identified payload.
-      @type {import("./types.js").BackgroundJobPayload & {id: string}} */
+     * @type {import("./types.js").BackgroundJobPayload & {id: string}} */
     const identifiedPayload = /**
                                * Narrows the runtime value to the documented type.
-                                @type {?} */ (payload)
+                               * @type {?} */ (payload)
 
     const executionMode = this._executionModeForPayload(identifiedPayload)
 
@@ -322,7 +322,7 @@ export default class BackgroundJobsWorker {
     // regardless of success or failure.
     /**
      * Defines inflight.
-      @type {Promise<void>} */
+     * @type {Promise<void>} */
     let inflight
 
     inflight = this._runInlineJobAndReport(payload).finally(() => {
@@ -375,7 +375,7 @@ export default class BackgroundJobsWorker {
   _trackProcessJob(processJob) {
     /**
      * Defines inflight.
-      @type {Promise<void>} */
+     * @type {Promise<void>} */
     let inflight
 
     inflight = processJob.finally(() => {
@@ -464,7 +464,7 @@ export default class BackgroundJobsWorker {
     const jobInstance = new JobClass()
     /**
      * Perform.
-      @type {(...args: Array<?>) => Promise<void>} */
+     * @type {(...args: Array<?>) => Promise<void>} */
     const perform = jobInstance.perform
 
     await configuration.withConnections({name: `Background job worker inline: ${payload.jobName}`}, async () => {

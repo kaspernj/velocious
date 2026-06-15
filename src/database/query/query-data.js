@@ -59,7 +59,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
   if (Array.isArray(spec)) {
     /**
      * Entries.
-      @type {QueryDataEntry[]} */
+     * @type {QueryDataEntry[]} */
     const entries = []
 
     for (const item of spec) {
@@ -71,7 +71,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       if (isPlainObject(item)) {
         for (const nested of normalizeQueryDataSpec(/**
                                                      * Narrows the runtime value to the documented type.
-                                                      @type {?} */ (item), chain)) {
+                                                     * @type {?} */ (item), chain)) {
           entries.push(nested)
         }
         continue
@@ -86,7 +86,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
   if (isPlainObject(spec)) {
     /**
      * Entries.
-      @type {QueryDataEntry[]} */
+     * @type {QueryDataEntry[]} */
     const entries = []
 
     for (const [key, value] of Object.entries(spec)) {
@@ -100,7 +100,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       if (typeof value === "string" || Array.isArray(value) || isPlainObject(value)) {
         for (const nested of normalizeQueryDataSpec(/**
                                                      * Narrows the runtime value to the documented type.
-                                                      @type {?} */ (value), [...chain, key])) {
+                                                     * @type {?} */ (value), [...chain, key])) {
           entries.push(nested)
         }
         continue
@@ -128,7 +128,7 @@ function buildNestedJoinDescriptor(chain) {
 
   /**
    * Obj.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   const obj = {}
   let cursor = obj
 
@@ -195,7 +195,7 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
   const primaryKey = rootModelClass.primaryKey()
   const rootIds = rootModels.map((model) => /**
                                              * Narrows the runtime value to the documented type.
-                                              @type {string | number} */ (model.readColumn(primaryKey)))
+                                             * @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     await runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels})
@@ -239,7 +239,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
 
   /**
    * Root where.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   const rootWhere = {}
   rootWhere[primaryKey] = rootIds
   query.where(rootWhere)
@@ -272,7 +272,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
 
   const rows = /**
                 * Narrows the runtime value to the documented type.
-                 @type {Array<Record<string, ?>>} */ (await query._executeQuery())
+                * @type {Array<Record<string, ?>>} */ (await query._executeQuery())
   const byParent = new Map()
 
   for (const row of rows) {
@@ -286,7 +286,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   for (const model of rootModels) {
     const modelId = /**
                      * Narrows the runtime value to the documented type.
-                      @type {string | number} */ (model.readColumn(primaryKey))
+                     * @type {string | number} */ (model.readColumn(primaryKey))
     // Driver-type tolerance: MySQL can return PKs as strings even when
     // the column is numeric. Fall back to a string lookup so results
     // still land on the right model.

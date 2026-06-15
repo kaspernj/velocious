@@ -18,6 +18,10 @@ import isPlainObject from "../utils/plain-object.js"
  * @typedef {null | boolean | number | string | object} FrontendModelTransportValue
  */
 /**
+ * FrontendModelAttributeValue type.
+ * @typedef {import("./base.js").FrontendModelAttributeValue} FrontendModelAttributeValue
+ */
+/**
  * Defines this typedef.
  * @typedef {{attributeName: string, relationshipName: string, where?: Record<string, FrontendModelTransportValue>}} FrontendModelWithCountPayloadEntry
  */
@@ -89,7 +93,7 @@ export function normalizePreload(preload) {
   if (Array.isArray(preload)) {
     /**
      * Normalized.
-      @type {import("../database/query/index.js").NestedPreloadRecord} */
+     * @type {import("../database/query/index.js").NestedPreloadRecord} */
     const normalized = {}
 
     for (const entry of preload) {
@@ -115,7 +119,7 @@ export function normalizePreload(preload) {
 
   /**
    * Normalized.
-    @type {import("../database/query/index.js").NestedPreloadRecord} */
+   * @type {import("../database/query/index.js").NestedPreloadRecord} */
   const normalized = {}
 
   for (const [relationshipName, relationshipPreload] of Object.entries(preload)) {
@@ -177,7 +181,7 @@ function normalizeWithCountFrontend(spec) {
     if (isPlainObject(value)) {
       const options = /**
                        * Narrows the runtime value to the documented type.
-                        @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
+                       * @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
       entries.push({
         attributeName: key,
         relationshipName: options.relationship || key,
@@ -228,7 +232,7 @@ function normalizeAbilitiesSpec(spec, rootModelClass) {
 
   /**
    * Entries.
-    @type {Array<{modelName: string, actions: string[]}>} */
+   * @type {Array<{modelName: string, actions: string[]}>} */
   const entries = []
 
   for (const [modelName, actions] of Object.entries(spec)) {
@@ -280,10 +284,10 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
       mergePreloadRecord(
         /**
          * Narrows the runtime value to the documented type.
-          @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
+         * @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
         /**
          * Narrows the runtime value to the documented type.
-          @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
+         * @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
       )
       continue
     }
@@ -325,7 +329,7 @@ function normalizeSelect(select, rootModelName = null) {
 
   /**
    * Normalized.
-    @type {Record<string, string[]>} */
+   * @type {Record<string, string[]>} */
   const normalized = {}
 
   for (const [modelName, selection] of Object.entries(select)) {
@@ -378,14 +382,14 @@ export function normalizeSearchOperator(operator) {
   }
   const normalizedOperator = operatorAliases[/**
                                               * Narrows the runtime value to the documented type.
-                                               @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+                                              * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   if (!supportedOperators.has(normalizedOperator)) {
     throw new Error(`search operator must be one of: eq, like, notEq, gt, gteq, lt, lteq, >, >=, <, <= (got: ${operator})`)
   }
 
-  return /** Narrows the runtime value to the documented type. @type {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
+  return /** @type {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
 }
 
 /**
@@ -434,7 +438,7 @@ export function normalizeJoins(joins) {
   if (Array.isArray(joins)) {
     /**
      * Normalized.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const normalized = {}
 
     for (const joinEntry of joins) {
@@ -454,7 +458,7 @@ export function normalizeJoins(joins) {
 
   /**
    * Normalized.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   const normalized = {}
 
   for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
@@ -627,7 +631,7 @@ function parseSortTuple(sortValue, path = []) {
 function normalizeSortObject(sortValue, path) {
   /**
    * Normalized sorts.
-    @type {FrontendModelSort[]} */
+   * @type {FrontendModelSort[]} */
   const normalizedSorts = []
 
   for (const [sortKey, sortEntry] of Object.entries(sortValue)) {
@@ -702,7 +706,7 @@ export function normalizeSort(sort) {
   if (Array.isArray(sort)) {
     /**
      * Normalized.
-      @type {FrontendModelSort[]} */
+     * @type {FrontendModelSort[]} */
     const normalized = []
 
     for (const sortEntry of sort) {
@@ -784,7 +788,7 @@ function columnPathDescriptor(value) {
 function normalizeColumnProjectionObject(value, path, parseString, label) {
   /**
    * Normalized.
-    @type {T[]} */
+   * @type {T[]} */
   const normalized = []
 
   for (const [projectionKey, projectionEntry] of Object.entries(value)) {
@@ -846,7 +850,7 @@ export function normalizeGroup(group) {
   if (Array.isArray(group)) {
     /**
      * Normalized.
-      @type {FrontendModelGroup[]} */
+     * @type {FrontendModelGroup[]} */
     const normalized = []
 
     for (const groupEntry of group) {
@@ -922,7 +926,7 @@ export function normalizePluck(pluck) {
   if (Array.isArray(pluck)) {
     /**
      * Normalized.
-      @type {FrontendModelPluck[]} */
+     * @type {FrontendModelPluck[]} */
     const normalized = []
 
     for (const pluckEntry of pluck) {
@@ -961,7 +965,7 @@ export function normalizePluck(pluck) {
 function frontendModelResourceAttributes(modelClass) {
   const resourceConfig = /**
                           * Narrows the runtime value to the documented type.
-                           @type {Record<string, ?>} */ (modelClass.resourceConfig())
+                          * @type {Record<string, ?>} */ (modelClass.resourceConfig())
   const attributes = resourceConfig.attributes
 
   if (Array.isArray(attributes)) {
@@ -1080,19 +1084,19 @@ function reverseSortDirection(direction) {
 export default class FrontendModelQuery {
   /**
    * Ransack.
-    @type {Record<string, ?>[]} */
+   * @type {Record<string, ?>[]} */
   _ransack = []
   /**
    * Searches.
-    @type {FrontendModelSearch[]} */
+   * @type {FrontendModelSearch[]} */
   _searches = []
   /**
    * Sort.
-    @type {FrontendModelSort[]} */
+   * @type {FrontendModelSort[]} */
   _sort = []
   /**
    * Group.
-    @type {FrontendModelGroup[]} */
+   * @type {FrontendModelGroup[]} */
   _group = []
 
   /**
@@ -1109,11 +1113,11 @@ export default class FrontendModelQuery {
     this._searches = []
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, string[]>} */
+     * @type {Record<string, string[]>} */
     this._select = {}
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, string[]>} */
+     * @type {Record<string, string[]>} */
     this._selectsExtra = {}
     this._sort = []
     this._group = []
@@ -1124,11 +1128,11 @@ export default class FrontendModelQuery {
     this._perPage = null
     /**
      * Narrows the runtime value to the documented type.
-      @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} */
+     * @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} */
     this._withCount = []
     /**
      * Narrows the runtime value to the documented type.
-      @type {Array<string | Record<string, ?>>} */
+     * @type {Array<string | Record<string, ?>>} */
     this._queryData = []
     /**
      * Per-record ability spec. Normalized to a list of
@@ -1231,7 +1235,7 @@ export default class FrontendModelQuery {
 
     this._queryData.push(/**
                           * Narrows the runtime value to the documented type.
-                           @type {?} */ (spec))
+                          * @type {?} */ (spec))
 
     return this
   }
@@ -1268,7 +1272,7 @@ export default class FrontendModelQuery {
 
     const scopedQuery = /**
                          * Narrows the runtime value to the documented type.
-                          @type {this | void} */ (scopeDescriptor.callback({
+                         * @type {this | void} */ (scopeDescriptor.callback({
       driver: null,
       modelClass: this.modelClass,
       query: this,
@@ -1312,7 +1316,7 @@ export default class FrontendModelQuery {
     const rootModelName = this.modelClass.getModelName()
     const selectMap = /**
                        * Narrows the runtime value to the documented type.
-                        @type {Record<string, string[]>} */ (this._select)
+                       * @type {Record<string, string[]>} */ (this._select)
     const existingRootAttributes = selectMap[rootModelName]
 
     if (!existingRootAttributes) {
@@ -1520,7 +1524,7 @@ export default class FrontendModelQuery {
   clone() {
     const newQuery = /**
                       * Narrows the runtime value to the documented type.
-                       @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
+                      * @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
       modelClass: this.modelClass,
       preload: normalizePreload(this._preload)
     }))
@@ -1763,7 +1767,7 @@ export default class FrontendModelQuery {
   paginationPayload() {
     /**
      * Payload.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const payload = {}
 
     if (this._limit !== null) payload.limit = this._limit
@@ -1782,7 +1786,7 @@ export default class FrontendModelQuery {
   assertEventQuerySupported() {
     /**
      * Unsupported options.
-      @type {string[]} */
+     * @type {string[]} */
     const unsupportedOptions = []
 
     if (this._sort.length > 0) unsupportedOptions.push("sort")
@@ -1872,7 +1876,7 @@ export default class FrontendModelQuery {
     const modelsData = Array.isArray(response.models) ? response.models : []
     /**
      * Models.
-      @type {InstanceType<T>[]} */
+     * @type {InstanceType<T>[]} */
     const models = modelsData.map((model) => this.modelClass.instantiateFromResponse(model))
 
     // Share a single cohort reference across every sibling so auto-batch-preload
@@ -1881,7 +1885,7 @@ export default class FrontendModelQuery {
     for (const model of models) {
       /**
        * Narrows the runtime value to the documented type.
-        @type {?} */ (model)._loadCohort = models
+       * @type {?} */ (model)._loadCohort = models
     }
 
     return models
@@ -2094,7 +2098,9 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    return /** Narrows the runtime value to the documented type. @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+    const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
+
+    return new ModelClass(/** @type {Record<string, FrontendModelAttributeValue>} */ (normalizedConditions))
   }
 
   /**
@@ -2109,9 +2115,8 @@ export default class FrontendModelQuery {
 
     if (model) return model
 
-    const newModel = /**
-                      * Narrows the runtime value to the documented type.
-                       @type {InstanceType<T>} */ (new this.modelClass(normalizedConditions))
+    const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (/** @type {unknown} */ (this.modelClass))
+    const newModel = new ModelClass(/** @type {Record<string, FrontendModelAttributeValue>} */ (normalizedConditions))
 
     if (callback) {
       await callback(newModel)
@@ -2226,7 +2231,7 @@ function frontendModelEventQuery(modelClass, options = {}) {
 
   const optionsObject = /**
                          * Narrows the runtime value to the documented type.
-                          @type {FrontendModelEventOptionsObject} */ (options)
+                         * @type {FrontendModelEventOptionsObject} */ (options)
   const query = frontendModelEventQueryFromOptionsObject(modelClass, optionsObject)
 
   applyFrontendModelProjectionOptions(query, optionsObject)

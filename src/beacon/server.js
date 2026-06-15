@@ -31,11 +31,11 @@ export default class BeaconServer {
     this.logger = new Logger(this)
     /**
      * Narrows the runtime value to the documented type.
-      @type {Set<JsonSocket>} */
+     * @type {Set<JsonSocket>} */
     this.peers = new Set()
     /**
      * Narrows the runtime value to the documented type.
-      @type {net.Server | undefined} */
+     * @type {net.Server | undefined} */
     this.server = undefined
     /**
      * Accepted sockets, including connections that have not completed the hello handshake yet.
@@ -110,7 +110,7 @@ export default class BeaconServer {
     const jsonSocket = new JsonSocket(socket)
     /**
      * Defines peerId.
-      @type {string | undefined} */
+     * @type {string | undefined} */
     let peerId
 
     const cleanup = () => {

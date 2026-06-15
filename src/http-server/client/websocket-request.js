@@ -21,16 +21,16 @@ export default class VelociousHttpServerClientWebsocketRequest {
     this.body = body
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, string>} */
+     * @type {Record<string, string>} */
     this.headersMap = {}
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     this.metadataObject = metadata ? {...metadata} : {}
     this.method = method.toUpperCase()
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     this.paramsObject = {}
     this._path = path
     this.remoteAddressValue = remoteAddress
@@ -131,7 +131,7 @@ export default class VelociousHttpServerClientWebsocketRequest {
     const parsedQuery = querystring.parse(query)
     /**
      * Params.
-      @type {Record<string, string | string[]>} */
+     * @type {Record<string, string | string[]>} */
     const params = Object.create(null)
 
     for (const key of Object.keys(parsedQuery)) {

@@ -19,7 +19,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   /**
    * Loaded.
-    @type {InstanceType<TMC> | undefined} */
+   * @type {InstanceType<TMC> | undefined} */
   _loaded = undefined
 
   /**
@@ -30,13 +30,13 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
   build(data) {
     const TargetModelClass = /**
                               * Narrows the runtime value to the documented type.
-                               @type {TMC} */ (this.getTargetModelClass())
+                              * @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
 
     const newInstance = /**
                          * Narrows the runtime value to the documented type.
-                          @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+                         * @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -58,16 +58,16 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = /**
                             * Narrows the runtime value to the documented type.
-                             @type {string | number} */ (this.getModel().readColumn(primaryKey))
+                            * @type {string | number} */ (this.getModel().readColumn(primaryKey))
     const TargetModelClass = /**
                               * Narrows the runtime value to the documented type.
-                               @type {TMC} */ (this.getTargetModelClass())
+                              * @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't load without a target model class")
 
     /**
      * Where args.
-      @type {Record<string, string | number>} */
+     * @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = primaryModelID
@@ -113,5 +113,5 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
     this._loaded = model
   }
 
-  getTargetModelClass() { return /** Narrows the runtime value to the documented type. @type {TMC | undefined} */ (this.relationship.getTargetModelClass()) }
+  getTargetModelClass() { return /** @type {TMC | undefined} */ (this.relationship.getTargetModelClass()) }
 }

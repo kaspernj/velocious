@@ -37,7 +37,7 @@ function normalizeJoinObject(join) {
   if (Array.isArray(join)) {
     /**
      * Result.
-      @type {import("./join-object.js").JoinObject} */
+     * @type {import("./join-object.js").JoinObject} */
     const result = {}
 
     for (const entry of join) {
@@ -69,7 +69,7 @@ function normalizeJoinObject(join) {
 
   /**
    * Result.
-    @type {import("./join-object.js").JoinObject} */
+   * @type {import("./join-object.js").JoinObject} */
   const result = {}
 
   for (const [key, value] of Object.entries(join)) {
@@ -157,7 +157,7 @@ export default class VelociousDatabaseQuery {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {() => import("../drivers/base.js").default} */
+     * @type {() => import("../drivers/base.js").default} */
     this._driverFn = typeof driver === "function" ? driver : () => driver
     this.handler = handler
     this.logger = new Logger(this)
@@ -173,24 +173,24 @@ export default class VelociousDatabaseQuery {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, string[]>} */
+     * @type {Record<string, string[]>} */
     this._preloadSelects = preloadSelects
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, string[]>} */
+     * @type {Record<string, string[]>} */
     this._preloadSelectsExtra = preloadSelectsExtra
     this._distinct = distinct
     this._selects = selects
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {import("./where-base.js").default[]} */
+     * @type {import("./where-base.js").default[]} */
     this._wheres = wheres
 
     const boundWhere = /**
                         * Narrows the runtime value to the documented type.
-                         @type {?} */ (this.where.bind(this))
+                        * @type {?} */ (this.where.bind(this))
     boundWhere.not = this.whereNot.bind(this)
     this.where = boundWhere
   }
@@ -202,7 +202,7 @@ export default class VelociousDatabaseQuery {
   clone() {
     const QueryClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {new (args: QueryArgsType) => this} */ (this.constructor)
+                        * @type {new (args: QueryArgsType) => this} */ (this.constructor)
     const newQuery = new QueryClass({
       driver: this._driverFn,
       froms: [...this._froms],
@@ -496,7 +496,7 @@ export default class VelociousDatabaseQuery {
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
       this._wheres.push(new WhereHash(this, /**
                                              * Narrows the runtime value to the documented type.
-                                              @type {import("./where-hash.js").WhereHash} */ (where)))
+                                             * @type {import("./where-hash.js").WhereHash} */ (where)))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
@@ -515,7 +515,7 @@ export default class VelociousDatabaseQuery {
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
       this._wheres.push(new WhereNot(new WhereHash(this, /**
                                                           * Narrows the runtime value to the documented type.
-                                                           @type {import("./where-hash.js").WhereHash} */ (where))))
+                                                          * @type {import("./where-hash.js").WhereHash} */ (where))))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }

@@ -15,7 +15,7 @@ const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 /**
  * Execution modes.
-  @type {import("./types.js").BackgroundJobExecutionMode[]} */
+ * @type {import("./types.js").BackgroundJobExecutionMode[]} */
 const EXECUTION_MODES = ["inline", "forked", "spawned"]
 const DEFAULT_EXECUTION_MODE = "forked"
 
@@ -233,13 +233,13 @@ export default class BackgroundJobsStore {
 
       /**
        * Counts.
-        @type {Record<string, number>} */
+       * @type {Record<string, number>} */
       const counts = {}
 
       for (const row of rows) {
         const typedRow = /**
                           * Narrows the runtime value to the documented type.
-                           @type {Record<string, ?>} */ (row)
+                          * @type {Record<string, ?>} */ (row)
 
         counts[String(typedRow.status)] = this._normalizeNumber(typedRow.count) || 0
       }
@@ -267,7 +267,7 @@ export default class BackgroundJobsStore {
       const rows = await query.results()
       const countRow = /**
                         * Narrows the runtime value to the documented type.
-                         @type {Record<string, ?>} */ (rows[0] || {})
+                        * @type {Record<string, ?>} */ (rows[0] || {})
 
       return this._normalizeNumber(countRow.count) || 0
     })
@@ -734,7 +734,7 @@ export default class BackgroundJobsStore {
   _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry}) {
     /**
      * Update.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const update = {
       attempts: nextAttempt,
       handed_off_at_ms: null,
@@ -926,7 +926,7 @@ export default class BackgroundJobsStore {
     let callbackCalled = false
     /**
      * Defines result.
-      @type {T | undefined} */
+     * @type {T | undefined} */
     let result
 
     await pool.withConnection({name: "Background jobs store"}, async (db) => {
@@ -938,7 +938,7 @@ export default class BackgroundJobsStore {
       throw new Error("Background jobs store callback was not invoked")
     }
 
-    return /** Narrows the runtime value to the documented type. @type {T} */ (result)
+    return /** @type {T} */ (result)
   }
 
   /**

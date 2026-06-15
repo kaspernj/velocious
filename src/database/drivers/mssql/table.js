@@ -121,7 +121,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
    * @returns {string} - The table name.
    */
   getName() {
-    return /** Narrows the runtime value to the documented type. @type {string} */ (digg(this.data, "TABLE_NAME"))
+    return /** @type {string} */ (digg(this.data, "TABLE_NAME"))
   }
 
   /**

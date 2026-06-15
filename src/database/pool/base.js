@@ -41,7 +41,7 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /**
  * Shared.
-  @type {{currentPool: VelociousDatabasePoolBase | null}} */
+ * @type {{currentPool: VelociousDatabasePoolBase | null}} */
 const shared = {
   currentPool: null
 }
@@ -60,11 +60,11 @@ function stableStringify(value) {
     const entries = Object
       .keys(/**
              * Narrows the runtime value to the documented type.
-              @type {Record<string, ?>} */ (value))
+             * @type {Record<string, ?>} */ (value))
       .sort()
       .map((key) => `${JSON.stringify(key)}:${stableStringify(/**
                                                                * Narrows the runtime value to the documented type.
-                                                                @type {Record<string, ?>} */ (value)[key])}`)
+                                                               * @type {Record<string, ?>} */ (value)[key])}`)
 
     return `{${entries.join(",")}}`
   }
@@ -75,7 +75,7 @@ function stableStringify(value) {
 class VelociousDatabasePoolBase {
   /**
    * Without current connection context.
-    @type {undefined | ((callback: () => ?) => ?)} */
+   * @type {undefined | ((callback: () => ?) => ?)} */
   _withoutCurrentConnectionContext = undefined
 
   /**
@@ -154,7 +154,7 @@ class VelociousDatabasePoolBase {
    * @returns {T} - Callback result.
    */
   withoutCurrentConnectionContext(callback) {
-    if (this._withoutCurrentConnectionContext) return /** Narrows the runtime value to the documented type. @type {T} */ (this._withoutCurrentConnectionContext(callback))
+    if (this._withoutCurrentConnectionContext) return /** @type {T} */ (this._withoutCurrentConnectionContext(callback))
 
     return callback()
   }
@@ -196,7 +196,7 @@ class VelociousDatabasePoolBase {
   connectionMatchesCurrentConfiguration(connection) {
     const connectionWithPoolKey = /**
                                    * Narrows the runtime value to the documented type.
-                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
   }
@@ -257,7 +257,7 @@ class VelociousDatabasePoolBase {
 
     const connectionWithPoolKey = /**
                                    * Narrows the runtime value to the documented type.
-                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
     connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
     connection.setSchemaCacheInvalidator(() => {
       this.clearSchemaCache()
@@ -372,7 +372,7 @@ class VelociousDatabasePoolBase {
   debugConnectionSnapshot(connection, details = {}) {
     const connectionWithPoolKey = /**
                                    * Narrows the runtime value to the documented type.
-                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return {
       ...connection.getDebugSnapshot(),

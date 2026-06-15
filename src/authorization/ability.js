@@ -19,27 +19,27 @@
 export default class VelociousAuthorizationAbility {
   /**
    * Create.
-    @type {string[]} */
+   * @type {string[]} */
   static CREATE = ["create"]
 
   /**
    * Read.
-    @type {string[]} */
+   * @type {string[]} */
   static READ = ["read"]
 
   /**
    * Update.
-    @type {string[]} */
+   * @type {string[]} */
   static UPDATE = ["update"]
 
   /**
    * Destroy.
-    @type {string[]} */
+   * @type {string[]} */
   static DESTROY = ["destroy"]
 
   /**
    * Crud.
-    @type {string[]} */
+   * @type {string[]} */
   static CRUD = ["create", "read", "update", "destroy"]
 
   /**
@@ -56,12 +56,12 @@ export default class VelociousAuthorizationAbility {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {AbilityRuleType[]} */
+     * @type {AbilityRuleType[]} */
     this.rules = []
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, boolean>} */
+     * @type {Record<string, boolean>} */
     this.loadedModelClassAbilities = {}
   }
 
@@ -78,7 +78,7 @@ export default class VelociousAuthorizationAbility {
 
     /**
      * Resolved.
-      @type {Array<typeof import("./base-resource.js").default>} */
+     * @type {Array<typeof import("./base-resource.js").default>} */
     const resolved = []
     const backendProjects = configuration.getBackendProjects()
 

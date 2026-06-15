@@ -55,22 +55,22 @@ export default class BeaconClient extends EventEmitter {
     this._reconnectDelayMs = this._initialReconnectDelayMs
     /**
      * Narrows the runtime value to the documented type.
-      @type {JsonSocket | undefined} */
+     * @type {JsonSocket | undefined} */
     this._jsonSocket = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {net.Socket | undefined} */
+     * @type {net.Socket | undefined} */
     this._socket = undefined
     this._connected = false
     this._ready = false
     this._closed = false
     /**
      * Narrows the runtime value to the documented type.
-      @type {NodeJS.Timeout | undefined} */
+     * @type {NodeJS.Timeout | undefined} */
     this._reconnectTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {Promise<void> | undefined} */
+     * @type {Promise<void> | undefined} */
     this._connectPromise = undefined
     /**
      * Last socket error observed while connected, surfaced as the disconnect reason.
@@ -118,7 +118,7 @@ export default class BeaconClient extends EventEmitter {
       }
       const onError = (/**
                         * Narrows the runtime value to the documented type.
-                         @type {Error} */ error) => {
+                        * @type {Error} */ error) => {
         this.off("connect", onConnect)
         this.off("connect-error", onError)
         reject(error)
@@ -145,7 +145,10 @@ export default class BeaconClient extends EventEmitter {
   async waitForReady({timeoutMs} = {}) {
     if (this._ready) return
 
-    /** Cleanup. @type {() => void} */
+    /**
+     * Cleans up the ready listener and timeout.
+     * @type {() => void}
+     */
     let cleanup = () => {}
     const readyPromise = new Promise((resolve) => {
       const onReady = () => {
@@ -184,7 +187,7 @@ export default class BeaconClient extends EventEmitter {
 
     /**
      * Message.
-      @type {import("./types.js").BeaconBroadcastMessage} */
+     * @type {import("./types.js").BeaconBroadcastMessage} */
     const message = {
       type: "broadcast",
       channel,
@@ -270,7 +273,7 @@ export default class BeaconClient extends EventEmitter {
 
     jsonSocket.on("message", (/**
                                * Narrows the runtime value to the documented type.
-                                @type {import("./types.js").BeaconSocketMessage} */ message) => {
+                               * @type {import("./types.js").BeaconSocketMessage} */ message) => {
       if (message?.type === "hello-ack" && message.peerId === this.peerId) {
         this._ready = true
         this.emit("ready")

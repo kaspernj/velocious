@@ -43,7 +43,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
     /**
      * Connect args.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const connectArgs = {}
 
     for (const forwardValue of forward) {
@@ -283,7 +283,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
       for (const row of result) {
         const table = new Table(this, /**
                                        * Narrows the runtime value to the documented type.
-                                        @type {Record<string, string>} */ (row))
+                                       * @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }

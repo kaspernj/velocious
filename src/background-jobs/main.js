@@ -29,7 +29,7 @@ const MAX_TIMER_MS = 2_147_483_647 // ~24.8 days
  */
 /**
  * Worker execution mode capabilities.
-  @type {WorkerExecutionModeCapability[]} */
+ * @type {WorkerExecutionModeCapability[]} */
 const WORKER_EXECUTION_MODE_CAPABILITIES = [
   {executionMode: "inline", accepts: (worker) => worker.acceptsInlineJobs !== false},
   {executionMode: "forked", accepts: (worker) => worker.acceptsForkedJobs !== false},
@@ -58,50 +58,50 @@ export default class BackgroundJobsMain {
     this.logger = new Logger(this)
     /**
      * Narrows the runtime value to the documented type.
-      @type {Set<JsonSocket>} */
+     * @type {Set<JsonSocket>} */
     this.workers = new Set()
     /**
      * Narrows the runtime value to the documented type.
-      @type {Set<JsonSocket>} */
+     * @type {Set<JsonSocket>} */
     this.readyWorkers = new Set()
     /**
      * Narrows the runtime value to the documented type.
-      @type {net.Server | undefined} */
+     * @type {net.Server | undefined} */
     this.server = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {NodeJS.Timeout | undefined} */
+     * @type {NodeJS.Timeout | undefined} */
     this._pollTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {NodeJS.Timeout | undefined} */
+     * @type {NodeJS.Timeout | undefined} */
     this._scheduledTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {NodeJS.Timeout | undefined} */
+     * @type {NodeJS.Timeout | undefined} */
     this._errorRetryTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {NodeJS.Timeout | undefined} */
+     * @type {NodeJS.Timeout | undefined} */
     this._orphanTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {BackgroundJobsScheduler | undefined} */
+     * @type {BackgroundJobsScheduler | undefined} */
     this.scheduler = undefined
     this._draining = false
     this._redrainQueued = false
     this._stopped = false
     /**
      * Narrows the runtime value to the documented type.
-      @type {(() => void) | undefined} */
+     * @type {(() => void) | undefined} */
     this._unsubscribeBeacon = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {((...args: Array<?>) => void) | undefined} */
+     * @type {((...args: Array<?>) => void) | undefined} */
     this._beaconConnectHandler = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {import("../beacon/client.js").default | import("../beacon/in-process-client.js").default | undefined} */
+     * @type {import("../beacon/client.js").default | import("../beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
   }
 
@@ -178,7 +178,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs close workers.
-    @returns {void} */
+   * @returns {void} */
   _closeWorkers() {
     for (const worker of this.workers) {
       worker.close()
@@ -187,7 +187,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs clear timers.
-    @returns {void} */
+   * @returns {void} */
   _clearTimers() {
     if (this._pollTimer) clearInterval(this._pollTimer)
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
@@ -201,7 +201,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs disconnect beacon handlers.
-    @returns {void} */
+   * @returns {void} */
   _disconnectBeaconHandlers() {
     if (this._unsubscribeBeacon) {
       this._unsubscribeBeacon()
@@ -217,7 +217,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs stop beacon and server.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async _stopBeaconAndServer() {
     try {
       await this.configuration.disconnectBeacon()
@@ -228,7 +228,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs close server and database connections.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async _closeServerAndDatabaseConnections() {
     try {
       await this._closeServer()
@@ -239,7 +239,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs close server.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async _closeServer() {
     if (!this.server) return
 
@@ -327,7 +327,7 @@ export default class BackgroundJobsMain {
     const jsonSocket = new JsonSocket(socket)
     /**
      * Role.
-      @type {import("./types.js").BackgroundJobSocketRole | null} */
+     * @type {import("./types.js").BackgroundJobSocketRole | null} */
     let role = null
 
     const cleanup = () => {
@@ -697,7 +697,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs clear error retry timer.
-    @returns {void} */
+   * @returns {void} */
   _clearErrorRetryTimer() {
     if (this._errorRetryTimer) {
       clearTimeout(this._errorRetryTimer)
@@ -839,7 +839,7 @@ export default class BackgroundJobsMain {
       this._addAcceptedExecutionModes({executionModes, worker})
     }
 
-    return /** Narrows the runtime value to the documented type. @type {import("./types.js").BackgroundJobExecutionMode[]} */ ([...executionModes])
+    return /** @type {import("./types.js").BackgroundJobExecutionMode[]} */ ([...executionModes])
   }
 
   /**

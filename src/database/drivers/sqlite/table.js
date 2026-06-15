@@ -73,7 +73,7 @@ export default class VelociousDatabaseDriversSqliteTable extends BaseTable {
 
         const indexData = /**
                            * Narrows the runtime value to the documented type.
-                            @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
+                           * @type {typeof columnsIndex.data & {columnNames?: string[]}} */ (columnsIndex.data)
 
         indexData.columnNames = this._parseColumnsFromSQL(String(sql))
 

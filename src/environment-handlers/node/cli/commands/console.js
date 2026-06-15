@@ -5,7 +5,7 @@ import repl from "node:repl"
 
 /**
  * Defines this typedef.
-  @typedef {{application: import("../../../../application.js").default, configuration: import("../../../../configuration.js").default}} ConsoleContextArgs */
+ * @typedef {{application: import("../../../../application.js").default, configuration: import("../../../../configuration.js").default}} ConsoleContextArgs */
 
 /**
  * Runs build console context.
@@ -15,7 +15,7 @@ import repl from "node:repl"
 function buildConsoleContext({application, configuration}) {
   /**
    * Dbs.
-    @type {Record<string, import("../../../../database/drivers/base.js").default>} */
+   * @type {Record<string, import("../../../../database/drivers/base.js").default>} */
   const dbs = configuration.getCurrentConnections()
 
   for (const identifier of configuration.getDatabaseIdentifiers()) {
@@ -24,7 +24,7 @@ function buildConsoleContext({application, configuration}) {
     const pool = configuration.getDatabasePool(identifier)
     const poolWithGlobal = /**
                             * Narrows the runtime value to the documented type.
-                             @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
+                            * @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
     const globalConnection = poolWithGlobal.getGlobalConnection?.()
 
     if (globalConnection) {
@@ -67,7 +67,7 @@ function assignConsoleContext({context, replServer}) {
 
   const modelClasses = /**
                         * Narrows the runtime value to the documented type.
-                         @type {Record<string, typeof import("../../../../database/record/index.js").default>} */ (
+                        * @type {Record<string, typeof import("../../../../database/record/index.js").default>} */ (
     context.models || {}
   )
 

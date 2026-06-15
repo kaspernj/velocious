@@ -41,7 +41,7 @@ const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 export default class FrontendModelWebsocketChannel extends VelociousWebsocketChannel {
   /**
    * Ability.
-    @type {import("../authorization/ability.js").default | null} */
+   * @type {import("../authorization/ability.js").default | null} */
   _ability = null
 
   /**
@@ -68,7 +68,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       params: {...this.params, model: modelName},
       request: /**
                 * Narrows the runtime value to the documented type.
-                 @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+                * @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
       response: new Response({configuration})
     })
 
@@ -88,7 +88,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
     return readRules.some((/**
                             * Narrows the runtime value to the documented type.
-                             @type {{effect: string}} */ rule) => rule.effect === "allow")
+                            * @type {{effect: string}} */ rule) => rule.effect === "allow")
   }
 
   /**
@@ -139,7 +139,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     }
 
     if (body.action === "destroy") {
-      if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
+      if (!hasEventFilters || this._hasDestroyEventDelivery() || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
       return
     }
 
@@ -157,7 +157,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
     /**
      * Deliver body.
-      @type {FrontendModelLifecycleBroadcastBody} */
+     * @type {FrontendModelLifecycleBroadcastBody} */
     let deliverBody = body
 
     if (this._hasProjectionParams()) {
@@ -171,7 +171,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         ...deliverBody,
         record: /**
                  * Narrows the runtime value to the documented type.
-                  @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord))
+                 * @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord))
       }
     }
 
@@ -204,6 +204,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return {
       abilities: this.params.abilities !== undefined,
       eventFilterCount: eventFilters.length,
+      destroyEventDelivery: this.params.destroyEventDelivery === true,
       model: this._modelName(),
       preload: this.params.preload !== undefined,
       queryData: this.params.queryData !== undefined,
@@ -254,6 +255,14 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Runs has destroy event delivery.
+   * @returns {boolean} - Whether id-only destroy events should be delivered with event filters.
+   */
+  _hasDestroyEventDelivery() {
+    return this.params.destroyEventDelivery === true
+  }
+
+  /**
    * Runs event filters.
    * @returns {import("./query.js").FrontendModelEventFilterPayloadEntry[]} - Valid event filters.
    */
@@ -270,7 +279,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
       const eventFilter = /**
                            * Narrows the runtime value to the documented type.
-                            @type {Record<string, ?>} */ (entry)
+                           * @type {Record<string, ?>} */ (entry)
       const unknownKeys = Object.keys(eventFilter).filter((key) => !EVENT_FILTER_KEYS.has(key))
 
       if (unknownKeys.length > 0) {
@@ -283,25 +292,25 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
       /**
        * Sanitized event filter.
-        @type {import("./query.js").FrontendModelEventFilterPayloadEntry} */
+       * @type {import("./query.js").FrontendModelEventFilterPayloadEntry} */
       const sanitizedEventFilter = {key: eventFilter.key}
 
       if (eventFilter.joins !== undefined) {
         sanitizedEventFilter.joins = /**
                                       * Narrows the runtime value to the documented type.
-                                       @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.joins)
+                                      * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.joins)
       }
 
       if (eventFilter.searches !== undefined) {
         sanitizedEventFilter.searches = /**
                                          * Narrows the runtime value to the documented type.
-                                          @type {import("./query.js").FrontendModelSearch[]} */ (eventFilter.searches)
+                                         * @type {import("./query.js").FrontendModelSearch[]} */ (eventFilter.searches)
       }
 
       if (eventFilter.where !== undefined) {
         sanitizedEventFilter.where = /**
                                       * Narrows the runtime value to the documented type.
-                                       @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.where)
+                                      * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.where)
       }
 
       return sanitizedEventFilter
@@ -346,7 +355,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       },
       request: /**
                 * Narrows the runtime value to the documented type.
-                 @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+                * @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
       response: new Response({configuration}),
       viewPath: "/"
     })
@@ -384,7 +393,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   async _matchedEventFilterKeysForEventId(id, FrontendModelController) {
     /**
      * Matched event filter keys.
-      @type {string[]} */
+     * @type {string[]} */
     const matchedEventFilterKeys = []
 
     for (const eventFilter of this._eventFilters()) {
@@ -458,14 +467,14 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     for (const entry of controller.frontendModelWithCount()) {
       /**
        * Spec.
-        @type {Record<string, boolean | {relationship?: string, where?: Record<string, import("./query.js").FrontendModelTransportValue>}>} */
+       * @type {Record<string, boolean | {relationship?: string, where?: Record<string, import("./query.js").FrontendModelTransportValue>}>} */
       const spec = {}
 
       spec[entry.attributeName] = {
         relationship: entry.relationshipName,
         where: entry.where ? /**
                               * Narrows the runtime value to the documented type.
-                               @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (entry.where) : undefined
+                              * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (entry.where) : undefined
       }
       query.withCount(spec)
     }
@@ -504,13 +513,13 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   _syntheticRequest() {
     const upgradeRequest = /**
                             * Narrows the runtime value to the documented type.
-                             @type {FrontendModelWebsocketUpgradeRequest} */ (this.session.upgradeRequest)
+                            * @type {FrontendModelWebsocketUpgradeRequest} */ (this.session.upgradeRequest)
     const rawHeaders = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
     const metadata = typeof this.session.getMetadata === "function" ? this.session.getMetadata() : {}
     const remoteAddress = typeof upgradeRequest?.remoteAddress === "function" ? upgradeRequest.remoteAddress() : undefined
     /**
      * Header map.
-      @type {Record<string, string | string[] | undefined>} */
+     * @type {Record<string, string | string[] | undefined>} */
     const headerMap = {}
 
     for (const key of Object.keys(rawHeaders || {})) {

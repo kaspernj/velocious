@@ -112,7 +112,7 @@ export default class PluginRoutes {
 
     /**
      * Params.
-      @type {Record<string, string>} */
+     * @type {Record<string, string>} */
     const params = {}
 
     for (let index = 0; index < routeSegments.length; index += 1) {

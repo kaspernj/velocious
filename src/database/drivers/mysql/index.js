@@ -85,7 +85,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
     /**
      * Connect args.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const connectArgs = {charset: "utf8mb4"}
 
     for (const forwardValue of forward) {
@@ -221,7 +221,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   retryableDatabaseError(error) {
     const errorCode = /**
                        * Narrows the runtime value to the documented type.
-                        @type {?} */ (error).code
+                       * @type {?} */ (error).code
     const message = error.message || ""
     const shouldRetry = (
       errorCode == "ECONNREFUSED" ||
@@ -335,7 +335,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
       for (const row of result) {
         const table = new Table(this, /**
                                        * Narrows the runtime value to the documented type.
-                                        @type {Record<string, string>} */ (row))
+                                       * @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }

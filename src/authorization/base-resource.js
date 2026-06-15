@@ -4,7 +4,7 @@
 export default class AuthorizationBaseResource {
   /**
    * Model class.
-    @type {typeof import("../database/record/index.js").default | undefined} */
+   * @type {typeof import("../database/record/index.js").default | undefined} */
   static ModelClass = undefined
 
   /**
@@ -37,7 +37,7 @@ export default class AuthorizationBaseResource {
    */
   can(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "can"})
-    this.requiredAbility().can(actions, this.requiredModelClass(), /** Narrows conditions to the runtime resource model class. @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
+    this.requiredAbility().can(actions, this.requiredModelClass(), /** @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
@@ -49,7 +49,7 @@ export default class AuthorizationBaseResource {
    */
   cannot(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "cannot"})
-    this.requiredAbility().cannot(actions, this.requiredModelClass(), /** Narrows conditions to the runtime resource model class. @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
+    this.requiredAbility().cannot(actions, this.requiredModelClass(), /** @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
@@ -71,7 +71,7 @@ export default class AuthorizationBaseResource {
   requiredModelClass() {
     const modelClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {typeof AuthorizationBaseResource} */ (this.constructor).modelClass()
+                        * @type {typeof AuthorizationBaseResource} */ (this.constructor).modelClass()
 
     if (!modelClass) {
       throw new Error(`${this.constructor.name} must define static ModelClass before calling ability helpers.`)

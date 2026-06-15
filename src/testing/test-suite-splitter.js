@@ -140,7 +140,7 @@ export default class TestSuiteSplitter {
   distributeGreedily(sortedFiles) {
     /**
      * Buckets.
-      @type {GroupBucket[]} */
+     * @type {GroupBucket[]} */
     const buckets = []
 
     for (let i = 0; i < this._groups; i++) {

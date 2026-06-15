@@ -39,17 +39,17 @@ export default class VelociousHttpServerDevelopmentReloader {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {ReturnType<typeof setTimeout> | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this.reloadTimer = undefined
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string | undefined} */
+     * @type {string | undefined} */
     this.pendingChangedPath = undefined
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, import("fs").FSWatcher>} */
+     * @type {Map<string, import("fs").FSWatcher>} */
     this.watchers = new Map()
   }
 
@@ -98,7 +98,7 @@ export default class VelociousHttpServerDevelopmentReloader {
     } catch (error) {
       if (/**
            * Narrows the runtime value to the documented type.
-            @type {{code?: string}} */ (error)?.code === "ENOENT") return
+           * @type {{code?: string}} */ (error)?.code === "ENOENT") return
       throw error
     }
 
@@ -172,7 +172,7 @@ export default class VelociousHttpServerDevelopmentReloader {
     } catch (error) {
       if (/**
            * Narrows the runtime value to the documented type.
-            @type {{code?: string}} */ (error)?.code !== "ENOENT") {
+           * @type {{code?: string}} */ (error)?.code !== "ENOENT") {
         throw error
       }
     }

@@ -40,7 +40,7 @@ function subscribeMessage(message) {
   return message.type === "subscribe"
     ? /**
        * Narrows the runtime value to the documented type.
-        @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
+       * @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
     : null
 }
 
@@ -52,7 +52,7 @@ function subscribeMessage(message) {
 function requestMessage(message) {
   if (message.type && message.type !== "request") return null
 
-  return /** Narrows the runtime value to the documented type. @type {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string}} */ (message)
+  return /** @type {{type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string}} */ (message)
 }
 
 /**
@@ -86,7 +86,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   channelReplayStates = new Map()
   /**
    * Message queue.
-    @type {WebsocketSessionMessage[]} */
+   * @type {WebsocketSessionMessage[]} */
   messageQueue = []
 
   /**
@@ -110,7 +110,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     this._metadata = {}
 
     /**
@@ -123,12 +123,12 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, import("../websocket-connection.js").default>} */
+     * @type {Map<string, import("../websocket-connection.js").default>} */
     this._connections = new Map()
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, {channelType: string, subscription: import("../websocket-channel.js").default}>} */
+     * @type {Map<string, {channelType: string, subscription: import("../websocket-channel.js").default}>} */
     this._channelSubscriptions = new Map()
 
     /**
@@ -154,7 +154,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {import("./index.js").default | null} */
+     * @type {import("./index.js").default | null} */
     this.socket = null
 
     /**
@@ -464,7 +464,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (message.type === "metadata") {
       const metadataPayload = /**
                                * Narrows the runtime value to the documented type.
-                                @type {{data?: Record<string, ?>}} */ (message)
+                               * @type {{data?: Record<string, ?>}} */ (message)
 
       this._metadata = metadataPayload.data && typeof metadataPayload.data === "object" ? {...metadataPayload.data} : {}
 
@@ -590,7 +590,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       if (this.buffer.length < offset + maskLength + payloadLength) return
 
-      /** Payload. @type {Buffer} */
+      /** @type {Buffer} */
       let payload = this.buffer.slice(offset + maskLength, offset + maskLength + payloadLength)
 
       if (isMasked) {
@@ -658,11 +658,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       /**
        * Defines finalPayload.
-        @type {Buffer} */
+       * @type {Buffer} */
       let finalPayload
       /**
        * Defines finalOpcode.
-        @type {number} */
+       * @type {number} */
       let finalOpcode
 
       if (this._fragmentedPayloads !== null) {
@@ -753,7 +753,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * Runs reset fragment buffer.
-    @returns {void} */
+   * @returns {void} */
   _resetFragmentBuffer() {
     this._fragmentedPayloads = null
     this._fragmentedOpcode = null
@@ -1149,7 +1149,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
       this.sendJson({type: "connection-error", connectionId, message: /**
                                                                        * Narrows the runtime value to the documented type.
-                                                                        @type {Error} */ (error).message || "Failed to open connection"})
+                                                                       * @type {Error} */ (error).message || "Failed to open connection"})
     }
   }
 
@@ -1175,7 +1175,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       this.logger.error(() => [`Failed to handle connection-message for ${connectionId}`, error])
       this.sendJson({type: "connection-error", connectionId, message: /**
                                                                        * Narrows the runtime value to the documented type.
-                                                                        @type {Error} */ (error).message || "Failed to handle message"})
+                                                                       * @type {Error} */ (error).message || "Failed to handle message"})
     }
   }
 
@@ -1288,7 +1288,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
       this.sendJson({type: "channel-error", subscriptionId, message: /**
                                                                       * Narrows the runtime value to the documented type.
-                                                                       @type {Error} */ (error).message || "Failed to subscribe"})
+                                                                      * @type {Error} */ (error).message || "Failed to subscribe"})
     }
   }
 
@@ -1333,7 +1333,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       subscription.sendMessage(/**
                                 * Narrows the runtime value to the documented type.
-                                 @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
+                                * @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
     }
   }
 
@@ -1609,7 +1609,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       ...(params && typeof params === "object" ? params : {})
     }
 
-    return /** Narrows the runtime value to the documented type. @type {Promise<string | null | undefined>} */ (this.configuration.resolveTenant({
+    return /** @type {Promise<string | null | undefined>} */ (this.configuration.resolveTenant({
       params: mergedParams,
       request: this.upgradeRequest,
       response: undefined,
@@ -1626,7 +1626,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   _unmaskPayload(payload, mask) {
     /**
      * Result.
-      @type {Buffer} */
+     * @type {Buffer} */
     const result = Buffer.alloc(payload.length)
 
     for (let i = 0; i < payload.length; i++) {

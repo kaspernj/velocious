@@ -65,7 +65,7 @@ export default async function runJobPayload(payload) {
   const jobInstance = new JobClass()
   /**
    * Perform.
-    @type {(...args: Array<?>) => Promise<void>} */
+   * @type {(...args: Array<?>) => Promise<void>} */
   const perform = jobInstance.perform
 
   try {

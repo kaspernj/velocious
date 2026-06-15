@@ -4,7 +4,7 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 /**
  * Defines this typedef.
-  @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
+ * @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
 
 /**
  * Runs normalize recipients.
@@ -162,9 +162,9 @@ export default class SmtpMailerBackend {
       const sendMessage = () => {
         connection.send({from: envelopeFrom, to: recipients}, /**
                                                                * Narrows the runtime value to the documented type.
-                                                                @type {?} */ (message), (/**
+                                                               * @type {?} */ (message), (/**
                                                                                           * Narrows the runtime value to the documented type.
-                                                                                           @type {Error | null | undefined} */ sendError) => {
+                                                                                          * @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

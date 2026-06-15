@@ -3,7 +3,7 @@
 export default class VelociousDatabaseQueryFromBase {
   /**
    * Query.
-    @type {import("./index.js").default  | null} */
+   * @type {import("./index.js").default  | null} */
   query = null
 
   /**

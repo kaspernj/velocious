@@ -23,7 +23,7 @@ const DURATION_MULTIPLIERS = {
 }
 /**
  * DurationUnit type.
-  @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
+ * @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
 
 /**
  * Runs the parseScheduledDuration helper.
@@ -54,7 +54,7 @@ export function parseScheduledDuration(value, fieldName) {
   const numericValue = Number(match[1])
   const multiplier = DURATION_MULTIPLIERS[/**
                                            * Narrows the runtime value to the documented type.
-                                            @type {DurationUnit} */ (match[2])]
+                                           * @type {DurationUnit} */ (match[2])]
 
   if (!multiplier) {
     throw new Error(`Invalid scheduled background job ${fieldName}: ${value}`)
@@ -77,11 +77,11 @@ export default class BackgroundJobsScheduler {
     this.logger = new Logger(this)
     /**
      * Narrows the runtime value to the documented type.
-      @type {Array<ReturnType<typeof setInterval>>} */
+     * @type {Array<ReturnType<typeof setInterval>>} */
     this.intervalIds = []
     /**
      * Narrows the runtime value to the documented type.
-      @type {Array<ReturnType<typeof setTimeout>>} */
+     * @type {Array<ReturnType<typeof setTimeout>>} */
     this.timeoutIds = []
     /**
      * Narrows the runtime value to the documented type.
@@ -92,7 +92,7 @@ export default class BackgroundJobsScheduler {
 
   /**
    * Runs start.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async start() {
     this.stopped = false
 
@@ -115,7 +115,7 @@ export default class BackgroundJobsScheduler {
 
   /**
    * Runs stop.
-    @returns {void} */
+   * @returns {void} */
   stop() {
     this.stopped = true
 
@@ -170,7 +170,7 @@ export default class BackgroundJobsScheduler {
   scheduleEveryJob({jobConfiguration, jobKey}) {
     const everyConfig = /**
                          * Narrows the runtime value to the documented type.
-                          @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
+                         * @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
     const {everyValue, firstInValue} = this.normalizeEvery(everyConfig)
     const intervalMs = parseScheduledDuration(everyValue, `${jobKey}.every`)
     const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.first_in`) : intervalMs

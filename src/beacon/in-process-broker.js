@@ -20,11 +20,11 @@
 
 /**
  * Defines this typedef.
-  @typedef {{_receiveBroadcast: (message: import("./types.js").BeaconBroadcastMessage) => void}} InProcessPeer */
+ * @typedef {{_receiveBroadcast: (message: import("./types.js").BeaconBroadcastMessage) => void}} InProcessPeer */
 
 /**
  * Peers.
-  @type {Set<InProcessPeer>} */
+ * @type {Set<InProcessPeer>} */
 const peers = new Set()
 
 /**

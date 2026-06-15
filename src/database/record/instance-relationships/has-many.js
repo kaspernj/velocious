@@ -31,7 +31,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     const newInstance = /**
                          * Narrows the runtime value to the documented type.
-                          @type {InstanceType<TMC>} */ (new targetModelClass(data))
+                         * @type {InstanceType<TMC>} */ (new targetModelClass(data))
 
 
     // Add it to the loaded models of this relationship
@@ -67,7 +67,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const foreignKeyValue = parentModel.readColumn(primaryKeyName)
       /**
        * Assign data.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const assignData = {}
 
       assignData[foreignKeyAttributeName] = foreignKeyValue
@@ -109,12 +109,12 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     const batched = await this._tryCohortPreload()
 
     if (batched) {
-      return /** Narrows the runtime value to the documented type. @type {InstanceType<TMC>[]} */ (Array.isArray(this._loaded) ? this._loaded : [])
+      return /** @type {InstanceType<TMC>[]} */ (Array.isArray(this._loaded) ? this._loaded : [])
     }
 
     const foreignModels = /**
                            * Narrows the runtime value to the documented type.
-                            @type {InstanceType<TMC>[]} */ (await this.query().load())
+                           * @type {InstanceType<TMC>[]} */ (await this.query().load())
 
     this.setLoaded(foreignModels)
     this.setDirty(false)
@@ -168,7 +168,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the find.
    */
   async find(modelID) {
-    return /** Narrows the runtime value to the documented type. @type {Promise<InstanceType<TMC>>} */ (this.query().find(modelID))
+    return /** @type {Promise<InstanceType<TMC>>} */ (this.query().find(modelID))
   }
 
   /**
@@ -204,7 +204,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const parentPrimaryKey = this.getPrimaryKey()
       const parentId = /**
                         * Narrows the runtime value to the documented type.
-                         @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
+                        * @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
@@ -217,11 +217,11 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     const primaryKey = this.getPrimaryKey()
     const primaryModelID = /**
                             * Narrows the runtime value to the documented type.
-                             @type {string | number} */ (this.getModel().readColumn(primaryKey))
+                            * @type {string | number} */ (this.getModel().readColumn(primaryKey))
 
     /**
      * Where args.
-      @type {Record<string, string | number>} */
+     * @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[foreignKey] = primaryModelID

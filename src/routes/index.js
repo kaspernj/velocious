@@ -26,7 +26,7 @@ export default class VelociousRoutes {
   getMounts() {
     /**
      * Collected.
-      @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
+     * @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
     const collected = []
 
     /**

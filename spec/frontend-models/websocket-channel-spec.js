@@ -84,6 +84,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
 
     expect(channel.debugSnapshot()).toEqual({
       abilities: false,
+      destroyEventDelivery: false,
       eventFilterCount: 1,
       model: "Invoice",
       preload: true,
@@ -116,6 +117,45 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
 
     expect(sentFrames).toEqual([])
+  })
+
+  it("delivers destroy events without unfiltering create or update events", async () => {
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {
+        destroyEventDelivery: true,
+        eventFilters: [
+          {key: "done", where: {state: "done"}}
+        ],
+        model: "Task"
+      },
+      // @ts-expect-error Minimal sendJson-only session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "filtered-destroy-delivery"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._matchedEventFilterKeysForEventId = async () => []
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: "other-task",
+      record: {id: "other-task", state: "open"}
+    })
+    await channel.deliverBroadcast({
+      action: "destroy",
+      id: "destroyed-task"
+    })
+
+    expect(sentFrames.map((frame) => frame.body)).toEqual([
+      {
+        action: "destroy",
+        id: "destroyed-task"
+      }
+    ])
   })
 
   it("forwards the subscriber's auth params to resolveAbility", async () => {

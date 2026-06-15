@@ -7,7 +7,7 @@ import splitSqlStatements from "../../../../../../utils/split-sql-statements.js"
 export default class DbSchemaLoad extends BaseCommand {
   /**
    * Runs execute.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async execute() {
     await this.getConfiguration().ensureConnections({name: "DB schema load"}, async (dbs) => {
       const dbDir = path.join(this.directory(), "db")
@@ -59,11 +59,11 @@ export default class DbSchemaLoad extends BaseCommand {
   executableConnection(db) {
     const dbWithConnection = /**
                               * Narrows the runtime value to the documented type.
-                               @type {import("../../../../../../database/drivers/base.js").default & {connection?: ?}} */ (db)
+                              * @type {import("../../../../../../database/drivers/base.js").default & {connection?: ?}} */ (db)
     const connection = dbWithConnection.connection
 
     if (connection && typeof connection == "object" && "exec" in connection && typeof connection.exec == "function") {
-      return /** Narrows the runtime value to the documented type. @type {{exec: (sql: string) => Promise<?>}} */ (connection)
+      return /** @type {{exec: (sql: string) => Promise<?>}} */ (connection)
     }
   }
 }

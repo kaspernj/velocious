@@ -4,7 +4,7 @@ import useEnvSense from "env-sense/build/use-env-sense.js"
 
 /**
  * LoggingOutputPayload type.
-  @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+ * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 const {isBrowser} = useEnvSense()
 const isNodeRuntime = typeof process !== "undefined" && Boolean(process.versions?.node)

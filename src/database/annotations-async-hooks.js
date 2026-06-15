@@ -4,12 +4,12 @@ import {AsyncLocalStorage} from "node:async_hooks"
 
 /**
  * Defines asyncLocalStorage.
-  @type {import("node:async_hooks").AsyncLocalStorage<string[]> | undefined} */
+ * @type {import("node:async_hooks").AsyncLocalStorage<string[]> | undefined} */
 let asyncLocalStorage
 
 /**
  * Database annotations global.
-  @type {typeof globalThis & {velociousDatabaseAnnotations?: {getDatabaseAnnotations: () => string[], withDatabaseAnnotation: (annotation: string, callback: () => Promise<?>) => Promise<?>}}} */
+ * @type {typeof globalThis & {velociousDatabaseAnnotations?: {getDatabaseAnnotations: () => string[], withDatabaseAnnotation: (annotation: string, callback: () => Promise<?>) => Promise<?>}}} */
 const databaseAnnotationsGlobal = globalThis
 
 if (AsyncLocalStorage) {

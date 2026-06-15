@@ -42,17 +42,17 @@ function isMigrationObject(migration) {
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
   /**
    * Find commands require context result.
-    @type {CommandsRequireContextType | undefined} */
+   * @type {CommandsRequireContextType | undefined} */
   findCommandsRequireContextResult = undefined
 
   /**
    * Migrations require context result.
-    @type {MigrationsRequireContextType | undefined} */
+   * @type {MigrationsRequireContextType | undefined} */
   _migrationsRequireContextResult = undefined
 
   /**
    * Test files require context result.
-    @type {TestFilesRequireContextType | undefined} */
+   * @type {TestFilesRequireContextType | undefined} */
   _testFilesRequireContextResult = undefined
 
   /**
@@ -117,7 +117,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
    */
   _findCommandsRequireContext() {
     // @ts-expect-error
-    this.findCommandsRequireContextResult ||= /** Narrows the runtime value to the documented type. @type {CommandsRequireContextType} */ (require.context("../cli/commands", true, /\.js$/))
+    this.findCommandsRequireContextResult ||= /** @type {CommandsRequireContextType} */ (require.context("../cli/commands", true, /\.js$/))
 
     return this.findCommandsRequireContextResult
   }
@@ -195,7 +195,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     const migrationsRequireContext = await this.migrationsRequireContext()
     /**
      * Migrations.
-      @type {Array<import("./base.js").MigrationObjectType | null>} */
+     * @type {Array<import("./base.js").MigrationObjectType | null>} */
     const migrations = migrationsRequireContext
       .keys()
       .map((file) => {
@@ -228,10 +228,10 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
       .filter(isMigrationObject)
     /**
      * Files.
-      @type {import("./base.js").MigrationObjectType[]} */
+     * @type {import("./base.js").MigrationObjectType[]} */
     const files = /**
                    * Narrows the runtime value to the documented type.
-                    @type {import("./base.js").MigrationObjectType[]} */ (migrations)
+                   * @type {import("./base.js").MigrationObjectType[]} */ (migrations)
 
     files.sort((migration1, migration2) => migration1.date - migration2.date)
 

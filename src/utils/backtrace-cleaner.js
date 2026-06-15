@@ -107,7 +107,7 @@ function relativeApplicationPath(sourcePath, applicationDirectory) {
 export default class BacktraceCleaner {
   /**
    * Framework source directory.
-    @type {string | undefined} */
+   * @type {string | undefined} */
   frameworkSourceDirectory = undefined
 
   /**

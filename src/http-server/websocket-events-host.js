@@ -6,7 +6,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   constructor() {
     /**
      * Narrows the runtime value to the documented type.
-      @type {Set<import("./worker-handler/index.js").default>} */
+     * @type {Set<import("./worker-handler/index.js").default>} */
     this.handlers = new Set()
     this.publishQueue = Promise.resolve()
   }
@@ -45,7 +45,7 @@ export class VelociousHttpServerWebsocketEventsHost {
       ? {channel: channelOrArgs, payload: payloadArg}
       : /**
          * Narrows the runtime value to the documented type.
-          @type {{channel: string, payload: ?}} */ (channelOrArgs)
+         * @type {{channel: string, payload: ?}} */ (channelOrArgs)
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 

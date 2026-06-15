@@ -3,22 +3,22 @@
 export default class VelociousBaseRoute {
   /**
    * Narrows the runtime value to the documented type.
-    @type {typeof import("./get-route.js").default} */
+   * @type {typeof import("./get-route.js").default} */
   static GetRouteType
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {typeof import("./namespace-route.js").default} */
+   * @type {typeof import("./namespace-route.js").default} */
   static NameSpaceRouteType
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {typeof import("./post-route.js").default} */
+   * @type {typeof import("./post-route.js").default} */
   static PostRouteType
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {typeof import("./resource-route.js").default} */
+   * @type {typeof import("./resource-route.js").default} */
   static ResourceRouteType
 
   /**
@@ -55,12 +55,12 @@ export default class VelociousBaseRoute {
 
   /**
    * Routes.
-    @type {Array<VelociousBaseRoute>} */
+   * @type {Array<VelociousBaseRoute>} */
   routes = []
 
   /**
    * Mounts.
-    @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
+   * @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
   mounts = []
 
   constructor() {

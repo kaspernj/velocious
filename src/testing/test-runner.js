@@ -39,11 +39,11 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
 
 /**
  * ConsoleMethodName type.
-  @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
+ * @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
 
 /**
  * Captured console methods.
-  @type {ConsoleMethodName[]} */
+ * @type {ConsoleMethodName[]} */
 const CAPTURED_CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"]
 
 /**
@@ -149,12 +149,12 @@ function toFileSlug(value) {
 export default class TestRunner {
   /**
    * Narrows the runtime value to the documented type.
-    @type {ActiveAfterAllScopeEntry[]} */
+   * @type {ActiveAfterAllScopeEntry[]} */
   _activeAfterAllScopes
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {FailedTestDetail[]} */
+   * @type {FailedTestDetail[]} */
   _failedTestDetails
 
   /**
@@ -343,7 +343,7 @@ export default class TestRunner {
   getExcludeTagSet() {
     /**
      * Config tags.
-      @type {string[]} */
+     * @type {string[]} */
     const configTags = Array.isArray(testConfig.excludeTags) ? testConfig.excludeTags : []
 
     return new Set([...this._excludeTags, ...configTags])
@@ -379,7 +379,7 @@ export default class TestRunner {
       const testData = tests.tests[testDescription]
       const testArgs = /**
                         * Narrows the runtime value to the documented type.
-                         @type {TestArgs} */ (Object.assign({}, testData.args))
+                        * @type {TestArgs} */ (Object.assign({}, testData.args))
       const includeByLine = lineMatchedInScope || this.matchesLineFilter(testData)
 
       if (this._onlyFocussed && !testArgs.focus) continue
@@ -719,7 +719,7 @@ export default class TestRunner {
 
     if (!shouldRunAnyTests) return
 
-    /** Scope entry. @type {ActiveAfterAllScopeEntry} */
+    /** @type {ActiveAfterAllScopeEntry} */
     const scopeEntry = {tests, afterAllsRun: false}
     this._activeAfterAllScopes.push(scopeEntry)
 
@@ -732,7 +732,7 @@ export default class TestRunner {
         const testData = tests.tests[testDescription]
         const testArgs = /**
                           * Narrows the runtime value to the documented type.
-                           @type {TestArgs} */ (Object.assign({}, testData.args))
+                          * @type {TestArgs} */ (Object.assign({}, testData.args))
         const includeByLine = scopeLineMatch || this.matchesLineFilter(testData)
 
         if (this._onlyFocussed && !testArgs.focus) continue
@@ -757,7 +757,7 @@ export default class TestRunner {
         let attemptNumber = 1
         /**
          * Attempt console outputs.
-          @type {AttemptConsoleOutput[]} */
+         * @type {AttemptConsoleOutput[]} */
         const attemptConsoleOutputs = []
 
         console.log(`${leftPadding}it ${testDescription}`)
@@ -766,15 +766,15 @@ export default class TestRunner {
           let shouldRetry = false
           /**
            * Defines caughtError.
-            @type {?} */
+           * @type {?} */
           let caughtError
           /**
            * Defines failedError.
-            @type {?} */
+           * @type {?} */
           let failedError
           /**
            * Defines lastError.
-            @type {?} */
+           * @type {?} */
           let lastError
           let willRetry = false
           const stopConsoleCapture = this.startConsoleCapture({
@@ -1120,17 +1120,17 @@ export default class TestRunner {
   startConsoleCapture({passthrough = false} = {}) {
     /**
      * Lines.
-      @type {string[]} */
+     * @type {string[]} */
     const lines = []
     /**
      * Console object.
-      @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
+     * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
     const consoleObject = /**
                            * Narrows the runtime value to the documented type.
-                            @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
+                           * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
     /**
      * Original console methods.
-      @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
+     * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
     const originalConsoleMethods = {
       debug: consoleObject.debug.bind(console),
       error: consoleObject.error.bind(console),

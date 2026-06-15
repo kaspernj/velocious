@@ -9,11 +9,11 @@ import MailerDelivery from "./delivery.js"
 
 /**
  * Deliveries store.
-  @type {import("./index.js").MailerDeliveryPayload[]} */
+ * @type {import("./index.js").MailerDeliveryPayload[]} */
 const deliveriesStore = []
 /**
  * Delivery handler.
-  @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} */
+ * @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} */
 let deliveryHandler = null
 
 /**
@@ -60,9 +60,9 @@ function inferActionName(mailerClass, stack) {
     if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, frameActionName)) continue
     if (typeof /**
                 * Narrows the runtime value to the documented type.
-                 @type {Record<string, ?>} */ (/**
+                * @type {Record<string, ?>} */ (/**
                                                 * Narrows the runtime value to the documented type.
-                                                 @type {?} */ (prototype))[frameActionName] !== "function") continue
+                                                * @type {?} */ (prototype))[frameActionName] !== "function") continue
 
     actionName = frameActionName
   }
@@ -124,7 +124,7 @@ export class VelociousMailerBase {
 
     const resolvedActionName = actionName || inferActionName(/**
                                                               * Narrows the runtime value to the documented type.
-                                                               @type {typeof VelociousMailerBase} */ (this.constructor), new Error().stack || "")
+                                                              * @type {typeof VelociousMailerBase} */ (this.constructor), new Error().stack || "")
 
     if (!resolvedActionName) {
       throw new Error(`Missing actionName for ${this.constructor.name}.mail()`)
@@ -217,9 +217,9 @@ export class VelociousMailerBase {
     const viewPath = `${configuration.getDirectory()}/src/mailers/${mailerDir}/${fileName}.ejs`
     const translate = (/**
                         * Narrows the runtime value to the documented type.
-                         @type {string} */ msgID, /**
+                        * @type {string} */ msgID, /**
                                                    * Narrows the runtime value to the documented type.
-                                                    @type {Record<string, ?> | undefined} */ args) => configuration.getTranslator()(msgID, args)
+                                                   * @type {Record<string, ?> | undefined} */ args) => configuration.getTranslator()(msgID, args)
     const viewParams = incorporate({mailer: this, _: translate}, this._viewParams)
 
     return await new Promise((resolve, reject) => {
@@ -227,7 +227,7 @@ export class VelociousMailerBase {
         if (err) {
           const errorCode = /**
                              * Narrows the runtime value to the documented type.
-                              @type {{code?: string}} */ (err).code
+                             * @type {{code?: string}} */ (err).code
 
           if (errorCode === "ENOENT") {
             reject(new Error(`Missing mailer view file: ${viewPath}`))

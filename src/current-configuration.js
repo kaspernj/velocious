@@ -2,7 +2,7 @@
 
 /**
  * Shared.
-  @type {{currentConfiguration: import("./configuration.js").default | null}} */
+ * @type {{currentConfiguration: import("./configuration.js").default | null}} */
 const shared = {
   currentConfiguration: null
 }

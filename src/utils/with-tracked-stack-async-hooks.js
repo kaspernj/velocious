@@ -4,15 +4,15 @@ import {AsyncLocalStorage} from "node:async_hooks"
 
 /**
  * Defines asyncLocalStorage.
-  @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
+ * @type {import("node:async_hooks").AsyncLocalStorage<Array<string[]>> | undefined} */
 let asyncLocalStorage
 
 /**
  * Tracked stack global.
-  @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
+ * @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
 const trackedStackGlobal = /**
                             * Narrows the runtime value to the documented type.
-                             @type {?} */ (globalThis)
+                            * @type {?} */ (globalThis)
 
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
@@ -48,23 +48,23 @@ function addTrackedStackToError(error) {
 async function withTrackedStack(arg1, arg2) {
   /**
    * Defines callback.
-    @type {() => Promise<?>} */
+   * @type {() => Promise<?>} */
   let callback
 
   /**
    * Defines stack.
-    @type {string} */
+   * @type {string} */
   let stack
 
   if (typeof arg2 == "function" && typeof arg1 == "string") {
     callback = /**
                 * Narrows the runtime value to the documented type.
-                 @type {() => Promise<?>} */ (arg2)
+                * @type {() => Promise<?>} */ (arg2)
     stack = arg1
   } else {
     callback = /**
                 * Narrows the runtime value to the documented type.
-                 @type {() => Promise<?>} */ (arg1)
+                * @type {() => Promise<?>} */ (arg1)
     stack = Error().stack || ""
   }
 

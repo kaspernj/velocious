@@ -12,19 +12,19 @@ export default class JsonSocket extends EventEmitter {
     this.socket = socket
     /**
      * Narrows the runtime value to the documented type.
-      @type {string | undefined} */
+     * @type {string | undefined} */
     this.workerId = undefined
     /**
      * Narrows the runtime value to the documented type.
-      @type {boolean} */
+     * @type {boolean} */
     this.acceptsSpawnedJobs = true
     /**
      * Narrows the runtime value to the documented type.
-      @type {boolean} */
+     * @type {boolean} */
     this.acceptsForkedJobs = true
     /**
      * Narrows the runtime value to the documented type.
-      @type {boolean} */
+     * @type {boolean} */
     this.acceptsInlineJobs = true
     this.buffer = ""
     this.socket.setEncoding("utf8")

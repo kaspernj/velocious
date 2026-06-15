@@ -6,7 +6,7 @@ import TableData from "../table-data/index.js"
 export default class VelociousDatabaseDriversBaseTable {
   /**
    * Driver.
-    @type {import("./base.js").default | undefined} */
+   * @type {import("./base.js").default | undefined} */
   driver = undefined
 
   /**

@@ -13,22 +13,22 @@ import TableReference from "./table-reference.js"
 export default class TableData {
   /**
    * Columns.
-    @type {TableColumn[]} */
+   * @type {TableColumn[]} */
   _columns = []
 
   /**
    * Foreign keys.
-    @type {import("./table-foreign-key.js").default[]} */
+   * @type {import("./table-foreign-key.js").default[]} */
   _foreignKeys = []
 
   /**
    * Indexes.
-    @type {TableIndex[]} */
+   * @type {TableIndex[]} */
   _indexes = []
 
   /**
    * References.
-    @type {TableReference[]} */
+   * @type {TableReference[]} */
   _references = []
 
   /**

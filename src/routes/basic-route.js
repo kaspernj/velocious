@@ -42,7 +42,7 @@ export default class VelociousBasicRoute extends BaseRoute {
 
     const at = /**
                 * Narrows the runtime value to the documented type.
-                 @type {Record<string, ?>} */ (options).at
+                * @type {Record<string, ?>} */ (options).at
 
     if (typeof at !== "string" || !at.startsWith("/")) {
       throw new Error(`mount requires an 'at' option starting with '/', got: ${String(at)}`)

@@ -5,7 +5,7 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 export default class VelociousDatabaseDriversBaseForeignKey {
   /**
    * Table.
-    @type {import("./base-table.js").default | undefined} */
+   * @type {import("./base-table.js").default | undefined} */
   table = undefined
 
   /**

@@ -14,12 +14,12 @@ export default class FormDataPart {
 
   /**
    * Headers.
-    @type {Record<string, import("./header.js").default>} */
+   * @type {Record<string, import("./header.js").default>} */
   headers = {}
 
   /**
    * Body.
-    @type {number[]} */
+   * @type {number[]} */
   body = []
 
   /**

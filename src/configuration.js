@@ -32,7 +32,7 @@ export {CurrentConfigurationNotSetError}
 function currentWorkingDirectory() {
   const processObject = /**
                          * Types the following value.
-                          @type {{cwd?: ?} | undefined} */ (globalThis.process)
+                         * @type {{cwd?: ?} | undefined} */ (globalThis.process)
 
   if (typeof processObject?.cwd !== "function") return undefined
 
@@ -51,11 +51,11 @@ function canonicalDebugSnapshotValue(value) {
   return Object.keys(value).sort().reduce((result, key) => {
     result[key] = canonicalDebugSnapshotValue(/**
                                                * Types the following value.
-                                                @type {Record<string, ?>} */ (value)[key])
+                                               * @type {Record<string, ?>} */ (value)[key])
     return result
   }, /**
       * Types the following value.
-       @type {Record<string, ?>} */ ({}))
+      * @type {Record<string, ?>} */ ({}))
 }
 
 /**
@@ -95,7 +95,7 @@ function resolveBeaconUnreachableReportMs(value) {
 export default class VelociousConfiguration {
   /**
    * Close database connections promise.
-    @type {Promise<void> | null} */
+   * @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
   /**
    * Runs current.
@@ -119,11 +119,11 @@ export default class VelociousConfiguration {
     this._beacon = beacon
     /**
      * Stores the beacon client value.
-      @type {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} */
+     * @type {import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
     /**
      * Stores the beacon connect promise value.
-      @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
+     * @type {Promise<import("./beacon/client.js").default | import("./beacon/in-process-client.js").default | undefined> | undefined} */
     this._beaconConnectPromise = undefined
     /**
      * Stores the beacon report timer value.
@@ -160,7 +160,7 @@ export default class VelociousConfiguration {
     this.httpServer = httpServer || {}
     /**
      * Stores the http server instance value.
-      @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
+     * @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
     this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
@@ -177,18 +177,18 @@ export default class VelociousConfiguration {
     this._websocketEvents = undefined
     /**
      * Stores the websocket channel subscribers value.
-      @type {VelociousWebsocketChannelSubscribers | undefined} */
+     * @type {VelociousWebsocketChannelSubscribers | undefined} */
     this._websocketChannelSubscribers = undefined
     this._websocketChannelResolver = websocketChannelResolver
     this._websocketMessageHandlerResolver = websocketMessageHandlerResolver
     /**
      * Stores the websocket connection classes value.
-      @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
+     * @type {Map<string, typeof import("./http-server/websocket-connection.js").default>} */
     this._websocketConnectionClasses = new Map()
 
     /**
      * Stores the websocket channel classes value.
-      @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
+     * @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
     this._websocketChannelClasses = new Map()
 
     /**
@@ -223,12 +223,12 @@ export default class VelociousConfiguration {
 
     /**
      * Stores the around action value.
-      @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
+     * @type {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} */
     this._aroundAction = null
 
     /**
      * Stores the websocket session identity resolver value.
-      @type {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
+     * @type {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
     this._websocketSessionIdentityResolver = null
     this._logging = logging
     this._mailerBackend = mailerBackend
@@ -237,18 +237,18 @@ export default class VelociousConfiguration {
 
     /**
      * Stores the applied route mounts value.
-      @type {WeakSet<object>} */
+     * @type {WeakSet<object>} */
     this._appliedRouteMounts = new WeakSet()
     this._errorEvents = new EventEmitter()
 
     /**
      * Stores the database pools value.
-      @type {{[key: string]: import("./database/pool/base.js").default}} */
+     * @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
 
     /**
      * Stores the model classes value.
-      @type {{[key: string]: typeof import("./database/record/index.js").default}} */
+     * @type {{[key: string]: typeof import("./database/record/index.js").default}} */
     this.modelClasses = {}
 
     this.getEnvironmentHandler().setConfiguration(this)
@@ -498,7 +498,7 @@ export default class VelociousConfiguration {
   async _debugHttpServerSnapshot() {
     const httpServer = /**
                         * Types the following value.
-                         @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
+                        * @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
 
     if (!httpServer?.getDebugSnapshot) {
       return {configured: Boolean(this.httpServer), active: false}
@@ -561,7 +561,7 @@ export default class VelociousConfiguration {
   _debugDatabaseSnapshot() {
     /**
      * Database pools.
-      @type {Record<string, import("./database/pool/base.js").DatabasePoolDebugSnapshot>} */
+     * @type {Record<string, import("./database/pool/base.js").DatabasePoolDebugSnapshot>} */
     const databasePools = {}
     const activeIdentifiers = this.getDatabaseIdentifiers()
 
@@ -584,22 +584,22 @@ export default class VelociousConfiguration {
   _debugWebsocketSnapshot() {
     /**
      * Session buckets.
-      @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
+     * @type {Map<string, {count: number, details: {channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, subscriptionCount: number}}>} */
     const sessionBuckets = new Map()
     /**
      * Session details.
-      @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
+     * @type {{channelSubscriptionCount: number, channelSubscriptions: {channelType: string, count: number, model: string | null}[], connectionCount: number, paused: boolean, queuedMessageCount: number, subscriptionCount: number}[]} */
     const sessionDetails = []
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
       /**
        * Details buckets.
-        @type {Map<string, {count: number, details: Record<string, ?>}>} */
+       * @type {Map<string, {count: number, details: Record<string, ?>}>} */
       const detailsBuckets = new Map()
 
       for (const subscription of channelSubscriptions) {
         const details = /**
                          * Types the following value.
-                          @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
+                         * @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
         const key = JSON.stringify(details)
         const existingBucket = detailsBuckets.get(key)
 
@@ -620,13 +620,13 @@ export default class VelociousConfiguration {
     for (const session of this._websocketSessions) {
       /**
        * Channel subscription buckets.
-        @type {Map<string, {channelType: string, count: number, model: string | null}>} */
+       * @type {Map<string, {channelType: string, count: number, model: string | null}>} */
       const channelSubscriptionBuckets = new Map()
 
       for (const {channelType, subscription} of session._channelSubscriptions.values()) {
         const details = /**
                          * Types the following value.
-                          @type {Record<string, ?>} */ (subscription.debugSnapshot())
+                         * @type {Record<string, ?>} */ (subscription.debugSnapshot())
         const model = typeof details.model === "string" ? details.model : null
         const key = JSON.stringify({channelType, model})
         const existingBucket = channelSubscriptionBuckets.get(key)
@@ -973,7 +973,7 @@ export default class VelociousConfiguration {
 
     /**
      * Default levels.
-      @type {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} */
+     * @type {Array<"debug-low-level" | "debug" | "info" | "warn" | "error">} */
     const defaultLevels = ["info", "warn", "error"]
 
     if (includeLowLevelDebug) defaultLevels.unshift("debug-low-level")
@@ -1363,7 +1363,7 @@ export default class VelociousConfiguration {
   _deliverBroadcastFromBeacon(message) {
     /**
      * Websocket events.
-      @type {?} */
+     * @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -1675,7 +1675,7 @@ export default class VelociousConfiguration {
 
         const modelClass = /**
                             * Types the following value.
-                             @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
+                            * @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
 
         if (!modelClass) continue
 
@@ -1794,7 +1794,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get translator.
-    @returns {(msgID: string, args?: Record<string, ?>) => string} */
+   * @returns {(msgID: string, args?: Record<string, ?>) => string} */
   getTranslator() {
     if (this._translator) return this._translator
 
@@ -2037,7 +2037,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get websocket session identity resolver.
-    @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
+   * @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
   getWebsocketSessionIdentityResolver() {
     return this._websocketSessionIdentityResolver
   }
@@ -2155,7 +2155,7 @@ export default class VelociousConfiguration {
     // so fall through to the local dispatch.
     /**
      * Websocket events.
-      @type {?} */
+     * @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -2181,7 +2181,7 @@ export default class VelociousConfiguration {
   async awaitPendingBroadcasts() {
     /**
      * Websocket events.
-      @type {?} */
+     * @type {?} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
@@ -2424,16 +2424,16 @@ export default class VelociousConfiguration {
     const name = typeof optionsOrCallback == "function" ? "Configuration.withConnections" : (optionsOrCallback.name || "Configuration.withConnections")
     /**
      * Actual with connections callback.
-      @type {WithConnectionsCallbackType<T> | undefined} */
+     * @type {WithConnectionsCallbackType<T> | undefined} */
     const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /**
                                                                                     * Types the following value.
-                                                                                     @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+                                                                                    * @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
 
     if (!actualWithConnectionsCallback) throw new Error("withConnections requires a callback")
 
     /**
      * Dbs.
-      @type {{[key: string]: import("./database/drivers/base.js").default}} */
+     * @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
     const stack = Error().stack
@@ -2445,7 +2445,7 @@ export default class VelociousConfiguration {
 
     /**
      * Run request.
-      @type {() => Promise<T>} */
+     * @type {() => Promise<T>} */
     let runRequest = actualCallback
 
     for (const identifier of this.getDatabaseIdentifiers()) {
@@ -2472,7 +2472,7 @@ export default class VelociousConfiguration {
   getCurrentConnections() {
     /**
      * Dbs.
-      @type {{[key: string]: import("./database/drivers/base.js").default}} */
+     * @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
     for (const identifier of this.getDatabaseIdentifiers()) {
@@ -2539,10 +2539,10 @@ export default class VelociousConfiguration {
     const name = typeof optionsOrCallback == "function" ? "Configuration.ensureConnections" : (optionsOrCallback.name || "Configuration.ensureConnections")
     /**
      * Actual with connections callback.
-      @type {WithConnectionsCallbackType<T> | undefined} */
+     * @type {WithConnectionsCallbackType<T> | undefined} */
     const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /**
                                                                                     * Types the following value.
-                                                                                     @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+                                                                                    * @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
 
     if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
 
@@ -2579,7 +2579,7 @@ export default class VelociousConfiguration {
 
         const poolConstructor = /**
                                  * Types the following value.
-                                  @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
+                                 * @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
 
         if (typeof poolConstructor?.clearGlobalConnections === "function") {
           constructors.add(poolConstructor)

@@ -79,13 +79,13 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     const targetTableData = new TableData(currentTableData.getName())
     /**
      * Column pairs.
-      @type {Array<[string, string]>} */
+     * @type {Array<[string, string]>} */
     const columnPairs = []
     const alterColumns = alterTableData.getColumns()
     const existingNames = new Set(currentTableData.getColumns().map((column) => column.getName()))
     /**
      * Column renames.
-      @type {Map<string, string>} */
+     * @type {Map<string, string>} */
     const columnRenames = new Map()
 
     for (const alterColumn of alterColumns) {

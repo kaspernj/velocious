@@ -2,11 +2,11 @@
 
 /**
  * FrontendModelInstance type.
-  @typedef {import("./base.js").default} FrontendModelInstance */
+ * @typedef {import("./base.js").default} FrontendModelInstance */
 
 /**
  * Model dependency ids.
-  @type {WeakMap<FrontendModelInstance, number>} */
+ * @type {WeakMap<FrontendModelInstance, number>} */
 const modelDependencyIds = new WeakMap()
 let nextModelDependencyId = 1
 

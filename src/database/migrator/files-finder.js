@@ -28,7 +28,7 @@ export default class VelociousDatabaseMigratorFilesFinder {
 
     /**
      * Result.
-      @type {import("./types.js").MigrationObjectType[]} */
+     * @type {import("./types.js").MigrationObjectType[]} */
     let result = []
 
     for (const file of files) {

@@ -8,10 +8,10 @@ const ATTACHMENTS_TABLE = "velocious_attachments"
 
 /**
  * AttachmentDriverConstructor type.
-  @typedef {import("../../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor */
+ * @typedef {import("../../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor */
 /**
  * Stores by configuration.
-  @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */
+ * @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */
 const storesByConfiguration = new WeakMap()
 
 /**
@@ -78,11 +78,11 @@ export default class RecordAttachmentsStore {
     this._contentBase64Nullable = true
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, Record<string, ?>>} */
+     * @type {Map<string, Record<string, ?>>} */
     this._attachmentDriversByName = new Map()
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<AttachmentDriverConstructor | Record<string, ?>, Record<string, ?>>} */
+     * @type {Map<AttachmentDriverConstructor | Record<string, ?>, Record<string, ?>>} */
     this._attachmentDriversByReference = new Map()
   }
 
@@ -188,7 +188,7 @@ export default class RecordAttachmentsStore {
       const position = replace ? 0 : await this._nextPosition({db, name, recordId, recordType})
       /**
        * Insert data.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const insertData = {
         byte_size: normalizedInput.byteSize,
         content_base64: this._contentBase64Nullable ? null : normalizedInput.contentBase64,
@@ -396,14 +396,14 @@ export default class RecordAttachmentsStore {
    */
   async attachmentDriverByName(driverName) {
     if (this._attachmentDriversByName.has(driverName)) {
-      return /** Narrows the runtime value to the documented type. @type {Record<string, ?>} */ (this._attachmentDriversByName.get(driverName))
+      return /** @type {Record<string, ?>} */ (this._attachmentDriversByName.get(driverName))
     }
 
     const attachmentConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
     const configuredDriver = attachmentConfiguration.drivers?.[driverName]
     /**
      * Defines attachmentDriver.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     let attachmentDriver
 
     if (!configuredDriver) {
@@ -445,18 +445,18 @@ export default class RecordAttachmentsStore {
    */
   attachmentDriverByReference({attachmentName, driverReference, modelClass}) {
     if (this._attachmentDriversByReference.has(driverReference)) {
-      return /** Narrows the runtime value to the documented type. @type {Record<string, ?>} */ (this._attachmentDriversByReference.get(driverReference))
+      return /** @type {Record<string, ?>} */ (this._attachmentDriversByReference.get(driverReference))
     }
 
     /**
      * Defines attachmentDriver.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     let attachmentDriver
 
     if (typeof driverReference === "function") {
       const DriverClass = /**
                            * Narrows the runtime value to the documented type.
-                            @type {AttachmentDriverConstructor} */ (driverReference)
+                           * @type {AttachmentDriverConstructor} */ (driverReference)
 
       attachmentDriver = new DriverClass({
         attachmentName,
@@ -561,7 +561,7 @@ export default class RecordAttachmentsStore {
     const rows = await query.results()
     const currentRow = /**
                         * Narrows the runtime value to the documented type.
-                         @type {{position?: string | number | null} | undefined} */ (rows[0])
+                        * @type {{position?: string | number | null} | undefined} */ (rows[0])
     const current = Number(currentRow?.position)
 
     if (!Number.isFinite(current)) return 0
@@ -579,13 +579,13 @@ export default class RecordAttachmentsStore {
     const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
     /**
      * Defines result.
-      @type {T | undefined} */
+     * @type {T | undefined} */
     let result
 
     await pool.withConnection({name: "Record attachment store"}, async (db) => {
       result = await callback(db)
     })
 
-    return /** Narrows the runtime value to the documented type. @type {T} */ (result)
+    return /** @type {T} */ (result)
   }
 }

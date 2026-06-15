@@ -58,7 +58,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     this._readyPromise = null
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, number>} */
+     * @type {Map<string, number>} */
     this._interestedChannels = new Map()
   }
 
@@ -227,7 +227,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         .results()
       const row = /**
                    * Narrows the runtime value to the documented type.
-                    @type {Record<string, ?> | undefined} */ (rows[0])
+                   * @type {Record<string, ?> | undefined} */ (rows[0])
 
       if (!row) return null
 
@@ -260,7 +260,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
 
       const rows = /**
                     * Narrows the runtime value to the documented type.
-                     @type {WebsocketEventRow[]} */ (await query.results())
+                    * @type {WebsocketEventRow[]} */ (await query.results())
 
       return rows.map((row) => this._normalizeEventRow(row))
     })
@@ -280,14 +280,14 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     await this._withDb(async (db) => {
       const expiredEventRows = /**
                                 * Narrows the runtime value to the documented type.
-                                 @type {Array<{id: string}>} */ (await db
+                                * @type {Array<{id: string}>} */ (await db
         .newQuery()
         .from(EVENTS_TABLE)
         .where(`created_at <= ${db.quote(cutoff)}`)
         .results())
       const expiredReplayChannelRows = /**
                                         * Narrows the runtime value to the documented type.
-                                         @type {WebsocketReplayChannelRow[]} */ (await db
+                                        * @type {WebsocketReplayChannelRow[]} */ (await db
         .newQuery()
         .from(REPLAY_CHANNELS_TABLE)
         .where(`interested_until <= ${db.quote(now)}`)
@@ -367,7 +367,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   async _getEventById({channel, db, id}) {
     const rows = /**
                   * Narrows the runtime value to the documented type.
-                   @type {WebsocketEventRow[]} */ (await db
+                  * @type {WebsocketEventRow[]} */ (await db
       .newQuery()
       .from(EVENTS_TABLE)
       .where({channel, id})

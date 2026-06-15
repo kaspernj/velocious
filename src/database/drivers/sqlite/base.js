@@ -20,15 +20,15 @@ import Update from "./sql/update.js"
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
    * Version major.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   versionMajor = undefined
   /**
    * Version minor.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   versionMinor = undefined
   /**
    * Version patch.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   versionPatch = undefined
 
   /**
@@ -89,7 +89,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   async dropTableSQLs(tableName, args = {}) {
     const driver = /**
                     * Narrows the runtime value to the documented type.
-                     @type {import("../base.js").default} */ (this)
+                    * @type {import("../base.js").default} */ (this)
     const dropArgs = Object.assign({tableName, driver}, args)
     const dropTable = new DropTable(dropArgs)
 
@@ -128,7 +128,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
       for (const row of result) {
         const table = new Table({driver: this, row: /**
                                                      * Narrows the runtime value to the documented type.
-                                                      @type {Record<string, string | number | null>} */ (row)})
+                                                     * @type {Record<string, string | number | null>} */ (row)})
 
         tables.push(table)
       }
@@ -162,15 +162,15 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   supportsMultipleInsertValues() {
     /**
      * Version major.
-      @type {number} */
+     * @type {number} */
     const versionMajor = this.versionMajor || 0
     /**
      * Version minor.
-      @type {number} */
+     * @type {number} */
     const versionMinor = this.versionMinor || 0
     /**
      * Version patch.
-      @type {number} */
+     * @type {number} */
     const versionPatch = this.versionPatch || 0
 
     if (versionMajor >= 4) return true
@@ -187,11 +187,11 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   supportsInsertIntoReturning() {
     /**
      * Version major.
-      @type {number} */
+     * @type {number} */
     const versionMajor = this.versionMajor || 0
     /**
      * Version minor.
-      @type {number} */
+     * @type {number} */
     const versionMinor = this.versionMinor || 0
 
     if (versionMajor >= 4) return true
@@ -225,13 +225,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     this._assertNotReadOnly()
     /**
      * Sqls.
-      @type {string[]} */
+     * @type {string[]} */
     const sqls = []
 
     for (const row of rows) {
       /**
        * Data.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const data = {}
 
       for (const columnIndex in columns) {
@@ -340,7 +340,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
     const type = typeof value
 
-    if (type == "number") return /** Narrows the runtime value to the documented type. @type {number} */ (value)
+    if (type == "number") return /** @type {number} */ (value)
     if (type != "string") value = String(value)
 
     return escapeString(value, null)
@@ -398,11 +398,11 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
         const waiters = state.waitersByName.get(name) || []
         /**
          * Timeout handle.
-          @type {NodeJS.Timeout | null} */
+         * @type {NodeJS.Timeout | null} */
         let timeoutHandle = null
         /**
          * Remove and resolve.
-          @type {(() => void) | null} */
+         * @type {(() => void) | null} */
         let removeAndResolve = null
 
         removeAndResolve = () => {
@@ -411,7 +411,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
           const current = state.waitersByName.get(name) || []
           const index = current.indexOf(/**
                                          * Narrows the runtime value to the documented type.
-                                          @type {() => void} */ (removeAndResolve))
+                                         * @type {() => void} */ (removeAndResolve))
 
           if (index >= 0) current.splice(index, 1)
           if (current.length === 0) state.waitersByName.delete(name)

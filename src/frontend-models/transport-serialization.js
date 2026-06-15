@@ -139,7 +139,7 @@ export function isBackendModelInstance(value) {
 
   const candidate = /**
                      * Narrows the runtime value to the documented type.
-                      @type {Record<string, ?>} */ (value)
+                     * @type {Record<string, ?>} */ (value)
 
   return (
     typeof candidate.attributes === "function"
@@ -195,12 +195,12 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
     /**
      * Serialized model.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const serializedModel = {
       [TYPE_KEY]: TYPE_FRONTEND_MODEL,
       attributes: /**
                    * Narrows the runtime value to the documented type.
-                    @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
+                   * @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
       modelName
     }
 
@@ -212,7 +212,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
     /**
      * Preloaded relationships.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const preloadedRelationships = {}
     const relationshipsMap = value.getModelClass().getRelationshipsMap()
 
@@ -241,7 +241,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
   if (isPlainObject(value)) {
     /**
      * Serialized.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const serialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
@@ -262,11 +262,11 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 function deserializeFrontendModelMarker(marker) {
   const attributes = /**
                       * Narrows the runtime value to the documented type.
-                       @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
+                      * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
   const preloadedRelationships = isPlainObject(marker.preloadedRelationships)
     ? /**
        * Narrows the runtime value to the documented type.
-        @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
+       * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
     : {}
   const modelClass = resolveFrontendModelClass(marker.modelName)
 
@@ -320,7 +320,7 @@ export function deserializeFrontendModelTransportValue(value) {
   if (isDateMarker(value)) {
     const dateValue = /**
                        * Narrows the runtime value to the documented type.
-                        @type {{value: string}} */ (value).value
+                       * @type {{value: string}} */ (value).value
 
     return new Date(dateValue)
   }
@@ -328,7 +328,7 @@ export function deserializeFrontendModelTransportValue(value) {
   if (isBigIntMarker(value)) {
     const bigintValue = /**
                          * Narrows the runtime value to the documented type.
-                          @type {{value: string}} */ (value).value
+                         * @type {{value: string}} */ (value).value
 
     return BigInt(bigintValue)
   }
@@ -336,7 +336,7 @@ export function deserializeFrontendModelTransportValue(value) {
   if (isNonFiniteNumberMarker(value)) {
     const numberValue = /**
                          * Narrows the runtime value to the documented type.
-                          @type {{value: string}} */ (value).value
+                         * @type {{value: string}} */ (value).value
 
     if (numberValue === NUMBER_NAN) return Number.NaN
     if (numberValue === NUMBER_POSITIVE_INFINITY) return Number.POSITIVE_INFINITY
@@ -355,7 +355,7 @@ export function deserializeFrontendModelTransportValue(value) {
   if (isPlainObject(value)) {
     /**
      * Deserialized.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const deserialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {

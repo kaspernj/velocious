@@ -2,10 +2,10 @@
 
 /**
  * Defines this typedef.
-  @typedef {{getDatabaseAnnotations?: () => string[], withDatabaseAnnotation?: (annotation: string, callback: () => Promise<?>) => Promise<?>}} DatabaseAnnotationsRuntime */
+ * @typedef {{getDatabaseAnnotations?: () => string[], withDatabaseAnnotation?: (annotation: string, callback: () => Promise<?>) => Promise<?>}} DatabaseAnnotationsRuntime */
 /**
  * Database annotations global.
-  @type {typeof globalThis & {velociousDatabaseAnnotations?: DatabaseAnnotationsRuntime}} */
+ * @type {typeof globalThis & {velociousDatabaseAnnotations?: DatabaseAnnotationsRuntime}} */
 const databaseAnnotationsGlobal = globalThis
 
 /**
@@ -31,7 +31,7 @@ async function withDatabaseAnnotation(annotation, callback) {
   const runtime = databaseAnnotationsGlobal.velociousDatabaseAnnotations
 
   if (runtime && runtime.withDatabaseAnnotation) {
-    return /** Narrows the runtime value to the documented type. @type {T} */ (await runtime.withDatabaseAnnotation(annotation, callback))
+    return /** @type {T} */ (await runtime.withDatabaseAnnotation(annotation, callback))
   }
 
   return await callback()

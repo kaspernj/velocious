@@ -18,7 +18,7 @@ export default class TenantDatabaseCommandHelper {
 
   /**
    * Runs validate tenant database identifier.
-    @returns {void} */
+   * @returns {void} */
   validateTenantDatabaseIdentifier() {
     const databaseConfiguration = this.configuration.getDatabaseConfiguration()[this.identifier]
 
@@ -88,7 +88,7 @@ export default class TenantDatabaseCommandHelper {
 
     /**
      * Failures.
-      @type {Array<{error: Error, tenant: ?}>} */
+     * @type {Array<{error: Error, tenant: ?}>} */
     const failures = []
     const workers = []
     let tenantIndex = 0
@@ -186,7 +186,7 @@ export default class TenantDatabaseCommandHelper {
     if (tenant && typeof tenant === "object") {
       const tenantObject = /**
                             * Narrows the runtime value to the documented type.
-                             @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
+                            * @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
 
       if (tenantObject.slug) return String(tenantObject.slug)
       if (tenantObject.name) return String(tenantObject.name)

@@ -52,5 +52,5 @@ export function defineModelScope({callback, modelClass, startQuery}) {
 export function isModelScopeDescriptor(value) {
   return Boolean(value && typeof value === "object" && /**
                                                         * Narrows the runtime value to the documented type.
-                                                         @type {Record<string, ?>} */ (value)[MODEL_SCOPE_DESCRIPTOR_MARKER] === true)
+                                                        * @type {Record<string, ?>} */ (value)[MODEL_SCOPE_DESCRIPTOR_MARKER] === true)
 }

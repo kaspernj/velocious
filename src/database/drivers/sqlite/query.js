@@ -10,7 +10,7 @@ export default async function query(connection, sql) {
   try {
     /**
      * Defines result.
-      @type {Record<string, ?>[]} */
+     * @type {Record<string, ?>[]} */
     let result
 
     // @ts-expect-error

@@ -10,7 +10,7 @@ import TableData from "./table-data/index.js"
 export default class VelociousDatabaseMigrator {
   /**
    * Migrations versions.
-    @type {Record<string, Record<string, boolean>>} */
+   * @type {Record<string, Record<string, boolean>>} */
   migrationsVersions = {}
 
   /**
@@ -158,7 +158,7 @@ export default class VelociousDatabaseMigrator {
   async migrateFilesFromRequireContext(requireContext) {
     /**
      * Files.
-      @type {import("./migrator/types.js").MigrationObjectType[]} */
+     * @type {import("./migrator/types.js").MigrationObjectType[]} */
     let files = []
 
     for (const file of requireContext.keys()) {
@@ -289,7 +289,7 @@ export default class VelociousDatabaseMigrator {
 
     /**
      * Files.
-      @type {import("./migrator/types.js").MigrationObjectType[]} */
+     * @type {import("./migrator/types.js").MigrationObjectType[]} */
     let files = []
 
     for (const file of migrationFiles) {
@@ -303,7 +303,7 @@ export default class VelociousDatabaseMigrator {
 
       const migrationObject = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("./migrator/types.js").MigrationObjectType} */ ({
+                               * @type {import("./migrator/types.js").MigrationObjectType} */ ({
         file,
         date,
         migrationClassName
@@ -404,7 +404,7 @@ export default class VelociousDatabaseMigrator {
 
     /**
      * Defines highestVersion.
-      @type {string | undefined} */
+     * @type {string | undefined} */
     let highestVersion
 
     for (const dbIdentifier in this.migrationsVersions) {
@@ -436,7 +436,7 @@ export default class VelociousDatabaseMigrator {
 
     /**
      * Db identifiers needing migration versions.
-      @type {string[]} */
+     * @type {string[]} */
     const dbIdentifiersNeedingMigrationVersions = []
 
     // migrateFiles() wraps execution in ensureConnections(), so the current

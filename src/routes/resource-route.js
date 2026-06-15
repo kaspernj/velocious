@@ -20,7 +20,7 @@ class VelociousRouteResourceRoute extends BasicRoute {
     this.regExp = new RegExp(`^(${escapeStringRegexp(name)})(.*)$`)
     /**
      * Narrows the runtime value to the documented type.
-      @type {Set<string>} */
+     * @type {Set<string>} */
     this.collectionRouteNames = new Set()
   }
 

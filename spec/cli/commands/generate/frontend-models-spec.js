@@ -159,11 +159,13 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@typedef {object} TaskCreateAttributes")
     expect(taskContents).toContain("@property {TaskAttributes[\"name\"]} [name] - Permitted name value.")
     expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
+    expect(taskContents).not.toContain("[is_done]")
     expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
     expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")
     expect(taskContents).toContain("export {Task}")
-    expect(taskContents).toContain("export default /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelClass<Task, TaskAttributes, TaskCreateAttributes>} */ (Task)")
+    expect(taskContents).toContain("export default Task")
+    expect(taskContents).not.toContain("export default /** @type")
     expect(taskContents).not.toContain("static async create(attributes = {})")
     expect(taskContents).not.toContain("async update(newAttributes = {})")
     expect(taskContents).not.toContain("_createAttributesType")
@@ -231,6 +233,10 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("commandName: \"refresh-profile\"")
     expect(userContents).toContain("email() { return /** @type {UserAttributes[\"email\"]} */ (this.readAttribute(\"email\")) }")
     expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
+    expect(userContents).toContain("@typedef {Record<string, never>} UserCreateAttributes")
+    expect(userContents).toContain("@typedef {Record<string, never>} UserUpdateAttributes")
+    expect(userContents).not.toContain("@typedef {object} UserCreateAttributes")
+    expect(userContents).not.toContain("@typedef {object} UserUpdateAttributes")
   })
 
   it("keeps generated frontend write attributes on inherited create and update", async () => {
@@ -248,16 +254,29 @@ describe("Cli - generate - frontend-models", () => {
 
     const sourceText = `
       import Task from "${dummyDirectory()}/src/frontend-models/task.js"
+      import User from "${dummyDirectory()}/src/frontend-models/user.js"
 
       async function checkWrites() {
         await Task.create({name: "Generated typing works"})
         // @ts-expect-error unknown create attributes must stay rejected
         await Task.create({typo: "Generated typing works"})
+        // @ts-expect-error read-only create attributes must stay rejected
+        await Task.create({id: "read-only"})
 
         const task = new Task()
         await task.update({name: "Generated typing works"})
         // @ts-expect-error unknown update attributes must stay rejected
         await task.update({typo: "Generated typing works"})
+
+        await User.create()
+        await User.create({})
+        // @ts-expect-error empty create attributes must reject model fields
+        await User.create({email: "generated@example.com"})
+
+        const user = new User()
+        await user.update({})
+        // @ts-expect-error empty update attributes must reject model fields
+        await user.update({email: "generated@example.com"})
       }
 
       checkWrites()
@@ -269,6 +288,7 @@ describe("Cli - generate - frontend-models", () => {
       return fileName === sourcePath
         || fileName.includes("/src/frontend-models/base.js")
         || fileName.includes("/spec/dummy/src/frontend-models/task.js")
+        || fileName.includes("/spec/dummy/src/frontend-models/user.js")
     })
   })
 

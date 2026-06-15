@@ -22,7 +22,7 @@ export default class Expect extends BaseExpect {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Array<Expect | ExpectToChange>} */
+     * @type {Array<Expect | ExpectToChange>} */
     this.expectations = []
   }
 
@@ -456,7 +456,7 @@ export default class Expect extends BaseExpect {
     if (isObjectContaining(result)) {
       const expectedValue = /**
                              * Narrows the runtime value to the documented type.
-                              @type {?} */ (result).value
+                             * @type {?} */ (result).value
       const {matches, differences} = matchObject(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -477,9 +477,9 @@ export default class Expect extends BaseExpect {
     if (isArrayContaining(result)) {
       const expectedValue = /**
                              * Narrows the runtime value to the documented type.
-                              @type {Array<?>} */ (/**
+                             * @type {Array<?>} */ (/**
                                                     * Narrows the runtime value to the documented type.
-                                                     @type {?} */ (result).value)
+                                                    * @type {?} */ (result).value)
       const {matches, differences} = matchArrayContaining(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -745,11 +745,11 @@ export default class Expect extends BaseExpect {
 
     /**
      * Differences.
-      @type {Record<string, Array<?>>} */
+     * @type {Record<string, Array<?>>} */
     const differences = {}
     const objectAsRecord = /**
                             * Narrows the runtime value to the documented type.
-                             @type {Record<string, ?>} */ (this._object)
+                            * @type {Record<string, ?>} */ (this._object)
 
     for (const key in result) {
       const value = result[key]
@@ -758,7 +758,7 @@ export default class Expect extends BaseExpect {
 
       const objectValue = /**
                            * Narrows the runtime value to the documented type.
-                            @type {() => ?} */ (objectAsRecord[key])()
+                           * @type {() => ?} */ (objectAsRecord[key])()
 
       if (value != objectValue) {
         differences[key] = [value, objectValue]
