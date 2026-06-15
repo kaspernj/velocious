@@ -159,6 +159,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@typedef {object} TaskCreateAttributes")
     expect(taskContents).toContain("@property {TaskAttributes[\"name\"]} [name] - Permitted name value.")
     expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
+    expect(taskContents).not.toContain("[is_done]")
     expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
     expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")

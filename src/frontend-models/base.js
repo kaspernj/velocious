@@ -72,6 +72,13 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @typedef {T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, Record<string, FrontendModelAttributeValue>> ? CreateAttributes : Record<string, FrontendModelAttributeValue>} FrontendModelCreateAttributesFor
  */
 /**
+ * Loaded instance type for relationship helper generics. Older generated
+ * frontend models passed model classes into relationship helpers, while newer
+ * generated models pass instance types.
+ * @template {FrontendModelBase | typeof FrontendModelBase} T
+ * @typedef {T extends typeof FrontendModelBase ? InstanceType<T> : T} FrontendModelRelationshipModel
+ */
+/**
  * FrontendModelTransportConfig type.
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. This should be the shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`).
@@ -269,29 +276,29 @@ export class AttributeNotSelectedError extends Error {
 
 /**
  * Lightweight singular relationship state holder for frontend model instances.
- * @template {FrontendModelBase} S
- * @template {FrontendModelBase} T
+ * @template {FrontendModelBase | typeof FrontendModelBase} S
+ * @template {FrontendModelBase | typeof FrontendModelBase} T
  * @template {Record<string, FrontendModelAttributeValue>} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
  */
 export class FrontendModelSingularRelationship {
   /**
    * Runs constructor.
-   * @param {S} model - Parent model.
+   * @param {FrontendModelBase} model - Parent model.
    * @param {string} relationshipName - Relationship name.
-   * @param {FrontendModelClass<T, Record<string, FrontendModelAttributeValue>, TargetCreateAttributes> | null} targetModelClass - Target model class.
+   * @param {FrontendModelClass<FrontendModelRelationshipModel<T>, Record<string, FrontendModelAttributeValue>, TargetCreateAttributes> | null} targetModelClass - Target model class.
    */
   constructor(model, relationshipName, targetModelClass) {
     this.model = model
     this.relationshipName = relationshipName
     this.targetModelClass = targetModelClass
     this._preloaded = false
-    /** @type {T | null} */
+    /** @type {FrontendModelRelationshipModel<T> | null} */
     this._loadedValue = null
   }
 
   /**
    * Runs set loaded.
-   * @param {T | null | undefined} loadedValue - Loaded relationship value.
+   * @param {FrontendModelRelationshipModel<T> | null | undefined} loadedValue - Loaded relationship value.
    * @returns {void}
    */
   setLoaded(loadedValue) {
@@ -309,7 +316,7 @@ export class FrontendModelSingularRelationship {
 
   /**
    * Runs loaded.
-   * @returns {T | null} - Loaded relationship value.
+   * @returns {FrontendModelRelationshipModel<T> | null} - Loaded relationship value.
    */
   loaded() {
     if (!this._preloaded) {
@@ -330,7 +337,7 @@ export class FrontendModelSingularRelationship {
     }
 
     // Narrows the runtime value to the target relationship's documented model type.
-    const loadedValue = /** @type {T | null} */ (sourceRelationship.loaded())
+    const loadedValue = /** @type {FrontendModelRelationshipModel<T> | null} */ (sourceRelationship.loaded())
 
     this.setLoaded(loadedValue)
   }
@@ -338,7 +345,7 @@ export class FrontendModelSingularRelationship {
   /**
    * Runs build.
    * @param {TargetCreateAttributes} [attributes] - New model attributes.
-   * @returns {T} - Built model.
+   * @returns {FrontendModelRelationshipModel<T>} - Built model.
    */
   build(attributes = /** @type {TargetCreateAttributes} */ ({})) {
     if (!this.targetModelClass) {
@@ -346,7 +353,7 @@ export class FrontendModelSingularRelationship {
     }
 
     // Narrows the runtime value to the documented relationship model type.
-    const model = /** @type {T} */ (new this.targetModelClass(attributes))
+    const model = /** @type {FrontendModelRelationshipModel<T>} */ (new this.targetModelClass(attributes))
 
     this.setLoaded(model)
 
@@ -355,7 +362,7 @@ export class FrontendModelSingularRelationship {
 
   /**
    * Force-reload the relationship.
-   * @returns {Promise<T | null>} - Loaded relationship model.
+   * @returns {Promise<FrontendModelRelationshipModel<T> | null>} - Loaded relationship model.
    */
   async load() {
     this._preloaded = false
@@ -372,7 +379,7 @@ export class FrontendModelSingularRelationship {
 
   /**
    * Returns the loaded relationship or loads it.
-   * @returns {Promise<T | null>} - Loaded relationship model.
+   * @returns {Promise<FrontendModelRelationshipModel<T> | null>} - Loaded relationship model.
    */
   async orLoad() {
     if (this.getPreloaded()) return this.loaded()
@@ -389,21 +396,21 @@ export class FrontendModelSingularRelationship {
 
 /**
  * Lightweight has-many relationship state holder for frontend model instances.
- * @template {FrontendModelBase} S
- * @template {FrontendModelBase} T
+ * @template {FrontendModelBase | typeof FrontendModelBase} S
+ * @template {FrontendModelBase | typeof FrontendModelBase} T
  * @template {Record<string, FrontendModelAttributeValue>} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
  */
 export class FrontendModelHasManyRelationship {
   /**
    * Narrows the runtime value to the documented type.
-    @type {Array<T>} */
+    @type {Array<FrontendModelRelationshipModel<T>>} */
   _loadedValue
 
   /**
    * Runs constructor.
-   * @param {S} model - Parent model.
+   * @param {FrontendModelBase} model - Parent model.
    * @param {string} relationshipName - Relationship name.
-   * @param {FrontendModelClass<T, Record<string, FrontendModelAttributeValue>, TargetCreateAttributes> | null} targetModelClass - Target model class.
+   * @param {FrontendModelClass<FrontendModelRelationshipModel<T>, Record<string, FrontendModelAttributeValue>, TargetCreateAttributes> | null} targetModelClass - Target model class.
    */
   constructor(model, relationshipName, targetModelClass) {
     this.model = model
@@ -415,7 +422,7 @@ export class FrontendModelHasManyRelationship {
 
   /**
    * Runs set loaded.
-   * @param {Array<T>} loadedValue - Loaded relationship value.
+   * @param {Array<FrontendModelRelationshipModel<T>>} loadedValue - Loaded relationship value.
    * @returns {void}
    */
   setLoaded(loadedValue) {
@@ -437,7 +444,7 @@ export class FrontendModelHasManyRelationship {
 
   /**
    * Runs loaded.
-   * @returns {Array<T>} - Loaded relationship values.
+   * @returns {Array<FrontendModelRelationshipModel<T>>} - Loaded relationship values.
    */
   loaded() {
     if (!this._preloaded) {
@@ -458,14 +465,14 @@ export class FrontendModelHasManyRelationship {
     }
 
     // Narrows the runtime value to the target relationship's documented model type.
-    const loadedValue = /** @type {Array<T>} */ (sourceRelationship.loaded())
+    const loadedValue = /** @type {Array<FrontendModelRelationshipModel<T>>} */ (sourceRelationship.loaded())
 
     this.setLoaded(loadedValue)
   }
 
   /**
    * Runs add to loaded.
-   * @param {Array<T>} models - Models to append.
+   * @param {Array<FrontendModelRelationshipModel<T>>} models - Models to append.
    * @returns {void}
    */
   addToLoaded(models) {
@@ -477,7 +484,7 @@ export class FrontendModelHasManyRelationship {
   /**
    * Runs build.
    * @param {TargetCreateAttributes} [attributes] - New model attributes.
-   * @returns {T} - Built model.
+   * @returns {FrontendModelRelationshipModel<T>} - Built model.
    */
   build(attributes = /** @type {TargetCreateAttributes} */ ({})) {
     if (!this.targetModelClass) {
@@ -485,7 +492,7 @@ export class FrontendModelHasManyRelationship {
     }
 
     // Narrows the runtime value to the documented relationship model type.
-    const model = /** @type {T} */ (new this.targetModelClass(attributes))
+    const model = /** @type {FrontendModelRelationshipModel<T>} */ (new this.targetModelClass(attributes))
 
     this.addToLoaded([model])
 
@@ -498,7 +505,7 @@ export class FrontendModelHasManyRelationship {
    * batched into one request via the cohort preloader. The scoped query path
    * (`Model.where(...).preload([name]).toArray()` directly from user code)
    * bypasses cohort batching by design.
-   * @returns {Promise<Array<T>>} - Loaded relationship models.
+   * @returns {Promise<Array<FrontendModelRelationshipModel<T>>>} - Loaded relationship models.
    */
   async load() {
     // Reset so the cohort preloader (or single-record fallback) repopulates.
@@ -516,7 +523,7 @@ export class FrontendModelHasManyRelationship {
 
   /**
    * Runs to array.
-   * @returns {Promise<Array<T>>} - Loaded relationship models.
+   * @returns {Promise<Array<FrontendModelRelationshipModel<T>>>} - Loaded relationship models.
    */
   async toArray() {
     if (this.getPreloaded() || this._loadedValue.length > 0) {

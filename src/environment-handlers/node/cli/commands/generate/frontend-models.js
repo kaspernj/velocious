@@ -311,8 +311,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
       fileContent += " */\n"
     }
-    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams: permittedCreateParams, typeName: createAttributesTypeName})
-    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams: permittedUpdateParams, typeName: updateAttributesTypeName})
+    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedCreateParams, typeName: createAttributesTypeName})
+    fileContent += this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedUpdateParams, typeName: updateAttributesTypeName})
     fileContent += "/**\n"
     fileContent += ` * Frontend model for ${className}.\n`
     fileContent += ` * @augments {FrontendModelBase<${attributesTypeName}, ${createAttributesTypeName}, ${updateAttributesTypeName}>}\n`
@@ -595,12 +595,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Arguments.
    * @param {Array<{jsDocType: string, name: string}>} args.attributes - Generated read attributes.
    * @param {string} args.attributesTypeName - Generated read attributes typedef name.
+   * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Array<{attributes: Array<{name: string, type: string}>, relationshipName: string, typeName: string}>} args.nestedWriteTypes - Nested write typedefs.
    * @param {Array<string | Record<string, object>>} args.permittedParams - Resource permitted params spec.
    * @param {string} args.typeName - Typedef name.
    * @returns {string} - Generated typedef source.
    */
-  writeAttributesTypedef({attributes, attributesTypeName, nestedWriteTypes, permittedParams, typeName}) {
+  writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams, typeName}) {
     let output = "/**\n"
 
     output += ` * Attributes accepted by ${typeName}.\n`
@@ -608,13 +609,20 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     const attributesByName = new Map(attributes.map((attribute) => [attribute.name, attribute]))
     const nestedWriteTypesByKey = new Map(nestedWriteTypes.map((nestedWriteType) => [`${nestedWriteType.relationshipName}Attributes`, nestedWriteType]))
+    const emittedAttributeNames = new Set()
 
     for (const entry of permittedParams) {
       if (typeof entry == "string") {
-        const attribute = attributesByName.get(entry)
+        const attributeName = this.frontendWriteAttributeName({attributeName: entry, attributesByName, modelClass})
+
+        if (emittedAttributeNames.has(attributeName)) continue
+
+        emittedAttributeNames.add(attributeName)
+
+        const attribute = attributesByName.get(attributeName)
         const type = attribute ? `${attributesTypeName}[${JSON.stringify(attribute.name)}]` : "FrontendModelAttributeValue"
 
-        output += ` * @property {${type}} [${entry}] - Permitted ${entry} value.\n`
+        output += ` * @property {${type}} [${attributeName}] - Permitted ${attributeName} value.\n`
       } else if (entry && typeof entry == "object" && !Array.isArray(entry)) {
         for (const key of Object.keys(entry)) {
           const nestedWriteType = nestedWriteTypesByKey.get(key)
@@ -628,6 +636,29 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     output += " */\n"
 
     return output
+  }
+
+  /**
+   * Resolves a permitted write attribute to the generated frontend attribute name.
+   * @param {{attributeName: string, attributesByName: Map<string, {jsDocType: string, name: string}>, modelClass: typeof import("../../../../../database/record/index.js").default | undefined}} args - Arguments.
+   * @returns {string} - Frontend attribute name used by generated accessors.
+   */
+  frontendWriteAttributeName({attributeName, attributesByName, modelClass}) {
+    if (attributesByName.has(attributeName)) return attributeName
+
+    if (modelClass) {
+      const resolvedAttributeName = modelClass.resolveAttributeName(attributeName)
+
+      if (resolvedAttributeName && attributesByName.has(resolvedAttributeName)) return resolvedAttributeName
+    }
+
+    const normalizedAttributeName = inflection.camelize(attributeName, true).toLowerCase()
+    const matchingAttributeName = Array.from(attributesByName.keys()).find((candidateName) => candidateName.toLowerCase() === normalizedAttributeName)
+
+    if (matchingAttributeName) return matchingAttributeName
+
+    // Write-only virtual params are valid permitted params even when they have no read attribute.
+    return attributeName
   }
 
   /**
@@ -684,10 +715,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (!Array.isArray(nestedSpec)) return []
 
     return nestedSpec.filter((entry) => typeof entry == "string").map((attributeName) => {
-      const attributeConfig = this.frontendAttributeConfigForModelAttribute({attributeName, modelClass: targetModelClass})
+      const resolvedAttributeName = targetModelClass?.resolveAttributeName(attributeName) || attributeName
+      const attributeConfig = this.frontendAttributeConfigForModelAttribute({attributeName: resolvedAttributeName, modelClass: targetModelClass})
 
       return {
-        name: attributeName,
+        name: resolvedAttributeName,
         type: attributeConfig ? this.jsDocTypeForFrontendAttribute({attributeConfig}) : "FrontendModelAttributeValue"
       }
     })
