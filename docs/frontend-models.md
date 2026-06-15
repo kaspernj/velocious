@@ -132,6 +132,7 @@
 - `onCreate` and `onUpdate` can receive a frontend-model query instead of a plain options object. React hooks can receive the same query through the `query` option. The query's `where`, `joins`, and `search` predicates narrow which create/update events reach that callback. The same query's `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData` control the event payload.
 - Event queries intentionally reject list-only options such as `limit`, `offset`, `page`, `perPage`, `sort`, `group`, and `distinct` because lifecycle events match one saved record at a time.
 - Destroy events carry only ids after the row is gone, so query-filtered destroy subscriptions are not supported. Use an unfiltered destroy listener and check local ids when a screen needs deletion cleanup.
+- An unfiltered destroy listener can share the same websocket subscription with query-filtered create/update listeners without widening create/update delivery. This keeps long-lived filtered screens from receiving unrelated update payloads just because they also need id-only destroy cleanup.
 
 ```js
 useUpdatedEvent(

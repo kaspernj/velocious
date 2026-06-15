@@ -427,6 +427,46 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }).toThrow(/destroy event subscriptions do not support query filters/)
   })
 
+  it("does not request unfiltered create or update delivery for destroy listeners", async () => {
+    const Task = buildScopedTestModelClass()
+    /** @type {Array<{destroyEventDelivery?: boolean, eventFilters?: Array<{where?: Record<string, unknown>}>, unfilteredEventDelivery?: boolean}>} */
+    const subscriptionParams = []
+
+    FrontendModelBase.configureTransport({
+      websocketClient: {
+        connect: async () => {},
+        subscribeChannel: (_channel, options) => {
+          subscriptionParams.push(options.params)
+
+          return {
+            close: () => {},
+            isClosed: () => false,
+            ready: Promise.resolve()
+          }
+        }
+      }
+    })
+
+    const offUpdate = await Task.onUpdate(() => {}, Task.where({isDone: true}))
+    const offDestroy = await Task.onDestroy(() => {})
+
+    try {
+      const latestParams = subscriptionParams[subscriptionParams.length - 1]
+
+      if (!latestParams) throw new Error("Expected subscription params")
+      if (!latestParams.eventFilters) throw new Error("Expected subscription event filters")
+
+      expect(latestParams.unfilteredEventDelivery).toEqual(undefined)
+      expect(latestParams.destroyEventDelivery).toEqual(true)
+      expect(latestParams.eventFilters).toHaveLength(1)
+      expect(latestParams.eventFilters[0].where).toEqual({isDone: true})
+    } finally {
+      offUpdate()
+      offDestroy()
+      resetFrontendModelTransport()
+    }
+  })
+
   it("uses the shared frontend-model API and batches requests by default", async () => {
     const originalFetch = globalThis.fetch
     /** @type {FetchCall[]} */

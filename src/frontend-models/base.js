@@ -1238,7 +1238,7 @@ class FrontendModelEventSubscription {
 
   /**
    * Runs subscription params.
-   * @returns {{model: string, eventFilters?: import("./query.js").FrontendModelEventFilterPayloadEntry[], unfilteredEventDelivery?: boolean} & import("./query.js").FrontendModelProjectionPayload} - Current websocket subscription params.
+   * @returns {{model: string, destroyEventDelivery?: boolean, eventFilters?: import("./query.js").FrontendModelEventFilterPayloadEntry[], unfilteredEventDelivery?: boolean} & import("./query.js").FrontendModelProjectionPayload} - Current websocket subscription params.
    */
   subscriptionParams() {
     /**
@@ -1250,14 +1250,15 @@ class FrontendModelEventSubscription {
       @type {Record<string, import("./query.js").FrontendModelEventFilterPayloadEntry>} */
     const eventFiltersByKey = {}
     const projectionEntries = []
-    let hasUnfilteredEventDelivery = this.classDestroyCallbacks.size > 0
+    let hasDestroyEventDelivery = this.classDestroyCallbacks.size > 0
+    let hasUnfilteredEventDelivery = false
 
     for (const entry of this.classCreateCallbacks) projectionEntries.push(entry)
     for (const entry of this.classUpdateCallbacks) projectionEntries.push(entry)
 
     for (const listener of this.instanceListeners.values()) {
       for (const entry of listener.updateCallbacks) projectionEntries.push(entry)
-      if (listener.destroyCallbacks.size > 0) hasUnfilteredEventDelivery = true
+      if (listener.destroyCallbacks.size > 0) hasDestroyEventDelivery = true
     }
 
     for (const entry of projectionEntries) {
@@ -1277,6 +1278,7 @@ class FrontendModelEventSubscription {
     const eventFilterParams = eventFilters.length > 0
       ? {
           eventFilters,
+          ...(hasDestroyEventDelivery ? {destroyEventDelivery: true} : {}),
           ...(hasUnfilteredEventDelivery ? {unfilteredEventDelivery: true} : {})
         }
       : {}

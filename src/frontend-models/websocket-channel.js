@@ -139,7 +139,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     }
 
     if (body.action === "destroy") {
-      if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
+      if (!hasEventFilters || this._hasDestroyEventDelivery() || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
       return
     }
 
@@ -204,6 +204,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return {
       abilities: this.params.abilities !== undefined,
       eventFilterCount: eventFilters.length,
+      destroyEventDelivery: this.params.destroyEventDelivery === true,
       model: this._modelName(),
       preload: this.params.preload !== undefined,
       queryData: this.params.queryData !== undefined,
@@ -251,6 +252,14 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    */
   _hasUnfilteredEventDelivery() {
     return this.params.unfilteredEventDelivery === true
+  }
+
+  /**
+   * Runs has destroy event delivery.
+   * @returns {boolean} - Whether id-only destroy events should be delivered with event filters.
+   */
+  _hasDestroyEventDelivery() {
+    return this.params.destroyEventDelivery === true
   }
 
   /**
