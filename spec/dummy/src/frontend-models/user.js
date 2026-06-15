@@ -63,4 +63,4 @@ FrontendModelBase.registerModel(User)
 
 export {User}
 
-export default /** @type {import("../../../../src/frontend-models/base.js").FrontendModelClass<User, UserAttributes, UserCreateAttributes>} */ (User)
+export default User

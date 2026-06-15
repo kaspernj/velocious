@@ -67,6 +67,11 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @typedef {{new (attributes?: Attributes | CreateAttributes): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
  */
 /**
+ * Create attributes accepted by a frontend model instance.
+ * @template {FrontendModelBase} T
+ * @typedef {T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, Record<string, FrontendModelAttributeValue>> ? CreateAttributes : Record<string, FrontendModelAttributeValue>} FrontendModelCreateAttributesFor
+ */
+/**
  * FrontendModelTransportConfig type.
  * @typedef {object} FrontendModelTransportConfig
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. This should be the shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`).
@@ -3565,16 +3570,14 @@ export default class FrontendModelBase {
 
   /**
    * Runs create.
-   * @template {FrontendModelBase} Model
-   * @template {Record<string, FrontendModelAttributeValue>} ModelAttributes
-   * @template {Record<string, FrontendModelAttributeValue>} ModelCreateAttributes
-   * @this {FrontendModelClass<Model, ModelAttributes, ModelCreateAttributes>}
-   * @param {ModelCreateAttributes} [attributes] - Initial attributes.
-   * @returns {Promise<Model>} - Persisted model.
+   * @template {new (attributes?: Record<string, FrontendModelAttributeValue>) => FrontendModelBase} ModelClass
+   * @this {ModelClass}
+   * @param {FrontendModelCreateAttributesFor<InstanceType<ModelClass>>} [attributes] - Initial attributes.
+   * @returns {Promise<InstanceType<ModelClass>>} - Persisted model.
    */
   static async create(attributes) {
     // Narrows the constructed instance to the receiver's documented model type.
-    const model = /** @type {Model} */ (new this(attributes))
+    const model = /** @type {InstanceType<ModelClass>} */ (new this(attributes))
 
     await model.save()
 

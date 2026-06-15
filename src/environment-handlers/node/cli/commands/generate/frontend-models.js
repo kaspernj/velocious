@@ -553,7 +553,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "\n"
     fileContent += `export {${className}}\n`
     fileContent += "\n"
-    fileContent += `export default /** @type {import(${JSON.stringify(importPath)}).FrontendModelClass<${className}, ${attributesTypeName}, ${createAttributesTypeName}>} */ (${className})\n`
+    fileContent += `export default ${className}\n`
 
     return fileContent
   }

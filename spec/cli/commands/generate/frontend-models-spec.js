@@ -163,7 +163,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
     expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")
     expect(taskContents).toContain("export {Task}")
-    expect(taskContents).toContain("export default /** @type {import(\"../../../../src/frontend-models/base.js\").FrontendModelClass<Task, TaskAttributes, TaskCreateAttributes>} */ (Task)")
+    expect(taskContents).toContain("export default Task")
+    expect(taskContents).not.toContain("export default /** @type")
     expect(taskContents).not.toContain("static async create(attributes = {})")
     expect(taskContents).not.toContain("async update(newAttributes = {})")
     expect(taskContents).not.toContain("_createAttributesType")
@@ -253,6 +254,8 @@ describe("Cli - generate - frontend-models", () => {
         await Task.create({name: "Generated typing works"})
         // @ts-expect-error unknown create attributes must stay rejected
         await Task.create({typo: "Generated typing works"})
+        // @ts-expect-error read-only create attributes must stay rejected
+        await Task.create({id: "read-only"})
 
         const task = new Task()
         await task.update({name: "Generated typing works"})
