@@ -263,6 +263,8 @@
  * @property {string} [columnType] - Alias for column type name.
  * @property {string} [sqlType] - Alias for column type name.
  * @property {string} [dataType] - Alias for column type name.
+ * @property {string} [jsDocType] - Exact generated JSDoc type for non-column attributes.
+ * @property {string} [name] - Attribute name when configured as an array entry.
  * @property {boolean} [null] - Whether value can be null.
  * @property {boolean} [selectedByDefault] - Whether included in default serialization. Defaults to true.
  */
@@ -274,7 +276,7 @@
 
 /**
  * @typedef {object} FrontendModelResourceConfiguration
- * @property {string[] | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
+ * @property {Array<string | FrontendModelAttributeConfiguration> | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
  * @property {string[]} [abilities] - Ability action list (camelCase action names). Defaults to `["read"]` for `find` and `index` when omitted.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {string[]} [commands] - Legacy built-in command names (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).

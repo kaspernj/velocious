@@ -64,7 +64,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @template {FrontendModelBase} [T=FrontendModelBase]
  * @template {Record<string, FrontendModelAttributeValue>} [Attributes=Record<string, FrontendModelAttributeValue>]
  * @template {Record<string, FrontendModelAttributeValue>} [CreateAttributes=Record<string, FrontendModelAttributeValue>]
- * @typedef {{new (): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create">} FrontendModelClass
+ * @typedef {{new (): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create" | "prototype">} FrontendModelClass
  */
 /**
  * Create attributes accepted by a frontend model instance.

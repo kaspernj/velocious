@@ -13,7 +13,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static resourceConfig() {
     return {
       abilities: ["read", "create", "update", "destroy"],
-      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "updatedAt"],
+      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", "updatedAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find", "update", "destroy"],
       relationships: ["project", "comments"],
@@ -33,11 +33,43 @@ class TaskFrontendResource extends FrontendModelBaseResource {
     return typeof name === "string" ? name.toUpperCase() : null
   }
 
+  /**
+   * Virtual attribute resolved asynchronously before frontend serialization.
+   *
+   * @param {import("../models/task.js").default} model - Task model instance.
+   * @returns {Promise<string | null>}
+   */
+  async asyncNameUppercaseAttribute(model) {
+    return this.nameUppercaseAttribute(model)
+  }
+
+  /**
+   * Write-only task download token.
+   * @param {import("../models/task.js").default} model - Task model instance.
+   * @returns {null} Hidden read value.
+   */
+  downloadTokenAttribute(model) {
+    void model
+    return null
+  }
+
+  /**
+   * Assigns a write-only task download token.
+   * @param {import("../models/task.js").default} model - Task model instance.
+   * @param {string} value - New download token.
+   * @returns {void}
+   */
+  setDownloadTokenAttribute(model, value) {
+    void model
+    void value
+  }
+
   /** @returns {Array<string | Record<string, ?>>} - Permit spec for Task writes. */
   permittedParams() {
     return [
       "name",
       "isDone",
+      "downloadToken",
       "descriptionFile",
       {commentsAttributes: ["id", "_destroy", "body"]},
       {projectAttributes: ["name"]}
@@ -139,6 +171,15 @@ class UserFrontendResource extends FrontendModelBaseResource {
     await wait(100)
 
     return await this.lookupByEmail()
+  }
+
+  /**
+   * User display name exposed by the dummy frontend model.
+   * @param {import("../models/user.js").default} model - User model.
+   * @returns {string | null}
+   */
+  nameAttribute(model) {
+    return model.email()
   }
 
   /** @returns {Promise<{user: import("../models/user.js").default | null}>} */

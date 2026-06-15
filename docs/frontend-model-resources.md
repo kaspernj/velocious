@@ -30,6 +30,13 @@ Without a resource definition, frontend models should not silently work.
 - Generated frontend model code should live in the configured frontend output path.
 - Avoid duplicating hand-maintained frontend-model code under backend.
 
+## Generated attribute types
+- The frontend-model generator scans each configured backend project's `src` tree when reading resource and model accessor JSDoc.
+- Translated resource attributes use their translation table column metadata when a resource method or generated accessor JSDoc is not available.
+- Resource attribute methods such as `statusCodeAttribute(model)` should carry an `@returns` tag when their serialized value differs from the backing column.
+- Resource attribute return types take precedence over backend model columns, because frontend payloads serialize the resource method result.
+- Async resource attribute methods are typed from their resolved value, so `@returns {Promise<string | null>}` generates `string | null`.
+
 ## Nested-attribute writes
 - Resources opt in to nested writes by overriding `permittedParams(arg)` to return a Rails-style flat array mixing attribute-name strings with `{<relationshipName>Attributes: [...]}` objects.
 - Model-level `Model.acceptsNestedAttributesFor(name, options)` is **required** in addition to the resource declaration. Policy options like `allowDestroy`/`limit`/`rejectIf` live on the model, not in the permit array.

@@ -30,7 +30,59 @@ class CallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class Call extends DatabaseRecord {
+  /** @returns {number | null} */
+  ea() { return this.readAttribute("ea") }
+}
+
+class InferredCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: [
+        "id",
+        {name: "startedAt", selectedByDefault: false},
+        {name: "durationSeconds", selectedByDefault: false},
+        {name: "metadata", selectedByDefault: false},
+        {name: "active", selectedByDefault: false},
+        {name: "eA", selectedByDefault: false}
+      ]
+    }
+  }
+}
+
+class TranslatedCall extends DatabaseRecord {}
+TranslatedCall.translates("title")
+const TranslatedCallTranslation = TranslatedCall.getTranslationClass()
+
+class TranslatedCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = TranslatedCall
+  static translatedAttributes = ["title"]
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: ["id", {name: "title", selectedByDefault: false}]
+    }
+  }
+}
+
+class UninferableCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: ["unknownComputed"]
+    }
+  }
+}
+
 class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = backendProjects[0].frontendModels.Task.ModelClass
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -48,7 +100,10 @@ class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseRes
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: ["id", "name"],
+      attributes: {
+        id: {type: "integer"},
+        name: {type: "varchar", null: true}
+      },
       relationships: ["project"]
     }
   }
@@ -67,7 +122,10 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
-      attributes: ["reference", "email"]
+      attributes: [
+        {name: "reference", type: "varchar", null: true},
+        {name: "email", type: "varchar"}
+      ]
     }
   }
 }
@@ -75,7 +133,58 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
 class User extends DatabaseRecord {}
 User.setPrimaryKey("reference")
 
-class Call extends DatabaseRecord {}
+/** @returns {void} */
+function configureCallColumns() {
+  Call._initialized = true
+  Call._columns = [
+    new TableColumn("id", {null: false, type: "uuid"}),
+    new TableColumn("started_at", {null: true, type: "datetime"}),
+    new TableColumn("duration_seconds", {null: false, type: "integer"}),
+    new TableColumn("metadata", {null: true, type: "json"}),
+    new TableColumn("active", {null: false, type: "boolean"}),
+    new TableColumn("EA", {null: true, type: "integer"})
+  ]
+  delete Call._columnsAsHash
+  delete Call._columnTypeByName
+  delete Call._columnNameToAttributeName
+  Call._attributeNameToColumnName = {
+    active: "active",
+    durationSeconds: "duration_seconds",
+    ea: "EA",
+    id: "id",
+    metadata: "metadata",
+    startedAt: "started_at"
+  }
+}
+
+/** @returns {void} */
+function configureTranslatedCallColumns() {
+  TranslatedCall._initialized = true
+  TranslatedCall._columns = [
+    new TableColumn("id", {null: false, type: "uuid"})
+  ]
+  TranslatedCall._attributeNameToColumnName = {
+    id: "id"
+  }
+  delete TranslatedCall._columnsAsHash
+  delete TranslatedCall._columnTypeByName
+  delete TranslatedCall._columnNameToAttributeName
+
+  TranslatedCallTranslation._initialized = true
+  TranslatedCallTranslation._columns = [
+    new TableColumn("id", {null: false, type: "uuid"}),
+    new TableColumn("locale", {null: false, type: "varchar"}),
+    new TableColumn("title", {null: true, type: "varchar"})
+  ]
+  TranslatedCallTranslation._attributeNameToColumnName = {
+    id: "id",
+    locale: "locale",
+    title: "title"
+  }
+  delete TranslatedCallTranslation._columnsAsHash
+  delete TranslatedCallTranslation._columnTypeByName
+  delete TranslatedCallTranslation._columnNameToAttributeName
+}
 
 /**
  * Typechecks source text and fails on diagnostics matched by the filter.
@@ -157,9 +266,15 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).not.toContain("builtInMemberCommands")
     expect(taskContents).toContain("@typedef {object} TaskAttributes")
     expect(taskContents).toContain("@typedef {object} TaskCreateAttributes")
-    expect(taskContents).toContain("@property {TaskAttributes[\"name\"]} [name] - Permitted name value.")
-    expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"]} [isDone] - Permitted isDone value.")
+    expect(taskContents).toContain("@property {TaskAttributes[\"name\"] | null} [name] - Permitted name value.")
+    expect(taskContents).toContain("@property {TaskAttributes[\"isDone\"] | null} [isDone] - Permitted isDone value.")
+    expect(taskContents).toContain("@property {string | null} [downloadToken] - Permitted downloadToken value.")
     expect(taskContents).not.toContain("[is_done]")
+    expect(taskContents).toContain("@property {string | null} nameUppercase - Attribute value.")
+    expect(taskContents).toContain("@property {string | null} asyncNameUppercase - Attribute value.")
+    expect(taskContents).toContain("@property {null} downloadToken - Attribute value.")
+    expect(taskContents).not.toContain("@property {Promise<string | null>} asyncNameUppercase - Attribute value.")
+    expect(taskContents).not.toContain("@property {FrontendModelAttributeValue} nameUppercase - Attribute value.")
     expect(taskContents).toContain("@property {FrontendModelAttributeValue} [descriptionFile] - Permitted descriptionFile value.")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
     expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")
@@ -173,7 +288,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("/** @returns {TaskAttributes[\"identifier\"]} - Attribute value. */")
     expect(taskContents).toContain("@returns {TaskAttributes[\"identifier\"]} - Attribute value.")
     expect(taskContents).toContain("identifier() { return /** @type {TaskAttributes[\"identifier\"]} */ (this.readAttribute(\"identifier\")) }")
-    expect(taskContents).toContain("setIdentifier(newValue) { return /** @type {TaskAttributes[\"identifier\"]} */ (this.setAttribute(\"identifier\", newValue)) }")
+    expect(taskContents).toContain("setIdentifier(newValue) { return /** @type {TaskAttributes[\"identifier\"] | null} */ (this.setAttribute(\"identifier\", newValue)) }")
+    expect(taskContents).toContain("setDownloadToken(newValue) { return /** @type {string | null} */ (this.setAttribute(\"downloadToken\", newValue)) }")
     expect(taskContents).not.toContain("import Project from")
     expect(taskContents).toContain("/** @returns {Record<string, {type: \"belongsTo\" | \"hasOne\" | \"hasMany\", autoload?: boolean}>} - Relationship definitions. */")
     expect(taskContents).toContain("static relationshipDefinitions()")
@@ -232,7 +348,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("payload: User.normalizeCustomCommandPayloadArguments(commandArguments)")
     expect(userContents).toContain("commandName: \"refresh-profile\"")
     expect(userContents).toContain("email() { return /** @type {UserAttributes[\"email\"]} */ (this.readAttribute(\"email\")) }")
-    expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"]} */ (this.setAttribute(\"email\", newValue)) }")
+    expect(userContents).toContain("setEmail(newValue) { return /** @type {UserAttributes[\"email\"] | null} */ (this.setAttribute(\"email\", newValue)) }")
     expect(userContents).toContain("@typedef {Record<string, never>} UserCreateAttributes")
     expect(userContents).toContain("@typedef {Record<string, never>} UserUpdateAttributes")
     expect(userContents).not.toContain("@typedef {object} UserCreateAttributes")
@@ -258,15 +374,32 @@ describe("Cli - generate - frontend-models", () => {
 
       async function checkWrites() {
         await Task.create({name: "Generated typing works"})
+        await Task.create({name: null})
+        await Task.create({downloadToken: "download-token"})
         // @ts-expect-error unknown create attributes must stay rejected
         await Task.create({typo: "Generated typing works"})
         // @ts-expect-error read-only create attributes must stay rejected
         await Task.create({id: "read-only"})
+        // @ts-expect-error write-only setter JSDoc must keep string typing
+        await Task.create({downloadToken: {token: "bad"}})
 
         const task = new Task()
+        task.setId(null)
+        task.setDownloadToken("download-token")
+        task.setDownloadToken(null)
+        // @ts-expect-error write-only generated setter must reject object values
+        task.setDownloadToken({token: "bad"})
         await task.update({name: "Generated typing works"})
+        await task.update({isDone: null})
+        await task.update({downloadToken: null})
         // @ts-expect-error unknown update attributes must stay rejected
         await task.update({typo: "Generated typing works"})
+
+        const users = await User.where({email: "generated@example.com"}).toArray()
+        for (const loadedUser of users) {
+          loadedUser.email()
+        }
+        await User.findBy({email: "generated@example.com"})
 
         await User.create()
         await User.create({})
@@ -326,23 +459,7 @@ describe("Cli - generate - frontend-models", () => {
   it("infers typed attribute typedefs from backend model columns for array attributes", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
-    Call._initialized = true
-    Call._columns = [
-      new TableColumn("id", {null: false, type: "uuid"}),
-      new TableColumn("started_at", {null: true, type: "datetime"}),
-      new TableColumn("duration_seconds", {null: false, type: "integer"}),
-      new TableColumn("metadata", {null: true, type: "json"}),
-      new TableColumn("active", {null: false, type: "boolean"})
-    ]
-    Call._columnsAsHash = {}
-    Call._columnTypeByName = {}
-    Call._attributeNameToColumnName = {
-      active: "active",
-      durationSeconds: "duration_seconds",
-      id: "id",
-      metadata: "metadata",
-      startedAt: "started_at"
-    }
+    configureCallColumns()
 
     const cli = new Cli({
       configuration: buildConfiguration({
@@ -371,6 +488,172 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
     expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
     expect(callContents).toContain("@property {boolean} active - Attribute value.")
+  })
+
+  it("infers typed attribute typedefs from backend model columns for configured attribute entries", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    configureCallColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            Call: InferredCallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          Call._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string} id - Attribute value.")
+    expect(callContents).toContain("@property {Date | null} startedAt - Attribute value.")
+    expect(callContents).toContain("@property {number} durationSeconds - Attribute value.")
+    expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
+    expect(callContents).toContain("@property {boolean} active - Attribute value.")
+    expect(callContents).toContain("@property {number | null} eA - Attribute value.")
+  })
+
+  it("infers translated attribute typedefs from translation table columns", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    configureTranslatedCallColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            TranslatedCall: TranslatedCallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          TranslatedCall._configuration = configuration
+          TranslatedCallTranslation._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/translated-call.js`, "utf8")
+
+    expect(callContents).toContain("@property {string | null} title - Attribute value.")
+  })
+
+  it("infers resource attribute typedefs from backend project source roots before backend model columns", async () => {
+    const temporaryDirectory = path.resolve(dummyDirectory(), "../tmp/frontend-model-backend-source-root")
+    const backendDirectory = `${temporaryDirectory}/backend`
+    const outputDirectory = `${temporaryDirectory}/output`
+    const resourcesDirectory = `${backendDirectory}/src/resources`
+    const repositoryDirectory = path.resolve(dummyDirectory(), "../..")
+
+    await fs.rm(temporaryDirectory, {force: true, recursive: true})
+    await fs.mkdir(resourcesDirectory, {recursive: true})
+    await fs.writeFile(`${resourcesDirectory}/report-resource.js`, `// @ts-check
+
+import DatabaseRecord from "${repositoryDirectory}/src/database/record/index.js"
+import FrontendModelBaseResource from "${repositoryDirectory}/src/frontend-model-resource/base-resource.js"
+import TableColumn from "${repositoryDirectory}/src/database/table-data/table-column.js"
+
+class Report extends DatabaseRecord {}
+Report._initialized = true
+Report._columns = [
+  new TableColumn("id", {null: false, type: "uuid"}),
+  new TableColumn("status_code", {null: false, type: "integer"})
+]
+Report._attributeNameToColumnName = {
+  id: "id",
+  statusCode: "status_code"
+}
+
+export default class ReportResource extends FrontendModelBaseResource {
+  static ModelClass = Report
+
+  /** @returns {import("${repositoryDirectory}/src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id", "statusCode"]
+    }
+  }
+
+  /**
+   * Formats the numeric status code for frontend display.
+   * @param {Report} model - Report model.
+   * @returns {string}
+   */
+  statusCodeAttribute(model) {
+    void model
+    return "HTTP 200"
+  }
+}
+`)
+
+    try {
+      const cli = new Cli({
+        configuration: buildConfiguration({
+          backendProjectsList: [{
+            path: backendDirectory,
+            frontendModelsOutputPath: outputDirectory
+          }]
+        }),
+        directory: dummyDirectory(),
+        environmentHandler: new EnvironmentHandlerNode(),
+        processArgs: ["g:frontend-models"],
+        testing: true
+      })
+
+      await cli.execute()
+
+      const reportContents = await fs.readFile(`${outputDirectory}/src/frontend-models/report.js`, "utf8")
+
+      expect(reportContents).toContain("@property {string} statusCode - Attribute value.")
+      expect(reportContents).not.toContain("@property {number} statusCode - Attribute value.")
+    } finally {
+      await fs.rm(temporaryDirectory, {force: true, recursive: true})
+    }
+  })
+
+  it("fails when a frontend attribute cannot be inferred from a column or resource method JSDoc", async () => {
+    configureCallColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            Call: UninferableCallFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          Call._configuration = configuration
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => {
+      await cli.execute()
+    }).toThrow(/Could not infer JSDoc type for frontend model attribute 'Call#unknownComputed'/)
   })
 
   it("fails when no backend projects are configured", async () => {
@@ -475,6 +758,7 @@ describe("Cli - generate - frontend-models", () => {
 
     const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
 
+    expect(userContents).toContain("@property {string} reference - Attribute value.")
     expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
@@ -494,7 +778,12 @@ describe("Cli - generate - frontend-models", () => {
 
       /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
       static resourceConfig() {
-        return {attributes: ["id", "name"]}
+        return {
+          attributes: {
+            id: {type: "integer"},
+            name: {type: "varchar", null: true}
+          }
+        }
       }
     }
 

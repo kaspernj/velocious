@@ -392,7 +392,7 @@ Generate classes:
 npx velocious g:frontend-models
 ```
 
-When `frontendModels.*.attributes` is an object, the generator can infer JSDoc typedefs from attribute metadata (`type`/`columnType`/`sqlType`/`dataType` and `null`). If metadata is absent, the generated attribute type falls back to `any`.
+Frontend-model attributes can usually be declared by name. The generator infers JSDoc typedefs and nullability from backend model columns and translated attribute columns. When an attribute entry needs resource-specific options such as `selectedByDefault: false`, keep only that option in the resource config, for example `{name: "archivedAt", selectedByDefault: false}`; the column type and nullability are still inferred. For computed resource attributes, add a typed `${attributeName}Attribute(model)` method with an `@returns` tag in the backend project's `src` tree. Resource attribute return types take precedence over column types because the resource method controls the serialized value. If Velocious cannot infer a read attribute from a column, generated model accessor, resource method JSDoc, or explicit metadata, generation fails with a clear error instead of emitting a broad fallback type.
 
 This creates `src/frontend-models/user.js` (and one file per configured resource). Generated classes support:
 
