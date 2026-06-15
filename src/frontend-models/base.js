@@ -76,7 +76,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * frontend models passed model classes into relationship helpers, while newer
  * generated models pass instance types.
  * @template {FrontendModelBase | typeof FrontendModelBase} T
- * @typedef {T extends typeof FrontendModelBase ? InstanceType<T> : T} FrontendModelRelationshipModel
+ * @typedef {T extends new (...args: any[]) => infer Instance ? Instance : T} FrontendModelRelationshipModel
  */
 /**
  * FrontendModelTransportConfig type.
