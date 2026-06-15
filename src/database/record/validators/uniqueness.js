@@ -14,18 +14,18 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   async validate({model, attributeName}) {
     const modelClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {typeof import("../index.js").default} */ (model.constructor)
+                        * @type {typeof import("../index.js").default} */ (model.constructor)
 
     const connection = modelClass.connection()
     const tableName = modelClass._getTable().getName()
     const attributeValue = /**
                             * Narrows the runtime value to the documented type.
-                             @type {string | number} */ (model.readAttribute(attributeName))
+                            * @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
 
     /**
      * Where args.
-      @type {Record<string, string | number>} */
+     * @type {Record<string, string | number>} */
     const whereArgs = {}
 
     whereArgs[attributeNameUnderscore] = attributeValue
@@ -51,7 +51,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
       whereArgs[scopeUnderscore] = /**
                                     * Narrows the runtime value to the documented type.
-                                     @type {string | number} */ (scopeValue)
+                                    * @type {string | number} */ (scopeValue)
     }
 
     let existingRecordQuery = modelClass
@@ -84,7 +84,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   _resolveScopeValueFromRelationship(model, scopeColumn) {
     const modelClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {typeof import("../index.js").default} */ (model.constructor)
+                        * @type {typeof import("../index.js").default} */ (model.constructor)
     const relationships = modelClass.getRelationshipsMap()
 
     for (const relationshipName in relationships) {

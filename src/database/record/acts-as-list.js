@@ -64,7 +64,7 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 
     const modelClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {typeof import("./index.js").default} */ (record.constructor)
+                        * @type {typeof import("./index.js").default} */ (record.constructor)
     const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
     const scopeCol = modelClass.getColumnNameForAttributeName(scope)
     /** @type {Record<string, ?>} */
@@ -81,24 +81,24 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 
     const oldPosition = posChanged ? /**
                                       * Narrows the runtime value to the documented type.
-                                       @type {number} */ (rawAttributes[posColumn]) : /**
+                                      * @type {number} */ (rawAttributes[posColumn]) : /**
                                                                                        * Narrows the runtime value to the documented type.
-                                                                                        @type {number} */ (record.readAttribute(positionColumn))
+                                                                                       * @type {number} */ (record.readAttribute(positionColumn))
     const newPosition = posChanged ? /**
                                       * Narrows the runtime value to the documented type.
-                                       @type {number} */ (changes[posColumn]) : /**
+                                      * @type {number} */ (changes[posColumn]) : /**
                                                                                  * Narrows the runtime value to the documented type.
-                                                                                  @type {number} */ (record.readAttribute(positionColumn))
+                                                                                 * @type {number} */ (record.readAttribute(positionColumn))
     const oldScopeValue = scopeChanged ? /**
                                           * Narrows the runtime value to the documented type.
-                                           @type {number} */ (rawAttributes[scopeCol]) : /**
+                                          * @type {number} */ (rawAttributes[scopeCol]) : /**
                                                                                           * Narrows the runtime value to the documented type.
-                                                                                           @type {number} */ (record.readAttribute(scope))
+                                                                                          * @type {number} */ (record.readAttribute(scope))
     const newScopeValue = scopeChanged ? /**
                                           * Narrows the runtime value to the documented type.
-                                           @type {number} */ (changes[scopeCol]) : /**
+                                          * @type {number} */ (changes[scopeCol]) : /**
                                                                                     * Narrows the runtime value to the documented type.
-                                                                                     @type {number} */ (record.readAttribute(scope))
+                                                                                    * @type {number} */ (record.readAttribute(scope))
 
     if (oldPosition == null || newPosition == null) return
     if (newPosition === oldPosition && newScopeValue === oldScopeValue) return
@@ -212,7 +212,7 @@ function clearBelongsToChangeForScope(record) {
 async function shiftPositionsUp({record, positionColumn, scope, fromPosition, toPosition, scopeValue, excludeRecordId}) {
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
-                       @type {typeof import("./index.js").default} */ (record.constructor)
+                      * @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
@@ -279,7 +279,7 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
 async function shiftPositionsDown({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
-                       @type {typeof import("./index.js").default} */ (record.constructor)
+                      * @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
@@ -337,7 +337,7 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
 async function highestPositionInScope({record, positionColumn, scope, scopeValue}) {
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
-                       @type {typeof import("./index.js").default} */ (record.constructor)
+                      * @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
   const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
@@ -370,11 +370,11 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
 function resolveScopeValue(record, scope) {
   const attrValue = record.readAttribute(scope)
 
-  if (attrValue != null) return /** Narrows the runtime value to the documented type. @type {string | number} */ (attrValue)
+  if (attrValue != null) return /** @type {string | number} */ (attrValue)
 
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
-                       @type {typeof import("./index.js").default} */ (record.constructor)
+                      * @type {typeof import("./index.js").default} */ (record.constructor)
   const relationships = modelClass.getRelationshipsMap()
   const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
 
@@ -412,7 +412,7 @@ function resolveScopeValue(record, scope) {
 async function moveOutOfWay({record, positionColumn, scope, scopeValue, targetScopeValue}) {
   const modelClass = /**
                       * Narrows the runtime value to the documented type.
-                       @type {typeof import("./index.js").default} */ (record.constructor)
+                      * @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)

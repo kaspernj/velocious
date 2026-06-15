@@ -44,9 +44,9 @@ async function resolveAbilityResourcesList(configuration) {
   if (typeof resolver === "function") {
     const ability = await resolver({configuration, params: {}, request: /**
                                                                          * Narrows the runtime value to the documented type.
-                                                                          @type {?} */ (undefined), response: /**
+                                                                         * @type {?} */ (undefined), response: /**
                                                                                                                * Narrows the runtime value to the documented type.
-                                                                                                                @type {?} */ (undefined)})
+                                                                                                               * @type {?} */ (undefined)})
 
     if (ability?.resources && Array.isArray(ability.resources)) {
       return ability.resources
@@ -64,7 +64,7 @@ async function resolveAbilityResourcesList(configuration) {
 function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
   /**
    * Resources.
-    @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
+   * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   const resources = {}
 
   if (!abilityResources || abilityResources.length === 0) return resources
@@ -81,7 +81,7 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
     if (resourceClass.prototype instanceof FrontendModelBaseResource) {
       const modelClass = /**
                           * Narrows the runtime value to the documented type.
-                           @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass).ModelClass
+                          * @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass).ModelClass
 
       if (!modelClass) {
         throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
@@ -95,7 +95,7 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
 
       resources[modelName] = /**
                               * Narrows the runtime value to the documented type.
-                               @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass)
+                              * @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass)
     } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
       // Authorization-only resource — valid but not relevant for WebSocket publishing
     } else {
@@ -116,7 +116,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
   /**
    * All frontend models.
-    @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
+   * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   let allFrontendModels = {}
 
   for (const backendProject of configuration.getBackendProjects()) {
@@ -161,19 +161,19 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     modelClass.beforeCreate((model) => {
       /**
        * Narrows the runtime value to the documented type.
-        @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "create"
+       * @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "create"
     })
 
     modelClass.beforeUpdate((model) => {
       /**
        * Narrows the runtime value to the documented type.
-        @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "update"
+       * @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "update"
     })
 
     modelClass.afterSave((model) => {
       const modelWithWebsocketAction = /**
                                         * Narrows the runtime value to the documented type.
-                                         @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model)
+                                        * @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model)
       const action = modelWithWebsocketAction.__frontendModelWebsocketAction
 
       if (action !== "create" && action !== "update") return

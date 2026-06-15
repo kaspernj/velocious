@@ -41,7 +41,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     const args = this.getArgs()
     /**
      * Connect args.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const connectArgs = {}
     const forward = ["database", "host", "password"]
 

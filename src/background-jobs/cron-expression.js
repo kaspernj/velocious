@@ -62,7 +62,7 @@ export function parseCronExpression(expression) {
   const trimmed = expression.trim().toLowerCase()
   const expanded = SHORTCUTS[/**
                               * Narrows the runtime value to the documented type.
-                               @type {keyof typeof SHORTCUTS} */ (trimmed)] || trimmed
+                              * @type {keyof typeof SHORTCUTS} */ (trimmed)] || trimmed
   const fields = expanded.split(/\s+/)
 
   if (fields.length !== 5) {

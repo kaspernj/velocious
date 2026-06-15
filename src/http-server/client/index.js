@@ -56,7 +56,7 @@ export default class VeoliciousHttpServerClient {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {RequestRunner[]} */
+     * @type {RequestRunner[]} */
     this.requestRunners = []
   }
 
@@ -110,12 +110,12 @@ export default class VeoliciousHttpServerClient {
   handleBadRequest(error) {
     this.logger.warn(() => ["Failed to parse HTTP request", badRequestDetails(/**
                                                                                * Narrows the runtime value to the documented type.
-                                                                                @type {Error & {velociousContext?: Record<string, ?>}} */ (error))])
+                                                                               * @type {Error & {velociousContext?: Record<string, ?>}} */ (error))])
 
     if (this.currentRequest && "getRequestParser" in this.currentRequest) {
       const httpRequest = /**
                            * Narrows the runtime value to the documented type.
-                            @type {import("./request.js").default} */ (this.currentRequest)
+                           * @type {import("./request.js").default} */ (this.currentRequest)
 
       httpRequest.getRequestParser().destroy()
     }
@@ -179,7 +179,7 @@ export default class VeoliciousHttpServerClient {
     try {
       /**
        * Remaining.
-        @type {Buffer | undefined} */
+       * @type {Buffer | undefined} */
       let remaining = data
 
       while (remaining) {
@@ -281,16 +281,16 @@ export default class VeoliciousHttpServerClient {
 
       const resolvedThenable = /**
                                 * Narrows the runtime value to the documented type.
-                                 @type {{then?: (...args: Array<?>) => ?}} */ (resolvedHandler)
+                                * @type {{then?: (...args: Array<?>) => ?}} */ (resolvedHandler)
 
       if (resolvedThenable?.then) {
         messageHandlerPromise = /**
                                  * Narrows the runtime value to the documented type.
-                                  @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)
+                                 * @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)
       } else if (resolvedHandler) {
         messageHandler = /**
                           * Narrows the runtime value to the documented type.
-                           @type {import("../../configuration-types.js").WebsocketMessageHandler} */ (resolvedHandler)
+                          * @type {import("../../configuration-types.js").WebsocketMessageHandler} */ (resolvedHandler)
       }
     }
 
@@ -445,7 +445,7 @@ export default class VeoliciousHttpServerClient {
     if ("getRequestParser" in request) {
       const httpRequest = /**
                            * Narrows the runtime value to the documented type.
-                            @type {import("./request.js").default} */ (request)
+                           * @type {import("./request.js").default} */ (request)
       httpRequest.getRequestParser().destroy()
     }
   }

@@ -12,7 +12,7 @@ function malformedNestedParamsKeyError(args) {
   const error = new Error(`Could not parse nested params key "${key}" at rest "${rest}"`)
   /**
    * Typed error.
-    @type {Error & {velociousContext?: Record<string, ?>}} */
+   * @type {Error & {velociousContext?: Record<string, ?>}} */
   const typedError = error
 
   typedError.velociousContext = {
@@ -42,7 +42,7 @@ export default class ParamsToObject {
   toObject() {
     /**
      * Result.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const result = {}
 
     for(const key in this.object) {
@@ -70,16 +70,16 @@ export default class ParamsToObject {
 
       /**
        * Defines newResult.
-        @type {Array<?> | Record<string, ?>} */
+       * @type {Array<?> | Record<string, ?>} */
       let newResult
       const objectResult = /**
                             * Narrows the runtime value to the documented type.
-                             @type {Record<string, ?>} */ (result)
+                            * @type {Record<string, ?>} */ (result)
 
       if (inputName in objectResult) {
         newResult = /**
                      * Narrows the runtime value to the documented type.
-                      @type {Array<?> | Record<string, ?>} */ (objectResult[inputName])
+                     * @type {Array<?> | Record<string, ?>} */ (objectResult[inputName])
       } else if (rest == "[]") {
         newResult = []
         objectResult[inputName] = newResult
@@ -92,7 +92,7 @@ export default class ParamsToObject {
     } else {
       const objectResult = /**
                             * Narrows the runtime value to the documented type.
-                             @type {Record<string, ?>} */ (result)
+                            * @type {Record<string, ?>} */ (result)
 
       objectResult[key] = value
     }
@@ -116,7 +116,7 @@ export default class ParamsToObject {
 
     /**
      * Defines newResult.
-      @type {Array<?> | Record<string, ?>} */
+     * @type {Array<?> | Record<string, ?>} */
     let newResult
 
     if (rest == "[]") {
@@ -128,16 +128,16 @@ export default class ParamsToObject {
     } else if (newRest == "") {
       /**
        * Narrows the runtime value to the documented type.
-        @type {Record<string, ?>} */ (result)[key] = value
+       * @type {Record<string, ?>} */ (result)[key] = value
     } else {
       const objectResult = /**
                             * Narrows the runtime value to the documented type.
-                             @type {Record<string, ?>} */ (result)
+                            * @type {Record<string, ?>} */ (result)
 
       if (!Array.isArray(result) && key in objectResult) {
         newResult = /**
                      * Narrows the runtime value to the documented type.
-                      @type {Array<?> | Record<string, ?>} */ (objectResult[key])
+                     * @type {Array<?> | Record<string, ?>} */ (objectResult[key])
       } else if (newRest == "[]") {
         newResult = []
         objectResult[key] = newResult

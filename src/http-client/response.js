@@ -15,7 +15,7 @@ export default class Response {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Header[]} */
+     * @type {Header[]} */
     this.headers = []
 
     this.method = method.toUpperCase().trim()
@@ -24,7 +24,7 @@ export default class Response {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Buffer} */
+     * @type {Buffer} */
     this.response = Buffer.alloc(0);
   }
 

@@ -344,7 +344,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
       for (const row of result) {
         const table = new Table(this, /**
                                        * Narrows the runtime value to the documented type.
-                                        @type {Record<string, string>} */ (row))
+                                       * @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }

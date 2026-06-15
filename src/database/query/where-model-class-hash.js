@@ -25,10 +25,10 @@ function normalizeRelationshipWhereOperator(operator) {
     ">=": "gteq"
   }
 
-  return /** Narrows the runtime value to the documented type. @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
     operatorAliases[/**
                      * Narrows the runtime value to the documented type.
-                      @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+                     * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   )
 }
 
@@ -68,7 +68,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     const modelQuery = /**
                         * Narrows the runtime value to the documented type.
-                         @type {import("./model-class-query.js").default} */ (this.query)
+                        * @type {import("./model-class-query.js").default} */ (this.query)
     const baseTableName = this.qualifyBaseTable
       ? modelQuery.getTableReferenceForJoin()
       : undefined
@@ -136,7 +136,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     /**
      * Normalized.
-      @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
+     * @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
     const normalized = []
     /**
      * Add condition.
@@ -146,7 +146,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
         const tuple = /**
                        * Narrows the runtime value to the documented type.
-                        @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
+                       * @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
         const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
@@ -395,7 +395,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     const options = this.getOptions()
     const modelQuery = /**
                         * Narrows the runtime value to the documented type.
-                         @type {import("./model-class-query.js").default} */ (this.query)
+                        * @type {import("./model-class-query.js").default} */ (this.query)
     let sql = ""
 
     for (const whereKey in hash) {
@@ -443,7 +443,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         const nestedHash = /**
                             * Narrows the runtime value to the documented type.
-                             @type {WhereHash} */ (whereValue)
+                            * @type {WhereHash} */ (whereValue)
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
 

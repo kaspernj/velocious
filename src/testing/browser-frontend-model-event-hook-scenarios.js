@@ -12,13 +12,13 @@ import wait from "awaitery/build/wait.js"
 
 /**
  * FrontendModelResourceConfig type.
-  @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
+ * @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
 /**
  * Defines this typedef.
-  @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+ * @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
 /**
  * Defines this typedef.
-  @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
+ * @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
 /**
  * FakeSubscriptions type.
  * @typedef {object} FakeSubscriptions
@@ -251,7 +251,7 @@ async function classLifecycleScenario() {
   const eventModel = buildFakeModel("1", buildFakeSubscriptions())
   /**
    * Received events.
-    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
   let connectedCount = 0
 
@@ -304,7 +304,7 @@ async function instanceLifecycleScenario() {
   const model = buildFakeModel("task-1", subscriptions)
   /**
    * Received events.
-    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
   let connectedCount = 0
 
@@ -411,7 +411,7 @@ async function debounceUnmountScenario() {
   const model = buildFakeModel("task-1", instanceSubscriptions)
   /**
    * Received events.
-    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
 
   /**
@@ -450,7 +450,7 @@ async function resubscribeInstanceScenario() {
   const secondModel = buildFakeModel("task-1", secondSubscriptions)
   /**
    * Received events.
-    @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
+   * @type {Array<FrontendModelHookTestCreateUpdatePayload | FrontendModelHookTestDestroyPayload>} */
   const receivedEvents = []
 
   /**

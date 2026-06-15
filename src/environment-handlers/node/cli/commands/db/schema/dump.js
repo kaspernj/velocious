@@ -6,7 +6,7 @@ import path from "path"
 export default class DbSchemaDump extends BaseCommand {
   /**
    * Runs execute.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async execute() {
     await this.getConfiguration().ensureConnections({name: "DB schema dump"}, async (dbs) => {
       const shouldGenerate = await this.shouldGenerateStructureSql({dbs})

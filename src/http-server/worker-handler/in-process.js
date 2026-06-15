@@ -23,20 +23,20 @@ export default class VelociousHttpServerInProcessHandler {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
+     * @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
     this.clients = {}
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
     this.unregisterFromEventsHost = websocketEventsHost.register(/**
                                                                   * Narrows the runtime value to the documented type.
-                                                                   @type {?} */ (this))
+                                                                  * @type {?} */ (this))
     this._stopping = false
   }
 
   /**
    * Runs start.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async start() {
     await this.logger.debug(() => `In-process handler ${this.workerCount} started`)
   }
@@ -74,12 +74,12 @@ export default class VelociousHttpServerInProcessHandler {
     // to the in-process HTTP Client without needing a real worker thread.
     const messagePortShim = /**
                              * Narrows the runtime value to the documented type.
-                              @type {import("worker_threads").Worker} */ (/**
+                             * @type {import("worker_threads").Worker} */ (/**
                                                                            * Narrows the runtime value to the documented type.
-                                                                            @type {?} */ ({
+                                                                           * @type {?} */ ({
       postMessage: (/**
                      * Narrows the runtime value to the documented type.
-                      @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
+                     * @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
         if (data.command === "clientWrite" && data.chunk) {
           const chunk = typeof data.chunk === "string" ? Buffer.from(data.chunk) : Buffer.from(data.chunk)
 
@@ -94,7 +94,7 @@ export default class VelociousHttpServerInProcessHandler {
 
   /**
    * Runs stop.
-    @returns {Promise<void>} */
+   * @returns {Promise<void>} */
   async stop() {
     this._stopping = true
 

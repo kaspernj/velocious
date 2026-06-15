@@ -2,7 +2,7 @@
 
 /**
  * LoggingOutputPayload type.
-  @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+ * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 /** Logger console output. */
 export default class LoggerConsoleOutput {

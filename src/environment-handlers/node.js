@@ -35,7 +35,7 @@ import toImportSpecifier from "../utils/to-import-specifier.js"
 
 /**
  * Defines this typedef.
-  @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?}} TimezoneStore */
+ * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?}} TimezoneStore */
 
 /**
  * Runs path within allowed prefixes.
@@ -61,12 +61,12 @@ function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
 export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Timezone async local storage.
-    @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
+   * @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
   _timezoneAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
 
   /**
    * Find commands result.
-    @type {import("./base.js").CommandFileObjectType[] | undefined} */
+   * @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined
 
   /**
@@ -113,7 +113,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
       /**
        * Discovered.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const discovered = {}
 
       for (const file of files) {
@@ -131,7 +131,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
           .split("-")
           .map((/**
                  * Narrows the runtime value to the documented type.
-                  @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
+                 * @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join("")
 
         discovered[modelName] = ResourceClass
@@ -863,7 +863,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   async _structureSqlByIdentifier({dbs}) {
     const sqlByIdentifier = /**
                              * Narrows the runtime value to the documented type.
-                              @type {Record<string, string>} */ ({})
+                             * @type {Record<string, string>} */ ({})
 
     for (const identifier of Object.keys(dbs)) {
       const db = dbs[identifier]

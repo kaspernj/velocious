@@ -17,7 +17,7 @@ function throwS3ConfigurationError(message) {
 function isReadableStream(value) {
   return Boolean(value && typeof value === "object" && typeof /**
                                                                * Narrows the runtime value to the documented type.
-                                                                @type {?} */ (value).pipe === "function")
+                                                               * @type {?} */ (value).pipe === "function")
 }
 
 /**
@@ -28,7 +28,7 @@ function isReadableStream(value) {
 async function dynamicImport(specifier) {
   const importer = /**
                     * Narrows the runtime value to the documented type.
-                     @type {(moduleSpecifier: string) => Promise<?>} */ (
+                    * @type {(moduleSpecifier: string) => Promise<?>} */ (
     new Function("moduleSpecifier", "return import(moduleSpecifier)")
   )
 
@@ -51,17 +51,17 @@ async function streamToBuffer(value) {
 
   /**
    * Chunks.
-    @type {Buffer[]} */
+   * @type {Buffer[]} */
   const chunks = []
 
   const readableStream = /**
                           * Narrows the runtime value to the documented type.
-                           @type {?} */ (value)
+                          * @type {?} */ (value)
 
   await new Promise((resolve, reject) => {
     readableStream.on("data", (/**
                                 * Narrows the runtime value to the documented type.
-                                 @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
+                                * @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
       if (Buffer.isBuffer(chunk)) {
         chunks.push(chunk)
       } else if (chunk instanceof ArrayBuffer) {
@@ -145,7 +145,7 @@ export default class S3AttachmentStorageDriver {
       const {S3Client} = await this.s3Runtime()
       /**
        * Client config.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const clientConfig = {
         region: this.options.region || process.env.VELOCIOUS_ATTACHMENTS_S3_REGION || "us-east-1"
       }

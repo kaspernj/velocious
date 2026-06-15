@@ -35,7 +35,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<number, Client>} */
+     * @type {Record<number, Client>} */
     this.clients = {}
 
     this.logger = new Logger(this)
@@ -66,7 +66,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {import("../../configuration.js").default} */
+     * @type {import("../../configuration.js").default} */
     this.configuration = configurationImport.default
 
     if (!this.configuration) throw new Error(`Configuration couldn't be loaded from: ${configurationPath}`)
@@ -170,7 +170,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     if (!chunk) throw new Error("No chunk given")
     const client = /**
                     * Narrows the runtime value to the documented type.
-                     @type {Client | undefined} */ (digg(this.clients, clientCount))
+                    * @type {Client | undefined} */ (digg(this.clients, clientCount))
 
     if (!client) throw new Error(`Client not found for clientWrite: ${clientCount}`)
 

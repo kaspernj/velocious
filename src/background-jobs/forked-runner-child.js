@@ -14,7 +14,7 @@ function isJobMessage(message) {
 
   const messageRecord = /**
                          * Narrows the runtime value to the documented type.
-                          @type {{type?: ?, payload?: ?}} */ (message)
+                         * @type {{type?: ?, payload?: ?}} */ (message)
 
   return messageRecord.type === "job" && Object.hasOwn(messageRecord, "payload")
 }

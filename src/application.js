@@ -9,7 +9,7 @@ import restArgsError from "./utils/rest-args-error.js"
 
 /**
  * HttpServerConfiguration type.
-  @typedef {import("./configuration-types.js").HttpServerConfiguration} HttpServerConfiguration */
+ * @typedef {import("./configuration-types.js").HttpServerConfiguration} HttpServerConfiguration */
 
 export default class VelociousApplication {
   /**
@@ -28,14 +28,14 @@ export default class VelociousApplication {
 
     /**
      * Stores the http server configuration value.
-      @type {HttpServerConfiguration} */
+     * @type {HttpServerConfiguration} */
     this.httpServerConfiguration = httpServer ?? {}
 
     this.logger = new Logger(this)
     this._type = type
     /**
      * Stores the http server lock value.
-      @type {HttpServerLock | undefined} */
+     * @type {HttpServerLock | undefined} */
     this.httpServerLock = undefined
   }
 
@@ -121,7 +121,7 @@ export default class VelociousApplication {
       if (!configuration.getWebsocketEvents()) {
         configuration.setWebsocketEvents(/**
                                           * Types the following value.
-                                           @type {?} */ (websocketEventsHost))
+                                          * @type {?} */ (websocketEventsHost))
       }
 
       await configuration.connectBeacon({peerType: "server"})

@@ -9,25 +9,25 @@ import useModelClassEvent from "./use-model-class-event.js"
 
 /**
  * FrontendModelClass type.
-  @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
+ * @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
 /**
  * FrontendModelInstance type.
-  @typedef {import("./base.js").default} FrontendModelInstance */
+ * @typedef {import("./base.js").default} FrontendModelInstance */
 /**
  * FrontendModelClassUpdateEventPayload type.
-  @typedef {import("./use-model-class-event.js").FrontendModelCreateUpdateEventPayload} FrontendModelClassUpdateEventPayload */
+ * @typedef {import("./use-model-class-event.js").FrontendModelCreateUpdateEventPayload} FrontendModelClassUpdateEventPayload */
 /**
  * Defines this typedef.
-  @typedef {{id: string, model: FrontendModelInstance}} FrontendModelInstanceUpdateEventPayload */
+ * @typedef {{id: string, model: FrontendModelInstance}} FrontendModelInstanceUpdateEventPayload */
 /**
  * FrontendModelUpdateEventPayload type.
-  @typedef {FrontendModelClassUpdateEventPayload | FrontendModelInstanceUpdateEventPayload} FrontendModelUpdateEventPayload */
+ * @typedef {FrontendModelClassUpdateEventPayload | FrontendModelInstanceUpdateEventPayload} FrontendModelUpdateEventPayload */
 /**
  * UseUpdatedEventOptions type.
-  @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseUpdatedEventOptions */
+ * @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseUpdatedEventOptions */
 /**
  * FrontendModelUpdateEventCallback type.
-  @typedef {(payload: FrontendModelUpdateEventPayload) => void} FrontendModelUpdateEventCallback */
+ * @typedef {(payload: FrontendModelUpdateEventPayload) => void} FrontendModelUpdateEventCallback */
 
 /**
  * Runs assert no unknown options.
@@ -72,7 +72,7 @@ export default function useUpdatedEvent(modelClassOrModels, callback, options = 
   useModelClassEvent(classModel, "update", (payload) => {
     callback(/**
               * Narrows the runtime value to the documented type.
-               @type {FrontendModelClassUpdateEventPayload} */ (payload))
+              * @type {FrontendModelClassUpdateEventPayload} */ (payload))
   }, {active: active && Boolean(classModel), debounce, onConnected, ...projectionOptions})
   useInstanceUpdatedEvent(instanceModels, callback, {active: active && !classModel, debounce, onConnected, ...projectionOptions})
 }
@@ -98,7 +98,7 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
   const eventCallback = useMemo(() => {
     const wrappedCallback = (/**
                               * Narrows the runtime value to the documented type.
-                               @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
+                              * @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -117,11 +117,11 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
     let closed = false
     /**
      * Unsubscribe callbacks.
-      @type {Array<() => void>} */
+     * @type {Array<() => void>} */
     const unsubscribeCallbacks = []
     const subscriptionCallback = (/**
                                    * Narrows the runtime value to the documented type.
-                                    @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
+                                   * @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

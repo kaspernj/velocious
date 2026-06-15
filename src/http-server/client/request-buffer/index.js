@@ -26,18 +26,18 @@ export default class RequestBuffer {
 
   /**
    * Data.
-    @type {number[]} */
+   * @type {number[]} */
   data = []
 
   events = new EventEmitter()
 
   /**
    * Headers by name.
-    @type {Record<string, Header>} */
+   * @type {Record<string, Header>} */
   headersByName = {}
   /**
    * Chunked body chars.
-    @type {number[] | undefined} */
+   * @type {number[] | undefined} */
   chunkedBodyChars = undefined
 
   multiPartyFormData = false
@@ -98,7 +98,7 @@ export default class RequestBuffer {
           chunkedBodyChars.push(char)
           /**
            * Current chunk bytes read.
-            @type {number} */
+           * @type {number} */
           const currentChunkBytesRead = (this.currentChunkBytesRead || 0) + 1
 
           this.currentChunkBytesRead = currentChunkBytesRead
@@ -196,7 +196,7 @@ export default class RequestBuffer {
   getHeadersHash() {
     /**
      * Result.
-      @type {Record<string, string>} */
+     * @type {Record<string, string>} */
     const result = {}
 
     for (const headerFormattedName in this.headersByName) {
@@ -347,7 +347,7 @@ export default class RequestBuffer {
         } else {
           /**
            * Narrows the runtime value to the documented type.
-            @type {number[]} */
+           * @type {number[]} */
           this.postBodyChars = []
 
           // this.postBodyBuffer = new ArrayBuffer(this.contentLength)
@@ -498,7 +498,7 @@ export default class RequestBuffer {
         const parsedQuery = querystring.parse(this.postBody)
         /**
          * Unparsed params.
-          @type {Record<string, string | string[]>} */
+         * @type {Record<string, string | string[]>} */
         const unparsedParams = {}
 
         for (const [key, value] of Object.entries(parsedQuery)) {
@@ -514,7 +514,7 @@ export default class RequestBuffer {
       } catch (error) {
         const ensuredError = /**
                               * Narrows the runtime value to the documented type.
-                               @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+                              * @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
         ensuredError.velociousContext = {
           ...(ensuredError.velociousContext || {}),

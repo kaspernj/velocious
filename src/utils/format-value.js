@@ -51,7 +51,7 @@ function minifiedStringify(value) {
 
     /**
      * Output.
-      @type {Record<string, ?>} */
+     * @type {Record<string, ?>} */
     const output = {}
 
     for (const key of Object.keys(current)) {

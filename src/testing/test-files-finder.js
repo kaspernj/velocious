@@ -39,42 +39,42 @@ export default class TestFilesFinder {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string[]} */
+     * @type {string[]} */
     this.foundFiles = []
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<number, Promise<void>>} */
+     * @type {Record<number, Promise<void>>} */
     this.findingPromises = {}
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string[]} */
+     * @type {string[]} */
     this.testArgs = this.processArgs.filter((processArg, index) => index != 0)
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string[]} */
+     * @type {string[]} */
     this.directoryArgs = []
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string[]} */
+     * @type {string[]} */
     this.directoryFullPaths = []
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string[]} */
+     * @type {string[]} */
     this.fileArgs = []
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {string[]} */
+     * @type {string[]} */
     this.explicitFiles = []
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, number[]>} */
+     * @type {Record<string, number[]>} */
     this.lineFiltersByFile = {}
 
     this._argsPrepared = false

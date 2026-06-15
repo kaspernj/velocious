@@ -61,7 +61,7 @@ export function frontendModelResourceConfigurationFromDefinition(resourceDefinit
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
   const restArgs = /**
                     * Narrows the runtime value to the documented type.
-                     @type {Record<string, ?>} */ ({...resourceConfiguration})
+                    * @type {Record<string, ?>} */ ({...resourceConfiguration})
 
   for (const key of [
     "abilities",
@@ -120,7 +120,7 @@ function normalizeFrontendModelResourceAbilities(abilities) {
 
   /**
    * Normalized.
-    @type {Record<string, string>} */
+   * @type {Record<string, string>} */
   const normalized = {}
 
   if (abilities.includes("create")) normalized.create = "create"
@@ -206,7 +206,7 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
 
   /**
    * Normalized commands.
-    @type {Record<string, string>} */
+   * @type {Record<string, string>} */
   const normalizedCommands = {}
 
   for (const commandType of commandsConfig) {
@@ -244,7 +244,7 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
 
   /**
    * Normalized commands.
-    @type {Record<string, string>} */
+   * @type {Record<string, string>} */
   const normalizedCommands = {}
 
   for (const methodName of commandsConfig) {
@@ -302,12 +302,12 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
       commandName: configuredCommandName,
       commandType: /**
                     * Narrows the runtime value to the documented type.
-                     @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
+                    * @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
       modelName
     })
 
     if (commandName === validatedCommandName) {
-      return /** Narrows the runtime value to the documented type. @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
+      return /** @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action)
     }
   }
 

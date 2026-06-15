@@ -31,10 +31,10 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
 
     const modelQuery = /**
                         * Narrows the runtime value to the documented type.
-                         @type {import("./model-class-query.js").default} */ (query)
+                        * @type {import("./model-class-query.js").default} */ (query)
     const ModelClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {typeof import("../record/index.js").default} */ (
+                        * @type {typeof import("../record/index.js").default} */ (
       this.basePath.length > 0 ? modelQuery._resolveModelClassForJoinPath(this.basePath) : modelQuery.modelClass
     )
 
@@ -55,7 +55,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
     const conn = this.getQuery().driver
     const query = /**
                    * Narrows the runtime value to the documented type.
-                    @type {import("./model-class-query.js").default} */ (this.getQuery())
+                   * @type {import("./model-class-query.js").default} */ (this.getQuery())
 
     for (const joinKey in join) {
       const joinValue = join[joinKey]

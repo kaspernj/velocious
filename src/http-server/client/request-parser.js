@@ -21,7 +21,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.hasCompleted = false
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} */
+     * @type {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} */
     this.params = {}
 
     this.requestBuffer = new RequestBuffer({configuration})
@@ -49,7 +49,7 @@ export default class VelociousHttpServerClientRequestParser {
   onFormDataPart = (formDataPart) => {
     /**
      * Unordered params.
-      @type {Record<string, string | string[] | import("./uploaded-file/uploaded-file.js").default>} */
+     * @type {Record<string, string | string[] | import("./uploaded-file/uploaded-file.js").default>} */
     const unorderedParams = {}
 
     unorderedParams[formDataPart.getName()] = formDataPart.getValue()
@@ -62,7 +62,7 @@ export default class VelociousHttpServerClientRequestParser {
     } catch (error) {
       const ensuredError = /**
                             * Narrows the runtime value to the documented type.
-                             @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+                            * @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),

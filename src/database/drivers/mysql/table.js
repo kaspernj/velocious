@@ -116,6 +116,6 @@ export default class VelociousDatabaseDriversMysqlTable extends BaseTable {
    * @returns {string} - The table name.
    */
   getName() {
-    return /** Narrows the runtime value to the documented type. @type {string} */ (Object.values(this.data)[0])
+    return /** @type {string} */ (Object.values(this.data)[0])
   }
 }

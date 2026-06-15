@@ -17,7 +17,7 @@
 export default class RequestTiming {
   /**
    * Buckets.
-    @type {Record<RequestTimingBucket, number>} */
+   * @type {Record<RequestTimingBucket, number>} */
   buckets = {
     controller: 0,
     db: 0,
@@ -26,21 +26,21 @@ export default class RequestTiming {
 
   /**
    * Bucket stack.
-    @type {ActiveTimingBucket[]} */
+   * @type {ActiveTimingBucket[]} */
   bucketStack = []
 
   dbQueryCount = 0
   /**
    * Completed log method.
-    @type {"debug" | "info" | undefined} */
+   * @type {"debug" | "info" | undefined} */
   completedLogMethod = undefined
   /**
    * Completed log subject.
-    @type {string | undefined} */
+   * @type {string | undefined} */
   completedLogSubject = undefined
   /**
    * Response served at ms.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   responseServedAtMs = undefined
   startedAtMs = Date.now()
 

@@ -56,7 +56,7 @@ export default class VelociousHttpServerLock {
     } catch (error) {
       if (/**
            * Narrows the runtime value to the documented type.
-            @type {{code?: string}} */ (error).code === "EEXIST") return false
+           * @type {{code?: string}} */ (error).code === "EEXIST") return false
       throw error
     }
 
@@ -107,7 +107,7 @@ export default class VelociousHttpServerLock {
 
     return this.processIsDead(/**
                                * Narrows the runtime value to the documented type.
-                                @type {{pid: number}} */ (owner).pid)
+                               * @type {{pid: number}} */ (owner).pid)
   }
 
   /**
@@ -145,7 +145,7 @@ export default class VelociousHttpServerLock {
 
       return false
     } catch (error) {
-      return /** Narrows the runtime value to the documented type. @type {{code?: string}} */ (error).code === "ESRCH"
+      return /** @type {{code?: string}} */ (error).code === "ESRCH"
     }
   }
 
@@ -157,7 +157,7 @@ export default class VelociousHttpServerLock {
     try {
       const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
 
-      return /** Narrows the runtime value to the documented type. @type {Record<string, ?>} */ (JSON.parse(rawOwner))
+      return /** @type {Record<string, ?>} */ (JSON.parse(rawOwner))
     } catch {
       return null
     }

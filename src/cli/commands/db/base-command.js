@@ -4,12 +4,12 @@ import {digg} from "diggerize"
 export default class DbBaseCommand extends BaseCommand {
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("../../../database/drivers/base.js").default | undefined} */
+   * @type {import("../../../database/drivers/base.js").default | undefined} */
   databaseConnection
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {Array<object> | undefined} */
+   * @type {Array<object> | undefined} */
   result
 
   /**

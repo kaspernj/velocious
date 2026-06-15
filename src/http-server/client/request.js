@@ -88,7 +88,7 @@ export default class VelociousHttpServerClientRequest {
     const parsed = querystring.parse(query)
     /**
      * Params.
-      @type {Record<string, string | string[]>} */
+     * @type {Record<string, string | string[]>} */
     const params = Object.create(null)
 
     for (const [key, value] of Object.entries(parsed)) {

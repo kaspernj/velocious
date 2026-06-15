@@ -70,13 +70,13 @@ export default class VelociousDatabaseQueryPreloaderSelection {
     if (narrowing) {
       const selects = [...new Set([...narrowing, ...mappingColumns, ...(extra || [])])]
 
-      return /** Narrows the runtime value to the documented type. @type {T} */ (query.select(selects))
+      return /** @type {T} */ (query.select(selects))
     }
 
     if (extra) {
       const allColumns = `${query.driver.quoteTable(targetModelClass.tableName())}.*`
 
-      return /** Narrows the runtime value to the documented type. @type {T} */ (query.select([allColumns, ...extra]))
+      return /** @type {T} */ (query.select([allColumns, ...extra]))
     }
 
     return query
@@ -129,7 +129,7 @@ export default class VelociousDatabaseQueryPreloaderSelection {
     const extra = this._extraFor(targetModelClass)
     /**
      * Columns.
-      @type {string[]} */
+     * @type {string[]} */
     const columns = []
 
     if (narrowing) {

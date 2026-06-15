@@ -46,7 +46,7 @@ export default class VelociousHttpServerWorker {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {Record<number, import("../server-client.js").default>} */
+     * @type {Record<number, import("../server-client.js").default>} */
     this.clients = {}
 
     this.logger = new Logger(this)
@@ -56,7 +56,7 @@ export default class VelociousHttpServerWorker {
     this._debugRequestId = 0
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
+     * @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
     this._debugSnapshotRequests = new Map()
   }
 
@@ -351,7 +351,7 @@ export default class VelociousHttpServerWorker {
 
   /**
    * Runs register with events host.
-    @returns {void} */
+   * @returns {void} */
   registerWithEventsHost() {
     if (this.unregisterFromEventsHost) return
 
@@ -360,7 +360,7 @@ export default class VelociousHttpServerWorker {
 
   /**
    * Runs unregister from events host if needed.
-    @returns {void} */
+   * @returns {void} */
   unregisterFromEventsHostIfNeeded() {
     if (!this.unregisterFromEventsHost) return
 

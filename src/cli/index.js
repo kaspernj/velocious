@@ -88,11 +88,11 @@ export default class VelociousCli {
     const commandNames = new Set(commands.map((command) => command.name))
     /**
      * Groups.
-      @type {string[][]} */
+     * @type {string[][]} */
     const groups = []
     /**
      * Current group.
-      @type {string[]} */
+     * @type {string[]} */
     let currentGroup = []
 
     for (const processArg of processArgs) {

@@ -39,7 +39,7 @@ function isArray(value) {
 export default class RecordAttachmentHandle {
   /**
    * Pending inputs.
-    @type {Array<?>} */
+   * @type {Array<?>} */
   pendingInputs = []
 
   /**
@@ -155,7 +155,7 @@ export default class RecordAttachmentHandle {
     const rows = await store.findMany({model: this.model, name: this.name})
     /**
      * Downloads.
-      @type {RecordAttachmentDownload[]} */
+     * @type {RecordAttachmentDownload[]} */
     const downloads = []
 
     for (const row of rows) {

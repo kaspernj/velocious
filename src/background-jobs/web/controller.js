@@ -112,7 +112,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
       const counts = await this._store().countsByStatus()
       /**
        * By status.
-        @type {Record<string, number>} */
+       * @type {Record<string, number>} */
       const byStatus = {}
       let total = 0
 
@@ -224,7 +224,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
     return Object.keys(jobs).map((name) => {
       const entry = jobs[name] || /**
                                    * Narrows the runtime value to the documented type.
-                                    @type {?} */ ({})
+                                   * @type {?} */ ({})
 
       return {
         args: redactArgs ? undefined : (entry.args || []),

@@ -2,7 +2,7 @@
 
 /**
  * Named status aliases.
-  @type {Record<string, number>} */
+ * @type {Record<string, number>} */
 const NAMED_STATUS_ALIASES = {
   "success": 200,
   "not-found": 404,
@@ -11,7 +11,7 @@ const NAMED_STATUS_ALIASES = {
 
 /**
  * Standard status messages.
-  @type {Record<number, string>} */
+ * @type {Record<number, string>} */
 const STANDARD_STATUS_MESSAGES = {
   100: "Continue",
   101: "Switching Protocols",
@@ -80,17 +80,17 @@ const STANDARD_STATUS_MESSAGES = {
 export default class VelociousHttpServerClientResponse {
   /**
    * Body.
-    @type {string | Uint8Array | null} */
+   * @type {string | Uint8Array | null} */
   body = null
 
   /**
    * File path.
-    @type {string | null} */
+   * @type {string | null} */
   filePath = null
 
   /**
    * Headers.
-    @type {Record<string, string[]>} */
+   * @type {Record<string, string[]>} */
   headers = {}
 
   /**

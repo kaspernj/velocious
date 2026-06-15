@@ -25,13 +25,13 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
   build(data) {
     const TargetModelClass = /**
                               * Narrows the runtime value to the documented type.
-                               @type {TMC} */ (this.getTargetModelClass())
+                              * @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model")
 
     const newInstance = /**
                          * Narrows the runtime value to the documented type.
-                          @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+                         * @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -84,7 +84,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
     const primaryKey = TargetModelClass.primaryKey()
     /**
      * Where args.
-      @type {Record<string, string | number | null | undefined>} */
+     * @type {Record<string, string | number | null | undefined>} */
     const whereArgs = {}
 
     whereArgs[primaryKey] = foreignModelID

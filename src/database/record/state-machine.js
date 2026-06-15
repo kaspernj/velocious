@@ -23,7 +23,7 @@
 
 /**
  * Pending transition key.
-  @type {string} */
+ * @type {string} */
 const PENDING_TRANSITION_KEY = "_stateMachinePendingTransition"
 
 /**
@@ -65,7 +65,7 @@ export function stateMachine(ModelClass, definition) {
   // Store definition on the model class for introspection
   /**
    * Dynamic class.
-    @type {?} */
+   * @type {?} */
   const dynamicClass = ModelClass
 
   dynamicClass._stateMachineDefinition = definition
@@ -98,7 +98,7 @@ export function stateMachine(ModelClass, definition) {
   // Register event methods and guard methods on the prototype
   /**
    * Proto.
-    @type {?} */
+   * @type {?} */
   const proto = ModelClass.prototype
 
   for (const [eventName, eventDef] of Object.entries(definition.events)) {
@@ -147,7 +147,7 @@ export function stateMachine(ModelClass, definition) {
     proto[eventName] = function () {
       /**
        * Self.
-        @type {?} */
+       * @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -182,7 +182,7 @@ export function stateMachine(ModelClass, definition) {
     proto[`${eventName}AndSave`] = async function () {
       /**
        * Self.
-        @type {?} */
+       * @type {?} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -214,7 +214,7 @@ export function stateMachine(ModelClass, definition) {
   ModelClass.beforeSave(async function (model) {
     /**
      * Dynamic model.
-      @type {?} */
+     * @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
@@ -241,7 +241,7 @@ export function stateMachine(ModelClass, definition) {
   ModelClass.afterSave(async function (model) {
     /**
      * Dynamic model.
-      @type {?} */
+     * @type {?} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 

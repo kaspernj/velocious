@@ -37,7 +37,7 @@ export default class InProcessBeaconClient extends EventEmitter {
     this._connected = false
     /**
      * Narrows the runtime value to the documented type.
-      @type {(() => void) | undefined} */
+     * @type {(() => void) | undefined} */
     this._unregister = undefined
   }
 
@@ -94,7 +94,7 @@ export default class InProcessBeaconClient extends EventEmitter {
 
     /**
      * Message.
-      @type {import("./types.js").BeaconBroadcastMessage} */
+     * @type {import("./types.js").BeaconBroadcastMessage} */
     const message = {
       type: "broadcast",
       channel,

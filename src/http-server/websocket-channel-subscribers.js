@@ -13,7 +13,7 @@ export default class VelociousWebsocketChannelSubscribers {
   constructor() {
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, Set<(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
+     * @type {Map<string, Set<(payload: ?, meta: {channel: string, createdAt?: string, eventId?: string}) => void | Promise<void>>>} */
     this._subscribers = new Map()
   }
 
@@ -94,10 +94,10 @@ export default class VelociousWebsocketChannelSubscribers {
 
         if (result && typeof (/**
                                * Narrows the runtime value to the documented type.
-                                @type {Promise<void>} */ (result)).then === "function") {
+                               * @type {Promise<void>} */ (result)).then === "function") {
           tasks.push(/**
                       * Narrows the runtime value to the documented type.
-                       @type {Promise<void>} */ (result))
+                      * @type {Promise<void>} */ (result))
         }
       } catch (error) {
         // Don't let one subscriber's failure abort the others; surface via the returned promises instead.

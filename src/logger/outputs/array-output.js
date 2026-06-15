@@ -2,18 +2,18 @@
 
 /**
  * LoggingOutputPayload type.
-  @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+ * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 /** Logger array output. */
 export default class LoggerArrayOutput {
   _limit = 2000
   /**
    * Levels.
-    @type {import("../../configuration-types.js").LogLevel[]} */
+   * @type {import("../../configuration-types.js").LogLevel[]} */
   levels = ["debug", "info", "warn", "error"]
   /**
    * Logs.
-    @type {LoggingOutputPayload[]} */
+   * @type {LoggingOutputPayload[]} */
   _logs = []
 
   /**

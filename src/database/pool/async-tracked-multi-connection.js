@@ -43,32 +43,32 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Connections.
-    @type {import("../drivers/base.js").default[]} */
+   * @type {import("../drivers/base.js").default[]} */
   connections = []
 
   /**
    * Connections in use.
-    @type {Record<number, import("../drivers/base.js").default>} */
+   * @type {Record<number, import("../drivers/base.js").default>} */
   connectionsInUse = {}
 
   /**
    * Pending checkouts.
-    @type {PendingCheckout[]} */
+   * @type {PendingCheckout[]} */
   pendingCheckouts = []
 
   /**
    * Connections being spawned.
-    @type {number} */
+   * @type {number} */
   connectionsBeingSpawned = 0
 
   /**
    * Pending checkout drain promise.
-    @type {Promise<void> | undefined} */
+   * @type {Promise<void> | undefined} */
   pendingCheckoutDrainPromise = undefined
 
   /**
    * Idle connection reaper timer.
-    @type {ReturnType<typeof setTimeout> | undefined} */
+   * @type {ReturnType<typeof setTimeout> | undefined} */
   idleConnectionReaperTimer = undefined
 
   /**
@@ -101,7 +101,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     super({configuration, identifier})
     this._withoutCurrentConnectionContext = /**
                                              * Narrows the runtime value to the documented type.
-                                              @type {(callback: () => ?) => ?} */ ((callback) => this.asyncLocalStorage.run(undefined, callback))
+                                             * @type {(callback: () => ?) => ?} */ ((callback) => this.asyncLocalStorage.run(undefined, callback))
   }
 
   /**
@@ -113,7 +113,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const id = connection.getIdSeq()
     const trackedConnection = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+                               * @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     if (trackedConnection[CLOSED_CONNECTION]) {
       this.untrackConnectionInUse(connection, id)
@@ -245,7 +245,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   connectionMatchesReuseKey(connection, reuseKey) {
     const connectionWithPoolKey = /**
                                    * Narrows the runtime value to the documented type.
-                                    @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === reuseKey
   }
@@ -263,7 +263,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     const trackedConnection = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+                               * @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
     delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
     trackedConnection[CONNECTION_CHECKED_OUT_AT] = Date.now()
 
@@ -364,7 +364,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
       const connectionWithPoolKey = /**
                                      * Narrows the runtime value to the documented type.
-                                      @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+                                     * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
       connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
       connection.setSchemaCacheInvalidator(() => {
@@ -711,7 +711,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   setGlobalConnection(connection) {
     const klass = /**
                    * Narrows the runtime value to the documented type.
-                    @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
+                   * @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
     let mapForConfiguration = klass.globalConnections.get(this.configuration)
 
     if (!mapForConfiguration) {
@@ -752,7 +752,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs clear test shared connection.
-    @returns {void} */
+   * @returns {void} */
   clearTestSharedConnection() {
     this._testSharedConnection = undefined
   }
@@ -798,7 +798,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   debugConnectionSnapshots(now) {
     /**
      * Connections.
-      @type {Array<Record<string, ?>>} */
+     * @type {Array<Record<string, ?>>} */
     const connections = []
     const seenConnections = new Set()
 
@@ -818,7 +818,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     for (const [id, connection] of Object.entries(this.connectionsInUse)) {
       const trackedConnection = /**
                                  * Narrows the runtime value to the documented type.
-                                  @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number}} */ (connection)
+                                 * @type {import("../drivers/base.js").default & {[CONNECTION_CHECKED_OUT_AT]?: number}} */ (connection)
       const checkedOutAt = trackedConnection[CONNECTION_CHECKED_OUT_AT]
       const checkedOutForMs = typeof checkedOutAt === "number" ? Math.max(0, now - checkedOutAt) : undefined
 
@@ -840,7 +840,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
       const trackedConnection = /**
                                  * Narrows the runtime value to the documented type.
-                                  @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+                                 * @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
       const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
       const idleForMs = typeof checkedInAt === "number" ? Math.max(0, now - checkedInAt) : undefined
 
@@ -908,7 +908,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   getGlobalConnectionForIdentifier() {
     const klass = /**
                    * Narrows the runtime value to the documented type.
-                    @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
+                   * @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
     const mapForConfiguration = klass.globalConnections.get(this.configuration)
 
     return mapForConfiguration?.[this.identifier]
@@ -921,7 +921,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   clearGlobalConnectionForIdentifier() {
     const klass = /**
                    * Narrows the runtime value to the documented type.
-                    @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
+                   * @type {typeof VelociousDatabasePoolAsyncTrackedMultiConnection} */ (this.constructor)
     const mapForConfiguration = klass.globalConnections.get(this.configuration)
 
     if (!mapForConfiguration) return
@@ -970,14 +970,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs schedule idle connection reaper.
-    @returns {void} */
+   * @returns {void} */
   scheduleIdleConnectionReaper() {
     if (this.idleConnectionReaperTimer) return
     if (!this.hasIdleConnectionsToReap()) return
 
     const delay = this.nextIdleConnectionReapDelay(/**
                                                     * Narrows the runtime value to the documented type.
-                                                     @type {number} */ (this.idleTimeoutMillis()))
+                                                    * @type {number} */ (this.idleTimeoutMillis()))
 
     this.idleConnectionReaperTimer = setTimeout(() => {
       this.idleConnectionReaperTimer = undefined
@@ -1013,7 +1013,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
       const trackedConnection = /**
                                  * Narrows the runtime value to the documented type.
-                                  @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+                                 * @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
       const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
 
       if (typeof checkedInAt !== "number") continue
@@ -1072,11 +1072,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   classifyIdleConnectionsForReaping({idleTimeoutMillis, now}) {
     /**
      * Kept connections.
-      @type {import("../drivers/base.js").default[]} */
+     * @type {import("../drivers/base.js").default[]} */
     const keptConnections = []
     /**
      * Expired connections.
-      @type {import("../drivers/base.js").default[]} */
+     * @type {import("../drivers/base.js").default[]} */
     const expiredConnections = []
 
     for (const connection of this.connections) {
@@ -1111,7 +1111,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   connectionIsClosed(connection) {
     const trackedConnection = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean}} */ (connection)
+                               * @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean}} */ (connection)
 
     return Boolean(trackedConnection[CLOSED_CONNECTION])
   }
@@ -1124,7 +1124,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   idleConnectionExpired({connection, idleTimeoutMillis, now}) {
     const trackedConnection = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+                               * @type {import("../drivers/base.js").default & {[IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
     const checkedInAt = trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
 
     return typeof checkedInAt === "number" && now - checkedInAt >= idleTimeoutMillis
@@ -1176,7 +1176,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     const trackedConnection = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
+                               * @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     trackedConnection[CLOSED_CONNECTION] = true
     delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
@@ -1198,7 +1198,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs clear idle connection reaper timer.
-    @returns {void} */
+   * @returns {void} */
   clearIdleConnectionReaperTimer() {
     if (!this.idleConnectionReaperTimer) return
 

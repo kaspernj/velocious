@@ -15,7 +15,7 @@ export default class BackgroundJobRegistry {
     this.configuration = configuration
     /**
      * Narrows the runtime value to the documented type.
-      @type {Map<string, typeof VelociousJob>} */
+     * @type {Map<string, typeof VelociousJob>} */
     this.jobsByName = new Map()
   }
 

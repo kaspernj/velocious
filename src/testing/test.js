@@ -8,25 +8,25 @@ import {arrayContaining, objectContaining} from "./expect-utils.js"
 
 /**
  * Tests.
-  @type {import("./test-runner.js").TestsArgument} */
+ * @type {import("./test-runner.js").TestsArgument} */
 const tests = {
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
+   * @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   afterEaches: [],
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+   * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
   afterAlls: [],
   args: {},
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+   * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
   beforeAlls: [],
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
+   * @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
   beforeEaches: [],
   filePath: undefined,
   line: undefined,
@@ -99,7 +99,7 @@ function normalizeTags(tags) {
 
 /**
  * Test config.
-  @type {VelociousTestConfig} */
+ * @type {VelociousTestConfig} */
 const testConfig = {
   consoleOutput: "failure",
   failedConsoleOutputMaxLines: 200,
@@ -212,7 +212,7 @@ function afterAll(callback) {
 async function describe(description, arg1, arg2) {
   /**
    * Defines testArgs.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   let testArgs, testFunction
 
   if (typeof arg2 == "function") {
@@ -278,23 +278,23 @@ function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
   /**
    * Defines testArgs.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   let testArgs
 
   /**
    * Defines testFunction.
-    @type {() => (void|Promise<void>)} */
+   * @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
     testFunction = /**
                     * Narrows the runtime value to the documented type.
-                     @type {() => (void|Promise<void>)} */ (arg1)
+                    * @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {}
   } else if (typeof arg2 == "function") {
     testFunction = /**
                     * Narrows the runtime value to the documented type.
-                     @type {() => (void|Promise<void>)} */ (arg2)
+                    * @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = arg1
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
@@ -322,23 +322,23 @@ function it(description, arg1, arg2) {
 function fit(description, arg1, arg2) {
   /**
    * Defines testArgs.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   let testArgs
 
   /**
    * Defines testFunction.
-    @type {() => (void|Promise<void>)} */
+   * @type {() => (void|Promise<void>)} */
   let testFunction
 
   if (typeof arg1 == "function") {
     testFunction = /**
                     * Narrows the runtime value to the documented type.
-                     @type {() => (void|Promise<void>)} */ (arg1)
+                    * @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {focus: true}
   } else if (typeof arg2 == "function") {
     testFunction = /**
                     * Narrows the runtime value to the documented type.
-                     @type {() => (void|Promise<void>)} */ (arg2)
+                    * @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = Object.assign({focus: true}, arg1)
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)

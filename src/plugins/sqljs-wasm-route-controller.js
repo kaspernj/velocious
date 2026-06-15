@@ -54,7 +54,7 @@ export default class SqlJsWasmRouteController extends Controller {
     } catch (error) {
       const ensuredError = /**
                             * Narrows the runtime value to the documented type.
-                             @type {{code?: string}} */ (error)
+                            * @type {{code?: string}} */ (error)
 
       if (ensuredError.code === "ENOENT") {
         await this.render({json: {errorMessage: "Not found", status: "error"}, status: "not-found"})

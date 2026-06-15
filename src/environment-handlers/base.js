@@ -79,7 +79,7 @@ export default class VelociousEnvironmentHandlerBase {
 
     /**
      * Narrows the runtime value to the documented type.
-      @type {number} */
+     * @type {number} */
     this.configuration._timezoneOffsetMinutes = _offsetMinutes
   }
 
@@ -97,7 +97,7 @@ export default class VelociousEnvironmentHandlerBase {
       return activeConfiguration._timezoneOffsetMinutes
     }
 
-    return /** Narrows the runtime value to the documented type. @type {number} */ (activeConfiguration.getTimezoneOffsetMinutes())
+    return /** @type {number} */ (activeConfiguration.getTimezoneOffsetMinutes())
   }
 
   /**

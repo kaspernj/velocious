@@ -14,11 +14,11 @@ import Base from "./base.js"
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
   /**
    * Better local storage.
-    @type {BetterLocalStorage | undefined} */
+   * @type {BetterLocalStorage | undefined} */
   betterLocalStorage = undefined
   /**
    * Connection.
-    @type {ConnectionSqlJs | undefined} */
+   * @type {ConnectionSqlJs | undefined} */
   _connection = undefined
 
   /**
@@ -64,7 +64,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    */
   getConnection() {
     if (this.args?.getConnection) {
-      return /** Narrows the runtime value to the documented type. @type {SqliteWebConnection} */ (this.args.getConnection())
+      return /** @type {SqliteWebConnection} */ (this.args.getConnection())
     } else {
       if (!this._connection) throw new Error("SQLite web connection has not been initialized")
       return this._connection

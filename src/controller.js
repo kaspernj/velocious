@@ -21,7 +21,7 @@ export default class VelociousController {
     if (!this._beforeActions) {
       /**
        * Stores the before actions value.
-        @type {Array<string>}  */
+       * @type {Array<string>}  */
       this._beforeActions = []
     }
 
@@ -102,7 +102,7 @@ export default class VelociousController {
     const {encrypted = false, ...options} = args
     /**
      * Types the following value.
-      @type {string} */
+     * @type {string} */
     let cookieValue
 
     if (encrypted) {
@@ -143,7 +143,7 @@ export default class VelociousController {
   _getControllerClass() {
     const controllerClass = /**
                              * Types the following value.
-                              @type {typeof VelociousController} */ (this.constructor)
+                             * @type {typeof VelociousController} */ (this.constructor)
 
     return controllerClass
   }
@@ -161,9 +161,9 @@ export default class VelociousController {
       if (beforeActions) {
         const controllerPrototype = /**
                                      * Types the following value.
-                                      @type {Record<string, Function | undefined>} */ (/**
+                                     * @type {Record<string, Function | undefined>} */ (/**
                                                                                         * Types the following value.
-                                                                                         @type {?} */ (currentControllerClass.prototype))
+                                                                                        * @type {?} */ (currentControllerClass.prototype))
 
         for (const beforeActionName of beforeActions) {
           const beforeAction = controllerPrototype[beforeActionName]
@@ -209,7 +209,7 @@ export default class VelociousController {
     try {
       /**
        * Unparsed params.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const unparsedParams = querystring.parse(query)
       const paramsToObject = new ParamsToObject(unparsedParams)
 
@@ -217,7 +217,7 @@ export default class VelociousController {
     } catch (error) {
       const ensuredError = /**
                             * Types the following value.
-                             @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+                            * @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),
@@ -297,7 +297,7 @@ export default class VelociousController {
         if (err) {
           const renderError = /**
                                * Types the following value.
-                                @type {Error & {code?: string}} */ (err)
+                               * @type {Error & {code?: string}} */ (err)
 
           if (renderError.code === "ENOENT") {
             this.logger.warn(`Missing view file: ${viewPath}`)

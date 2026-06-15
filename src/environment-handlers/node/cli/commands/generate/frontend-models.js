@@ -45,15 +45,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     /**
      * Ensured directories.
-      @type {Set<string>} */
+     * @type {Set<string>} */
     const ensuredDirectories = new Set()
     /**
      * Generated model names by directory.
-      @type {Map<string, Set<string>>} */
+     * @type {Map<string, Set<string>>} */
     const generatedModelNamesByDirectory = new Map()
     /**
      * Generated files by directory.
-      @type {Map<string, Array<{className: string, fileName: string}>>} */
+     * @type {Map<string, Array<{className: string, fileName: string}>>} */
     const generatedFilesByDirectory = new Map()
 
     for (const backendProject of backendProjects) {
@@ -192,7 +192,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   availableFrontendModelClassNames(resources) {
     /**
      * Class names.
-      @type {Set<string>} */
+     * @type {Set<string>} */
     const classNames = new Set()
 
     for (const resourceModelName in resources) {
@@ -808,7 +808,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     /**
      * Relationship names.
-      @type {string[]} */
+     * @type {string[]} */
     const relationshipNames = []
 
     for (const entry of spec) {

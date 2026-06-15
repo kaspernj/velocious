@@ -54,7 +54,7 @@ function isMissingTargetModuleError({error, targetPath, targetImportSpecifier}) 
 export default class VelociousRoutesResolver {
   /**
    * Narrows the runtime value to the documented type.
-    @type {Logger | undefined} */
+   * @type {Logger | undefined} */
   logger
 
   /**
@@ -90,7 +90,7 @@ export default class VelociousRoutesResolver {
 
     /**
      * Params.
-      @type {Record<string, string>} */
+     * @type {Record<string, string>} */
     const params = {}
     const searchParams = new URLSearchParams(query)
 
@@ -181,7 +181,7 @@ export default class VelociousRoutesResolver {
     const controllerClass = await this.resolveControllerClass({controllerPath})
     const controllerRequest = /**
                                * Narrows the runtime value to the documented type.
-                                @type {import("../http-server/client/request.js").default} */ (this.request)
+                               * @type {import("../http-server/client/request.js").default} */ (this.request)
     const controllerInstance = new controllerClass({
       action,
       configuration: this.configuration,
@@ -198,9 +198,9 @@ export default class VelociousRoutesResolver {
 
     const actionHandlers = /**
                             * Narrows the runtime value to the documented type.
-                             @type {Record<string, () => void | Promise<void>>} */ (/**
+                            * @type {Record<string, () => void | Promise<void>>} */ (/**
                                                                                      * Narrows the runtime value to the documented type.
-                                                                                      @type {?} */ (controllerInstance))
+                                                                                     * @type {?} */ (controllerInstance))
 
     const logMethod = this._logMethod()
 
@@ -262,7 +262,7 @@ export default class VelociousRoutesResolver {
 
       const errorWithContext = /**
                                 * Narrows the runtime value to the documented type.
-                                 @type {{velociousContext?: object}} */ (ensuredError)
+                                * @type {{velociousContext?: object}} */ (ensuredError)
 
       errorWithContext.velociousContext = {
         ...(errorWithContext.velociousContext || {}),
@@ -283,11 +283,11 @@ export default class VelociousRoutesResolver {
     const controllerImportSpecifier = toImportSpecifier(controllerPath)
 
     if (!this.routeHookControllerClass) {
-      return /** Narrows the runtime value to the documented type. @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
+      return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
     }
 
     try {
-      return /** Narrows the runtime value to the documented type. @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
+      return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
     } catch (error) {
       const isMissingControllerFileError = isMissingTargetModuleError({
         error: ensureError(error),
@@ -297,7 +297,7 @@ export default class VelociousRoutesResolver {
 
       if (!isMissingControllerFileError) throw ensureError(error)
 
-      return /** Narrows the runtime value to the documented type. @type {typeof import("../controller.js").default} */ (this.routeHookControllerClass)
+      return /** @type {typeof import("../controller.js").default} */ (this.routeHookControllerClass)
     }
   }
 
@@ -425,7 +425,7 @@ export default class VelociousRoutesResolver {
     const remoteAddress = request.remoteAddress() || "unknown"
     const loggedParams = /**
                           * Narrows the runtime value to the documented type.
-                           @type {Record<string, ?>} */ (this._sanitizeParamsForLogging(this.params))
+                          * @type {Record<string, ?>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action
     delete loggedParams.controller
@@ -523,7 +523,7 @@ export default class VelociousRoutesResolver {
     if (value && typeof value === "object") {
       /**
        * Result.
-        @type {Record<string, ?>} */
+       * @type {Record<string, ?>} */
       const result = {}
 
       for (const key of Object.keys(value)) {

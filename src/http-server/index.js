@@ -11,10 +11,10 @@ import WorkerHandler from "./worker-handler/index.js"
 
 /**
  * Defines this typedef.
-  @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
+ * @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
 /**
  * Defines this typedef.
-  @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
+ * @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
 
 /**
  * Runs normalize worker count.
@@ -39,27 +39,27 @@ export default class VelociousHttpServer {
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {DevelopmentReloader | DevelopmentReloaderLike | undefined} */
+   * @type {DevelopmentReloader | DevelopmentReloaderLike | undefined} */
   developmentReloader
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("net").Server | undefined} */
+   * @type {import("net").Server | undefined} */
   netServer
 
   /**
    * Narrows the runtime value to the documented type.
-    @type {WorkerHandlerFactory | undefined} */
+   * @type {WorkerHandlerFactory | undefined} */
   workerHandlerFactory
 
   /**
    * Clients.
-    @type {Record<string, ServerClient>}  */
+   * @type {Record<string, ServerClient>}  */
   clients = {}
 
   /**
    * Active sockets.
-    @type {Set<import("net").Socket>} */
+   * @type {Set<import("net").Socket>} */
   _activeSockets = new Set()
 
   events = new EventEmitter()
@@ -67,12 +67,12 @@ export default class VelociousHttpServer {
 
   /**
    * Worker handlers.
-    @type {Array<WorkerHandler | InProcessHandler>} */
+   * @type {Array<WorkerHandler | InProcessHandler>} */
   workerHandlers = []
   nextWorkerHandlerIndex = 0
   /**
    * Sticky worker handlers.
-    @type {Map<string, WorkerHandler | InProcessHandler>} */
+   * @type {Map<string, WorkerHandler | InProcessHandler>} */
   stickyWorkerHandlers = new Map()
 
   /**
@@ -114,7 +114,7 @@ export default class VelociousHttpServer {
       await this._startDevelopmentReloader()
       /**
        * Net server.
-        @type {import("net").Server} */
+       * @type {import("net").Server} */
       const netServer = new Net.Server()
       this.netServer = netServer
       netServer.on("close", this.onClose)
@@ -149,7 +149,7 @@ export default class VelociousHttpServer {
   async _stopStartupResources(startupState) {
     /**
      * Startup net server.
-      @type {import("net").Server | undefined} */
+     * @type {import("net").Server | undefined} */
     const startupNetServer = this.netServer
 
     if (this.developmentReloader && this.developmentReloader !== startupState.developmentReloader) {
@@ -422,7 +422,7 @@ export default class VelociousHttpServer {
   async _buildWorkerHandlers() {
     /**
      * Worker handlers.
-      @type {Array<WorkerHandler | InProcessHandler>} */
+     * @type {Array<WorkerHandler | InProcessHandler>} */
     const workerHandlers = []
 
     for (let index = 0; index < this.workers; index += 1) {

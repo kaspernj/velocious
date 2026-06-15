@@ -67,6 +67,18 @@ import isPlainObject from "../utils/plain-object.js"
  */
 
 /**
+ * Virtual setter method on a frontend-model resource.
+ * @typedef {function(import("../database/record/index.js").default, FrontendModelResourcePayloadValue): (void | Promise<void>)} FrontendModelResourceVirtualSetter
+ */
+
+/**
+ * Static helpers used when checking whether a model-like receiver accepts an attribute.
+ * @typedef {object} WritableAttributeReceiverClass
+ * @property {function(string): string} [resolveAttributeName] - Resolves aliases to canonical attribute names.
+ * @property {function(Record<string, ?>, string): string} [findMemberNameInsensitive] - Locates a setter method on the receiver.
+ */
+
+/**
  * Options passed while saving frontend-model resource mutations.
  * @typedef {object} FrontendModelResourceSaveOptions
  * @property {FrontendModelResourceAttributePayload | null} [attachments] - Uploaded attachment attributes.
@@ -84,46 +96,26 @@ import isPlainObject from "../utils/plain-object.js"
  * @template {typeof import("../database/record/index.js").default} [TModelClass=typeof import("../database/record/index.js").default]
  */
 export default class FrontendModelBaseResource extends AuthorizationBaseResource {
-  /**
-   * Backing model class.
-    @type {typeof import("../database/record/index.js").default | undefined} */
+  /** @type {typeof import("../database/record/index.js").default | undefined} */
   static ModelClass = undefined
 
-  /**
-   * Attributes.
-    @type {Record<string, ?> | string[] | undefined} */
+  /** @type {Record<string, ?> | string[] | undefined} */
   static attributes = undefined
-  /**
-   * Abilities.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static abilities = undefined
-  /**
-   * Attachments.
-    @type {Record<string, ?> | undefined} */
+  /** @type {Record<string, ?> | undefined} */
   static attachments = undefined
-  /**
-   * Collection commands.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static collectionCommands = undefined
-  /**
-   * Built in collection commands.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static builtInCollectionCommands = undefined
-  /**
-   * Member commands.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static memberCommands = undefined
-  /**
-   * Built in member commands.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static builtInMemberCommands = undefined
-  /**
-   * Relationships.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static relationships = undefined
-  /**
-   * Translated attributes.
-    @type {string[] | undefined} */
+  /** @type {string[] | undefined} */
   static translatedAttributes = undefined
 
   /**
@@ -137,17 +129,14 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       locals: "locals" in args ? args.locals || {} : {}
     })
 
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    const defaultResourceConfiguration = /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
+
     this.controller = "controller" in args ? args.controller : undefined
-    this.modelClassValue = "modelClass" in args ? args.modelClass : /**
-                                                                     * Narrows the runtime value to the documented type.
-                                                                      @type {typeof import("../database/record/index.js").default | undefined} */ (/**
-                                                                                                                                                    * Narrows the runtime value to the documented type.
-                                                                                                                                                     @type {typeof FrontendModelBaseResource} */ (this.constructor).modelClass())
+    this.modelClassValue = "modelClass" in args ? args.modelClass : ResourceClass.modelClass()
     this.modelNameValue = "modelName" in args ? args.modelName : (this.modelClassValue?.getModelName ? this.modelClassValue.getModelName() : this.modelClassValue?.name || "")
     this.paramsValue = "params" in args ? args.params : undefined
-    this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : /**
-                                                                                                      * Narrows the runtime value to the documented type.
-                                                                                                       @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
+    this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : defaultResourceConfiguration
   }
 
   /**
@@ -155,7 +144,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {FrontendModelResourceController} - Controller instance with frontend-model helpers.
    */
   typedControllerInstance() {
-    return /** Narrows the runtime value to the documented type. @type {FrontendModelResourceController} */ (this.controller)
+    return /** @type {FrontendModelResourceController} */ (this.controller)
   }
 
   /**
@@ -163,9 +152,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Static resource config (raw user input shape; consumers normalize).
    */
   static resourceConfig() {
-    /**
-     * Config.
-      @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
+    /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
       attributes: this.attributes || []
     }
@@ -574,27 +561,17 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<void>}
    */
   async _assignWithVirtualSetters(model, attributes) {
-    /**
-     * Direct attributes.
-      @type {Record<string, ?>} */
+    /** @type {Record<string, ?>} */
     const directAttributes = {}
-    const translatedSet = new Set(/**
-                                   * Narrows the runtime value to the documented type.
-                                    @type {typeof FrontendModelBaseResource} */ (this.constructor).translatedAttributes || [])
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    const translatedSet = new Set(ResourceClass.translatedAttributes || [])
 
     for (const [name, value] of Object.entries(attributes)) {
       const resourceSetterName = `set${inflection.camelize(name)}Attribute`
+      const resourceSetter = virtualSetterLookup(this)[resourceSetterName]
 
-      if (typeof /**
-                  * Narrows the runtime value to the documented type.
-                   @type {Record<string, ?>} */ (/**
-                                                  * Narrows the runtime value to the documented type.
-                                                   @type {?} */ (this))[resourceSetterName] === "function") {
-        await /**
-               * Narrows the runtime value to the documented type.
-                @type {Record<string, ?>} */ (/**
-                                               * Narrows the runtime value to the documented type.
-                                                @type {?} */ (this))[resourceSetterName](model, value)
+      if (typeof resourceSetter === "function") {
+        await resourceSetter.call(this, model, value)
       } else if (translatedSet.has(name)) {
         await this._setTranslatedAttributeOnModel(model, name, value)
       } else {
@@ -697,18 +674,14 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const locale = this.context?.configuration?.getLocale?.() || "en"
     const instanceRelationship = model.getRelationshipByName("translations")
 
-    /**
-     * Defines translation.
-      @type {import("../database/record/index.js").default | undefined} */
+    /** @type {import("../database/record/index.js").default | undefined} */
     let translation
 
     if (model.isNewRecord()) {
       const loaded = instanceRelationship.loaded()
 
       if (Array.isArray(loaded)) {
-        translation = loaded.find((/**
-                                    * Narrows the runtime value to the documented type.
-                                     @type {Record<string, ?>} */ t) => t.locale() === locale)
+        translation = loaded.find((t) => /** @type {Record<string, ?>} */ (t).locale() === locale)
       }
     } else {
       if (!instanceRelationship.getPreloaded()) {
@@ -718,9 +691,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const loaded = instanceRelationship.loaded()
 
       if (Array.isArray(loaded)) {
-        translation = loaded.find((/**
-                                    * Narrows the runtime value to the documented type.
-                                     @type {Record<string, ?>} */ t) => t.locale() === locale)
+        translation = loaded.find((t) => /** @type {Record<string, ?>} */ (t).locale() === locale)
       }
     }
 
@@ -728,9 +699,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       translation = instanceRelationship.build({locale})
     }
 
-    /**
-     * Assignments.
-      @type {Record<string, ?>} */
+    /** @type {Record<string, ?>} */
     const assignments = {}
 
     assignments[name] = value
@@ -1311,9 +1280,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       throw new Error(`Nested child resource must define an 'abilities' object to authorize nested ${action}.`)
     }
 
-    const abilityAction = /**
-                           * Narrows the runtime value to the documented type.
-                            @type {Record<string, string>} */ (abilities)[action]
+    const abilityAction = /** @type {Record<string, string>} */ (abilities)[action]
 
     if (typeof abilityAction !== "string" || abilityAction.length < 1) {
       throw new Error(`Nested child resource must define abilities.${action}.`)
@@ -1343,12 +1310,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const primaryKey = targetModelClass.primaryKey()
     const lookup = {[primaryKey]: id, ...parentLinkAttributes}
     const query = ability
-      ? /**
-         * Narrows the runtime value to the documented type.
-          @type {?} */ (targetModelClass).accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
-      : /**
-         * Narrows the runtime value to the documented type.
-          @type {?} */ (targetModelClass).where({})
+      ? targetModelClass.accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
+      : targetModelClass.where({})
 
     const existing = await query.findBy(lookup)
 
@@ -1376,9 +1339,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     const abilityAction = this._resolveChildAbilityAction(childResourceConfiguration, "create")
     const primaryKey = targetModelClass.primaryKey()
-    const authorizedIds = await /**
-                                 * Narrows the runtime value to the documented type.
-                                  @type {?} */ (targetModelClass)
+    const authorizedIds = await targetModelClass
       .accessibleFor(abilityAction, ability)
       .where({[primaryKey]: child.readAttribute(primaryKey)})
       .pluck(primaryKey)
@@ -1402,12 +1363,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (relationshipNames.length === 0) return
 
     for (const relationshipName of relationshipNames) {
-      if (typeof /**
-                  * Narrows the runtime value to the documented type.
-                   @type {?} */ (model).loadRelationship === "function") {
-        await /**
-               * Narrows the runtime value to the documented type.
-                @type {?} */ (model).loadRelationship(relationshipName)
+      if (typeof model.loadRelationship === "function") {
+        await model.loadRelationship(relationshipName)
       }
     }
   }
@@ -1433,13 +1390,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
  * @returns {{attributes: string[], nested: Record<string, {attributes: string[], nested: Record<string, ?>}>}} - Parsed structure.
  */
 function parsePermittedParams(permitSpec) {
-  /**
-   * Attributes.
-    @type {string[]} */
+  /** @type {string[]} */
   const attributes = []
-  /**
-   * Nested.
-    @type {Record<string, {attributes: string[], nested: Record<string, ?>}>} */
+  /** @type {Record<string, {attributes: string[], nested: Record<string, ?>}>} */
   const nested = {}
 
   if (!Array.isArray(permitSpec)) return {attributes, nested}
@@ -1472,6 +1425,15 @@ function parsePermittedParams(permitSpec) {
 }
 
 /**
+ * Narrows a resource to its dynamic virtual setter lookup surface.
+ * @param {FrontendModelBaseResource} resource - Resource instance.
+ * @returns {Record<string, FrontendModelResourceVirtualSetter>} Dynamic virtual setter lookup.
+ */
+function virtualSetterLookup(resource) {
+  return /** @type {Record<string, FrontendModelResourceVirtualSetter>} */ (/** @type {unknown} */ (resource))
+}
+
+/**
  * Runs filter writable frontend model attributes.
  * @param {Record<string, ?>} receiver - Model instance or prototype.
  * @param {Record<string, ?>} attributes - Incoming frontend-model attributes.
@@ -1479,28 +1441,32 @@ function parsePermittedParams(permitSpec) {
  * @param {string[] | null} [permittedAttributeNames] - Optional explicit permit list. `null` falls back to setter-existence checks only.
  * @returns {Record<string, ?>} - Writable attributes only.
  */
-function filterWritableFrontendModelAttributes(receiver, attributes, resource = /**
-                                                                                 * Narrows the runtime value to the documented type.
-                                                                                  @type {FrontendModelBaseResource | null} */ (null), permittedAttributeNames = null) {
+function filterWritableFrontendModelAttributes(
+  receiver,
+  attributes,
+  resource = /** @type {FrontendModelBaseResource | null} */ (null),
+  permittedAttributeNames = null
+) {
   // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
   // Silent drops hide contract mistakes in generated models and app-side wrapper code.
-  /**
-   * Writable attributes.
-    @type {Record<string, ?>} */
+  /** @type {Record<string, ?>} */
   const writableAttributes = {}
-  /**
-   * Invalid attributes.
-    @type {string[]} */
+  /** @type {string[]} */
   const invalidAttributes = []
-  /**
-   * Not permitted attributes.
-    @type {string[]} */
+  /** @type {string[]} */
   const notPermittedAttributes = []
 
   const permitSet = Array.isArray(permittedAttributeNames) ? new Set(permittedAttributeNames) : null
-  const translatedSet = resource ? new Set(/**
-                                            * Narrows the runtime value to the documented type.
-                                             @type {typeof FrontendModelBaseResource} */ (resource.constructor).translatedAttributes || []) : new Set()
+  /** @type {string[]} */
+  let translatedAttributes = []
+
+  if (resource) {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (resource.constructor)
+
+    translatedAttributes = ResourceClass.translatedAttributes || []
+  }
+
+  const translatedSet = new Set(translatedAttributes)
 
   for (const [attributeName, value] of Object.entries(attributes)) {
     if (permitSet && !permitSet.has(attributeName)) {
@@ -1508,19 +1474,16 @@ function filterWritableFrontendModelAttributes(receiver, attributes, resource = 
       continue
     }
 
-    const modelClass = /** Narrows the runtime value to the documented type. @type {?} */ (receiver).constructor
+    const modelClass = /** @type {WritableAttributeReceiverClass} */ (receiver.constructor)
     const resolvedAttributeName = (modelClass && typeof modelClass.resolveAttributeName === "function" && modelClass.resolveAttributeName(attributeName)) || attributeName
     const requestedSetterName = `set${inflection.camelize(resolvedAttributeName)}`
     const setterName = (modelClass && typeof modelClass.findMemberNameInsensitive === "function" && modelClass.findMemberNameInsensitive(receiver, requestedSetterName)) || requestedSetterName
     const resourceSetterName = `set${inflection.camelize(attributeName)}Attribute`
+    const resourceSetter = resource ? virtualSetterLookup(resource)[resourceSetterName] : undefined
 
     if (setterName in receiver) {
       writableAttributes[attributeName] = value
-    } else if (resource && typeof /**
-                                   * Narrows the runtime value to the documented type.
-                                    @type {Record<string, ?>} */ (/**
-                                                                   * Narrows the runtime value to the documented type.
-                                                                    @type {?} */ (resource))[resourceSetterName] === "function") {
+    } else if (typeof resourceSetter === "function") {
       writableAttributes[attributeName] = value
     } else if (translatedSet.has(attributeName)) {
       writableAttributes[attributeName] = value

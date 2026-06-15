@@ -35,11 +35,11 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Satisfied targets.
-      @type {import("../../record/index.js").default[]} */
+     * @type {import("../../record/index.js").default[]} */
     const satisfiedTargets = []
     /**
      * Models to load.
-      @type {import("../../record/index.js").default[]} */
+     * @type {import("../../record/index.js").default[]} */
     const modelsToLoad = []
 
     for (const model of this.models) {
@@ -48,7 +48,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       if (this.selection.isSatisfied({instanceRelationship, targetModelClass, mappingColumns: [primaryKey]})) {
         const loaded = /**
                         * Narrows the runtime value to the documented type.
-                         @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
+                        * @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
 
         if (loaded) satisfiedTargets.push(loaded)
       } else {
@@ -60,13 +60,13 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Foreign key values.
-      @type {Array<number | string>} */
+     * @type {Array<number | string>} */
     const foreignKeyValues = []
 
     for (const model of modelsToLoad) {
       const foreignKeyValue = /**
                                * Narrows the runtime value to the documented type.
-                                @type {string | number | null | undefined} */ (model.readColumn(foreignKey))
+                               * @type {string | number | null | undefined} */ (model.readColumn(foreignKey))
 
       // Skip null/undefined foreign keys: a belongsTo with no foreign key has no
       // target, and including them would serialize to e.g. `IN (null)` which
@@ -78,12 +78,12 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Target models by id.
-      @type {Record<string, import("../../record/index.js").default>} */
+     * @type {Record<string, import("../../record/index.js").default>} */
     const targetModelsById = {}
 
     /**
      * Target models.
-      @type {import("../../record/index.js").default[]} */
+     * @type {import("../../record/index.js").default[]} */
     let targetModels = []
 
     // Only query when at least one model has a non-null foreign key.
@@ -92,7 +92,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
       /**
        * Where args.
-        @type {Record<string, string | number | Array<string | number>>} */
+       * @type {Record<string, string | number | Array<string | number>>} */
       const whereArgs = {}
 
       whereArgs[primaryKey] = foreignKeyValues
@@ -108,7 +108,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       for (const targetModel of targetModels) {
         const primaryKeyValue = /**
                                  * Narrows the runtime value to the documented type.
-                                  @type {string | number} */ (targetModel.readColumn(primaryKey))
+                                 * @type {string | number} */ (targetModel.readColumn(primaryKey))
 
         targetModelsById[primaryKeyValue] = targetModel
       }
@@ -118,7 +118,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     for (const model of modelsToLoad) {
       const foreignKeyValue = /**
                                * Narrows the runtime value to the documented type.
-                                @type {string | number} */ (model.readColumn(foreignKey))
+                               * @type {string | number} */ (model.readColumn(foreignKey))
       const targetModel = targetModelsById[foreignKeyValue]
       const modelRelationship = model.getRelationshipByName(relationshipName)
 
@@ -144,37 +144,37 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Model meta.
-      @type {{foreignKeyValue: number | string | undefined, model: import("../../record/index.js").default, targetType: string | undefined}[]} */
+     * @type {{foreignKeyValue: number | string | undefined, model: import("../../record/index.js").default, targetType: string | undefined}[]} */
     const modelMeta = []
 
     /**
      * Satisfied targets.
-      @type {import("../../record/index.js").default[]} */
+     * @type {import("../../record/index.js").default[]} */
     const satisfiedTargets = []
 
     /**
      * Target models by class name.
-      @type {Record<string, import("../../record/index.js").default[]>} */
+     * @type {Record<string, import("../../record/index.js").default[]>} */
     const targetModelsByClassName = {}
 
     for (const model of this.models) {
       const targetType = /**
                           * Narrows the runtime value to the documented type.
-                           @type {string | undefined} */ (model.readColumn(typeColumn))
+                          * @type {string | undefined} */ (model.readColumn(typeColumn))
       const instanceRelationship = model.getRelationshipByName(relationshipName)
       const targetModelClass = targetType ? configuration.getModelClass(targetType) : undefined
 
       if (targetModelClass && this.selection.isSatisfied({instanceRelationship, targetModelClass, mappingColumns: [primaryKey]})) {
         const loaded = /**
                         * Narrows the runtime value to the documented type.
-                         @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
+                        * @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
 
         if (loaded) {
           satisfiedTargets.push(loaded)
 
           const className = /**
                              * Narrows the runtime value to the documented type.
-                              @type {typeof import("../../record/index.js").default} */ (loaded.constructor).getModelName()
+                             * @type {typeof import("../../record/index.js").default} */ (loaded.constructor).getModelName()
 
           if (!targetModelsByClassName[className]) targetModelsByClassName[className] = []
           targetModelsByClassName[className].push(loaded)
@@ -186,7 +186,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       modelMeta.push({
         foreignKeyValue: /**
                           * Narrows the runtime value to the documented type.
-                           @type {string | number | undefined} */ (model.readColumn(foreignKey)),
+                          * @type {string | number | undefined} */ (model.readColumn(foreignKey)),
         model,
         targetType
       })
@@ -194,7 +194,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Foreign key values by type.
-      @type {Record<string, Array<number | string>>} */
+     * @type {Record<string, Array<number | string>>} */
     const foreignKeyValuesByType = {}
 
     for (const meta of modelMeta) {
@@ -207,12 +207,12 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Target models by type and id.
-      @type {Record<string, Record<number | string, import("../../record/index.js").default>>} */
+     * @type {Record<string, Record<number | string, import("../../record/index.js").default>>} */
     const targetModelsByTypeAndId = {}
 
     /**
      * Target models.
-      @type {import("../../record/index.js").default[]} */
+     * @type {import("../../record/index.js").default[]} */
     const targetModels = []
 
     for (const targetType in foreignKeyValuesByType) {
@@ -222,7 +222,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
       /**
        * Where args.
-        @type {Record<string, string | number | Array<string | number>>} */
+       * @type {Record<string, string | number | Array<string | number>>} */
       const whereArgs = {}
 
       whereArgs[primaryKey] = foreignKeyValuesByType[targetType]
@@ -246,7 +246,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       for (const targetModel of foundTargetModels) {
         const primaryKeyValue = /**
                                  * Narrows the runtime value to the documented type.
-                                  @type {string | number} */ (targetModel.readColumn(primaryKey))
+                                 * @type {string | number} */ (targetModel.readColumn(primaryKey))
 
         targetModelsByTypeAndId[targetType][primaryKeyValue] = targetModel
       }

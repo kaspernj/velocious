@@ -111,7 +111,7 @@ export default class VelociousWebsocketConnection {
 
   /**
    * Runs is closed.
-    @returns {boolean} */
+   * @returns {boolean} */
   isClosed() {
     return this._closed
   }

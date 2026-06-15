@@ -2,21 +2,21 @@
 
 /**
  * LoggingOutputPayload type.
-  @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
+ * @typedef {import("../../configuration-types.js").LoggingOutputPayload} LoggingOutputPayload */
 
 /** Logger file output. */
 export default class LoggerFileOutput {
   /**
    * Configuration.
-    @type {import("../../configuration.js").default | undefined} */
+   * @type {import("../../configuration.js").default | undefined} */
   _configuration = undefined
   /**
    * File path.
-    @type {string | undefined} */
+   * @type {string | undefined} */
   _filePath = undefined
   /**
    * Get configuration.
-    @type {(() => import("../../configuration.js").default | undefined) | undefined} */
+   * @type {(() => import("../../configuration.js").default | undefined) | undefined} */
   _getConfiguration = undefined
 
   /**

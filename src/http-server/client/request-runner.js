@@ -32,10 +32,10 @@ function requestErrorSummary(error, cleanedStackWithHeader) {
 
   const errorCode = typeof /**
                             * Narrows the runtime value to the documented type.
-                             @type {?} */ (error).code === "string"
+                            * @type {?} */ (error).code === "string"
     ? /**
        * Narrows the runtime value to the documented type.
-        @type {?} */ (error).code
+       * @type {?} */ (error).code
     : undefined
   const errorMessage = error.message || String(error)
 
@@ -182,17 +182,17 @@ export default class VelociousHttpServerClientRequestRunner {
         const startTimeMs = Date.now()
         /**
          * Defines timeoutId.
-          @type {ReturnType<typeof setTimeout> | undefined} */
+         * @type {ReturnType<typeof setTimeout> | undefined} */
         let timeoutId
         /**
          * Defines timeoutReject.
-          @type {((error: Error) => void) | undefined} */
+         * @type {((error: Error) => void) | undefined} */
         let timeoutReject
         let timedOut = false
 
         const setRequestTimeoutSeconds = (/**
                                            * Narrows the runtime value to the documented type.
-                                            @type {number | undefined} */ timeoutSeconds) => {
+                                           * @type {number | undefined} */ timeoutSeconds) => {
           if (timeoutId) {
             clearTimeout(timeoutId)
             timeoutId = undefined
@@ -257,7 +257,7 @@ export default class VelociousHttpServerClientRequestRunner {
       const error = ensureError(e)
       const errorWithContext = /**
                                 * Narrows the runtime value to the documented type.
-                                 @type {{velociousContext?: object}} */ (error)
+                                * @type {{velociousContext?: object}} */ (error)
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
       const logDetails = requestErrorLogDetails(error)
 

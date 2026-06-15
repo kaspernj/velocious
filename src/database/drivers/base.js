@@ -139,27 +139,27 @@ function formatElapsedMs(elapsedMs) {
 export default class VelociousDatabaseDriversBase {
   /**
    * Id seq.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   idSeq = undefined
   /**
    * Narrows the runtime value to the documented type.
-    @type {Array<Array<() => void | Promise<void>>>} */
+   * @type {Array<Array<() => void | Promise<void>>>} */
   _afterCommitCallbackFrames
   /**
    * Narrows the runtime value to the documented type.
-    @type {Map<string, Promise<?>>} */
+   * @type {Map<string, Promise<?>>} */
   _schemaCache
   /**
    * Narrows the runtime value to the documented type.
-    @type {(() => void) | undefined} */
+   * @type {(() => void) | undefined} */
   _schemaCacheInvalidator
   /**
    * Narrows the runtime value to the documented type.
-    @type {string | undefined} */
+   * @type {string | undefined} */
   _connectionCheckoutName
   /**
    * Active query.
-    @type {ActiveQueryState | null} */
+   * @type {ActiveQueryState | null} */
   _activeQuery = null
 
   /**
@@ -457,7 +457,7 @@ export default class VelociousDatabaseDriversBase {
     const existingPromise = this._schemaCache.get(cacheKey)
 
     if (existingPromise) {
-      return /** Narrows the runtime value to the documented type. @type {T} */ (this._schemaCacheReturnValue(await existingPromise))
+      return /** @type {T} */ (this._schemaCacheReturnValue(await existingPromise))
     }
 
     const promise = (async () => await callback())()
@@ -465,7 +465,7 @@ export default class VelociousDatabaseDriversBase {
     this._schemaCache.set(cacheKey, promise)
 
     try {
-      return /** Narrows the runtime value to the documented type. @type {T} */ (this._schemaCacheReturnValue(await promise))
+      return /** @type {T} */ (this._schemaCacheReturnValue(await promise))
     } catch (error) {
       if (this._schemaCache.get(cacheKey) === promise) {
         this._schemaCache.delete(cacheKey)
@@ -565,7 +565,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<import("./base-table.js").default>} - Resolves with the table by name or fail.
    */
   async getTableByNameOrFail(name) {
-    return /** Narrows the runtime value to the documented type. @type {import("./base-table.js").default} */ (await this.getTableByName(name, {throwError: true}))
+    return /** @type {import("./base-table.js").default} */ (await this.getTableByName(name, {throwError: true}))
   }
 
   /**
@@ -813,7 +813,7 @@ export default class VelociousDatabaseDriversBase {
     const savePointName = this.generateSavePointName()
     /**
      * Callback frame.
-      @type {Array<() => void | Promise<void>>} */
+     * @type {Array<() => void | Promise<void>>} */
     const callbackFrame = []
     let transactionStarted = false
     let savePointStarted = false

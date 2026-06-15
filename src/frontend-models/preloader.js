@@ -24,15 +24,15 @@ export default class FrontendModelPreloader {
 
     const modelClass = /**
                         * Narrows the runtime value to the documented type.
-                         @type {import("./base.js").FrontendModelClass} */ (models[0].constructor)
+                        * @type {import("./base.js").FrontendModelClass} */ (models[0].constructor)
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec === "object" && "_preload" in queryOrSpec
     const query = isQuery
       ? /**
          * Narrows the runtime value to the documented type.
-          @type {import("./query.js").default<import("./base.js").FrontendModelClass>} */ (queryOrSpec)
+         * @type {import("./query.js").default<import("./base.js").FrontendModelClass>} */ (queryOrSpec)
       : modelClass.preload(/**
                             * Narrows the runtime value to the documented type.
-                             @type {?} */ (queryOrSpec))
+                            * @type {?} */ (queryOrSpec))
 
     const topLevelRelationships = Object.keys(query._preload)
 
@@ -60,7 +60,7 @@ export default class FrontendModelPreloader {
 
     /**
      * Reloaded by id.
-      @type {Map<string, import("./base.js").default>} */
+     * @type {Map<string, import("./base.js").default>} */
     const reloadedById = new Map()
 
     for (const reloadedModel of reloaded) {
@@ -165,6 +165,6 @@ export default class FrontendModelPreloader {
     if (!subPreload || typeof subPreload !== "object") return null
     if (Object.keys(subPreload).length === 0) return null
 
-    return /** Narrows the runtime value to the documented type. @type {import("../database/query/index.js").NestedPreloadRecord} */ (subPreload)
+    return /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (subPreload)
   }
 }

@@ -9,25 +9,25 @@ import useModelClassEvent from "./use-model-class-event.js"
 
 /**
  * FrontendModelClass type.
-  @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
+ * @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
 /**
  * FrontendModelInstance type.
-  @typedef {import("./base.js").default} FrontendModelInstance */
+ * @typedef {import("./base.js").default} FrontendModelInstance */
 /**
  * FrontendModelClassDestroyEventPayload type.
-  @typedef {import("./use-model-class-event.js").FrontendModelDestroyEventPayload} FrontendModelClassDestroyEventPayload */
+ * @typedef {import("./use-model-class-event.js").FrontendModelDestroyEventPayload} FrontendModelClassDestroyEventPayload */
 /**
  * Defines this typedef.
-  @typedef {{id: string}} FrontendModelInstanceDestroyEventPayload */
+ * @typedef {{id: string}} FrontendModelInstanceDestroyEventPayload */
 /**
  * FrontendModelDestroyEventPayload type.
-  @typedef {FrontendModelClassDestroyEventPayload | FrontendModelInstanceDestroyEventPayload} FrontendModelDestroyEventPayload */
+ * @typedef {FrontendModelClassDestroyEventPayload | FrontendModelInstanceDestroyEventPayload} FrontendModelDestroyEventPayload */
 /**
  * UseDestroyedEventOptions type.
-  @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseDestroyedEventOptions */
+ * @typedef {import("./use-model-class-event.js").UseModelClassEventOptions} UseDestroyedEventOptions */
 /**
  * FrontendModelDestroyEventCallback type.
-  @typedef {(payload: FrontendModelDestroyEventPayload) => void} FrontendModelDestroyEventCallback */
+ * @typedef {(payload: FrontendModelDestroyEventPayload) => void} FrontendModelDestroyEventCallback */
 
 /**
  * Runs assert no unknown options.
@@ -94,7 +94,7 @@ function useInstanceDestroyedEvent(modelOrModels, callback, options) {
   const eventCallback = useMemo(() => {
     const wrappedCallback = (/**
                               * Narrows the runtime value to the documented type.
-                               @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
+                              * @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -113,11 +113,11 @@ function useInstanceDestroyedEvent(modelOrModels, callback, options) {
     let closed = false
     /**
      * Unsubscribe callbacks.
-      @type {Array<() => void>} */
+     * @type {Array<() => void>} */
     const unsubscribeCallbacks = []
     const subscriptionCallback = (/**
                                    * Narrows the runtime value to the documented type.
-                                    @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
+                                   * @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

@@ -21,15 +21,15 @@ import HasOnePreloader from "../../query/preloader/has-one.js"
 export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
    * Auto save.
-    @type {boolean | undefined} */
+   * @type {boolean | undefined} */
   _autoSave = undefined
   /**
    * Preloaded.
-    @type {boolean | undefined} */
+   * @type {boolean | undefined} */
   _preloaded = undefined
   /**
    * Loaded.
-    @type {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} */
+   * @type {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} */
   _loaded = undefined
 
   /**
@@ -128,9 +128,9 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     const configuration = relationshipDef.getConfiguration()
     const cohort = /**
                     * Narrows the runtime value to the documented type.
-                     @type {Array<import("../index.js").default> | undefined} */ (/**
+                    * @type {Array<import("../index.js").default> | undefined} */ (/**
                                                                                    * Narrows the runtime value to the documented type.
-                                                                                    @type {?} */ (this.model)._loadCohort)
+                                                                                   * @type {?} */ (this.model)._loadCohort)
 
     if (!configuration.getAutoload() || !relationshipDef.getAutoload() || !cohort || cohort.length <= 1) {
       return false
@@ -139,10 +139,10 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     const relationshipName = relationshipDef.getRelationshipName()
     const OwnerModelClass = /**
                              * Narrows the runtime value to the documented type.
-                              @type {?} */ (this.model).constructor
+                             * @type {?} */ (this.model).constructor
     /**
      * Batch.
-      @type {Array<import("../index.js").default>} */
+     * @type {Array<import("../index.js").default>} */
     const batch = []
 
     // Exact same class, persisted, no existing in-memory relationship state.
@@ -168,21 +168,21 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     if (type == "belongsTo") {
       const belongsToRelationship = /**
                                      * Narrows the runtime value to the documented type.
-                                      @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
+                                     * @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
       const preloader = new BelongsToPreloader({models: batch, relationship: belongsToRelationship})
 
       await preloader.run()
     } else if (type == "hasMany") {
       const hasManyRelationship = /**
                                    * Narrows the runtime value to the documented type.
-                                    @type {import("../relationships/has-many.js").default} */ (relationshipDef)
+                                   * @type {import("../relationships/has-many.js").default} */ (relationshipDef)
       const preloader = new HasManyPreloader({models: batch, relationship: hasManyRelationship})
 
       await preloader.run()
     } else if (type == "hasOne") {
       const hasOneRelationship = /**
                                   * Narrows the runtime value to the documented type.
-                                   @type {import("../relationships/has-one.js").default} */ (relationshipDef)
+                                  * @type {import("../relationships/has-one.js").default} */ (relationshipDef)
       const preloader = new HasOnePreloader({models: batch, relationship: hasOneRelationship})
 
       await preloader.run()
@@ -276,7 +276,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   getTargetModelClass() {
     const TargetModelClass = /**
                               * Narrows the runtime value to the documented type.
-                               @type {TMC} */ (this.getRelationship().getTargetModelClass())
+                              * @type {TMC} */ (this.getRelationship().getTargetModelClass())
 
     return TargetModelClass
   }

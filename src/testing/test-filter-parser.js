@@ -74,11 +74,11 @@ export function parseFilters(processArgs) {
 
   /**
    * Defines groups.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   let groups
   /**
    * Defines groupNumber.
-    @type {number | undefined} */
+   * @type {number | undefined} */
   let groupNumber
 
   let inRestArgs = false

@@ -6,15 +6,15 @@
 export default class MailerDelivery {
   /**
    * Narrows the runtime value to the documented type.
-    @type {import("./base.js").VelociousMailerBase} */
+   * @type {import("./base.js").VelociousMailerBase} */
   mailer
   /**
    * Narrows the runtime value to the documented type.
-    @type {Promise<?>} */
+   * @type {Promise<?>} */
   actionPromise
   /**
    * Narrows the runtime value to the documented type.
-    @type {string} */
+   * @type {string} */
   actionName
 
   /**
@@ -37,7 +37,7 @@ export default class MailerDelivery {
   async buildPayload() {
     await this.actionPromise
 
-    return /** Narrows the runtime value to the documented type. @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
+    return /** @type {import("./index.js").MailerDeliveryPayload} */ (await this.mailer._buildPayload())
   }
 
   /**

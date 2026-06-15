@@ -47,7 +47,7 @@ export function normalizeWithCount(spec) {
   if (typeof spec === "object") {
     /**
      * Entries.
-      @type {WithCountEntry[]} */
+     * @type {WithCountEntry[]} */
     const entries = []
 
     for (const [key, value] of Object.entries(spec)) {
@@ -63,7 +63,7 @@ export function normalizeWithCount(spec) {
       if (typeof value === "object" && value !== null) {
         /**
          * Options.
-          @type {{relationship?: string, where?: Record<string, ?>}} */
+         * @type {{relationship?: string, where?: Record<string, ?>}} */
         const options = value
         entries.push({
           attributeName: key,
@@ -112,7 +112,7 @@ export async function runWithCount({models, modelClass, entries}) {
   const primaryKey = modelClass.primaryKey()
   const parentIds = models.map((model) => /**
                                            * Narrows the runtime value to the documented type.
-                                            @type {string | number} */ (model.readColumn(primaryKey)))
+                                           * @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     const counts = await countForEntry({entries, entry, modelClass, parentIds})
@@ -120,14 +120,14 @@ export async function runWithCount({models, modelClass, entries}) {
     for (const model of models) {
       const modelPrimaryKeyValue = /**
                                     * Narrows the runtime value to the documented type.
-                                     @type {string | number} */ (model.readColumn(primaryKey))
+                                    * @type {string | number} */ (model.readColumn(primaryKey))
       // Tolerate driver differences in numeric return types: SQLite
       // returns integers as JS numbers, but MySQL's raw driver can
       // return count primary keys as strings. Try both.
       const resolvedCount = counts.has(modelPrimaryKeyValue)
         ? /**
            * Narrows the runtime value to the documented type.
-            @type {number} */ (counts.get(modelPrimaryKeyValue))
+           * @type {number} */ (counts.get(modelPrimaryKeyValue))
         : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
 
       // Counts go on the record's dedicated association-count map,
@@ -170,7 +170,7 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   const foreignKey = relationship.getForeignKey()
   /**
    * Where conditions.
-    @type {Record<string, ?>} */
+   * @type {Record<string, ?>} */
   const whereConditions = {[foreignKey]: parentIds}
 
   if (relationship.getPolymorphic && relationship.getPolymorphic()) {
@@ -198,19 +198,19 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
 
   const rows = /**
                 * Narrows the runtime value to the documented type.
-                 @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
+                * @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
     await countQuery._executeQuery()
   )
 
   /**
    * Counts.
-    @type {Map<string | number, number>} */
+   * @type {Map<string | number, number>} */
   const counts = new Map()
 
   for (const row of rows) {
     const parentId = /**
                       * Narrows the runtime value to the documented type.
-                       @type {string | number} */ (row.parent_id)
+                      * @type {string | number} */ (row.parent_id)
     const countValue = Number(row.count_value) || 0
     counts.set(parentId, countValue)
   }

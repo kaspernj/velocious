@@ -8,20 +8,20 @@ import restArgsError from "./utils/rest-args-error.js"
 
 /**
  * LogLevel type.
-  @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
+ * @typedef {"debug-low-level" | "debug" | "info" | "warn" | "error"} LogLevel */
 
 const DEFAULT_LOGGING_CONFIGURATION = {
   console: true,
   file: false,
   /**
    * Types the following value.
-    @type {LogLevel[]} */
+   * @type {LogLevel[]} */
   levels: ["info", "warn", "error"]
 }
 
 /**
  * Level order.
-  @type {LogLevel[]} */
+ * @type {LogLevel[]} */
 const LEVEL_ORDER = ["debug-low-level", "debug", "info", "warn", "error"]
 
 /**
@@ -190,7 +190,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
   if (Array.isArray(loggingConfiguration.loggers)) {
     /**
      * Logger outputs.
-      @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+     * @type {import("./configuration-types.js").LoggingOutputConfig[]} */
     const loggerOutputs = []
 
     for (const logger of loggingConfiguration.loggers) {
@@ -198,7 +198,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
 
       const loggerConfig = /**
                             * Types the following value.
-                             @type {?} */ (logger)
+                            * @type {?} */ (logger)
 
       if (typeof loggerConfig.toOutputConfig === "function") {
         loggerOutputs.push(loggerConfig.toOutputConfig({configuration}))
@@ -230,7 +230,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
 
   /**
    * Outputs.
-    @type {import("./configuration-types.js").LoggingOutputConfig[]} */
+   * @type {import("./configuration-types.js").LoggingOutputConfig[]} */
   const outputs = []
   if (loggingConfiguration.console !== false) {
     outputs.push({
@@ -319,15 +319,15 @@ async function writeLog({subject, level, messages, configuration, loggingConfigu
   const writes = []
   /**
    * Types the following value.
-    @type {Array<?> | undefined} */
+   * @type {Array<?> | undefined} */
   let resolvedMessages
   /**
    * Types the following value.
-    @type {string | undefined} */
+   * @type {string | undefined} */
   let message
   /**
    * Payload.
-    @type {import("./configuration-types.js").LoggingOutputPayload | null} */
+   * @type {import("./configuration-types.js").LoggingOutputPayload | null} */
   let payload = null
 
   for (const outputConfig of enabledOutputs) {
@@ -385,7 +385,7 @@ export default class Logger {
     if (!this._configuration) {
       const objectWithConfig = /**
                                 * Types the following value.
-                                 @type {{configuration?: import("./configuration.js").default}} */ (this._object)
+                                * @type {{configuration?: import("./configuration.js").default}} */ (this._object)
       this._configuration = objectWithConfig?.configuration || currentConfiguration()
     }
 
