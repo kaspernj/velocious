@@ -3,6 +3,8 @@
 import DatabaseRecord from "../index.js"
 import RecordAttachmentsStore from "./store.js"
 
+const INTEGER_STRING_PATTERN = /^-?\d+$/
+
 /** Frontend-readable metadata row for `velocious_attachments`. */
 export default class VelociousAttachment extends DatabaseRecord {
   /**
@@ -81,11 +83,37 @@ export default class VelociousAttachment extends DatabaseRecord {
    * Returns the created-at timestamp in milliseconds.
    * @returns {number} - Created-at timestamp in milliseconds.
    */
-  createdAtMs() { return this.readAttribute("createdAtMs") }
+  createdAtMs() { return this.timestampMsAttribute("createdAtMs") }
 
   /**
    * Returns the updated-at timestamp in milliseconds.
    * @returns {number} - Updated-at timestamp in milliseconds.
    */
-  updatedAtMs() { return this.readAttribute("updatedAtMs") }
+  updatedAtMs() { return this.timestampMsAttribute("updatedAtMs") }
+
+  /**
+   * Returns a checked millisecond timestamp attribute value.
+   * @param {"createdAtMs" | "updatedAtMs"} attributeName - Timestamp attribute name.
+   * @returns {number} - Millisecond timestamp.
+   */
+  timestampMsAttribute(attributeName) {
+    const value = this.readAttribute(attributeName)
+    let timestampMs
+
+    if (typeof value === "number") {
+      timestampMs = value
+    } else if (typeof value === "bigint") {
+      timestampMs = Number(value)
+    } else if (typeof value === "string" && INTEGER_STRING_PATTERN.test(value)) {
+      timestampMs = Number(value)
+    } else {
+      throw new Error(`Expected ${attributeName} to be a safe millisecond timestamp`)
+    }
+
+    if (!Number.isSafeInteger(timestampMs)) {
+      throw new Error(`Expected ${attributeName} to be a safe millisecond timestamp`)
+    }
+
+    return timestampMs
+  }
 }

@@ -1,5 +1,7 @@
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
+import Configuration from "../../../src/configuration.js"
+import VelociousAttachment from "../../../src/database/record/attachments/attachment-record.js"
 
 describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   class InlineMemoryAttachmentDriver {
@@ -119,6 +121,20 @@ describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transactio
     expect(typeof attachmentUrl).toEqual("string")
     expect(attachmentUrl.startsWith("file://")).toEqual(true)
     expect(downloadedAttachment.url()).toEqual(attachmentUrl)
+  })
+
+  it("normalizes driver string timestamp values for attachment metadata records", async () => {
+    await VelociousAttachment.initializeRecord({configuration: Configuration.current()})
+
+    const attachment = new VelociousAttachment()
+
+    attachment.loadExistingRecord({
+      created_at_ms: "1700000000000",
+      updated_at_ms: "1700000000001"
+    })
+
+    expect(attachment.createdAtMs()).toEqual(1700000000000)
+    expect(attachment.updatedAtMs()).toEqual(1700000000001)
   })
 
   it("keeps only the latest queued has-one attachment before save", async () => {
