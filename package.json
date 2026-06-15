@@ -98,7 +98,7 @@
     "esbuild": "^0.28.0",
     "eslint": "^10.0.1",
     "eslint-plugin-jsdoc": "^63.0.0",
-    "eslint-plugin-jsdoc-tag-lines": "git+https://github.com/kaspernj/eslint-plugin-jsdoc-tag-lines.git#extract-jsdoc-tag-lines-rule",
+    "eslint-plugin-jsdoc-tag-lines": "^1.0.1",
     "fallow": "2.92.1",
     "globals": "^17.0.0",
     "mssql": "^12.0.0",
