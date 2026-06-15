@@ -282,6 +282,14 @@ class ScopedTaskFrontendResource extends FrontendModelBaseResource {
   indexQuery(options = {}) {
     return /** @type {import("../../src/database/query/model-class-query.js").default<typeof Task>} */ (super.indexQuery(options).where({name: ["Scoped Alpha", "Scoped Bravo"]}))
   }
+
+  /** @returns {{includePagination: false, includeSort: false}} - Index-query options for count. */
+  countIndexQueryOptions() {
+    return {
+      includePagination: false,
+      includeSort: false
+    }
+  }
 }
 
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
@@ -760,7 +768,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
-  it("lets resources customize frontendIndex queries while count ignores pagination and sort", async () => {
+  it("lets resources customize frontendIndex queries and count options", async () => {
     await Dummy.run(async () => {
       const previousTaskResource = backendProjects[0].frontendModels.Task
 

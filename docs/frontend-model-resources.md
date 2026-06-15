@@ -18,7 +18,8 @@ Without a resource definition, frontend models should not silently work.
 - Resource `attachments` defines attachment helpers generated on frontend models.
 
 ## Custom index records
-- Override `indexQuery(options)` when the default index behavior is correct but the resource needs an additional scope. Call `super.indexQuery(options)` and add the resource-specific filters, joins, or select data. The `options` object can include `includePagination` and `includeSort`; the built-in aggregate `count()` disables both so it counts the full filtered scope.
+- Override `indexQuery(options)` when the default index behavior is correct but the resource needs an additional scope. Call `super.indexQuery(options)` and add the resource-specific filters, joins, or select data. The `options` object can include `includePagination` and `includeSort`.
+- Override `countIndexQueryOptions()` when a resource-specific `count()` needs different index-query options, for example `{includePagination: false, includeSort: false}` to count the full filtered scope while keeping paginated records.
 - Override `applyFrontendModelIndexPagination({controller, pagination, query})`, `applyFrontendModelIndexSearch({controller, query, search})`, or `applyFrontendModelIndexSort({controller, query, sort})` when only one part of the default index query needs resource-specific behavior. Delegate back to the controller method for the default behavior, for example `controller.applyFrontendModelSearch({query, search})`.
 - Resources that override `records()` opt out of aggregate `count()` automatically because Velocious cannot infer whether the default query still matches the custom records.
 - Override `count()` on the resource when a custom index needs frontend-model `count()` support.

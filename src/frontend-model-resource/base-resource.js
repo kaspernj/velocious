@@ -528,11 +528,19 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
+   * Runs index query options for count.
+   * @returns {FrontendModelResourceIndexQueryOptions} - Index query options for count.
+   */
+  countIndexQueryOptions() {
+    return {}
+  }
+
+  /**
    * Runs count.
    * @returns {Promise<number>} - Records count for index action.
    */
   async count() {
-    return await this.indexQuery({includePagination: false, includeSort: false}).count()
+    return await this.indexQuery(this.countIndexQueryOptions()).count()
   }
 
   /**
