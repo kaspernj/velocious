@@ -292,6 +292,34 @@ class ScopedTaskFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+/** Task resource exposing description only when explicitly requested. */
+class DescriptionPluckTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id", {name: "description", selectedByDefault: false}],
+      builtInCollectionCommands: ["index"]
+    }
+  }
+}
+
+/** Task resource using the legacy all-model-columns serialization default. */
+class AllColumnsPluckTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: [],
+      builtInCollectionCommands: ["index"]
+    }
+  }
+}
+
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("does not override scoped distinct when distinct param is omitted", async () => {
     await withTaskReadDistinctAbilityScope(async () => {
@@ -1072,6 +1100,77 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("rejects pluck params for model columns not exposed by the resource", async () => {
+    await Dummy.run(async () => {
+      const task = await Task.create({
+        description: "Hidden task description",
+        name: "Hidden pluck task",
+        projectId: (await Project.create({name: "Hidden pluck project"})).id()
+      })
+
+      const payload = await postSharedTaskFrontendModelCommand("index", {
+        pluck: ["description"],
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Unknown pluck column/)
+      expect(payload.values).toEqual(undefined)
+    })
+  })
+
+  it("allows pluck params for exposed non-default resource attributes", async () => {
+    await Dummy.run(async () => {
+      const previousTaskResource = backendProjects[0].frontendModels.Task
+
+      backendProjects[0].frontendModels.Task = DescriptionPluckTaskFrontendResource
+
+      try {
+        const task = await Task.create({
+          description: "Exposed task description",
+          name: "Exposed pluck task",
+          projectId: (await Project.create({name: "Exposed pluck project"})).id()
+        })
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {
+          pluck: ["description"],
+          where: {id: task.id()}
+        })
+
+        expect(payload.status).toEqual("success")
+        expect(payload.values).toEqual(["Exposed task description"])
+      } finally {
+        backendProjects[0].frontendModels.Task = previousTaskResource
+      }
+    })
+  })
+
+  it("allows pluck params for model columns when the resource exposes all default model attributes", async () => {
+    await Dummy.run(async () => {
+      const previousTaskResource = backendProjects[0].frontendModels.Task
+
+      backendProjects[0].frontendModels.Task = AllColumnsPluckTaskFrontendResource
+
+      try {
+        const task = await Task.create({
+          description: "Default task description",
+          name: "Default pluck task",
+          projectId: (await Project.create({name: "Default pluck project"})).id()
+        })
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {
+          pluck: ["description"],
+          where: {id: task.id()}
+        })
+
+        expect(payload.status).toEqual("success")
+        expect(payload.values).toEqual(["Default task description"])
+      } finally {
+        backendProjects[0].frontendModels.Task = previousTaskResource
+      }
+    })
+  })
+
   it("applies relationship-path pluck params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const firstTask = await createTaskWithProject({projectName: "Pluck project A", taskName: "Pluck relation A"})
@@ -1086,6 +1185,25 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(payload.values.length).toEqual(2)
       expect(payload.values[0]).not.toEqual(payload.values[1])
+    })
+  })
+
+  it("rejects relationship-path pluck params for columns not exposed by the related resource", async () => {
+    await Dummy.run(async () => {
+      const task = await createTaskWithProject({
+        creatingUserReference: "hidden-owner-reference",
+        projectName: "Hidden relation pluck project",
+        taskName: "Hidden relation pluck task"
+      })
+
+      const payload = await postSharedTaskFrontendModelCommand("index", {
+        pluck: {project: ["creatingUserReference"]},
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Unknown pluck column/)
+      expect(payload.values).toEqual(undefined)
     })
   })
 

@@ -1244,7 +1244,11 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelPluck() {
     try {
-      return normalizeQueryPluck(this.frontendModelParams().pluck)
+      const pluck = normalizeQueryPluck(this.frontendModelParams().pluck)
+
+      this.validateFrontendModelPluckDefinitions(pluck)
+
+      return pluck
     } catch (error) {
       throw frontendModelValidationErrorForError(error)
     }
@@ -1650,7 +1654,10 @@ export default class FrontendModelController extends Controller {
         modelClass,
         path: pluckEntry.path
       })
-      const columnName = this.resolveFrontendModelColumnName(targetModelClass, pluckEntry.column)
+      const columnName = this.resolveFrontendModelPluckColumnName({
+        attributeName: pluckEntry.column,
+        modelClass: targetModelClass
+      })
 
       if (!columnName) {
         throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
@@ -1685,6 +1692,95 @@ export default class FrontendModelController extends Controller {
 
       return aliases.map((alias) => rowHash[alias])
     })
+  }
+
+  /**
+   * Resolves a frontend-model pluck attribute to a database column.
+   * @param {{attributeName: string, modelClass: typeof import("./database/record/index.js").default}} args - Arguments.
+   * @returns {string | undefined} Resolved DB column name.
+   */
+  resolveFrontendModelPluckColumnName({attributeName, modelClass}) {
+    const attributeNames = this.frontendModelResourceAttributeNamesForModelClass(modelClass)
+
+    if (attributeNames && !attributeNames.has(attributeName)) return undefined
+
+    return this.resolveFrontendModelColumnName(modelClass, attributeName)
+  }
+
+  /**
+   * Runs exposed frontend-model resource attribute names for a model class.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {Set<string> | null} Exposed resource attribute names, or null when the resource exposes all DB-backed model attributes.
+   */
+  frontendModelResourceAttributeNamesForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+
+    if (!frontendModelResource) return new Set()
+
+    const attributes = frontendModelResource.resourceConfiguration.attributes
+
+    if (!attributes) return null
+
+    const attributeNames = this.frontendModelResourceAttributeNames(attributes)
+
+    if (attributeNames.size < 1) return null
+
+    return attributeNames
+  }
+
+  /**
+   * Runs exposed frontend-model resource attribute names.
+   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration["attributes"]} attributes - Resource attributes.
+   * @returns {Set<string>} Exposed resource attribute names.
+   */
+  frontendModelResourceAttributeNames(attributes) {
+    /** @type {Set<string>} */
+    const attributeNames = new Set()
+
+    if (Array.isArray(attributes)) {
+      for (const attribute of attributes) {
+        if (typeof attribute === "string") {
+          attributeNames.add(attribute)
+          continue
+        }
+
+        const attributeConfig = /** @type {import("./configuration-types.js").FrontendModelAttributeConfiguration} */ (attribute)
+
+        if (typeof attributeConfig.name !== "string" || attributeConfig.name.length < 1) {
+          throw new Error("Frontend-model resource attribute array entries must be strings or configs with a name.")
+        }
+
+        attributeNames.add(attributeConfig.name)
+      }
+
+      return attributeNames
+    }
+
+    return new Set(Object.keys(attributes))
+  }
+
+  /**
+   * Validates frontend-model pluck definitions against exposed resource attributes.
+   * @param {FrontendModelPluck[]} pluck - Pluck descriptors.
+   * @returns {void}
+   */
+  validateFrontendModelPluckDefinitions(pluck) {
+    const modelClass = this.frontendModelClass()
+
+    for (const pluckEntry of pluck) {
+      const targetModelClass = this.frontendModelSearchTargetModelClass({
+        modelClass,
+        path: pluckEntry.path
+      })
+      const columnName = this.resolveFrontendModelPluckColumnName({
+        attributeName: pluckEntry.column,
+        modelClass: targetModelClass
+      })
+
+      if (!columnName) {
+        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+      }
+    }
   }
 
   /**

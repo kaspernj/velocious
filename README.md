@@ -447,7 +447,7 @@ Frontend-model `group(...)` is attribute/path based and does not accept raw SQL 
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
 Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
 Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
-Frontend-model `pluck(...)` validates attribute/path descriptors against configured model metadata and does not accept SQL fragments.
+Frontend-model `pluck(...)` validates attribute/path descriptors against configured resource attributes and does not accept SQL fragments or hidden raw model columns when the resource declares an explicit attribute list.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 
