@@ -5,7 +5,7 @@ import Controller from "./controller.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
 import Response from "./http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-models/built-in-resources.js"
-import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath} from "./frontend-models/resource-definition.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
@@ -147,6 +147,14 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
  *   expectedError: boolean,
  *   frontendModelEndpoint: true
  * }} FrontendModelEndpointErrorContext
+ */
+
+/**
+ * FrontendModelIndexQueryOptions type.
+ * @typedef {object} FrontendModelIndexQueryOptions
+ * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
+ * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
+ * @property {import("./frontend-model-resource/base-resource.js").default} [resource] - Resource providing query hooks.
  */
 
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
@@ -772,14 +780,10 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model resource model class.
    * @param {{modelName: string, resourceClass: import("./configuration-types.js").FrontendModelResourceClassType}} frontendModelResource - Frontend model resource configuration.
-   * @returns {typeof import("./database/record/index.js").default | null} - Backing record class, when available.
+   * @returns {typeof import("./database/record/index.js").default} - Backing record class.
    */
   frontendModelResourceModelClass(frontendModelResource) {
-    const resourceModelClass = frontendModelResource.resourceClass.ModelClass
-
-    if (resourceModelClass) return resourceModelClass
-
-    return this.getConfiguration().getModelClasses()[frontendModelResource.modelName] || null
+    return frontendModelResource.resourceClass.modelClass()
   }
 
   /**
@@ -791,18 +795,7 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) return null
 
-    const resourceModelClass = this.frontendModelResourceModelClass(frontendModelResource)
-
-    if (resourceModelClass) return resourceModelClass
-
-    const modelClasses = this.getConfiguration().getModelClasses()
-    const modelClass = modelClasses[frontendModelResource.modelName]
-
-    if (!modelClass) {
-      throw new Error(`Frontend model '${frontendModelResource.modelName}' is configured for '${this.frontendModelParams().controller}', but no model class was registered. Registered models: ${Object.keys(modelClasses).join(", ")}`)
-    }
-
-    return modelClass
+    return this.frontendModelResourceModelClass(frontendModelResource)
   }
 
   /**
@@ -835,13 +828,7 @@ export default class FrontendModelController extends Controller {
   async ensureFrontendModelRecordClassInitialized(modelClass) {
     if (!modelClass || modelClass.isInitialized()) return
 
-    const configuration = this.getConfiguration()
-
-    if (typeof modelClass.ensureInitialized === "function") {
-      await modelClass.ensureInitialized({configuration})
-    } else if (typeof modelClass.initializeRecord === "function") {
-      await modelClass.initializeRecord({configuration})
-    }
+    await modelClass.ensureInitialized({configuration: this.getConfiguration()})
   }
 
   /**
@@ -1000,7 +987,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model ability action.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {string} - Ability action configured for the frontend action.
    */
   frontendModelAbilityAction(action) {
@@ -1018,7 +1005,7 @@ export default class FrontendModelController extends Controller {
 
     const abilityKey = action === "attach"
       ? "update"
-      : ((action === "download" || action === "url") ? "find" : action)
+      : ((action === "download" || action === "url" || action === "attachmentList") ? "find" : action)
     const abilityAction = abilities[abilityKey]
 
     if (typeof abilityAction !== "string" || abilityAction.length < 1) {
@@ -1030,7 +1017,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model ability authorized query.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
    */
   frontendModelAbilityAuthorizedQuery(action) {
@@ -1041,7 +1028,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model authorized query.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
    */
   frontendModelAuthorizedQuery(action) {
@@ -1071,7 +1058,7 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model filter authorized models.
    * @param {object} args - Arguments.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} args.action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} args.action - Frontend action.
    * @param {import("./database/record/index.js").default[]} args.models - Candidate models.
    * @returns {Promise<import("./database/record/index.js").default[]>} - Authorized models.
    */
@@ -1091,7 +1078,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs run frontend model before action.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {Promise<boolean>} - Whether action should continue.
    */
   async runFrontendModelBeforeAction(action) {
@@ -1102,7 +1089,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model find record.
-   * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @param {string | number} id - Record id.
    * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
    */
@@ -1253,7 +1240,11 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelPluck() {
     try {
-      return normalizeQueryPluck(this.frontendModelParams().pluck)
+      const pluck = normalizeQueryPluck(this.frontendModelParams().pluck)
+
+      this.validateFrontendModelPluckDefinitions(pluck)
+
+      return pluck
     } catch (error) {
       throw frontendModelValidationErrorForError(error)
     }
@@ -1301,9 +1292,7 @@ export default class FrontendModelController extends Controller {
    * Resolve an entry from the frontend-model `abilities` payload to
    * its backend model class by looking up the resource by modelName
    * across all configured backend projects. Returns null when no
-   * resource matches — the spec entry is then silently ignored so a
-   * caller requesting abilities for a model they cannot resolve does
-   * not crash the request.
+   * resource matches the user-provided ability entry.
    * @param {string} modelName
    * @returns {typeof import("./database/record/index.js").default | null}
    */
@@ -1311,23 +1300,20 @@ export default class FrontendModelController extends Controller {
     if (typeof modelName !== "string" || modelName.length === 0) return null
 
     const configuration = this.getConfiguration()
-    const backendProjects = configuration?.getBackendProjects?.() ?? []
+    const backendProjects = configuration.getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      const frontendModels = backendProject?.frontendModels
-      if (!frontendModels || typeof frontendModels !== "object") continue
-
+      const frontendModels = frontendModelResourcesForBackendProject(backendProject)
       const resourceDefinition = frontendModels[modelName]
+
       if (!resourceDefinition) continue
 
       const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
-      if (!resourceClass) continue
+      if (!resourceClass) {
+        throw new Error(`Frontend model '${modelName}' resource definition must be a FrontendModelBaseResource subclass.`)
+      }
 
-      const modelClass = typeof resourceClass.modelClass === "function"
-        ? resourceClass.modelClass()
-        : resourceClass.ModelClass
-
-      if (typeof modelClass === "function") return modelClass
+      return resourceClass.modelClass()
     }
 
     return null
@@ -1361,24 +1347,15 @@ export default class FrontendModelController extends Controller {
       if (seen.has(record)) return
       seen.add(record)
 
-      const ModelClass = typeof record.getModelClass === "function"
-        ? record.getModelClass()
-        : null
-      if (ModelClass && typeof ModelClass.getModelName === "function" && ModelClass.getModelName() === modelName) {
+      const ModelClass = record.getModelClass()
+      if (ModelClass.getModelName() === modelName) {
         out.push(record)
       }
 
-      const relationshipsMap = typeof ModelClass?.getRelationshipsMap === "function"
-        ? ModelClass.getRelationshipsMap()
-        : null
-      if (!relationshipsMap) return
+      const relationshipsMap = ModelClass.getRelationshipsMap()
 
       for (const relationshipName of Object.keys(relationshipsMap)) {
-        const relationship = typeof record.getRelationshipByName === "function"
-          ? record.getRelationshipByName(relationshipName)
-          : null
-        if (!relationship || typeof relationship.getLoadedOrUndefined !== "function") continue
-
+        const relationship = record.getRelationshipByName(relationshipName)
         const loaded = relationship.getLoadedOrUndefined()
         if (loaded === undefined) continue
 
@@ -1512,9 +1489,11 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model index query.
+   * @param {FrontendModelIndexQueryOptions} [options] - Index query options.
    * @returns {import("./database/query/model-class-query.js").default} - Frontend index query with normalized params applied.
    */
-  frontendModelIndexQuery() {
+  frontendModelIndexQuery(options = {}) {
+    const {includePagination = true, includeSort = true, resource = this.frontendModelResourceInstance()} = options
     let query = this.frontendModelAuthorizedQuery("index")
     const preload = this.frontendModelPreload()
 
@@ -1527,7 +1506,9 @@ export default class FrontendModelController extends Controller {
     const pagination = this.frontendModelPagination()
     const distinct = this.frontendModelDistinct()
 
-    this.applyFrontendModelPagination({pagination, query})
+    if (includePagination) {
+      resource.applyFrontendModelIndexPagination({controller: this, pagination, query})
+    }
 
     if (distinct !== null) {
       query.distinct(distinct)
@@ -1550,7 +1531,7 @@ export default class FrontendModelController extends Controller {
     const searches = this.frontendModelSearches()
 
     for (const search of searches) {
-      this.applyFrontendModelSearch({query, search})
+      resource.applyFrontendModelIndexSearch({controller: this, query, search})
     }
 
     const groups = this.frontendModelGroup()
@@ -1565,9 +1546,9 @@ export default class FrontendModelController extends Controller {
 
     const sorts = this.frontendModelSort()
 
-    if (sorts.length > 0) {
+    if (includeSort && sorts.length > 0) {
       for (const sort of sorts) {
-        this.applyFrontendModelSort({query, sort})
+        resource.applyFrontendModelIndexSort({controller: this, query, sort})
       }
     }
 
@@ -1694,6 +1675,95 @@ export default class FrontendModelController extends Controller {
 
       return aliases.map((alias) => rowHash[alias])
     })
+  }
+
+  /**
+   * Resolves a frontend-model pluck attribute to a database column.
+   * @param {{attributeName: string, modelClass: typeof import("./database/record/index.js").default}} args - Arguments.
+   * @returns {string | undefined} Resolved DB column name.
+   */
+  resolveFrontendModelPluckColumnName({attributeName, modelClass}) {
+    const attributeNames = this.frontendModelResourceAttributeNamesForModelClass(modelClass)
+
+    if (attributeNames && !attributeNames.has(attributeName)) return undefined
+
+    return this.resolveFrontendModelColumnName(modelClass, attributeName)
+  }
+
+  /**
+   * Runs exposed frontend-model resource attribute names for a model class.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @returns {Set<string> | null} Exposed resource attribute names, or null when the resource exposes all DB-backed model attributes.
+   */
+  frontendModelResourceAttributeNamesForModelClass(modelClass) {
+    const frontendModelResource = this.frontendModelResourceConfigurationForModelClass(modelClass)
+
+    if (!frontendModelResource) return new Set()
+
+    const attributes = frontendModelResource.resourceConfiguration.attributes
+
+    if (!attributes) return null
+
+    const attributeNames = this.frontendModelResourceAttributeNames(attributes)
+
+    if (attributeNames.size < 1) return null
+
+    return attributeNames
+  }
+
+  /**
+   * Runs exposed frontend-model resource attribute names.
+   * @param {import("./configuration-types.js").FrontendModelResourceConfiguration["attributes"]} attributes - Resource attributes.
+   * @returns {Set<string>} Exposed resource attribute names.
+   */
+  frontendModelResourceAttributeNames(attributes) {
+    /** @type {Set<string>} */
+    const attributeNames = new Set()
+
+    if (Array.isArray(attributes)) {
+      for (const attribute of attributes) {
+        if (typeof attribute === "string") {
+          attributeNames.add(attribute)
+          continue
+        }
+
+        const attributeConfig = /** @type {import("./configuration-types.js").FrontendModelAttributeConfiguration} */ (attribute)
+
+        if (typeof attributeConfig.name !== "string" || attributeConfig.name.length < 1) {
+          throw new Error("Frontend-model resource attribute array entries must be strings or configs with a name.")
+        }
+
+        attributeNames.add(attributeConfig.name)
+      }
+
+      return attributeNames
+    }
+
+    return new Set(Object.keys(attributes))
+  }
+
+  /**
+   * Validates frontend-model pluck definitions against exposed resource attributes.
+   * @param {FrontendModelPluck[]} pluck - Pluck descriptors.
+   * @returns {void}
+   */
+  validateFrontendModelPluckDefinitions(pluck) {
+    const modelClass = this.frontendModelClass()
+
+    for (const pluckEntry of pluck) {
+      const targetModelClass = this.frontendModelSearchTargetModelClass({
+        modelClass,
+        path: pluckEntry.path
+      })
+      const columnName = this.resolveFrontendModelPluckColumnName({
+        attributeName: pluckEntry.column,
+        modelClass: targetModelClass
+      })
+
+      if (!columnName) {
+        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+      }
+    }
   }
 
   /**
@@ -1944,6 +2014,8 @@ export default class FrontendModelController extends Controller {
           return typeof name === "string" && name.length > 0 ? name : null
         })
         .filter((entry) => typeof entry === "string")
+
+      if (attributeNames.length === 0) return null
 
       return new Set(attributeNames)
     }
@@ -2612,7 +2684,7 @@ export default class FrontendModelController extends Controller {
     }
 
     const configuration = this.getConfiguration()
-    const backendProjects = configuration.getBackendProjects?.() || []
+    const backendProjects = configuration.getBackendProjects()
     const modelClassName = /**
                             * Types the following value.
                             * @type {typeof import("./database/record/index.js").default} */ (model.constructor).getModelName()
@@ -2632,9 +2704,7 @@ export default class FrontendModelController extends Controller {
                        * @type {typeof import("./database/record/index.js").default} */ (model.constructor),
           modelName: modelClassName,
           params: {},
-          resourceConfiguration: /**
-                                  * Types the following value.
-                                  * @type {import("./configuration-types.js").FrontendModelResourceConfiguration | undefined} */ (typeof resourceClass.resourceConfig === "function" ? resourceClass.resourceConfig() : undefined)
+          resourceConfiguration: resourceClass.resourceConfig()
         })
       }
     }
@@ -2842,15 +2912,9 @@ export default class FrontendModelController extends Controller {
     for (const [modelIndex, model] of models.entries()) {
       const serializedAttributes = await this.serializeFrontendModelAttributes(model)
       const preloadedRelationships = preloadedRelationshipsPerModel[modelIndex]
-      const associationCounts = typeof model.associationCounts === "function"
-        ? model.associationCounts()
-        : {}
-      const queryDataValues = typeof model.queryDataValues === "function"
-        ? model.queryDataValues()
-        : {}
-      const computedAbilities = typeof model.computedAbilities === "function"
-        ? model.computedAbilities()
-        : {}
+      const associationCounts = model.associationCounts()
+      const queryDataValues = model.queryDataValues()
+      const computedAbilities = model.computedAbilities()
       const hasCounts = Object.keys(associationCounts).length > 0
       const hasQueryData = Object.keys(queryDataValues).length > 0
       const hasAbilities = Object.keys(computedAbilities).length > 0
@@ -2944,7 +3008,7 @@ export default class FrontendModelController extends Controller {
    * @param {object} args - Error context args.
    * @param {string} args.action - Endpoint/action label.
    * @param {unknown} args.error - Caught error.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
    * @param {string | undefined} [args.model] - Request model name when available.
    * @param {string | undefined} [args.requestId] - Batch request id when available.
    * @returns {FrontendModelEndpointErrorContext} Frontend-model endpoint error context.
@@ -3025,7 +3089,7 @@ export default class FrontendModelController extends Controller {
    * @param {object} args - Error log args.
    * @param {string} args.action - Endpoint/action label.
    * @param {?} args.error - Caught error.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
    * @param {string | undefined} [args.model] - Request model name when available.
    * @param {string | undefined} [args.requestId] - Batch request id when available.
    * @returns {Promise<void>} - Resolves after logging.
@@ -3066,7 +3130,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model render command response.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {Promise<void>} - Resolves when response has been rendered.
    */
   async frontendModelRenderCommandResponse(action) {
@@ -3094,7 +3158,7 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model command payload.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Frontend action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {Promise<Record<string, ?> | null>} - Response payload.
    */
   async frontendModelCommandPayload(action) {
@@ -3127,7 +3191,7 @@ export default class FrontendModelController extends Controller {
 
         const values = await this.frontendModelPluckValues({
           pluck,
-          query: this.frontendModelIndexQuery()
+          query: resource.indexQuery()
         })
 
         return {
@@ -3248,6 +3312,24 @@ export default class FrontendModelController extends Controller {
       }
     }
 
+    if (action === "attachmentList") {
+      const attachmentParams = frontendModelAttachmentParams(params)
+      if (typeof attachmentParams === "string") return this.frontendModelErrorPayload(attachmentParams)
+
+      const model = await this.frontendModelFindRecord("attachmentList", id)
+
+      if (!model) {
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      }
+
+      const attachments = await model.getAttachmentByName(attachmentParams.attachmentName).listMetadata()
+
+      return {
+        attachments,
+        status: "success"
+      }
+    }
+
     if (action === "find") {
       const model = await this.frontendModelFindRecord("find", id)
 
@@ -3326,7 +3408,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      const isBuiltInCommand = ["index", "find", "create", "update", "destroy", "attach", "download", "url"].includes(commandType)
+      const isBuiltInCommand = ["index", "find", "create", "update", "destroy", "attach", "download", "url", "attachmentList"].includes(commandType)
 
       if (!isBuiltInCommand && (typeof customPath !== "string" || !customPath.startsWith("/"))) {
         responses.push({
@@ -3676,10 +3758,7 @@ export default class FrontendModelController extends Controller {
 
     if (isBackendModelInstance(value)) {
       const richSerialized = await resource.serialize(value, action)
-      const modelClass = /**
-                          * Types the following value.
-                          * @type {{constructor: {getModelName?: () => string, name?: string}}} */ (value).constructor
-      const modelName = typeof modelClass.getModelName === "function" ? modelClass.getModelName() : (modelClass.name || "")
+      const modelName = value.getModelClass().getModelName()
 
       // Wrap the resource-serialized payload in the frontend_model transport
       // marker. Marker-based decoding routes through `instantiateFromResponse`,

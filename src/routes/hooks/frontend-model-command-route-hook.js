@@ -28,7 +28,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   // Don't intercept paths that match explicitly defined custom routes
   if (hasMatchingCustomRoute) return null
 
-  const backendProjects = configuration.getBackendProjects?.() || []
+  const backendProjects = configuration.getBackendProjects()
   const customCommandMatch = frontendModelCustomCommandForPath({
     backendProjects,
     currentPath: normalizedCurrentPath

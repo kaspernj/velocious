@@ -1178,7 +1178,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {boolean} - Whether query logging is enabled for this driver.
    */
   _queryLoggingEnabled() {
-    if (typeof this.configuration?.getQueryLoggingEnabled !== "function") return true
+    if (!this.configuration) return true
     if (!this.configuration.getQueryLoggingEnabled()) return false
 
     const logger = new Logger("SQL", {configuration: this.configuration})
@@ -1213,9 +1213,9 @@ export default class VelociousDatabaseDriversBase {
   _querySourceLine(sourceStack) {
     if (!sourceStack) return undefined
 
-    const applicationDirectory = typeof this.configuration?.getDirectoryIfAvailable === "function"
+    const applicationDirectory = this.configuration
       ? this.configuration.getDirectoryIfAvailable()
-      : this.configuration?.getDirectory?.()
+      : undefined
 
     if (!applicationDirectory) return undefined
 

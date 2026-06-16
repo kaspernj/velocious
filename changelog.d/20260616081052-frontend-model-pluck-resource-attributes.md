@@ -1,0 +1,1 @@
+Frontend-model pluck requests now require the plucked attribute to be declared on target resources with explicit attribute lists, preventing hidden raw model columns from bypassing resource serialization.

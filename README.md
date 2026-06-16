@@ -376,6 +376,7 @@ export default new Configuration({
 ```
 
 `frontendModels` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
+Resource-level index customization should prefer `indexQuery()` or the pagination/search/sort hooks over replacing `records()`, so built-in pluck and aggregate count support can keep using the same query. See [`docs/frontend-model-resources.md`](docs/frontend-model-resources.md) for the resource extension points.
 
 Resources expose the full CRUD ability set (`create`, `destroy`, `read`, `update`) by default. To restrict the API surface — for example to a read-only resource — declare an explicit subset:
 
@@ -446,7 +447,7 @@ Frontend-model `group(...)` is attribute/path based and does not accept raw SQL 
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
 Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
 Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
-Frontend-model `pluck(...)` validates attribute/path descriptors against configured model metadata and does not accept SQL fragments.
+Frontend-model `pluck(...)` validates attribute/path descriptors against configured resource/model metadata and does not accept SQL fragments or hidden raw model columns when the resource declares an explicit attribute list.
 Frontend-model query fields are limited to attributes exposed by the backend resource. Use `{name: "attributeName", selectedByDefault: false}` for fields that may be selected or filtered explicitly but should stay out of default payloads.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.

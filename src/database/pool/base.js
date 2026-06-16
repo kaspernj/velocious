@@ -90,9 +90,10 @@ class VelociousDatabasePoolBase {
 
   /**
    * Clears any global connections for the given configuration.
+   * @param {import("../../configuration.js").default} configuration - Configuration owning the pool.
    * @returns {void} - No return value.
    */
-  static clearGlobalConnections() {}
+  static clearGlobalConnections(configuration) { void configuration }
 
   /**
    * Runs constructor.

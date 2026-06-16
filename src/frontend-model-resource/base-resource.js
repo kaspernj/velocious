@@ -6,22 +6,63 @@ import isPlainObject from "../utils/plain-object.js"
 
 /**
  * Built-in frontend-model resource action.
- * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelResourceAction
+ * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelResourceAction
  */
 
 /**
  * Frontend-model controller methods used by resources.
  * @typedef {import("../controller.js").default & {
  *   currentAbility: () => import("../authorization/ability.js").default | undefined,
+ *   applyFrontendModelPagination: (args: {pagination: FrontendModelResourcePagination, query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>}) => void,
+ *   applyFrontendModelSearch: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, search: FrontendModelResourceSearch}) => void,
+ *   applyFrontendModelSort: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, sort: FrontendModelResourceSort}) => void,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
  *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
- *   frontendModelIndexQuery: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {resource?: FrontendModelBaseResource}) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
  *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
  *   frontendModelResourceConfigurationForModelClass: (modelClass: typeof import("../database/record/index.js").default) => FrontendModelResolvedResourceConfiguration | null,
  *   serializeFrontendModel: (model: import("../database/record/index.js").default) => Promise<Record<string, object | string | number | boolean | null>>
  * }} FrontendModelResourceController
+ */
+
+/**
+ * Generic frontend-model index query passed to resource query hooks.
+ * @typedef {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} FrontendModelResourceAnyQuery
+ */
+
+/**
+ * Options for building a frontend-model resource index query.
+ * @typedef {object} FrontendModelResourceIndexQueryOptions
+ * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
+ * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
+ */
+
+/**
+ * FrontendModelResourcePagination type.
+ * @typedef {object} FrontendModelResourcePagination
+ * @property {number | null} limit - Maximum number of records.
+ * @property {number | null} offset - Number of records to skip.
+ * @property {number | null} page - 1-based page number.
+ * @property {number | null} perPage - Page size.
+ */
+
+/**
+ * FrontendModelResourceSearch type.
+ * @typedef {object} FrontendModelResourceSearch
+ * @property {string} column - Column or attribute name.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {string[]} path - Relationship path.
+ * @property {?} value - Search value.
+ */
+
+/**
+ * FrontendModelResourceSort type.
+ * @typedef {object} FrontendModelResourceSort
+ * @property {string} column - Attribute name to sort by.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
  */
 
 /**
@@ -75,8 +116,8 @@ import isPlainObject from "../utils/plain-object.js"
 /**
  * Static helpers used when checking whether a model-like receiver accepts an attribute.
  * @typedef {object} WritableAttributeReceiverClass
- * @property {function(string): string} [resolveAttributeName] - Resolves aliases to canonical attribute names.
- * @property {function(Record<string, ?>, string): string} [findMemberNameInsensitive] - Locates a setter method on the receiver.
+ * @property {function(string): string | null} resolveAttributeName - Resolves aliases to canonical attribute names.
+ * @property {function(Record<string, ?>, string): string | null} findMemberNameInsensitive - Locates a setter method on the receiver.
  */
 
 /**
@@ -135,7 +176,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     this.controller = "controller" in args ? args.controller : undefined
     this.modelClassValue = "modelClass" in args ? args.modelClass : ResourceClass.modelClass()
-    this.modelNameValue = "modelName" in args ? args.modelName : (this.modelClassValue?.getModelName ? this.modelClassValue.getModelName() : this.modelClassValue?.name || "")
+    this.modelNameValue = "modelName" in args ? args.modelName : this.modelClass().getModelName()
     this.paramsValue = "params" in args ? args.params : undefined
     this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : defaultResourceConfiguration
   }
@@ -171,9 +212,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs static model class.
-   * @returns {typeof import("../database/record/index.js").default | undefined} - Backing model class.
+   * @returns {typeof import("../database/record/index.js").default} - Backing model class.
    */
   static modelClass() {
+    if (!this.ModelClass) throw new Error(`${this.name} requires a static ModelClass.`)
+
     return this.ModelClass
   }
 
@@ -397,10 +440,57 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelAbilityAuthorizedQuery(action))
   }
 
+  /**
+   * Runs index query.
+   * @param {FrontendModelResourceIndexQueryOptions} [options] - Query options.
+   * @returns {import("../database/query/model-class-query.js").default<TModelClass>} - Frontend-model index query.
+   */
+  indexQuery(options = {}) {
+    return /** @type {import("../database/query/model-class-query.js").default<TModelClass>} */ (this.typedControllerInstance().frontendModelIndexQuery({
+      ...options,
+      resource: this
+    }))
+  }
+
+  /**
+   * Applies frontend-model index pagination.
+   * @param {object} args - Pagination args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourcePagination} args.pagination - Pagination params.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @returns {void}
+   */
+  applyFrontendModelIndexPagination({controller, pagination, query}) {
+    controller.applyFrontendModelPagination({pagination, query})
+  }
+
+  /**
+   * Applies frontend-model index search.
+   * @param {object} args - Search args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @param {FrontendModelResourceSearch} args.search - Search params.
+   * @returns {void}
+   */
+  applyFrontendModelIndexSearch({controller, query, search}) {
+    controller.applyFrontendModelSearch({query, search})
+  }
+
+  /**
+   * Applies frontend-model index sort.
+   * @param {object} args - Sort args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @param {FrontendModelResourceSort} args.sort - Sort params.
+   * @returns {void}
+   */
+  applyFrontendModelIndexSort({controller, query, sort}) {
+    controller.applyFrontendModelSort({query, sort})
+  }
 
   /**
    * Runs supports pluck.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @returns {boolean | Promise<boolean>} - Whether pluck is supported.
    */
   supportsPluck(action) {
@@ -411,7 +501,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs supports count.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @returns {boolean | Promise<boolean>} - Whether count is supported.
    */
   supportsCount(action) {
@@ -423,7 +513,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs before action.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @returns {boolean | void | Promise<boolean | void>} - Continue processing unless false.
    */
   beforeAction(action) {
@@ -437,7 +527,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default[]>} - Records for index action.
    */
   async records() {
-    return await this.typedControllerInstance().frontendModelIndexQuery().toArray()
+    return await this.indexQuery().toArray()
+  }
+
+  /**
+   * Runs index query options for count.
+   * @returns {FrontendModelResourceIndexQueryOptions} - Index query options for count.
+   */
+  countIndexQueryOptions() {
+    return {}
   }
 
   /**
@@ -445,12 +543,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<number>} - Records count for index action.
    */
   async count() {
-    return await this.typedControllerInstance().frontendModelIndexQuery().count()
+    return await this.indexQuery(this.countIndexQueryOptions()).count()
   }
 
   /**
    * Runs find.
-   * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
+   * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
    * @param {string | number} id - Record id.
    * @returns {Promise<import("../database/record/index.js").default | null>} - Located model.
    */
@@ -475,8 +573,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const normalizedAttributes = await this.normalizeCreateAttributes(attributes, options)
     const attachmentSplit = this._extractAttachmentAttributes(normalizedAttributes, options.attachments ?? null)
     const permit = parsePermittedParams(this.permittedParams({action: "create", ability: this.ability, locals: this.locals, params: normalizedAttributes}))
-    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, attachmentSplit.attributes, this, permit.attributes)
     const ModelClass = this.modelClass()
+    const filtered = filterWritableFrontendModelAttributes(this.modelClass().prototype, ModelClass, attachmentSplit.attributes, this, permit.attributes)
     const model = new ModelClass()
 
     return await this.runMutationTransaction({
@@ -513,7 +611,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const normalizedAttributes = await this.normalizeUpdateAttributes(model, attributes, options)
     const attachmentSplit = this._extractAttachmentAttributes(normalizedAttributes, options.attachments ?? null)
     const permit = parsePermittedParams(this.permittedParams({action: "update", ability: this.ability, locals: this.locals, params: normalizedAttributes}))
-    const filtered = filterWritableFrontendModelAttributes(model, attachmentSplit.attributes, this, permit.attributes)
+    const filtered = filterWritableFrontendModelAttributes(model, model.getModelClass(), attachmentSplit.attributes, this, permit.attributes)
 
     return await this.runMutationTransaction({
       action: "update",
@@ -593,7 +691,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {{attributes: Record<string, ?>, attachments: Record<string, ?> | null}} Attributes with attachment keys removed and merged attachment payload.
    */
   _extractAttachmentAttributes(attributes, attachments) {
-    const attachmentDefinitions = this.modelClass().getAttachmentsMap?.() || {}
+    const attachmentDefinitions = this.modelClass().getAttachmentsMap()
     const attachmentNames = new Set(Object.keys(attachmentDefinitions))
 
     if (attachmentNames.size === 0) return {attributes, attachments}
@@ -637,7 +735,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     const permitSet = new Set(permittedAttributeNames)
     const modelClass = model.getModelClass()
-    const attachmentDefinitions = modelClass.getAttachmentsMap?.() || {}
+    const attachmentDefinitions = modelClass.getAttachmentsMap()
     /** @type {string[]} */
     const notPermittedAttachments = []
     /** @type {string[]} */
@@ -672,7 +770,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<void>}
    */
   async _setTranslatedAttributeOnModel(model, name, value) {
-    const locale = this.context?.configuration?.getLocale?.() || "en"
+    const configuration = this.context?.configuration
+    const locale = configuration ? configuration.getLocale() : "en"
     const instanceRelationship = model.getRelationshipByName("translations")
 
     /** @type {import("../database/record/index.js").default | undefined} */
@@ -747,8 +846,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {{ability: import("../authorization/ability.js").default | undefined, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
    */
   _nestedRelationshipContext({parent, relationshipName, rawEntries, childPermit, controller}) {
+    if (!controller) {
+      throw new Error(`Nested attributes for '${relationshipName}' require a controller instance.`)
+    }
+
     const parentModelClass = parent.getModelClass()
-    const modelAcceptance = parentModelClass.acceptedNestedAttributesFor?.(relationshipName)
+    const modelAcceptance = parentModelClass.acceptedNestedAttributesFor(relationshipName)
 
     if (!modelAcceptance) {
       throw new Error(`Model ${parentModelClass.name} does not accept nested attributes for '${relationshipName}'. Declare it via ${parentModelClass.name}.acceptsNestedAttributesFor('${relationshipName}').`)
@@ -775,20 +878,20 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       throw new Error(`No target model class resolved for relationship '${relationshipName}' on ${parentModelClass.name}.`)
     }
 
-    const childResourceConfig = controller?.frontendModelResourceConfigurationForModelClass?.(targetModelClass)
+    const childResourceConfig = controller.frontendModelResourceConfigurationForModelClass(targetModelClass)
 
     if (!childResourceConfig) {
-      throw new Error(`No frontend-model resource registered for child model '${targetModelClass.getModelName?.() || targetModelClass.name}' under relationship '${relationshipName}'.`)
+      throw new Error(`No frontend-model resource registered for child model '${targetModelClass.getModelName()}' under relationship '${relationshipName}'.`)
     }
 
     const childResource = new childResourceConfig.resourceClass({
       ability: this.ability,
-      controller: controller || undefined,
+      controller,
       context: this.context || {},
       locals: this.locals || {},
       modelClass: targetModelClass,
       modelName: childResourceConfig.modelName,
-      params: controller?.frontendModelParams?.() || {},
+      params: controller.frontendModelParams(),
       resourceConfiguration: childResourceConfig.resourceConfiguration
     })
     const childWritableAttributes = childPermit.attributes.filter((name) => name !== "_destroy")
@@ -801,7 +904,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       })
 
     return {
-      ability: controller?.currentAbility?.() || this.ability,
+      ability: controller.currentAbility() || this.ability,
       childResource,
       childResourceConfig,
       childWritableAttributes,
@@ -871,7 +974,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const nestedAttributes = {}
     /** @type {FrontendModelResourceNestedEntry} */
     const normalized = {}
-    const attachmentDefinitions = targetModelClass.getAttachmentsMap?.() || {}
+    const attachmentDefinitions = targetModelClass.getAttachmentsMap()
 
     for (const [attributeName, value] of Object.entries(entry)) {
       if (attributeName === "id") {
@@ -1183,7 +1286,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (entry.attributes !== undefined) {
       if (!isPlainObject(entry.attributes)) throw new Error("Expected nested entry attributes to be an object.")
 
-      const filtered = filterWritableFrontendModelAttributes(child, entry.attributes, this, childWritableAttributes)
+      const filtered = filterWritableFrontendModelAttributes(child, child.getModelClass(), entry.attributes, this, childWritableAttributes)
       await this._assignWithVirtualSetters(child, filtered)
     }
 
@@ -1364,9 +1467,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (relationshipNames.length === 0) return
 
     for (const relationshipName of relationshipNames) {
-      if (typeof model.loadRelationship === "function") {
-        await model.loadRelationship(relationshipName)
-      }
+      await model.loadRelationship(relationshipName)
     }
   }
 }
@@ -1437,6 +1538,7 @@ function virtualSetterLookup(resource) {
 /**
  * Runs filter writable frontend model attributes.
  * @param {Record<string, ?>} receiver - Model instance or prototype.
+ * @param {WritableAttributeReceiverClass} receiverClass - Static helper owner for the receiver.
  * @param {Record<string, ?>} attributes - Incoming frontend-model attributes.
  * @param {FrontendModelBaseResource | null} [resource] - Resource instance for virtual-setter detection.
  * @param {string[] | null} [permittedAttributeNames] - Optional explicit permit list. `null` falls back to setter-existence checks only.
@@ -1444,6 +1546,7 @@ function virtualSetterLookup(resource) {
  */
 function filterWritableFrontendModelAttributes(
   receiver,
+  receiverClass,
   attributes,
   resource = /** @type {FrontendModelBaseResource | null} */ (null),
   permittedAttributeNames = null
@@ -1475,10 +1578,9 @@ function filterWritableFrontendModelAttributes(
       continue
     }
 
-    const modelClass = /** @type {WritableAttributeReceiverClass} */ (receiver.constructor)
-    const resolvedAttributeName = (modelClass && typeof modelClass.resolveAttributeName === "function" && modelClass.resolveAttributeName(attributeName)) || attributeName
+    const resolvedAttributeName = receiverClass.resolveAttributeName(attributeName) || attributeName
     const requestedSetterName = `set${inflection.camelize(resolvedAttributeName)}`
-    const setterName = (modelClass && typeof modelClass.findMemberNameInsensitive === "function" && modelClass.findMemberNameInsensitive(receiver, requestedSetterName)) || requestedSetterName
+    const setterName = receiverClass.findMemberNameInsensitive(receiver, requestedSetterName) || requestedSetterName
     const resourceSetterName = `set${inflection.camelize(attributeName)}Attribute`
     const resourceSetter = resource ? virtualSetterLookup(resource)[resourceSetterName] : undefined
 

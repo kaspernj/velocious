@@ -24,6 +24,15 @@ class TransportTask extends FrontendModelBase {
 
 FrontendModelBase.registerModel(TransportTask)
 
+/** Test backend model class shape for transport serialization specs. */
+class TransportTaskBackendModelClass {
+  /** @returns {string} - Backend model name. */
+  static getModelName() { return "TransportTask" }
+
+  /** @returns {Record<string, never>} - No relationships. */
+  static getRelationshipsMap() { return {} }
+}
+
 describe("Frontend models - transport serialization", {databaseCleaning: {transaction: true}}, () => {
   it("does not prototype-pollute during deserialize for __proto__ keys", () => {
     const payload = /** @type {Record<string, any>} */ (JSON.parse("{\"safe\":1,\"__proto__\":{\"polluted\":true}}"))
@@ -61,12 +70,7 @@ describe("Frontend models - transport serialization", {databaseCleaning: {transa
         id: 42,
         name: "Transport task"
       }),
-      constructor: {
-        getModelName: () => "TransportTask"
-      },
-      getModelClass: () => ({
-        getRelationshipsMap: () => ({})
-      }),
+      getModelClass: () => TransportTaskBackendModelClass,
       getRelationshipByName: () => {
         throw new Error("No relationships should be read in this spec")
       }

@@ -6,10 +6,9 @@ import FrontendModelBaseResource from "../../src/frontend-model-resource/base-re
 import AuthorizationBaseResource from "../../src/authorization/base-resource.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
-import Ability from "../../src/authorization/ability.js"
 
 describe("Frontend models - websocket publishers", {databaseCleaning: {transaction: true}}, () => {
-  it("auto-discovers frontend model resources from ability resolver when no explicit config exists", async () => {
+  it("auto-discovers frontend model resources from explicit ability resources when no frontend model config exists", async () => {
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
@@ -40,10 +39,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     const publishedChannels = []
 
     const mockConfiguration = {
-      getAbilityResources: () => [],
-      getAbilityResolver: () => async () => new Ability({
-        resources: [TestTaskResource, TestUserResource]
-      }),
+      getAbilityResources: () => [TestTaskResource, TestUserResource],
+      getAbilityResolver: () => undefined,
       getBackendProjects: () => [
         {path: "/tmp/test-project"}
       ],
@@ -55,7 +52,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
         publish: (/** @type {string} */ channel) => {
           publishedChannels.push(channel)
         }
-      })
+      }),
+      registerWebsocketChannel: () => {}
     }
 
     await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
@@ -64,23 +62,26 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     expect(publishedChannels).toEqual([])
   })
 
-  it("throws when ability resolver requires request context", async () => {
+  it("does not call the request-scoped ability resolver during startup-time resource discovery", async () => {
+    let abilityResolverCalled = false
     const mockConfiguration = {
       getAbilityResources: () => [],
-      getAbilityResolver: () => async (/** @type {any} */ {request}) => {
-        // Simulate a resolver that accesses request methods
-        request.path()
+      getAbilityResolver: () => async () => {
+        abilityResolverCalled = true
+
+        throw new Error("Request-scoped ability resolver should not run during startup-time resource discovery")
       },
       getBackendProjects: () => [
         {path: "/tmp/test-project"}
       ],
       getModelClasses: () => ({}),
-      getWebsocketEvents: () => null
+      getWebsocketEvents: () => null,
+      registerWebsocketChannel: () => {}
     }
 
-    await expect(async () => {
-      await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
-    }).toThrow(/Cannot read properties of undefined/)
+    await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
+
+    expect(abilityResolverCalled).toBeFalse()
   })
 
   it("throws when ability resources contain non-function entries", async () => {
@@ -91,7 +92,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
         {path: "/tmp/test-project"}
       ],
       getModelClasses: () => ({}),
-      getWebsocketEvents: () => null
+      getWebsocketEvents: () => null,
+      registerWebsocketChannel: () => {}
     }
 
     await expect(async () => {
@@ -109,7 +111,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
         {path: "/tmp/test-project"}
       ],
       getModelClasses: () => ({}),
-      getWebsocketEvents: () => null
+      getWebsocketEvents: () => null,
+      registerWebsocketChannel: () => {}
     }
 
     await expect(async () => {
@@ -144,7 +147,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
       }),
       getWebsocketEvents: () => ({
         publish: () => {}
-      })
+      }),
+      registerWebsocketChannel: () => {}
     }
 
     // Should not throw — TestAuthResource is skipped, TestTaskResource is registered

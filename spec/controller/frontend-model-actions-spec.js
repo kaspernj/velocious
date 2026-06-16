@@ -50,7 +50,7 @@ async function postFrontendModel(path, payload) {
 }
 
 /**
- * @param {"create" | "destroy" | "find" | "index" | "update" | "attach" | "download" | "url"} commandType - Command.
+ * @param {"create" | "destroy" | "find" | "index" | "update" | "attach" | "attachmentList" | "download" | "url"} commandType - Command.
  * @param {Record<string, any>} payload - Command payload.
  * @returns {Promise<Record<string, any>>} - Command response payload.
  */
@@ -260,6 +260,64 @@ async function createTaskWithProject({projectName, taskName, creatingUserReferen
     name: taskName,
     projectId: project.id()
   }))
+}
+
+/** Task resource that customizes the base index query without replacing records/count. */
+class ScopedTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id", "name"],
+      builtInCollectionCommands: ["index"]
+    }
+  }
+
+  /**
+   * @param {{includePagination?: boolean, includeSort?: boolean}} [options] - Index-query options.
+   * @returns {import("../../src/database/query/model-class-query.js").default<typeof Task>} - Scoped index query.
+   */
+  indexQuery(options = {}) {
+    return /** @type {import("../../src/database/query/model-class-query.js").default<typeof Task>} */ (super.indexQuery(options).where({name: ["Scoped Alpha", "Scoped Bravo"]}))
+  }
+
+  /** @returns {{includePagination: false, includeSort: false}} - Index-query options for count. */
+  countIndexQueryOptions() {
+    return {
+      includePagination: false,
+      includeSort: false
+    }
+  }
+}
+
+/** Task resource exposing description only when explicitly requested. */
+class DescriptionPluckTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: ["id", {name: "description", selectedByDefault: false}],
+      builtInCollectionCommands: ["index"]
+    }
+  }
+}
+
+/** Task resource using the legacy all-model-columns serialization default. */
+class AllColumnsPluckTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
+  static resourceConfig() {
+    return {
+      abilities: ["read"],
+      attributes: [],
+      builtInCollectionCommands: ["index"]
+    }
+  }
 }
 
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
@@ -738,6 +796,45 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("lets resources customize frontendIndex queries and count options", async () => {
+    await Dummy.run(async () => {
+      const previousTaskResource = backendProjects[0].frontendModels.Task
+
+      backendProjects[0].frontendModels.Task = ScopedTaskFrontendResource
+
+      try {
+        await createTask("Other Charlie")
+        await createTask("Scoped Alpha")
+        await createTask("Scoped Bravo")
+
+        const recordsPayload = await postSharedTaskFrontendModelCommand("index", {
+          page: 1,
+          perPage: 1,
+          sort: "name asc"
+        })
+        const countPayload = await postSharedTaskFrontendModelCommand("index", {
+          count: true,
+          page: 1,
+          perPage: 1,
+          sort: "name desc"
+        })
+        const pluckPayload = await postSharedTaskFrontendModelCommand("index", {
+          pluck: ["name"],
+          sort: "name asc"
+        })
+
+        expect(recordsPayload.status).toEqual("success")
+        expect(recordsPayload.models.map((model) => model.name)).toEqual(["Scoped Alpha"])
+        expect(countPayload.status).toEqual("success")
+        expect(countPayload.count).toEqual(2)
+        expect(pluckPayload.status).toEqual("success")
+        expect(pluckPayload.values).toEqual(["Scoped Alpha", "Scoped Bravo"])
+      } finally {
+        backendProjects[0].frontendModels.Task = previousTaskResource
+      }
+    })
+  })
+
   it("applies distinct params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const task = await createTask(`Distinct Controller ${Date.now()}`)
@@ -1004,6 +1101,77 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("rejects pluck params for model columns not exposed by the resource", async () => {
+    await Dummy.run(async () => {
+      const task = await Task.create({
+        description: "Hidden task description",
+        name: "Hidden pluck task",
+        projectId: (await Project.create({name: "Hidden pluck project"})).id()
+      })
+
+      const payload = await postSharedTaskFrontendModelCommand("index", {
+        pluck: ["description"],
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Unknown pluck column/)
+      expect(payload.values).toEqual(undefined)
+    })
+  })
+
+  it("allows pluck params for exposed non-default resource attributes", async () => {
+    await Dummy.run(async () => {
+      const previousTaskResource = backendProjects[0].frontendModels.Task
+
+      backendProjects[0].frontendModels.Task = DescriptionPluckTaskFrontendResource
+
+      try {
+        const task = await Task.create({
+          description: "Exposed task description",
+          name: "Exposed pluck task",
+          projectId: (await Project.create({name: "Exposed pluck project"})).id()
+        })
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {
+          pluck: ["description"],
+          where: {id: task.id()}
+        })
+
+        expect(payload.status).toEqual("success")
+        expect(payload.values).toEqual(["Exposed task description"])
+      } finally {
+        backendProjects[0].frontendModels.Task = previousTaskResource
+      }
+    })
+  })
+
+  it("allows pluck params for model columns when the resource exposes all default model attributes", async () => {
+    await Dummy.run(async () => {
+      const previousTaskResource = backendProjects[0].frontendModels.Task
+
+      backendProjects[0].frontendModels.Task = AllColumnsPluckTaskFrontendResource
+
+      try {
+        const task = await Task.create({
+          description: "Default task description",
+          name: "Default pluck task",
+          projectId: (await Project.create({name: "Default pluck project"})).id()
+        })
+
+        const payload = await postSharedTaskFrontendModelCommand("index", {
+          pluck: ["description"],
+          where: {id: task.id()}
+        })
+
+        expect(payload.status).toEqual("success")
+        expect(payload.values).toEqual(["Default task description"])
+      } finally {
+        backendProjects[0].frontendModels.Task = previousTaskResource
+      }
+    })
+  })
+
   it("applies relationship-path pluck params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const firstTask = await createTaskWithProject({projectName: "Pluck project A", taskName: "Pluck relation A"})
@@ -1018,6 +1186,25 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.status).toEqual("success")
       expect(payload.values.length).toEqual(2)
       expect(payload.values[0]).not.toEqual(payload.values[1])
+    })
+  })
+
+  it("rejects relationship-path pluck params for columns not exposed by the related resource", async () => {
+    await Dummy.run(async () => {
+      const task = await createTaskWithProject({
+        creatingUserReference: "hidden-owner-reference",
+        projectName: "Hidden relation pluck project",
+        taskName: "Hidden relation pluck task"
+      })
+
+      const payload = await postSharedTaskFrontendModelCommand("index", {
+        pluck: {project: ["creatingUserReference"]},
+        where: {id: task.id()}
+      })
+
+      expect(payload.status).toEqual("error")
+      expect(payload.errorMessage).toMatch(/Unknown pluck column/)
+      expect(payload.values).toEqual(undefined)
     })
   })
 
@@ -1394,6 +1581,34 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(urlPayload.status).toEqual("success")
       expect(typeof urlPayload.url).toEqual("string")
       expect(urlPayload.url.startsWith("file://")).toEqual(true)
+    })
+  })
+
+  it("lists has-many attachment metadata through the frontend-model attachmentList endpoint", async () => {
+    await Dummy.run(async () => {
+      const task = await createTask("Attachment list endpoint")
+
+      await postSharedTaskFrontendModelCommand("attach", {
+        attachment: {contentBase64: Buffer.from("AA").toString("base64"), filename: "a.txt"},
+        attachmentName: "files",
+        id: task.id()
+      })
+      await postSharedTaskFrontendModelCommand("attach", {
+        attachment: {contentBase64: Buffer.from("BBB").toString("base64"), filename: "b.txt"},
+        attachmentName: "files",
+        id: task.id()
+      })
+
+      const listPayload = await postSharedTaskFrontendModelCommand("attachmentList", {
+        attachmentName: "files",
+        id: task.id()
+      })
+
+      expect(listPayload.status).toEqual("success")
+      expect(listPayload.attachments.map((entry) => entry.filename)).toEqual(["a.txt", "b.txt"])
+      expect(listPayload.attachments.map((entry) => entry.byteSize)).toEqual([2, 3])
+      expect(listPayload.attachments.every((entry) => typeof entry.id === "string" && entry.id.length > 0)).toEqual(true)
+      expect("contentBase64" in listPayload.attachments[0]).toEqual(false)
     })
   })
 

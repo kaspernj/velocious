@@ -134,11 +134,13 @@ const configuration = new Configuration({
 
       for (const fileName of requireContextModels.keys()) {
         const modelClassImport = requireContextModels(fileName)
-        const modelClass = modelClassImport?.default
+        const modelClass = modelClassImport.default
 
-        if (!modelClass?.initializeRecord) continue
+        if (!modelClass) {
+          throw new Error(`Model wasn't exported from: ${fileName}`)
+        }
 
-        if (typeof modelClass.getDatabaseIdentifier === "function" && modelClass.getDatabaseIdentifier() !== "default") {
+        if (modelClass.getConfiguredDatabaseIdentifier() !== "default") {
           continue
         }
 

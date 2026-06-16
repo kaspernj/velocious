@@ -132,7 +132,7 @@ function isFrontendModelMarker(value) {
 /**
  * Runs the isBackendModelInstance helper.
  * @param {?} value - Candidate value.
- * @returns {value is {attributes: () => Record<string, ?>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => {getRelationshipsMap: () => Record<string, ?>}, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => ?}}} - Whether value looks like a backend model instance.
+ * @returns {value is {attributes: () => Record<string, ?>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => typeof import("../database/record/index.js").default, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => ?}}} - Whether value looks like a backend model instance.
  */
 export function isBackendModelInstance(value) {
   if (!value || typeof value !== "object") return false
@@ -190,8 +190,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
   if (isBackendModelInstance(value)) {
     const modelAttributes = value.attributes()
-    const modelClass = value.constructor
-    const modelName = typeof modelClass.getModelName === "function" ? modelClass.getModelName() : modelClass.name
+    const modelName = value.getModelClass().getModelName()
 
     /**
      * Serialized model.

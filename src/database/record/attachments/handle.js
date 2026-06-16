@@ -171,6 +171,38 @@ export default class RecordAttachmentHandle {
   }
 
   /**
+   * Runs list metadata. Returns metadata (no content bytes) for every attachment
+   * under this (record, name), so callers can enumerate has-many attachments
+   * without downloading their content.
+   * @returns {Promise<Array<{byteSize: number, contentType: string | null, filename: string, id: string, url: string | null}>>} - Attachment metadata entries.
+   */
+  async listMetadata() {
+    if (!this.model.isPersisted()) return []
+
+    const store = recordAttachmentsStoreForModel(this.model)
+    const rows = await store.findMany({model: this.model, name: this.name})
+    /**
+     * Metadata entries.
+     * @type {Array<{byteSize: number, contentType: string | null, filename: string, id: string, url: string | null}>} */
+    const entries = []
+
+    for (const row of rows) {
+      const url = await store.attachmentRowUrl({model: this.model, name: this.name, row})
+      const byteSize = Number(row.byte_size)
+
+      entries.push({
+        byteSize: Number.isFinite(byteSize) ? byteSize : 0,
+        contentType: row.content_type || null,
+        filename: row.filename || "attachment.bin",
+        id: row.id,
+        url
+      })
+    }
+
+    return entries
+  }
+
+  /**
    * Runs url.
    * @param {string} [id] - Optional attachment id for has-many attachments.
    * @returns {Promise<string | null>} - Resolvable attachment URL.

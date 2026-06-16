@@ -123,7 +123,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const fileContent = await this.buildModelFileContent({
           className,
           importPath,
-          modelClass: resourceClass?.ModelClass || configuration.getModelClasses()[className],
+          modelClass: resourceClass ? resourceClass.modelClass() : configuration.getModelClasses()[className],
           modelConfig,
           resourceClass
         })
@@ -817,22 +817,17 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {FrontendModelGeneratorPermitSpec} - Permitted params spec.
    */
   permittedParamsForGenerator(resourceClass, action) {
-    if (!resourceClass || typeof resourceClass !== "function") return []
-
-    const prototypeWithMethod = /**
-                                 * Resource prototype.
-                                 * @type {{permittedParams?: (arg?: object) => FrontendModelGeneratorPermitSpec}}
-                                 */ (resourceClass.prototype)
-
-    if (typeof prototypeWithMethod?.permittedParams !== "function") return []
+    if (!resourceClass) return []
 
     try {
+      const modelClass = resourceClass.modelClass()
+
       const instance = new resourceClass({
         ability: undefined,
         context: {},
         locals: {},
-        modelClass: resourceClass.ModelClass,
-        modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
+        modelClass,
+        modelName: modelClass.getModelName(),
         params: {},
         resourceConfiguration: /**
                                 * Resource configuration.
@@ -860,24 +855,19 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {string[]} - Relationship names that accept nested writes (empty when none).
    */
   nestedRelationshipNamesForGenerator(resourceClass) {
-    if (!resourceClass || typeof resourceClass !== "function") return []
-
-    const prototypeWithMethod = /**
-                                 * Resource prototype.
-                                 * @type {{permittedParams?: (arg?: object) => FrontendModelGeneratorPermitSpec}}
-                                 */ (resourceClass.prototype)
-
-    if (typeof prototypeWithMethod?.permittedParams !== "function") return []
+    if (!resourceClass) return []
 
     let spec
 
     try {
+      const modelClass = resourceClass.modelClass()
+
       const instance = new resourceClass({
         ability: undefined,
         context: {},
         locals: {},
-        modelClass: resourceClass.ModelClass,
-        modelName: resourceClass.ModelClass?.getModelName?.() || resourceClass.name,
+        modelClass,
+        modelName: modelClass.getModelName(),
         params: {},
         resourceConfiguration: /**
                                 * Resource configuration.
@@ -1073,6 +1063,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   frontendAttributeConfigForGeneratedAttribute({attributeConfig, attributeName, modelClass}) {
     if (!this.frontendAttributeIsModelPrimaryKey({attributeName, modelClass})) return attributeConfig
+    if (this.frontendAttributeConfigHasNullability(attributeConfig)) return attributeConfig
 
     return {...attributeConfig, null: false}
   }
@@ -1139,6 +1130,18 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   frontendAttributeConfigHasType(attributeConfig) {
     return typeof this.frontendAttributeTypeValue(attributeConfig) == "string"
       || typeof attributeConfig?.jsDocType == "string"
+  }
+
+  /**
+   * Runs frontend attribute config has nullability.
+   * @param {FrontendAttributeConfig | null | undefined} attributeConfig - Attribute config.
+   * @returns {boolean} - Whether the config declares nullability.
+   */
+  frontendAttributeConfigHasNullability(attributeConfig) {
+    if (!attributeConfig || typeof attributeConfig !== "object") return false
+    if (Object.prototype.hasOwnProperty.call(attributeConfig, "null")) return true
+
+    return typeof attributeConfig.getNull == "function"
   }
 
   /**
@@ -1832,11 +1835,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {{autoload: boolean, relationshipName: string, targetClassName: string, targetFileName: string, type: "belongsTo" | "hasOne" | "hasMany"}} Inferred relationship definition.
    */
   inferredRelationshipDefinition({className, relationshipName, resourceClass}) {
-    const modelClass = resourceClass?.ModelClass || this.getConfiguration().getModelClass(className)
-
-    if (!modelClass) {
-      throw new Error(`Could not find backend model class '${className}' for relationship '${relationshipName}'`)
-    }
+    const modelClass = resourceClass ? resourceClass.modelClass() : this.getConfiguration().getModelClass(className)
 
     const relationship = modelClass.getRelationshipByName(relationshipName)
     const relationshipType = relationship.getType()

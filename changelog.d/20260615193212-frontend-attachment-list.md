@@ -1,0 +1,1 @@
+Frontend models can now enumerate a record's has-many attachments without downloading their content: `record.attachmentName().list()` (and the backend `RecordAttachmentHandle#listMetadata()`) return `{id, filename, contentType, byteSize, url}` metadata for each attachment via a new `attachmentList` member command.

@@ -16,7 +16,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
 
 /**
  * FrontendModelCommandType type.
- * @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "download" | "url"} FrontendModelCommandType */
+ * @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelCommandType */
 /**
  * FrontendModelRequestCommandType type.
  * @typedef {FrontendModelCommandType | string} FrontendModelRequestCommandType */
@@ -621,7 +621,7 @@ export class FrontendModelAttachmentDownload {
 /**
  * Runs frontend model attachment command payload.
  * @param {FrontendModelAttachmentHandle} attachment - Attachment wrapper.
- * @param {string | undefined} attachmentId - Optional has-many attachment id.
+ * @param {string} [attachmentId] - Optional has-many attachment id.
  * @returns {Record<string, ?>} - Command payload.
  */
 function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
@@ -1005,6 +1005,30 @@ export class FrontendModelAttachmentHandle {
    */
   async first() {
     return await this.query().first()
+  }
+
+  /**
+   * Runs list. Returns metadata for every attachment under this attachment name
+   * (no content bytes), so callers can enumerate has-many attachments and then
+   * download or link to each one by id.
+   * @returns {Promise<Array<{byteSize: number, contentType: string | null, filename: string, id: string, url: string | null}>>} - Attachment metadata entries.
+   */
+  async list() {
+    const ModelClass = frontendModelClassFor(this.model)
+    const response = await ModelClass.executeCommand("attachmentList", frontendModelAttachmentCommandPayload(this))
+    const attachments = Array.isArray(response.attachments) ? response.attachments : []
+
+    return attachments.map((attachment) => {
+      const byteSize = Number(attachment.byteSize)
+
+      return {
+        byteSize: Number.isFinite(byteSize) ? byteSize : 0,
+        contentType: typeof attachment.contentType === "string" && attachment.contentType.length > 0 ? attachment.contentType : null,
+        filename: typeof attachment.filename === "string" && attachment.filename.length > 0 ? attachment.filename : "attachment.bin",
+        id: typeof attachment.id === "string" ? attachment.id : "",
+        url: typeof attachment.url === "string" && attachment.url.length > 0 ? attachment.url : null
+      }
+    })
   }
 
   /**
@@ -2604,7 +2628,7 @@ export default class FrontendModelBase {
     if (!this._relationships || Object.keys(this._relationships).length === 0) return
 
     const ModelClass = frontendModelClassFor(this)
-    const definitions = typeof ModelClass.relationshipDefinitions === "function" ? ModelClass.relationshipDefinitions() : {}
+    const definitions = ModelClass.relationshipDefinitions()
 
     for (const relationshipName of Object.keys(this._relationships)) {
       const definition = /**
@@ -2695,7 +2719,7 @@ export default class FrontendModelBase {
    * @returns {string} - The model name.
    */
   static getModelName() {
-    const resourceConfig = typeof this.resourceConfig === "function" ? this.resourceConfig() : null
+    const resourceConfig = this.resourceConfig()
     const modelName = resourceConfig?.modelName
 
     return (typeof modelName === "string" && modelName.length > 0) ? modelName : this.name
@@ -3967,7 +3991,7 @@ export default class FrontendModelBase {
    */
   async _buildNestedAttributesPayload() {
     const ModelClass = frontendModelClassFor(this)
-    const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
+    const resourceConfig = ModelClass.resourceConfig()
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
     if (!nestedAttributesConfig) return {}
@@ -4189,7 +4213,7 @@ export default class FrontendModelBase {
    */
   _reconcileNestedAttributesFromResponse(response) {
     const ModelClass = frontendModelClassFor(this)
-    const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
+    const resourceConfig = ModelClass.resourceConfig()
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
     if (!nestedAttributesConfig) return

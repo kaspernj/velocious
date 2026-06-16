@@ -9,10 +9,5 @@
 export default async function ensureModelClassInitialized(modelClass, configuration) {
   if (modelClass.isInitialized()) return
 
-  if (typeof modelClass.ensureInitialized === "function") {
-    await modelClass.ensureInitialized({configuration})
-    return
-  }
-
-  await modelClass.initializeRecord({configuration})
+  await modelClass.ensureInitialized({configuration})
 }

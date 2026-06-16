@@ -8,6 +8,15 @@ import FrontendModelController from "../../src/frontend-model-controller.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 
+/**
+ * FakeBackendModelClassType type.
+ * @typedef {{getModelName: () => string, getRelationshipsMap: () => Record<string, never>, name: string}} FakeBackendModelClassType
+ */
+/**
+ * FakeBackendRecord type.
+ * @typedef {{attributes: () => {id: string}, constructor: FakeBackendModelClassType, getModelClass: () => FakeBackendModelClassType, getRelationshipByName: () => {getPreloaded: () => boolean, loaded: () => null}, __id: string}} FakeBackendRecord
+ */
+
 /** @returns {Promise<FrontendModelController>} - Bare controller for direct method calls. */
 async function buildController() {
   const configuration = new Configuration({
@@ -47,20 +56,28 @@ async function buildController() {
 }
 
 /**
- * Minimal duck-typed backend `Record` shape — `isBackendModelInstance` checks
- * for `attributes()`, `getModelClass()`, and `getRelationshipByName()`. The
- * walker also reads `constructor.getModelName()` for the marker `modelName`.
+ * Minimal duck-typed backend `Record` shape — `isBackendModelInstance` accepts
+ * backend-record-shaped values, and the walker then expects the normal model
+ * class APIs from `getModelClass()`.
  *
  * @param {string} id - Model id used in serialized output.
- * @param {string} [modelName="Build"] - Model name reported by the constructor.
- * @returns {{attributes: () => Record<string, any>, constructor: {getModelName: () => string, name: string}, getModelClass: () => Record<string, any>, getRelationshipByName: () => Record<string, any>, __id: string}} - Record stand-in.
+ * @param {string} [modelName="Build"] - Model name reported by the model class.
+ * @returns {FakeBackendRecord} - Record stand-in.
  */
 function makeFakeRecord(id, modelName = "Build") {
+  class FakeBackendModelClass {
+    /** @returns {string} - Backend model name. */
+    static getModelName() { return modelName }
+
+    /** @returns {Record<string, never>} - No relationships. */
+    static getRelationshipsMap() { return {} }
+  }
+
   return {
     __id: id,
     attributes: () => ({id}),
-    constructor: {getModelName: () => modelName, name: modelName},
-    getModelClass: () => ({getRelationshipsMap: () => ({})}),
+    constructor: FakeBackendModelClass,
+    getModelClass: () => FakeBackendModelClass,
     getRelationshipByName: () => ({getPreloaded: () => false, loaded: () => null})
   }
 }

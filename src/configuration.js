@@ -18,7 +18,7 @@ import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
-import {frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
@@ -1673,12 +1673,13 @@ export default class VelociousConfiguration {
           throw new Error(`Resource for ${modelName} defines relationships as an object. Use an array instead: static relationships = ${JSON.stringify(Object.keys(resourceConfig.relationships))}`)
         }
 
-        const modelClass = /**
-                            * Types the following value.
-                            * @type {typeof import("./database/record/index.js").default | undefined} */ (this.modelClasses[modelName])
+        const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
-        if (!modelClass) continue
+        if (!resourceClass) {
+          throw new Error(`Frontend model resource for ${modelName} must be a FrontendModelBaseResource subclass.`)
+        }
 
+        const modelClass = resourceClass.modelClass()
         const existingRelationships = modelClass.getRelationshipsMap()
 
         for (const relationshipName of resourceConfig.relationships) {
@@ -2567,27 +2568,21 @@ export default class VelociousConfiguration {
       return
     }
 
+    /** @type {Set<typeof import("./database/pool/base.js").default>} */
     const constructors = new Set()
 
     this._closeDatabaseConnectionsPromise = (async () => {
       for (const pool of Object.values(this.databasePools)) {
         if (!pool) continue
 
-        if (typeof pool.closeAll === "function") {
-          await pool.closeAll()
-        }
+        await pool.closeAll()
 
-        const poolConstructor = /**
-                                 * Types the following value.
-                                 * @type {{clearGlobalConnections?: (configuration: VelociousConfiguration) => void}} */ (pool.constructor)
-
-        if (typeof poolConstructor?.clearGlobalConnections === "function") {
-          constructors.add(poolConstructor)
-        }
+        const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
+        constructors.add(PoolClass)
       }
 
-      for (const constructor of constructors) {
-        constructor.clearGlobalConnections?.(this)
+      for (const PoolClass of constructors) {
+        PoolClass.clearGlobalConnections(this)
       }
 
       // Allow models to be re-initialized after connections are closed.
