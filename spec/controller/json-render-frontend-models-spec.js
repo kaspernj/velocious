@@ -29,9 +29,18 @@ class RenderTask extends FrontendModelBase {
 
 FrontendModelBase.registerModel(RenderTask)
 
+/** Test backend model class shape for controller render specs. */
+class RenderTaskBackendModelClass {
+  /** @returns {string} - Backend model name. */
+  static getModelName() { return "RenderTask" }
+
+  /** @returns {Record<string, never>} - No relationships. */
+  static getRelationshipsMap() { return {} }
+}
+
 class JsonRenderController extends Controller {
   /**
-   * @param {{attributes: () => Record<string, any>, constructor: {getModelName: () => string}, getModelClass: () => {getRelationshipsMap: () => Record<string, any>}, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => any}}} task
+   * @param {{attributes: () => {id: number, name: string}, getModelClass: () => typeof RenderTaskBackendModelClass, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => null}}} task
    * @returns {Promise<void>}
    */
   async renderTask(task) {
@@ -94,12 +103,7 @@ describe("Controller JSON render frontend models", {databaseCleaning: {transacti
         id: 7,
         name: "Rendered task"
       }),
-      constructor: {
-        getModelName: () => "RenderTask"
-      },
-      getModelClass: () => ({
-        getRelationshipsMap: () => ({})
-      }),
+      getModelClass: () => RenderTaskBackendModelClass,
       getRelationshipByName: () => {
         throw new Error("No relationships should be read in this spec")
       }

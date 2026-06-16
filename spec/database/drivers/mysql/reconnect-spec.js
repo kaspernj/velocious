@@ -5,7 +5,8 @@ import {describe, expect, it} from "../../../../src/testing/test.js"
 
 const configuration = /** @type {any} */ ({
   debug: false,
-  getCurrentRequestTiming: () => undefined
+  getCurrentRequestTiming: () => undefined,
+  getQueryLoggingEnabled: () => false
 })
 
 describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction: false, truncate: false}}, () => {

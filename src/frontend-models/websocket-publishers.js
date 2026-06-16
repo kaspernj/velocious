@@ -21,42 +21,6 @@ export function frontendModelBroadcastChannelName(modelName) {
 }
 
 /**
- * Builds a frontend models map from the configuration's ability resources.
- * Each resource class with a static ModelClass property is keyed by model name.
- * @param {import("../configuration.js").default} configuration - Configuration instance.
- * @returns {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} - Resource definitions keyed by model name.
- */
-/**
- * Runs resolve ability resources list.
- * @param {import("../configuration.js").default} configuration - Configuration instance.
- * @returns {Promise<import("../configuration-types.js").AbilityResourceClassType[]>} - Resolved ability resources.
- */
-async function resolveAbilityResourcesList(configuration) {
-  // First check explicitly set ability resources
-  const explicit = configuration.getAbilityResources()
-
-  if (explicit && explicit.length > 0) return explicit
-
-  // Resolve from the ability resolver by calling it with a synthetic context.
-  // The resolver must handle undefined request/response gracefully.
-  const resolver = configuration.getAbilityResolver()
-
-  if (typeof resolver === "function") {
-    const ability = await resolver({configuration, params: {}, request: /**
-                                                                         * Narrows the runtime value to the documented type.
-                                                                         * @type {?} */ (undefined), response: /**
-                                                                                                               * Narrows the runtime value to the documented type.
-                                                                                                               * @type {?} */ (undefined)})
-
-    if (ability?.resources && Array.isArray(ability.resources)) {
-      return ability.resources
-    }
-  }
-
-  return []
-}
-
-/**
  * Runs frontend model resources from ability resources list.
  * @param {import("../configuration-types.js").AbilityResourceClassType[]} abilityResources - Ability resource classes.
  * @returns {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} - Resource definitions keyed by model name.
@@ -67,11 +31,11 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
    * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   const resources = {}
 
-  if (!abilityResources || abilityResources.length === 0) return resources
-
   if (!Array.isArray(abilityResources)) {
     throw new Error(`Expected ability resources to be an array but got: ${typeof abilityResources}`)
   }
+
+  if (abilityResources.length === 0) return resources
 
   for (const resourceClass of abilityResources) {
     if (typeof resourceClass !== "function") {
@@ -117,7 +81,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
   // Auto-discover from ability resources when backend projects didn't provide any
   if (Object.keys(configuredFrontendModels).length === 0) {
-    const abilityResources = await resolveAbilityResourcesList(configuration)
+    const abilityResources = configuration.getAbilityResources()
 
     allFrontendModels = {
       ...allFrontendModels,

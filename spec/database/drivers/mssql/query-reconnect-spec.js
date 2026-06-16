@@ -30,7 +30,8 @@ describe("Database - drivers - mssql query reconnect", {databaseCleaning: {trans
     try {
       const configuration = /** @type {any} */ ({
         debug: false,
-        getCurrentRequestTiming: () => undefined
+        getCurrentRequestTiming: () => undefined,
+        getQueryLoggingEnabled: () => false
       })
       const driver = new MssqlDriver({sqlConfig: {}}, configuration)
       driver.connection = undefined
