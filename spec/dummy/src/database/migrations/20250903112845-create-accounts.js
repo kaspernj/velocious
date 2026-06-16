@@ -13,6 +13,6 @@ class CreateAccounts extends Migration {
   }
 }
 
-CreateAccounts.onDatabases(process.env.VELOCIOUS_DISABLE_MSSQL === "1" ? ["default"] : ["mssql"])
+CreateAccounts.onDatabases(["mssql"])
 
 export default CreateAccounts

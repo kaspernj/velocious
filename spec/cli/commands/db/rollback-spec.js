@@ -26,7 +26,7 @@ describe("Cli - Commands - db:rollback", () => {
 
       await dropTables(dbs.default)
 
-      if (dbs.default.getType() != "mssql" && dbs.mssql) {
+      if (dbs.default.getType() != "mssql") {
         await dropTables(dbs.mssql)
       }
     })
@@ -106,9 +106,6 @@ describe("Cli - Commands - db:rollback", () => {
     const {defaultDatabaseType, defaultSchemaMigrations, tablesResult} = await getTestData()
 
     const filteredTables = tablesResult.filter((tableName) => !internalTables.has(tableName))
-    const expectedSchemaMigrationTables = dummyConfiguration.getDatabaseIdentifiers().includes("mssql")
-      ? ["schema_migrations", "schema_migrations"]
-      : ["schema_migrations"]
 
     if (defaultDatabaseType == "mssql") {
       expect(uniqunize(filteredTables.sort())).toEqual(
@@ -158,7 +155,8 @@ describe("Cli - Commands - db:rollback", () => {
           "project_details",
           "project_translations",
           "projects",
-          ...expectedSchemaMigrationTables,
+          "schema_migrations",
+          "schema_migrations",
           "string_subject_interactions",
           "string_subjects",
           "tasks",
@@ -244,7 +242,8 @@ describe("Cli - Commands - db:rollback", () => {
           "project_details",
           "project_translations",
           "projects",
-          ...expectedSchemaMigrationTables,
+          "schema_migrations",
+          "schema_migrations",
           "string_subject_interactions",
           "string_subjects",
           "tasks",

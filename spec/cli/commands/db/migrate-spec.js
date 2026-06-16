@@ -35,7 +35,6 @@ describe("Cli - Commands - db:migrate", () => {
     })
 
     let defaultDatabaseType
-    let hasSecondaryDatabase = false
 
     /** @type {string[]} */
     const defaultSchemaMigrations = []
@@ -55,7 +54,6 @@ describe("Cli - Commands - db:migrate", () => {
 
     await cli.getConfiguration().ensureConnections(async (dbs) => {
       defaultDatabaseType = dbs.default.getType()
-      hasSecondaryDatabase = Boolean(dbs.mssql && dbs.default.getType() != "mssql")
 
       const tableNames = [
         "accounts",
@@ -87,7 +85,7 @@ describe("Cli - Commands - db:migrate", () => {
 
       await dropTables(dbs.default)
 
-      if (dbs.default.getType() != "mssql" && dbs.mssql) {
+      if (dbs.default.getType() != "mssql") {
         await dropTables(dbs.mssql)
       }
 
@@ -216,10 +214,6 @@ describe("Cli - Commands - db:migrate", () => {
         "20260601052206"
       ])
     } else {
-      const expectedSchemaMigrationTables = hasSecondaryDatabase
-        ? ["schema_migrations", "schema_migrations"]
-        : ["schema_migrations"]
-
       expect(filteredTables.sort()).toEqual(
         [
           "accounts",
@@ -230,7 +224,8 @@ describe("Cli - Commands - db:migrate", () => {
           "project_details",
           "project_translations",
           "projects",
-          ...expectedSchemaMigrationTables,
+          "schema_migrations",
+          "schema_migrations",
           "string_subject_interactions",
           "string_subjects",
           "tasks",
