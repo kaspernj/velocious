@@ -34,6 +34,7 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
 
         expect(record.id()).toMatch(uuidRegex)
       } finally {
+        delete configuration.getModelClasses().ImplicitUuidItem
         await driver.dropTable("implicit_uuid_items", {cascade: true, ifExists: true})
       }
     })
