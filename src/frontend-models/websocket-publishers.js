@@ -2,6 +2,7 @@
 
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
+import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
 import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
@@ -118,18 +119,27 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
    * All frontend models.
    * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   let allFrontendModels = {}
+  /**
+   * Configured frontend models.
+   * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
+  let configuredFrontendModels = {}
 
   for (const backendProject of configuration.getBackendProjects()) {
-    const projectResources = frontendModelResourcesForBackendProject(backendProject)
+    const configuredProjectResources = frontendModelResourcesForBackendProject(backendProject)
+    const projectResources = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
 
+    configuredFrontendModels = {...configuredFrontendModels, ...configuredProjectResources}
     allFrontendModels = {...allFrontendModels, ...projectResources}
   }
 
   // Auto-discover from ability resources when backend projects didn't provide any
-  if (Object.keys(allFrontendModels).length === 0) {
+  if (Object.keys(configuredFrontendModels).length === 0) {
     const abilityResources = await resolveAbilityResourcesList(configuration)
 
-    allFrontendModels = frontendModelResourcesFromAbilityResourcesList(abilityResources)
+    allFrontendModels = {
+      ...allFrontendModels,
+      ...frontendModelResourcesFromAbilityResourcesList(abilityResources)
+    }
   }
 
   // Phase 3: register the V2 channel class once per configuration so

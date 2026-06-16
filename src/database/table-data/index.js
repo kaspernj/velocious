@@ -188,7 +188,7 @@ export default class TableData {
     const referenceArgs = args || {}
     const reference = new TableReference(name, referenceArgs)
     const {index, polymorphic, ...restArgs} = referenceArgs
-    const columnArgs = Object.assign({isNewColumn: true, type: "bigint"}, restArgs)
+    const columnArgs = Object.assign({isNewColumn: true, type: "uuid"}, restArgs)
     const column = new TableColumn(columnName, columnArgs)
     const indexArgs = typeof index == "object" ? {unique: index.unique === true} : undefined
     const tableIndex = new TableIndex([column], indexArgs)

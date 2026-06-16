@@ -10,7 +10,7 @@ export default class CreateTypedPolymorphicInteractions extends Migration {
     }
 
     if (!await this.tableExists("string_subject_interactions")) {
-      await this.createTable("string_subject_interactions", (table) => {
+      await this.createTable("string_subject_interactions", {id: {type: "bigint"}}, (table) => {
         table.references("subject", {null: false, polymorphic: true, type: "string"})
         table.string("kind")
         table.timestamps()
@@ -18,7 +18,7 @@ export default class CreateTypedPolymorphicInteractions extends Migration {
     }
 
     if (!await this.tableExists("uuid_interactions")) {
-      await this.createTable("uuid_interactions", (table) => {
+      await this.createTable("uuid_interactions", {id: {type: "bigint"}}, (table) => {
         table.references("subject", {null: false, polymorphic: true, type: "uuid"})
         table.string("kind")
         table.timestamps()

@@ -103,6 +103,7 @@
 - `defineScope(...)` creates reusable named query scopes. Call `Model.scopeName(args...)` to start a new query, or `query.scope(Model.scopeName.scope(args...))` to apply the same scope to an existing frontend query.
 - Frontend scope callbacks receive `{query, modelClass}` plus `table: null` and `driver: null`; frontend scopes should stay descriptor-based (`where`, `joins`, `sort`, etc.) rather than building raw SQL.
 - `select({Model: ["attr"]})` narrows the serialized attributes per model (keyed by model name, or root-model shorthand). `selectsExtra({Model: ["attr"]})` keeps the default serialized attributes and loads the listed extras in addition — useful for attributes declared `selectedByDefault: false` on the backend resource.
+- Frontend-model query attributes are bounded by the backend resource's exposed `attributes`. `select`, `selectsExtra`, `pluck`, `where`, `search`, `group`, `sort`, and `order` can only reference exposed attributes. To allow a field for explicit selection/filtering without including it in default payloads, declare it as `{name: "attributeName", selectedByDefault: false}` on the resource.
 - Generated read-attribute JSDoc is inferred from backend columns, generated model accessors, or typed resource `${attributeName}Attribute(model)` methods. Resource entries that only add options such as `{name: "archivedAt", selectedByDefault: false}` do not need to repeat `type` or `null`; generation fails if a read attribute has no inferable type.
 
 ## Preloading onto loaded records
@@ -159,6 +160,21 @@ useUpdatedEvent(
 - Frontend attachment input supports `File`/`Blob` (`arrayBuffer()`), bytes, and `{contentBase64, filename?, contentType?}` payloads.
 - Frontend attachment input does not support `{path: ...}`.
 - Setting an attachment field in `create`, `update`, or `save()` queues it into that model's mutation payload. Nested attributes can include attachment fields when the nested permit lists that attachment name.
+- Attachment metadata is available as normal frontend-model data through the built-in `VelociousAttachment` model:
+
+  ```js
+  import {VelociousAttachment} from "velocious/build/src/frontend-models/base.js"
+
+  const attachments = await VelociousAttachment
+    .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+    .order([["position", "asc"]])
+    .toArray()
+
+  const firstFile = await task.files().first()
+  const allFiles = await task.files().toArray()
+  ```
+
+  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata reads require owner scope (`recordType`, `recordId`, and `name`) and authorize through the owning record's frontend-model resource. Binary content and storage URLs still use `download()` and `url()`.
 
 ## Condition validation rules
 - Reject `undefined` condition values.

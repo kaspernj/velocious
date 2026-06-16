@@ -2,7 +2,7 @@
 
 import {wait, waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
-import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import FrontendModelBase, {AttributeNotSelectedError, VelociousAttachment} from "../../src/frontend-models/base.js"
 import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import Dummy from "../dummy/index.js"
@@ -139,6 +139,10 @@ class Task extends FrontendModelBase {
   static resourceConfig() {
     return {
       attributes: ["id", "name", "nameUppercase", "updatedAt"],
+      attachments: {
+        descriptionFile: {type: "hasOne"},
+        files: {type: "hasMany"}
+      },
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       primaryKey: "id"
@@ -294,6 +298,32 @@ async function seedHttpPreloadModels() {
   })
 
   await CommentRecord.create({body: "HTTP preload comment", taskId: task.id()})
+
+  return {project, task}
+}
+
+/**
+ * @returns {Promise<{project: ProjectRecord, task: TaskRecord}>}
+ */
+async function seedHttpAttachmentModels() {
+  const project = await ProjectRecord.create({name: "HTTP attachment project"})
+  const task = await TaskRecord.create({name: "HTTP attachment task", projectId: project.id()})
+
+  await task.descriptionFile().attach({
+    content: "description attachment",
+    contentType: "text/plain",
+    filename: "description.txt"
+  })
+  await task.files().attach({
+    content: "first file",
+    contentType: "text/plain",
+    filename: "first.txt"
+  })
+  await task.files().attach({
+    content: "second file",
+    contentType: "text/plain",
+    filename: "second.txt"
+  })
 
   return {project, task}
 }
@@ -1023,6 +1053,102 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         await expect(async () => {
           await User.findBy({[key]: "2"})
         }).toThrow(/findBy does not support symbol condition keys/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("loads attachment metadata as frontend models through real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {task} = await seedHttpAttachmentModels()
+        const descriptionAttachments = await VelociousAttachment
+          .where({recordType: "Task", recordId: String(task.id()), name: "descriptionFile"})
+          .toArray()
+        const fileAttachments = await VelociousAttachment
+          .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+          .order([["position", "asc"]])
+          .toArray()
+        const loadedTask = await Task.find(task.id())
+        const descriptionAttachmentFromHandle = await loadedTask.getAttachmentByName("descriptionFile").first()
+        const fileAttachmentsFromHandle = await loadedTask.getAttachmentByName("files").toArray()
+
+        expect(descriptionAttachments.length).toEqual(1)
+        expect(descriptionAttachments[0].recordType()).toEqual("Task")
+        expect(descriptionAttachments[0].recordId()).toEqual(String(task.id()))
+        expect(descriptionAttachments[0].name()).toEqual("descriptionFile")
+        expect(descriptionAttachments[0].filename()).toEqual("description.txt")
+        expect(descriptionAttachments[0].contentType()).toEqual("text/plain")
+        expect(descriptionAttachments[0].byteSize()).toEqual(Buffer.byteLength("description attachment"))
+        expect(descriptionAttachments[0].createdAt() instanceof Date).toEqual(true)
+        expect(Number.isFinite(descriptionAttachments[0].createdAt().getTime())).toEqual(true)
+        expect(descriptionAttachments[0].updatedAt() instanceof Date).toEqual(true)
+        expect(Number.isFinite(descriptionAttachments[0].updatedAt().getTime())).toEqual(true)
+        expect(descriptionAttachments[0].attributes().driver).toEqual(undefined)
+        expect(descriptionAttachments[0].attributes().storageKey).toEqual(undefined)
+        expect(descriptionAttachments[0].attributes().contentBase64).toEqual(undefined)
+        expect(fileAttachments.map((attachment) => attachment.filename())).toEqual(["first.txt", "second.txt"])
+        expect(fileAttachments.map((attachment) => attachment.position())).toEqual([0, 1])
+        expect(descriptionAttachmentFromHandle instanceof VelociousAttachment).toEqual(true)
+        if (!descriptionAttachmentFromHandle) throw new Error("Expected description attachment metadata")
+        expect(descriptionAttachmentFromHandle.filename()).toEqual("description.txt")
+        expect(fileAttachmentsFromHandle.map((attachment) => attachment.filename())).toEqual(["first.txt", "second.txt"])
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("rejects hidden attachment storage fields in frontend-model queries over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {task} = await seedHttpAttachmentModels()
+        const ownerWhere = {recordType: "Task", recordId: String(task.id()), name: "descriptionFile"}
+
+        await expect(async () => {
+          await VelociousAttachment
+            .select(["driver"])
+            .where(ownerWhere)
+            .toArray()
+        }).toThrow(/Unknown select attribute "driver"/)
+
+        await expect(async () => {
+          await VelociousAttachment
+            .where({...ownerWhere, storageKey: "secret"})
+            .toArray()
+        }).toThrow(/Unknown where column "storageKey"/)
+
+        await expect(async () => {
+          await VelociousAttachment
+            .where(ownerWhere)
+            .search([], "contentBase64", "eq", "secret")
+            .toArray()
+        }).toThrow(/Unknown search column "contentBase64"/)
+
+        await expect(async () => {
+          await VelociousAttachment
+            .where(ownerWhere)
+            .order([["storageKey", "asc"]])
+            .toArray()
+        }).toThrow(/Unknown sort column "storageKey"/)
+
+        await expect(async () => {
+          await VelociousAttachment
+            .where(ownerWhere)
+            .group("storageKey")
+            .toArray()
+        }).toThrow(/Unknown group column "storageKey"/)
+
+        await expect(async () => {
+          await VelociousAttachment
+            .where(ownerWhere)
+            .pluck("storageKey")
+        }).toThrow(/Unknown pluck column "storageKey"/)
       } finally {
         resetFrontendModelTransport()
       }

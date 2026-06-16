@@ -203,7 +203,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * Runs primary key type.
    * @returns {string} - The primary key type.
    */
-  primaryKeyType() { return "bigint" }
+  primaryKeyType() { return "uuid" }
 
   /**
    * Runs query actual.

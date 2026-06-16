@@ -18,11 +18,11 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
       await driver.query("DROP TABLE IF EXISTS fk_rebuild_posts")
       await driver.query("DROP TABLE IF EXISTS fk_rebuild_authors")
 
-      await migration.createTable("fk_rebuild_authors", (table) => {
+      await migration.createTable("fk_rebuild_authors", {id: {type: "bigint"}}, (table) => {
         table.string("name", {null: false})
       })
 
-      await migration.createTable("fk_rebuild_posts", (table) => {
+      await migration.createTable("fk_rebuild_posts", {id: {type: "bigint"}}, (table) => {
         table.string("title", {null: false})
         table.integer("author_id", {null: true})
       })
@@ -56,11 +56,11 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
       await driver.query("DROP TABLE IF EXISTS fk_data_posts")
       await driver.query("DROP TABLE IF EXISTS fk_data_authors")
 
-      await migration.createTable("fk_data_authors", (table) => {
+      await migration.createTable("fk_data_authors", {id: {type: "bigint"}}, (table) => {
         table.string("name", {null: false})
       })
 
-      await migration.createTable("fk_data_posts", (table) => {
+      await migration.createTable("fk_data_posts", {id: {type: "bigint"}}, (table) => {
         table.string("title", {null: false})
         table.integer("author_id", {null: true})
       })
@@ -97,11 +97,11 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
       await driver.query("DROP TABLE IF EXISTS fk_rename_posts")
       await driver.query("DROP TABLE IF EXISTS fk_rename_authors")
 
-      await migration.createTable("fk_rename_authors", (table) => {
+      await migration.createTable("fk_rename_authors", {id: {type: "bigint"}}, (table) => {
         table.string("name", {null: false})
       })
 
-      await migration.createTable("fk_rename_posts", (table) => {
+      await migration.createTable("fk_rename_posts", {id: {type: "bigint"}}, (table) => {
         table.string("title", {null: false})
         table.integer("author_id", {null: true})
       })
@@ -138,11 +138,11 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
       await driver.query("DROP TABLE IF EXISTS fk_state_posts")
       await driver.query("DROP TABLE IF EXISTS fk_state_authors")
 
-      await migration.createTable("fk_state_authors", (table) => {
+      await migration.createTable("fk_state_authors", {id: {type: "bigint"}}, (table) => {
         table.string("name", {null: false})
       })
 
-      await migration.createTable("fk_state_posts", (table) => {
+      await migration.createTable("fk_state_posts", {id: {type: "bigint"}}, (table) => {
         table.string("title", {null: false})
         table.integer("author_id", {null: true})
       })
@@ -181,16 +181,16 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
       await driver.query("DROP TABLE IF EXISTS fk_cross_posts")
       await driver.query("DROP TABLE IF EXISTS fk_cross_authors")
 
-      await migration.createTable("fk_cross_authors", (table) => {
+      await migration.createTable("fk_cross_authors", {id: {type: "bigint"}}, (table) => {
         table.string("name", {null: false})
       })
 
-      await migration.createTable("fk_cross_posts", (table) => {
+      await migration.createTable("fk_cross_posts", {id: {type: "bigint"}}, (table) => {
         table.string("title", {null: false})
         table.integer("author_id", {null: true})
       })
 
-      await migration.createTable("fk_cross_comments", (table) => {
+      await migration.createTable("fk_cross_comments", {id: {type: "bigint"}}, (table) => {
         table.string("body", {null: false})
         table.integer("fk_cross_post_id", {foreignKey: true, null: true})
       })
