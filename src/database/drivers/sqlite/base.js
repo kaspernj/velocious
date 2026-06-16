@@ -269,7 +269,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * Runs primary key type.
    * @returns {string} - The type of the primary key for this driver.
    */
-  primaryKeyType() { return "integer" } // Because bigint on SQLite doesn't support auto increment
+  primaryKeyType() { return "uuid" }
 
   /**
    * Runs query to sql.

@@ -1006,6 +1006,8 @@ npx velocious g:migration create-tasks
 ```
 
 ## Write a migration
+Implicit `id` primary keys and `references(...)` columns use UUIDs by default. Use an explicit numeric `id` or reference `type` only for legacy schemas or external compatibility.
+
 ```js
 import Migration from "velocious/build/src/database/migration/index.js"
 
@@ -1015,9 +1017,9 @@ export default class CreateEvents extends Migration {
       t.timestamps()
     })
 
-    // UUID primary key
-    await this.createTable("uuid_items", {id: {type: "uuid"}}, (t) => {
-      t.string("title", {null: false})
+    // Legacy numeric primary key
+    await this.createTable("legacy_events", {id: {type: "bigint"}}, (t) => {
+      t.references("task", {type: "bigint"})
       t.timestamps()
     })
 

@@ -2,7 +2,7 @@ import Migration from "../../../../../src/database/migration/index.js"
 
 class CreateAccounts extends Migration {
   async up() {
-    await this.createTable("accounts", (t) => {
+    await this.createTable("accounts", {id: {type: "bigint"}}, (t) => {
       t.string("name")
       t.timestamps()
     })

@@ -177,7 +177,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   getType() { return "pgsql" }
-  primaryKeyType() { return "bigint" }
+  primaryKeyType() { return "uuid" }
 
   /**
    * Runs query actual.

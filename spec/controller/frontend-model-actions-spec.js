@@ -1327,6 +1327,52 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("loads attachment metadata when the owner resource is in a later backend project", async () => {
+    await Dummy.run(async () => {
+      const configuration = Configuration.current()
+      const configuredBackendProjects = configuration.getBackendProjects()
+      const originalBackendProjects = configuredBackendProjects.slice()
+      const task = await createTask("Cross project attachment owner")
+
+      await task.descriptionFile().attach({
+        content: "cross-project-content",
+        filename: "cross-project.txt"
+      })
+
+      try {
+        configuredBackendProjects.splice(
+          0,
+          configuredBackendProjects.length,
+          {frontendModels: {}, path: "/tmp/empty-backend-project"},
+          {
+            frontendModels: {
+              Task: backendProjects[0].frontendModels.Task
+            },
+            path: dummyDirectory()
+          }
+        )
+
+        const payload = await postFrontendModel("/frontend-models", {
+          requests: [{
+            commandType: "index",
+            model: "VelociousAttachment",
+            payload: {
+              where: {recordType: "Task", recordId: String(task.id()), name: "descriptionFile"}
+            },
+            requestId: "request-1"
+          }]
+        })
+        const response = payload.responses[0].response
+
+        expect(response.status).toEqual("success")
+        expect(response.models.length).toEqual(1)
+        expect(response.models[0].filename).toEqual("cross-project.txt")
+      } finally {
+        configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)
+      }
+    })
+  })
+
   it("returns attachment URL through frontend-model URL endpoint", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Attachment URL endpoint")

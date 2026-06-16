@@ -129,12 +129,17 @@ describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transactio
     const attachment = new VelociousAttachment()
 
     attachment.loadExistingRecord({
+      byte_size: "1234",
       created_at_ms: "1700000000000",
       updated_at_ms: "1700000000001"
     })
 
-    expect(attachment.createdAtMs()).toEqual(1700000000000)
-    expect(attachment.updatedAtMs()).toEqual(1700000000001)
+    expect(typeof attachment.byteSize()).toBe("number")
+    expect(typeof attachment.createdAtMs()).toBe("number")
+    expect(typeof attachment.updatedAtMs()).toBe("number")
+    expect(attachment.byteSize()).toBe(1234)
+    expect(attachment.createdAtMs()).toBe(1700000000000)
+    expect(attachment.updatedAtMs()).toBe(1700000000001)
   })
 
   it("keeps only the latest queued has-one attachment before save", async () => {

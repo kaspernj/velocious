@@ -150,15 +150,7 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
    */
   async attachmentOwnerAuthorized(ownerScope) {
     const controller = /** @type {import("../frontend-model-controller.js").default} */ (this.controllerInstance())
-    const frontendModelResource = controller.frontendModelResourceConfiguration()
-    const backendProject = frontendModelResource?.backendProject
-
-    if (!backendProject) throw new Error("VelociousAttachment requires a backend project")
-
-    const ownerResource = controller.frontendModelResourceConfigurationForBackendProjectModelName({
-      backendProject,
-      modelName: ownerScope.recordType
-    })
+    const ownerResource = this.attachmentOwnerResource({controller, ownerScope})
 
     if (!ownerResource) {
       throw new Error(`No frontend model resource configured for attachment owner ${ownerScope.recordType}`)
@@ -184,5 +176,46 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
       .findBy({[ownerModelClass.primaryKey()]: ownerScope.recordId})
 
     return Boolean(owner)
+  }
+
+  /**
+   * Finds the frontend-model resource that owns an attachment scope.
+   * @param {object} args - Options object.
+   * @param {import("../frontend-model-controller.js").default} args.controller - Frontend-model controller.
+   * @param {{name: string, recordId: string, recordType: string}} args.ownerScope - Owner scope.
+   * @returns {{backendProject: import("../configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("../configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Owner resource configuration.
+   */
+  attachmentOwnerResource({controller, ownerScope}) {
+    const backendProjects = controller.getConfiguration().getBackendProjects()
+    let resourceWithoutAttachment = null
+
+    if (backendProjects.length < 1) throw new Error("VelociousAttachment requires a backend project")
+
+    for (const backendProject of backendProjects) {
+      const ownerResource = controller.frontendModelResourceConfigurationForBackendProjectModelName({
+        backendProject,
+        modelName: ownerScope.recordType
+      })
+
+      if (!ownerResource) continue
+
+      const ownerModelClass = controller.frontendModelResourceModelClass(ownerResource)
+
+      if (!ownerModelClass) {
+        throw new Error(`No model class configured for attachment owner ${ownerScope.recordType}`)
+      }
+
+      const attachmentDefinitions = ownerModelClass.getAttachmentsMap()
+
+      if (attachmentDefinitions[ownerScope.name]) return ownerResource
+
+      resourceWithoutAttachment ||= ownerResource
+    }
+
+    if (resourceWithoutAttachment) {
+      throw new Error(`No attachment '${ownerScope.name}' configured for ${ownerScope.recordType}`)
+    }
+
+    return null
   }
 }

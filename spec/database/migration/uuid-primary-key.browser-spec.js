@@ -2,11 +2,71 @@
 
 import UuidItem from "../../dummy/src/models/uuid-item.js"
 import Configuration from "../../../src/configuration.js"
+import DatabaseRecord from "../../../src/database/record/index.js"
+import Migration from "../../../src/database/migration/index.js"
 import {describe, it} from "../../../src/testing/test.js"
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** Record backed by a table with an implicit migration primary key. */
+class ImplicitUuidItem extends DatabaseRecord {
+  /** @returns {string} - Table name. */
+  static tableName() { return "implicit_uuid_items" }
+}
+
 describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
+  it("uses UUIDs for implicit primary keys", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const configuration = Configuration.current()
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      try {
+        await driver.dropTable("implicit_uuid_items", {cascade: true, ifExists: true})
+        await migration.createTable("implicit_uuid_items", (table) => {
+          table.string("title")
+        })
+        await ImplicitUuidItem.initializeRecord({configuration})
+
+        const record = new ImplicitUuidItem({title: "implicit uuid"})
+
+        await record.save()
+
+        expect(record.id()).toMatch(uuidRegex)
+      } finally {
+        await driver.dropTable("implicit_uuid_items", {cascade: true, ifExists: true})
+      }
+    })
+  })
+
+  it("uses UUIDs for implicit reference columns", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const configuration = Configuration.current()
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      try {
+        await driver.dropTable("implicit_uuid_children", {cascade: true, ifExists: true})
+        await driver.dropTable("implicit_uuid_parents", {cascade: true, ifExists: true})
+        await migration.createTable("implicit_uuid_parents", (table) => {
+          table.string("name")
+        })
+        await migration.createTable("implicit_uuid_children", (table) => {
+          table.references("implicit_uuid_parent", {null: true})
+        })
+
+        const childTable = await driver.getTableByNameOrFail("implicit_uuid_children")
+        const parentReferenceColumn = await childTable.getColumnByNameOrFail("implicit_uuid_parent_id")
+        const parentReferenceType = parentReferenceColumn.getType()?.toLowerCase()
+
+        expect(["uuid", "varchar"].includes(parentReferenceType || "")).toEqual(true)
+      } finally {
+        await driver.dropTable("implicit_uuid_children", {cascade: true, ifExists: true})
+        await driver.dropTable("implicit_uuid_parents", {cascade: true, ifExists: true})
+      }
+    })
+  })
+
   it("uses driver default UUIDs when supported", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const table = await dbs.default.getTableByNameOrFail("uuid_items")

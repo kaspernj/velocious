@@ -77,43 +77,45 @@ export default class VelociousAttachment extends DatabaseRecord {
    * Returns the attachment byte size.
    * @returns {number} - Attachment byte size.
    */
-  byteSize() { return this.readAttribute("byteSize") }
+  byteSize() { return this.safeIntegerAttribute({attributeName: "byteSize", expectedDescription: "attachment byte size"}) }
 
   /**
    * Returns the created-at timestamp in milliseconds.
    * @returns {number} - Created-at timestamp in milliseconds.
    */
-  createdAtMs() { return this.timestampMsAttribute("createdAtMs") }
+  createdAtMs() { return this.safeIntegerAttribute({attributeName: "createdAtMs", expectedDescription: "safe millisecond timestamp"}) }
 
   /**
    * Returns the updated-at timestamp in milliseconds.
    * @returns {number} - Updated-at timestamp in milliseconds.
    */
-  updatedAtMs() { return this.timestampMsAttribute("updatedAtMs") }
+  updatedAtMs() { return this.safeIntegerAttribute({attributeName: "updatedAtMs", expectedDescription: "safe millisecond timestamp"}) }
 
   /**
-   * Returns a checked millisecond timestamp attribute value.
-   * @param {"createdAtMs" | "updatedAtMs"} attributeName - Timestamp attribute name.
-   * @returns {number} - Millisecond timestamp.
+   * Returns a checked integer attribute value.
+   * @param {object} args - Options object.
+   * @param {"byteSize" | "createdAtMs" | "updatedAtMs"} args.attributeName - Integer attribute name.
+   * @param {string} args.expectedDescription - Description for error messages.
+   * @returns {number} - Safe integer value.
    */
-  timestampMsAttribute(attributeName) {
+  safeIntegerAttribute({attributeName, expectedDescription}) {
     const value = this.readAttribute(attributeName)
-    let timestampMs
+    let integer
 
     if (typeof value === "number") {
-      timestampMs = value
+      integer = value
     } else if (typeof value === "bigint") {
-      timestampMs = Number(value)
+      integer = Number(value)
     } else if (typeof value === "string" && INTEGER_STRING_PATTERN.test(value)) {
-      timestampMs = Number(value)
+      integer = Number(value)
     } else {
-      throw new Error(`Expected ${attributeName} to be a safe millisecond timestamp`)
+      throw new Error(`Expected ${attributeName} to be a ${expectedDescription}`)
     }
 
-    if (!Number.isSafeInteger(timestampMs)) {
-      throw new Error(`Expected ${attributeName} to be a safe millisecond timestamp`)
+    if (!Number.isSafeInteger(integer)) {
+      throw new Error(`Expected ${attributeName} to be a ${expectedDescription}`)
     }
 
-    return timestampMs
+    return integer
   }
 }
