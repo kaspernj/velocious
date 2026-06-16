@@ -384,7 +384,7 @@ export default class VelociousDatabaseMigration {
       // If driver doesn't support UUID() but the caller explicitly set a default, respect it.
     }
 
-    const tableData = new TableData(tableName, {ifNotExists})
+    const tableData = new TableData(tableName, {ifNotExists, primaryKeyType: databasePool.primaryKeyType()})
 
     restArgsError(restArgs)
 

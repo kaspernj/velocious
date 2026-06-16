@@ -5,6 +5,7 @@ This folder contains implementation learnings and practical guidance discovered 
 ## Index
 - `docs/advisory-locks.md`: Cooperative, connection-scoped advisory lock helpers on every record class.
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
+- `docs/database-migrations.md`: Migration helpers, implicit primary keys, and reference column defaults.
 - `docs/http-server.md`: HTTP server worker configuration and socket distribution behavior.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.

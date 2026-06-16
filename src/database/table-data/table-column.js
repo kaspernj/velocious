@@ -326,7 +326,13 @@ export default class TableColumn {
     }
 
     if (databaseType == "pgsql" && this.getAutoIncrement() && this.getPrimaryKey()) {
-      type = "SERIAL"
+      if (type == "BIGINT") {
+        type = "BIGSERIAL"
+      } else if (type == "SMALLINT") {
+        type = "SMALLSERIAL"
+      } else {
+        type = "SERIAL"
+      }
     }
 
     let sql = `${options.quoteColumnName(this.getActualName())} `

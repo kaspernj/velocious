@@ -8,6 +8,7 @@ import TableReference from "./table-reference.js"
  * TableDataArgsType type.
  * @typedef {object} TableDataArgsType
  * @property {boolean} ifNotExists - Whether to create the table only if it does not exist.
+ * @property {string} [primaryKeyType] - Default type for implicit primary-key references.
  */
 
 export default class TableData {
@@ -188,7 +189,7 @@ export default class TableData {
     const referenceArgs = args || {}
     const reference = new TableReference(name, referenceArgs)
     const {index, polymorphic, ...restArgs} = referenceArgs
-    const columnArgs = Object.assign({isNewColumn: true, type: "uuid"}, restArgs)
+    const columnArgs = Object.assign({isNewColumn: true, type: this.args?.primaryKeyType || "uuid"}, restArgs)
     const column = new TableColumn(columnName, columnArgs)
     const indexArgs = typeof index == "object" ? {unique: index.unique === true} : undefined
     const tableIndex = new TableIndex([column], indexArgs)

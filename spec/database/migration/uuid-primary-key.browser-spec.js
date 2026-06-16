@@ -68,6 +68,75 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
     })
   })
 
+  it("uses configured primary key types for implicit primary keys and references", async () => {
+    const configuration = Configuration.current()
+    const databaseConfiguration = configuration.getDatabaseConfiguration().default
+    const originalPrimaryKeyType = databaseConfiguration.primaryKeyType
+
+    databaseConfiguration.primaryKeyType = "bigint"
+
+    try {
+      await configuration.ensureConnections(async (dbs) => {
+        const driver = dbs.default
+        const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+        try {
+          await driver.dropTable("configured_primary_key_children", {cascade: true, ifExists: true})
+          await driver.dropTable("configured_primary_key_parents", {cascade: true, ifExists: true})
+          await migration.createTable("configured_primary_key_parents", (table) => {
+            table.string("name")
+          })
+          await migration.createTable("configured_primary_key_children", (table) => {
+            table.references("configured_primary_key_parent", {null: true})
+            table.references("configured_primary_key_parent_uuid", {null: true, type: "uuid"})
+          })
+
+          const parentTable = await driver.getTableByNameOrFail("configured_primary_key_parents")
+          const childTable = await driver.getTableByNameOrFail("configured_primary_key_children")
+          const parentIdColumn = await parentTable.getColumnByNameOrFail("id")
+          const parentReferenceColumn = await childTable.getColumnByNameOrFail("configured_primary_key_parent_id")
+          const explicitUuidReferenceColumn = await childTable.getColumnByNameOrFail("configured_primary_key_parent_uuid_id")
+          const expectedParentIdType = driver.getType() == "sqlite" ? "integer" : "bigint"
+
+          expect(parentIdColumn.getType()?.toLowerCase()).toEqual(expectedParentIdType)
+          expect(parentReferenceColumn.getType()?.toLowerCase()).toEqual("bigint")
+          expect(["uuid", "varchar"].includes(explicitUuidReferenceColumn.getType()?.toLowerCase() || "")).toEqual(true)
+        } finally {
+          await driver.dropTable("configured_primary_key_children", {cascade: true, ifExists: true})
+          await driver.dropTable("configured_primary_key_parents", {cascade: true, ifExists: true})
+        }
+      })
+    } finally {
+      if (originalPrimaryKeyType === undefined) {
+        delete databaseConfiguration.primaryKeyType
+      } else {
+        databaseConfiguration.primaryKeyType = originalPrimaryKeyType
+      }
+    }
+  })
+
+  it("keeps reference defaults tied to the database primary key type when table IDs are explicit", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const configuration = Configuration.current()
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      try {
+        await driver.dropTable("explicit_id_reference_defaults", {cascade: true, ifExists: true})
+        await migration.createTable("explicit_id_reference_defaults", {id: {type: "bigint"}}, (table) => {
+          table.references("implicit_uuid_parent", {null: true})
+        })
+
+        const table = await driver.getTableByNameOrFail("explicit_id_reference_defaults")
+        const referenceColumn = await table.getColumnByNameOrFail("implicit_uuid_parent_id")
+
+        expect(["uuid", "varchar"].includes(referenceColumn.getType()?.toLowerCase() || "")).toEqual(true)
+      } finally {
+        await driver.dropTable("explicit_id_reference_defaults", {cascade: true, ifExists: true})
+      }
+    })
+  })
+
   it("uses driver default UUIDs when supported", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const table = await dbs.default.getTableByNameOrFail("uuid_items")

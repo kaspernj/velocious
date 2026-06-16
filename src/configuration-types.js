@@ -71,6 +71,7 @@
  * @property {boolean} [migrations] - Whether migrations are enabled for this database.
  * @property {string} [password] - Password for the database user.
  * @property {number} [port] - Database port.
+ * @property {string} [primaryKeyType] - Default type for implicit migration primary keys and references. Defaults to `uuid`.
  * @property {DatabasePoolConfiguration} [pool] - Velocious database pool lifecycle configuration.
  * @property {string} [name] - Friendly name for the configuration.
  * @property {(file: string) => string} [locateFile] - Optional sqlite-web sql.js wasm resolver (`initSqlJs({locateFile})`).

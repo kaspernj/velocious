@@ -266,12 +266,6 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
-   * Runs primary key type.
-   * @returns {string} - The type of the primary key for this driver.
-   */
-  primaryKeyType() { return "uuid" }
-
-  /**
    * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.
