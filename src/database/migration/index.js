@@ -26,7 +26,15 @@
  * CreateTableCallbackType type.
  * @typedef {(table: TableData) => void} CreateTableCallbackType
  */
+/**
+ * LegacyLocalDateTimesMigrationArgsType type.
+ * @typedef {object} LegacyLocalDateTimesMigrationArgsType
+ * @property {Record<string, string[]>} [columnsByTable] - Explicit datetime columns keyed by table name.
+ * @property {number} [legacyLocalOffsetMinutes] - UTC-minus-local offset in minutes for legacy rows.
+ * @property {string[]} [tables] - Tables to migrate. Defaults to all non-internal tables.
+ */
 
+import { convertLegacyDateValueToUtcStorage } from "../datetime-storage.js"
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
 import TableData from "../table-data/index.js"
@@ -273,6 +281,125 @@ export default class VelociousDatabaseMigration {
     if (!column) throw new Error(`Column ${columnName} does not exist in table ${tableName}`)
 
     await column.changeNullable(nullable)
+  }
+
+  /**
+   * Migrates legacy timezone-less local datetime rows into UTC datetime storage.
+   * New SQLite UTC rows include a timezone suffix and are skipped.
+   * @param {LegacyLocalDateTimesMigrationArgsType} [args] - Migration options.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async migrateLegacyLocalDateTimesToUtcStorage(args = {}) {
+    const {columnsByTable, legacyLocalOffsetMinutes, tables, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    const tableNames = await this._legacyLocalDateTimesTableNames(tables)
+
+    for (const tableName of tableNames) {
+      await this._migrateLegacyLocalDateTimesTable({
+        columnsByTable,
+        legacyLocalOffsetMinutes,
+        tableName
+      })
+    }
+  }
+
+  /**
+   * Resolves table names for a legacy local datetime migration.
+   * @param {string[] | undefined} tables - Explicit table names.
+   * @returns {Promise<string[]>} - Table names.
+   */
+  async _legacyLocalDateTimesTableNames(tables) {
+    if (tables) return tables
+
+    return (await this.getDriver().getTables())
+      .map((table) => table.getName())
+      .filter((tableName) => tableName != "schema_migrations" && !tableName.startsWith("sqlite_"))
+  }
+
+  /**
+   * Migrates one table's legacy local datetime values.
+   * @param {object} args - Options.
+   * @param {Record<string, string[]> | undefined} args.columnsByTable - Explicit columns keyed by table.
+   * @param {number | undefined} args.legacyLocalOffsetMinutes - UTC-minus-local offset in minutes.
+   * @param {string} args.tableName - Table name.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _migrateLegacyLocalDateTimesTable({columnsByTable, legacyLocalOffsetMinutes, tableName}) {
+    const driver = this.getDriver()
+    const table = await driver.getTableByNameOrFail(tableName)
+    const columns = await this._legacyLocalDateTimesColumns({columnsByTable, table})
+
+    if (columns.length === 0) return
+
+    const primaryKeyColumn = await this._legacyLocalDateTimesPrimaryKey(table)
+    const selectedColumns = [primaryKeyColumn, ...columns]
+    const selectSql = selectedColumns
+      .map((columnName) => driver.quoteColumn(columnName))
+      .join(", ")
+    const rows = await driver.query(`SELECT ${selectSql} FROM ${driver.quoteTable(tableName)}`)
+
+    for (const row of rows) {
+      for (const columnName of columns) {
+        const value = row[columnName]
+        const convertedValue = convertLegacyDateValueToUtcStorage(value, {
+          databaseType: driver.getType(),
+          legacyLocalOffsetMinutes
+        })
+
+        if (convertedValue === value) continue
+
+        await driver.query(`
+          UPDATE ${driver.quoteTable(tableName)}
+          SET ${driver.quoteColumn(columnName)} = ${driver.quote(convertedValue)}
+          WHERE ${driver.quoteColumn(primaryKeyColumn)} = ${driver.quote(row[primaryKeyColumn])}
+        `)
+      }
+    }
+  }
+
+  /**
+   * Resolves date-like columns for one table.
+   * @param {object} args - Options.
+   * @param {Record<string, string[]> | undefined} args.columnsByTable - Explicit columns keyed by table.
+   * @param {import("../drivers/base-table.js").default} args.table - Table metadata.
+   * @returns {Promise<string[]>} - Date-like column names.
+   */
+  async _legacyLocalDateTimesColumns({columnsByTable, table}) {
+    const explicitColumns = columnsByTable?.[table.getName()]
+
+    if (explicitColumns) return explicitColumns
+
+    return (await table.getColumns())
+      .filter((column) => this._legacyLocalDateTimesColumnIsDateLike(column))
+      .map((column) => column.getName())
+  }
+
+  /**
+   * Checks whether a column should be included by default.
+   * @param {import("../drivers/base-column.js").default} column - Column metadata.
+   * @returns {boolean} - Whether the column is date-like.
+   */
+  _legacyLocalDateTimesColumnIsDateLike(column) {
+    const columnType = column.getType().toLowerCase()
+
+    return columnType.includes("date") || columnType.includes("timestamp")
+  }
+
+  /**
+   * Resolves the single primary key column for row updates.
+   * @param {import("../drivers/base-table.js").default} table - Table metadata.
+   * @returns {Promise<string>} - Primary key column name.
+   */
+  async _legacyLocalDateTimesPrimaryKey(table) {
+    const primaryKeyColumns = (await table.getColumns()).filter((column) => column.getPrimaryKey())
+
+    if (primaryKeyColumns.length != 1) {
+      throw new Error(`Expected exactly one primary key on ${table.getName()} but found ${primaryKeyColumns.length}`)
+    }
+
+    return primaryKeyColumns[0].getName()
   }
 
   /**

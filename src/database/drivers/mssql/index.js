@@ -30,6 +30,10 @@ export default class VelociousDatabaseDriversMssql extends Base{
     try {
       if (this.connection) await this.close()
 
+      if (sqlConfig) {
+        sqlConfig.options = Object.assign({}, sqlConfig.options, {useUTC: true})
+      }
+
       if (sqlConfig?.server && !sqlConfig.options?.serverName && net.isIP(sqlConfig.server)) {
         sqlConfig.options = Object.assign({}, sqlConfig.options, {serverName: ""})
       }

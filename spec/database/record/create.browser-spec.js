@@ -228,21 +228,26 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     const createdAt = "2025-12-26T16:18:50.641Z"
     const createdAtNoMs = "2025-12-26T16:18:50Z"
     const createdAtOffset = "2025-12-26T16:18:50+01:00"
+    const createdAtWithoutTimezone = "2025-12-26 16:18:50.641"
 
     const task = new Task({name: "ISO task", createdAt})
     const taskNoMs = new Task({name: "ISO task no ms", createdAt: createdAtNoMs})
     const taskOffset = new Task({name: "ISO task offset", createdAt: createdAtOffset})
+    const taskWithoutTimezone = new Task({name: "ISO task without timezone", createdAt: createdAtWithoutTimezone})
 
     const createdAtValue = task.createdAt()
     const createdAtNoMsValue = taskNoMs.createdAt()
     const createdAtOffsetValue = taskOffset.createdAt()
+    const createdAtWithoutTimezoneValue = taskWithoutTimezone.createdAt()
 
     expect(createdAtValue).toBeInstanceOf(Date)
     expect(createdAtNoMsValue).toBeInstanceOf(Date)
     expect(createdAtOffsetValue).toBeInstanceOf(Date)
+    expect(createdAtWithoutTimezoneValue).toBeInstanceOf(Date)
     expect(createdAtValue?.toISOString().slice(0, 19)).toEqual(createdAt.slice(0, 19))
     expect(createdAtNoMsValue?.toISOString().slice(0, 19)).toEqual(createdAtNoMs.slice(0, 19))
     expect(createdAtOffsetValue?.toISOString().slice(0, 19)).toEqual("2025-12-26T15:18:50")
+    expect(createdAtWithoutTimezoneValue?.toISOString().slice(0, 19)).toEqual("2025-12-26T16:18:50")
   })
 
   it("round-trips datetime values without timezone shifts", async () => {
@@ -287,9 +292,8 @@ describe("Record - create", {tags: ["dummy"]}, () => {
 
     await Configuration.current().getEnvironmentHandler().runWithTimezoneOffset(0, async () => {
       const reloaded = await Task.find(resolvedTaskId)
-      const expected = new Date(timestamp.getTime() - (120 * 60 * 1000))
 
-      expectTimestampMatches(reloaded.createdAt(), expected)
+      expectTimestampMatches(reloaded.createdAt(), timestamp)
     })
   })
 
