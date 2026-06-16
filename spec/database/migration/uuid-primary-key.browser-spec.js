@@ -137,6 +137,37 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
     })
   })
 
+  it("uses the explicit migration driver for primary key defaults outside a pool checkout", async () => {
+    const configuration = Configuration.current()
+    const pool = configuration.getDatabasePool("default")
+    const outsideContextConnection = pool.withoutCurrentConnectionContext(() => pool.getCurrentContextConnection())
+    const outsideContextConnectionIsShared = Boolean(outsideContextConnection && outsideContextConnection.getArgs().getConnection)
+
+    if (outsideContextConnection && !outsideContextConnectionIsShared) await pool.closeAll()
+    const driver = await pool.spawnConnection()
+    const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+    const sharesConnection = Boolean(driver.getArgs().getConnection)
+
+    try {
+      await driver.dropTable("explicit_driver_primary_keys", {cascade: true, ifExists: true})
+      await configuration.withoutCurrentConnectionContexts(async () => {
+        await migration.createTable("explicit_driver_primary_keys", {id: {type: "bigint"}}, (table) => {
+          table.string("name")
+        })
+      })
+
+      const table = await driver.getTableByNameOrFail("explicit_driver_primary_keys")
+      const idColumn = await table.getColumnByNameOrFail("id")
+      const expectedIdType = driver.getType() == "sqlite" ? "integer" : "bigint"
+
+      expect(idColumn.getType()?.toLowerCase()).toEqual(expectedIdType)
+    } finally {
+      await driver.dropTable("explicit_driver_primary_keys", {cascade: true, ifExists: true})
+
+      if (!sharesConnection) await driver.close()
+    }
+  })
+
   it("uses driver default UUIDs when supported", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const table = await dbs.default.getTableByNameOrFail("uuid_items")

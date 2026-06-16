@@ -351,8 +351,8 @@ export default class VelociousDatabaseMigration {
     }
 
     const {id = {}, ifNotExists = false, ...restArgs} = args
-    const databaseIdentifier = this._getDatabaseIdentifier()
-    const databasePool = this.configuration.getDatabasePool(databaseIdentifier)
+    const driver = this.getDriver()
+    const defaultPrimaryKeyType = driver.primaryKeyType()
     let idDefault, idType, restArgsId
 
     if (id !== false) {
@@ -362,9 +362,9 @@ export default class VelociousDatabaseMigration {
     }
 
     if (!idType) {
-      idType = databasePool.primaryKeyType()
+      idType = defaultPrimaryKeyType
     }
-    const driverSupportsDefaultUUID = this.getDriver().supportsDefaultPrimaryKeyUUID?.()
+    const driverSupportsDefaultUUID = driver.supportsDefaultPrimaryKeyUUID?.()
     const lowerIdType = idType?.toLowerCase()
     const isUUIDPrimaryKey = lowerIdType == "uuid"
     const numericAutoIncrementTypes = ["int", "integer", "bigint", "smallint", "tinyint"]
@@ -384,7 +384,7 @@ export default class VelociousDatabaseMigration {
       // If driver doesn't support UUID() but the caller explicitly set a default, respect it.
     }
 
-    const tableData = new TableData(tableName, {ifNotExists, primaryKeyType: databasePool.primaryKeyType()})
+    const tableData = new TableData(tableName, {ifNotExists, primaryKeyType: defaultPrimaryKeyType})
 
     restArgsError(restArgs)
 
@@ -398,7 +398,7 @@ export default class VelociousDatabaseMigration {
       callback(tableData)
     }
 
-    const sqls = await this.getDriver().createTableSql(tableData)
+    const sqls = await driver.createTableSql(tableData)
 
     for (const sql of sqls) {
       await this._db.query(sql)
