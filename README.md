@@ -5,7 +5,7 @@
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
 * Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
-* Migrations for schema changes
+* Migrations for schema changes (see [docs/database-migrations.md](docs/database-migrations.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
@@ -1006,7 +1006,20 @@ npx velocious g:migration create-tasks
 ```
 
 ## Write a migration
-Implicit `id` primary keys and `references(...)` columns use UUIDs by default. Use an explicit numeric `id` or reference `type` only for legacy schemas or external compatibility.
+Implicit `id` primary keys and `references(...)` columns use UUIDs by default. Set `primaryKeyType` on a database config to change the implicit type for that database, or pass an explicit `id` / reference `type` for legacy schemas and external compatibility.
+
+```js
+export default new Configuration({
+  database: {
+    production: {
+      default: {
+        type: "pgsql",
+        primaryKeyType: "bigint"
+      }
+    }
+  }
+})
+```
 
 ```js
 import Migration from "velocious/build/src/database/migration/index.js"

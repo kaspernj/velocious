@@ -407,6 +407,14 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Runs primary key type.
+   * @returns {string} - Configured primary key type, defaulting to UUID.
+   */
+  primaryKeyType() {
+    return this.getArgs().primaryKeyType || "uuid"
+  }
+
+  /**
    * Clears cached schema metadata for this driver instance.
    * @returns {void} - No return value.
    */

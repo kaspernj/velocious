@@ -83,4 +83,14 @@ describe("database - query - create-table foreign-key SQL", {databaseCleaning: {
     expect(sqls[0]).toContain("REFERENCES `authors`(`id`)")
     expect(sqls[0]).not.toContain("CONSTRAINT")
   })
+
+  it("uses bigserial for PostgreSQL auto-increment bigint primary keys", async () => {
+    const tableData = new TableData("posts")
+
+    tableData.addColumn("id", {autoIncrement: true, null: false, primaryKey: true, type: "bigint"})
+
+    const sqls = await new CreateTableBase({driver: buildDriver("pgsql"), tableData}).toSql()
+
+    expect(sqls[0]).toContain("`id` BIGSERIAL PRIMARY KEY NOT NULL")
+  })
 })
