@@ -51,10 +51,10 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 1
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 1
   mariadb_2:
     depends_on:
       - mariadb
@@ -65,10 +65,10 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 2
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 2
   mariadb_3:
     depends_on:
       - mariadb
@@ -79,10 +79,10 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.mariadb.js spec/dummy/src/config/configuration.js
       - wait-for-it mariadb:3306
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 3
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 3
   mssql_1:
     depends_on:
       - mssql
@@ -171,10 +171,10 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 1
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 1
   pgsql_2:
     depends_on:
       - postgres
@@ -185,10 +185,10 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 2
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 2
   pgsql_3:
     depends_on:
       - postgres
@@ -199,37 +199,37 @@ builds:
       - cp spec/dummy/src/config/configuration.peakflow.pgsql.js spec/dummy/src/config/configuration.js
       - wait-for-it postgres:5432
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 3
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 3
   sqlite_1:
     name: "SQLite (1/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 1
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 1
   sqlite_2:
     name: "SQLite (2/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 2
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 2
   sqlite_3:
     name: "SQLite (3/3)"
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
       - sleep 5
-      - cd spec/dummy && node ../../bin/velocious.js db:create
-      - cd spec/dummy && node ../../bin/velocious.js db:migrate
-      - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 3 --group-number 3
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:create
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && VELOCIOUS_DISABLE_MSSQL=1 node ../../bin/velocious.js g:base-models
+      - VELOCIOUS_DISABLE_MSSQL=1 npm run test -- --groups 3 --group-number 3
   expo_build:
     name: Expo Build
     script:

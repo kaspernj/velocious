@@ -10,13 +10,16 @@ describe("Configuration.ensureGlobalConnections", {databaseCleaning: {transactio
       await dummyConfiguration.ensureGlobalConnections()
 
       const defaultPool = dummyConfiguration.getDatabasePool("default")
-      const mssqlPool = /** @type {import("../../src/database/pool/async-tracked-multi-connection.js").default} */ (dummyConfiguration.getDatabasePool("mssql"))
-
       const defaultConnection = defaultPool.getCurrentConnection()
+
+      expect(defaultConnection).toBeDefined()
+
+      if (!dummyConfiguration.getDatabaseIdentifiers().includes("mssql")) return
+
+      const mssqlPool = /** @type {import("../../src/database/pool/async-tracked-multi-connection.js").default} */ (dummyConfiguration.getDatabasePool("mssql"))
       const fallbackConnection = mssqlPool.getGlobalConnection()
       const outsideConnection = await mssqlPool.asyncLocalStorage.run(undefined, async () => mssqlPool.getCurrentConnection())
 
-      expect(defaultConnection).toBeDefined()
       expect(fallbackConnection).toBeDefined()
       expect(outsideConnection).toBe(fallbackConnection)
     })
