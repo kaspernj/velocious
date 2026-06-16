@@ -102,6 +102,11 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
   }
 
   for (const resourceClass of Object.values(allFrontendModels)) {
+    // An abstract base resource (no static ModelClass — e.g. an app's shared
+    // `BaseResource` that other resources extend) backs no model, so there is
+    // nothing to publish realtime events for. Skip it instead of throwing.
+    if (!resourceClass.ModelClass) continue
+
     const modelClass = resourceClass.modelClass()
     const modelName = modelClass.getModelName()
 

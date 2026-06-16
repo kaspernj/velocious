@@ -5,6 +5,7 @@ import backendProjects from "../../../dummy/src/config/backend-projects.js"
 import Cli from "../../../../src/cli/index.js"
 import Configuration from "../../../../src/configuration.js"
 import DatabaseRecord from "../../../../src/database/record/index.js"
+import DbGenerateFrontendModels from "../../../../src/environment-handlers/node/cli/commands/generate/frontend-models.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../../../src/frontend-model-resource/base-resource.js"
@@ -119,6 +120,15 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
     return {
       attributes: {id: {type: "uuid", null: true}}
     }
+  }
+}
+
+// An abstract base resource other resources extend — deliberately has no static
+// ModelClass, like an app's shared `BaseResource`.
+class AbstractBaseFrontendResource extends FrontendModelBaseResource {
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {attributes: []}
   }
 }
 
@@ -958,5 +968,61 @@ export default class ReportResource extends FrontendModelBaseResource {
     }).toThrow(/Duplicate frontend model definition for 'User'/)
 
     await fs.rm(outputDirectory, {force: true, recursive: true})
+  })
+
+  it("generates configured resources even when an abstract base resource without a ModelClass is registered", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            AbstractBase: AbstractBaseFrontendResource,
+            Call: CallFrontendResource
+          }
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    // Must not throw "AbstractBase requires a static ModelClass" — the abstract
+    // base is treated as resource-less and the real resource still generates.
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("class Call extends FrontendModelBase")
+
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+  })
+
+  it("skips a class whose body can't be brace-matched instead of aborting the whole generation", () => {
+    const configuration = /** @type {any} */ ({getEnvironmentHandler: () => ({})})
+    const command = new DbGenerateFrontendModels({args: {configuration}, cli: /** @type {any} */ (null)})
+    // The redact() body contains a regex literal with quote characters; the brace
+    // matcher mis-tokenizes the quotes as string delimiters and can't find the
+    // closing brace. The class after it must still be processed.
+    const sourceText = [
+      "class RedactingResource {",
+      "  /** @returns {string} */",
+      "  redact(value) {",
+      "    return value.replace(/(token\\s*[=:]\\s*)(\"?)[^\\s\"']+\\2/gi, \"$1$2[REDACTED]$2\")",
+      "  }",
+      "}",
+      "",
+      "class CleanResource {",
+      "  /** @returns {Promise<number>} */",
+      "  index() { return Promise.resolve(1) }",
+      "}"
+    ].join("\n")
+    const returnTypes = new Map()
+
+    command.addResourceMethodReturnTypesFromSource({returnTypes, sourceText})
+
+    expect(returnTypes.get("CleanResource.index")).toEqual("Promise<number>")
   })
 })
