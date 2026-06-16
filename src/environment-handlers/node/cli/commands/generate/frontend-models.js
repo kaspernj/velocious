@@ -106,7 +106,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
           throw new Error(`Invalid frontend model resource definition for '${className}'`)
         }
 
-        const resourceClass = frontendModelResourceClassFromDefinition(resources[modelClassName])
+        const resolvedResourceClass = frontendModelResourceClassFromDefinition(resources[modelClassName])
+        // An abstract base resource (no static ModelClass — e.g. an app's shared
+        // `BaseResource` that other resources extend) can't back a generated
+        // frontend model. Treat it as resource-less so the generator falls back
+        // to by-name model lookup + empty write params instead of throwing when
+        // it eagerly calls `modelClass()` / `permittedParams()` on it.
+        const resourceClass = resolvedResourceClass && resolvedResourceClass.ModelClass ? resolvedResourceClass : null
 
         this.validateModelConfig({availableFrontendModelClassNames, className, modelConfig, resourceClass})
 
@@ -1516,7 +1522,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const classBodyEnd = this.matchingBraceIndex({openIndex: classBodyStart - 1, sourceText})
 
       if (classBodyEnd == null) {
-        throw new Error(`Could not find closing brace for resource class '${className}' while reading frontend attribute JSDoc`)
+        // The brace matcher can't tokenize every construct (e.g. a regex literal
+        // whose quotes look like string delimiters), so it can fail to locate a
+        // class body. Skip metadata extraction for that class rather than
+        // aborting the whole frontend-model generation; resources that parse
+        // cleanly still get their JSDoc-derived return/param types.
+        continue
       }
 
       const classBody = sourceText.slice(classBodyStart, classBodyEnd)
@@ -1557,7 +1568,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       const classBodyEnd = this.matchingBraceIndex({openIndex: classBodyStart - 1, sourceText})
 
       if (classBodyEnd == null) {
-        throw new Error(`Could not find closing brace for resource class '${className}' while reading frontend attribute JSDoc`)
+        // The brace matcher can't tokenize every construct (e.g. a regex literal
+        // whose quotes look like string delimiters), so it can fail to locate a
+        // class body. Skip metadata extraction for that class rather than
+        // aborting the whole frontend-model generation; resources that parse
+        // cleanly still get their JSDoc-derived return/param types.
+        continue
       }
 
       const classBody = sourceText.slice(classBodyStart, classBodyEnd)
