@@ -47,12 +47,16 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
+ * Defines frontend-model attribute metadata.
+ * @typedef {{columnType?: string, dataType?: string, jsDocType?: string, name?: string, null?: boolean, selectedByDefault?: boolean, sqlType?: string, type?: string}} FrontendModelAttributeDefinition
+ */
+/**
  * Attachment input accepted by frontend-model attachment helpers before normalization.
  * @typedef {Record<string, ?> | {arrayBuffer: () => Promise<ArrayBuffer>, type?: string, name?: string} | null | undefined} FrontendModelAttachmentInput
  */
 /**
  * Defines this typedef.
- * @typedef {{attributes?: string[], builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
+ * @typedef {{attributes?: Array<string | FrontendModelAttributeDefinition> | Record<string, FrontendModelAttributeDefinition>, builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
  */
 /**
  * Frontend model constructor type.
@@ -969,6 +973,38 @@ export class FrontendModelAttachmentHandle {
     }
 
     return null
+  }
+
+  /**
+   * Builds a query for this attachment handle's metadata rows.
+   * @returns {import("./query.js").default<typeof VelociousAttachment>} - Attachment metadata query.
+   */
+  query() {
+    const ModelClass = frontendModelClassFor(this.model)
+
+    return VelociousAttachment
+      .where({
+        name: this.attachmentName,
+        recordId: String(this.model.primaryKeyValue()),
+        recordType: ModelClass.getModelName()
+      })
+      .order([["position", "asc"]])
+  }
+
+  /**
+   * Loads all attachment metadata rows for this handle.
+   * @returns {Promise<VelociousAttachment[]>} - Attachment metadata rows.
+   */
+  async toArray() {
+    return await this.query().toArray()
+  }
+
+  /**
+   * Loads the first attachment metadata row for this handle.
+   * @returns {Promise<VelociousAttachment | null>} - First attachment metadata row.
+   */
+  async first() {
+    return await this.query().first()
   }
 
   /**
@@ -2592,7 +2628,7 @@ export default class FrontendModelBase {
     if (!this._relationships || Object.keys(this._relationships).length === 0) return
 
     const ModelClass = frontendModelClassFor(this)
-    const definitions = typeof ModelClass.relationshipDefinitions === "function" ? ModelClass.relationshipDefinitions() : {}
+    const definitions = ModelClass.relationshipDefinitions()
 
     for (const relationshipName of Object.keys(this._relationships)) {
       const definition = /**
@@ -2683,7 +2719,7 @@ export default class FrontendModelBase {
    * @returns {string} - The model name.
    */
   static getModelName() {
-    const resourceConfig = typeof this.resourceConfig === "function" ? this.resourceConfig() : null
+    const resourceConfig = this.resourceConfig()
     const modelName = resourceConfig?.modelName
 
     return (typeof modelName === "string" && modelName.length > 0) ? modelName : this.name
@@ -3955,7 +3991,7 @@ export default class FrontendModelBase {
    */
   async _buildNestedAttributesPayload() {
     const ModelClass = frontendModelClassFor(this)
-    const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
+    const resourceConfig = ModelClass.resourceConfig()
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
     if (!nestedAttributesConfig) return {}
@@ -4177,7 +4213,7 @@ export default class FrontendModelBase {
    */
   _reconcileNestedAttributesFromResponse(response) {
     const ModelClass = frontendModelClassFor(this)
-    const resourceConfig = typeof ModelClass.resourceConfig === "function" ? ModelClass.resourceConfig() : null
+    const resourceConfig = ModelClass.resourceConfig()
     const nestedAttributesConfig = resourceConfig?.nestedAttributes
 
     if (!nestedAttributesConfig) return
@@ -4407,3 +4443,93 @@ export default class FrontendModelBase {
     return new Set()
   }
 }
+
+/** Public frontend model for safe Velocious attachment metadata. */
+export class VelociousAttachment extends FrontendModelBase {
+  /**
+   * Runs resource config.
+   * @returns {FrontendModelResourceConfig} - Resource config.
+   */
+  static resourceConfig() {
+    return {
+      attributes: {
+        byteSize: {type: "integer"},
+        contentType: {null: true, type: "varchar"},
+        createdAt: {type: "datetime"},
+        filename: {type: "varchar"},
+        id: {type: "uuid"},
+        name: {type: "varchar"},
+        position: {type: "integer"},
+        recordId: {type: "varchar"},
+        recordType: {type: "varchar"},
+        updatedAt: {type: "datetime"}
+      },
+      builtInCollectionCommands: ["index"],
+      builtInMemberCommands: ["find"],
+      modelName: "VelociousAttachment",
+      primaryKey: "id"
+    }
+  }
+
+  /**
+   * Returns the attachment id.
+   * @returns {string} - Attachment id.
+   */
+  id() { return this.readAttribute("id") }
+
+  /**
+   * Returns the owner model name.
+   * @returns {string} - Owner model name.
+   */
+  recordType() { return this.readAttribute("recordType") }
+
+  /**
+   * Returns the owner record id.
+   * @returns {string} - Owner record id.
+   */
+  recordId() { return this.readAttribute("recordId") }
+
+  /**
+   * Returns the attachment name on the owner model.
+   * @returns {string} - Attachment name on the owner model.
+   */
+  name() { return this.readAttribute("name") }
+
+  /**
+   * Returns the attachment position.
+   * @returns {number} - Attachment position.
+   */
+  position() { return this.readAttribute("position") }
+
+  /**
+   * Returns the attachment filename.
+   * @returns {string} - Attachment filename.
+   */
+  filename() { return this.readAttribute("filename") }
+
+  /**
+   * Returns the attachment content type.
+   * @returns {string | null} - Attachment content type.
+   */
+  contentType() { return this.readAttribute("contentType") }
+
+  /**
+   * Returns the attachment byte size.
+   * @returns {number} - Attachment byte size.
+   */
+  byteSize() { return this.readAttribute("byteSize") }
+
+  /**
+   * Returns the created-at timestamp.
+   * @returns {Date} - Created-at timestamp.
+   */
+  createdAt() { return this.readAttribute("createdAt") }
+
+  /**
+   * Returns the updated-at timestamp.
+   * @returns {Date} - Updated-at timestamp.
+   */
+  updatedAt() { return this.readAttribute("updatedAt") }
+}
+
+FrontendModelBase.registerModel(VelociousAttachment)

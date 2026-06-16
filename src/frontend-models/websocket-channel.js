@@ -55,20 +55,19 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     this._eventFilters()
 
     const configuration = this.session.configuration
-    const modelClasses = configuration.getModelClasses?.() || {}
+    const modelClasses = configuration.getModelClasses()
     const ModelClass = modelClasses[modelName]
 
     if (!ModelClass) return false
 
-    const ability = await configuration.resolveAbility?.({
+    const request = /** @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest())
+    const ability = await configuration.resolveAbility({
       // Forward the subscriber's params (e.g. authenticationToken) so token-authenticated clients
       // resolve the same ability they would over HTTP. Without this only session/cookie auth on the
       // upgrade request works, and param-based auth (like a scanner passing an authenticationToken)
       // is dropped — leaving such subscribers with a guest ability and no read rule.
       params: {...this.params, model: modelName},
-      request: /**
-                * Narrows the runtime value to the documented type.
-                * @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+      request,
       response: new Response({configuration})
     })
 
@@ -78,13 +77,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     // Load resource-declared rules for this model class before checking,
     // otherwise `rulesFor` returns empty for abilities whose resources
     // register rules lazily via `abilities()`.
-    if (typeof ability.loadAbilitiesForModelClass === "function") {
-      ability.loadAbilitiesForModelClass(ModelClass)
-    }
+    ability.loadAbilitiesForModelClass(ModelClass)
 
-    const readRules = typeof ability.rulesFor === "function"
-      ? ability.rulesFor({action: "read", modelClass: ModelClass})
-      : []
+    const readRules = ability.rulesFor({action: "read", modelClass: ModelClass})
 
     return readRules.some((/**
                             * Narrows the runtime value to the documented type.
@@ -100,7 +95,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   async deliverBroadcast(body, meta) {
     const configuration = this.session.configuration
 
-    if (configuration && typeof configuration.ensureConnections === "function") {
+    if (configuration) {
       await configuration.ensureConnections({name: "Frontend model websocket broadcast"}, async () => {
         await this._deliverBroadcast(body, meta)
       })

@@ -14,7 +14,14 @@ import path from "node:path"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
 import * as ts from "typescript"
 
+class Call extends DatabaseRecord {
+  /** @returns {number | null} */
+  ea() { return this.readAttribute("ea") }
+}
+
 class CallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -28,11 +35,6 @@ class CallFrontendResource extends FrontendModelBaseResource {
       }
     }
   }
-}
-
-class Call extends DatabaseRecord {
-  /** @returns {number | null} */
-  ea() { return this.readAttribute("ea") }
 }
 
 class InferredCallFrontendResource extends FrontendModelBaseResource {
@@ -110,6 +112,8 @@ class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseRes
 }
 
 class NullableIdCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
@@ -118,20 +122,22 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class User extends DatabaseRecord {}
+User.setPrimaryKey("reference")
+
 class ReferenceUserFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = User
+
   /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
   static resourceConfig() {
     return {
       attributes: [
-        {name: "reference", type: "varchar", null: true},
+        {name: "reference", type: "varchar"},
         {name: "email", type: "varchar"}
       ]
     }
   }
 }
-
-class User extends DatabaseRecord {}
-User.setPrimaryKey("reference")
 
 /** @returns {void} */
 function configureCallColumns() {
@@ -767,6 +773,8 @@ export default class ReportResource extends FrontendModelBaseResource {
 
     /** Resource that opts in to nested writes for two relationships through permittedParams. */
     class ProjectWithNestedResource extends FrontendModelBaseResource {
+      static ModelClass = backendProjects[0].frontendModels.Project.ModelClass
+
       /** @returns {Array<string | Record<string, Array<string>>>} */
       permittedParams() {
         return [

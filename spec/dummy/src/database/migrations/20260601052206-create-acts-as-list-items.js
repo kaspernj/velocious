@@ -4,8 +4,8 @@ import Migration from "../../../../../src/database/migration/index.js"
 
 export default class CreateActsAsListItems extends Migration {
   async change() {
-    await this.createTable("acts_as_list_items", (table) => {
-      table.references("project", {null: false})
+    await this.createTable("acts_as_list_items", {id: {type: "bigint"}}, (table) => {
+      table.references("project", {null: false, type: "bigint"})
       table.integer("position", {null: true})
       table.string("name")
       table.timestamps()

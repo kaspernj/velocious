@@ -5,7 +5,7 @@
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
 * Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
-* Migrations for schema changes
+* Migrations for schema changes (see [docs/database-migrations.md](docs/database-migrations.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
@@ -447,7 +447,8 @@ Frontend-model `group(...)` is attribute/path based and does not accept raw SQL 
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
 Frontend-model `joins(...)` supports relationship-object descriptors only (for example `Task.joins({project: {creatingUser: true}})`) and rejects raw SQL join strings.
 Frontend-model `distinct(...)` only accepts booleans (`true` by default) and is applied server-side through the backend query API.
-Frontend-model `pluck(...)` validates attribute/path descriptors against configured resource attributes and does not accept SQL fragments or hidden raw model columns when the resource declares an explicit attribute list.
+Frontend-model `pluck(...)` validates attribute/path descriptors against configured resource/model metadata and does not accept SQL fragments or hidden raw model columns when the resource declares an explicit attribute list.
+Frontend-model query fields are limited to attributes exposed by the backend resource. Use `{name: "attributeName", selectedByDefault: false}` for fields that may be selected or filtered explicitly but should stay out of default payloads.
 
 When backend payloads include `__preloadedRelationships`, nested frontend-model relationships are hydrated recursively. Relationship methods can use `getRelationshipByName("relationship").loaded()` and will throw when a relationship was not preloaded.
 
@@ -547,11 +548,14 @@ For frontend models, configure `resourceConfig().attachments` and use:
 await frontendTask.update({descriptionFile: file})
 const descriptionFile = await frontendTask.descriptionFile().download()
 const descriptionFileUrl = await frontendTask.descriptionFile().url()
+const descriptionFileMetadata = await frontendTask.descriptionFile().first()
+const filesMetadata = await frontendTask.files().toArray()
 await frontendTask.attach(file)
 ```
 
 Frontend model attachment input does not support `{path: ...}`.
 Use `File`/`Blob`/bytes/`contentBase64` payloads instead.
+Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
@@ -1003,6 +1007,21 @@ npx velocious g:migration create-tasks
 ```
 
 ## Write a migration
+Implicit `id` primary keys and `references(...)` columns use UUIDs by default. Set `primaryKeyType` on a database config to change the implicit type for that database, or pass an explicit `id` / reference `type` for legacy schemas and external compatibility.
+
+```js
+export default new Configuration({
+  database: {
+    production: {
+      default: {
+        type: "pgsql",
+        primaryKeyType: "bigint"
+      }
+    }
+  }
+})
+```
+
 ```js
 import Migration from "velocious/build/src/database/migration/index.js"
 
@@ -1012,9 +1031,9 @@ export default class CreateEvents extends Migration {
       t.timestamps()
     })
 
-    // UUID primary key
-    await this.createTable("uuid_items", {id: {type: "uuid"}}, (t) => {
-      t.string("title", {null: false})
+    // Legacy numeric primary key
+    await this.createTable("legacy_events", {id: {type: "bigint"}}, (t) => {
+      t.references("task", {type: "bigint"})
       t.timestamps()
     })
 

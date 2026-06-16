@@ -2,9 +2,9 @@ import Migration from "../../../../../src/database/migration/index.js"
 
 export default class CreateAuthenticationTokens extends Migration {
   async up() {
-    await this.createTable("authentication_tokens", (t) => {
+    await this.createTable("authentication_tokens", {id: {type: "bigint"}}, (t) => {
       t.string("token", {default: () => "UUID()", index: {unique: true}})
-      t.references("user", {foreignKey: true, null: false})
+      t.references("user", {foreignKey: true, null: false, type: "bigint"})
       t.timestamps()
     })
   }

@@ -1,8 +1,8 @@
 // @ts-check
 
 import AuthorizationBaseResource from "../authorization/base-resource.js"
-import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
-import {frontendModelResourcesForBackendProject} from "./resource-definition.js"
+import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
+import {frontendModelResourceDefinitionIsClass, frontendModelResourcesForBackendProject} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
 const modelClassesWithRegisteredHooks = new WeakSet()
@@ -39,7 +39,7 @@ async function resolveAbilityResourcesList(configuration) {
 
   // Resolve from the ability resolver by calling it with a synthetic context.
   // The resolver must handle undefined request/response gracefully.
-  const resolver = configuration.getAbilityResolver?.()
+  const resolver = configuration.getAbilityResolver()
 
   if (typeof resolver === "function") {
     const ability = await resolver({configuration, params: {}, request: /**
@@ -78,24 +78,10 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
       throw new Error(`Expected ability resource to be a class but got: ${typeof resourceClass}`)
     }
 
-    if (resourceClass.prototype instanceof FrontendModelBaseResource) {
-      const modelClass = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass).ModelClass
+    if (frontendModelResourceDefinitionIsClass(resourceClass)) {
+      const modelName = resourceClass.modelClass().getModelName()
 
-      if (!modelClass) {
-        throw new Error(`Resource class ${resourceClass.name} is missing a static ModelClass property`)
-      }
-
-      const modelName = modelClass.getModelName()
-
-      if (!modelName) {
-        throw new Error(`Model class ${modelClass.name} returned empty model name from getModelName()`)
-      }
-
-      resources[modelName] = /**
-                              * Narrows the runtime value to the documented type.
-                              * @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resourceClass)
+      resources[modelName] = resourceClass
     } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
       // Authorization-only resource — valid but not relevant for WebSocket publishing
     } else {
@@ -112,24 +98,31 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
  * @returns {Promise<void>}
  */
 export async function ensureFrontendModelWebsocketPublishersRegistered(configuration) {
-  const modelClasses = configuration.getModelClasses()
-
   /**
    * All frontend models.
    * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   let allFrontendModels = {}
+  /**
+   * Configured frontend models.
+   * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
+  let configuredFrontendModels = {}
 
   for (const backendProject of configuration.getBackendProjects()) {
-    const projectResources = frontendModelResourcesForBackendProject(backendProject)
+    const configuredProjectResources = frontendModelResourcesForBackendProject(backendProject)
+    const projectResources = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
 
+    configuredFrontendModels = {...configuredFrontendModels, ...configuredProjectResources}
     allFrontendModels = {...allFrontendModels, ...projectResources}
   }
 
   // Auto-discover from ability resources when backend projects didn't provide any
-  if (Object.keys(allFrontendModels).length === 0) {
+  if (Object.keys(configuredFrontendModels).length === 0) {
     const abilityResources = await resolveAbilityResourcesList(configuration)
 
-    allFrontendModels = frontendModelResourcesFromAbilityResourcesList(abilityResources)
+    allFrontendModels = {
+      ...allFrontendModels,
+      ...frontendModelResourcesFromAbilityResourcesList(abilityResources)
+    }
   }
 
   // Phase 3: register the V2 channel class once per configuration so
@@ -141,13 +134,12 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     channelClassRegisteredConfigurations.add(configuration)
     const {default: FrontendModelWebsocketChannel} = await import("./websocket-channel.js")
 
-    configuration.registerWebsocketChannel?.(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannel)
+    configuration.registerWebsocketChannel(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannel)
   }
 
-  for (const modelName of Object.keys(allFrontendModels)) {
-    const modelClass = modelClasses[modelName]
-
-    if (!modelClass) continue
+  for (const resourceClass of Object.values(allFrontendModels)) {
+    const modelClass = resourceClass.modelClass()
+    const modelName = modelClass.getModelName()
 
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where
@@ -209,8 +201,6 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {
-  if (typeof configuration.broadcastToChannel !== "function") return
-
   const body = {
     action: event.action,
     id: event.id,

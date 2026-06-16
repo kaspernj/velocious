@@ -3,8 +3,8 @@ import Migration from "../../../../../src/database/migration/index.js"
 export default class CreateProjectDetails extends Migration {
   async up() {
     if (!await this.tableExists("project_details")) {
-      await this.createTable("project_details", (t) => {
-        t.references("project", {foreignKey: true, null: false})
+      await this.createTable("project_details", {id: {type: "bigint"}}, (t) => {
+        t.references("project", {foreignKey: true, null: false, type: "bigint"})
         t.text("note")
         t.timestamps()
       })

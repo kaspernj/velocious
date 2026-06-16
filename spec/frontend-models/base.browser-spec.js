@@ -1,5 +1,5 @@
 import Configuration from "../../src/configuration.js"
-import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import FrontendModelBase, {AttributeNotSelectedError, VelociousAttachment} from "../../src/frontend-models/base.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
 import TaskRecord from "../dummy/src/models/task.js"
@@ -123,6 +123,10 @@ class Task extends FrontendModelBase {
     return {
       abilities: ["read"],
       attributes: ["id", "name", "updatedAt"],
+      attachments: {
+        descriptionFile: {type: "hasOne"},
+        files: {type: "hasMany"}
+      },
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       primaryKey: "id"
@@ -284,6 +288,46 @@ async function seedBrowserPreloadModels() {
   return preloadSeedResult
 }
 
+/** @type {{project: ProjectRecord, task: TaskRecord} | null} */
+let attachmentSeedResult = null
+
+/** @returns {Promise<{project: ProjectRecord, task: TaskRecord}>} */
+async function seedBrowserAttachmentModels() {
+  if (attachmentSeedResult) return attachmentSeedResult
+
+  const config = backendConfiguration()
+
+  await config.ensureConnections(async () => {
+    await ProjectRecord.initializeRecord({configuration: config})
+    await TaskRecord.initializeRecord({configuration: config})
+
+    const project = await ProjectRecord.create({name: "Browser attachment project"})
+    const task = await TaskRecord.create({name: "Browser attachment task", projectId: project.id()})
+
+    await task.descriptionFile().attach({
+      content: "browser description attachment",
+      contentType: "text/plain",
+      filename: "browser-description.txt"
+    })
+    await task.files().attach({
+      content: "browser first file",
+      contentType: "text/plain",
+      filename: "browser-first.txt"
+    })
+    await task.files().attach({
+      content: "browser second file",
+      contentType: "text/plain",
+      filename: "browser-second.txt"
+    })
+
+    attachmentSeedResult = {project, task}
+  })
+
+  await restoreBrowserSideModelConfiguration([ProjectRecord, TaskRecord])
+
+  return attachmentSeedResult
+}
+
 /** @returns {boolean} */
 function runBrowserHttpIntegration() {
   return process.env.VELOCIOUS_BROWSER_TESTS === "true"
@@ -426,6 +470,44 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
 
       expect(model?.id()).toEqual(2)
       expect(model?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("loads attachment metadata as frontend models through real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      const {task} = await seedBrowserAttachmentModels()
+      const descriptionAttachments = await VelociousAttachment
+        .where({recordType: "Task", recordId: String(task.id()), name: "descriptionFile"})
+        .toArray()
+      const fileAttachments = await VelociousAttachment
+        .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+        .order([["position", "asc"]])
+        .toArray()
+
+      expect(descriptionAttachments.length).toEqual(1)
+      expect(descriptionAttachments[0].recordType()).toEqual("Task")
+      expect(descriptionAttachments[0].recordId()).toEqual(String(task.id()))
+      expect(descriptionAttachments[0].name()).toEqual("descriptionFile")
+      expect(descriptionAttachments[0].filename()).toEqual("browser-description.txt")
+      expect(descriptionAttachments[0].contentType()).toEqual("text/plain")
+      expect(descriptionAttachments[0].byteSize()).toEqual("browser description attachment".length)
+      expect(descriptionAttachments[0].createdAt() instanceof Date).toEqual(true)
+      expect(Number.isFinite(descriptionAttachments[0].createdAt().getTime())).toEqual(true)
+      expect(descriptionAttachments[0].updatedAt() instanceof Date).toEqual(true)
+      expect(Number.isFinite(descriptionAttachments[0].updatedAt().getTime())).toEqual(true)
+      expect(descriptionAttachments[0].attributes().driver).toEqual(undefined)
+      expect(descriptionAttachments[0].attributes().storageKey).toEqual(undefined)
+      expect(descriptionAttachments[0].attributes().contentBase64).toEqual(undefined)
+      expect(fileAttachments.map((attachment) => attachment.filename())).toEqual(["browser-first.txt", "browser-second.txt"])
+      expect(fileAttachments.map((attachment) => attachment.position())).toEqual([0, 1])
     } finally {
       resetFrontendModelTransport()
     }

@@ -22,9 +22,13 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs model class.
-   * @returns {typeof import("../database/record/index.js").default | undefined} - Model class handled by this resource.
+   * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
    */
   static modelClass() {
+    if (!this.ModelClass) {
+      throw new Error(`${this.name} must define static ModelClass before calling ability helpers.`)
+    }
+
     return this.ModelClass
   }
 
@@ -69,15 +73,9 @@ export default class AuthorizationBaseResource {
    * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
    */
   requiredModelClass() {
-    const modelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {typeof AuthorizationBaseResource} */ (this.constructor).modelClass()
+    const ResourceClass = /** @type {typeof AuthorizationBaseResource} */ (this.constructor)
 
-    if (!modelClass) {
-      throw new Error(`${this.constructor.name} must define static ModelClass before calling ability helpers.`)
-    }
-
-    return modelClass
+    return ResourceClass.modelClass()
   }
 
   /**

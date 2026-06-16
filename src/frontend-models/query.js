@@ -216,9 +216,7 @@ function normalizeAbilitiesSpec(spec, rootModelClass) {
       }
     }
 
-    const rootModelName = typeof rootModelClass?.getModelName === "function"
-      ? rootModelClass.getModelName()
-      : undefined
+    const rootModelName = rootModelClass.getModelName()
     if (!rootModelName) {
       throw new Error("abilities flat-form requires a root model class with getModelName()")
     }
@@ -989,12 +987,8 @@ function frontendModelPluckTargetModelClass(modelClass, path) {
   let targetModelClass = modelClass
 
   for (const relationshipName of path) {
-    const relationshipDefinitions = typeof targetModelClass.relationshipDefinitions === "function"
-      ? targetModelClass.relationshipDefinitions()
-      : {}
-    const relationshipModelClasses = typeof targetModelClass.relationshipModelClasses === "function"
-      ? targetModelClass.relationshipModelClasses()
-      : {}
+    const relationshipDefinitions = targetModelClass.relationshipDefinitions()
+    const relationshipModelClasses = targetModelClass.relationshipModelClasses()
     const relationshipDefinition = relationshipDefinitions[relationshipName]
     const relationshipTargetModelClass = resolveFrontendModelClass(relationshipModelClasses[relationshipName])
 

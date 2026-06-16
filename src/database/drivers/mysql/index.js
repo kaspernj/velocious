@@ -208,12 +208,6 @@ export default class VelociousDatabaseDriversMysql extends Base{
   getType() { return "mysql" }
 
   /**
-   * Runs primary key type.
-   * @returns {string} - The primary key type.
-   */
-  primaryKeyType() { return "bigint" }
-
-  /**
    * Runs retryable database error.
    * @param {Error} error - Error instance.
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.

@@ -168,11 +168,11 @@ async function initializeDummyModels(configuration) {
       const modelImport = await import(pathToFileURL(modelFile).href)
       const modelClass = modelImport.default
 
-      if (!modelClass?.initializeRecord) {
+      if (!modelClass) {
         throw new Error(`Model wasn't exported from: ${modelFile}`)
       }
 
-      if (typeof modelClass.getDatabaseIdentifier === "function" && modelClass.getDatabaseIdentifier() !== "default") {
+      if (modelClass.getConfiguredDatabaseIdentifier() !== "default") {
         continue
       }
 

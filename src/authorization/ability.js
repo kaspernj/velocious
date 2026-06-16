@@ -72,7 +72,7 @@ export default class VelociousAuthorizationAbility {
   _resolveResourcesFromConfiguration() {
     const configuration = this.context?.configuration
 
-    if (!configuration || typeof configuration.getBackendProjects !== "function") {
+    if (!configuration) {
       return []
     }
 
@@ -85,12 +85,10 @@ export default class VelociousAuthorizationAbility {
     for (const backendProject of backendProjects) {
       const frontendModels = backendProject.frontendModels
 
-      if (!frontendModels || typeof frontendModels !== "object") continue
+      if (!frontendModels) continue
 
       for (const resourceDefinition of Object.values(frontendModels)) {
-        if (typeof resourceDefinition === "function" && typeof resourceDefinition.modelClass === "function") {
-          resolved.push(resourceDefinition)
-        }
+        resolved.push(resourceDefinition)
       }
     }
 
@@ -173,7 +171,6 @@ export default class VelociousAuthorizationAbility {
     for (const ResourceClass of this.resources) {
       const resourceModelClass = ResourceClass.modelClass()
 
-      if (!resourceModelClass) continue
       if (resourceModelClass !== modelClass) continue
 
       const resourceInstance = new ResourceClass({

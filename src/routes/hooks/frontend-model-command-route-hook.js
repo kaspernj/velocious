@@ -1,6 +1,7 @@
 // @ts-check
 
-import {frontendModelActionForCommand, frontendModelCustomCommandForPath, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "../../frontend-models/resource-definition.js"
+import {frontendModelResourcesWithBuiltInsForBackendProject} from "../../frontend-models/built-in-resources.js"
+import {frontendModelActionForCommand, frontendModelCustomCommandForPath, frontendModelResourcePath} from "../../frontend-models/resource-definition.js"
 
 const SHARED_FRONTEND_MODEL_API_PATH = "/frontend-models"
 const FRONTEND_MODEL_CONTROLLER_PATH = new URL("../../frontend-model-controller.js", import.meta.url).href
@@ -27,7 +28,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   // Don't intercept paths that match explicitly defined custom routes
   if (hasMatchingCustomRoute) return null
 
-  const backendProjects = configuration.getBackendProjects?.() || []
+  const backendProjects = configuration.getBackendProjects()
   const customCommandMatch = frontendModelCustomCommandForPath({
     backendProjects,
     currentPath: normalizedCurrentPath
@@ -56,7 +57,7 @@ export default async function frontendModelCommandRouteHook({configuration, curr
   }
 
   for (const backendProject of backendProjects) {
-    const resources = frontendModelResourcesForBackendProject(backendProject)
+    const resources = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
 
     for (const modelName in resources) {
       const resourceDefinition = resources[modelName]

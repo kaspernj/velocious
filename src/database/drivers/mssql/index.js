@@ -200,12 +200,6 @@ export default class VelociousDatabaseDriversMssql extends Base{
   getType() { return "mssql" }
 
   /**
-   * Runs primary key type.
-   * @returns {string} - The primary key type.
-   */
-  primaryKeyType() { return "bigint" }
-
-  /**
    * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.

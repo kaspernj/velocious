@@ -98,6 +98,8 @@ export default class RecordAttachmentsStore {
 
     this._readyPromise = (async () => {
       await this._withDb(async (db) => {
+        db.clearSchemaCache()
+
         if (await db.tableExists(ATTACHMENTS_TABLE)) {
           await this.ensureAttachmentStoreSchema({db})
           return
