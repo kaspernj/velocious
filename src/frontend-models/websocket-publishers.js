@@ -43,6 +43,12 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
     }
 
     if (frontendModelResourceDefinitionIsClass(resourceClass)) {
+      // An abstract base resource (no static ModelClass — e.g. an app's shared
+      // `BaseResource` that other resources extend) backs no model, so it isn't a
+      // publishable frontend model. Skip it instead of letting `modelClass()`
+      // throw `requires a static ModelClass` during ability-resource discovery.
+      if (!resourceClass.ModelClass) continue
+
       const modelName = resourceClass.modelClass().getModelName()
 
       resources[modelName] = resourceClass

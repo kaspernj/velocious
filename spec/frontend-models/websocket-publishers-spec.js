@@ -154,4 +154,41 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     // Should not throw — TestAuthResource is skipped, TestTaskResource is registered
     await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
   })
+
+  it("skips abstract FrontendModelBaseResource subclasses without a ModelClass during ability-resource discovery", async () => {
+    // An app's shared abstract base resource that real resources extend.
+    class AbstractBaseResource extends FrontendModelBaseResource {}
+
+    class TestTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          builtInCollectionCommands: ["index"],
+          builtInMemberCommands: ["find"]
+        }
+      }
+    }
+
+    const mockConfiguration = {
+      getAbilityResources: () => [AbstractBaseResource, TestTaskResource],
+      getAbilityResolver: () => undefined,
+      getBackendProjects: () => [
+        {path: "/tmp/test-project"}
+      ],
+      getModelClasses: () => ({
+        Task
+      }),
+      getWebsocketEvents: () => ({
+        publish: () => {}
+      }),
+      registerWebsocketChannel: () => {}
+    }
+
+    // Must not throw "AbstractBaseResource requires a static ModelClass" — the
+    // abstract base is skipped and the real resource is still registered.
+    await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
+  })
 })
