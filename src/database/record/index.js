@@ -1678,7 +1678,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Declares a tenant-aware database identifier resolver for this model class.
-   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: Record<string, unknown>}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
+   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: Record<string, unknown> | null | undefined}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
    * @returns {void} - No return value.
    */
   static switchesTenantDatabase(databaseIdentifierOrResolver) {
