@@ -6,6 +6,8 @@
  * @property {?} [default] - Default value for the column.
  * @property {object} [foreignKey] - Foreign key definition for the column.
  * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
+ * @property {number} [limit] - Alias for maxLength (varchar length limit) on string-like columns.
+ * @property {number} [maxLength] - Maximum length for string-like columns (e.g. varchar length).
  * @property {boolean} [null] - Whether the column allows null values.
  * @property {boolean} [primaryKey] - Whether the column is a primary key.
  * @property {boolean} [unique] - Whether the column enforces uniqueness.
