@@ -6,6 +6,10 @@ import {serializeFrontendModelTransportValue} from "./transport-serialization.js
 
 const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 
+// Mirrors FRONTEND_MODELS_CHANNEL_NAME in ./websocket-publishers.js, duplicated here
+// to avoid the configuration → logger → websocket-publishers import cycle.
+const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
+
 /**
  * Defines this typedef.
  * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
@@ -381,18 +385,22 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       return await callback()
     }
 
+    // Mirror the subscribe-time tenant resolution (`WebsocketSession._resolveTenant`):
+    // pass `subscription: {channel, params}` so resolvers that derive scope from the
+    // subscription behave the same for broadcasts as they did at `channel-subscribe`.
+    // The synthetic request forwards the subscriber's params (e.g. authenticationToken),
+    // matching this channel's ability resolution above.
     const tenant = await configuration.resolveTenant({
       params: {...this.params, id, model: this._modelName()},
-      request: /**
-                * Narrows the runtime value to the documented type.
-                * @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
-      response: new Response({configuration})
+      request: /** @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+      response: new Response({configuration}),
+      subscription: {channel: FRONTEND_MODELS_CHANNEL_NAME, params: this.params}
     })
 
-    if (!tenant) {
-      return await callback()
-    }
-
+    // Always enter `runWithTenant`, even when no tenant resolved. Broadcast fan-out
+    // runs in the publisher's ambient tenant context; falling back to `callback()`
+    // there would authorize a cross-tenant record against the publisher's tenant and
+    // could leak it to a subscriber whose own resolver could not resolve it.
     return await configuration.runWithTenant(tenant, async () => {
       return await configuration.ensureConnections({name: "Frontend model websocket event tenant"}, callback)
     })
