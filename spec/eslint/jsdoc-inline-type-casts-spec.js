@@ -100,6 +100,20 @@ describe("eslint jsdoc inline type casts rule", () => {
     ])
   })
 
+  it("rejects line-wrapped inline type casts", () => {
+    const messages = lintSource(`
+      const value =
+        /**
+         * Narrows the runtime value to the documented type.
+         * @type {string} */
+        (input)
+    `)
+
+    expect(messages.map((message) => message.message)).toEqual([
+      "Inline JSDoc @type comments must stay on one line; move complex casts to a named local."
+    ])
+  })
+
   it("fixes multiline inline type casts to a single-line cast", () => {
     const report = fixSource(`
       const value = /**
@@ -109,5 +123,22 @@ describe("eslint jsdoc inline type casts rule", () => {
 
     expect(report.fixed).toEqual(true)
     expect(report.output).toContain("const value = /** @type {string} */ (input)")
+  })
+
+  it("does not autofix wrapped type tags", () => {
+    const source = `
+      const value = /**
+                     * Narrows the runtime value to the documented type.
+                     * @type {Array<
+                     *   string
+                     * >} */ (input)
+    `
+    const report = fixSource(source)
+
+    expect(report.fixed).toEqual(false)
+    expect(report.output).toEqual(source)
+    expect(report.messages.map((message) => message.message)).toEqual([
+      "Inline JSDoc @type comments must stay on one line; move complex casts to a named local."
+    ])
   })
 })

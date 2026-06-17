@@ -3,6 +3,15 @@
 const typeTagPattern = /^@type\b/
 
 /**
+ * Checks whether the `@type` tag fits on one line.
+ * @param {string} typeTag - Type tag text.
+ * @returns {boolean} Whether the tag text contains the complete type braces.
+ */
+function isSingleLineTypeTag(typeTag) {
+  return /\{.*\}/.test(typeTag)
+}
+
+/**
  * ESLint comment shape used by this rule.
  * @typedef {object} SourceComment
  * @property {"Block" | "Line"} type - Comment type.
@@ -44,7 +53,9 @@ function isInlineTypeComment(sourceCode, comment) {
 
   return Boolean(
     (previousToken && previousToken.loc.end.line === comment.loc.start.line) ||
-      (nextToken && nextToken.loc.start.line === comment.loc.end.line)
+      (nextToken && nextToken.loc.start.line === comment.loc.end.line) ||
+      (previousToken?.type === "Punctuator" && previousToken.value === "(") ||
+      (nextToken?.type === "Punctuator" && nextToken.value === "(")
   )
 }
 
@@ -58,7 +69,7 @@ function reportInlineTypeCast(context, comment, typeTag) {
   context.report({
     loc: comment.loc,
     messageId: "multilineInlineTypeCast",
-    fix: (fixer) => fixer.replaceTextRange(comment.range, `/** ${typeTag} */`)
+    fix: isSingleLineTypeTag(typeTag) ? (fixer) => fixer.replaceTextRange(comment.range, `/** ${typeTag} */`) : null
   })
 }
 
