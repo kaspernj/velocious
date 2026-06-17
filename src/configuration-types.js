@@ -304,9 +304,8 @@
  * @property {string[]} [abilities] - Ability action list (camelCase action names). Defaults to `["read"]` for `find` and `index` when omitted.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {string[]} [commands] - Legacy built-in command names (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
- * @property {string[]} [collectionCommands] - Custom collection commands as camelCase method names. The runtime derives the kebab-case command slug from each name.
- * @property {string[]} [memberCommands] - Custom member commands as camelCase method names. The runtime derives the kebab-case command slug from each name.
- * @property {Record<string, string>} [commandReturnTypes] - Optional `{commandName: "JSDoc return type"}` map. When a custom command declares one, the generator types its method `Promise<thatType>` instead of `Promise<Record<string, ?>>`. Emitted verbatim into the generated frontend model, so it must resolve there.
+ * @property {Array<FrontendModelResourceCustomCommand>} [collectionCommands] - Custom collection commands. Each entry is a camelCase method name, or a `{name, args?, returnType?}` object declaring typed arguments and/or a response type. The runtime derives the kebab-case command slug from the name.
+ * @property {Array<FrontendModelResourceCustomCommand>} [memberCommands] - Custom member commands. Each entry is a camelCase method name, or a `{name, args?, returnType?}` object declaring typed arguments and/or a response type. The runtime derives the kebab-case command slug from the name.
  * @property {string[]} [builtInCollectionCommands] - Built-in collection command names (`index`, `create`).
  * @property {string[]} [builtInMemberCommands] - Built-in member command names (`find`, `update`, `destroy`, `attach`, `download`, `url`).
  * @property {string[]} [relationships] - Relationship names to expose in frontend models. Type and target model are inferred from the backend model's registered relationships.
@@ -315,12 +314,27 @@
  */
 
 /**
- * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commandReturnTypes" | "commands" | "memberCommands"> & {
+ * Object form of a custom command entry, declaring its typed arguments and/or
+ * response type alongside the command name.
+ * @typedef {object} FrontendModelResourceCustomCommandObject
+ * @property {string} name - camelCase command method name.
+ * @property {Array<{name: string, type: string}>} [args] - Typed command arguments; each generates a named, typed method parameter mapped positionally into the command payload. `type` is a JSDoc type string.
+ * @property {string} [returnType] - JSDoc type for the command response. When set, the generated method is typed `Promise<returnType>` instead of `Promise<Record<string, ?>>`. Emitted verbatim into the generated frontend model, so it must resolve there.
+ */
+
+/**
+ * A custom command entry: a plain camelCase method name, or an object declaring
+ * typed args and/or a response type.
+ * @typedef {string | FrontendModelResourceCustomCommandObject} FrontendModelResourceCustomCommand
+ */
+
+/**
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands"> & {
  *   abilities: FrontendModelResourceAbilitiesConfiguration
  *   builtInCollectionCommands: Record<string, string>
  *   builtInMemberCommands: Record<string, string>
  *   collectionCommands: Record<string, string>
- *   commandReturnTypes: Record<string, string>
+ *   commandMetadata: Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>
  *   memberCommands: Record<string, string>
  * }} NormalizedFrontendModelResourceConfiguration
  */

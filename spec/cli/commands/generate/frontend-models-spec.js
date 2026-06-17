@@ -130,8 +130,10 @@ class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
   static resourceConfig() {
     return {
       attributes: {id: {type: "uuid"}},
-      commandReturnTypes: {refresh: "{refreshedAt: string}"},
-      memberCommands: ["refresh"]
+      memberCommands: [
+        "ping",
+        {name: "refresh", args: [{name: "age", type: "number"}], returnType: "{refreshedAt: string}"}
+      ]
     }
   }
 }
@@ -983,7 +985,7 @@ export default class ReportResource extends FrontendModelBaseResource {
     await fs.rm(outputDirectory, {force: true, recursive: true})
   })
 
-  it("types a custom command's response from the resource's declared commandReturnTypes", async () => {
+  it("types a custom command's args and response from a {name, args, returnType} command entry", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
     const cli = new Cli({
@@ -1003,9 +1005,14 @@ export default class ReportResource extends FrontendModelBaseResource {
 
     const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
 
-    expect(callContents).toContain("async refresh(...commandArguments)")
+    // Object entry: named typed arg + declared return type.
+    expect(callContents).toContain("async refresh(age) {")
+    expect(callContents).toContain("@param {number} age - Command argument.")
     expect(callContents).toContain("@returns {Promise<{refreshedAt: string}>} - Command response.")
-    expect(callContents).not.toContain("@returns {Promise<Record<string, ?>>} - Command response.")
+    expect(callContents).toContain("normalizeCustomCommandPayloadArguments([age])")
+    // Plain string entry stays variadic with the generic response type.
+    expect(callContents).toContain("async ping(...commandArguments) {")
+    expect(callContents).toContain("@returns {Promise<Record<string, ?>>} - Command response.")
 
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })

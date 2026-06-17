@@ -70,7 +70,6 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     "builtInCollectionCommands",
     "builtInMemberCommands",
     "collectionCommands",
-    "commandReturnTypes",
     "commands",
     "memberCommands",
     "modelName",
@@ -91,42 +90,12 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     builtInCollectionCommands: normalizedCommands.builtInCollectionCommands,
     builtInMemberCommands: normalizedCommands.builtInMemberCommands,
     collectionCommands: normalizedCommands.collectionCommands,
-    // Optional `{commandName: "JSDoc return type"}` map. When a custom command
-    // declares one, the generator types its method `Promise<thatType>` instead of
-    // the generic `Promise<Record<string, ?>>`. The type is emitted verbatim into
-    // the generated frontend model, so it must resolve there (a self-contained
-    // inline type or an importable name).
-    commandReturnTypes: normalizeFrontendModelCommandReturnTypes(resourceConfiguration.commandReturnTypes),
+    // Per-command metadata (typed args + declared return type) keyed by method
+    // name, derived from `{name, args?, returnType?}` command entries. The
+    // generator uses it to type each custom command method.
+    commandMetadata: normalizedCommands.commandMetadata,
     memberCommands: normalizedCommands.memberCommands
   }
-}
-
-/**
- * Validates the optional custom-command return-type map.
- * @param {unknown} commandReturnTypes - Raw `commandReturnTypes` config.
- * @returns {Record<string, string>} - Normalized return-type map.
- */
-function normalizeFrontendModelCommandReturnTypes(commandReturnTypes) {
-  if (commandReturnTypes === undefined || commandReturnTypes === null) {
-    return {}
-  }
-
-  if (typeof commandReturnTypes !== "object" || Array.isArray(commandReturnTypes)) {
-    throw new Error(`commandReturnTypes must be a {commandName: returnType} object but got: ${typeof commandReturnTypes}`)
-  }
-
-  /** @type {Record<string, string>} */
-  const normalized = {}
-
-  for (const [commandName, returnType] of Object.entries(commandReturnTypes)) {
-    if (typeof returnType !== "string" || returnType.trim().length < 1) {
-      throw new Error(`commandReturnTypes['${commandName}'] must be a non-empty JSDoc type string`)
-    }
-
-    normalized[commandName] = returnType.trim()
-  }
-
-  return normalized
 }
 
 /**
@@ -186,7 +155,7 @@ function defaultCrudAbilities() {
 /**
  * Runs normalize frontend model resource commands.
  * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
- * @returns {{builtInCollectionCommands: Record<string, string>, builtInMemberCommands: Record<string, string>, collectionCommands: Record<string, string>, memberCommands: Record<string, string>}} - Normalized command configuration.
+ * @returns {{builtInCollectionCommands: Record<string, string>, builtInMemberCommands: Record<string, string>, collectionCommands: Record<string, string>, commandMetadata: Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>, memberCommands: Record<string, string>}} - Normalized command configuration.
  */
 function normalizeFrontendModelResourceCommands(resourceConfiguration) {
   const builtInCollectionCommands = resourceConfiguration.builtInCollectionCommands
@@ -215,11 +184,15 @@ function normalizeFrontendModelResourceCommands(resourceConfiguration) {
     modelName: "MemberCommand"
   })
 
+  const normalizedCollectionCommands = normalizeFrontendModelCustomCommands({commandsConfig: customCollectionCommands, modelName: "CollectionCommand"})
+  const normalizedMemberCommands = normalizeFrontendModelCustomCommands({commandsConfig: customMemberCommands, modelName: "MemberCommand"})
+
   return {
     builtInCollectionCommands: normalizedBuiltInCollectionCommands,
     builtInMemberCommands: normalizedBuiltInMemberCommands,
-    collectionCommands: normalizeFrontendModelCustomCommands({commandsConfig: customCollectionCommands, modelName: "CollectionCommand"}),
-    memberCommands: normalizeFrontendModelCustomCommands({commandsConfig: customMemberCommands, modelName: "MemberCommand"})
+    collectionCommands: normalizedCollectionCommands.commands,
+    commandMetadata: {...normalizedCollectionCommands.metadata, ...normalizedMemberCommands.metadata},
+    memberCommands: normalizedMemberCommands.commands
   }
 }
 
@@ -263,27 +236,30 @@ function normalizeFrontendModelBuiltInCommands({commandDefaults, commandsConfig,
 }
 
 /**
- * Runs normalize frontend model custom commands.
+ * Runs normalize frontend model custom commands. Entries are either a plain
+ * camelCase method-name string or a `{name, args?, returnType?}` object that
+ * also declares the command's typed arguments and/or response type.
  * @param {object} args - Arguments.
- * @param {string[] | undefined} args.commandsConfig - Custom commands config (camelCase method-name list).
+ * @param {Array<string | {name: string, args?: Array<{name: string, type: string}>, returnType?: string}> | undefined} args.commandsConfig - Custom commands config.
  * @param {string} args.modelName - Diagnostic model name.
- * @returns {Record<string, string>} - Normalized custom command config (camelCase method name → kebab-case command slug).
+ * @returns {{commands: Record<string, string>, metadata: Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>}} - Route map (method name → kebab slug) + per-command metadata.
  */
 function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
   if (!commandsConfig) {
-    return {}
+    return {commands: {}, metadata: {}}
   }
 
   if (!Array.isArray(commandsConfig)) {
     throw new Error(`${modelName} configuration must use the array form. Object form is no longer supported.`)
   }
 
-  /**
-   * Normalized commands.
-   * @type {Record<string, string>} */
-  const normalizedCommands = {}
+  /** @type {Record<string, string>} */
+  const commands = {}
+  /** @type {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} */
+  const metadata = {}
 
-  for (const methodName of commandsConfig) {
+  for (const commandEntry of commandsConfig) {
+    const {methodName, args, returnType} = normalizeFrontendModelCustomCommandEntry({commandEntry, modelName})
     const validatedMethodName = validateFrontendModelResourceCommandName({
       commandName: methodName,
       commandType: methodName,
@@ -291,10 +267,90 @@ function normalizeFrontendModelCustomCommands({commandsConfig, modelName}) {
     })
     const commandSlug = inflection.dasherize(inflection.underscore(validatedMethodName))
 
-    normalizedCommands[validatedMethodName] = commandSlug
+    commands[validatedMethodName] = commandSlug
+    metadata[validatedMethodName] = {args, returnType}
   }
 
-  return normalizedCommands
+  return {commands, metadata}
+}
+
+/**
+ * Normalizes one custom-command entry (string shorthand or contract object).
+ * @param {object} args - Arguments.
+ * @param {unknown} args.commandEntry - Raw command entry.
+ * @param {string} args.modelName - Diagnostic model name.
+ * @returns {{methodName: string, args: Array<{name: string, type: string}>, returnType: string | null}} - Method name + metadata.
+ */
+function normalizeFrontendModelCustomCommandEntry({commandEntry, modelName}) {
+  if (typeof commandEntry === "string") {
+    return {methodName: commandEntry, args: [], returnType: null}
+  }
+
+  if (!commandEntry || typeof commandEntry !== "object" || Array.isArray(commandEntry)) {
+    throw new Error(`${modelName} entries must be a camelCase name string or a {name, args?, returnType?} object`)
+  }
+
+  const {name, args, returnType, ...rest} = /** @type {{name?: unknown, args?: unknown, returnType?: unknown}} */ (commandEntry)
+
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`Unexpected ${modelName} keys: ${Object.keys(rest).join(", ")}. Allowed: name, args, returnType`)
+  }
+
+  if (typeof name !== "string" || name.length < 1) {
+    throw new Error(`${modelName} object entries require a non-empty 'name' string`)
+  }
+
+  return {
+    methodName: name,
+    args: normalizeFrontendModelCommandArgs({args, commandName: name, modelName}),
+    returnType: normalizeFrontendModelCommandReturnType({commandName: name, modelName, returnType})
+  }
+}
+
+/**
+ * Validates and normalizes a custom command's typed-argument list.
+ * @param {object} args - Arguments.
+ * @param {unknown} args.args - Raw command args.
+ * @param {string} args.commandName - Command name for diagnostics.
+ * @param {string} args.modelName - Diagnostic model name.
+ * @returns {Array<{name: string, type: string}>} - Normalized typed command arguments.
+ */
+function normalizeFrontendModelCommandArgs({args, commandName, modelName}) {
+  if (args === undefined || args === null) {
+    return []
+  }
+
+  if (!Array.isArray(args)) {
+    throw new Error(`${modelName} '${commandName}' args must be an array of {name, type} objects`)
+  }
+
+  return args.map((arg) => {
+    if (!arg || typeof arg !== "object" || typeof arg.name !== "string" || arg.name.length < 1 || typeof arg.type !== "string" || arg.type.trim().length < 1) {
+      throw new Error(`${modelName} '${commandName}' args entries require non-empty 'name' and JSDoc-type 'type' strings`)
+    }
+
+    return {name: arg.name, type: arg.type.trim()}
+  })
+}
+
+/**
+ * Validates and normalizes a custom command's declared JSDoc return type.
+ * @param {object} args - Arguments.
+ * @param {string} args.commandName - Command name for diagnostics.
+ * @param {string} args.modelName - Diagnostic model name.
+ * @param {unknown} args.returnType - Raw return type.
+ * @returns {string | null} - Normalized JSDoc return type.
+ */
+function normalizeFrontendModelCommandReturnType({commandName, modelName, returnType}) {
+  if (returnType === undefined || returnType === null) {
+    return null
+  }
+
+  if (typeof returnType !== "string" || returnType.trim().length < 1) {
+    throw new Error(`${modelName} '${commandName}' returnType must be a non-empty JSDoc type string`)
+  }
+
+  return returnType.trim()
 }
 
 /**

@@ -2,4 +2,4 @@ Generated typed-attribute frontend models (`FrontendModelBase<XAttributes, XCrea
 
 The generator's model-accessor attribute inference now unwraps `Promise<T>` to `T` (a frontend attribute holds the serialized resolved value, not a Promise) and falls back to `any` when the inferred type references a backend-only typedef that can't resolve in the generated frontend model.
 
-Custom commands can now declare their response type via a `commandReturnTypes: {commandName: "JSDoc type"}` map on the resource; the generator types that command's method `Promise<thatType>` instead of the generic `Promise<Record<string, ?>>`.
+Custom command entries in `collectionCommands`/`memberCommands` may now be a `{name, args?, returnType?}` object (alongside the plain camelCase-name string form). Declared `args: [{name, type}]` generate named, typed method parameters mapped positionally into the command payload; a declared `returnType` types the method `Promise<thatType>` instead of the generic `Promise<Record<string, ?>>`.
