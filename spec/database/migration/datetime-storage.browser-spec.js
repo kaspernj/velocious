@@ -10,6 +10,11 @@ describe("database - migration - datetime storage", {tags: ["dummy"]}, () => {
       const tableName = "legacy_datetime_storage_records"
       const migration = new Migration({configuration: Configuration.current(), db})
 
+      if (db.getType() != "sqlite") {
+        // Only SQLite preserves legacy local values as timezone-less strings.
+        return
+      }
+
       if (await migration.tableExists(tableName)) {
         await migration.dropTable(tableName)
       }
