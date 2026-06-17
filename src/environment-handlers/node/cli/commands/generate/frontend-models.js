@@ -1438,7 +1438,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   customCommandMethodSignature({commandMetadata, methodName}) {
     const metadata = commandMetadata[methodName] || {args: [], returnType: null}
-    const returnType = metadata.returnType || "Record<string, ?>"
+    const returnType = metadata.returnType || "Record<string, FrontendModelAttributeValue>"
 
     if (metadata.args.length > 0) {
       const parameterNames = metadata.args.map((arg) => arg.name)

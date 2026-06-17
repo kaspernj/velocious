@@ -1124,7 +1124,7 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(callContents).toContain("normalizeCustomCommandPayloadArguments([age])")
     // Plain string entry stays variadic with the generic response type.
     expect(callContents).toContain("async ping(...commandArguments) {")
-    expect(callContents).toContain("@returns {Promise<Record<string, ?>>} - Command response.")
+    expect(callContents).toContain("@returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response.")
 
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })
