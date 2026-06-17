@@ -61,7 +61,7 @@ export default class Current {
 
   /**
    * Runs set tenant.
-   * @param {Record<string, unknown>} tenant - Tenant.
+   * @param {object} tenant - Tenant. Any caller-defined object shape; read back (and narrowed) via tenant().
    * @returns {void} - No return value.
    */
   static setTenant(tenant) {
@@ -70,7 +70,7 @@ export default class Current {
 
   /**
    * Runs with tenant.
-   * @param {Record<string, unknown>} tenant - Tenant.
+   * @param {object} tenant - Tenant. Any caller-defined object shape; read back (and narrowed) via tenant().
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
    */

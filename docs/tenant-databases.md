@@ -8,6 +8,24 @@ Configure the tenant database as `tenantOnly: true`. Tenant-only identifiers are
 
 Model classes that call `switchesTenantDatabase(...)` require a tenant database identifier by default. If a model query or write runs without a current tenant, or with a tenant object that does not resolve the model's tenant database, Velocious raises `TenantDatabaseScopeError` instead of falling back to the global database. Legacy apps can temporarily set `enforceTenantDatabaseScopes: false` on the configuration while migrating to explicit tenant scopes.
 
+## Tenant object typing
+
+The tenant is an app-defined value: Velocious stores and restores whatever object you pass and never inspects its fields. The types reflect the split between writing and reading it:
+
+- **Writing** — `Current.setTenant(tenant)`, `Current.withTenant(tenant, callback)`, and `configuration.runWithTenant(tenant, callback)` accept any `object`, so a tenant modeled as an `interface`/class (for example `interface Tenant { slug: string }`) is assignable without a cast.
+- **Reading** — `Current.tenant()` returns `Record<string, unknown> | undefined`, so consumers can read and narrow their own fields without casting `unknown`.
+- **Resolver callback** — the `switchesTenantDatabase((args) => ...)` callback receives `args.tenant` typed `Record<string, unknown> | null | undefined`. It can be invoked outside a tenant scope (with a nullish tenant) before the fail-closed `TenantDatabaseScopeError` path runs, so resolvers must narrow rather than read a field directly:
+
+```js
+ProjectRecord.switchesTenantDatabase(({tenant}) => {
+  const databaseIdentifiers = tenant?.databaseIdentifiers
+
+  if (Array.isArray(databaseIdentifiers) && databaseIdentifiers.includes("auditTenant")) {
+    return "auditTenant"
+  }
+})
+```
+
 ```js
 export default new Configuration({
   database: {
