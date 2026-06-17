@@ -890,6 +890,16 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeFrontendModelWebsocketPublishers(configuration) {
+    // Discover each backend project's resources before registering publishers. The publishers are
+    // derived from `backendProject.frontendModels`, which `autoDiscoverResources` populates. Without
+    // this, registration runs against an empty/partial resource set (only built-ins), so apps that
+    // resolve resources through an `abilityResolver` rather than a static ability-resource list never
+    // register lifecycle publishers and their realtime frontend-model updates silently stop. The
+    // lifecycle hooks are deduped per model class via a process-global set, so a later, fully
+    // discovered pass cannot retroactively add the missing publishers. `autoDiscoverResources` is
+    // idempotent (it skips backend projects whose `frontendModels` are already set).
+    await this.autoDiscoverResources(configuration)
+
     const {ensureFrontendModelWebsocketPublishersRegistered} = await import("../frontend-models/websocket-publishers.js")
 
     await ensureFrontendModelWebsocketPublishersRegistered(configuration)
