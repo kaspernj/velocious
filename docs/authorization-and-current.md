@@ -19,8 +19,8 @@
 - `configuration.tenantDatabaseResolver(...)` can override a configured database identifier per resolved tenant.
 - Database identifiers configured with `tenantOnly: true` are active only inside a tenant context where `tenantDatabaseResolver(...)` returns an override; normal `db:migrate` and global connection setup skip them.
 - `tenantDatabaseProviders` powers `db:tenants:create`, `db:tenants:check`, and `db:tenants:migrate` for Apartment-style project/account databases.
-- `configuration.runWithTenant(tenant, callback)` and `Current.tenant()` expose the active tenant for custom model/database routing.
-- Model classes can declare tenant-aware database routing with `ModelClass.switchesTenantDatabase(...)` instead of overriding `getDatabaseIdentifier()` manually.
+- `configuration.runWithTenant(tenant, callback)` and `Current.tenant()` expose the active tenant for custom model/database routing. The tenant is an app-defined value: inputs (`runWithTenant`/`Current.setTenant`/`Current.withTenant`) accept any `object` so interface/class-typed tenants are assignable, while `Current.tenant()` returns `Record<string, unknown> | undefined` so callers narrow their own fields. See [tenant databases](tenant-databases.md#tenant-object-typing).
+- Model classes can declare tenant-aware database routing with `ModelClass.switchesTenantDatabase(...)` instead of overriding `getDatabaseIdentifier()` manually. The resolver callback's `tenant` is typed `Record<string, unknown> | null | undefined` (it may run outside a tenant scope), so narrow before reading fields.
 - HTTP routes and websocket subscriptions/events run inside the resolved tenant context before abilities and controller/channel code execute.
 
 ## Failure mode
