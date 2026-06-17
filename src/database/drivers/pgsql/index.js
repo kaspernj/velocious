@@ -29,6 +29,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
     try {
       await client.connect()
+      this.connection = client
+      await this.setSessionTimezoneToUtc()
     } catch (error) {
       // Re-throw to recover real stack trace
       if (error instanceof Error) {
@@ -37,8 +39,6 @@ export default class VelociousDatabaseDriversPgsql extends Base{
         throw new Error(`Connect to Postgres server failed: ${error}`, {cause: error})
       }
     }
-
-    this.connection = client
   }
 
   connectArgs() {
@@ -87,6 +87,14 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async clearConnectionCheckoutName() {
     await this.query("RESET application_name", {logName: "Clear Connection Checkout Name", processListComment: false})
     await super.clearConnectionCheckoutName()
+  }
+
+  /**
+   * Sets the database session timezone to UTC so bare timestamp literals store UTC instants.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async setSessionTimezoneToUtc() {
+    await this.query("SET TIME ZONE 'UTC'", {logName: "Set Session Time Zone", processListComment: false})
   }
 
   /**

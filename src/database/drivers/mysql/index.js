@@ -37,6 +37,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
   async connect() {
     this.pool = mysql.createPool(Object.assign({connectionLimit: 1}, this.connectArgs()))
     this.pool.on("error", this.onPoolError)
+
+    await this.setSessionTimezoneToUtc()
   }
 
   /**
@@ -73,6 +75,14 @@ export default class VelociousDatabaseDriversMysql extends Base{
   async clearConnectionCheckoutName() {
     await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false})
     await super.clearConnectionCheckoutName()
+  }
+
+  /**
+   * Sets the database session timezone to UTC so bare timestamp literals store UTC instants.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async setSessionTimezoneToUtc() {
+    await this.query("SET time_zone = '+00:00'", {logName: "Set Session Time Zone", processListComment: false})
   }
 
   /**

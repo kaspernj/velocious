@@ -40,12 +40,14 @@ SQLite stores auto-increment primary keys through its special `INTEGER PRIMARY K
 
 ## Datetime Storage
 
-Velocious stores persisted `Date` values as UTC instants. Runtime-local timezone and `timezoneOffsetMinutes` are not applied when records are inserted, updated, or read back from storage.
+Velocious stores persisted `Date` values as UTC instants. Runtime-local timezone and `timezoneOffsetMinutes` are not applied when records are inserted, updated, queried, or read back from storage.
 
 External datetime strings follow the same rule:
 
 - Strings with a timezone suffix, such as `2026-06-12T14:30:00+02:00`, are parsed as that exact instant and stored in UTC.
 - Timezone-less datetime strings, such as `2026-06-12 12:30:00`, are treated as UTC.
+
+Frontend-model `where`/`findBy` datetime filters use the same parsing rule, so filtering with the same timezone-less datetime string that created a row matches the stored UTC instant.
 
 SQLite stores new datetime rows with an explicit `Z` suffix. Legacy SQLite rows written by older Velocious versions may contain timezone-less local wall-clock strings. Use `migrateLegacyLocalDateTimesToUtcStorage(...)` in a migration to rewrite those rows:
 

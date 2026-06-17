@@ -675,6 +675,25 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
     }
   })
 
+  it("findBy treats timezone-less datetime strings as UTC over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    try {
+      await seedUsers()
+
+      const model = await User.findBy({createdAt: "2026-02-18 08:00:00.000"})
+
+      expect(model?.id()).toEqual(1)
+      expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("findBy returns null when no backend record matches", async () => {
     if (!runBrowserHttpIntegration()) {
       return

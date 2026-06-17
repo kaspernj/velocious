@@ -8,6 +8,7 @@ import WebsocketClient from "../../src/http-client/websocket-client.js"
 import Dummy from "../dummy/index.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
+import runWithProcessTimezone from "../helpers/process-timezone.js"
 import TaskRecord from "../dummy/src/models/task.js"
 import UserRecord from "../dummy/src/models/user.js"
 
@@ -963,6 +964,25 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         expect(model?.id()).toEqual(jane.id())
         expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("findBy treats timezone-less datetime strings as UTC over real Node HTTP requests", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {jane} = await seedHttpFrontendModels()
+
+        await runWithProcessTimezone("Europe/Berlin", async () => {
+          const model = await User.findBy({createdAt: "2026-02-18 08:00:00.000"})
+
+          expect(model?.id()).toEqual(jane.id())
+          expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
+        })
       } finally {
         resetFrontendModelTransport()
       }

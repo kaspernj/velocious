@@ -2,7 +2,7 @@
 
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
-import process from "node:process"
+import runWithProcessTimezone from "../../helpers/process-timezone.js"
 import Configuration from "../../../src/configuration.js"
 
 describe("Record - datetime persistence", {tags: ["dummy"]}, () => {
@@ -25,28 +25,6 @@ describe("Record - datetime persistence", {tags: ["dummy"]}, () => {
       expect(Math.abs(actualTime - expectedTime)).toBeLessThanOrEqual(1)
     } else {
       expect(actualTime).toEqual(expectedTime)
-    }
-  }
-
-  /**
-   * Runs a callback with the Node process timezone temporarily changed.
-   * @param {string} timezone - IANA timezone name.
-   * @param {() => Promise<void>} callback - Callback to run.
-   * @returns {Promise<void>} - Resolves when the callback has completed.
-   */
-  async function runWithProcessTimezone(timezone, callback) {
-    const previousTimezone = process.env.TZ
-
-    process.env.TZ = timezone
-
-    try {
-      await callback()
-    } finally {
-      if (previousTimezone === undefined) {
-        delete process.env.TZ
-      } else {
-        process.env.TZ = previousTimezone
-      }
     }
   }
 

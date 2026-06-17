@@ -81,4 +81,17 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
       }
     ])
   })
+
+  it("sets the session time zone to UTC without process-list comments", async () => {
+    const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
+
+    await mysql.setSessionTimezoneToUtc()
+
+    expect(mysql.queries).toEqual([
+      {
+        options: {logName: "Set Session Time Zone", processListComment: false},
+        sql: "SET time_zone = '+00:00'"
+      }
+    ])
+  })
 })

@@ -10,7 +10,9 @@ import {normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJ
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
 import {ValidationError} from "./database/record/index.js"
+import { normalizeDateStringForWrite } from "./database/datetime-storage.js"
 import VelociousError from "./velocious-error.js"
+import isDate from "./utils/is-date.js"
 import isPlainObject from "./utils/plain-object.js"
 
 /**
@@ -2212,9 +2214,9 @@ export default class FrontendModelController extends Controller {
       const isDateTimeColumn = typeof columnType === "string" && ["date", "datetime", "timestamp"].some((type) => columnType.includes(type))
 
       if (isDateTimeColumn) {
-        const parsedDate = new Date(value)
+        const parsedDate = normalizeDateStringForWrite(value)
 
-        if (!Number.isNaN(parsedDate.getTime())) {
+        if (isDate(parsedDate)) {
           return parsedDate
         }
       }

@@ -59,4 +59,17 @@ describe("Database - Drivers - PostgreSQL - checkout names", {databaseCleaning: 
       }
     ])
   })
+
+  it("sets the session time zone to UTC without process-list comments", async () => {
+    const pgsql = new QueryCapturingPgsqlDriver({}, buildConfiguration())
+
+    await pgsql.setSessionTimezoneToUtc()
+
+    expect(pgsql.queries).toEqual([
+      {
+        options: {logName: "Set Session Time Zone", processListComment: false},
+        sql: "SET TIME ZONE 'UTC'"
+      }
+    ])
+  })
 })

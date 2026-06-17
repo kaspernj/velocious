@@ -271,7 +271,7 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     expectTimestampMatches(reloaded.createdAt(), timestamp)
   })
 
-  it("applies per-request timezone offsets on write and read", async () => {
+  it("does not apply per-request timezone offsets on write or read", async () => {
     const project = await Project.create({name: "Timezone offset project"})
     const timestamp = new Date("2025-12-26T12:34:56.789Z")
     /** @type {string | number | undefined} */
