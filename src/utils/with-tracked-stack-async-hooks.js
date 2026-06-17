@@ -10,9 +10,7 @@ let asyncLocalStorage
 /**
  * Tracked stack global.
  * @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
-const trackedStackGlobal = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {?} */ (globalThis)
+const trackedStackGlobal = /** @type {?} */ (globalThis)
 
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
@@ -57,14 +55,10 @@ async function withTrackedStack(arg1, arg2) {
   let stack
 
   if (typeof arg2 == "function" && typeof arg1 == "string") {
-    callback = /**
-                * Narrows the runtime value to the documented type.
-                * @type {() => Promise<?>} */ (arg2)
+    callback = /** @type {() => Promise<?>} */ (arg2)
     stack = arg1
   } else {
-    callback = /**
-                * Narrows the runtime value to the documented type.
-                * @type {() => Promise<?>} */ (arg1)
+    callback = /** @type {() => Promise<?>} */ (arg1)
     stack = Error().stack || ""
   }
 

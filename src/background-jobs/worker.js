@@ -276,9 +276,7 @@ export default class BackgroundJobsWorker {
     /**
      * Identified payload.
      * @type {import("./types.js").BackgroundJobPayload & {id: string}} */
-    const identifiedPayload = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {?} */ (payload)
+    const identifiedPayload = /** @type {?} */ (payload)
 
     const executionMode = this._executionModeForPayload(identifiedPayload)
 

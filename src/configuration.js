@@ -30,13 +30,32 @@ export {CurrentConfigurationNotSetError}
  * @returns {string | undefined} - Current working directory when the runtime exposes one.
  */
 function currentWorkingDirectory() {
-  const processObject = /**
-                         * Types the following value.
-                         * @type {{cwd?: ?} | undefined} */ (globalThis.process)
+  const processObject = /** @type {{cwd?: ?} | undefined} */ (globalThis.process)
 
   if (typeof processObject?.cwd !== "function") return undefined
 
   return processObject.cwd()
+}
+
+/**
+ * Resolves the overloaded with/ensure connections arguments.
+ * @template T
+ * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
+ * @param {WithConnectionsCallbackType<T> | undefined} callback - Callback function.
+ * @param {string} defaultName - Default checkout name.
+ * @returns {{name: string, callback: WithConnectionsCallbackType<T> | undefined}} Resolved checkout name and callback.
+ */
+function resolveWithConnectionsArgs(optionsOrCallback, callback, defaultName) {
+  if (typeof optionsOrCallback == "function") {
+    const actualCallback = /** @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback)
+
+    return {name: defaultName, callback: actualCallback}
+  }
+
+  return {
+    name: optionsOrCallback.name || defaultName,
+    callback
+  }
 }
 
 /**
@@ -49,13 +68,9 @@ function canonicalDebugSnapshotValue(value) {
   if (Array.isArray(value)) return value.map((entry) => canonicalDebugSnapshotValue(entry))
 
   return Object.keys(value).sort().reduce((result, key) => {
-    result[key] = canonicalDebugSnapshotValue(/**
-                                               * Types the following value.
-                                               * @type {Record<string, ?>} */ (value)[key])
+    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, ?>} */ (value)[key])
     return result
-  }, /**
-      * Types the following value.
-      * @type {Record<string, ?>} */ ({}))
+  }, /** @type {Record<string, ?>} */ ({}))
 }
 
 /**
@@ -496,9 +511,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics.
    */
   async _debugHttpServerSnapshot() {
-    const httpServer = /**
-                        * Types the following value.
-                        * @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
+    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
 
     if (!httpServer?.getDebugSnapshot) {
       return {configured: Boolean(this.httpServer), active: false}
@@ -597,9 +610,7 @@ export default class VelociousConfiguration {
       const detailsBuckets = new Map()
 
       for (const subscription of channelSubscriptions) {
-        const details = /**
-                         * Types the following value.
-                         * @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
+        const details = /** @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
         const key = JSON.stringify(details)
         const existingBucket = detailsBuckets.get(key)
 
@@ -624,9 +635,7 @@ export default class VelociousConfiguration {
       const channelSubscriptionBuckets = new Map()
 
       for (const {channelType, subscription} of session._channelSubscriptions.values()) {
-        const details = /**
-                         * Types the following value.
-                         * @type {Record<string, ?>} */ (subscription.debugSnapshot())
+        const details = /** @type {Record<string, ?>} */ (subscription.debugSnapshot())
         const model = typeof details.model === "string" ? details.model : null
         const key = JSON.stringify({channelType, model})
         const existingBucket = channelSubscriptionBuckets.get(key)
@@ -2422,13 +2431,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnections(optionsOrCallback, callback) {
-    const name = typeof optionsOrCallback == "function" ? "Configuration.withConnections" : (optionsOrCallback.name || "Configuration.withConnections")
-    /**
-     * Actual with connections callback.
-     * @type {WithConnectionsCallbackType<T> | undefined} */
-    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /**
-                                                                                    * Types the following value.
-                                                                                    * @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+    const {name, callback: actualWithConnectionsCallback} = resolveWithConnectionsArgs(optionsOrCallback, callback, "Configuration.withConnections")
 
     if (!actualWithConnectionsCallback) throw new Error("withConnections requires a callback")
 
@@ -2537,13 +2540,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async ensureConnections(optionsOrCallback, callback) {
-    const name = typeof optionsOrCallback == "function" ? "Configuration.ensureConnections" : (optionsOrCallback.name || "Configuration.ensureConnections")
-    /**
-     * Actual with connections callback.
-     * @type {WithConnectionsCallbackType<T> | undefined} */
-    const actualWithConnectionsCallback = typeof optionsOrCallback == "function" ? /**
-                                                                                    * Types the following value.
-                                                                                    * @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback) : callback
+    const {name, callback: actualWithConnectionsCallback} = resolveWithConnectionsArgs(optionsOrCallback, callback, "Configuration.ensureConnections")
 
     if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
 

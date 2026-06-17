@@ -137,9 +137,7 @@ function isFrontendModelMarker(value) {
 export function isBackendModelInstance(value) {
   if (!value || typeof value !== "object") return false
 
-  const candidate = /**
-                     * Narrows the runtime value to the documented type.
-                     * @type {Record<string, ?>} */ (value)
+  const candidate = /** @type {Record<string, ?>} */ (value)
 
   return (
     typeof candidate.attributes === "function"
@@ -197,9 +195,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
      * @type {Record<string, ?>} */
     const serializedModel = {
       [TYPE_KEY]: TYPE_FRONTEND_MODEL,
-      attributes: /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
+      attributes: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
       modelName
     }
 
@@ -259,13 +255,9 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
  * @returns {?} - Hydrated frontend model or plain object fallback.
  */
 function deserializeFrontendModelMarker(marker) {
-  const attributes = /**
-                      * Narrows the runtime value to the documented type.
-                      * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
+  const attributes = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
   const preloadedRelationships = isPlainObject(marker.preloadedRelationships)
-    ? /**
-       * Narrows the runtime value to the documented type.
-       * @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
+    ? /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
     : {}
   const modelClass = resolveFrontendModelClass(marker.modelName)
 
@@ -317,25 +309,19 @@ export function deserializeFrontendModelTransportValue(value) {
   }
 
   if (isDateMarker(value)) {
-    const dateValue = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {{value: string}} */ (value).value
+    const dateValue = /** @type {{value: string}} */ (value).value
 
     return new Date(dateValue)
   }
 
   if (isBigIntMarker(value)) {
-    const bigintValue = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {{value: string}} */ (value).value
+    const bigintValue = /** @type {{value: string}} */ (value).value
 
     return BigInt(bigintValue)
   }
 
   if (isNonFiniteNumberMarker(value)) {
-    const numberValue = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {{value: string}} */ (value).value
+    const numberValue = /** @type {{value: string}} */ (value).value
 
     if (numberValue === NUMBER_NAN) return Number.NaN
     if (numberValue === NUMBER_POSITIVE_INFINITY) return Number.POSITIVE_INFINITY

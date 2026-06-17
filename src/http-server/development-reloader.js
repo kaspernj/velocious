@@ -96,9 +96,7 @@ export default class VelociousHttpServerDevelopmentReloader {
     try {
       entries = await this.readdir(resolvedDirectoryPath, {withFileTypes: true})
     } catch (error) {
-      if (/**
-           * Narrows the runtime value to the documented type.
-           * @type {{code?: string}} */ (error)?.code === "ENOENT") return
+      if (/** @type {{code?: string}} */ (error)?.code === "ENOENT") return
       throw error
     }
 
@@ -170,9 +168,7 @@ export default class VelociousHttpServerDevelopmentReloader {
         await this.watchDirectoryRecursive(changedPath)
       }
     } catch (error) {
-      if (/**
-           * Narrows the runtime value to the documented type.
-           * @type {{code?: string}} */ (error)?.code !== "ENOENT") {
+      if (/** @type {{code?: string}} */ (error)?.code !== "ENOENT") {
         throw error
       }
     }

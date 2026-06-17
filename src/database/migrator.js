@@ -301,9 +301,7 @@ export default class VelociousDatabaseMigrator {
       const migrationName = match[2]
       const migrationClassName = inflection.camelize(migrationName)
 
-      const migrationObject = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {import("./migrator/types.js").MigrationObjectType} */ ({
+      const migrationObject = /** @type {import("./migrator/types.js").MigrationObjectType} */ ({
         file,
         date,
         migrationClassName

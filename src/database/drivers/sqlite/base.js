@@ -87,9 +87,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
   async dropTableSQLs(tableName, args = {}) {
-    const driver = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {import("../base.js").default} */ (this)
+    const driver = /** @type {import("../base.js").default} */ (this)
     const dropArgs = Object.assign({tableName, driver}, args)
     const dropTable = new DropTable(dropArgs)
 
@@ -126,9 +124,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
       const tables = []
 
       for (const row of result) {
-        const table = new Table({driver: this, row: /**
-                                                     * Narrows the runtime value to the documented type.
-                                                     * @type {Record<string, string | number | null>} */ (row)})
+        const table = new Table({driver: this, row: /** @type {Record<string, string | number | null>} */ (row)})
 
         tables.push(table)
       }
@@ -403,9 +399,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
           if (timeoutHandle) clearTimeout(timeoutHandle)
 
           const current = state.waitersByName.get(name) || []
-          const index = current.indexOf(/**
-                                         * Narrows the runtime value to the documented type.
-                                         * @type {() => void} */ (removeAndResolve))
+          const index = current.indexOf(/** @type {() => void} */ (removeAndResolve))
 
           if (index >= 0) current.splice(index, 1)
           if (current.length === 0) state.waitersByName.delete(name)

@@ -172,9 +172,7 @@ function normalizeAdvancedRansackConditions({modelClass, value}) {
       throw new Error(`Unsupported ransack predicate in condition: ${predicateValue}`)
     }
 
-    const predicate = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {RansackPredicate} */ (predicateValue)
+    const predicate = /** @type {RansackPredicate} */ (predicateValue)
     const rawValue = advancedRansackConditionValue({predicate, value: entry.v})
     const normalizedValue = normalizeRansackValue({predicate, value: rawValue})
 
@@ -523,18 +521,12 @@ function resolveAttributeName({modelClass, value}) {
  * @returns {Record<string, {targetModelClass: RansackModelClass}>} - Relationship entries keyed by name.
  */
 function relationshipEntries(modelClass) {
-  if (typeof /**
-              * Narrows the runtime value to the documented type.
-              * @type {?} */ (modelClass).getRelationshipsMap === "function") {
+  if (typeof /** @type {?} */ (modelClass).getRelationshipsMap === "function") {
     return backendRelationshipEntries(modelClass)
   }
 
-  if (typeof /**
-              * Narrows the runtime value to the documented type.
-              * @type {?} */ (modelClass).relationshipDefinitions === "function" &&
-    typeof /**
-            * Narrows the runtime value to the documented type.
-            * @type {?} */ (modelClass).relationshipModelClasses === "function") {
+  if (typeof /** @type {?} */ (modelClass).relationshipDefinitions === "function" &&
+    typeof /** @type {?} */ (modelClass).relationshipModelClasses === "function") {
     return frontendRelationshipEntries(modelClass)
   }
 
@@ -551,9 +543,7 @@ function backendRelationshipEntries(modelClass) {
    * Entries.
    * @type {Record<string, {targetModelClass: RansackModelClass}>} */
   const entries = {}
-  const relationshipsMap = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {?} */ (modelClass).getRelationshipsMap()
+  const relationshipsMap = /** @type {?} */ (modelClass).getRelationshipsMap()
 
   for (const relationshipName of Object.keys(relationshipsMap)) {
     const relationship = relationshipsMap[relationshipName]
@@ -580,12 +570,8 @@ function frontendRelationshipEntries(modelClass) {
    * Entries.
    * @type {Record<string, {targetModelClass: RansackModelClass}>} */
   const entries = {}
-  const definitions = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {?} */ (modelClass).relationshipDefinitions()
-  const relationshipModelClasses = /**
-                                    * Narrows the runtime value to the documented type.
-                                    * @type {?} */ (modelClass).relationshipModelClasses()
+  const definitions = /** @type {?} */ (modelClass).relationshipDefinitions()
+  const relationshipModelClasses = /** @type {?} */ (modelClass).relationshipModelClasses()
 
   for (const relationshipName of Object.keys(definitions)) {
     const targetModelClass = resolveFrontendModelClass(relationshipModelClasses[relationshipName])
@@ -604,20 +590,12 @@ function frontendRelationshipEntries(modelClass) {
  * @returns {Record<string, string>} - Attribute-to-column entries keyed by attribute name.
  */
 function attributeEntries(modelClass) {
-  if (typeof /**
-              * Narrows the runtime value to the documented type.
-              * @type {?} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
-    return /** @type {Record<string, string>} */ ((/**
-                                                    * Narrows the runtime value to the documented type.
-                                                    * @type {?} */ (modelClass).getAttributeNameToColumnNameMap()))
+  if (typeof /** @type {?} */ (modelClass).getAttributeNameToColumnNameMap === "function") {
+    return /** @type {Record<string, string>} */ ((/** @type {?} */ (modelClass).getAttributeNameToColumnNameMap()))
   }
 
-  const resourceConfig = typeof /**
-                                 * Narrows the runtime value to the documented type.
-                                 * @type {?} */ (modelClass).resourceConfig === "function"
-    ? /**
-       * Narrows the runtime value to the documented type.
-       * @type {?} */ (modelClass).resourceConfig()
+  const resourceConfig = typeof /** @type {?} */ (modelClass).resourceConfig === "function"
+    ? /** @type {?} */ (modelClass).resourceConfig()
     : {}
   const attributes = resourceConfig.attributes
   /**
@@ -675,9 +653,7 @@ function parseRansackKey(key) {
 
     return {
       pathValue,
-      predicate: /**
-                  * Narrows the runtime value to the documented type.
-                  * @type {RansackPredicate} */ (predicate)
+      predicate: /** @type {RansackPredicate} */ (predicate)
     }
   }
 
@@ -694,9 +670,7 @@ function parseRansackKey(key) {
 
     return {
       pathValue,
-      predicate: /**
-                  * Narrows the runtime value to the documented type.
-                  * @type {RansackPredicate} */ (predicate)
+      predicate: /** @type {RansackPredicate} */ (predicate)
     }
   }
 

@@ -70,9 +70,7 @@ export default function useUpdatedEvent(modelClassOrModels, callback, options = 
   const projectionOptions = {abilities, preload, query, queryData, select, selectsExtra, withCount}
 
   useModelClassEvent(classModel, "update", (payload) => {
-    callback(/**
-              * Narrows the runtime value to the documented type.
-              * @type {FrontendModelClassUpdateEventPayload} */ (payload))
+    callback(/** @type {FrontendModelClassUpdateEventPayload} */ (payload))
   }, {active: active && Boolean(classModel), debounce, onConnected, ...projectionOptions})
   useInstanceUpdatedEvent(instanceModels, callback, {active: active && !classModel, debounce, onConnected, ...projectionOptions})
 }
@@ -96,9 +94,7 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
 
   const modelsKey = modelsDependencyKey(modelOrModels)
   const eventCallback = useMemo(() => {
-    const wrappedCallback = (/**
-                              * Narrows the runtime value to the documented type.
-                              * @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
+    const wrappedCallback = (/** @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -119,9 +115,7 @@ function useInstanceUpdatedEvent(modelOrModels, callback, options) {
      * Unsubscribe callbacks.
      * @type {Array<() => void>} */
     const unsubscribeCallbacks = []
-    const subscriptionCallback = (/**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
+    const subscriptionCallback = (/** @type {FrontendModelInstanceUpdateEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

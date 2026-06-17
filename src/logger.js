@@ -196,9 +196,7 @@ function resolveLoggingOutputs({loggingConfiguration, configuration}) {
     for (const logger of loggingConfiguration.loggers) {
       if (!logger) continue
 
-      const loggerConfig = /**
-                            * Types the following value.
-                            * @type {?} */ (logger)
+      const loggerConfig = /** @type {?} */ (logger)
 
       if (typeof loggerConfig.toOutputConfig === "function") {
         loggerOutputs.push(loggerConfig.toOutputConfig({configuration}))
@@ -383,9 +381,7 @@ export default class Logger {
    */
   getConfiguration() {
     if (!this._configuration) {
-      const objectWithConfig = /**
-                                * Types the following value.
-                                * @type {{configuration?: import("./configuration.js").default}} */ (this._object)
+      const objectWithConfig = /** @type {{configuration?: import("./configuration.js").default}} */ (this._object)
       this._configuration = objectWithConfig?.configuration || currentConfiguration()
     }
 

@@ -126,21 +126,15 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     modelClassesWithRegisteredHooks.add(modelClass)
 
     modelClass.beforeCreate((model) => {
-      /**
-       * Narrows the runtime value to the documented type.
-       * @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "create"
+      /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "create"
     })
 
     modelClass.beforeUpdate((model) => {
-      /**
-       * Narrows the runtime value to the documented type.
-       * @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "update"
+      /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "update"
     })
 
     modelClass.afterSave((model) => {
-      const modelWithWebsocketAction = /**
-                                        * Narrows the runtime value to the documented type.
-                                        * @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model)
+      const modelWithWebsocketAction = /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model)
       const action = modelWithWebsocketAction.__frontendModelWebsocketAction
 
       if (action !== "create" && action !== "update") return

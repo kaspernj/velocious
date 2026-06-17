@@ -229,9 +229,7 @@ export default class VelociousEnvironmentsHandlerBrowser extends Base {
     /**
      * Files.
      * @type {import("./base.js").MigrationObjectType[]} */
-    const files = /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {import("./base.js").MigrationObjectType[]} */ (migrations)
+    const files = /** @type {import("./base.js").MigrationObjectType[]} */ (migrations)
 
     files.sort((migration1, migration2) => migration1.date - migration2.date)
 

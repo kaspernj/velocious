@@ -454,9 +454,7 @@ export default class Expect extends BaseExpect {
     }
 
     if (isObjectContaining(result)) {
-      const expectedValue = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {?} */ (result).value
+      const expectedValue = /** @type {?} */ (result).value
       const {matches, differences} = matchObject(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -475,11 +473,7 @@ export default class Expect extends BaseExpect {
     }
 
     if (isArrayContaining(result)) {
-      const expectedValue = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {Array<?>} */ (/**
-                                                    * Narrows the runtime value to the documented type.
-                                                    * @type {?} */ (result).value)
+      const expectedValue = /** @type {Array<?>} */ (/** @type {?} */ (result).value)
       const {matches, differences} = matchArrayContaining(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -747,18 +741,14 @@ export default class Expect extends BaseExpect {
      * Differences.
      * @type {Record<string, Array<?>>} */
     const differences = {}
-    const objectAsRecord = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {Record<string, ?>} */ (this._object)
+    const objectAsRecord = /** @type {Record<string, ?>} */ (this._object)
 
     for (const key in result) {
       const value = result[key]
 
       if (!(key in objectAsRecord)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
 
-      const objectValue = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {() => ?} */ (objectAsRecord[key])()
+      const objectValue = /** @type {() => ?} */ (objectAsRecord[key])()
 
       if (value != objectValue) {
         differences[key] = [value, objectValue]

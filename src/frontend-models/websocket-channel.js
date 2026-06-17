@@ -85,9 +85,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
     const readRules = ability.rulesFor({action: "read", modelClass: ModelClass})
 
-    return readRules.some((/**
-                            * Narrows the runtime value to the documented type.
-                            * @type {{effect: string}} */ rule) => rule.effect === "allow")
+    return readRules.some((/** @type {{effect: string}} */ rule) => rule.effect === "allow")
   }
 
   /**
@@ -168,9 +166,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
       deliverBody = {
         ...deliverBody,
-        record: /**
-                 * Narrows the runtime value to the documented type.
-                 * @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord))
+        record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord))
       }
     }
 
@@ -276,9 +272,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         throw new Error("Frontend model eventFilters entries must be objects")
       }
 
-      const eventFilter = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {Record<string, ?>} */ (entry)
+      const eventFilter = /** @type {Record<string, ?>} */ (entry)
       const unknownKeys = Object.keys(eventFilter).filter((key) => !EVENT_FILTER_KEYS.has(key))
 
       if (unknownKeys.length > 0) {
@@ -295,21 +289,15 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       const sanitizedEventFilter = {key: eventFilter.key}
 
       if (eventFilter.joins !== undefined) {
-        sanitizedEventFilter.joins = /**
-                                      * Narrows the runtime value to the documented type.
-                                      * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.joins)
+        sanitizedEventFilter.joins = /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.joins)
       }
 
       if (eventFilter.searches !== undefined) {
-        sanitizedEventFilter.searches = /**
-                                         * Narrows the runtime value to the documented type.
-                                         * @type {import("./query.js").FrontendModelSearch[]} */ (eventFilter.searches)
+        sanitizedEventFilter.searches = /** @type {import("./query.js").FrontendModelSearch[]} */ (eventFilter.searches)
       }
 
       if (eventFilter.where !== undefined) {
-        sanitizedEventFilter.where = /**
-                                      * Narrows the runtime value to the documented type.
-                                      * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.where)
+        sanitizedEventFilter.where = /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (eventFilter.where)
       }
 
       return sanitizedEventFilter
@@ -352,9 +340,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         ...params,
         withCount: this.params.withCount
       },
-      request: /**
-                * Narrows the runtime value to the documented type.
-                * @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+      request: /** @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
       response: new Response({configuration}),
       viewPath: "/"
     })
@@ -518,9 +504,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
         spec[entry.attributeName] = {
           relationship: entry.relationshipName,
-          where: entry.where ? /**
-                                * Narrows the runtime value to the documented type.
-                                * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (entry.where) : undefined
+          where: entry.where ? /** @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (entry.where) : undefined
         }
         query.withCount(spec)
       }
@@ -558,9 +542,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {FrontendModelWebsocketSyntheticRequest} Request-like object for ability resolution.
    */
   _syntheticRequest() {
-    const upgradeRequest = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {FrontendModelWebsocketUpgradeRequest} */ (this.session.upgradeRequest)
+    const upgradeRequest = /** @type {FrontendModelWebsocketUpgradeRequest} */ (this.session.upgradeRequest)
     const rawHeaders = typeof upgradeRequest?.headers === "function" ? upgradeRequest.headers() : {}
     const metadata = typeof this.session.getMetadata === "function" ? this.session.getMetadata() : {}
     const remoteAddress = typeof upgradeRequest?.remoteAddress === "function" ? upgradeRequest.remoteAddress() : undefined

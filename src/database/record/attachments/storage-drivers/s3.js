@@ -15,9 +15,7 @@ function throwS3ConfigurationError(message) {
  * @returns {boolean} - Whether value is a readable stream.
  */
 function isReadableStream(value) {
-  return Boolean(value && typeof value === "object" && typeof /**
-                                                               * Narrows the runtime value to the documented type.
-                                                               * @type {?} */ (value).pipe === "function")
+  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).pipe === "function")
 }
 
 /**
@@ -26,9 +24,7 @@ function isReadableStream(value) {
  * @returns {Promise<?>} - Imported module.
  */
 async function dynamicImport(specifier) {
-  const importer = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {(moduleSpecifier: string) => Promise<?>} */ (
+  const importer = /** @type {(moduleSpecifier: string) => Promise<?>} */ (
     new Function("moduleSpecifier", "return import(moduleSpecifier)")
   )
 
@@ -54,14 +50,10 @@ async function streamToBuffer(value) {
    * @type {Buffer[]} */
   const chunks = []
 
-  const readableStream = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {?} */ (value)
+  const readableStream = /** @type {?} */ (value)
 
   await new Promise((resolve, reject) => {
-    readableStream.on("data", (/**
-                                * Narrows the runtime value to the documented type.
-                                * @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
+    readableStream.on("data", (/** @type {Buffer | Uint8Array | ArrayBuffer | string} */ chunk) => {
       if (Buffer.isBuffer(chunk)) {
         chunks.push(chunk)
       } else if (chunk instanceof ArrayBuffer) {

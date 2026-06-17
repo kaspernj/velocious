@@ -133,11 +133,7 @@ export default class VelociousDatabaseRecordBaseRelationship {
 
     if (!scope) return query
 
-    const scopedQuery = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {T | void} */ (scope.call(query, /**
-                                                                  * Narrows the runtime value to the documented type.
-                                                                  * @type {import("../../query/model-class-query.js").default<typeof import("../index.js").default>} */ (query)))
+    const scopedQuery = /** @type {T | void} */ (scope.call(query, /** @type {import("../../query/model-class-query.js").default<typeof import("../index.js").default>} */ (query)))
 
     return scopedQuery || query
   }

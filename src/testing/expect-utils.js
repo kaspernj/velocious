@@ -49,9 +49,7 @@ function isObjectLike(value) {
  * @returns {boolean} - Whether arrayContaining matcher.
  */
 function isArrayContaining(value) {
-  return !!value && typeof value === "object" && (/**
-                                                   * Narrows the runtime value to the documented type.
-                                                   * @type {?} */ (value)).__velociousMatcher === "arrayContaining"
+  return !!value && typeof value === "object" && (/** @type {?} */ (value)).__velociousMatcher === "arrayContaining"
 }
 
 /**
@@ -60,9 +58,7 @@ function isArrayContaining(value) {
  * @returns {boolean} - Whether objectContaining matcher.
  */
 function isObjectContaining(value) {
-  return !!value && typeof value === "object" && (/**
-                                                   * Narrows the runtime value to the documented type.
-                                                   * @type {?} */ (value)).__velociousMatcher === "objectContaining"
+  return !!value && typeof value === "object" && (/** @type {?} */ (value)).__velociousMatcher === "objectContaining"
 }
 
 /**
@@ -106,18 +102,12 @@ function valuesEqual(actual, expected) {
  */
 function collectMatchDifferences(actual, expected, path, differences) {
   if (isObjectContaining(expected)) {
-    collectMatchDifferences(actual, /**
-                                     * Narrows the runtime value to the documented type.
-                                     * @type {?} */ (expected).value, path, differences)
+    collectMatchDifferences(actual, /** @type {?} */ (expected).value, path, differences)
     return
   }
 
   if (isArrayContaining(expected)) {
-    const {matches} = matchArrayContaining(actual, /**
-                                                    * Narrows the runtime value to the documented type.
-                                                    * @type {Array<?>} */ (/**
-                                                                           * Narrows the runtime value to the documented type.
-                                                                           * @type {?} */ (expected).value))
+    const {matches} = matchArrayContaining(actual, /** @type {Array<?>} */ (/** @type {?} */ (expected).value))
 
     if (!matches) {
       differences[path || "$"] = [expected, actual]
@@ -146,12 +136,8 @@ function collectMatchDifferences(actual, expected, path, differences) {
       return
     }
 
-    const expectedObject = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {Record<string, ?>} */ (expected)
-    const actualObject = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {Record<string, ?>} */ (actual)
+    const expectedObject = /** @type {Record<string, ?>} */ (expected)
+    const actualObject = /** @type {Record<string, ?>} */ (actual)
 
     for (const key of Object.keys(expectedObject)) {
       const nextPath = path ? `${path}.${key}` : key
@@ -218,9 +204,7 @@ function matchArrayContaining(actual, expected) {
       if (usedIndexes.has(i)) continue
 
       if (isObjectContaining(expectedItem)) {
-        const {matches} = matchObject(actual[i], /**
-                                                  * Narrows the runtime value to the documented type.
-                                                  * @type {?} */ (expectedItem).value)
+        const {matches} = matchObject(actual[i], /** @type {?} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break
@@ -229,9 +213,7 @@ function matchArrayContaining(actual, expected) {
       }
 
       if (isArrayContaining(expectedItem)) {
-        const {matches} = matchArrayContaining(actual[i], /**
-                                                           * Narrows the runtime value to the documented type.
-                                                           * @type {?} */ (expectedItem).value)
+        const {matches} = matchArrayContaining(actual[i], /** @type {?} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break
