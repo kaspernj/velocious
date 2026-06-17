@@ -397,8 +397,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         values: memberCommands
       })
     }
-    if (modelClass && modelClass.primaryKey() !== "id") {
-      fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
+    if (modelClass) {
+      const primaryKey = this.frontendModelPrimaryKeyForModelClass({attributeNames, modelClass})
+
+      if (primaryKey !== "id") {
+        fileContent += `      primaryKey: ${JSON.stringify(primaryKey)},\n`
+      }
     }
     const nestedRelationshipNames = this.nestedRelationshipNamesForGenerator(resourceClass || null)
     if (nestedRelationshipNames.length > 0) {
@@ -1093,6 +1097,40 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (attributeName === primaryKey) return true
 
     return modelClass.resolveAttributeName(primaryKey) === attributeName
+  }
+
+  /**
+   * Resolves the backend primary key to generated frontend-model attribute names.
+   * @param {{attributeNames: Array<string>, modelClass: typeof import("../../../../../database/record/index.js").default}} args - Primary key resolution args.
+   * @returns {string | Array<string>} - Frontend-model primary key attribute name.
+   */
+  frontendModelPrimaryKeyForModelClass({attributeNames, modelClass}) {
+    const primaryKey = modelClass.primaryKey()
+
+    if (primaryKey === "id") return "id"
+
+    if (Array.isArray(primaryKey)) {
+      return primaryKey.map((columnName) => this.frontendModelPrimaryKeyAttributeName({attributeNames, columnName, modelClass}))
+    }
+
+    return this.frontendModelPrimaryKeyAttributeName({attributeNames, columnName: primaryKey, modelClass})
+  }
+
+  /**
+   * Resolves one backend primary key column to a generated frontend-model attribute name.
+   * @param {{attributeNames: Array<string>, columnName: string, modelClass: typeof import("../../../../../database/record/index.js").default}} args - Primary key args.
+   * @returns {string} - Frontend-model primary key attribute name.
+   */
+  frontendModelPrimaryKeyAttributeName({attributeNames, columnName, modelClass}) {
+    if (attributeNames.includes(columnName)) return columnName
+
+    const attributeName = modelClass.resolveAttributeName(columnName)
+
+    if (attributeName && attributeNames.includes(attributeName)) {
+      return attributeName
+    }
+
+    throw new Error(`${modelClass.name}.primaryKey() column "${columnName}" does not resolve to a generated frontend model attribute.`)
   }
 
   /**
