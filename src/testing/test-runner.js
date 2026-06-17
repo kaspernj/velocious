@@ -74,6 +74,7 @@ function toFileSlug(value) {
  * @property {object} [databaseCleaning] - Database cleanup options for tests.
  * @property {boolean} [databaseCleaning.transaction] - Use transactions to rollback between tests.
  * @property {boolean} [databaseCleaning.truncate] - Truncate tables between tests.
+ * @property {boolean} [databaseCleaning.truncateBefore] - Truncate tables before each test, in addition to the default cleanup.
  * @property {boolean} [focus] - Whether this test is focused.
  * @property {() => (void|Promise<void>)} [function] - Test callback function.
  * @property {number} [retry] - Number of retries when a test fails.
