@@ -361,6 +361,44 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Resolves the subscriber's tenant for the broadcast record and runs `callback` inside that tenant
+   * context. Broadcast delivery runs in whatever ambient tenant context the publisher left behind. For
+   * multi-tenant records that ambient tenant may have been resolved without the subscriber's request
+   * (e.g. a relay endpoint or background job mutating the row), so it lacks the subscriber's per-record
+   * access flags and the per-event authorization query wrongly finds nothing. Re-resolving the tenant
+   * from the event record id plus the subscriber's request makes the authorization queries run against
+   * the subscriber's own tenant/ability scope. When no tenant resolves (non-multitenant configs), the
+   * callback runs directly so the ambient context is preserved.
+   * @template T
+   * @param {string | number} id - Event record id.
+   * @param {() => Promise<T>} callback - Authorized-query callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _withEventTenant(id, callback) {
+    const configuration = this.session.configuration
+
+    if (!configuration || typeof configuration.resolveTenant !== "function") {
+      return await callback()
+    }
+
+    const tenant = await configuration.resolveTenant({
+      params: {...this.params, id, model: this._modelName()},
+      request: /**
+                * Narrows the runtime value to the documented type.
+                * @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+      response: new Response({configuration})
+    })
+
+    if (!tenant) {
+      return await callback()
+    }
+
+    return await configuration.runWithTenant(tenant, async () => {
+      return await configuration.ensureConnections({name: "Frontend model websocket event tenant"}, callback)
+    })
+  }
+
+  /**
    * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
    * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
    * @param {string | number} id - Event record id.
@@ -368,15 +406,17 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {Promise<boolean>} True when the record is readable by this subscription.
    */
   async _eventIsAccessible(id, FrontendModelController) {
-    const controller = this._frontendModelController(FrontendModelController)
+    return await this._withEventTenant(id, async () => {
+      const controller = this._frontendModelController(FrontendModelController)
 
-    await controller.ensureFrontendModelClassInitialized()
+      await controller.ensureFrontendModelClassInitialized()
 
-    const ModelClass = controller.frontendModelClass()
-    const primaryKey = ModelClass.primaryKey()
-    const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      const ModelClass = controller.frontendModelClass()
+      const primaryKey = ModelClass.primaryKey()
+      const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
 
-    return Boolean(await query.first())
+      return Boolean(await query.first())
+    })
   }
 
   /**
@@ -413,30 +453,32 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {Promise<boolean>} Whether the record matches the filter.
    */
   async _eventMatchesFilter({FrontendModelController, eventFilter, id}) {
-    const controller = this._frontendModelController(FrontendModelController, {
-      joins: eventFilter.joins,
-      searches: eventFilter.searches,
-      where: eventFilter.where
+    return await this._withEventTenant(id, async () => {
+      const controller = this._frontendModelController(FrontendModelController, {
+        joins: eventFilter.joins,
+        searches: eventFilter.searches,
+        where: eventFilter.where
+      })
+
+      await controller.ensureFrontendModelClassInitialized()
+
+      const ModelClass = controller.frontendModelClass()
+      const primaryKey = ModelClass.primaryKey()
+      const where = controller.frontendModelWhere()
+      const joins = controller.frontendModelJoins()
+      // Start from the subscriber's authorized scope so a filter can only ever match records the
+      // subscription's ability permits to read.
+      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+
+      if (where) controller.applyFrontendModelWhere({query, where})
+      if (joins) controller.applyFrontendModelJoins({joins, query})
+
+      for (const search of controller.frontendModelSearches()) {
+        controller.applyFrontendModelSearch({query, search})
+      }
+
+      return Boolean(await query.first())
     })
-
-    await controller.ensureFrontendModelClassInitialized()
-
-    const ModelClass = controller.frontendModelClass()
-    const primaryKey = ModelClass.primaryKey()
-    const where = controller.frontendModelWhere()
-    const joins = controller.frontendModelJoins()
-    // Start from the subscriber's authorized scope so a filter can only ever match records the
-    // subscription's ability permits to read.
-    let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
-
-    if (where) controller.applyFrontendModelWhere({query, where})
-    if (joins) controller.applyFrontendModelJoins({joins, query})
-
-    for (const search of controller.frontendModelSearches()) {
-      controller.applyFrontendModelSearch({query, search})
-    }
-
-    return Boolean(await query.first())
   }
 
   /**
@@ -446,51 +488,53 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>} - Serialized projected record.
    */
   async _projectedRecordForEventId(id, FrontendModelController) {
-    const controller = this._frontendModelController(FrontendModelController)
+    return await this._withEventTenant(id, async () => {
+      const controller = this._frontendModelController(FrontendModelController)
 
-    await controller.ensureFrontendModelClassInitialized()
+      await controller.ensureFrontendModelClassInitialized()
 
-    const ModelClass = controller.frontendModelClass()
-    const primaryKey = ModelClass.primaryKey()
-    // Reload through the subscriber's authorized scope so projected records are only ever sent for
-    // rows the subscription's ability permits to read.
-    let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
-    const preload = controller.frontendModelPreload()
+      const ModelClass = controller.frontendModelClass()
+      const primaryKey = ModelClass.primaryKey()
+      // Reload through the subscriber's authorized scope so projected records are only ever sent for
+      // rows the subscription's ability permits to read.
+      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      const preload = controller.frontendModelPreload()
 
-    if (preload) query = query.preload(preload)
+      if (preload) query = query.preload(preload)
 
-    for (const entry of controller.frontendModelWithCount()) {
-      /**
-       * Spec.
-       * @type {Record<string, boolean | {relationship?: string, where?: Record<string, import("./query.js").FrontendModelTransportValue>}>} */
-      const spec = {}
+      for (const entry of controller.frontendModelWithCount()) {
+        /**
+         * Spec.
+         * @type {Record<string, boolean | {relationship?: string, where?: Record<string, import("./query.js").FrontendModelTransportValue>}>} */
+        const spec = {}
 
-      spec[entry.attributeName] = {
-        relationship: entry.relationshipName,
-        where: entry.where ? /**
-                              * Narrows the runtime value to the documented type.
-                              * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (entry.where) : undefined
+        spec[entry.attributeName] = {
+          relationship: entry.relationshipName,
+          where: entry.where ? /**
+                                * Narrows the runtime value to the documented type.
+                                * @type {Record<string, import("./query.js").FrontendModelTransportValue>} */ (entry.where) : undefined
+        }
+        query.withCount(spec)
       }
-      query.withCount(spec)
-    }
 
-    const queryData = controller.frontendModelQueryData()
+      const queryData = controller.frontendModelQueryData()
 
-    if (queryData !== null) query.queryData(queryData)
+      if (queryData !== null) query.queryData(queryData)
 
-    query = controller.applyFrontendModelTranslatedAttributePreloads({query})
+      query = controller.applyFrontendModelTranslatedAttributePreloads({query})
 
-    const model = await query.first()
+      const model = await query.first()
 
-    if (!model) return null
+      if (!model) return null
 
-    if (this.params.abilities !== undefined) {
-      await controller.frontendModelComputeAbilities([model])
-    }
+      if (this.params.abilities !== undefined) {
+        await controller.frontendModelComputeAbilities([model])
+      }
 
-    controller._frontendModelAbilityOverride = undefined
+      controller._frontendModelAbilityOverride = undefined
 
-    return await controller.frontendModelResourceInstance().serialize(model, "find")
+      return await controller.frontendModelResourceInstance().serialize(model, "find")
+    })
   }
 
   /**
