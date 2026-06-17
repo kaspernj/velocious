@@ -1,0 +1,1 @@
+Add `limit` and `maxLength` to `AddColumnArgsType` so `addColumn(table, name, "string", {maxLength})` type-checks. The value was already honored at runtime via `TableColumn`/the column drivers; only the migration arg type omitted it.

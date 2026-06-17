@@ -1,0 +1,1 @@
+Type the tenant value as `Record<string, unknown>` instead of `unknown` on `Current.tenant()`, `Current.setTenant()`, `Current.withTenant()`, and the `switchesTenantDatabase(...)` resolver callback. Application code stores app-defined tenant objects, so consumers can now read and narrow tenant fields (for example `databaseIdentifiers`) without casting `unknown`.
