@@ -61,6 +61,21 @@ export default defineConfig([
     }
   },
   {
+    // Scoped exception to the repo-wide no-`any` policy. The frontend-model base
+    // type definitions deliberately default their attribute/model generic params
+    // to `any`: a generated subclass declares typed-attribute generics
+    // (`FrontendModelBase<XAttributes, ...>`) and, by TypeScript invariance, only
+    // an `any` default lets such a subclass satisfy the bare
+    // `FrontendModelClass`/`FrontendModelBase` constraints used across the static
+    // query and relationship helpers (`unknown`/`object` do not). The methods'
+    // own `@template T` still captures the precise calling subclass for returns,
+    // so accessor precision is preserved. Kept to this one foundational file.
+    files: ["src/frontend-models/base.js"],
+    rules: {
+      "jsdoc/reject-any-type": "off"
+    }
+  },
+  {
     files: ["spec/**/*.js"],
     rules: {
       "no-undef": "off"

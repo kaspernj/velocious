@@ -288,6 +288,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
     const collectionCommands = modelConfig.collectionCommands
     const memberCommands = modelConfig.memberCommands
+    const commandReturnTypes = modelConfig.commandReturnTypes || {}
     const builtInCollectionCommandsAreDefault = builtInCollectionCommands.create === "create" && builtInCollectionCommands.index === "index"
     const builtInMemberCommandsAreDefault = builtInMemberCommands.attach === "attach"
       && builtInMemberCommands.destroy === "destroy"
@@ -464,7 +465,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  /**\n"
       fileContent += `   * Runs ${methodName}.\n`
       fileContent += "   * @param {...FrontendModelAttributeValue} commandArguments - Custom command arguments.\n"
-      fileContent += "   * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response.\n"
+      // When the resource declares a return type for this command via
+      // `commandReturnTypes`, emit it. Otherwise the response is an arbitrary
+      // backend-defined shape typed with `any` values, and callers cast it to
+      // the concrete payload they expect.
+      const commandReturnType = commandReturnTypes[methodName] || "Record<string, ?>"
+
+      fileContent += `   * @returns {Promise<${commandReturnType}>} - Command response.\n`
       fileContent += "   */\n"
       fileContent += `  static async ${methodName}(...commandArguments) {\n`
       fileContent += "    return await this.executeCustomCommand({\n"
@@ -481,7 +488,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += "  /**\n"
       fileContent += `   * Runs ${methodName}.\n`
       fileContent += "   * @param {...FrontendModelAttributeValue} commandArguments - Custom command arguments.\n"
-      fileContent += "   * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response.\n"
+      // When the resource declares a return type for this command via
+      // `commandReturnTypes`, emit it. Otherwise the response is an arbitrary
+      // backend-defined shape typed with `any` values, and callers cast it to
+      // the concrete payload they expect.
+      const commandReturnType = commandReturnTypes[methodName] || "Record<string, ?>"
+
+      fileContent += `   * @returns {Promise<${commandReturnType}>} - Command response.\n`
       fileContent += "   */\n"
       fileContent += `  async ${methodName}(...commandArguments) {\n`
       fileContent += `    return await ${className}.executeCustomCommand({\n`
@@ -1327,7 +1340,36 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       sourceClassName: ownerClassName
     })
 
-    return jsDocType ? {jsDocType} : null
+    // Frontend attributes hold the serialized (resolved) value, so an async
+    // backend accessor typed `Promise<number>` must surface as `number` — the
+    // same unwrapping the resource-method inference path applies.
+    return jsDocType
+      ? {jsDocType: this.frontendResolvableAttributeJsDocType(this.unwrappedPromiseJsDocType({jsDocType}))}
+      : null
+  }
+
+  /**
+   * A backend accessor's `@returns` can reference types that exist only on the
+   * backend (e.g. a model-local `@typedef AgentRunPlanningArtifact`). The frontend
+   * model can't resolve those, so fall back to `any` rather than emitting an
+   * undefined type name. Types built only from primitives and known generic
+   * builtins pass through unchanged.
+   * @param {string} jsDocType - Resolved (Promise-unwrapped) attribute type.
+   * @returns {string} - A frontend-resolvable attribute type.
+   */
+  frontendResolvableAttributeJsDocType(jsDocType) {
+    const safeTypeIdentifiers = new Set([
+      "Array", "Date", "Exclude", "Extract", "FrontendModelAttributeValue", "FrontendModelTransportValue",
+      "Map", "NonNullable", "Omit", "Partial", "Pick", "Promise", "Readonly", "ReadonlyArray", "Record",
+      "Required", "ReturnType", "Set"
+    ])
+    const referencedIdentifiers = jsDocType.match(/[A-Z][A-Za-z0-9_$]*/g) || []
+
+    if (referencedIdentifiers.some((identifier) => !safeTypeIdentifiers.has(identifier))) {
+      return "any"
+    }
+
+    return jsDocType
   }
 
   /**

@@ -70,6 +70,7 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     "builtInCollectionCommands",
     "builtInMemberCommands",
     "collectionCommands",
+    "commandReturnTypes",
     "commands",
     "memberCommands",
     "modelName",
@@ -90,8 +91,42 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     builtInCollectionCommands: normalizedCommands.builtInCollectionCommands,
     builtInMemberCommands: normalizedCommands.builtInMemberCommands,
     collectionCommands: normalizedCommands.collectionCommands,
+    // Optional `{commandName: "JSDoc return type"}` map. When a custom command
+    // declares one, the generator types its method `Promise<thatType>` instead of
+    // the generic `Promise<Record<string, ?>>`. The type is emitted verbatim into
+    // the generated frontend model, so it must resolve there (a self-contained
+    // inline type or an importable name).
+    commandReturnTypes: normalizeFrontendModelCommandReturnTypes(resourceConfiguration.commandReturnTypes),
     memberCommands: normalizedCommands.memberCommands
   }
+}
+
+/**
+ * Validates the optional custom-command return-type map.
+ * @param {unknown} commandReturnTypes - Raw `commandReturnTypes` config.
+ * @returns {Record<string, string>} - Normalized return-type map.
+ */
+function normalizeFrontendModelCommandReturnTypes(commandReturnTypes) {
+  if (commandReturnTypes === undefined || commandReturnTypes === null) {
+    return {}
+  }
+
+  if (typeof commandReturnTypes !== "object" || Array.isArray(commandReturnTypes)) {
+    throw new Error(`commandReturnTypes must be a {commandName: returnType} object but got: ${typeof commandReturnTypes}`)
+  }
+
+  /** @type {Record<string, string>} */
+  const normalized = {}
+
+  for (const [commandName, returnType] of Object.entries(commandReturnTypes)) {
+    if (typeof returnType !== "string" || returnType.trim().length < 1) {
+      throw new Error(`commandReturnTypes['${commandName}'] must be a non-empty JSDoc type string`)
+    }
+
+    normalized[commandName] = returnType.trim()
+  }
+
+  return normalized
 }
 
 /**

@@ -123,6 +123,19 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: {id: {type: "uuid"}},
+      commandReturnTypes: {refresh: "{refreshedAt: string}"},
+      memberCommands: ["refresh"]
+    }
+  }
+}
+
 // An abstract base resource other resources extend — deliberately has no static
 // ModelClass, like an app's shared `BaseResource`.
 class AbstractBaseFrontendResource extends FrontendModelBaseResource {
@@ -968,6 +981,33 @@ export default class ReportResource extends FrontendModelBaseResource {
     }).toThrow(/Duplicate frontend model definition for 'User'/)
 
     await fs.rm(outputDirectory, {force: true, recursive: true})
+  })
+
+  it("types a custom command's response from the resource's declared commandReturnTypes", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {Call: CommandReturnTypeFrontendResource}
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("async refresh(...commandArguments)")
+    expect(callContents).toContain("@returns {Promise<{refreshedAt: string}>} - Command response.")
+    expect(callContents).not.toContain("@returns {Promise<Record<string, ?>>} - Command response.")
+
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })
 
   it("generates configured resources even when an abstract base resource without a ModelClass is registered", async () => {
