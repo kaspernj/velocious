@@ -123,6 +123,21 @@ class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: {id: {type: "uuid"}},
+      memberCommands: [
+        "ping",
+        {name: "refresh", args: [{name: "age", type: "number"}], returnType: "{refreshedAt: string}"}
+      ]
+    }
+  }
+}
+
 // An abstract base resource other resources extend — deliberately has no static
 // ModelClass, like an app's shared `BaseResource`.
 class AbstractBaseFrontendResource extends FrontendModelBaseResource {
@@ -968,6 +983,38 @@ export default class ReportResource extends FrontendModelBaseResource {
     }).toThrow(/Duplicate frontend model definition for 'User'/)
 
     await fs.rm(outputDirectory, {force: true, recursive: true})
+  })
+
+  it("types a custom command's args and response from a {name, args, returnType} command entry", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {Call: CommandReturnTypeFrontendResource}
+        }]
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/call.js`, "utf8")
+
+    // Object entry: named typed arg + declared return type.
+    expect(callContents).toContain("async refresh(age) {")
+    expect(callContents).toContain("@param {number} age - Command argument.")
+    expect(callContents).toContain("@returns {Promise<{refreshedAt: string}>} - Command response.")
+    expect(callContents).toContain("normalizeCustomCommandPayloadArguments([age])")
+    // Plain string entry stays variadic with the generic response type.
+    expect(callContents).toContain("async ping(...commandArguments) {")
+    expect(callContents).toContain("@returns {Promise<Record<string, ?>>} - Command response.")
+
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })
 
   it("generates configured resources even when an abstract base resource without a ModelClass is registered", async () => {

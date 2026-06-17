@@ -24,6 +24,39 @@ Without a resource definition, frontend models should not silently work.
 - Resources that override `records()` opt out of aggregate `count()` automatically because Velocious cannot infer whether the default query still matches the custom records.
 - Override `count()` on the resource when a custom index needs frontend-model `count()` support.
 
+## Custom commands
+- Declare custom commands on the resource with `collectionCommands` (class-level, e.g. `Model.refreshAll()`) and `memberCommands` (instance-level, e.g. `record.refresh()`), as arrays. The generator emits a method per command and the runtime derives each command's kebab-case route slug from the camelCase method name.
+- Each array entry is **either** a plain camelCase method-name string **or** a `{name, args?, returnType?}` object that also declares the command's contract:
+  - `args` is an array of `{name, type}` objects. Each becomes a named, typed method parameter, mapped positionally into the command payload. `type` is a JSDoc type string (for example `"number"`, `"string | null"`).
+  - `returnType` is a JSDoc type string for the command response. When set, the generated method is typed `Promise<returnType>` instead of the generic `Promise<Record<string, ?>>`. The type is emitted verbatim into the generated frontend model, so it must resolve there (a self-contained inline type or a name the model can import).
+- Both forms can be mixed in the same array; string entries are unchanged and stay variadic (`async refresh(...commandArguments)`).
+
+```js
+static resourceConfig() {
+  return {
+    abilities: ["read"],
+    attributes: ["id"],
+    memberCommands: [
+      "suspend",
+      {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}
+    ]
+  }
+}
+```
+
+generates, on the frontend model:
+
+```js
+/** @returns {Promise<Record<string, ?>>} - Command response. */
+async suspend(...commandArguments) { /* ... */ }
+
+/**
+ * @param {number} age - Command argument.
+ * @returns {Promise<string>} - Command response.
+ */
+async refresh(age) { /* ... */ }
+```
+
 ## Naming conventions
 - Resource files should use concise domain naming (for example `battle.js`, `challenge-level.js`) instead of frontend-specific suffixes.
 - Frontend imports should use model names without `FrontendModel` suffix (for example `Account`, not `AccountFrontendModel`).

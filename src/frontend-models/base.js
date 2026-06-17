@@ -66,9 +66,19 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Frontend model static side.
- * @template {FrontendModelBase} [T=FrontendModelBase]
- * @template {Record<string, FrontendModelAttributeValue>} [Attributes=Record<string, FrontendModelAttributeValue>]
- * @template {Record<string, FrontendModelAttributeValue>} [CreateAttributes=Record<string, FrontendModelAttributeValue>]
+ *
+ * The template defaults are intentionally permissive (`any` model/attribute
+ * params). The bare `FrontendModelClass` is the `@this`/constraint type on the
+ * static query methods (findBy/find/where/preload/...); a generated subclass
+ * declares typed-attribute generics (e.g. `FrontendModelBase<AccountAttributes,
+ * AccountCreateAttributes, AccountUpdateAttributes>`) which, against a concrete
+ * `Record<string, FrontendModelTransportValue>` default, fail the constraint by
+ * invariance. Defaulting to `any` lets any subclass satisfy the constraint while
+ * the methods' own `@template T` still captures the precise calling class for
+ * their return types.
+ * @template {FrontendModelBase} [T=FrontendModelBase<any, any, any>]
+ * @template {object} [Attributes=any]
+ * @template {object} [CreateAttributes=any]
  * @typedef {{new (): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create" | "prototype">} FrontendModelClass
  */
 /**
@@ -80,7 +90,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * Loaded instance type for relationship helper generics. Older generated
  * frontend models passed model classes into relationship helpers, while newer
  * generated models pass instance types.
- * @template {FrontendModelBase | typeof FrontendModelBase} T
+ * @template {FrontendModelBase<any, any, any> | typeof FrontendModelBase} T
  * @typedef {T extends new (...args: any[]) => infer Instance ? Instance : T} FrontendModelRelationshipModel
  */
 /**
@@ -281,9 +291,9 @@ export class AttributeNotSelectedError extends Error {
 
 /**
  * Lightweight singular relationship state holder for frontend model instances.
- * @template {FrontendModelBase | typeof FrontendModelBase} S
- * @template {FrontendModelBase | typeof FrontendModelBase} T
- * @template {Record<string, FrontendModelAttributeValue>} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
+ * @template {FrontendModelBase<any, any, any> | typeof FrontendModelBase} S
+ * @template {FrontendModelBase<any, any, any> | typeof FrontendModelBase} T
+ * @template {object} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
  */
 export class FrontendModelSingularRelationship {
   /**
@@ -401,9 +411,9 @@ export class FrontendModelSingularRelationship {
 
 /**
  * Lightweight has-many relationship state holder for frontend model instances.
- * @template {FrontendModelBase | typeof FrontendModelBase} S
- * @template {FrontendModelBase | typeof FrontendModelBase} T
- * @template {Record<string, FrontendModelAttributeValue>} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
+ * @template {FrontendModelBase<any, any, any> | typeof FrontendModelBase} S
+ * @template {FrontendModelBase<any, any, any> | typeof FrontendModelBase} T
+ * @template {object} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
  */
 export class FrontendModelHasManyRelationship {
   /**
@@ -540,8 +550,13 @@ export class FrontendModelHasManyRelationship {
 }
 
 /**
- * Frontend model relationship helper type.
- * @typedef {FrontendModelHasManyRelationship<FrontendModelBase, FrontendModelBase, Record<string, FrontendModelAttributeValue>> | FrontendModelSingularRelationship<FrontendModelBase, FrontendModelBase, Record<string, FrontendModelAttributeValue>>} FrontendModelRelationship
+ * Frontend model relationship helper type. Returned by `getRelationshipByName`,
+ * which generated models immediately cast to their concrete relationship type
+ * (e.g. `FrontendModelSingularRelationship<Owner, Target, TargetCreateAttributes>`).
+ * The members use `any` type args so that cast is allowed regardless of the
+ * target model's typed-attribute generics — a concrete `FrontendModelBase` member
+ * here makes the cast a non-overlapping (TS2352) error for every typed model.
+ * @typedef {FrontendModelHasManyRelationship<any, any, any> | FrontendModelSingularRelationship<any, any, any>} FrontendModelRelationship
  */
 
 /**
@@ -1883,9 +1898,16 @@ function assertDefinedFindByConditionValue(value, keyPath) {
 
 /**
  * Base frontend model.
- * @template {Record<string, FrontendModelAttributeValue>} [Attributes=Record<string, FrontendModelAttributeValue>]
- * @template {Record<string, FrontendModelAttributeValue>} [CreateAttributes=Record<string, FrontendModelAttributeValue>]
- * @template {Record<string, FrontendModelAttributeValue>} [UpdateAttributes=Record<string, FrontendModelAttributeValue>]
+ *
+ * Defaults are `any` so the bare `FrontendModelBase` — used throughout as a
+ * constraint/parameter type for "any frontend model" — accepts generated
+ * subclasses declaring typed-attribute generics (`FrontendModelBase<XAttributes,
+ * ...>`). A concrete `Record<string, FrontendModelAttributeValue>` default makes
+ * those subclasses fail by invariance. Subclasses still pass their precise
+ * attribute typedefs, so typed accessors keep their precision.
+ * @template {object} [Attributes=any]
+ * @template {object} [CreateAttributes=any]
+ * @template {object} [UpdateAttributes=any]
  */
 export default class FrontendModelBase {
   /**

@@ -288,6 +288,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
     const collectionCommands = modelConfig.collectionCommands
     const memberCommands = modelConfig.memberCommands
+    const commandMetadata = modelConfig.commandMetadata || {}
     const builtInCollectionCommandsAreDefault = builtInCollectionCommands.create === "create" && builtInCollectionCommands.index === "index"
     const builtInMemberCommandsAreDefault = builtInMemberCommands.attach === "attach"
       && builtInMemberCommands.destroy === "destroy"
@@ -460,35 +461,39 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     for (const methodName of Object.keys(collectionCommands)) {
+      const signature = this.customCommandMethodSignature({commandMetadata, methodName})
+
       fileContent += "\n"
       fileContent += "  /**\n"
       fileContent += `   * Runs ${methodName}.\n`
-      fileContent += "   * @param {...FrontendModelAttributeValue} commandArguments - Custom command arguments.\n"
-      fileContent += "   * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response.\n"
+      fileContent += signature.paramDocs
+      fileContent += `   * @returns {Promise<${signature.returnType}>} - Command response.\n`
       fileContent += "   */\n"
-      fileContent += `  static async ${methodName}(...commandArguments) {\n`
+      fileContent += `  static async ${methodName}(${signature.parameters}) {\n`
       fileContent += "    return await this.executeCustomCommand({\n"
       fileContent += `      commandName: ${JSON.stringify(collectionCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(collectionCommands[methodName])},\n`
-      fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(commandArguments),\n`
+      fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(${signature.payloadArguments}),\n`
       fileContent += "      resourcePath: this.resourcePath()\n"
       fileContent += "    })\n"
       fileContent += "  }\n"
     }
 
     for (const methodName of Object.keys(memberCommands)) {
+      const signature = this.customCommandMethodSignature({commandMetadata, methodName})
+
       fileContent += "\n"
       fileContent += "  /**\n"
       fileContent += `   * Runs ${methodName}.\n`
-      fileContent += "   * @param {...FrontendModelAttributeValue} commandArguments - Custom command arguments.\n"
-      fileContent += "   * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response.\n"
+      fileContent += signature.paramDocs
+      fileContent += `   * @returns {Promise<${signature.returnType}>} - Command response.\n`
       fileContent += "   */\n"
-      fileContent += `  async ${methodName}(...commandArguments) {\n`
+      fileContent += `  async ${methodName}(${signature.parameters}) {\n`
       fileContent += `    return await ${className}.executeCustomCommand({\n`
       fileContent += `      commandName: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += "      memberId: this.primaryKeyValue(),\n"
-      fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(commandArguments),\n`
+      fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(${signature.payloadArguments}),\n`
       fileContent += `      resourcePath: ${className}.resourcePath()\n`
       fileContent += "    })\n"
       fileContent += "  }\n"
@@ -1327,7 +1332,69 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       sourceClassName: ownerClassName
     })
 
-    return jsDocType ? {jsDocType} : null
+    // Frontend attributes hold the serialized (resolved) value, so an async
+    // backend accessor typed `Promise<number>` must surface as `number` — the
+    // same unwrapping the resource-method inference path applies.
+    return jsDocType
+      ? {jsDocType: this.frontendResolvableAttributeJsDocType(this.unwrappedPromiseJsDocType({jsDocType}))}
+      : null
+  }
+
+  /**
+   * A backend accessor's `@returns` can reference types that exist only on the
+   * backend (e.g. a model-local `@typedef AgentRunPlanningArtifact`). The frontend
+   * model can't resolve those, so fall back to `any` rather than emitting an
+   * undefined type name. Types built only from primitives and known generic
+   * builtins pass through unchanged.
+   * @param {string} jsDocType - Resolved (Promise-unwrapped) attribute type.
+   * @returns {string} - A frontend-resolvable attribute type.
+   */
+  frontendResolvableAttributeJsDocType(jsDocType) {
+    const safeTypeIdentifiers = new Set([
+      "Array", "Date", "Exclude", "Extract", "FrontendModelAttributeValue", "FrontendModelTransportValue",
+      "Map", "NonNullable", "Omit", "Partial", "Pick", "Promise", "Readonly", "ReadonlyArray", "Record",
+      "Required", "ReturnType", "Set"
+    ])
+    const referencedIdentifiers = jsDocType.match(/[A-Z][A-Za-z0-9_$]*/g) || []
+
+    if (referencedIdentifiers.some((identifier) => !safeTypeIdentifiers.has(identifier))) {
+      return "any"
+    }
+
+    return jsDocType
+  }
+
+  /**
+   * Builds the JSDoc param block, parameter list, payload-argument expression, and
+   * return type for a custom command method. With declared `args` each becomes a
+   * named, typed parameter mapped positionally into the command payload; without
+   * them the method stays variadic.
+   * @param {object} args - Arguments.
+   * @param {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} args.commandMetadata - Per-command metadata.
+   * @param {string} args.methodName - Command method name.
+   * @returns {{paramDocs: string, parameters: string, payloadArguments: string, returnType: string}} - Generation pieces.
+   */
+  customCommandMethodSignature({commandMetadata, methodName}) {
+    const metadata = commandMetadata[methodName] || {args: [], returnType: null}
+    const returnType = metadata.returnType || "Record<string, ?>"
+
+    if (metadata.args.length > 0) {
+      const parameterNames = metadata.args.map((arg) => arg.name)
+
+      return {
+        paramDocs: metadata.args.map((arg) => `   * @param {${arg.type}} ${arg.name} - Command argument.\n`).join(""),
+        parameters: parameterNames.join(", "),
+        payloadArguments: `[${parameterNames.join(", ")}]`,
+        returnType
+      }
+    }
+
+    return {
+      paramDocs: "   * @param {...FrontendModelAttributeValue} commandArguments - Custom command arguments.\n",
+      parameters: "...commandArguments",
+      payloadArguments: "commandArguments",
+      returnType
+    }
   }
 
   /**
