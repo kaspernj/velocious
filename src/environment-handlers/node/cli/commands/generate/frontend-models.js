@@ -397,12 +397,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         values: memberCommands
       })
     }
-    if (modelClass) {
-      const primaryKey = this.frontendModelPrimaryKeyForModelClass({attributeNames, modelClass})
+    const primaryKey = this.frontendModelPrimaryKeyForResource({attributeNames, modelClass, modelConfig})
 
-      if (primaryKey !== "id") {
-        fileContent += `      primaryKey: ${JSON.stringify(primaryKey)},\n`
-      }
+    if (primaryKey !== "id") {
+      fileContent += `      primaryKey: ${JSON.stringify(primaryKey)},\n`
     }
     const nestedRelationshipNames = this.nestedRelationshipNamesForGenerator(resourceClass || null)
     if (nestedRelationshipNames.length > 0) {
@@ -1097,6 +1095,32 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (attributeName === primaryKey) return true
 
     return modelClass.resolveAttributeName(primaryKey) === attributeName
+  }
+
+  /**
+   * Resolves the primary key from explicit resource config or the backend model.
+   * @param {{attributeNames: Array<string>, modelClass: typeof import("../../../../../database/record/index.js").default | undefined, modelConfig: import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration}} args - Primary key resolution args.
+   * @returns {string | Array<string>} - Frontend-model primary key attribute name.
+   */
+  frontendModelPrimaryKeyForResource({attributeNames, modelClass, modelConfig}) {
+    if (modelConfig.primaryKey) {
+      return this.validatedConfiguredPrimaryKey({attributeNames, primaryKey: modelConfig.primaryKey})
+    }
+
+    if (!modelClass) return "id"
+
+    return this.frontendModelPrimaryKeyForModelClass({attributeNames, modelClass})
+  }
+
+  /**
+   * Validates an explicitly configured frontend-model primary key.
+   * @param {{attributeNames: Array<string>, primaryKey: string}} args - Configured primary key args.
+   * @returns {string} - Configured primary key.
+   */
+  validatedConfiguredPrimaryKey({attributeNames, primaryKey}) {
+    if (attributeNames.includes(primaryKey)) return primaryKey
+
+    throw new Error(`Configured frontend model primary key "${primaryKey}" is not a generated frontend model attribute.`)
   }
 
   /**
