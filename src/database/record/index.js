@@ -31,13 +31,13 @@ import HasOneRelationship from "./relationships/has-one.js"
 import RecordAttachmentHandle from "./attachments/handle.js"
 import * as inflection from "inflection"
 import deburrColumnName from "../../utils/deburr-column-name.js"
-import isDate from "../../utils/is-date.js"
 import ModelClassQuery from "../query/model-class-query.js"
 import Preloader from "../query/preloader.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../../record-payload-values.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
+import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateValueForWrite } from "../datetime-storage.js"
 import {formatValue} from "../../utils/format-value.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -1866,17 +1866,7 @@ class VelociousDatabaseRecord {
    * @returns {?} - The date value.
    */
   _normalizeDateValue(value) {
-    if (typeof value != "string") return value
-
-    const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/
-
-    if (!isoDateTimeRegex.test(value)) return value
-
-    const timestamp = Date.parse(value)
-
-    if (Number.isNaN(timestamp)) return value
-
-    return new Date(timestamp)
+    return normalizeDateValueForWrite(value)
   }
 
   /**
@@ -2240,21 +2230,7 @@ class VelociousDatabaseRecord {
    * @returns {?} - Normalized value.
    */
   static _normalizeDateValueForInsert(value) {
-    let normalizedValue = value
-
-    if (typeof normalizedValue == "string") {
-      normalizedValue = this._normalizeDateStringForInsert(normalizedValue)
-    }
-
-    if (isDate(normalizedValue)) {
-      const configuration = this._getConfiguration()
-      const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
-      const offsetMs = offsetMinutes * 60 * 1000
-
-      normalizedValue = new Date(normalizedValue.getTime() - offsetMs)
-    }
-
-    return normalizedValue
+    return normalizeDateValueForWrite(value)
   }
 
   /**
@@ -2263,15 +2239,7 @@ class VelociousDatabaseRecord {
    * @returns {string | Date} - Parsed date or original string.
    */
   static _normalizeDateStringForInsert(value) {
-    const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/
-
-    if (!isoDateTimeRegex.test(value)) return value
-
-    const timestamp = Date.parse(value)
-
-    if (Number.isNaN(timestamp)) return value
-
-    return new Date(timestamp)
+    return normalizeDateStringForWrite(value)
   }
 
   /**
@@ -3925,26 +3893,7 @@ class VelociousDatabaseRecord {
    * @returns {?} - Normalized value.
    */
   _normalizeDateValueForRead(value) {
-    if (value === null || value === undefined) return value
-
-    const configuration = this.getModelClass()._getConfiguration()
-    const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
-    const offsetMs = offsetMinutes * 60 * 1000
-
-    if (isDate(value)) {
-      return new Date(value.getTime() + offsetMs)
-    }
-
-    if (typeof value != "string") return value
-
-    const hasTimezone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value)
-    const normalized = value.includes("T") ? value : value.replace(" ", "T")
-    const parseValue = hasTimezone ? normalized : `${normalized}Z`
-    const parsed = Date.parse(parseValue)
-
-    if (Number.isNaN(parsed)) return value
-
-    return new Date(parsed + offsetMs)
+    return normalizeDateValueForRead(value, {databaseType: this.getModelClass().getDatabaseType()})
   }
 
   _belongsToChanges() {
@@ -4079,10 +4028,6 @@ class VelociousDatabaseRecord {
    * @returns {void} - No return value.
    */
   _normalizeDateValuesForWrite(data) {
-    const configuration = this.getModelClass()._getConfiguration()
-    const offsetMinutes = configuration.getEnvironmentHandler().getTimezoneOffsetMinutes(configuration)
-    const offsetMs = offsetMinutes * 60 * 1000
-
     for (const columnName in data) {
       const columnType = this.getModelClass().getColumnTypeByName(columnName)
 
@@ -4090,9 +4035,7 @@ class VelociousDatabaseRecord {
 
       const value = data[columnName]
 
-      if (!isDate(value)) continue
-
-      data[columnName] = new Date(value.getTime() - offsetMs)
+      data[columnName] = normalizeDateValueForWrite(value)
     }
   }
 

@@ -5,6 +5,7 @@ import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import FrontendModelQuery, {frontendModelEventOptionsPayload} from "./query.js"
 import FrontendModelPreloader from "./preloader.js"
+import { normalizeDateStringForWrite } from "../database/datetime-storage.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
@@ -3775,6 +3776,12 @@ export default class FrontendModelBase {
    */
   static findByPrimitiveValuesMatch(actualValue, expectedValue) {
     if (actualValue instanceof Date && typeof expectedValue === "string") {
+      const normalizedExpectedValue = normalizeDateStringForWrite(expectedValue)
+
+      if (normalizedExpectedValue instanceof Date) {
+        return actualValue.toISOString() === normalizedExpectedValue.toISOString()
+      }
+
       return actualValue.toISOString() === expectedValue
     }
 

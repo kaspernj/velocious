@@ -3,7 +3,7 @@
 import AlterTable from "./sql/alter-table.js"
 import wait from "awaitery/build/wait.js"
 import Base from "../base.js"
-import {Client} from "pg"
+import { Client, types as pgTypes } from "pg"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
@@ -19,12 +19,18 @@ import StructureSql from "./structure-sql.js"
 import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 
+const PG_TIMESTAMP_WITHOUT_TIMEZONE_OID = 1114
+
+pgTypes.setTypeParser(PG_TIMESTAMP_WITHOUT_TIMEZONE_OID, (value) => new Date(`${value.replace(" ", "T")}Z`))
+
 export default class VelociousDatabaseDriversPgsql extends Base{
   async connect() {
     const client = new Client(this.connectArgs())
 
     try {
       await client.connect()
+      this.connection = client
+      await this.setSessionTimezoneToUtc()
     } catch (error) {
       // Re-throw to recover real stack trace
       if (error instanceof Error) {
@@ -33,8 +39,6 @@ export default class VelociousDatabaseDriversPgsql extends Base{
         throw new Error(`Connect to Postgres server failed: ${error}`, {cause: error})
       }
     }
-
-    this.connection = client
   }
 
   connectArgs() {
@@ -83,6 +87,14 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   async clearConnectionCheckoutName() {
     await this.query("RESET application_name", {logName: "Clear Connection Checkout Name", processListComment: false})
     await super.clearConnectionCheckoutName()
+  }
+
+  /**
+   * Sets the database session timezone to UTC so bare timestamp literals store UTC instants.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async setSessionTimezoneToUtc() {
+    await this.query("SET TIME ZONE 'UTC'", {logName: "Set Session Time Zone", processListComment: false})
   }
 
   /**

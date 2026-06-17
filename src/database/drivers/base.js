@@ -103,12 +103,12 @@
 
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import { getDatabaseAnnotations } from "../annotations.js"
+import { formatDateForDatabase } from "../datetime-storage.js"
 import isDate from "../../utils/is-date.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import Handler from "../handler.js"
 import Mutex from "epic-locks/build/mutex.js"
-import strftime from "strftime"
 import UUID from "pure-uuid"
 import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
@@ -656,7 +656,7 @@ export default class VelociousDatabaseDriversBase {
     // isDate instead of instanceof: a Date created in another realm (e.g. the console REPL) would
     // fail instanceof, skip this conversion, and serialize as an empty SQL value downstream.
     if (isDate(value)) {
-      return strftime("%F %T.%L", value)
+      return formatDateForDatabase(value, {databaseType: this.getType()})
     }
 
     // JSON-encode plain objects/arrays so they land in JSON/text columns as valid

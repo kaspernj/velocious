@@ -32,9 +32,13 @@ export default class DbDrop extends DbBaseCommand {
         const configuredFallback = newConfiguration.useDatabase
         const useConfiguredFallback = typeof configuredFallback == "string" && configuredFallback.length > 0 && configuredFallback != targetDatabaseName
 
-        newConfiguration.database = useConfiguredFallback
-          ? configuredFallback
-          : this.systemFallbackDatabaseName(databaseType)
+        if (useConfiguredFallback) {
+          newConfiguration.database = configuredFallback
+        } else if (databaseType == "mysql") {
+          delete newConfiguration.database
+        } else {
+          newConfiguration.database = this.systemFallbackDatabaseName(databaseType)
+        }
 
         if (databaseType == "mssql" && newConfiguration.sqlConfig?.database) {
           delete newConfiguration.sqlConfig.database

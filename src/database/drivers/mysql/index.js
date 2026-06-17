@@ -37,6 +37,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
   async connect() {
     this.pool = mysql.createPool(Object.assign({connectionLimit: 1}, this.connectArgs()))
     this.pool.on("error", this.onPoolError)
+
+    await this.setSessionTimezoneToUtc()
   }
 
   /**
@@ -76,6 +78,14 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
+   * Sets the database session timezone to UTC so bare timestamp literals store UTC instants.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async setSessionTimezoneToUtc() {
+    await this.query("SET time_zone = '+00:00'", {logName: "Set Session Time Zone", processListComment: false})
+  }
+
+  /**
    * Runs connect args.
    * @returns {Record<string, ?>} - The connect args.
    */
@@ -86,7 +96,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
     /**
      * Connect args.
      * @type {Record<string, ?>} */
-    const connectArgs = {charset: "utf8mb4"}
+    const connectArgs = {charset: "utf8mb4", timezone: "Z"}
 
     for (const forwardValue of forward) {
       if (forwardValue in args) connectArgs[forwardValue] = digg(args, forwardValue)

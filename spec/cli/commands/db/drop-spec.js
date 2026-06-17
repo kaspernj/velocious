@@ -9,7 +9,8 @@ class FakeDropDriver {
   static instances = []
   static failConnect = false
 
-  constructor() {
+  constructor(configuration) {
+    this.configuration = configuration
     this.closed = false
     this.connected = false
     FakeDropDriver.instances.push(this)
@@ -43,6 +44,24 @@ function fakeMssqlDropConfiguration() {
       })
     }),
     getDatabaseType: () => "mssql",
+    getEnvironment: () => "test",
+    getEnvironmentHandler: () => ({})
+  }
+}
+
+function fakeMysqlDropConfiguration() {
+  return {
+    getDatabaseConfiguration: () => ({default: {database: "velocious_test"}}),
+    getDatabaseIdentifiers: () => ["default"],
+    getDatabasePool: () => ({
+      getConfiguration: () => ({
+        database: "velocious_test",
+        driver: FakeDropDriver,
+        type: "mysql",
+        useDatabase: "velocious_test"
+      })
+    }),
+    getDatabaseType: () => "mysql",
     getEnvironment: () => "test",
     getEnvironmentHandler: () => ({})
   }
@@ -111,6 +130,21 @@ describe("Cli - Commands - db:drop", () => {
     await command.execute()
 
     expectSingleFakeDriverClosed(FakeDropDriver)
+  })
+
+  it("does not connect MySQL drop commands to the inaccessible mysql system database", async () => {
+    FakeDropDriver.reset()
+    const command = new DbDrop({
+      args: {
+        configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMysqlDropConfiguration()),
+        testing: true
+      },
+      cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
+    })
+
+    await command.execute()
+
+    expect(FakeDropDriver.instances[0].configuration.database).toBeUndefined()
   })
 
   it("closes direct MSSQL connections when connect fails", async () => {
