@@ -47,7 +47,7 @@ export default class Current {
 
   /**
    * Runs tenant.
-   * @returns {?} - Current tenant.
+   * @returns {Record<string, unknown> | undefined} - Current tenant.
    */
   static tenant() {
     try {
@@ -61,7 +61,7 @@ export default class Current {
 
   /**
    * Runs set tenant.
-   * @param {?} tenant - Tenant.
+   * @param {Record<string, unknown>} tenant - Tenant.
    * @returns {void} - No return value.
    */
   static setTenant(tenant) {
@@ -70,7 +70,7 @@ export default class Current {
 
   /**
    * Runs with tenant.
-   * @param {?} tenant - Tenant.
+   * @param {Record<string, unknown>} tenant - Tenant.
    * @param {() => Promise<?>} callback - Callback.
    * @returns {Promise<?>} - Callback result.
    */
