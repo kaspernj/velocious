@@ -821,6 +821,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Returns whether this pool has a real async context for the current connection.
+   * @returns {boolean} - Whether nested code can reuse the current connection context.
+   */
+  hasCurrentConnectionContext() {
+    return this.asyncLocalStorage.getStore() !== undefined
+  }
+
+  /**
    * Runs get debug snapshot.
    * @returns {import("./base.js").DatabasePoolDebugSnapshot} - Diagnostic snapshot for this pool.
    */

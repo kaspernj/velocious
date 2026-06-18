@@ -2561,7 +2561,11 @@ export default class VelociousConfiguration {
     if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
 
     const dbs = this.getCurrentConnections()
-    const missingIdentifiers = this.getDatabaseIdentifiers().filter((identifier) => !dbs[identifier])
+    const missingIdentifiers = this.getDatabaseIdentifiers().filter((identifier) => {
+      if (!dbs[identifier]) return true
+
+      return !this.getDatabasePool(identifier).hasCurrentConnectionContext()
+    })
 
     if (missingIdentifiers.length === 0) {
       return await actualWithConnectionsCallback(dbs)

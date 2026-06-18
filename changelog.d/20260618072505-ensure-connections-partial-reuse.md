@@ -1,2 +1,2 @@
-- Reuse existing async-context database connections in `ensureConnections` and only check out missing database identifiers.
+- Reuse existing async-context database connections in `ensureConnections`, only check out missing database identifiers, and avoid treating fallback-only connections as reusable scoped connections.
 - Add sanitized pool state details to async-tracked connection checkout timeout errors.

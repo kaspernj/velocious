@@ -99,4 +99,25 @@ describe("Configuration tenant support", {databaseCleaning: {transaction: true}}
       await cleanup()
     }
   })
+
+  it("checks out fallback-only connections when another database is missing", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-config-test-shared-partial-connections")
+
+    try {
+      const defaultPool = configuration.getDatabasePool("default")
+      const testSharedConnection = await defaultPool.spawnConnection()
+
+      defaultPool.setTestSharedConnection(testSharedConnection)
+
+      await configuration.ensureConnections({name: "partial ensure with fallback"}, async (dbs) => {
+        const scopedDefaultConnection = defaultPool.getCurrentConnection()
+
+        expect(dbs.default).toBe(scopedDefaultConnection)
+        expect(dbs.default).not.toBe(testSharedConnection)
+        expect(dbs.analytics).toBeDefined()
+      })
+    } finally {
+      await cleanup()
+    }
+  })
 })
