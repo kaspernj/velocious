@@ -145,6 +145,14 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Returns whether the current connection is pinned to an execution context.
+   * @returns {boolean} - Whether the current connection can be reused by nested code.
+   */
+  hasCurrentConnectionContext() {
+    return true
+  }
+
+  /**
    * Runs without current connection context.
    * @template T
    * @param {() => T} callback - Callback to run without ? current connection context.

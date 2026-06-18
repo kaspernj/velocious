@@ -4,9 +4,9 @@ import {dirname} from "path"
 import {fileURLToPath} from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
+import {ensureError} from "typanic"
 import Logger from "../logger.js"
 import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
-import ensureError from "../utils/ensure-error.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 
 /**

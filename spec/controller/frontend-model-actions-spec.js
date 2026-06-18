@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Configuration from "../../src/configuration.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import Dummy from "../dummy/index.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Comment from "../dummy/src/models/comment.js"
 import backendProjects from "../dummy/src/config/backend-projects.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
@@ -47,6 +48,17 @@ async function postFrontendModel(path, payload) {
       status: "error"
     }
   }
+}
+
+/**
+ * @returns {number} - Active shared frontend-model controller action checkouts.
+ */
+function activeFrontendModelControllerActionConnectionCount() {
+  const snapshot = dummyConfiguration.getDatabasePool("default").getDebugSnapshot()
+
+  return snapshot.connections.filter((connection) => {
+    return connection.state === "in-use" && connection.checkoutName === "FrontendModelController.frontendApi"
+  }).length
 }
 
 /**
@@ -393,6 +405,40 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.responses[0].requestId).toEqual("request-1")
       expect(payload.responses[0].response.status).toEqual("success")
       expect(payload.responses[0].response.models.map((model) => model.name)).toEqual(["Batch Alpha", "Batch Beta"])
+    })
+  })
+
+  it("checks shared frontend-model API controller action connections back in", async () => {
+    await Dummy.run(async () => {
+      await createTask("Connection checkout release")
+
+      const successPayload = await postFrontendModel("/frontend-models", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {where: {name: "Connection checkout release"}},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(successPayload.responses[0].response.status).toEqual("success")
+      expect(activeFrontendModelControllerActionConnectionCount()).toEqual(0)
+
+      const errorPayload = await postFrontendModel("/frontend-models", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {distinct: "1 OR 1=1"},
+            requestId: "request-1"
+          }
+        ]
+      })
+
+      expect(errorPayload.responses[0].response.status).toEqual("error")
+      expect(activeFrontendModelControllerActionConnectionCount()).toEqual(0)
     })
   })
 

@@ -9,6 +9,7 @@ import path from "path"
 import SqliteDriver from "../../../src/database/drivers/sqlite/index.js"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
+import {forcedError} from "typanic"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
 class CheckoutNameFailingSqliteDriver extends SqliteDriver {
@@ -116,8 +117,9 @@ describe("database - pool - async tracked multi connection checkout names", () =
           await queuedCheckout
           throw new Error("Queued checkout unexpectedly resolved")
         } catch (error) {
-          expect(error).toBeInstanceOf(Error)
-          expect(/** @type {Error} */ (error).message).toBe("Checkout name activation failed")
+          const actualError = forcedError(error)
+
+          expect(actualError.message).toBe("Checkout name activation failed")
         }
       })
 
@@ -177,8 +179,13 @@ describe("database - pool - async tracked multi connection checkout names", () =
           await queuedCheckout
           throw new Error("Queued checkout unexpectedly resolved")
         } catch (error) {
-          expect(error).toBeInstanceOf(Error)
-          expect(/** @type {Error} */ (error).message).toEqual("Timed out after 20ms waiting for database connection checkout from pool \"default\". Checkout name: \"waiting checkout\".")
+          const actualError = forcedError(error)
+
+          expect(actualError.message).toContain("Timed out after 20ms waiting for database connection checkout from pool \"default\". Checkout name: \"waiting checkout\".")
+          expect(actualError.message).toContain("Pool state: max=1, inUse=1, idle=0")
+          expect(actualError.message).toContain("checkout=\"long checkout\"")
+          expect(actualError.message).toContain("openTransactions=0")
+          expect(actualError.message).not.toContain("sqlPreview")
         }
       })
 
@@ -214,8 +221,10 @@ describe("database - pool - async tracked multi connection checkout names", () =
             await timedOutCheckout
             throw new Error("Queued checkout unexpectedly resolved")
           } catch (error) {
-            expect(error).toBeInstanceOf(Error)
-            expect(/** @type {Error} */ (error).message).toEqual("Timed out after 10ms waiting for database connection checkout from pool \"default\". Checkout name: \"timed out checkout\".")
+            const actualError = forcedError(error)
+
+            expect(actualError.message).toContain("Timed out after 10ms waiting for database connection checkout from pool \"default\". Checkout name: \"timed out checkout\".")
+            expect(actualError.message).toContain("Pool state: max=1")
           }
         })
 
