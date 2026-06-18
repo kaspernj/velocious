@@ -109,6 +109,7 @@ export default class VelociousHttpServerWorker {
   onWorkerError = (error) => {
     this.logger.error(`Velocious worker ${this.workerCount} error`, error)
     void this._closeAllClients()
+    // Preserve Error instances for the original backtrace while wrapping non-Error throwables.
     throw ensureError(error)
   }
 
