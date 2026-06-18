@@ -164,6 +164,41 @@ class ReferenceUserFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class LegacyPrimaryKeyUser extends DatabaseRecord {}
+LegacyPrimaryKeyUser.setPrimaryKey("LegacyID")
+
+class LegacyPrimaryKeyUserFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = LegacyPrimaryKeyUser
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: [
+        {name: "legacyID", type: "integer"},
+        {name: "email", type: "varchar"}
+      ]
+    }
+  }
+}
+
+class ConfiguredPrimaryKeyUser extends DatabaseRecord {}
+ConfiguredPrimaryKeyUser.setPrimaryKey("LegacyID")
+
+class ConfiguredPrimaryKeyUserFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = ConfiguredPrimaryKeyUser
+
+  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+  static resourceConfig() {
+    return {
+      attributes: [
+        {name: "legacyID", type: "integer"},
+        {name: "email", type: "varchar"}
+      ],
+      primaryKey: "legacyID"
+    }
+  }
+}
+
 /** @returns {void} */
 function configureCallColumns() {
   Call._initialized = true
@@ -215,6 +250,22 @@ function configureTranslatedCallColumns() {
   delete TranslatedCallTranslation._columnsAsHash
   delete TranslatedCallTranslation._columnTypeByName
   delete TranslatedCallTranslation._columnNameToAttributeName
+}
+
+/** @returns {void} */
+function configureLegacyPrimaryKeyUserColumns() {
+  LegacyPrimaryKeyUser._initialized = true
+  LegacyPrimaryKeyUser._columns = [
+    new TableColumn("LegacyID", {null: false, type: "integer"}),
+    new TableColumn("email", {null: false, type: "varchar"})
+  ]
+  LegacyPrimaryKeyUser._attributeNameToColumnName = {
+    email: "email",
+    legacyID: "LegacyID"
+  }
+  delete LegacyPrimaryKeyUser._columnsAsHash
+  delete LegacyPrimaryKeyUser._columnTypeByName
+  delete LegacyPrimaryKeyUser._columnNameToAttributeName
 }
 
 /**
@@ -793,6 +844,67 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("primaryKey: \"reference\"")
   })
 
+  it("generates frontend-model primary keys from resolved frontend attribute names", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+    configureLegacyPrimaryKeyUserColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            LegacyPrimaryKeyUser: LegacyPrimaryKeyUserFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(LegacyPrimaryKeyUser)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/legacy-primary-key-user.js`, "utf8")
+
+    expect(userContents).toContain("@property {number} legacyID - Attribute value.")
+    expect(userContents).toContain("primaryKey: \"legacyID\"")
+    expect(userContents).not.toContain("primaryKey: \"LegacyID\"")
+  })
+
+  it("honors configured frontend-model primary key attribute names", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            ConfiguredPrimaryKeyUser: ConfiguredPrimaryKeyUserFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(ConfiguredPrimaryKeyUser)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/configured-primary-key-user.js`, "utf8")
+
+    expect(userContents).toContain("@property {number} legacyID - Attribute value.")
+    expect(userContents).toContain("primaryKey: \"legacyID\"")
+    expect(userContents).not.toContain("primaryKey: \"LegacyID\"")
+  })
+
   it("emits nestedAttributes relationship names extracted from permittedParams into the generated frontend-model resourceConfig", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 
@@ -1012,7 +1124,7 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(callContents).toContain("normalizeCustomCommandPayloadArguments([age])")
     // Plain string entry stays variadic with the generic response type.
     expect(callContents).toContain("async ping(...commandArguments) {")
-    expect(callContents).toContain("@returns {Promise<Record<string, ?>>} - Command response.")
+    expect(callContents).toContain("@returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response.")
 
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })

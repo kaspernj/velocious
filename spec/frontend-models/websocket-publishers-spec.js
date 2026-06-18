@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import {ensureFrontendModelWebsocketPublishersRegistered} from "../../src/frontend-models/websocket-publishers.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import AuthorizationBaseResource from "../../src/authorization/base-resource.js"
 import Task from "../dummy/src/models/task.js"
@@ -190,5 +191,66 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     // Must not throw "AbstractBaseResource requires a static ModelClass" — the
     // abstract base is skipped and the real resource is still registered.
     await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
+  })
+
+  it("auto-discovers each backend project's resources before registering publishers", async () => {
+    // Regression: `initializeFrontendModelWebsocketPublishers` must run resource
+    // discovery first. Publishers are derived from `backendProject.frontendModels`,
+    // which `autoDiscoverResources` populates. If registration ran before discovery,
+    // apps that resolve resources through an `abilityResolver` (rather than a static
+    // ability-resource list) registered no publishers and their realtime
+    // frontend-model updates silently stopped.
+    class TestTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          builtInCollectionCommands: ["index"],
+          builtInMemberCommands: ["find"]
+        }
+      }
+    }
+
+    /** @type {{path: string, frontendModels?: Record<string, unknown>}} */
+    const backendProject = {path: "/tmp/velocious-publisher-discovery-regression"}
+    /** @type {string[]} */
+    const callOrder = []
+
+    const mockConfiguration = {
+      getBackendProjects: () => [backendProject],
+      // Always read (and merged with discovered resources) so resources supplied only
+      // through the ability resolver still register publishers.
+      getAbilityResources: () => {
+        callOrder.push("read-ability-resources-fallback")
+
+        return []
+      },
+      registerWebsocketChannel: () => {}
+    }
+
+    class TestEnvironmentHandlerNode extends EnvironmentHandlerNode {
+      /**
+       * @param {any} _configuration
+       * @returns {Promise<void>}
+       */
+      async autoDiscoverResources(_configuration) {
+        callOrder.push("auto-discover")
+        // Emulate file-system discovery populating the backend project.
+        backendProject.frontendModels = {Task: TestTaskResource}
+      }
+    }
+
+    const environmentHandler = new TestEnvironmentHandlerNode()
+
+    await environmentHandler.initializeFrontendModelWebsocketPublishers(/** @type {any} */ (mockConfiguration))
+
+    // Discovery ran first and populated `frontendModels`, and the ability-resource
+    // list is then also read and merged — a project can expose some resources as
+    // discoverable files and others only through `getAbilityResources()`, so discovery
+    // must not suppress the ability-resource list.
+    expect(callOrder).toEqual(["auto-discover", "read-ability-resources-fallback"])
+    expect(backendProject.frontendModels).toEqual({Task: TestTaskResource})
   })
 })

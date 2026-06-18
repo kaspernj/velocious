@@ -397,8 +397,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         values: memberCommands
       })
     }
-    if (modelClass && modelClass.primaryKey() !== "id") {
-      fileContent += `      primaryKey: ${JSON.stringify(modelClass.primaryKey())},\n`
+    const primaryKey = this.frontendModelPrimaryKeyForResource({attributeNames, modelClass, modelConfig})
+
+    if (primaryKey !== "id") {
+      fileContent += `      primaryKey: ${JSON.stringify(primaryKey)},\n`
     }
     const nestedRelationshipNames = this.nestedRelationshipNamesForGenerator(resourceClass || null)
     if (nestedRelationshipNames.length > 0) {
@@ -1090,6 +1092,66 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * Resolves the primary key from explicit resource config or the backend model.
+   * @param {{attributeNames: Array<string>, modelClass: typeof import("../../../../../database/record/index.js").default | undefined, modelConfig: import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration}} args - Primary key resolution args.
+   * @returns {string | Array<string>} - Frontend-model primary key attribute name.
+   */
+  frontendModelPrimaryKeyForResource({attributeNames, modelClass, modelConfig}) {
+    if (modelConfig.primaryKey) {
+      return this.validatedConfiguredPrimaryKey({attributeNames, primaryKey: modelConfig.primaryKey})
+    }
+
+    if (!modelClass) return "id"
+
+    return this.frontendModelPrimaryKeyForModelClass({attributeNames, modelClass})
+  }
+
+  /**
+   * Validates an explicitly configured frontend-model primary key.
+   * @param {{attributeNames: Array<string>, primaryKey: string}} args - Configured primary key args.
+   * @returns {string} - Configured primary key.
+   */
+  validatedConfiguredPrimaryKey({attributeNames, primaryKey}) {
+    if (attributeNames.includes(primaryKey)) return primaryKey
+
+    throw new Error(`Configured frontend model primary key "${primaryKey}" is not a generated frontend model attribute.`)
+  }
+
+  /**
+   * Resolves the backend primary key to generated frontend-model attribute names.
+   * @param {{attributeNames: Array<string>, modelClass: typeof import("../../../../../database/record/index.js").default}} args - Primary key resolution args.
+   * @returns {string | Array<string>} - Frontend-model primary key attribute name.
+   */
+  frontendModelPrimaryKeyForModelClass({attributeNames, modelClass}) {
+    const primaryKey = modelClass.primaryKey()
+
+    if (primaryKey === "id") return "id"
+
+    if (Array.isArray(primaryKey)) {
+      return primaryKey.map((columnName) => this.frontendModelPrimaryKeyAttributeName({attributeNames, columnName, modelClass}))
+    }
+
+    return this.frontendModelPrimaryKeyAttributeName({attributeNames, columnName: primaryKey, modelClass})
+  }
+
+  /**
+   * Resolves one backend primary key column to a generated frontend-model attribute name.
+   * @param {{attributeNames: Array<string>, columnName: string, modelClass: typeof import("../../../../../database/record/index.js").default}} args - Primary key args.
+   * @returns {string} - Frontend-model primary key attribute name.
+   */
+  frontendModelPrimaryKeyAttributeName({attributeNames, columnName, modelClass}) {
+    if (attributeNames.includes(columnName)) return columnName
+
+    const attributeName = modelClass.resolveAttributeName(columnName)
+
+    if (attributeName && attributeNames.includes(attributeName)) {
+      return attributeName
+    }
+
+    throw new Error(`${modelClass.name}.primaryKey() column "${columnName}" does not resolve to a generated frontend model attribute.`)
+  }
+
+  /**
    * Resolves frontend attribute config from explicit metadata, resource methods, model columns, translated columns, or model accessor JSDoc.
    * @param {object} args - Arguments.
    * @param {string} args.attributeName - Frontend attribute name.
@@ -1370,7 +1432,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   customCommandMethodSignature({commandMetadata, methodName}) {
     const metadata = commandMetadata[methodName] || {args: [], returnType: null}
-    const returnType = metadata.returnType || "Record<string, ?>"
+    const returnType = metadata.returnType || "Record<string, FrontendModelAttributeValue>"
 
     if (metadata.args.length > 0) {
       const parameterNames = metadata.args.map((arg) => arg.name)

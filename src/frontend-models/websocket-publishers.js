@@ -2,7 +2,7 @@
 
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
-import {frontendModelResourceDefinitionIsClass, frontendModelResourcesForBackendProject} from "./resource-definition.js"
+import {frontendModelResourceDefinitionIsClass} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
 const modelClassesWithRegisteredHooks = new WeakSet()
@@ -72,27 +72,22 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
    * All frontend models.
    * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
   let allFrontendModels = {}
-  /**
-   * Configured frontend models.
-   * @type {Record<string, import("../configuration-types.js").FrontendModelResourceClassType>} */
-  let configuredFrontendModels = {}
 
   for (const backendProject of configuration.getBackendProjects()) {
-    const configuredProjectResources = frontendModelResourcesForBackendProject(backendProject)
     const projectResources = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
 
-    configuredFrontendModels = {...configuredFrontendModels, ...configuredProjectResources}
     allFrontendModels = {...allFrontendModels, ...projectResources}
   }
 
-  // Auto-discover from ability resources when backend projects didn't provide any
-  if (Object.keys(configuredFrontendModels).length === 0) {
-    const abilityResources = configuration.getAbilityResources()
+  // Always merge the ability resolver's resource list too. A project can expose some
+  // resources as discoverable `src/resources/*.js` files (configured or auto-discovered)
+  // and others only through `getAbilityResources()`; both sets need lifecycle publishers,
+  // so resource discovery must not suppress this list.
+  const abilityResources = configuration.getAbilityResources()
 
-    allFrontendModels = {
-      ...allFrontendModels,
-      ...frontendModelResourcesFromAbilityResourcesList(abilityResources)
-    }
+  allFrontendModels = {
+    ...allFrontendModels,
+    ...frontendModelResourcesFromAbilityResourcesList(abilityResources)
   }
 
   // Phase 3: register the V2 channel class once per configuration so
