@@ -110,24 +110,18 @@ export async function runWithCount({models, modelClass, entries}) {
   if (models.length === 0 || entries.length === 0) return
 
   const primaryKey = modelClass.primaryKey()
-  const parentIds = models.map((model) => /**
-                                           * Narrows the runtime value to the documented type.
-                                           * @type {string | number} */ (model.readColumn(primaryKey)))
+  const parentIds = models.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     const counts = await countForEntry({entries, entry, modelClass, parentIds})
 
     for (const model of models) {
-      const modelPrimaryKeyValue = /**
-                                    * Narrows the runtime value to the documented type.
-                                    * @type {string | number} */ (model.readColumn(primaryKey))
+      const modelPrimaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
       // Tolerate driver differences in numeric return types: SQLite
       // returns integers as JS numbers, but MySQL's raw driver can
       // return count primary keys as strings. Try both.
       const resolvedCount = counts.has(modelPrimaryKeyValue)
-        ? /**
-           * Narrows the runtime value to the documented type.
-           * @type {number} */ (counts.get(modelPrimaryKeyValue))
+        ? /** @type {number} */ (counts.get(modelPrimaryKeyValue))
         : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
 
       // Counts go on the record's dedicated association-count map,
@@ -196,9 +190,7 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   countQuery.select(`${quotedTable}.${quotedFk} AS parent_id`)
   countQuery.select("COUNT(*) AS count_value")
 
-  const rows = /**
-                * Narrows the runtime value to the documented type.
-                * @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
+  const rows = /** @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
     await countQuery._executeQuery()
   )
 
@@ -208,9 +200,7 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   const counts = new Map()
 
   for (const row of rows) {
-    const parentId = /**
-                      * Narrows the runtime value to the documented type.
-                      * @type {string | number} */ (row.parent_id)
+    const parentId = /** @type {string | number} */ (row.parent_id)
     const countValue = Number(row.count_value) || 0
     counts.set(parentId, countValue)
   }

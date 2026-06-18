@@ -222,9 +222,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
     const redactArgs = Boolean(this._mountOptions().redactArgs)
 
     return Object.keys(jobs).map((name) => {
-      const entry = jobs[name] || /**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {?} */ ({})
+      const entry = jobs[name] || /** @type {?} */ ({})
 
       return {
         args: redactArgs ? undefined : (entry.args || []),

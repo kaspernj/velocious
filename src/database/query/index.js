@@ -188,9 +188,7 @@ export default class VelociousDatabaseQuery {
      * @type {import("./where-base.js").default[]} */
     this._wheres = wheres
 
-    const boundWhere = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {?} */ (this.where.bind(this))
+    const boundWhere = /** @type {?} */ (this.where.bind(this))
     boundWhere.not = this.whereNot.bind(this)
     this.where = boundWhere
   }
@@ -200,9 +198,7 @@ export default class VelociousDatabaseQuery {
    * @returns {this} - The clone.
    */
   clone() {
-    const QueryClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {new (args: QueryArgsType) => this} */ (this.constructor)
+    const QueryClass = /** @type {new (args: QueryArgsType) => this} */ (this.constructor)
     const newQuery = new QueryClass({
       driver: this._driverFn,
       froms: [...this._froms],
@@ -494,9 +490,7 @@ export default class VelociousDatabaseQuery {
     if (typeof where == "string") {
       this._wheres.push(new WherePlain(this, where))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      this._wheres.push(new WhereHash(this, /**
-                                             * Narrows the runtime value to the documented type.
-                                             * @type {import("./where-hash.js").WhereHash} */ (where)))
+      this._wheres.push(new WhereHash(this, /** @type {import("./where-hash.js").WhereHash} */ (where)))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }
@@ -513,9 +507,7 @@ export default class VelociousDatabaseQuery {
     if (typeof where == "string") {
       this._wheres.push(new WhereNot(new WherePlain(this, where)))
     } else if (typeof where == "object" && (where.constructor.name == "object" || where.constructor.name == "Object")) {
-      this._wheres.push(new WhereNot(new WhereHash(this, /**
-                                                          * Narrows the runtime value to the documented type.
-                                                          * @type {import("./where-hash.js").WhereHash} */ (where))))
+      this._wheres.push(new WhereNot(new WhereHash(this, /** @type {import("./where-hash.js").WhereHash} */ (where))))
     } else {
       throw new Error(`Invalid type of where: ${typeof where} (${where.constructor.name})`)
     }

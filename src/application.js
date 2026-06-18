@@ -119,9 +119,7 @@ export default class VelociousApplication {
   async startLockedHttpServer({configuration, host, httpServerConfiguration, port}) {
     try {
       if (!configuration.getWebsocketEvents()) {
-        configuration.setWebsocketEvents(/**
-                                          * Types the following value.
-                                          * @type {?} */ (websocketEventsHost))
+        configuration.setWebsocketEvents(/** @type {?} */ (websocketEventsHost))
       }
 
       await configuration.connectBeacon({peerType: "server"})

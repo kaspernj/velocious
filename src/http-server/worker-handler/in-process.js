@@ -28,9 +28,7 @@ export default class VelociousHttpServerInProcessHandler {
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
-    this.unregisterFromEventsHost = websocketEventsHost.register(/**
-                                                                  * Narrows the runtime value to the documented type.
-                                                                  * @type {?} */ (this))
+    this.unregisterFromEventsHost = websocketEventsHost.register(/** @type {?} */ (this))
     this._stopping = false
   }
 
@@ -72,14 +70,8 @@ export default class VelociousHttpServerInProcessHandler {
 
     // Create a message-port shim so ServerClient.onSocketData can route data
     // to the in-process HTTP Client without needing a real worker thread.
-    const messagePortShim = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {import("worker_threads").Worker} */ (/**
-                                                                           * Narrows the runtime value to the documented type.
-                                                                           * @type {?} */ ({
-      postMessage: (/**
-                     * Narrows the runtime value to the documented type.
-                     * @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
+    const messagePortShim = /** @type {import("worker_threads").Worker} */ (/** @type {?} */ ({
+      postMessage: (/** @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
         if (data.command === "clientWrite" && data.chunk) {
           const chunk = typeof data.chunk === "string" ? Buffer.from(data.chunk) : Buffer.from(data.chunk)
 

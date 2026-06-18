@@ -92,9 +92,7 @@ function useInstanceDestroyedEvent(modelOrModels, callback, options) {
 
   const modelsKey = modelsDependencyKey(modelOrModels)
   const eventCallback = useMemo(() => {
-    const wrappedCallback = (/**
-                              * Narrows the runtime value to the documented type.
-                              * @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
+    const wrappedCallback = (/** @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -115,9 +113,7 @@ function useInstanceDestroyedEvent(modelOrModels, callback, options) {
      * Unsubscribe callbacks.
      * @type {Array<() => void>} */
     const unsubscribeCallbacks = []
-    const subscriptionCallback = (/**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
+    const subscriptionCallback = (/** @type {FrontendModelInstanceDestroyEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

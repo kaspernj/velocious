@@ -247,9 +247,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
         return true
       } catch (error) {
-        if (/**
-             * Narrows the runtime value to the documented type.
-             * @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
+        if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
 
         if (await this._isAdvisoryLockStale(lockPath)) {
           await fs.rm(lockPath, {recursive: true, force: true})
@@ -285,9 +283,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
       return true
     } catch (error) {
-      if (/**
-           * Narrows the runtime value to the documented type.
-           * @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
+      if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
 
       if (await this._isAdvisoryLockStale(lockPath)) {
         await fs.rm(lockPath, {recursive: true, force: true})
@@ -298,9 +294,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
           return true
         } catch (retryError) {
-          if (/**
-               * Narrows the runtime value to the documented type.
-               * @type {NodeJS.ErrnoException} */ (retryError)?.code === "EEXIST") return false
+          if (/** @type {NodeJS.ErrnoException} */ (retryError)?.code === "EEXIST") return false
 
           throw retryError
         }

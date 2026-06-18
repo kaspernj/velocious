@@ -29,9 +29,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     if (!targetModelClass) throw new Error("Can't build a new record without a taget model class")
 
-    const newInstance = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {InstanceType<TMC>} */ (new targetModelClass(data))
+    const newInstance = /** @type {InstanceType<TMC>} */ (new targetModelClass(data))
 
 
     // Add it to the loaded models of this relationship
@@ -112,9 +110,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       return /** @type {InstanceType<TMC>[]} */ (Array.isArray(this._loaded) ? this._loaded : [])
     }
 
-    const foreignModels = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {InstanceType<TMC>[]} */ (await this.query().load())
+    const foreignModels = /** @type {InstanceType<TMC>[]} */ (await this.query().load())
 
     this.setLoaded(foreignModels)
     this.setDirty(false)
@@ -202,9 +198,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const throughTable = throughModelClass.tableName()
       const driver = TargetModelClass.connection()
       const parentPrimaryKey = this.getPrimaryKey()
-      const parentId = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
+      const parentId = /** @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
@@ -215,9 +209,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
-    const primaryModelID = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {string | number} */ (this.getModel().readColumn(primaryKey))
+    const primaryModelID = /** @type {string | number} */ (this.getModel().readColumn(primaryKey))
 
     /**
      * Where args.

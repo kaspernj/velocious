@@ -160,11 +160,7 @@ export default class SmtpMailerBackend {
       }
 
       const sendMessage = () => {
-        connection.send({from: envelopeFrom, to: recipients}, /**
-                                                               * Narrows the runtime value to the documented type.
-                                                               * @type {?} */ (message), (/**
-                                                                                          * Narrows the runtime value to the documented type.
-                                                                                          * @type {Error | null | undefined} */ sendError) => {
+        connection.send({from: envelopeFrom, to: recipients}, /** @type {?} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

@@ -378,9 +378,7 @@ export default class TestRunner {
   hasRunnableTests(tests, descriptions = [], lineMatchedInScope = false) {
     for (const testDescription in tests.tests) {
       const testData = tests.tests[testDescription]
-      const testArgs = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {TestArgs} */ (Object.assign({}, testData.args))
+      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
       const includeByLine = lineMatchedInScope || this.matchesLineFilter(testData)
 
       if (this._onlyFocussed && !testArgs.focus) continue
@@ -731,9 +729,7 @@ export default class TestRunner {
 
       for (const testDescription in tests.tests) {
         const testData = tests.tests[testDescription]
-        const testArgs = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {TestArgs} */ (Object.assign({}, testData.args))
+        const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
         const includeByLine = scopeLineMatch || this.matchesLineFilter(testData)
 
         if (this._onlyFocussed && !testArgs.focus) continue
@@ -1126,9 +1122,7 @@ export default class TestRunner {
     /**
      * Console object.
      * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
-    const consoleObject = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
+    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
     /**
      * Original console methods.
      * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */

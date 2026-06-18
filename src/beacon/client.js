@@ -116,9 +116,7 @@ export default class BeaconClient extends EventEmitter {
         this.off("connect-error", onError)
         resolve()
       }
-      const onError = (/**
-                        * Narrows the runtime value to the documented type.
-                        * @type {Error} */ error) => {
+      const onError = (/** @type {Error} */ error) => {
         this.off("connect", onConnect)
         this.off("connect-error", onError)
         reject(error)
@@ -271,9 +269,7 @@ export default class BeaconClient extends EventEmitter {
       this.emit("connect")
     })
 
-    jsonSocket.on("message", (/**
-                               * Narrows the runtime value to the documented type.
-                               * @type {import("./types.js").BeaconSocketMessage} */ message) => {
+    jsonSocket.on("message", (/** @type {import("./types.js").BeaconSocketMessage} */ message) => {
       if (message?.type === "hello-ack" && message.peerId === this.peerId) {
         this._ready = true
         this.emit("ready")

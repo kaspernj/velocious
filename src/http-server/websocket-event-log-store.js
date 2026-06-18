@@ -225,9 +225,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         .order("sequence DESC")
         .limit(1)
         .results()
-      const row = /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {Record<string, ?> | undefined} */ (rows[0])
+      const row = /** @type {Record<string, ?> | undefined} */ (rows[0])
 
       if (!row) return null
 
@@ -258,9 +256,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         query.where(`sequence <= ${db.quote(upToSequence)}`)
       }
 
-      const rows = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {WebsocketEventRow[]} */ (await query.results())
+      const rows = /** @type {WebsocketEventRow[]} */ (await query.results())
 
       return rows.map((row) => this._normalizeEventRow(row))
     })
@@ -278,16 +274,12 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     const cutoff = new Date(now.getTime() - this.retentionMs)
 
     await this._withDb(async (db) => {
-      const expiredEventRows = /**
-                                * Narrows the runtime value to the documented type.
-                                * @type {Array<{id: string}>} */ (await db
+      const expiredEventRows = /** @type {Array<{id: string}>} */ (await db
         .newQuery()
         .from(EVENTS_TABLE)
         .where(`created_at <= ${db.quote(cutoff)}`)
         .results())
-      const expiredReplayChannelRows = /**
-                                        * Narrows the runtime value to the documented type.
-                                        * @type {WebsocketReplayChannelRow[]} */ (await db
+      const expiredReplayChannelRows = /** @type {WebsocketReplayChannelRow[]} */ (await db
         .newQuery()
         .from(REPLAY_CHANNELS_TABLE)
         .where(`interested_until <= ${db.quote(now)}`)
@@ -365,9 +357,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ?, sequence: number} | null>} - Event row or null.
    */
   async _getEventById({channel, db, id}) {
-    const rows = /**
-                  * Narrows the runtime value to the documented type.
-                  * @type {WebsocketEventRow[]} */ (await db
+    const rows = /** @type {WebsocketEventRow[]} */ (await db
       .newQuery()
       .from(EVENTS_TABLE)
       .where({channel, id})

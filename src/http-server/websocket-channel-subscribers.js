@@ -92,12 +92,8 @@ export default class VelociousWebsocketChannelSubscribers {
       try {
         const result = callback(payload, meta)
 
-        if (result && typeof (/**
-                               * Narrows the runtime value to the documented type.
-                               * @type {Promise<void>} */ (result)).then === "function") {
-          tasks.push(/**
-                      * Narrows the runtime value to the documented type.
-                      * @type {Promise<void>} */ (result))
+        if (result && typeof (/** @type {Promise<void>} */ (result)).then === "function") {
+          tasks.push(/** @type {Promise<void>} */ (result))
         }
       } catch (error) {
         // Don't let one subscriber's failure abort the others; surface via the returned promises instead.

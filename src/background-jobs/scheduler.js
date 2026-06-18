@@ -52,9 +52,7 @@ export function parseScheduledDuration(value, fieldName) {
   }
 
   const numericValue = Number(match[1])
-  const multiplier = DURATION_MULTIPLIERS[/**
-                                           * Narrows the runtime value to the documented type.
-                                           * @type {DurationUnit} */ (match[2])]
+  const multiplier = DURATION_MULTIPLIERS[/** @type {DurationUnit} */ (match[2])]
 
   if (!multiplier) {
     throw new Error(`Invalid scheduled background job ${fieldName}: ${value}`)
@@ -168,9 +166,7 @@ export default class BackgroundJobsScheduler {
    * @returns {void}
    */
   scheduleEveryJob({jobConfiguration, jobKey}) {
-    const everyConfig = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
+    const everyConfig = /** @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
     const {everyValue, firstInValue} = this.normalizeEvery(everyConfig)
     const intervalMs = parseScheduledDuration(everyValue, `${jobKey}.every`)
     const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.first_in`) : intervalMs

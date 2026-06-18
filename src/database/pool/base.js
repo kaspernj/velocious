@@ -58,13 +58,9 @@ function stableStringify(value) {
 
   if (value && typeof value === "object") {
     const entries = Object
-      .keys(/**
-             * Narrows the runtime value to the documented type.
-             * @type {Record<string, ?>} */ (value))
+      .keys(/** @type {Record<string, ?>} */ (value))
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(/**
-                                                               * Narrows the runtime value to the documented type.
-                                                               * @type {Record<string, ?>} */ (value)[key])}`)
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(/** @type {Record<string, ?>} */ (value)[key])}`)
 
     return `{${entries.join(",")}}`
   }
@@ -195,9 +191,7 @@ class VelociousDatabasePoolBase {
    * @returns {boolean} - Whether connection matches current resolved configuration.
    */
   connectionMatchesCurrentConfiguration(connection) {
-    const connectionWithPoolKey = /**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
   }
@@ -256,9 +250,7 @@ class VelociousDatabasePoolBase {
 
     const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
 
-    const connectionWithPoolKey = /**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
     connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
     connection.setSchemaCacheInvalidator(() => {
       this.clearSchemaCache()
@@ -371,9 +363,7 @@ class VelociousDatabasePoolBase {
    * @returns {Record<string, ?>} - Connection diagnostic snapshot.
    */
   debugConnectionSnapshot(connection, details = {}) {
-    const connectionWithPoolKey = /**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
     return {
       ...connection.getDebugSnapshot(),

@@ -58,9 +58,7 @@ export default class VelociousJob {
     const isOptionsArg = lastArg && typeof lastArg === "object" && !Array.isArray(lastArg) && "jobOptions" in lastArg
 
     if (isOptionsArg) {
-      const {jobOptions} = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {{jobOptions: import("./types.js").BackgroundJobOptions}} */ (lastArg)
+      const {jobOptions} = /** @type {{jobOptions: import("./types.js").BackgroundJobOptions}} */ (lastArg)
       return {jobArgs: args.slice(0, -1), jobOptions: jobOptions || {}}
     }
 

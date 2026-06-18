@@ -1,5 +1,6 @@
 import js from "@eslint/js"
 import {jsdoc} from 'eslint-plugin-jsdoc'
+import jsdocInlineTypeCastsPlugin from "eslint-plugin-jsdoc-inline-type-casts"
 import jsdocTagLinesPlugin from "eslint-plugin-jsdoc-tag-lines"
 import globals from "globals"
 import {defineConfig} from "eslint/config"
@@ -11,12 +12,13 @@ export default defineConfig([
   },
   {
     files: ["**/*.{js,mjs,cjs}"],
-    plugins: {js},
+    plugins: {js, "jsdoc-inline-type-casts": jsdocInlineTypeCastsPlugin},
     extends: ["js/recommended"],
     languageOptions: {
       globals: {...globals.browser, ...globals.node}
     },
     rules: {
+      "jsdoc-inline-type-casts/jsdoc-inline-type-casts": "error",
       "no-unused-vars": ["error", {argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_"}]
     }
   },

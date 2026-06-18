@@ -26,9 +26,7 @@ function normalizeRelationshipWhereOperator(operator) {
   }
 
   return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
-    operatorAliases[/**
-                     * Narrows the runtime value to the documented type.
-                     * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+    operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   )
 }
 
@@ -66,9 +64,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   toSql() {
     let sql = "("
 
-    const modelQuery = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {import("./model-class-query.js").default} */ (this.query)
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (this.query)
     const baseTableName = this.qualifyBaseTable
       ? modelQuery.getTableReferenceForJoin()
       : undefined
@@ -144,9 +140,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
      */
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
-        const tuple = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
+        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
         const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
 
         normalized.push([
@@ -393,9 +387,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    */
   _whereSQLFromHash(hash, modelClass, path, tableName, index = 0) {
     const options = this.getOptions()
-    const modelQuery = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {import("./model-class-query.js").default} */ (this.query)
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (this.query)
     let sql = ""
 
     for (const whereKey in hash) {
@@ -441,9 +433,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
         if (!targetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
 
-        const nestedHash = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {WhereHash} */ (whereValue)
+        const nestedHash = /** @type {WhereHash} */ (whereValue)
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
 

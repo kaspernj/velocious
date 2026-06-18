@@ -54,9 +54,7 @@ export default class VelociousHttpServerLock {
     try {
       await fs.mkdir(this.lockPath)
     } catch (error) {
-      if (/**
-           * Narrows the runtime value to the documented type.
-           * @type {{code?: string}} */ (error).code === "EEXIST") return false
+      if (/** @type {{code?: string}} */ (error).code === "EEXIST") return false
       throw error
     }
 
@@ -105,9 +103,7 @@ export default class VelociousHttpServerLock {
 
     if (!this.isLocalProcessOwner(owner)) return false
 
-    return this.processIsDead(/**
-                               * Narrows the runtime value to the documented type.
-                               * @type {{pid: number}} */ (owner).pid)
+    return this.processIsDead(/** @type {{pid: number}} */ (owner).pid)
   }
 
   /**

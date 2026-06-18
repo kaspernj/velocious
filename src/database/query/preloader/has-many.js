@@ -105,9 +105,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       throw new Error(`${this.relationship.getModelClass().name}#${this.relationship.getRelationshipName()} doesn't have a primary key`)
     }
 
-    const throughRelationshipName = /**
-                                     * Narrows the runtime value to the documented type.
-                                     * @type {string} */ (this.relationship.through)
+    const throughRelationshipName = /** @type {string} */ (this.relationship.through)
     const parentModelClass = this.relationship.getModelClass()
     const throughRelationship = parentModelClass.getRelationshipByName(throughRelationshipName)
     const throughModelClass = throughRelationship.getTargetModelClass()
@@ -146,9 +144,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const preloadCollections = {}
 
     for (const model of modelsToLoad) {
-      const primaryKeyValue = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {string | number} */ (model.readColumn(primaryKey))
+      const primaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = []
 
@@ -174,12 +170,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const allTargetIds = new Set()
 
     for (const throughModel of throughModels) {
-      const parentId = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {string | number} */ (throughModel.readColumn(throughForeignKey))
-      const throughId = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
+      const parentId = /** @type {string | number} */ (throughModel.readColumn(throughForeignKey))
+      const throughId = /** @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
 
       if (!(parentId in parentToTargetIds)) parentToTargetIds[parentId] = []
 
@@ -208,9 +200,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const targetModelsByForeignKey = {}
 
     for (const targetModel of targetModels) {
-      const fkValue = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {string | number} */ (targetModel.readColumn(targetForeignKey))
+      const fkValue = /** @type {string | number} */ (targetModel.readColumn(targetForeignKey))
 
       if (!(fkValue in targetModelsByForeignKey)) targetModelsByForeignKey[fkValue] = []
 
@@ -284,9 +274,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const preloadCollections = {}
 
     for (const model of modelsToLoad) {
-      const primaryKeyValue = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {string | number} */ (model.readColumn(primaryKey))
+      const primaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = []
 
@@ -319,9 +307,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     const targetModels = await query.toArray()
 
     for (const targetModel of targetModels) {
-      const foreignKeyValue = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {string | number} */ (targetModel.readColumn(foreignKey))
+      const foreignKeyValue = /** @type {string | number} */ (targetModel.readColumn(foreignKey))
 
       preloadCollections[foreignKeyValue].push(targetModel)
     }

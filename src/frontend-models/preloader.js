@@ -22,17 +22,11 @@ export default class FrontendModelPreloader {
   static async preload(models, queryOrSpec, {force = false} = {}) {
     if (!models || models.length === 0) return
 
-    const modelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {import("./base.js").FrontendModelClass} */ (models[0].constructor)
+    const modelClass = /** @type {import("./base.js").FrontendModelClass} */ (models[0].constructor)
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec === "object" && "_preload" in queryOrSpec
     const query = isQuery
-      ? /**
-         * Narrows the runtime value to the documented type.
-         * @type {import("./query.js").default<import("./base.js").FrontendModelClass>} */ (queryOrSpec)
-      : modelClass.preload(/**
-                            * Narrows the runtime value to the documented type.
-                            * @type {?} */ (queryOrSpec))
+      ? /** @type {import("./query.js").default<import("./base.js").FrontendModelClass>} */ (queryOrSpec)
+      : modelClass.preload(/** @type {?} */ (queryOrSpec))
 
     const topLevelRelationships = Object.keys(query._preload)
 

@@ -55,9 +55,7 @@ function isArrayBuffer(value) {
  * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether value supports arrayBuffer().
  */
 function isArrayBufferLike(value) {
-  return Boolean(value && typeof value === "object" && typeof /**
-                                                               * Narrows the runtime value to the documented type.
-                                                               * @type {?} */ (value).arrayBuffer === "function")
+  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).arrayBuffer === "function")
 }
 
 /**
@@ -81,15 +79,11 @@ function toBuffer(value) {
  * @returns {Promise<Buffer>} - File content buffer.
  */
 async function uploadedFileBuffer(uploadedFile, environmentHandler) {
-  const memoryBuffer = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
+  const memoryBuffer = /** @type {{getBuffer?: () => Buffer}} */ (uploadedFile).getBuffer?.()
 
   if (Buffer.isBuffer(memoryBuffer)) return memoryBuffer
 
-  const tempPath = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
+  const tempPath = /** @type {{getPath?: () => string}} */ (uploadedFile).getPath?.()
 
   if (typeof tempPath === "string" && tempPath.length > 0) {
     if (!environmentHandler || typeof environmentHandler.readAttachmentInputFile !== "function") {
@@ -174,23 +168,11 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     const arrayBuffer = await input.arrayBuffer()
 
     buffer = Buffer.from(arrayBuffer)
-    filename = typeof /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {?} */ (input).name === "string" && /**
-                                                                   * Narrows the runtime value to the documented type.
-                                                                   * @type {?} */ (input).name.length > 0
-      ? /**
-         * Narrows the runtime value to the documented type.
-         * @type {?} */ (input).name
+    filename = typeof /** @type {?} */ (input).name === "string" && /** @type {?} */ (input).name.length > 0
+      ? /** @type {?} */ (input).name
       : defaultFilename
-    contentType = typeof /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {?} */ (input).type === "string" && /**
-                                                                      * Narrows the runtime value to the documented type.
-                                                                      * @type {?} */ (input).type.length > 0
-      ? /**
-         * Narrows the runtime value to the documented type.
-         * @type {?} */ (input).type
+    contentType = typeof /** @type {?} */ (input).type === "string" && /** @type {?} */ (input).type.length > 0
+      ? /** @type {?} */ (input).type
       : null
   } else if (typeof input === "string" || Buffer.isBuffer(input) || isArrayBuffer(input) || isUint8Array(input)) {
     buffer = toBuffer(input)

@@ -126,20 +126,14 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   async _tryCohortPreload() {
     const relationshipDef = this.getRelationship()
     const configuration = relationshipDef.getConfiguration()
-    const cohort = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {Array<import("../index.js").default> | undefined} */ (/**
-                                                                                   * Narrows the runtime value to the documented type.
-                                                                                   * @type {?} */ (this.model)._loadCohort)
+    const cohort = /** @type {Array<import("../index.js").default> | undefined} */ (/** @type {?} */ (this.model)._loadCohort)
 
     if (!configuration.getAutoload() || !relationshipDef.getAutoload() || !cohort || cohort.length <= 1) {
       return false
     }
 
     const relationshipName = relationshipDef.getRelationshipName()
-    const OwnerModelClass = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {?} */ (this.model).constructor
+    const OwnerModelClass = /** @type {?} */ (this.model).constructor
     /**
      * Batch.
      * @type {Array<import("../index.js").default>} */
@@ -166,23 +160,17 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
     const type = relationshipDef.getType()
 
     if (type == "belongsTo") {
-      const belongsToRelationship = /**
-                                     * Narrows the runtime value to the documented type.
-                                     * @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
+      const belongsToRelationship = /** @type {import("../relationships/belongs-to.js").default} */ (relationshipDef)
       const preloader = new BelongsToPreloader({models: batch, relationship: belongsToRelationship})
 
       await preloader.run()
     } else if (type == "hasMany") {
-      const hasManyRelationship = /**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {import("../relationships/has-many.js").default} */ (relationshipDef)
+      const hasManyRelationship = /** @type {import("../relationships/has-many.js").default} */ (relationshipDef)
       const preloader = new HasManyPreloader({models: batch, relationship: hasManyRelationship})
 
       await preloader.run()
     } else if (type == "hasOne") {
-      const hasOneRelationship = /**
-                                  * Narrows the runtime value to the documented type.
-                                  * @type {import("../relationships/has-one.js").default} */ (relationshipDef)
+      const hasOneRelationship = /** @type {import("../relationships/has-one.js").default} */ (relationshipDef)
       const preloader = new HasOnePreloader({models: batch, relationship: hasOneRelationship})
 
       await preloader.run()
@@ -274,9 +262,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
    * @returns {TMC | undefined} The model class that this instance relationship
    */
   getTargetModelClass() {
-    const TargetModelClass = /**
-                              * Narrows the runtime value to the documented type.
-                              * @type {TMC} */ (this.getRelationship().getTargetModelClass())
+    const TargetModelClass = /** @type {TMC} */ (this.getRelationship().getTargetModelClass())
 
     return TargetModelClass
   }
