@@ -66,7 +66,11 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
           if (candidate.through) return false
 
           try {
-            return candidate.getTargetModelClass() === modelClass
+            const candidateTargetModelClass = candidate.getTargetModelClass()
+
+            if (!candidateTargetModelClass) return false
+
+            return this._modelClassesMatch(candidateTargetModelClass, modelClass)
           } catch {
             // A has-many/has-one with an unresolvable target can't be the inverse of this belongs-to.
             // It is reported separately when its own model's belongs-to relationships are linted.
@@ -95,6 +99,22 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
     console.log(`Relationship lint passed for ${modelClasses.length} model(s).`)
 
     return {offences}
+  }
+
+  /**
+   * Checks whether two model class objects describe the same registered model.
+   * @param {typeof import("../../../../../database/record/index.js").default} leftModelClass - Candidate target model class.
+   * @param {typeof import("../../../../../database/record/index.js").default} rightModelClass - Belongs-to source model class.
+   * @returns {boolean} Whether both model classes represent the same model identity.
+   */
+  _modelClassesMatch(leftModelClass, rightModelClass) {
+    if (leftModelClass === rightModelClass) return true
+    // `translates()` creates an internal translation class; apps may also define
+    // a concrete class for the same model/table so generated code has a stable
+    // file and type name.
+    if (leftModelClass.getModelName() != rightModelClass.getModelName()) return false
+
+    return leftModelClass.tableName() == rightModelClass.tableName()
   }
 
   /**

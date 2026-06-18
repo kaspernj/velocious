@@ -20,6 +20,14 @@ class LintOrphanSetting extends DatabaseRecord {}
 
 LintOrphanSetting.belongsTo("lintEvent", {className: "LintEvent"})
 
+class LintArticle extends DatabaseRecord {}
+class LintArticleTranslation extends DatabaseRecord {}
+
+LintArticle.setTableName("lint_articles")
+LintArticle.translates("title")
+LintArticleTranslation.setTableName("lint_article_translations")
+LintArticleTranslation.belongsTo("lintArticle", {className: "LintArticle"})
+
 /**
  * @param {Array<typeof DatabaseRecord>} modelClasses - Model classes to register.
  * @returns {Configuration} - Configuration instance.
@@ -86,5 +94,9 @@ describe("Cli - lint - relationships", () => {
     } finally {
       await fs.rm(configPath, {force: true})
     }
+  })
+
+  it("accepts the implicit inverse created by translates for concrete translation models", async () => {
+    await runLint(buildConfiguration([LintArticle, LintArticleTranslation]))
   })
 })
