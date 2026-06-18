@@ -1194,7 +1194,11 @@ export default class FrontendModelController extends Controller {
    * @returns {FrontendModelSort[]} - Frontend sort definitions.
    */
   frontendModelSort() {
-    return normalizeQuerySort(this.frontendModelParams().sort)
+    try {
+      return normalizeQuerySort(this.frontendModelParams().sort)
+    } catch (error) {
+      throw frontendModelValidationErrorForError(error)
+    }
   }
 
   /**
@@ -1517,7 +1521,11 @@ export default class FrontendModelController extends Controller {
     const ransack = this.frontendModelRansack()
 
     if (ransack) {
-      query.ransack(ransack)
+      try {
+        query.ransack(ransack)
+      } catch (error) {
+        throw frontendModelValidationErrorForError(error)
+      }
     }
 
     if (joins) {
@@ -1639,7 +1647,7 @@ export default class FrontendModelController extends Controller {
       })
 
       if (!columnName) {
-        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+        throw frontendModelValidationError(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
       }
 
       if (pluckEntry.path.length > 0) {
@@ -1753,7 +1761,7 @@ export default class FrontendModelController extends Controller {
       })
 
       if (!columnName) {
-        throw new Error(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+        throw frontendModelValidationError(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
       }
     }
   }
@@ -1772,7 +1780,7 @@ export default class FrontendModelController extends Controller {
       const relationship = targetModelClass.getRelationshipsMap()[relationshipName]
 
       if (!relationship) {
-        throw new Error(`Unknown search relationship "${relationshipName}" for ${targetModelClass.name}`)
+        throw frontendModelValidationError(`Unknown search relationship "${relationshipName}" for ${targetModelClass.name}`)
       }
 
       const relationshipTargetModelClass = relationship.getTargetModelClass()
@@ -1807,7 +1815,7 @@ export default class FrontendModelController extends Controller {
     })
 
     if (!columnName) {
-      throw new Error(`Unknown search column "${search.column}" for ${targetModelClass.name}`)
+      throw frontendModelValidationError(`Unknown search column "${search.column}" for ${targetModelClass.name}`)
     }
 
     if (search.path.length > 0) {
@@ -1958,7 +1966,7 @@ export default class FrontendModelController extends Controller {
       const relationship = modelClass.getRelationshipsMap()[relationshipName]
 
       if (!relationship) {
-        throw new Error(`Unknown join relationship "${relationshipName}" for ${modelClass.name}`)
+        throw frontendModelValidationError(`Unknown join relationship "${relationshipName}" for ${modelClass.name}`)
       }
 
       const targetModelClass = relationship.getTargetModelClass()
@@ -2060,7 +2068,7 @@ export default class FrontendModelController extends Controller {
     for (const attributeName of attributeNames) {
       if (this.frontendModelAttributeIsExposed({attributeName, modelClass})) continue
 
-      throw new Error(`Unknown ${operationName} attribute "${attributeName}" for ${modelClass.name}`)
+      throw frontendModelValidationError(`Unknown ${operationName} attribute "${attributeName}" for ${modelClass.name}`)
     }
 
     return attributeNames
@@ -2163,7 +2171,7 @@ export default class FrontendModelController extends Controller {
         const relationship = modelClass.getRelationshipsMap()[attributeName]
 
         if (!relationship) {
-          throw new Error(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
+          throw frontendModelValidationError(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
         }
 
         const targetModelClass = relationship.getTargetModelClass()
@@ -2184,7 +2192,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      throw new Error(`Unknown where column "${attributeName}" for ${modelClass.name}`)
+      throw frontendModelValidationError(`Unknown where column "${attributeName}" for ${modelClass.name}`)
     }
   }
 
@@ -2251,7 +2259,7 @@ export default class FrontendModelController extends Controller {
     })
 
     if (!columnName) {
-      throw new Error(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
+      throw frontendModelValidationError(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
     }
 
     this.ensureFrontendModelJoinPath({path: group.path, query})
@@ -2369,7 +2377,7 @@ export default class FrontendModelController extends Controller {
       const translationPath = sort.path.concat(["currentTranslation"])
 
       if (!translationColumnName) {
-        throw new Error(`Unknown translated sort column "${sort.column}" for ${targetModelClass.name}`)
+        throw frontendModelValidationError(`Unknown translated sort column "${sort.column}" for ${targetModelClass.name}`)
       }
 
       this.ensureFrontendModelSortJoinPath({path: translationPath, query})
@@ -2383,7 +2391,7 @@ export default class FrontendModelController extends Controller {
     }
 
     if (!columnName) {
-      throw new Error(`Unknown sort column "${sort.column}" for ${targetModelClass.name}`)
+      throw frontendModelValidationError(`Unknown sort column "${sort.column}" for ${targetModelClass.name}`)
     }
 
     this.ensureFrontendModelSortJoinPath({path: sort.path, query})

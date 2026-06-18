@@ -578,6 +578,7 @@ Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle
 Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
 Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
+Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `group`, `sort`, `pluck`, or Ransack attributes, return the specific frontend-model validation message with `velocious.code: "frontend-model-validation"` and are not emitted as framework errors.
 In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
 Other non-production environments, such as `staging`, keep the same client-safe default unless you explicitly opt in with `exposeInternalErrorsToClients: true`:
 
@@ -1619,7 +1620,7 @@ configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
 })
 ```
 
-Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`) rather than the generic one, and `error.velocious`-annotated / `safeToExpose` / `errorType`-marked errors keep their expected-error status — none of these reach the error bus.
+Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model validation errors, and `error.velocious`-annotated / `safeToExpose` / `errorType`-marked errors keep their expected-error status — none of these reach the error bus.
 
 ## Use the Websocket client API (HTTP-like)
 
