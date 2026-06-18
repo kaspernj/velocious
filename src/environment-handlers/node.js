@@ -125,6 +125,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         const ResourceClass = imported.default
 
         if (!frontendModelResourceDefinitionIsClass(ResourceClass)) continue
+        // Skip abstract/common base resources that declare no `ModelClass` — they are
+        // not models, so they must not be recorded as discovered frontend models.
+        if (!ResourceClass.ModelClass) continue
 
         const baseName = file.replace(/\.(js|mjs)$/, "")
         const modelName = baseName.replace(/-resource$/, "")

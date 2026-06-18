@@ -220,8 +220,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
 
     const mockConfiguration = {
       getBackendProjects: () => [backendProject],
-      // Hit only by the fallback path that runs when no backend project provided
-      // resources — i.e. only when discovery did NOT populate `frontendModels` first.
+      // Always read (and merged with discovered resources) so resources supplied only
+      // through the ability resolver still register publishers.
       getAbilityResources: () => {
         callOrder.push("read-ability-resources-fallback")
 
@@ -246,9 +246,11 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
 
     await environmentHandler.initializeFrontendModelWebsocketPublishers(/** @type {any} */ (mockConfiguration))
 
-    // Discovery ran first and populated `frontendModels`, so the ability-resource
-    // fallback was never reached.
-    expect(callOrder).toEqual(["auto-discover"])
+    // Discovery ran first and populated `frontendModels`, and the ability-resource
+    // list is then also read and merged — a project can expose some resources as
+    // discoverable files and others only through `getAbilityResources()`, so discovery
+    // must not suppress the ability-resource list.
+    expect(callOrder).toEqual(["auto-discover", "read-ability-resources-fallback"])
     expect(backendProject.frontendModels).toEqual({Task: TestTaskResource})
   })
 })
