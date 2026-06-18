@@ -28,7 +28,7 @@ Without a resource definition, frontend models should not silently work.
 - Declare custom commands on the resource with `collectionCommands` (class-level, e.g. `Model.refreshAll()`) and `memberCommands` (instance-level, e.g. `record.refresh()`), as arrays. The generator emits a method per command and the runtime derives each command's kebab-case route slug from the camelCase method name.
 - Each array entry is **either** a plain camelCase method-name string **or** a `{name, args?, returnType?}` object that also declares the command's contract:
   - `args` is an array of `{name, type}` objects. Each becomes a named, typed method parameter, mapped positionally into the command payload. `type` is a JSDoc type string (for example `"number"`, `"string | null"`).
-  - `returnType` is a JSDoc type string for the command response. When set, the generated method is typed `Promise<returnType>` instead of the generic `Promise<Record<string, ?>>`. The type is emitted verbatim into the generated frontend model, so it must resolve there (a self-contained inline type or a name the model can import).
+  - `returnType` is a JSDoc type string for the command response. When set, the generated method is typed `Promise<returnType>` instead of the generic `Promise<Record<string, FrontendModelAttributeValue>>` (a command result is a deserialized transport payload, so its values are `FrontendModelAttributeValue` — the closed transport-value union). The type is emitted verbatim into the generated frontend model, so it must resolve there (a self-contained inline type or a name the model can import).
 - Both forms can be mixed in the same array; string entries are unchanged and stay variadic (`async refresh(...commandArguments)`).
 
 ```js
@@ -47,7 +47,7 @@ static resourceConfig() {
 generates, on the frontend model:
 
 ```js
-/** @returns {Promise<Record<string, ?>>} - Command response. */
+/** @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Command response. */
 async suspend(...commandArguments) { /* ... */ }
 
 /**
