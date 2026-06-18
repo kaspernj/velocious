@@ -5,18 +5,15 @@ import {deliverPayload} from "../mailer.js"
 
 /**
  * Background job for delivering mailer payloads.
+ * @augments {VelociousJob<[import("../mailer.js").MailerDeliveryPayload]>}
  */
 export default class MailDeliveryJob extends VelociousJob {
   /**
    * Runs perform.
-   * @param {import("../mailer.js").MailerDeliveryPayload} [payload] - Mail delivery payload.
+   * @param {import("../mailer.js").MailerDeliveryPayload} payload - Mail delivery payload.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async perform(payload) {
-    if (!payload) {
-      throw new Error(`Missing mail delivery payload. Got: ${String(payload)}`)
-    }
-
     await deliverPayload(payload)
   }
 }

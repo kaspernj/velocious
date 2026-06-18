@@ -2,6 +2,16 @@
 
 import BackgroundJobsClient from "./client.js"
 
+/**
+ * Base class for background jobs.
+ *
+ * `TArgs` is the tuple of arguments the subclass's `perform` accepts, so a job that
+ * needs arguments declares them as required and typed — for example
+ * `class RunBuildJob extends VelociousJob<[string]>` with `async perform(buildId)`.
+ * The default empty tuple keeps argument-less jobs (`extends VelociousJob`,
+ * `async perform()`) working unchanged.
+ * @template {Array<?>} [TArgs=[]]
+ */
 export default class VelociousJob {
   /**
    * Runs job name.
@@ -69,9 +79,10 @@ export default class VelociousJob {
 
   /**
    * Override in subclasses.
+   * @param {TArgs} _args - Job args (the tuple this job class was parameterized with).
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async perform() {
+  async perform(..._args) {
     throw new Error("perform not implemented")
   }
 }
