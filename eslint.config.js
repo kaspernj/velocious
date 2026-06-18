@@ -1,15 +1,9 @@
 import js from "@eslint/js"
 import {jsdoc} from 'eslint-plugin-jsdoc'
-import jsdocInlineTypeCastsRule from "./eslint-rules/jsdoc-inline-type-casts.js"
+import jsdocInlineTypeCastsPlugin from "eslint-plugin-jsdoc-inline-type-casts"
 import jsdocTagLinesPlugin from "eslint-plugin-jsdoc-tag-lines"
 import globals from "globals"
 import {defineConfig} from "eslint/config"
-
-const jsdocInlineTypeCastsPlugin = {
-  rules: {
-    "jsdoc-inline-type-casts": jsdocInlineTypeCastsRule
-  }
-}
 
 export default defineConfig([
   {
