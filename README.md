@@ -1981,12 +1981,25 @@ Beacon is opt-in for the rest of the framework, but the dispatcher uses event-dr
 ```js
 import VelociousJob from "velocious/build/src/background-jobs/job.js"
 
+/** @augments {VelociousJob<[string, string]>} */
 export default class MyJob extends VelociousJob {
+  /**
+   * @param {string} arg1
+   * @param {string} arg2
+   * @returns {Promise<void>}
+   */
   async perform(arg1, arg2) {
     await doWork(arg1, arg2)
   }
 }
 ```
+
+`VelociousJob` is generic over the tuple of arguments `perform` takes. Declaring it
+with `@augments {VelociousJob<[...]>}` (or `extends VelociousJob<[...]>` in TypeScript)
+lets a type-checked codebase declare `perform`'s parameters as required and typed.
+Argument-less jobs use a bare `extends VelociousJob` with `async perform()` — the
+default empty-tuple type argument keeps that working unchanged. Plain (unchecked)
+JavaScript can ignore the annotation entirely.
 
 Queue a job:
 
