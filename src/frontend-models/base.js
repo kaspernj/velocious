@@ -4254,7 +4254,7 @@ export default class FrontendModelBase {
    * @param {string | number | null} [args.memberId] - Optional member id for member-scoped commands.
    * @param {Record<string, ?>} args.payload - Request payload.
    * @param {string} args.resourcePath - Direct resource path.
-   * @returns {Promise<Record<string, ?>>} - Decoded response payload.
+   * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Decoded response payload.
    */
   static async executeCustomCommand({commandName, commandType, memberId = null, payload, resourcePath}) {
     const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
@@ -4279,7 +4279,7 @@ export default class FrontendModelBase {
       scheduleSharedFrontendModelRequestFlush()
     })
 
-    const decodedBatchResponse = /** @type {Record<string, ?>} */ (batchResponse)
+    const decodedBatchResponse = /** @type {Record<string, FrontendModelAttributeValue>} */ (batchResponse)
 
     this.throwOnErrorFrontendModelResponse({
       commandType,
