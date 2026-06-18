@@ -842,10 +842,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         modelClass,
         modelName: modelClass.getModelName(),
         params: {},
-        resourceConfiguration: /**
-                                * Resource configuration.
-                                * @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration}
-                                */ ({attributes: []})
+        resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
       })
       const spec = instance.permittedParams({action, ability: undefined, locals: {}, params: {}})
 
@@ -882,10 +879,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         modelClass,
         modelName: modelClass.getModelName(),
         params: {},
-        resourceConfiguration: /**
-                                * Resource configuration.
-                                * @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration}
-                                */ ({attributes: []})
+        resourceConfiguration: /** @type {import("../../../../../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
       })
       spec = instance.permittedParams()
     } catch (error) {

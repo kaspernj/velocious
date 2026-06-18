@@ -142,9 +142,7 @@ export default class ServerClient {
    * @returns {void} - No return value.
    */
   onSocketError = (error) => {
-    const errorCode = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {{code?: string}} */ (error).code
+    const errorCode = /** @type {{code?: string}} */ (error).code
 
     this.logger.error(() => [`Socket ${this.clientCount} error`, errorCode || error.message])
     this.emitClose()
@@ -188,12 +186,8 @@ export default class ServerClient {
         this.socket.off("error", onWriteError)
         resolve()
       }
-      const onWriteError = (/**
-                             * Narrows the runtime value to the documented type.
-                             * @type {Error} */ error) => {
-        const errorCode = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {{code?: string}} */ (error).code
+      const onWriteError = (/** @type {Error} */ error) => {
+        const errorCode = /** @type {{code?: string}} */ (error).code
 
         this.logger.error(() => [`Socket ${this.clientCount} write error`, errorCode || error.message])
         finish()

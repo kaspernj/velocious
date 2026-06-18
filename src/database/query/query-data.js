@@ -69,9 +69,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       }
 
       if (isPlainObject(item)) {
-        for (const nested of normalizeQueryDataSpec(/**
-                                                     * Narrows the runtime value to the documented type.
-                                                     * @type {?} */ (item), chain)) {
+        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (item), chain)) {
           entries.push(nested)
         }
         continue
@@ -98,9 +96,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       if (value === false) continue
 
       if (typeof value === "string" || Array.isArray(value) || isPlainObject(value)) {
-        for (const nested of normalizeQueryDataSpec(/**
-                                                     * Narrows the runtime value to the documented type.
-                                                     * @type {?} */ (value), [...chain, key])) {
+        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (value), [...chain, key])) {
           entries.push(nested)
         }
         continue
@@ -193,9 +189,7 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
   if (rootModels.length === 0 || entries.length === 0) return
 
   const primaryKey = rootModelClass.primaryKey()
-  const rootIds = rootModels.map((model) => /**
-                                             * Narrows the runtime value to the documented type.
-                                             * @type {string | number} */ (model.readColumn(primaryKey)))
+  const rootIds = rootModels.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
 
   for (const entry of entries) {
     await runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels})
@@ -270,9 +264,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
     tableName: targetTableRef
   })
 
-  const rows = /**
-                * Narrows the runtime value to the documented type.
-                * @type {Array<Record<string, ?>>} */ (await query._executeQuery())
+  const rows = /** @type {Array<Record<string, ?>>} */ (await query._executeQuery())
   const byParent = new Map()
 
   for (const row of rows) {
@@ -284,9 +276,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
   }
 
   for (const model of rootModels) {
-    const modelId = /**
-                     * Narrows the runtime value to the documented type.
-                     * @type {string | number} */ (model.readColumn(primaryKey))
+    const modelId = /** @type {string | number} */ (model.readColumn(primaryKey))
     // Driver-type tolerance: MySQL can return PKs as strings even when
     // the column is numeric. Fall back to a string lookup so results
     // still land on the right model.

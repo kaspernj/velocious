@@ -287,14 +287,10 @@ function it(description, arg1, arg2) {
   let testFunction
 
   if (typeof arg1 == "function") {
-    testFunction = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {() => (void|Promise<void>)} */ (arg1)
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {}
   } else if (typeof arg2 == "function") {
-    testFunction = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {() => (void|Promise<void>)} */ (arg2)
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = arg1
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
@@ -331,14 +327,10 @@ function fit(description, arg1, arg2) {
   let testFunction
 
   if (typeof arg1 == "function") {
-    testFunction = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {() => (void|Promise<void>)} */ (arg1)
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
     testArgs = {focus: true}
   } else if (typeof arg2 == "function") {
-    testFunction = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {() => (void|Promise<void>)} */ (arg2)
+    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
     testArgs = Object.assign({focus: true}, arg1)
   } else {
     throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)

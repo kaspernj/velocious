@@ -179,9 +179,7 @@ export default class VelociousRoutesResolver {
     }
 
     const controllerClass = await this.resolveControllerClass({controllerPath})
-    const controllerRequest = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {import("../http-server/client/request.js").default} */ (this.request)
+    const controllerRequest = /** @type {import("../http-server/client/request.js").default} */ (this.request)
     const controllerInstance = new controllerClass({
       action,
       configuration: this.configuration,
@@ -196,11 +194,7 @@ export default class VelociousRoutesResolver {
       throw new Error(`Missing action on controller: ${controller}#${action}`)
     }
 
-    const actionHandlers = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {Record<string, () => void | Promise<void>>} */ (/**
-                                                                                     * Narrows the runtime value to the documented type.
-                                                                                     * @type {?} */ (controllerInstance))
+    const actionHandlers = /** @type {Record<string, () => void | Promise<void>>} */ (/** @type {?} */ (controllerInstance))
 
     const logMethod = this._logMethod()
 
@@ -260,9 +254,7 @@ export default class VelociousRoutesResolver {
         stage: "controller-action"
       }
 
-      const errorWithContext = /**
-                                * Narrows the runtime value to the documented type.
-                                * @type {{velociousContext?: object}} */ (ensuredError)
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (ensuredError)
 
       errorWithContext.velociousContext = {
         ...(errorWithContext.velociousContext || {}),
@@ -423,9 +415,7 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress() || "unknown"
-    const loggedParams = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {Record<string, ?>} */ (this._sanitizeParamsForLogging(this.params))
+    const loggedParams = /** @type {Record<string, ?>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action
     delete loggedParams.controller

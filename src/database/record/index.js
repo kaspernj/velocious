@@ -147,9 +147,7 @@ function buildRelatedRecordWithInverse(parent, relationshipName, attributes, all
     allowHasMany,
     inverseOf,
     parent,
-    record: /**
-             * Narrows the runtime value to the documented type.
-             * @type {{getRelationshipByName: VelociousDatabaseRecord["getRelationshipByName"]}} */ (record)
+    record: /** @type {{getRelationshipByName: VelociousDatabaseRecord["getRelationshipByName"]}} */ (record)
   })
 
   return record
@@ -669,11 +667,7 @@ class VelociousDatabaseRecord {
     }
 
     let relationship
-    const prototype = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {Record<string, ?>} */ (/**
-                                                       * Narrows the runtime value to the documented type.
-                                                       * @type {?} */ (this.prototype))
+    const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
     if (actualData.type == "belongsTo") {
       relationship = new BelongsToRelationship(actualData)
@@ -684,12 +678,8 @@ class VelociousDatabaseRecord {
         return relationship.loaded()
       }
 
-      prototype[`build${inflection.camelize(relationshipName)}`] = function(/**
-                                                                             * Narrows the runtime value to the documented type.
-                                                                             * @type {Record<string, ?>} */ attributes) {
-        return buildRelatedRecordWithInverse(/**
-                                              * Narrows the runtime value to the documented type.
-                                              * @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, true)
+      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, ?>} */ attributes) {
+        return buildRelatedRecordWithInverse(/** @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, true)
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
@@ -700,9 +690,7 @@ class VelociousDatabaseRecord {
         return await this.relationshipOrLoad(relationshipName, {preloadTranslations: true})
       }
 
-      prototype[`set${inflection.camelize(relationshipName)}`] = function(/**
-                                                                           * Narrows the runtime value to the documented type.
-                                                                           * @type {?} */ model) {
+      prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {?} */ model) {
         const relationship = this.getRelationshipByName(relationshipName)
 
         relationship.setLoaded(model)
@@ -733,12 +721,8 @@ class VelociousDatabaseRecord {
         return this.getRelationshipByName(relationshipName).loaded()
       }
 
-      prototype[`build${inflection.camelize(relationshipName)}`] = function(/**
-                                                                             * Narrows the runtime value to the documented type.
-                                                                             * @type {Record<string, ?>} */ attributes) {
-        return buildRelatedRecordWithInverse(/**
-                                              * Narrows the runtime value to the documented type.
-                                              * @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, false)
+      prototype[`build${inflection.camelize(relationshipName)}`] = function(/** @type {Record<string, ?>} */ attributes) {
+        return buildRelatedRecordWithInverse(/** @type {VelociousDatabaseRecord} */ (this), relationshipName, attributes, false)
       }
 
       prototype[`load${inflection.camelize(relationshipName)}`] = async function() {
@@ -764,9 +748,7 @@ class VelociousDatabaseRecord {
   static _normalizeRelationshipArgs(scopeOrOptions, options) {
     if (typeof scopeOrOptions == "function") {
       return {
-        scope: /**
-                * Narrows the runtime value to the documented type.
-                * @type {RelationshipScopeCallback} */ (scopeOrOptions),
+        scope: /** @type {RelationshipScopeCallback} */ (scopeOrOptions),
         relationshipOptions: options || {}
       }
     }
@@ -837,9 +819,7 @@ class VelociousDatabaseRecord {
     })
 
     ChildModel.beforeSave(async (record) => {
-      const model = /**
-                     * Narrows the runtime value to the documented type.
-                     * @type {?} */ (record)
+      const model = /** @type {?} */ (record)
 
       if (model.isNewRecord()) return
 
@@ -856,9 +836,7 @@ class VelociousDatabaseRecord {
     })
 
     ChildModel.afterSave(async (record) => {
-      const model = /**
-                     * Narrows the runtime value to the documented type.
-                     * @type {?} */ (record)
+      const model = /** @type {?} */ (record)
       const prevKey = `_counterCachePrev_${relationshipName}`
       const previousParentId = model[prevKey]
 
@@ -1128,9 +1106,7 @@ class VelociousDatabaseRecord {
 
     this._defineRelationship(relationshipName, Object.assign({type: "belongsTo", scope}, relationshipOptions))
 
-    if (/**
-         * Narrows the runtime value to the documented type.
-         * @type {?} */ (relationshipOptions)?.counterCache) {
+    if (/** @type {?} */ (relationshipOptions)?.counterCache) {
       this._registerCounterCacheCallbacks(relationshipName)
     }
   }
@@ -1163,9 +1139,7 @@ class VelociousDatabaseRecord {
   static async create(attributes) {
     await this.ensureInitialized()
 
-    const record = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {Model} */ (new this(attributes))
+    const record = /** @type {Model} */ (new this(attributes))
 
     await record.save()
 
@@ -1240,9 +1214,7 @@ class VelociousDatabaseRecord {
       this._acceptedNestedAttributes = {}
     }
 
-    /**
-     * Narrows the runtime value to the documented type.
-     * @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, ?>) => boolean}>} */ (this._acceptedNestedAttributes)[relationshipName] = {...options}
+    /** @type {Record<string, {allowDestroy?: boolean, limit?: number, rejectIf?: (attributes: Record<string, ?>) => boolean}>} */ (this._acceptedNestedAttributes)[relationshipName] = {...options}
   }
 
   /**
@@ -1281,19 +1253,13 @@ class VelociousDatabaseRecord {
 
     this.getAttachmentsMap()[attachmentName] = {driver, type}
 
-    const prototype = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {Record<string, ?>} */ (/**
-                                                       * Narrows the runtime value to the documented type.
-                                                       * @type {?} */ (this.prototype))
+    const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
     prototype[attachmentName] = function() {
       return this.getAttachmentByName(attachmentName)
     }
 
-      prototype[`set${inflection.camelize(attachmentName)}`] = function(/**
-                                                                         * Narrows the runtime value to the documented type.
-                                                                         * @type {?} */ newValue) {
+      prototype[`set${inflection.camelize(attachmentName)}`] = function(/** @type {?} */ newValue) {
       this.getAttachmentByName(attachmentName).queueAttach(newValue)
       return newValue
     }
@@ -1418,11 +1384,7 @@ class VelociousDatabaseRecord {
 
     const columnNameToAttributeName = this.getColumnNameToAttributeNameMap()
     const attributeNameToColumnName = this.getAttributeNameToColumnNameMap()
-    const prototype = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {Record<string, ?>} */ (/**
-                                                       * Narrows the runtime value to the documented type.
-                                                       * @type {?} */ (this.prototype))
+    const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
     for (const column of this._columns) {
       this._columnsAsHash[column.getName()] = column
@@ -1441,20 +1403,14 @@ class VelociousDatabaseRecord {
       }
 
       if (!(`set${camelizedColumnNameBigFirst}` in prototype)) {
-        prototype[`set${camelizedColumnNameBigFirst}`] = function(/**
-                                                                   * Narrows the runtime value to the documented type.
-                                                                   * @type {?} */ newValue) {
+        prototype[`set${camelizedColumnNameBigFirst}`] = function(/** @type {?} */ newValue) {
           return this._setColumnAttribute(camelizedColumnName, newValue)
         }
       }
 
       if (!(`has${camelizedColumnNameBigFirst}` in prototype)) {
         prototype[`has${camelizedColumnNameBigFirst}`] = function() {
-          const dynamicThis = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {Record<string, (...args: Array<?>) => ?>} */ (/**
-                                                                                      * Narrows the runtime value to the documented type.
-                                                                                      * @type {?} */ (this))
+          const dynamicThis = /** @type {Record<string, (...args: Array<?>) => ?>} */ (/** @type {?} */ (this))
           const value = dynamicThis[camelizedColumnName]()
 
           return this._hasAttribute(value)
@@ -1548,11 +1504,7 @@ class VelociousDatabaseRecord {
       for (const name in this._translations) {
         const nameCamelized = inflection.camelize(name)
         const setterMethodName = `set${nameCamelized}`
-        const prototype = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {Record<string, ?>} */ (/**
-                                                           * Narrows the runtime value to the documented type.
-                                                           * @type {?} */ (this.prototype))
+        const prototype = /** @type {Record<string, ?>} */ (/** @type {?} */ (this.prototype))
 
         prototype[name] = function getTranslatedAttribute() {
           const locale = this._getConfiguration().getLocale()
@@ -1561,11 +1513,7 @@ class VelociousDatabaseRecord {
         }
 
         prototype[`has${nameCamelized}`] = function hasTranslatedAttribute() {
-          const dynamicThis = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {Record<string, ?>} */ (/**
-                                                               * Narrows the runtime value to the documented type.
-                                                               * @type {?} */ (this))
+          const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
           const candidate = dynamicThis[name]
 
           if (typeof candidate == "function") {
@@ -1577,9 +1525,7 @@ class VelociousDatabaseRecord {
           }
         }
 
-        prototype[setterMethodName] = function setTranslatedAttribute(/**
-                                                                       * Narrows the runtime value to the documented type.
-                                                                       * @type {?} */ newValue) {
+        prototype[setterMethodName] = function setTranslatedAttribute(/** @type {?} */ newValue) {
           const locale = this._getConfiguration().getLocale()
 
           return this._setTranslatedAttribute(name, locale, newValue)
@@ -1595,18 +1541,12 @@ class VelociousDatabaseRecord {
             return this._getTranslatedAttribute(name, locale)
           }
 
-          prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(/**
-                                                                                            * Narrows the runtime value to the documented type.
-                                                                                            * @type {?} */ newValue) {
+          prototype[setterMethodNameLocalized] = function setTranslatedAttributeWithLocale(/** @type {?} */ newValue) {
             return this._setTranslatedAttribute(name, locale, newValue)
           }
 
           prototype[hasMethodNameLocalized] = function hasTranslatedAttribute() {
-            const dynamicThis = /**
-                                 * Narrows the runtime value to the documented type.
-                                 * @type {Record<string, ?>} */ (/**
-                                                                 * Narrows the runtime value to the documented type.
-                                                                 * @type {?} */ (this))
+            const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
             const candidate = dynamicThis[getterMethodNameLocalized]
 
             if (typeof candidate == "function") {
@@ -1678,7 +1618,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Declares a tenant-aware database identifier resolver for this model class.
-   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: Record<string, unknown>}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
+   * @param {string | ((args: {modelClass: typeof VelociousDatabaseRecord, tenant: Record<string, unknown> | null | undefined}) => string | undefined)} databaseIdentifierOrResolver - Static identifier or resolver.
    * @returns {void} - No return value.
    */
   static switchesTenantDatabase(databaseIdentifierOrResolver) {
@@ -1728,9 +1668,7 @@ class VelociousDatabaseRecord {
    * @returns {typeof VelociousDatabaseRecord} - The model class.
    */
   getModelClass() {
-    const modelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {typeof VelociousDatabaseRecord} */ (this.constructor)
+    const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
 
     return modelClass
   }
@@ -1747,11 +1685,7 @@ class VelociousDatabaseRecord {
     const canonicalName = this.getModelClass().resolveAttributeName(name) ?? name
     const requestedSetterName = `set${inflection.camelize(canonicalName)}`
     const setterName = this.getModelClass().findMemberNameInsensitive(this, requestedSetterName)
-    const dynamicThis = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {Record<string, (value: ?) => void>} */ (/**
-                                                                          * Narrows the runtime value to the documented type.
-                                                                          * @type {?} */ (this))
+    const dynamicThis = /** @type {Record<string, (value: ?) => void>} */ (/** @type {?} */ (this))
 
     this.getModelClass()._assertHasBeenInitialized()
     if (!this.getModelClass().isInitialized()) throw new Error(`${this.constructor.name} model isn't initialized yet`)
@@ -2910,9 +2844,7 @@ class VelociousDatabaseRecord {
        * @type {Record<string, ?>} */
       const dict = translation
 
-      const attributeMethod = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {function() : string | undefined} */ (dict[name])
+      const attributeMethod = /** @type {function() : string | undefined} */ (dict[name])
 
       if (typeof attributeMethod == "function") {
         return attributeMethod.bind(translation)()
@@ -3260,9 +3192,7 @@ class VelociousDatabaseRecord {
    * @returns {ModelClassQuery<MC>} - The preload.
    */
   static preload(preload) {
-    const query = /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {ModelClassQuery<MC>} */ (this._newQuery().preload(preload))
+    const query = /** @type {ModelClassQuery<MC>} */ (this._newQuery().preload(preload))
 
     return query
   }
@@ -3410,9 +3340,7 @@ class VelociousDatabaseRecord {
 
     for (const relationship of this.getModelClass().getRelationships()) {
       if (relationship.getDependent() == "restrict") {
-        const instanceRelationship = /**
-                                      * Narrows the runtime value to the documented type.
-                                      * @type {?} */ (this.getRelationshipByName(relationship.getRelationshipName()))
+        const instanceRelationship = /** @type {?} */ (this.getRelationshipByName(relationship.getRelationshipName()))
         const count = await instanceRelationship.query().count()
 
         if (count > 0) {
@@ -3498,11 +3426,7 @@ class VelociousDatabaseRecord {
         if (callback == callbackName) {
           callbackNameRegisteredAsString = true
         }
-        const dynamicThis = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {Record<string, ?>} */ (/**
-                                                             * Narrows the runtime value to the documented type.
-                                                             * @type {?} */ (this))
+        const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
         const methodCallback = dynamicThis[callback]
 
         if (typeof methodCallback != "function") {
@@ -3515,11 +3439,7 @@ class VelociousDatabaseRecord {
       }
     }
 
-    const dynamicThis = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {Record<string, ?>} */ (/**
-                                                         * Narrows the runtime value to the documented type.
-                                                         * @type {?} */ (this))
+    const dynamicThis = /** @type {Record<string, ?>} */ (/** @type {?} */ (this))
     const instanceCallback = dynamicThis[callbackName]
 
     if (!callbackNameRegisteredAsString && typeof instanceCallback === "function") {
@@ -3623,11 +3543,7 @@ class VelociousDatabaseRecord {
    * @returns {number}
    */
   readCount(attributeName) {
-    return readPayloadAssociationCount(/**
-                                        * Narrows the runtime value to the documented type.
-                                        * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                                         * Narrows the runtime value to the documented type.
-                                                                                                                         * @type {?} */ (this)), attributeName)
+    return readPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName)
   }
 
   /**
@@ -3638,11 +3554,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setAssociationCount(attributeName, value) {
-    setPayloadAssociationCount(/**
-                                * Narrows the runtime value to the documented type.
-                                * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                                 * Narrows the runtime value to the documented type.
-                                                                                                                 * @type {?} */ (this)), attributeName, value)
+    setPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName, value)
   }
 
   /**
@@ -3657,11 +3569,7 @@ class VelociousDatabaseRecord {
      * @type {Record<string, number>} */
     const result = {}
 
-    const target = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                     * Narrows the runtime value to the documented type.
-                                                                                                     * @type {?} */ (this))
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this))
 
     if (!target._associationCounts) return result
 
@@ -3683,11 +3591,7 @@ class VelociousDatabaseRecord {
    * @returns {?}
    */
   queryData(name) {
-    return readPayloadQueryData(/**
-                                 * Narrows the runtime value to the documented type.
-                                 * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                                  * Narrows the runtime value to the documented type.
-                                                                                                                  * @type {?} */ (this)), name)
+    return readPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name)
   }
 
   /**
@@ -3699,11 +3603,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setQueryData(name, value) {
-    setPayloadQueryData(/**
-                         * Narrows the runtime value to the documented type.
-                         * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                          * Narrows the runtime value to the documented type.
-                                                                                                          * @type {?} */ (this)), name, value)
+    setPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name, value)
   }
 
   /**
@@ -3718,11 +3618,7 @@ class VelociousDatabaseRecord {
      * @type {Record<string, ?>} */
     const result = {}
 
-    const target = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                     * Narrows the runtime value to the documented type.
-                                                                                                     * @type {?} */ (this))
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this))
 
     if (!target._queryDataValues) return result
 
@@ -3745,11 +3641,7 @@ class VelociousDatabaseRecord {
    * @returns {boolean}
    */
   can(action) {
-    return readPayloadComputedAbility(/**
-                                       * Narrows the runtime value to the documented type.
-                                       * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                                        * Narrows the runtime value to the documented type.
-                                                                                                                        * @type {?} */ (this)), action)
+    return readPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action)
   }
 
   /**
@@ -3761,11 +3653,7 @@ class VelociousDatabaseRecord {
    * @returns {void}
    */
   _setComputedAbility(action, value) {
-    setPayloadComputedAbility(/**
-                               * Narrows the runtime value to the documented type.
-                               * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                                * Narrows the runtime value to the documented type.
-                                                                                                                * @type {?} */ (this)), action, value)
+    setPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action, value)
   }
 
   /**
@@ -3780,11 +3668,7 @@ class VelociousDatabaseRecord {
      * @type {Record<string, boolean>} */
     const result = {}
 
-    const target = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/**
-                                                                                                     * Narrows the runtime value to the documented type.
-                                                                                                     * @type {?} */ (this))
+    const target = /** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this))
 
     if (!target._computedAbilities) return result
 
@@ -4131,9 +4015,7 @@ class VelociousDatabaseRecord {
 
     whereObject[primaryKey] = id
 
-    const query = /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {import("../query/model-class-query.js").default<MC>} */ (this.getModelClass().where(whereObject))
+    const query = /** @type {import("../query/model-class-query.js").default<MC>} */ (this.getModelClass().where(whereObject))
     const reloadedModel = await query.first()
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
@@ -4148,9 +4030,7 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async reload() {
-    const recordId = /**
-                      * Narrows the runtime value to the documented type.
-                      * @type {string | number} */ (this.readAttribute("id"))
+    const recordId = /** @type {string | number} */ (this.readAttribute("id"))
     await this._reloadWithId(recordId)
   }
 

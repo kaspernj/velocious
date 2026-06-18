@@ -40,9 +40,7 @@ export default class VelociousBasicRoute extends BaseRoute {
       throw new Error("mount expects a mountable with a 'mountInto' method")
     }
 
-    const at = /**
-                * Narrows the runtime value to the documented type.
-                * @type {Record<string, ?>} */ (options).at
+    const at = /** @type {Record<string, ?>} */ (options).at
 
     if (typeof at !== "string" || !at.startsWith("/")) {
       throw new Error(`mount requires an 'at' option starting with '/', got: ${String(at)}`)

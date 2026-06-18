@@ -59,9 +59,7 @@ export function frontendModelResourceConfigurationFromDefinition(resourceDefinit
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} - Normalized resource configuration.
  */
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
-  const restArgs = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {Record<string, ?>} */ ({...resourceConfiguration})
+  const restArgs = /** @type {Record<string, ?>} */ ({...resourceConfiguration})
 
   for (const key of [
     "abilities",
@@ -392,9 +390,7 @@ export function frontendModelActionForCommand({commandName, modelName, resourceD
 
     const validatedCommandName = validateFrontendModelResourceCommandName({
       commandName: configuredCommandName,
-      commandType: /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
+      commandType: /** @type {"attach" | "create" | "destroy" | "download" | "find" | "index" | "update" | "url"} */ (action),
       modelName
     })
 

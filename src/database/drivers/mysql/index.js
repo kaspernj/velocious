@@ -223,9 +223,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
-    const errorCode = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {?} */ (error).code
+    const errorCode = /** @type {?} */ (error).code
     const message = error.message || ""
     const shouldRetry = (
       errorCode == "ECONNREFUSED" ||
@@ -337,9 +335,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
       const tables = []
 
       for (const row of result) {
-        const table = new Table(this, /**
-                                       * Narrows the runtime value to the documented type.
-                                       * @type {Record<string, string>} */ (row))
+        const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }

@@ -237,9 +237,7 @@ export default class BackgroundJobsStore {
       const counts = {}
 
       for (const row of rows) {
-        const typedRow = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {Record<string, ?>} */ (row)
+        const typedRow = /** @type {Record<string, ?>} */ (row)
 
         counts[String(typedRow.status)] = this._normalizeNumber(typedRow.count) || 0
       }
@@ -265,9 +263,7 @@ export default class BackgroundJobsStore {
       if (jobName) query = query.where({job_name: jobName})
 
       const rows = await query.results()
-      const countRow = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {Record<string, ?>} */ (rows[0] || {})
+      const countRow = /** @type {Record<string, ?>} */ (rows[0] || {})
 
       return this._normalizeNumber(countRow.count) || 0
     })

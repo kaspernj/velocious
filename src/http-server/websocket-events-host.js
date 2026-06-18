@@ -43,9 +43,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   publish(channelOrArgs, payloadArg) {
     const publishArgs = typeof channelOrArgs === "string"
       ? {channel: channelOrArgs, payload: payloadArg}
-      : /**
-         * Narrows the runtime value to the documented type.
-         * @type {{channel: string, payload: ?}} */ (channelOrArgs)
+      : /** @type {{channel: string, payload: ?}} */ (channelOrArgs)
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 

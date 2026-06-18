@@ -22,9 +22,7 @@ function buildConsoleContext({application, configuration}) {
     if (dbs[identifier]) continue
 
     const pool = configuration.getDatabasePool(identifier)
-    const poolWithGlobal = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
+    const poolWithGlobal = /** @type {{getGlobalConnection?: () => import("../../../../database/drivers/base.js").default | undefined}} */ (pool)
     const globalConnection = poolWithGlobal.getGlobalConnection?.()
 
     if (globalConnection) {
@@ -65,9 +63,7 @@ function buildConsoleContext({application, configuration}) {
 function assignConsoleContext({context, replServer}) {
   Object.assign(replServer.context, context)
 
-  const modelClasses = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {Record<string, typeof import("../../../../database/record/index.js").default>} */ (
+  const modelClasses = /** @type {Record<string, typeof import("../../../../database/record/index.js").default>} */ (
     context.models || {}
   )
 

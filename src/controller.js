@@ -141,9 +141,7 @@ export default class VelociousController {
    * @returns {typeof VelociousController} - The controller class.
    */
   _getControllerClass() {
-    const controllerClass = /**
-                             * Types the following value.
-                             * @type {typeof VelociousController} */ (this.constructor)
+    const controllerClass = /** @type {typeof VelociousController} */ (this.constructor)
 
     return controllerClass
   }
@@ -159,11 +157,7 @@ export default class VelociousController {
       const beforeActions = currentControllerClass._beforeActions
 
       if (beforeActions) {
-        const controllerPrototype = /**
-                                     * Types the following value.
-                                     * @type {Record<string, Function | undefined>} */ (/**
-                                                                                        * Types the following value.
-                                                                                        * @type {?} */ (currentControllerClass.prototype))
+        const controllerPrototype = /** @type {Record<string, Function | undefined>} */ (/** @type {?} */ (currentControllerClass.prototype))
 
         for (const beforeActionName of beforeActions) {
           const beforeAction = controllerPrototype[beforeActionName]
@@ -215,9 +209,7 @@ export default class VelociousController {
 
       return paramsToObject.toObject()
     } catch (error) {
-      const ensuredError = /**
-                            * Types the following value.
-                            * @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),
@@ -295,9 +287,7 @@ export default class VelociousController {
 
       ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
         if (err) {
-          const renderError = /**
-                               * Types the following value.
-                               * @type {Error & {code?: string}} */ (err)
+          const renderError = /** @type {Error & {code?: string}} */ (err)
 
           if (renderError.code === "ENOENT") {
             this.logger.warn(`Missing view file: ${viewPath}`)

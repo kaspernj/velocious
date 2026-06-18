@@ -111,9 +111,7 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
   const eventNames = normalizeEventNames(eventOrEvents)
   const eventsKey = eventNamesDependencyKey(eventNames)
   const eventCallback = useMemo(() => {
-    const wrappedCallback = (/**
-                              * Narrows the runtime value to the documented type.
-                              * @type {FrontendModelClassEventPayload} */ payload) => {
+    const wrappedCallback = (/** @type {FrontendModelClassEventPayload} */ payload) => {
       if (activeRef.current) callbackRef.current(payload)
     }
 
@@ -131,9 +129,7 @@ export default function useModelClassEvent(modelClass, eventOrEvents, callback, 
      * Unsubscribe callbacks.
      * @type {Array<() => void>} */
     const unsubscribeCallbacks = []
-    const subscriptionCallback = (/**
-                                   * Narrows the runtime value to the documented type.
-                                   * @type {FrontendModelClassEventPayload} */ payload) => {
+    const subscriptionCallback = (/** @type {FrontendModelClassEventPayload} */ payload) => {
       if (!closed) eventCallback(payload)
     }
 

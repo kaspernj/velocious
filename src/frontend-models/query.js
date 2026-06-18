@@ -179,9 +179,7 @@ function normalizeWithCountFrontend(spec) {
     if (value === false) continue
 
     if (isPlainObject(value)) {
-      const options = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
+      const options = /** @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
       entries.push({
         attributeName: key,
         relationshipName: options.relationship || key,
@@ -280,12 +278,8 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
 
     if (isPlainObject(existingValue)) {
       mergePreloadRecord(
-        /**
-         * Narrows the runtime value to the documented type.
-         * @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
-        /**
-         * Narrows the runtime value to the documented type.
-         * @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
+        /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (existingValue),
+        /** @type {import("../database/query/index.js").NestedPreloadRecord} */ (incomingValue)
       )
       continue
     }
@@ -378,9 +372,7 @@ export function normalizeSearchOperator(operator) {
     ">": "gt",
     ">=": "gteq"
   }
-  const normalizedOperator = operatorAliases[/**
-                                              * Narrows the runtime value to the documented type.
-                                              * @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  const normalizedOperator = operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
   const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   if (!supportedOperators.has(normalizedOperator)) {
@@ -961,9 +953,7 @@ export function normalizePluck(pluck) {
  * @returns {Set<string>} - Resource attribute names.
  */
 function frontendModelResourceAttributes(modelClass) {
-  const resourceConfig = /**
-                          * Narrows the runtime value to the documented type.
-                          * @type {Record<string, ?>} */ (modelClass.resourceConfig())
+  const resourceConfig = /** @type {Record<string, ?>} */ (modelClass.resourceConfig())
   const attributes = resourceConfig.attributes
 
   if (Array.isArray(attributes)) {
@@ -1227,9 +1217,7 @@ export default class FrontendModelQuery {
   queryData(spec) {
     if (spec == null) return this
 
-    this._queryData.push(/**
-                          * Narrows the runtime value to the documented type.
-                          * @type {?} */ (spec))
+    this._queryData.push(/** @type {?} */ (spec))
 
     return this
   }
@@ -1264,9 +1252,7 @@ export default class FrontendModelQuery {
       throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to ${this.modelClass.name} query`)
     }
 
-    const scopedQuery = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {this | void} */ (scopeDescriptor.callback({
+    const scopedQuery = /** @type {this | void} */ (scopeDescriptor.callback({
       driver: null,
       modelClass: this.modelClass,
       query: this,
@@ -1308,9 +1294,7 @@ export default class FrontendModelQuery {
    */
   selectWithRequiredRootAttributes(requiredAttributes = []) {
     const rootModelName = this.modelClass.getModelName()
-    const selectMap = /**
-                       * Narrows the runtime value to the documented type.
-                       * @type {Record<string, string[]>} */ (this._select)
+    const selectMap = /** @type {Record<string, string[]>} */ (this._select)
     const existingRootAttributes = selectMap[rootModelName]
 
     if (!existingRootAttributes) {
@@ -1516,9 +1500,7 @@ export default class FrontendModelQuery {
    * @returns {FrontendModelQuery<T>} - Cloned query instance.
    */
   clone() {
-    const newQuery = /**
-                      * Narrows the runtime value to the documented type.
-                      * @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
+    const newQuery = /** @type {FrontendModelQuery<T>} */ (new FrontendModelQuery({
       modelClass: this.modelClass,
       preload: normalizePreload(this._preload)
     }))
@@ -1877,9 +1859,7 @@ export default class FrontendModelQuery {
     // can batch lazy relationship access later. Single-record lookups still flow
     // through here (with a cohort of one) and degrade cleanly to per-record load.
     for (const model of models) {
-      /**
-       * Narrows the runtime value to the documented type.
-       * @type {?} */ (model)._loadCohort = models
+      /** @type {?} */ (model)._loadCohort = models
     }
 
     return models
@@ -2223,9 +2203,7 @@ function frontendModelEventQuery(modelClass, options = {}) {
 
   assertFrontendModelEventOptionsObject(options)
 
-  const optionsObject = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {FrontendModelEventOptionsObject} */ (options)
+  const optionsObject = /** @type {FrontendModelEventOptionsObject} */ (options)
   const query = frontendModelEventQueryFromOptionsObject(modelClass, optionsObject)
 
   applyFrontendModelProjectionOptions(query, optionsObject)

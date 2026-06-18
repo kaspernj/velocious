@@ -53,17 +53,13 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
       const instanceRelationship = model.getRelationshipByName(relationshipName)
 
       if (this.selection.isSatisfied({instanceRelationship, targetModelClass, mappingColumns: [foreignKey]})) {
-        const loaded = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
+        const loaded = /** @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
 
         if (loaded) satisfiedTargets.push(loaded)
         continue
       }
 
-      const primaryKeyValue = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {string | number} */ (model.readColumn(primaryKey))
+      const primaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
 
       preloadCollections[primaryKeyValue] = undefined
 
@@ -99,9 +95,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
     const targetModels = await query.toArray()
 
     for (const targetModel of targetModels) {
-      const foreignKeyValue = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {string | number} */ (targetModel.readColumn(foreignKey))
+      const foreignKeyValue = /** @type {string | number} */ (targetModel.readColumn(foreignKey))
 
       preloadCollections[foreignKeyValue] = targetModel
     }

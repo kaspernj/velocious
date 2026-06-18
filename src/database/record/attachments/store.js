@@ -456,9 +456,7 @@ export default class RecordAttachmentsStore {
     let attachmentDriver
 
     if (typeof driverReference === "function") {
-      const DriverClass = /**
-                           * Narrows the runtime value to the documented type.
-                           * @type {AttachmentDriverConstructor} */ (driverReference)
+      const DriverClass = /** @type {AttachmentDriverConstructor} */ (driverReference)
 
       attachmentDriver = new DriverClass({
         attachmentName,
@@ -561,9 +559,7 @@ export default class RecordAttachmentsStore {
       .order("position DESC")
       .limit(1)
     const rows = await query.results()
-    const currentRow = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {{position?: string | number | null} | undefined} */ (rows[0])
+    const currentRow = /** @type {{position?: string | number | null} | undefined} */ (rows[0])
     const current = Number(currentRow?.position)
 
     if (!Number.isFinite(current)) return 0

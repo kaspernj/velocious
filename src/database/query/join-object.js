@@ -29,12 +29,8 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
       throw new Error(`Query has to be a ModelClassQuery but was a ${query.constructor.name}`)
     }
 
-    const modelQuery = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {import("./model-class-query.js").default} */ (query)
-    const ModelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {typeof import("../record/index.js").default} */ (
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (query)
+    const ModelClass = /** @type {typeof import("../record/index.js").default} */ (
       this.basePath.length > 0 ? modelQuery._resolveModelClassForJoinPath(this.basePath) : modelQuery.modelClass
     )
 
@@ -53,9 +49,7 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
   joinObject(join, modelClass, sql, joinsCount, path) {
     const pretty = this.pretty
     const conn = this.getQuery().driver
-    const query = /**
-                   * Narrows the runtime value to the documented type.
-                   * @type {import("./model-class-query.js").default} */ (this.getQuery())
+    const query = /** @type {import("./model-class-query.js").default} */ (this.getQuery())
 
     for (const joinKey in join) {
       const joinValue = join[joinKey]

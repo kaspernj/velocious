@@ -72,14 +72,10 @@ export default class ParamsToObject {
        * Defines newResult.
        * @type {Array<?> | Record<string, ?>} */
       let newResult
-      const objectResult = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {Record<string, ?>} */ (result)
+      const objectResult = /** @type {Record<string, ?>} */ (result)
 
       if (inputName in objectResult) {
-        newResult = /**
-                     * Narrows the runtime value to the documented type.
-                     * @type {Array<?> | Record<string, ?>} */ (objectResult[inputName])
+        newResult = /** @type {Array<?> | Record<string, ?>} */ (objectResult[inputName])
       } else if (rest == "[]") {
         newResult = []
         objectResult[inputName] = newResult
@@ -90,9 +86,7 @@ export default class ParamsToObject {
 
       this.treatSecond(value, rest, newResult, key)
     } else {
-      const objectResult = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {Record<string, ?>} */ (result)
+      const objectResult = /** @type {Record<string, ?>} */ (result)
 
       objectResult[key] = value
     }
@@ -126,18 +120,12 @@ export default class ParamsToObject {
 
       result.push(value)
     } else if (newRest == "") {
-      /**
-       * Narrows the runtime value to the documented type.
-       * @type {Record<string, ?>} */ (result)[key] = value
+      /** @type {Record<string, ?>} */ (result)[key] = value
     } else {
-      const objectResult = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {Record<string, ?>} */ (result)
+      const objectResult = /** @type {Record<string, ?>} */ (result)
 
       if (!Array.isArray(result) && key in objectResult) {
-        newResult = /**
-                     * Narrows the runtime value to the documented type.
-                     * @type {Array<?> | Record<string, ?>} */ (objectResult[key])
+        newResult = /** @type {Array<?> | Record<string, ?>} */ (objectResult[key])
       } else if (newRest == "[]") {
         newResult = []
         objectResult[key] = newResult

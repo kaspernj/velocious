@@ -292,9 +292,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
       const tables = []
 
       for (const row of result) {
-        const table = new Table(this, /**
-                                       * Narrows the runtime value to the documented type.
-                                       * @type {Record<string, string>} */ (row))
+        const table = new Table(this, /** @type {Record<string, string>} */ (row))
 
         tables.push(table)
       }

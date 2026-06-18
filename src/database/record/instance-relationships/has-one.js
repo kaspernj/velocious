@@ -28,15 +28,11 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
-    const TargetModelClass = /**
-                              * Narrows the runtime value to the documented type.
-                              * @type {TMC} */ (this.getTargetModelClass())
+    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
 
-    const newInstance = /**
-                         * Narrows the runtime value to the documented type.
-                         * @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    const newInstance = /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
 
     this._loaded = newInstance
 
@@ -56,12 +52,8 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     const foreignKey = this.getForeignKey()
     const primaryKey = this.getPrimaryKey()
-    const primaryModelID = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {string | number} */ (this.getModel().readColumn(primaryKey))
-    const TargetModelClass = /**
-                              * Narrows the runtime value to the documented type.
-                              * @type {TMC} */ (this.getTargetModelClass())
+    const primaryModelID = /** @type {string | number} */ (this.getModel().readColumn(primaryKey))
+    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
 
     if (!TargetModelClass) throw new Error("Can't load without a target model class")
 

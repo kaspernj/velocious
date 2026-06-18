@@ -12,15 +12,11 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async validate({model, attributeName}) {
-    const modelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {typeof import("../index.js").default} */ (model.constructor)
+    const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
 
     const connection = modelClass.connection()
     const tableName = modelClass._getTable().getName()
-    const attributeValue = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {string | number} */ (model.readAttribute(attributeName))
+    const attributeValue = /** @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
 
     /**
@@ -49,9 +45,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
 
       if (scopeValue == null) return
 
-      whereArgs[scopeUnderscore] = /**
-                                    * Narrows the runtime value to the documented type.
-                                    * @type {string | number} */ (scopeValue)
+      whereArgs[scopeUnderscore] = /** @type {string | number} */ (scopeValue)
     }
 
     let existingRecordQuery = modelClass
@@ -82,9 +76,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * @returns {string | number | null}
    */
   _resolveScopeValueFromRelationship(model, scopeColumn) {
-    const modelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {typeof import("../index.js").default} */ (model.constructor)
+    const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
     const relationships = modelClass.getRelationshipsMap()
 
     for (const relationshipName in relationships) {

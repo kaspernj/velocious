@@ -184,9 +184,7 @@ export default class TenantDatabaseCommandHelper {
    */
   tenantLabel(tenant) {
     if (tenant && typeof tenant === "object") {
-      const tenantObject = /**
-                            * Narrows the runtime value to the documented type.
-                            * @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
+      const tenantObject = /** @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
 
       if (tenantObject.slug) return String(tenantObject.slug)
       if (tenantObject.name) return String(tenantObject.name)

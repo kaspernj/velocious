@@ -168,9 +168,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
 
     const {chunk, clientCount} = data
     if (!chunk) throw new Error("No chunk given")
-    const client = /**
-                    * Narrows the runtime value to the documented type.
-                    * @type {Client | undefined} */ (digg(this.clients, clientCount))
+    const client = /** @type {Client | undefined} */ (digg(this.clients, clientCount))
 
     if (!client) throw new Error(`Client not found for clientWrite: ${clientCount}`)
 

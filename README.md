@@ -2200,7 +2200,7 @@ export default new Configuration({
 })
 ```
 
-Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when custom model/database routing needs to read the active tenant manually.
+Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when custom model/database routing needs to read the active tenant manually. The tenant is an app-defined value — inputs (`runWithTenant`/`Current.setTenant`/`Current.withTenant`) accept any `object`, `Current.tenant()` returns `Record<string, unknown> | undefined`, and the `switchesTenantDatabase(...)` resolver callback receives `Record<string, unknown> | null | undefined`, so narrow before reading fields. See [tenant object typing](docs/tenant-databases.md#tenant-object-typing).
 
 Tenant-switched model classes fail closed by default: if `switchesTenantDatabase(...)` cannot resolve a tenant database identifier for the current tenant, Velocious raises `TenantDatabaseScopeError` instead of running the query against the configured fallback database. Set `enforceTenantDatabaseScopes: false` only for legacy apps that still need the old fallback behavior during migration.
 

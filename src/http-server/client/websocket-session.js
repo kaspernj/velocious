@@ -38,9 +38,7 @@ const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
  */
 function subscribeMessage(message) {
   return message.type === "subscribe"
-    ? /**
-       * Narrows the runtime value to the documented type.
-       * @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
+    ? /** @type {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>}} */ (message)
     : null
 }
 
@@ -462,9 +460,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     if (message.type === "metadata") {
-      const metadataPayload = /**
-                               * Narrows the runtime value to the documented type.
-                               * @type {{data?: Record<string, ?>}} */ (message)
+      const metadataPayload = /** @type {{data?: Record<string, ?>}} */ (message)
 
       this._metadata = metadataPayload.data && typeof metadataPayload.data === "object" ? {...metadataPayload.data} : {}
 
@@ -1147,9 +1143,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       this.sendJson({type: "connection-opened", connectionId})
     } catch (error) {
       this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /**
-                                                                       * Narrows the runtime value to the documented type.
-                                                                       * @type {Error} */ (error).message || "Failed to open connection"})
+      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to open connection"})
     }
   }
 
@@ -1173,9 +1167,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       })
     } catch (error) {
       this.logger.error(() => [`Failed to handle connection-message for ${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /**
-                                                                       * Narrows the runtime value to the documented type.
-                                                                       * @type {Error} */ (error).message || "Failed to handle message"})
+      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to handle message"})
     }
   }
 
@@ -1286,9 +1278,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       this._channelSubscriptions.delete(subscriptionId)
       this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
       this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
-      this.sendJson({type: "channel-error", subscriptionId, message: /**
-                                                                      * Narrows the runtime value to the documented type.
-                                                                      * @type {Error} */ (error).message || "Failed to subscribe"})
+      this.sendJson({type: "channel-error", subscriptionId, message: /** @type {Error} */ (error).message || "Failed to subscribe"})
     }
   }
 
@@ -1331,9 +1321,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const event of events) {
       if (subscription.isClosed()) break
 
-      subscription.sendMessage(/**
-                                * Narrows the runtime value to the documented type.
-                                * @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
+      subscription.sendMessage(/** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
     }
   }
 

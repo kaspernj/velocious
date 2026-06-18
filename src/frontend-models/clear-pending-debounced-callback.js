@@ -6,9 +6,7 @@
  * @returns {void}
  */
 export default function clearPendingDebouncedCallback(callback) {
-  const callbackWithClear = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {{clear?: ?}} */ (callback)
+  const callbackWithClear = /** @type {{clear?: ?}} */ (callback)
 
   if (typeof callbackWithClear.clear === "function") {
     callbackWithClear.clear()

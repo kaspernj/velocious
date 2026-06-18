@@ -88,19 +88,13 @@ export default class VelociousDatabaseQueryPreloader {
   static async preload(models, queryOrSpec, {force = false} = {}) {
     if (models.length == 0) return
 
-    const modelClass = /**
-                        * Narrows the runtime value to the documented type.
-                        * @type {typeof import("../record/index.js").default} */ (models[0].constructor)
+    const modelClass = /** @type {typeof import("../record/index.js").default} */ (models[0].constructor)
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec == "object" && "_preload" in queryOrSpec
     // Reuse the query builder's preload/select normalization for raw specs
     // instead of duplicating it here.
     const query = isQuery
-      ? /**
-         * Narrows the runtime value to the documented type.
-         * @type {import("./model-class-query.js").default} */ (queryOrSpec)
-      : modelClass.preload(/**
-                            * Narrows the runtime value to the documented type.
-                            * @type {?} */ (queryOrSpec))
+      ? /** @type {import("./model-class-query.js").default} */ (queryOrSpec)
+      : modelClass.preload(/** @type {?} */ (queryOrSpec))
 
     const preloader = new VelociousDatabaseQueryPreloader({
       modelClass,
@@ -141,23 +135,17 @@ export default class VelociousDatabaseQueryPreloader {
       let preloadResult
 
       if (relationship.getType() == "belongsTo") {
-        const belongsToRelationship = /**
-                                       * Narrows the runtime value to the documented type.
-                                       * @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
+        const belongsToRelationship = /** @type {import("../record/relationships/belongs-to.js").default} */ (relationship)
         const hasManyPreloader = new BelongsToPreloader({models: this.models, relationship: belongsToRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasMany") {
-        const hasManyRelationship = /**
-                                     * Narrows the runtime value to the documented type.
-                                     * @type {import("../record/relationships/has-many.js").default} */ (relationship)
+        const hasManyRelationship = /** @type {import("../record/relationships/has-many.js").default} */ (relationship)
         const hasManyPreloader = new HasManyPreloader({models: this.models, relationship: hasManyRelationship, selection: this.selection})
 
         preloadResult = await hasManyPreloader.run()
       } else if (relationship.getType() == "hasOne") {
-        const hasOneRelationship = /**
-                                    * Narrows the runtime value to the documented type.
-                                    * @type {import("../record/relationships/has-one.js").default} */ (relationship)
+        const hasOneRelationship = /** @type {import("../record/relationships/has-one.js").default} */ (relationship)
         const hasOnePreloader = new HasOnePreloader({models: this.models, relationship: hasOneRelationship, selection: this.selection})
 
         preloadResult = await hasOnePreloader.run()

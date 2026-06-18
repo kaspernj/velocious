@@ -129,9 +129,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         const baseName = file.replace(/\.(js|mjs)$/, "")
         const modelName = baseName.replace(/-resource$/, "")
           .split("-")
-          .map((/**
-                 * Narrows the runtime value to the documented type.
-                 * @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .map((/** @type {string} */ part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join("")
 
         discovered[modelName] = ResourceClass
@@ -861,9 +859,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<Record<string, string>>} - Resolves with SQL string.
    */
   async _structureSqlByIdentifier({dbs}) {
-    const sqlByIdentifier = /**
-                             * Narrows the runtime value to the documented type.
-                             * @type {Record<string, string>} */ ({})
+    const sqlByIdentifier = /** @type {Record<string, string>} */ ({})
 
     for (const identifier of Object.keys(dbs)) {
       const db = dbs[identifier]
