@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.462",
+  "version": "1.0.464",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -70,7 +70,8 @@
     "snapreq": "^0.0.8",
     "sql-escape-string": "^1.1.0",
     "sql.js": "^1.12.0",
-    "strftime": "^0.10.2"
+    "strftime": "^0.10.2",
+    "typanic": "^1.0.5"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -100,7 +101,7 @@
     "eslint-plugin-jsdoc": "^63.0.0",
     "eslint-plugin-jsdoc-inline-type-casts": "https://github.com/kaspernj/eslint-plugin-jsdoc-inline-type-casts/archive/refs/heads/master.tar.gz",
     "eslint-plugin-jsdoc-tag-lines": "^1.0.1",
-    "fallow": "2.92.1",
+    "fallow": "2.98.0",
     "globals": "^17.0.0",
     "mssql": "^12.0.0",
     "mysql": "^2.18.1",

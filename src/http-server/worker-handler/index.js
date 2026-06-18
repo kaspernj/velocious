@@ -1,8 +1,8 @@
 // @ts-check
 
+import {ensureError} from "typanic"
 import Logger from "../../logger.js"
 import {Worker} from "worker_threads"
-import ensureError from "../../utils/ensure-error.js"
 import websocketEventsHost from "../websocket-events-host.js"
 
 /**
@@ -109,7 +109,8 @@ export default class VelociousHttpServerWorker {
   onWorkerError = (error) => {
     this.logger.error(`Velocious worker ${this.workerCount} error`, error)
     void this._closeAllClients()
-    throw ensureError(error) // Throws original error with backtrace and everything into the console
+    // Preserve Error instances for the original backtrace while wrapping non-Error throwables.
+    throw ensureError(error)
   }
 
   /**
