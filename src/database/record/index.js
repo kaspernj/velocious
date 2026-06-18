@@ -3957,7 +3957,7 @@ class VelociousDatabaseRecord {
     })
     const insertResult = await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
 
-    await this._applyInsertResult({data, insertResult, primaryKey, primaryKeyType})
+    await this._applyInsertResult({data, insertResult, primaryKey})
     this.setIsNewRecord(false)
 
     this._markLoadedRelationshipsPreloadedAfterCreate()
@@ -3983,21 +3983,25 @@ class VelociousDatabaseRecord {
 
   /**
    * Applies the database insert response to this record.
-   * @param {object} options - Insert result options.
-   * @param {Record<string, ?>} options.data - Inserted data.
-   * @param {?} options.insertResult - Result returned from the connection.
-   * @param {string} options.primaryKey - Primary key column name.
-   * @param {string | undefined} options.primaryKeyType - Primary key column type.
+   * @param {{data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string}} options - Inserted data, connection result, and primary key column name.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _applyInsertResult({data, insertResult, primaryKey, primaryKeyType}) {
+  async _applyInsertResult({data, insertResult, primaryKey}) {
     if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
       this._changes = {}
-    } else if (primaryKeyType == "uuid" && data[primaryKey] !== undefined) {
-      this._attributes = Object.assign({}, data)
-      this._changes = {}
     } else {
+      const primaryKeyValue = data[primaryKey]
+
+      if (primaryKeyValue !== undefined && primaryKeyValue !== null && primaryKeyValue !== "") {
+        if (typeof primaryKeyValue != "string" && typeof primaryKeyValue != "number") {
+          throw new Error(`Inserted primary key ${primaryKey} must be a string or number, got ${typeof primaryKeyValue}`)
+        }
+
+        await this._reloadWithId(primaryKeyValue)
+        return
+      }
+
       const id = await this._connection().lastInsertID()
 
       await this._reloadWithId(id)
