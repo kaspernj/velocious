@@ -178,7 +178,11 @@ describe("database - pool - async tracked multi connection checkout names", () =
           throw new Error("Queued checkout unexpectedly resolved")
         } catch (error) {
           expect(error).toBeInstanceOf(Error)
-          expect(/** @type {Error} */ (error).message).toEqual("Timed out after 20ms waiting for database connection checkout from pool \"default\". Checkout name: \"waiting checkout\".")
+          expect(/** @type {Error} */ (error).message).toContain("Timed out after 20ms waiting for database connection checkout from pool \"default\". Checkout name: \"waiting checkout\".")
+          expect(/** @type {Error} */ (error).message).toContain("Pool state: max=1, inUse=1, idle=0")
+          expect(/** @type {Error} */ (error).message).toContain("checkout=\"long checkout\"")
+          expect(/** @type {Error} */ (error).message).toContain("openTransactions=0")
+          expect(/** @type {Error} */ (error).message).not.toContain("sqlPreview")
         }
       })
 
@@ -215,7 +219,8 @@ describe("database - pool - async tracked multi connection checkout names", () =
             throw new Error("Queued checkout unexpectedly resolved")
           } catch (error) {
             expect(error).toBeInstanceOf(Error)
-            expect(/** @type {Error} */ (error).message).toEqual("Timed out after 10ms waiting for database connection checkout from pool \"default\". Checkout name: \"timed out checkout\".")
+            expect(/** @type {Error} */ (error).message).toContain("Timed out after 10ms waiting for database connection checkout from pool \"default\". Checkout name: \"timed out checkout\".")
+            expect(/** @type {Error} */ (error).message).toContain("Pool state: max=1")
           }
         })
 

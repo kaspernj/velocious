@@ -2440,10 +2440,26 @@ export default class VelociousConfiguration {
      * @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
+    return await this.withDatabaseIdentifierConnections({
+      callback: actualWithConnectionsCallback,
+      dbs,
+      identifiers: this.getDatabaseIdentifiers(),
+      name,
+      stackLabel: "withConnections"
+    })
+  }
+
+  /**
+   * Runs callback with database connections for the requested identifiers.
+   * @template T
+   * @param {{callback: WithConnectionsCallbackType<T>, dbs: Record<string, import("./database/drivers/base.js").default>, identifiers: string[], name: string, stackLabel: string}} args - Connection scope details.
+   * @returns {Promise<T>} - Resolves with the callback result.
+   */
+  async withDatabaseIdentifierConnections({callback, dbs, identifiers, name, stackLabel}) {
     const stack = Error().stack
     const actualCallback = async () => {
-      return await withTrackedStack(stack || "withConnections", async () => {
-        return await actualWithConnectionsCallback(dbs)
+      return await withTrackedStack(stack || stackLabel, async () => {
+        return await callback(dbs)
       })
     }
 
@@ -2452,7 +2468,7 @@ export default class VelociousConfiguration {
      * @type {() => Promise<T>} */
     let runRequest = actualCallback
 
-    for (const identifier of this.getDatabaseIdentifiers()) {
+    for (const identifier of identifiers) {
       let actualRunRequest = runRequest
 
       const nextRunRequest = async () => {
@@ -2545,14 +2561,19 @@ export default class VelociousConfiguration {
     if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
 
     const dbs = this.getCurrentConnections()
-    const identifiers = this.getDatabaseIdentifiers()
-    const hasAllConnections = identifiers.every((identifier) => dbs[identifier])
+    const missingIdentifiers = this.getDatabaseIdentifiers().filter((identifier) => !dbs[identifier])
 
-    if (hasAllConnections) {
+    if (missingIdentifiers.length === 0) {
       return await actualWithConnectionsCallback(dbs)
-    } else {
-      return await this.withConnections({name}, actualWithConnectionsCallback)
     }
+
+    return await this.withDatabaseIdentifierConnections({
+      callback: actualWithConnectionsCallback,
+      dbs,
+      identifiers: missingIdentifiers,
+      name,
+      stackLabel: "ensureConnections"
+    })
   }
 
   /**

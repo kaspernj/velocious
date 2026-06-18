@@ -71,4 +71,32 @@ describe("Configuration tenant support", {databaseCleaning: {transaction: true}}
       await cleanup()
     }
   })
+
+  it("reuses current async-context connections and checks out only missing databases", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-config-partial-connections")
+
+    try {
+      configuration.getDatabaseConfiguration().default.pool = {checkoutTimeoutMillis: 10, max: 1}
+
+      const analyticsPool = configuration.getDatabasePool("analytics")
+      const defaultPool = configuration.getDatabasePool("default")
+
+      await defaultPool.withConnection({name: "held default connection"}, async (defaultConnection) => {
+        await configuration.ensureConnections({name: "partial ensure"}, async (dbs) => {
+          expect(dbs.default).toBe(defaultConnection)
+          expect(dbs.analytics).toBeDefined()
+          expect(analyticsPool.getDebugSnapshot().inUseCount).toEqual(1)
+          expect(defaultPool.getDebugSnapshot().inUseCount).toEqual(1)
+        })
+
+        expect(analyticsPool.getDebugSnapshot().inUseCount).toEqual(0)
+        expect(defaultPool.getDebugSnapshot().inUseCount).toEqual(1)
+      })
+
+      expect(analyticsPool.getDebugSnapshot().inUseCount).toEqual(0)
+      expect(defaultPool.getDebugSnapshot().inUseCount).toEqual(0)
+    } finally {
+      await cleanup()
+    }
+  })
 })

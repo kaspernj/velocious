@@ -523,8 +523,65 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   pendingCheckoutTimeoutError(checkout) {
     const checkoutName = checkout.options.name ? ` Checkout name: ${JSON.stringify(checkout.options.name)}.` : ""
+    const diagnostics = this.pendingCheckoutTimeoutDiagnostics(checkout)
 
-    return new Error(`Timed out after ${checkout.timeoutMillis}ms waiting for database connection checkout from pool "${this.identifier}".${checkoutName}`)
+    return new Error(`Timed out after ${checkout.timeoutMillis}ms waiting for database connection checkout from pool "${this.identifier}".${checkoutName} ${diagnostics}`)
+  }
+
+  /**
+   * Builds sanitized diagnostics for a checkout timeout.
+   * @param {PendingCheckout} checkout - Timed-out checkout.
+   * @returns {string} - Pool state summary.
+   */
+  pendingCheckoutTimeoutDiagnostics(checkout) {
+    const snapshot = this.getDebugSnapshot()
+    const connectionSummaries = snapshot.connections
+      .map((connection) => this.pendingCheckoutTimeoutConnectionSummary(connection))
+      .join(", ")
+    const pendingSummaries = (snapshot.pendingCheckouts || [])
+      .map((pendingCheckout) => this.pendingCheckoutTimeoutPendingSummary(pendingCheckout))
+      .join(", ")
+    const waitedForMs = Math.max(0, Date.now() - checkout.enqueuedAt)
+
+    return `Pool state: max=${this.maxConnections() ?? "unbounded"}, inUse=${snapshot.inUseCount}, idle=${snapshot.idleCount}, pending=${snapshot.pendingCheckoutCount}, spawning=${snapshot.connectionsBeingSpawned}, timedOutWaitingForMs=${waitedForMs}, holders=[${connectionSummaries}], waiting=[${pendingSummaries}].`
+  }
+
+  /**
+   * Builds a sanitized connection summary for checkout timeout diagnostics.
+   * @param {Record<string, ?>} connection - Connection debug snapshot.
+   * @returns {string} - Sanitized connection state.
+   */
+  pendingCheckoutTimeoutConnectionSummary(connection) {
+    const parts = [`state=${connection.state}`]
+
+    if (connection.checkoutName) parts.push(`checkout=${JSON.stringify(connection.checkoutName)}`)
+    if (typeof connection.checkedOutForMs === "number") parts.push(`checkedOutForMs=${connection.checkedOutForMs}`)
+    if (typeof connection.idleForMs === "number") parts.push(`idleForMs=${connection.idleForMs}`)
+    if (typeof connection.openTransactions === "number") parts.push(`openTransactions=${connection.openTransactions}`)
+
+    const activeQuery = connection.activeQuery
+
+    if (activeQuery && typeof activeQuery === "object" && !Array.isArray(activeQuery)) {
+      const runningMs = (/** @type {Record<string, ?>} */ (activeQuery)).runningMs
+
+      if (typeof runningMs === "number") parts.push(`activeQueryMs=${runningMs}`)
+    }
+
+    return `{${parts.join(" ")}}`
+  }
+
+  /**
+   * Builds a sanitized pending checkout summary for checkout timeout diagnostics.
+   * @param {import("./base.js").DatabasePoolPendingCheckoutDebugSnapshot} pendingCheckout - Waiting checkout snapshot.
+   * @returns {string} - Sanitized pending checkout state.
+   */
+  pendingCheckoutTimeoutPendingSummary(pendingCheckout) {
+    const parts = [`index=${pendingCheckout.index}`, `waitingForMs=${pendingCheckout.waitingForMs}`]
+
+    if (pendingCheckout.checkoutName) parts.push(`checkout=${JSON.stringify(pendingCheckout.checkoutName)}`)
+    if (pendingCheckout.remainingTimeoutMs !== null) parts.push(`remainingTimeoutMs=${pendingCheckout.remainingTimeoutMs}`)
+
+    return `{${parts.join(" ")}}`
   }
 
   /**

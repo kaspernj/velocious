@@ -1,0 +1,2 @@
+- Reuse existing async-context database connections in `ensureConnections` and only check out missing database identifiers.
+- Add sanitized pool state details to async-tracked connection checkout timeout errors.
