@@ -1,7 +1,7 @@
 // @ts-check
 
+import {ensureError} from "typanic"
 import BacktraceCleaner from "../../utils/backtrace-cleaner-node.js"
-import ensureError from "../../utils/ensure-error.js"
 import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
 import RequestTiming from "./request-timing.js"
