@@ -6,7 +6,7 @@ import FrontendModelBaseResource from "./frontend-model-resource/base-resource.j
 import Response from "./http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-models/built-in-resources.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
-import {normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
+import {FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import RoutesResolver from "./routes/resolver.js"
 import {ValidationError} from "./database/record/index.js"
@@ -14,6 +14,7 @@ import { normalizeDateStringForWrite } from "./database/datetime-storage.js"
 import VelociousError from "./velocious-error.js"
 import isDate from "./utils/is-date.js"
 import isPlainObject from "./utils/plain-object.js"
+import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./utils/ransack.js"
 
 /**
  * Runs normalize frontend model preload.
@@ -37,7 +38,7 @@ function normalizeFrontendModelJoins(joins) {
   try {
     return normalizeQueryJoins(joins)
   } catch (error) {
-    throw frontendModelValidationErrorForError(error)
+    throwFrontendModelQueryErrorForParserError(error)
   }
 }
 
@@ -52,7 +53,7 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
 
   if (typeof select === "string") {
     if (!rootModelName) {
-      throw frontendModelValidationError("Invalid select shorthand without root model name")
+      throw frontendModelQueryError("Invalid select shorthand without root model name")
     }
 
     return {[rootModelName]: [select]}
@@ -60,12 +61,12 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
 
   if (Array.isArray(select)) {
     if (!rootModelName) {
-      throw frontendModelValidationError("Invalid select shorthand without root model name")
+      throw frontendModelQueryError("Invalid select shorthand without root model name")
     }
 
     for (const attributeName of select) {
       if (typeof attributeName !== "string") {
-        throw frontendModelValidationError(`Invalid select attribute for ${rootModelName}: ${typeof attributeName}`)
+        throw frontendModelQueryError(`Invalid select attribute for ${rootModelName}: ${typeof attributeName}`)
       }
     }
 
@@ -73,7 +74,7 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
   }
 
   if (!isPlainObject(select)) {
-    throw frontendModelValidationError(`Invalid select type: ${typeof select}`)
+    throw frontendModelQueryError(`Invalid select type: ${typeof select}`)
   }
 
   /**
@@ -88,12 +89,12 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
     }
 
     if (!Array.isArray(selectValue)) {
-      throw frontendModelValidationError(`Invalid select value for ${modelName}: ${typeof selectValue}`)
+      throw frontendModelQueryError(`Invalid select value for ${modelName}: ${typeof selectValue}`)
     }
 
     for (const attributeName of selectValue) {
       if (typeof attributeName !== "string") {
-        throw frontendModelValidationError(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
+        throw frontendModelQueryError(`Invalid select attribute for ${modelName}: ${typeof attributeName}`)
       }
     }
 
@@ -175,27 +176,25 @@ function frontendModelQueryMetadata(query) {
 }
 
 /**
- * Runs frontend model validation error.
- * @param {string} message - Validation error message.
- * @returns {VelociousError} - Client-safe validation error.
+ * Builds a client-safe frontend-model query error.
+ * @param {string} message - Error message.
+ * @returns {VelociousError} Client-safe query error.
  */
-function frontendModelValidationError(message) {
-  return VelociousError.safe(message, {code: "frontend-model-validation"})
+function frontendModelQueryError(message) {
+  return VelociousError.safe(message, {code: "frontend-model-query-error"})
 }
 
 /**
- * Runs frontend model validation error for error.
+ * Throws a client-safe frontend-model query error for typed query parser errors.
  * @param {?} error - Error raised while normalizing client query params.
- * @returns {VelociousError} - Client-safe validation error preserving the normalizer message.
+ * @returns {never} Always throws.
  */
-function frontendModelValidationErrorForError(error) {
-  if (error instanceof VelociousError && error.safeToExpose) return error
+function throwFrontendModelQueryErrorForParserError(error) {
+  if (error instanceof FrontendModelQueryError || error instanceof RansackQueryError) {
+    throw frontendModelQueryError(error.message)
+  }
 
-  const message = error instanceof Error
-    ? error.message
-    : String(error)
-
-  return frontendModelValidationError(message)
+  throw error
 }
 
 /**
@@ -338,7 +337,7 @@ function normalizeFrontendModelSearches(searches) {
   if (!searches) return []
 
   if (!Array.isArray(searches)) {
-    throw frontendModelValidationError(`Invalid searches type: ${typeof searches}`)
+    throw frontendModelQueryError(`Invalid searches type: ${typeof searches}`)
   }
 
   /**
@@ -348,7 +347,7 @@ function normalizeFrontendModelSearches(searches) {
 
   for (const search of searches) {
     if (!isPlainObject(search)) {
-      throw frontendModelValidationError(`Invalid search entry type: ${typeof search}`)
+      throw frontendModelQueryError(`Invalid search entry type: ${typeof search}`)
     }
 
     const path = search.path
@@ -356,26 +355,34 @@ function normalizeFrontendModelSearches(searches) {
     const operator = search.operator
 
     if (!Array.isArray(path)) {
-      throw frontendModelValidationError("Invalid search path: expected an array")
+      throw frontendModelQueryError("Invalid search path: expected an array")
     }
 
     for (const pathEntry of path) {
       if (typeof pathEntry !== "string" || pathEntry.length < 1) {
-        throw frontendModelValidationError("Invalid search path entry: expected non-empty string")
+        throw frontendModelQueryError("Invalid search path entry: expected non-empty string")
       }
     }
 
     if (typeof column !== "string" || column.length < 1) {
-      throw frontendModelValidationError("Invalid search column: expected non-empty string")
+      throw frontendModelQueryError("Invalid search column: expected non-empty string")
     }
 
     if (typeof operator !== "string") {
-      throw frontendModelValidationError(`Invalid search operator: ${operator}`)
+      throw frontendModelQueryError(`Invalid search operator: ${operator}`)
+    }
+
+    let normalizedOperator
+
+    try {
+      normalizedOperator = normalizeQuerySearchOperator(operator)
+    } catch (error) {
+      throwFrontendModelQueryErrorForParserError(error)
     }
 
     normalized.push({
       column,
-      operator: normalizeQuerySearchOperator(operator),
+      operator: normalizedOperator,
       path: [...path],
       value: search.value
     })
@@ -393,7 +400,7 @@ function normalizeFrontendModelWhere(where) {
   if (!where) return null
 
   if (!isPlainObject(where)) {
-    throw frontendModelValidationError(`Invalid where type: ${typeof where}`)
+    throw frontendModelQueryError(`Invalid where type: ${typeof where}`)
   }
 
   return where
@@ -408,7 +415,7 @@ function normalizeFrontendModelRansack(ransack) {
   if (!ransack) return null
 
   if (!isPlainObject(ransack)) {
-    throw frontendModelValidationError(`Invalid ransack type: ${typeof ransack}`)
+    throw frontendModelQueryError(`Invalid ransack type: ${typeof ransack}`)
   }
 
   return ransack
@@ -425,11 +432,11 @@ function normalizeFrontendModelIntegerParam(value, name, min) {
   if (value == null) return null
 
   if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw frontendModelValidationError(`Invalid ${name}: expected integer number`)
+    throw frontendModelQueryError(`Invalid ${name}: expected integer number`)
   }
 
   if (value < min) {
-    throw frontendModelValidationError(`Invalid ${name}: expected value >= ${min}`)
+    throw frontendModelQueryError(`Invalid ${name}: expected value >= ${min}`)
   }
 
   return value
@@ -462,7 +469,7 @@ function normalizeFrontendModelDistinct(distinct) {
   if (distinct == null) return null
 
   if (typeof distinct !== "boolean") {
-    throw frontendModelValidationError(`Invalid distinct: expected boolean`)
+    throw frontendModelQueryError(`Invalid distinct: expected boolean`)
   }
 
   return distinct
@@ -1197,7 +1204,7 @@ export default class FrontendModelController extends Controller {
     try {
       return normalizeQuerySort(this.frontendModelParams().sort)
     } catch (error) {
-      throw frontendModelValidationErrorForError(error)
+      throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1209,7 +1216,7 @@ export default class FrontendModelController extends Controller {
     try {
       return normalizeQueryGroup(this.frontendModelParams().group)
     } catch (error) {
-      throw frontendModelValidationErrorForError(error)
+      throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1244,11 +1251,11 @@ export default class FrontendModelController extends Controller {
     try {
       const pluck = normalizeQueryPluck(this.frontendModelParams().pluck)
 
-      this.validateFrontendModelPluckDefinitions(pluck)
+      this.assertFrontendModelPluckDefinitionsAllowed(pluck)
 
       return pluck
     } catch (error) {
-      throw frontendModelValidationErrorForError(error)
+      throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1521,11 +1528,8 @@ export default class FrontendModelController extends Controller {
     const ransack = this.frontendModelRansack()
 
     if (ransack) {
-      try {
-        query.ransack(ransack)
-      } catch (error) {
-        throw frontendModelValidationErrorForError(error)
-      }
+      this.assertFrontendModelRansackAllowed(ransack)
+      query.ransack(ransack)
     }
 
     if (joins) {
@@ -1647,7 +1651,7 @@ export default class FrontendModelController extends Controller {
       })
 
       if (!columnName) {
-        throw frontendModelValidationError(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+        throw frontendModelQueryError(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
       }
 
       if (pluckEntry.path.length > 0) {
@@ -1743,11 +1747,11 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * Validates frontend-model pluck definitions against exposed resource attributes.
+   * Asserts frontend-model pluck definitions only reference exposed resource attributes.
    * @param {FrontendModelPluck[]} pluck - Pluck descriptors.
    * @returns {void}
    */
-  validateFrontendModelPluckDefinitions(pluck) {
+  assertFrontendModelPluckDefinitionsAllowed(pluck) {
     const modelClass = this.frontendModelClass()
 
     for (const pluckEntry of pluck) {
@@ -1761,8 +1765,102 @@ export default class FrontendModelController extends Controller {
       })
 
       if (!columnName) {
-        throw frontendModelValidationError(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
+        throw frontendModelQueryError(`Unknown pluck column "${pluckEntry.column}" for ${targetModelClass.name}`)
       }
+    }
+  }
+
+  /**
+   * Asserts frontend-model Ransack definitions only reference exposed resource attributes.
+   * @param {Record<string, ?>} ransack - Ransack descriptor.
+   * @returns {void}
+   */
+  assertFrontendModelRansackAllowed(ransack) {
+    const {s, ...filterParams} = ransack
+
+    if (Object.keys(filterParams).length > 0) {
+      this.assertFrontendModelRansackGroupAllowed({
+        group: this.frontendModelRansackGroup(filterParams)
+      })
+    }
+
+    if (typeof s === "string" && s.trim().length > 0) {
+      for (const sort of this.frontendModelRansackSorts(s)) {
+        this.assertFrontendModelRansackAttributeAllowed({
+          attributeName: sort.attribute,
+          modelClass: this.frontendModelClass(),
+          operationName: "ransack sort"
+        })
+      }
+    }
+  }
+
+  /**
+   * Runs normalized frontend-model Ransack group.
+   * @param {Record<string, ?>} filterParams - Ransack filter params.
+   * @returns {import("./utils/ransack.js").RansackGroup} Normalized Ransack group.
+   */
+  frontendModelRansackGroup(filterParams) {
+    try {
+      return normalizeRansackGroup(this.frontendModelClass(), filterParams)
+    } catch (error) {
+      throwFrontendModelQueryErrorForParserError(error)
+    }
+  }
+
+  /**
+   * Runs normalized frontend-model Ransack sorts.
+   * @param {string} sortString - Ransack sort string.
+   * @returns {import("./utils/ransack.js").RansackSort[]} Normalized Ransack sorts.
+   */
+  frontendModelRansackSorts(sortString) {
+    try {
+      return parseRansackSort(this.frontendModelClass(), sortString)
+    } catch (error) {
+      throwFrontendModelQueryErrorForParserError(error)
+    }
+  }
+
+  /**
+   * Asserts a normalized frontend-model Ransack group only references exposed attributes.
+   * @param {object} args - Assertion args.
+   * @param {import("./utils/ransack.js").RansackGroup} args.group - Ransack group.
+   * @returns {void}
+   */
+  assertFrontendModelRansackGroupAllowed({group}) {
+    for (const condition of group.conditions) {
+      for (const attribute of condition.attributes) {
+        const targetModelClass = this.frontendModelSearchTargetModelClass({
+          modelClass: this.frontendModelClass(),
+          path: attribute.path
+        })
+
+        this.assertFrontendModelRansackAttributeAllowed({
+          attributeName: attribute.attributeName,
+          modelClass: targetModelClass,
+          operationName: "ransack"
+        })
+      }
+    }
+
+    for (const grouping of group.groupings) {
+      this.assertFrontendModelRansackGroupAllowed({group: grouping})
+    }
+  }
+
+  /**
+   * Asserts one normalized frontend-model Ransack attribute is exposed by its resource.
+   * @param {object} args - Assertion args.
+   * @param {string} args.attributeName - Attribute name.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Target model class.
+   * @param {string} args.operationName - Operation name for errors.
+   * @returns {void}
+   */
+  assertFrontendModelRansackAttributeAllowed({attributeName, modelClass, operationName}) {
+    const attributeNames = this.frontendModelResourceAttributeNamesForModelClass(modelClass)
+
+    if (attributeNames && !attributeNames.has(attributeName)) {
+      throw frontendModelQueryError(`Unknown ${operationName} attribute "${attributeName}" for ${modelClass.name}`)
     }
   }
 
@@ -1780,7 +1878,7 @@ export default class FrontendModelController extends Controller {
       const relationship = targetModelClass.getRelationshipsMap()[relationshipName]
 
       if (!relationship) {
-        throw frontendModelValidationError(`Unknown search relationship "${relationshipName}" for ${targetModelClass.name}`)
+        throw frontendModelQueryError(`Unknown search relationship "${relationshipName}" for ${targetModelClass.name}`)
       }
 
       const relationshipTargetModelClass = relationship.getTargetModelClass()
@@ -1815,7 +1913,7 @@ export default class FrontendModelController extends Controller {
     })
 
     if (!columnName) {
-      throw frontendModelValidationError(`Unknown search column "${search.column}" for ${targetModelClass.name}`)
+      throw frontendModelQueryError(`Unknown search column "${search.column}" for ${targetModelClass.name}`)
     }
 
     if (search.path.length > 0) {
@@ -1966,7 +2064,7 @@ export default class FrontendModelController extends Controller {
       const relationship = modelClass.getRelationshipsMap()[relationshipName]
 
       if (!relationship) {
-        throw frontendModelValidationError(`Unknown join relationship "${relationshipName}" for ${modelClass.name}`)
+        throw frontendModelQueryError(`Unknown join relationship "${relationshipName}" for ${modelClass.name}`)
       }
 
       const targetModelClass = relationship.getTargetModelClass()
@@ -2057,18 +2155,18 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
-   * Validates a selected frontend-model attribute list against resource metadata.
+   * Asserts a selected frontend-model attribute list only references exposed attributes.
    * @param {object} args - Args.
    * @param {string[]} args.attributeNames - Selected attribute names.
    * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class.
    * @param {"select" | "selectsExtra"} args.operationName - Selection operation.
-   * @returns {string[]} - Validated selected attribute names.
+   * @returns {string[]} - Allowed selected attribute names.
    */
-  validateFrontendModelSelectedAttributes({attributeNames, modelClass, operationName}) {
+  assertFrontendModelSelectedAttributesAllowed({attributeNames, modelClass, operationName}) {
     for (const attributeName of attributeNames) {
       if (this.frontendModelAttributeIsExposed({attributeName, modelClass})) continue
 
-      throw frontendModelValidationError(`Unknown ${operationName} attribute "${attributeName}" for ${modelClass.name}`)
+      throw frontendModelQueryError(`Unknown ${operationName} attribute "${attributeName}" for ${modelClass.name}`)
     }
 
     return attributeNames
@@ -2171,7 +2269,7 @@ export default class FrontendModelController extends Controller {
         const relationship = modelClass.getRelationshipsMap()[attributeName]
 
         if (!relationship) {
-          throw frontendModelValidationError(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
+          throw frontendModelQueryError(`Unknown where relationship "${attributeName}" for ${modelClass.name}`)
         }
 
         const targetModelClass = relationship.getTargetModelClass()
@@ -2192,7 +2290,7 @@ export default class FrontendModelController extends Controller {
         continue
       }
 
-      throw frontendModelValidationError(`Unknown where column "${attributeName}" for ${modelClass.name}`)
+      throw frontendModelQueryError(`Unknown where column "${attributeName}" for ${modelClass.name}`)
     }
   }
 
@@ -2259,7 +2357,7 @@ export default class FrontendModelController extends Controller {
     })
 
     if (!columnName) {
-      throw frontendModelValidationError(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
+      throw frontendModelQueryError(`Unknown group column "${group.column}" for ${targetModelClass.name}`)
     }
 
     this.ensureFrontendModelJoinPath({path: group.path, query})
@@ -2377,7 +2475,7 @@ export default class FrontendModelController extends Controller {
       const translationPath = sort.path.concat(["currentTranslation"])
 
       if (!translationColumnName) {
-        throw frontendModelValidationError(`Unknown translated sort column "${sort.column}" for ${targetModelClass.name}`)
+        throw frontendModelQueryError(`Unknown translated sort column "${sort.column}" for ${targetModelClass.name}`)
       }
 
       this.ensureFrontendModelSortJoinPath({path: translationPath, query})
@@ -2391,7 +2489,7 @@ export default class FrontendModelController extends Controller {
     }
 
     if (!columnName) {
-      throw frontendModelValidationError(`Unknown sort column "${sort.column}" for ${targetModelClass.name}`)
+      throw frontendModelQueryError(`Unknown sort column "${sort.column}" for ${targetModelClass.name}`)
     }
 
     this.ensureFrontendModelSortJoinPath({path: sort.path, query})
@@ -2448,7 +2546,7 @@ export default class FrontendModelController extends Controller {
 
     if (!selectedAttributes) return null
 
-    return this.validateFrontendModelSelectedAttributes({
+    return this.assertFrontendModelSelectedAttributesAllowed({
       attributeNames: selectedAttributes,
       modelClass,
       operationName: "select"
@@ -2469,7 +2567,7 @@ export default class FrontendModelController extends Controller {
 
     if (!extraAttributes) return null
 
-    return this.validateFrontendModelSelectedAttributes({
+    return this.assertFrontendModelSelectedAttributesAllowed({
       attributeNames: extraAttributes,
       modelClass,
       operationName: "selectsExtra"
