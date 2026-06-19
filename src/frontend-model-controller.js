@@ -584,6 +584,12 @@ export default class FrontendModelController extends Controller {
    * Frontend model ability override.
    * @type {import("./authorization/ability.js").default | undefined} */
   _frontendModelAbilityOverride = undefined
+  /**
+   * Original deserialized custom-command client payload, captured before route
+   * framework params are merged in, so a typed command method receives the client's
+   * own arguments rather than the route metadata. Only set on the shared-endpoint path.
+   * @type {Record<string, ?> | undefined} */
+  _frontendModelCustomCommandClientArguments = undefined
 
   /**
    * Runs frontend model params.
@@ -3578,6 +3584,14 @@ export default class FrontendModelController extends Controller {
       viewPath
     })
 
+    // Preserve the client's own command arguments before route framework params won
+    // the `controllerParams` merge above, so a typed command method (`async name(args)`)
+    // receives the client payload — not the route's member id / model / controller keys.
+    const customCommandController = /** @type {FrontendModelController} */ (/** @type {unknown} */ (controllerInstance))
+
+    customCommandController._frontendModelCustomCommandClientArguments =
+      (payload && typeof payload === "object" && !Array.isArray(payload)) ? /** @type {Record<string, ?>} */ (payload) : {}
+
     await this.withFrontendModelRequestContext(controllerParams, response, async () => {
       await controllerInstance._runBeforeCallbacks()
       const controllerMethods = /** @type {Record<string, () => Promise<void> | void>} */ (/** @type {?} */ (controllerInstance))
@@ -3757,7 +3771,13 @@ export default class FrontendModelController extends Controller {
       return this.frontendModelErrorPayload(`Missing frontend-model custom command '${methodName}'.`)
     }
 
-    const responsePayload = await commandMethod.call(resource)
+    // Pass the client command arguments as the method's first argument so a command
+    // method can take a typed args object (`async name(args)`) and the generated
+    // frontend method can forward the backend method's `@param`. `this.params()` is
+    // unchanged, so existing parameterless methods keep working. The args are untrusted
+    // client input typed only by the declared contract, so methods must still validate.
+    const commandArguments = this.frontendModelCustomCommandArguments(params)
+    const responsePayload = await commandMethod.call(resource, commandArguments)
 
     if (!responsePayload || typeof responsePayload !== "object") {
       return {status: "success"}
@@ -3770,6 +3790,32 @@ export default class FrontendModelController extends Controller {
         methodName
       )
     )
+  }
+
+  /**
+   * Resolves the typed argument object passed to a custom command method. On the
+   * shared-endpoint path the original client payload was captured before route
+   * framework params were merged, so it is returned verbatim (a client `id` survives
+   * a member route). On the direct path it falls back to the request params with the
+   * framework keys the command route hook injected stripped out.
+   * @param {Record<string, ?>} params - Deserialized frontend-model params.
+   * @returns {Record<string, ?>} - Client command arguments.
+   */
+  frontendModelCustomCommandArguments(params) {
+    if (this._frontendModelCustomCommandClientArguments) {
+      return this._frontendModelCustomCommandClientArguments
+    }
+
+    const {
+      action: _action,
+      controller: _controller,
+      frontendModelCustomCommandMethodName: _methodName,
+      frontendModelCustomCommandScope: _scope,
+      model: _model,
+      ...commandArguments
+    } = params
+
+    return commandArguments
   }
 
   /**

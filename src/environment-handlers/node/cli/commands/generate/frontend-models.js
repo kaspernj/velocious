@@ -29,7 +29,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   /** @type {Map<string, string> | null} */
   _resourceMethodReturnTypes = null
 
-  /** @type {Map<string, string[]> | null} */
+  /** @type {Map<string, Array<{name: string | null, type: string}>> | null} */
   _resourceMethodParameterTypes = null
 
   /**
@@ -288,7 +288,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
     const collectionCommands = modelConfig.collectionCommands
     const memberCommands = modelConfig.memberCommands
-    const commandMetadata = modelConfig.commandMetadata || {}
+    const declaredCommandMetadata = modelConfig.commandMetadata || {}
+    const commandMetadata = await this.commandMetadataWithResourceJsDoc({
+      commandMetadata: declaredCommandMetadata,
+      commandNames: [...Object.keys(collectionCommands), ...Object.keys(memberCommands)],
+      resourceClass
+    })
     const builtInCollectionCommandsAreDefault = builtInCollectionCommands.create === "create" && builtInCollectionCommands.index === "index"
     const builtInMemberCommandsAreDefault = builtInMemberCommands.attach === "attach"
       && builtInMemberCommands.destroy === "destroy"
@@ -472,12 +477,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += `   * @returns {Promise<${signature.returnType}>} - Command response.\n`
       fileContent += "   */\n"
       fileContent += `  static async ${methodName}(${signature.parameters}) {\n`
-      fileContent += "    return await this.executeCustomCommand({\n"
+      fileContent += `    return /** @type {${signature.returnType}} */ (await this.executeCustomCommand({\n`
       fileContent += `      commandName: ${JSON.stringify(collectionCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(collectionCommands[methodName])},\n`
       fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(${signature.payloadArguments}),\n`
       fileContent += "      resourcePath: this.resourcePath()\n"
-      fileContent += "    })\n"
+      fileContent += "    }))\n"
       fileContent += "  }\n"
     }
 
@@ -491,13 +496,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += `   * @returns {Promise<${signature.returnType}>} - Command response.\n`
       fileContent += "   */\n"
       fileContent += `  async ${methodName}(${signature.parameters}) {\n`
-      fileContent += `    return await ${className}.executeCustomCommand({\n`
+      fileContent += `    return /** @type {${signature.returnType}} */ (await ${className}.executeCustomCommand({\n`
       fileContent += `      commandName: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += "      memberId: this.primaryKeyValue(),\n"
       fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(${signature.payloadArguments}),\n`
       fileContent += `      resourcePath: ${className}.resourcePath()\n`
-      fileContent += "    })\n"
+      fileContent += "    }))\n"
       fileContent += "  }\n"
     }
 
@@ -1406,11 +1411,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {string} - A frontend-resolvable attribute type.
    */
   frontendResolvableAttributeJsDocType(jsDocType) {
-    const safeTypeIdentifiers = new Set([
-      "Array", "Date", "Exclude", "Extract", "FrontendModelAttributeValue", "FrontendModelTransportValue",
-      "Map", "NonNullable", "Omit", "Partial", "Pick", "Promise", "Readonly", "ReadonlyArray", "Record",
-      "Required", "ReturnType", "Set"
-    ])
+    const safeTypeIdentifiers = this.frontendResolvableTypeIdentifiers()
     const referencedIdentifiers = jsDocType.match(/[A-Z][A-Za-z0-9_$]*/g) || []
 
     if (referencedIdentifiers.some((identifier) => !safeTypeIdentifiers.has(identifier))) {
@@ -1418,6 +1419,43 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return jsDocType
+  }
+
+  /**
+   * Capitalized identifiers a generated frontend model can resolve on its own
+   * (primitives are lower-case and matched separately), so only framework-owned
+   * and builtin generic types are listed.
+   * @returns {Set<string>} - Frontend-resolvable type identifiers.
+   */
+  frontendResolvableTypeIdentifiers() {
+    return new Set([
+      "Array", "Date", "Exclude", "Extract", "FrontendModelAttributeValue", "FrontendModelTransportValue",
+      "Map", "NonNullable", "Omit", "Partial", "Pick", "Promise", "Readonly", "ReadonlyArray", "Record",
+      "Required", "ReturnType", "Set"
+    ])
+  }
+
+  /**
+   * Rewrites a custom-command param/return JSDoc type so it resolves in the generated
+   * frontend model: each model-class (or otherwise non-frontend-resolvable) identifier
+   * becomes `any` in place, keeping the surrounding object fields typed. A command-result
+   * field holding a model arrives as a serialized transport value, so the consumer hydrates
+   * it with `Model.instantiateFromResponse(...)`. The word boundary avoids matching the
+   * capitalized middle of a camelCase property name (e.g. `adjustedTotalCents`).
+   * @param {string} jsDocType - Resolved (Promise-unwrapped) JSDoc type.
+   * @returns {string} - A frontend-resolvable JSDoc type.
+   */
+  frontendResolvableCommandJsDocType(jsDocType) {
+    const safeTypeIdentifiers = this.frontendResolvableTypeIdentifiers()
+
+    return jsDocType
+      // A type that reaches into a backend source file via `import("...")` (optionally
+      // `.Member` and `[]`) can't resolve from the generated frontend model and would type
+      // a serialized result as a backend model instance, so collapse it to `any`.
+      .replace(/import\(\s*["'][^"']*["']\s*\)(\s*\.\s*[A-Za-z_$][\w$]*)*(\s*\[\s*\])*/g, "any")
+      // Remaining capitalized identifiers are model classes or otherwise non-resolvable
+      // types; downgrade each in place so sibling scalar fields keep their real types.
+      .replace(/\b[A-Z][A-Za-z0-9_$]*/g, (identifier) => safeTypeIdentifiers.has(identifier) ? identifier : "any")
   }
 
   /**
@@ -1451,6 +1489,69 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       payloadArguments: "commandArguments",
       returnType
     }
+  }
+
+  /**
+   * Enriches custom-command metadata by deriving a command's typed args and return
+   * type from the backend resource method's `@param`/`@returns` JSDoc when they are
+   * not already declared in `resourceConfig`. Precedence: explicit `resourceConfig`
+   * `{args, returnType}` wins, then the derived backend-method JSDoc, then the generic
+   * default. Model-class identifiers in the derived types are downgraded to `any`
+   * because the frontend receives a serialized record, not a model instance, which the
+   * consumer hydrates with `Model.instantiateFromResponse(...)`.
+   * @param {object} args - Arguments.
+   * @param {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} args.commandMetadata - Declared per-command metadata.
+   * @param {string[]} args.commandNames - Command method names to resolve.
+   * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
+   * @returns {Promise<Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>>} - Enriched metadata.
+   */
+  async commandMetadataWithResourceJsDoc({commandMetadata, commandNames, resourceClass}) {
+    if (!resourceClass) return commandMetadata
+
+    /** @type {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} */
+    const enriched = {...commandMetadata}
+
+    for (const commandName of commandNames) {
+      const declared = commandMetadata[commandName] || {args: [], returnType: null}
+      const sourceClassName = this.methodOwnerClassName({methodName: commandName, targetClass: resourceClass})
+
+      if (!sourceClassName) {
+        enriched[commandName] = declared
+
+        continue
+      }
+
+      let returnType = declared.returnType
+
+      if (!returnType) {
+        const jsDocReturnType = await this.resourceMethodReturnType({methodName: commandName, sourceClassName})
+
+        if (jsDocReturnType) {
+          returnType = this.frontendResolvableCommandJsDocType(this.unwrappedPromiseJsDocType({jsDocType: jsDocReturnType}))
+        }
+      }
+
+      let args = declared.args
+
+      if (!args || args.length === 0) {
+        const jsDocParameters = await this.resourceMethodParameters({methodName: commandName, sourceClassName})
+        // Skip object-property tags (`@param {string} args.message`); only the
+        // top-level parameters map to method arguments, otherwise the shared
+        // `@param {object} args` + property style would emit `name(args, args)`.
+        const topLevelParameters = (jsDocParameters || []).filter((parameter) => typeof parameter.name === "string" && !parameter.name.includes("."))
+
+        if (topLevelParameters.length > 0) {
+          args = topLevelParameters.map((parameter) => ({
+            name: /** @type {string} */ (parameter.name),
+            type: this.frontendResolvableCommandJsDocType(parameter.type)
+          }))
+        }
+      }
+
+      enriched[commandName] = {args: args || [], returnType: returnType || null}
+    }
+
+    return enriched
   }
 
   /**
@@ -1534,26 +1635,39 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {Promise<string | null>} - JSDoc parameter type when documented.
    */
   async resourceMethodParameterType({methodName, parameterIndex, sourceClassName}) {
+    const parameters = await this.resourceMethodParameters({methodName, sourceClassName})
+
+    if (!parameters) return null
+
+    const parameter = parameters[parameterIndex]
+
+    if (parameter === undefined) return null
+
+    if (parameter.type.length < 1) {
+      throw new Error(`Expected non-empty JSDoc parameter type for ${sourceClassName}.${methodName} parameter ${parameterIndex}`)
+    }
+
+    return parameter.type
+  }
+
+  /**
+   * Runs resource method parameters.
+   * @param {{methodName: string, sourceClassName: string}} args - Arguments.
+   * @returns {Promise<Array<{name: string | null, type: string}> | null>} - JSDoc parameters (name + type) when documented.
+   */
+  async resourceMethodParameters({methodName, sourceClassName}) {
     const resourceMethodParameterTypes = await this.resourceMethodParameterTypes()
     const parameterTypesKey = `${sourceClassName}.${methodName}`
 
     if (!resourceMethodParameterTypes.has(parameterTypesKey)) return null
 
-    const parameterTypes = resourceMethodParameterTypes.get(parameterTypesKey)
+    const parameters = resourceMethodParameterTypes.get(parameterTypesKey)
 
-    if (!parameterTypes) {
-      throw new Error(`Expected JSDoc parameter types for ${parameterTypesKey}`)
+    if (!parameters) {
+      throw new Error(`Expected JSDoc parameters for ${parameterTypesKey}`)
     }
 
-    const parameterType = parameterTypes[parameterIndex]
-
-    if (parameterType === undefined) return null
-
-    if (parameterType.length < 1) {
-      throw new Error(`Expected non-empty JSDoc parameter type for ${parameterTypesKey} parameter ${parameterIndex}`)
-    }
-
-    return parameterType
+    return parameters
   }
 
   /**
@@ -1579,7 +1693,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Runs resource method parameter types.
-   * @returns {Promise<Map<string, string[]>>} - Resource method parameter types keyed by ClassName.methodName.
+   * @returns {Promise<Map<string, Array<{name: string | null, type: string}>>>} - Resource method parameters keyed by ClassName.methodName.
    */
   async resourceMethodParameterTypes() {
     if (this._resourceMethodParameterTypes) return this._resourceMethodParameterTypes
@@ -1678,7 +1792,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Adds resource method parameter types from source.
-   * @param {{parameterTypes: Map<string, string[]>, sourceText: string}} args - Arguments.
+   * @param {{parameterTypes: Map<string, Array<{name: string | null, type: string}>>, sourceText: string}} args - Arguments.
    * @returns {void}
    */
   addResourceMethodParameterTypesFromSource({parameterTypes, sourceText}) {
@@ -1710,10 +1824,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         if (!methodMatch) continue
 
         const methodName = methodMatch[1]
-        const jsDocParameterTypes = this.jsDocParameterTypes(jsDocMatch[1])
+        const jsDocParameters = this.jsDocParameters(jsDocMatch[1])
 
-        if (jsDocParameterTypes.length > 0) {
-          parameterTypes.set(`${className}.${methodName}`, jsDocParameterTypes)
+        if (jsDocParameters.length > 0) {
+          parameterTypes.set(`${className}.${methodName}`, jsDocParameters)
         }
       }
 
@@ -1748,12 +1862,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * Runs js doc parameter types.
+   * Runs js doc parameters.
    * @param {string} jsDocText - JSDoc text inside comment markers.
-   * @returns {string[]} - JSDoc parameter types in declaration order.
+   * @returns {Array<{name: string | null, type: string}>} - JSDoc parameters (name + type) in declaration order.
    */
-  jsDocParameterTypes(jsDocText) {
-    const parameterTypes = []
+  jsDocParameters(jsDocText) {
+    const parameters = []
     const paramRegex = /@param\s*\{/g
     let _paramMatch
 
@@ -1765,17 +1879,23 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         throw new Error(`Could not parse JSDoc parameter type from: ${jsDocText}`)
       }
 
-      const parameterType = jsDocText.slice(typeOpenIndex + 1, typeCloseIndex).trim()
+      const type = jsDocText.slice(typeOpenIndex + 1, typeCloseIndex).trim()
 
-      if (parameterType.length < 1) {
+      if (type.length < 1) {
         throw new Error(`Expected non-empty JSDoc parameter type in: ${jsDocText}`)
       }
 
-      parameterTypes.push(parameterType)
+      // After the closing brace the parameter name follows (optionally bracketed
+      // for `@param {type} [name]`). Capture the leading name token — including any
+      // dotted path so object-property tags like `@param {string} args.message` stay
+      // distinguishable from the top-level `@param {object} args` parameter.
+      const nameMatch = jsDocText.slice(typeCloseIndex + 1).match(/^\s*\[?\s*([A-Za-z_$][\w$.]*)/)
+
+      parameters.push({name: nameMatch ? nameMatch[1] : null, type})
       paramRegex.lastIndex = typeCloseIndex + 1
     }
 
-    return parameterTypes
+    return parameters
   }
 
   /**

@@ -1129,6 +1129,40 @@ export default class ReportResource extends FrontendModelBaseResource {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })
 
+  it("derives a custom command's typed args and return type from the backend resource method JSDoc", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+
+    const cli = new Cli({
+      configuration: buildConfiguration({backendProjectsList: backendProjects}),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
+
+    // A string command whose method declares `@param {{...}} args` becomes a typed args parameter.
+    expect(userContents).toContain("static async echoMessage(args) {")
+    expect(userContents).toContain("@param {{message: string, times: number}} args - Command argument.")
+    expect(userContents).toContain("@returns {Promise<{echoed: string, length: number}>} - Command response.")
+    expect(userContents).toContain("normalizeCustomCommandPayloadArguments([args])")
+    // The object-property `@param {object} args` + `args.label` style emits a single
+    // `args` parameter, not `echoObjectStyle(args, args)`.
+    expect(userContents).toContain("static async echoObjectStyle(args) {")
+    expect(userContents).toContain("@param {object} args - Command argument.")
+    expect(userContents).not.toContain("echoObjectStyle(args, args)")
+    // A model-valued result field is downgraded to `any` (the frontend gets a serialized record).
+    expect(userContents).toContain("@returns {Promise<{users: any}>} - Command response.")
+    // An explicit resourceConfig returnType wins over the method's own JSDoc.
+    expect(userContents).toContain("@returns {Promise<{fromConfig: boolean}>} - Command response.")
+    expect(userContents).not.toContain("fromJsDoc")
+
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+  })
+
   it("generates configured resources even when an abstract base resource without a ModelClass is registered", async () => {
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
 

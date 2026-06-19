@@ -57,6 +57,22 @@ async suspend(...commandArguments) { /* ... */ }
 async refresh(age) { /* ... */ }
 ```
 
+### Deriving a command's types from the resource method JSDoc
+- When a command is declared as a plain string (no explicit `{args, returnType}`), the generator derives its typed signature from the **backend resource method's own `@param`/`@returns` JSDoc**, so the type is declared once on the method and flows to the generated frontend method.
+- The command runner passes the deserialized command payload as the method's **first argument**, so a method can take a single typed args object and document it with one `@param`:
+
+  ```js
+  /**
+   * @param {{accountId: string, token: string}} args - Create-card arguments.
+   * @returns {Promise<{billingCard: BillingCard, status: "ok"}>} - Create-card response.
+   */
+  async createCard(args) { /* reads args.accountId, args.token */ }
+  ```
+
+  generates `static async createCard(args)` typed `(args: {accountId: string, token: string}) => Promise<{billingCard: any, status: "ok"}>`. `this.params()` is unchanged, so existing parameterless methods keep working. The args object is **untrusted client input** typed only by the declared contract — methods must still validate the values they read.
+- **Precedence:** an explicit `resourceConfig` `{args, returnType}` wins, then the derived backend-method JSDoc, then the generic default (`...commandArguments` + `Promise<Record<string, FrontendModelAttributeValue>>`).
+- **Model results downgrade to `any`.** A derived type referencing a model class (`BillingCard`, `Account`, …) or a backend `import("...")` type is rewritten field-by-field to `any`, because the frontend receives a *serialized* record, not a model instance — sibling scalar fields keep their real types. Hydrate a downgraded field with `Model.instantiateFromResponse(response.field)`. (Keep result-object string literals lower-case, e.g. `status: "ok"`; an upper-case literal would be misread as a model identifier and downgraded.)
+
 ## Naming conventions
 - Resource files should use concise domain naming (for example `battle.js`, `challenge-level.js`) instead of frontend-specific suffixes.
 - Frontend imports should use model names without `FrontendModel` suffix (for example `Account`, not `AccountFrontendModel`).
