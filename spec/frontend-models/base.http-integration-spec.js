@@ -23,10 +23,23 @@ class User extends FrontendModelBase {
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],
+      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail", "echoMessage"],
       modelName: "User",
       primaryKey: "id"
     }
+  }
+
+  /**
+   * @param {{message: string, times: number}} payload - Command payload read by the backend method's args parameter.
+   * @returns {Promise<{echoed: string, length: number}>} - Command response.
+   */
+  static async echoMessage(payload) {
+    return /** @type {Promise<{echoed: string, length: number}>} */ (this.executeCustomCommand({
+      commandName: "echo-message",
+      commandType: "echo-message",
+      payload,
+      resourcePath: this.resourcePath()
+    }))
   }
 
   /** @returns {number} */
@@ -388,6 +401,23 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         expect(lookupResponse.users[0].email()).toEqual(john.email())
         expect(refreshResponse.user instanceof User).toEqual(true)
         expect(refreshResponse.user?.email()).toEqual(jane.email())
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("forwards the command payload to the backend method's args parameter", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        await seedHttpFrontendModels()
+
+        const response = await User.echoMessage({message: "hello", times: 3})
+
+        expect(response.echoed).toEqual("hello")
+        expect(response.length).toEqual(3)
       } finally {
         resetFrontendModelTransport()
       }

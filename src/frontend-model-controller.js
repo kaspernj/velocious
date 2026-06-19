@@ -3757,7 +3757,13 @@ export default class FrontendModelController extends Controller {
       return this.frontendModelErrorPayload(`Missing frontend-model custom command '${methodName}'.`)
     }
 
-    const responsePayload = await commandMethod.call(resource)
+    // Pass the deserialized command params as the method's first argument so a
+    // command method can take a typed args object (`async name(args)`) and the
+    // generated frontend method can forward the backend method's `@param`.
+    // `this.params()` is unchanged, so existing parameterless methods keep working.
+    // The args are untrusted client input typed only by the declared contract, so
+    // methods must still validate values they read.
+    const responsePayload = await commandMethod.call(resource, params)
 
     if (!responsePayload || typeof responsePayload !== "object") {
       return {status: "success"}

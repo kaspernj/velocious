@@ -135,9 +135,31 @@ class UserFrontendResource extends FrontendModelBaseResource {
       attributes: ["id", "email", "name", {name: "reference", selectedByDefault: false}, "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],
+      collectionCommands: [
+        "currentSessionCookie",
+        "setSessionCookie",
+        "lookupByEmail",
+        "delayedLookupByEmail",
+        "echoMessage",
+        {name: "echoOverride", returnType: "{fromConfig: boolean}"}
+      ],
       memberCommands: ["refreshProfile"]
     }
+  }
+
+  /**
+   * Echoes the typed args object back so the generator can derive the command's
+   * `@param`/`@returns` types and the runner's args forwarding can be exercised.
+   * @param {{message: string, times: number}} args - Echo arguments.
+   * @returns {Promise<{echoed: string, length: number}>} - Echo response.
+   */
+  async echoMessage(args) {
+    return {echoed: args.message, length: args.times}
+  }
+
+  /** @returns {Promise<{fromJsDoc: boolean}>} - JSDoc response the explicit resourceConfig returnType overrides. */
+  async echoOverride() {
+    return {fromJsDoc: true}
   }
 
   /** @returns {Promise<{success: true}>} */
