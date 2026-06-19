@@ -1,12 +1,9 @@
 // @ts-check
 
-import {AsyncLocalStorage} from "async_hooks"
 import BasePool from "./base.js"
 
-const SUPPRESSED_CONNECTION_CONTEXT = Symbol("velociousSuppressedSingleConnectionContext")
-
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
-  asyncLocalStorage = new AsyncLocalStorage()
+  suppressedConnectionContextCount = 0
 
   /**
    * Runs checkin.
@@ -70,7 +67,23 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {T} - Callback result.
    */
   withoutCurrentConnectionContext(callback) {
-    return /** @type {T} */ (this.asyncLocalStorage.run(SUPPRESSED_CONNECTION_CONTEXT, callback))
+    this.suppressedConnectionContextCount += 1
+
+    try {
+      const result = callback()
+
+      if (result instanceof Promise) {
+        return /** @type {T} */ (result.finally(() => {
+          this.suppressedConnectionContextCount -= 1
+        }))
+      }
+
+      this.suppressedConnectionContextCount -= 1
+      return result
+    } catch (error) {
+      this.suppressedConnectionContextCount -= 1
+      throw error
+    }
   }
 
   /**
@@ -112,7 +125,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
    */
   getCurrentContextConnection() {
-    if (this.asyncLocalStorage.getStore() === SUPPRESSED_CONNECTION_CONTEXT) return undefined
+    if (this.suppressedConnectionContextCount > 0) return undefined
 
     return this.connection
   }
@@ -122,7 +135,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {boolean} - Whether nested code can reuse the shared connection.
    */
   hasCurrentConnectionContext() {
-    return this.asyncLocalStorage.getStore() !== SUPPRESSED_CONNECTION_CONTEXT
+    return this.suppressedConnectionContextCount === 0
   }
 
   /**
