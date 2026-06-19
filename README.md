@@ -591,15 +591,17 @@ const configuration = new Configuration({
 
 This opt-in is ignored in `production`; production frontend-model responses never include internal exception details.
 
-Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, and a small `context` object, and should only return fields that are safe for clients to see. Frontend-model endpoint failures include `context.frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. This is useful for attaching an error-reporting URL while keeping the normal production error message generic:
+Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, a safe `requestDetails` snapshot, and a small `context` object, and should only return fields that are safe for clients to see. Frontend-model endpoint failures include `context.frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. This is useful for attaching an error-reporting URL while keeping the normal production error message generic:
 
 ```js
-configuration.addClientErrorPayloadReporter(async ({error, request, context}) => {
-  const report = await reportErrorToService({error, request, context})
+configuration.addClientErrorPayloadReporter(async ({error, requestDetails, context}) => {
+  const report = await reportErrorToService({error, requestDetails, context})
 
   return {bugReportUrl: report.url}
 })
 ```
+
+`requestDetails` includes `httpMethod`, `path`, and a parsed `body` snapshot when available. The body snapshot redacts common secret keys, truncates large strings and arrays, summarizes uploaded files and buffers without bytes, and compacts oversized frontend-model batches while preserving `requestId`, `model`, `commandType` / `customPath`, and payload shape.
 
 For sqlite web databases, Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
 

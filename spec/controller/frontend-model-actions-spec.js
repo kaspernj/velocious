@@ -106,10 +106,11 @@ function buildFrontendModelControllerConfiguration(environment, options = {}) {
  * @param {object} args - Arguments.
  * @param {Configuration} args.configuration - Configuration.
  * @param {Record<string, any>} args.params - Controller params.
+ * @param {Record<string, any>} [args.requestPayload] - Optional JSON request body payload.
  * @returns {Promise<Record<string, any>>} - Parsed frontend API payload.
  */
-async function runFrontendApi({configuration, params}) {
-  const {payload} = await runFrontendApiWithResponse({configuration, params})
+async function runFrontendApi({configuration, params, requestPayload}) {
+  const {payload} = await runFrontendApiWithResponse({configuration, params, requestPayload})
 
   return payload
 }
@@ -118,19 +119,28 @@ async function runFrontendApi({configuration, params}) {
  * @param {object} args - Arguments.
  * @param {Configuration} args.configuration - Configuration.
  * @param {Record<string, any>} args.params - Controller params.
+ * @param {Record<string, any>} [args.requestPayload] - Optional JSON request body payload.
  * @returns {Promise<{payload: Record<string, any>, response: Response}>} - Parsed frontend API payload and raw response.
  */
-async function runFrontendApiWithResponse({configuration, params}) {
+async function runFrontendApiWithResponse({configuration, params, requestPayload}) {
   const client = {remoteAddress: "127.0.0.1"}
   const request = new Request({client, configuration})
   const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
-
-  request.feed(Buffer.from([
+  const requestBody = requestPayload ? JSON.stringify(serializeFrontendModelTransportValue(requestPayload)) : ""
+  const requestHeaders = [
     "POST /frontend-models HTTP/1.1",
     "Host: example.com",
-    "Content-Length: 0",
+    `Content-Length: ${Buffer.byteLength(requestBody)}`
+  ]
+
+  if (requestBody.length > 0) {
+    requestHeaders.push("Content-Type: application/json")
+  }
+
+  request.feed(Buffer.from([
+    ...requestHeaders,
     "",
-    ""
+    requestBody
   ].join("\r\n"), "utf8"))
 
   await donePromise
@@ -644,9 +654,19 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     const configuration = buildFrontendModelControllerConfiguration("production")
     /** @type {import("../../src/configuration-types.js").ClientErrorPayloadContext[]} */
     const reporterContexts = []
+    /** @type {Array<import("../../src/configuration-types.js").ErrorRequestDetails | null>} */
+    const reporterRequestDetails = []
+    const requestPayload = unknownSharedFrontendModelRequestParams()
 
-    configuration.addClientErrorPayloadReporter(async ({context, error}) => {
+    requestPayload.requests[0].payload = {
+      authorization: "Bearer private-token",
+      comments: ["x".repeat(1200)],
+      payload: {contentBase64: "raw-base64"}
+    }
+
+    configuration.addClientErrorPayloadReporter(async ({context, error, requestDetails}) => {
       reporterContexts.push(context)
+      reporterRequestDetails.push(requestDetails)
       expect(error.message).toMatch(/No frontend model resource configuration/)
 
       return {bugReportUrl: "https://tensorbuzz.test/bugs/1"}
@@ -654,7 +674,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
     const payload = await runFrontendApi({
       configuration,
-      params: unknownSharedFrontendModelRequestParams()
+      params: requestPayload,
+      requestPayload
     })
 
     const response = expectSingleSharedFrontendModelResponse(payload)
@@ -668,6 +689,51 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(reporterContexts[0].frontendModelEndpoint).toEqual(true)
     expect(reporterContexts[0].model).toEqual("UnknownModel")
     expect(reporterContexts[0].requestId).toEqual("request-1")
+    expect(reporterRequestDetails[0]?.httpMethod).toEqual("POST")
+    expect(reporterRequestDetails[0]?.path).toEqual("/frontend-models")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.comments?.[0]).toContain("[truncated ")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual("[redacted]")
+  })
+
+  it("compacts oversized shared frontend-model request details for client error reporters", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production")
+    /** @type {Array<import("../../src/configuration-types.js").ErrorRequestDetails | null>} */
+    const reporterRequestDetails = []
+    const requestPayload = unknownSharedFrontendModelRequestParams()
+
+    requestPayload.requests[0].payload = {
+      attributes: {
+        description: "x".repeat(15000),
+        title: "Investigate request body"
+      }
+    }
+
+    configuration.addClientErrorPayloadReporter(async ({requestDetails}) => {
+      reporterRequestDetails.push(requestDetails)
+
+      return {bugReportUrl: "https://tensorbuzz.test/bugs/1"}
+    })
+
+    const payload = await runFrontendApi({
+      configuration,
+      params: requestPayload,
+      requestPayload
+    })
+
+    expectGenericFrontendModelError(expectSingleSharedFrontendModelResponse(payload))
+    expect(reporterRequestDetails[0]?.body?.__truncated).toEqual(true)
+    expect(reporterRequestDetails[0]?.body?.originalSerializedLength).toBeGreaterThan(12000)
+    expect(reporterRequestDetails[0]?.body?.requests).toEqual([{
+      commandType: "index",
+      model: "UnknownModel",
+      payload: {
+        attributes: {
+          __keys: ["description", "title"]
+        }
+      },
+      requestId: "request-1"
+    }])
   })
 
   it("renders and emits direct frontend-model errors when params parsing fails", async () => {
@@ -1983,15 +2049,17 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const configuration = buildFrontendModelControllerConfiguration("production")
       /** @type {any[]} */
       const frameworkErrors = []
+      const requestPayload = {
+        modelName: "Task",
+        requests: [{commandType: "find", model: "Task", payload: {id: -1}, requestId: "find-request"}]
+      }
 
       configuration.getErrorEvents().on("framework-error", (/** @type {any} */ payload) => frameworkErrors.push(payload))
 
       const payload = await runFrontendApi({
         configuration,
-        params: {
-          modelName: "Task",
-          requests: [{commandType: "find", model: "Task", payload: {id: -1}, requestId: "find-request"}]
-        }
+        params: requestPayload,
+        requestPayload
       })
       const response = /** @type {Record<string, any>} */ (payload.responses?.[0]?.response || payload)
 
@@ -1999,6 +2067,11 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(frameworkErrors.length).toBeGreaterThan(0)
       expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
       expect(frameworkErrors[0].error).toBeInstanceOf(Error)
+      expect(frameworkErrors[0].requestDetails).toEqual({
+        body: requestPayload,
+        httpMethod: "POST",
+        path: "/frontend-models"
+      })
     })
   })
 
