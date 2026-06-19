@@ -2230,8 +2230,8 @@ export default class VelociousConfiguration {
 
       if (!matches) continue
 
-      this.withoutCurrentConnectionContexts(() => {
-        void Promise
+      void this.withoutCurrentConnectionContexts(() => {
+        return Promise
           .resolve()
           .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
           .catch((error) => {

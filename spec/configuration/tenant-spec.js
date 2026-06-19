@@ -120,4 +120,28 @@ describe("Configuration tenant support", {databaseCleaning: {transaction: true}}
       await cleanup()
     }
   })
+
+  it("suppresses async-tracked test shared fallback connections when current contexts are cleared", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-config-test-shared-suppressed-context")
+
+    try {
+      const defaultPool = configuration.getDatabasePool("default")
+      const testSharedConnection = await defaultPool.spawnConnection()
+      let contextConnection
+      let configurationConnectionCount = 0
+
+      defaultPool.setTestSharedConnection(testSharedConnection)
+
+      await configuration.withoutCurrentConnectionContexts(async () => {
+        await Promise.resolve()
+        contextConnection = defaultPool.getCurrentContextConnection()
+        configurationConnectionCount = Object.keys(configuration.getCurrentConnections()).length
+      })
+
+      expect(contextConnection).toBeUndefined()
+      expect(configurationConnectionCount).toEqual(0)
+    } finally {
+      await cleanup()
+    }
+  })
 })

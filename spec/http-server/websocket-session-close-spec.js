@@ -6,7 +6,7 @@ import WebsocketChannel from "../../src/http-server/websocket-channel.js"
 import WebsocketRequest from "../../src/http-server/client/websocket-request.js"
 import WebsocketSession from "../../src/http-server/client/websocket-session.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import wait from "awaitery/build/wait.js"
+import waitFor from "../helpers/wait-for.js"
 
 class ResumableChannel extends WebsocketChannel {
   /** @returns {boolean} */
@@ -21,9 +21,14 @@ class ConnectionCheckingChannel extends WebsocketChannel {
   async unsubscribed() {
     const dbs = this.session.configuration.getCurrentConnections()
 
-    this.params.checkoutName = dbs.default.getDebugSnapshot().checkoutName
+    this.params.hadDefaultConnection = Boolean(dbs.default)
 
-    await dbs.default.query("SELECT 1")
+    try {
+      await dbs.default.query("SELECT 1")
+      this.params.querySucceeded = true
+    } finally {
+      this.params.queryFinished = true
+    }
   }
 }
 
@@ -85,10 +90,11 @@ describe("WebsocketSession close handling", {databaseCleaning: {transaction: tru
     await closePromise
 
     session._finalizeGraceExpiry()
-    await wait(0.02)
+    await waitFor(() => params.queryFinished === true)
 
     expect(teardownConnectionWrapperCalls).toEqual(1)
-    expect(params.checkoutName).toBeDefined()
+    expect(params.hadDefaultConnection).toEqual(true)
+    expect(params.querySucceeded).toEqual(true)
     dummyConfiguration._clearPausedWebsocketSession(session.sessionId)
   })
 })
