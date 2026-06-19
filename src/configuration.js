@@ -18,6 +18,7 @@ import Ability from "./authorization/ability.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
+import {requestDetails} from "./error-reporting/request-details.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
@@ -2411,9 +2412,13 @@ export default class VelociousConfiguration {
   async clientErrorPayloadForError(args) {
     /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
     const payload = {}
+    const details = requestDetails(args.request)
 
     for (const reporter of this._clientErrorPayloadReporters) {
-      const reporterPayload = await reporter(args)
+      const reporterPayload = await reporter({
+        ...args,
+        requestDetails: details
+      })
 
       if (reporterPayload && typeof reporterPayload === "object") {
         Object.assign(payload, reporterPayload)

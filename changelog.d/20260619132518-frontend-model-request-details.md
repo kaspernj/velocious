@@ -1,0 +1,1 @@
+Frontend-model client error reporters and framework-error events now include a sanitized `requestDetails` snapshot with method, path, and parsed body metadata. Oversized frontend-model request bodies are compacted while preserving request ids, models, command types, and payload shape for production error reports.

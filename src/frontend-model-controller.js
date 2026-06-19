@@ -8,6 +8,7 @@ import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-mo
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+import {requestDetails} from "./error-reporting/request-details.js"
 import RoutesResolver from "./routes/resolver.js"
 import {ValidationError} from "./database/record/index.js"
 import { normalizeDateStringForWrite } from "./database/datetime-storage.js"
@@ -3183,7 +3184,8 @@ export default class FrontendModelController extends Controller {
     const errorPayload = {
       context: errorContext,
       error: error instanceof Error ? error : new Error(String(error)),
-      request: this.getRequest()
+      request: this.getRequest(),
+      requestDetails: requestDetails(this.getRequest())
     }
 
     this.getConfiguration().getErrorEvents().emit("framework-error", errorPayload)

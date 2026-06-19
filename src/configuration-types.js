@@ -213,6 +213,13 @@
  */
 
 /**
+ * @typedef {object} ErrorRequestDetails
+ * @property {?} [body] - Sanitized parsed request body, when available.
+ * @property {string} httpMethod - Request HTTP method.
+ * @property {string} path - Request path.
+ */
+
+/**
  * @typedef {object} ClientErrorPayloadContext
  * @property {string} controller - Controller class name.
  * @property {string} [action] - Controller action or endpoint label.
@@ -227,7 +234,8 @@
  * @typedef {function({
  *   context: ClientErrorPayloadContext,
  *   error: Error,
- *   request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined
+ *   request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined,
+ *   requestDetails: ErrorRequestDetails | null
  * }): Promise<ClientErrorPayloadReporterPayload | void> | ClientErrorPayloadReporterPayload | void} ClientErrorPayloadReporterType
  */
 
