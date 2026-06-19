@@ -3,6 +3,12 @@
 import BaseCommand from "../../../../../cli/base-command.js"
 import fs from "node:fs/promises"
 import path from "node:path"
+import requireContext from "require-context"
+
+/**
+ * @typedef {(id: string) => {default: typeof import("../../../../../database/record/index.js").default}} ModelFileRequireContextIdFunctionType
+ * @typedef {ModelFileRequireContextIdFunctionType & {keys: () => string[]}} ModelFileRequireContextType
+ */
 
 /**
  * Lints model relationships: every non-polymorphic belongs-to relationship should have an inverse
@@ -27,7 +33,9 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
     // current configuration, so make this command's configuration the current one.
     this.getConfiguration().setCurrent()
 
-    await this.getConfiguration().initializeModels()
+    if (!await this._registerStaticModelFiles()) {
+      await this.getConfiguration().initializeModels()
+    }
 
     const ignoredRelationships = await this._loadIgnoredRelationships()
     const offences = []
@@ -66,7 +74,11 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
           if (candidate.through) return false
 
           try {
-            return candidate.getTargetModelClass() === modelClass
+            const candidateTargetModelClass = candidate.getTargetModelClass()
+
+            if (!candidateTargetModelClass) return false
+
+            return this._modelClassesMatch(candidateTargetModelClass, modelClass)
           } catch {
             // A has-many/has-one with an unresolvable target can't be the inverse of this belongs-to.
             // It is reported separately when its own model's belongs-to relationships are linted.
@@ -95,6 +107,87 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
     console.log(`Relationship lint passed for ${modelClasses.length} model(s).`)
 
     return {offences}
+  }
+
+  /**
+   * Registers model classes from the conventional src/models directory without
+   * running the application's full database/server initialization.
+   * @returns {Promise<boolean>} Whether static model files were registered.
+   */
+  async _registerStaticModelFiles() {
+    if (this.args.testing) return false
+
+    const modelsDirectory = path.join(this.directory(), "src/models")
+
+    try {
+      const stats = await fs.stat(modelsDirectory)
+
+      if (!stats.isDirectory()) return false
+    } catch (error) {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code == "ENOENT") return false
+
+      throw error
+    }
+
+    if ((await this._javascriptFilesInDirectory(modelsDirectory)).length === 0) return false
+
+    /** @type {ModelFileRequireContextType} */
+    const requireContextModels = requireContext(modelsDirectory, true, /^(.+)\.js$/)
+
+    const modelFileNames = requireContextModels.keys()
+    for (const fileName of modelFileNames) {
+      const modelClassImport = requireContextModels(fileName)
+      const modelClass = modelClassImport.default
+
+      if (!modelClass) {
+        throw new Error(`Model wasn't exported from: ${fileName}`)
+      }
+
+      modelClass.registerRecordClass({configuration: this.getConfiguration()})
+    }
+
+    return true
+  }
+
+  /**
+   * Finds JavaScript files below a directory.
+   * @param {string} directory - Directory to scan.
+   * @returns {Promise<string[]>} JavaScript file paths.
+   */
+  async _javascriptFilesInDirectory(directory) {
+    const filePaths = []
+    const entries = await fs.readdir(directory, {withFileTypes: true})
+
+    for (const entry of entries) {
+      const entryPath = path.join(directory, entry.name)
+
+      if (entry.isDirectory()) {
+        filePaths.push(...await this._javascriptFilesInDirectory(entryPath))
+        continue
+      }
+
+      if (entry.isFile() && entry.name.endsWith(".js")) {
+        filePaths.push(entryPath)
+      }
+    }
+
+    return filePaths
+  }
+
+  /**
+   * Checks whether two model class objects describe the same registered model.
+   * @param {typeof import("../../../../../database/record/index.js").default} leftModelClass - Candidate target model class.
+   * @param {typeof import("../../../../../database/record/index.js").default} rightModelClass - Belongs-to source model class.
+   * @returns {boolean} Whether both model classes represent the same model identity.
+   */
+  _modelClassesMatch(leftModelClass, rightModelClass) {
+    if (leftModelClass === rightModelClass) return true
+    // `translates()` creates an internal translation class; apps may also define
+    // a concrete class for the same model/table so generated code has a stable
+    // file and type name.
+    if (leftModelClass.getModelName() != rightModelClass.getModelName()) return false
+
+    return leftModelClass.tableName() == rightModelClass.tableName()
   }
 
   /**

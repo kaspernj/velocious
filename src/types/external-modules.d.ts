@@ -55,3 +55,16 @@ declare module "is-plain-object" {
 declare module "escape-string-regexp" {
   export default function escapeStringRegexp(value: string): string
 }
+
+declare module "require-context" {
+  export interface RequireContext<TModule = {default?: unknown}> {
+    (id: string): TModule
+    keys(): string[]
+  }
+
+  export default function requireContext<TModule = {default?: unknown}>(
+    directory: string,
+    useSubdirectories?: boolean,
+    regExp?: RegExp
+  ): RequireContext<TModule>
+}
