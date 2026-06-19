@@ -1535,9 +1535,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       if (!args || args.length === 0) {
         const jsDocParameters = await this.resourceMethodParameters({methodName: commandName, sourceClassName})
+        // Skip object-property tags (`@param {string} args.message`); only the
+        // top-level parameters map to method arguments, otherwise the shared
+        // `@param {object} args` + property style would emit `name(args, args)`.
+        const topLevelParameters = (jsDocParameters || []).filter((parameter) => typeof parameter.name === "string" && !parameter.name.includes("."))
 
-        if (jsDocParameters && jsDocParameters.length > 0 && jsDocParameters.every((parameter) => parameter.name)) {
-          args = jsDocParameters.map((parameter) => ({
+        if (topLevelParameters.length > 0) {
+          args = topLevelParameters.map((parameter) => ({
             name: /** @type {string} */ (parameter.name),
             type: this.frontendResolvableCommandJsDocType(parameter.type)
           }))
@@ -1882,9 +1886,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
 
       // After the closing brace the parameter name follows (optionally bracketed
-      // for `@param {type} [name]`). Capture the leading name token so generated
-      // command methods can name their parameter after the backend method's param.
-      const nameMatch = jsDocText.slice(typeCloseIndex + 1).match(/^\s*\[?\s*([A-Za-z_$][\w$]*)/)
+      // for `@param {type} [name]`). Capture the leading name token — including any
+      // dotted path so object-property tags like `@param {string} args.message` stay
+      // distinguishable from the top-level `@param {object} args` parameter.
+      const nameMatch = jsDocText.slice(typeCloseIndex + 1).match(/^\s*\[?\s*([A-Za-z_$][\w$.]*)/)
 
       parameters.push({name: nameMatch ? nameMatch[1] : null, type})
       paramRegex.lastIndex = typeCloseIndex + 1

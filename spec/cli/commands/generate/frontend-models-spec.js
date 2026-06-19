@@ -1149,6 +1149,11 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("@param {{message: string, times: number}} args - Command argument.")
     expect(userContents).toContain("@returns {Promise<{echoed: string, length: number}>} - Command response.")
     expect(userContents).toContain("normalizeCustomCommandPayloadArguments([args])")
+    // The object-property `@param {object} args` + `args.label` style emits a single
+    // `args` parameter, not `echoObjectStyle(args, args)`.
+    expect(userContents).toContain("static async echoObjectStyle(args) {")
+    expect(userContents).toContain("@param {object} args - Command argument.")
+    expect(userContents).not.toContain("echoObjectStyle(args, args)")
     // A model-valued result field is downgraded to `any` (the frontend gets a serialized record).
     expect(userContents).toContain("@returns {Promise<{users: any}>} - Command response.")
     // An explicit resourceConfig returnType wins over the method's own JSDoc.

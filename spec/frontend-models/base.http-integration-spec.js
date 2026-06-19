@@ -118,6 +118,22 @@ class User extends FrontendModelBase {
       resourcePath: ModelClass.resourcePath()
     }))
   }
+
+  /**
+   * @param {{id: string}} payload - Client payload whose `id` must survive the member route id.
+   * @returns {Promise<{receivedId: string}>} - Command response.
+   */
+  async echoMemberPayload(payload) {
+    const ModelClass = /** @type {typeof User} */ (this.constructor)
+
+    return /** @type {Promise<{receivedId: string}>} */ (ModelClass.executeCustomCommand({
+      commandName: "echo-member-payload",
+      commandType: "echo-member-payload",
+      memberId: this.primaryKeyValue(),
+      payload,
+      resourcePath: ModelClass.resourcePath()
+    }))
+  }
 }
 
 FrontendModelBase.registerModel(User)
@@ -418,6 +434,28 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         expect(response.echoed).toEqual("hello")
         expect(response.length).toEqual(3)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("passes the client payload to a member command without the route member id overwriting it", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {john} = await seedHttpFrontendModels()
+        const johnModel = await User.findBy({email: john.email()})
+
+        if (!johnModel) throw new Error("Expected John frontend model")
+
+        const response = await johnModel.echoMemberPayload({id: "client-provided-id"})
+
+        // Without the framework-key fix the merged params would deliver the member's
+        // own id here instead of the client's.
+        expect(response.receivedId).toEqual("client-provided-id")
+        expect(response.receivedId).not.toEqual(johnModel.id())
       } finally {
         resetFrontendModelTransport()
       }

@@ -141,10 +141,21 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "lookupByEmail",
         "delayedLookupByEmail",
         "echoMessage",
+        "echoObjectStyle",
         {name: "echoOverride", returnType: "{fromConfig: boolean}"}
       ],
-      memberCommands: ["refreshProfile"]
+      memberCommands: ["refreshProfile", "echoMemberPayload"]
     }
+  }
+
+  /**
+   * Returns the client's own `id` argument to prove the member route id does not
+   * overwrite the typed args payload passed to the command method.
+   * @param {{id: string}} args - Member echo arguments.
+   * @returns {Promise<{receivedId: string}>} - Echo response.
+   */
+  async echoMemberPayload(args) {
+    return {receivedId: args.id}
   }
 
   /**
@@ -155,6 +166,17 @@ class UserFrontendResource extends FrontendModelBaseResource {
    */
   async echoMessage(args) {
     return {echoed: args.message, length: args.times}
+  }
+
+  /**
+   * Documents its payload with the `@param {object}` + property-tag style so the
+   * generator emits a single `args` parameter instead of `args, args`.
+   * @param {object} args - Object-style arguments.
+   * @param {string} args.label - Label argument.
+   * @returns {Promise<{labeled: string}>} - Echo response.
+   */
+  async echoObjectStyle(args) {
+    return {labeled: /** @type {{label: string}} */ (args).label}
   }
 
   /** @returns {Promise<{fromJsDoc: boolean}>} - JSDoc response the explicit resourceConfig returnType overrides. */
