@@ -82,11 +82,12 @@ async function postSharedTaskFrontendModelCommand(commandType, payload) {
 
 /**
  * @param {string} environment - Environment.
- * @param {{exposeInternalErrorsToClients?: boolean}} [options] - Configuration options.
+ * @param {{exposeInternalErrorsToClients?: boolean, resolveFrontendModelAbility?: boolean}} [options] - Configuration options.
  * @returns {Configuration} - Test configuration.
  */
 function buildFrontendModelControllerConfiguration(environment, options = {}) {
   return new Configuration({
+    abilityResolver: options.resolveFrontendModelAbility ? dummyConfiguration.getAbilityResolver() : undefined,
     backendProjects,
     cookieSecret: "dummy-cookie-secret",
     database: {[environment]: {}},
@@ -1056,6 +1057,51 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("allows Ransack filters only on resource-exposed attributes", async () => {
+    await Dummy.run(async () => {
+      await User.create({
+        email: "visible-ransack@example.com",
+        encryptedPassword: "visible-secret",
+        reference: "visible-ransack"
+      })
+      await User.create({
+        email: "other-ransack@example.com",
+        encryptedPassword: "hidden-secret",
+        reference: "other-ransack"
+      })
+
+      const allowedResponse = await postFrontendModel("/frontend-models", {
+        requests: [{
+          commandType: "index",
+          model: "User",
+          payload: {
+            ransack: {email_eq: "visible-ransack@example.com"}
+          },
+          requestId: "users"
+        }]
+      })
+      const hiddenResponse = await postFrontendModel("/frontend-models", {
+        requests: [{
+          commandType: "index",
+          model: "User",
+          payload: {
+            ransack: {encryptedPassword_eq: "hidden-secret"}
+          },
+          requestId: "users"
+        }]
+      })
+
+      const allowedPayload = allowedResponse.responses[0].response
+      const hiddenPayload = hiddenResponse.responses[0].response
+
+      expect(allowedPayload.status).toEqual("success")
+      expect(allowedPayload.models.map((model) => model.email)).toEqual(["visible-ransack@example.com"])
+      expect(hiddenPayload.status).toEqual("error")
+      expect(hiddenPayload.errorMessage).toEqual('Unknown ransack attribute "encryptedPassword" for User')
+      expect(hiddenPayload.velocious).toEqual({code: "frontend-model-query-error"})
+    })
+  })
+
   it("applies joins params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       const task = await createTask("Join filter task")
@@ -1953,6 +1999,88 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(frameworkErrors.length).toBeGreaterThan(0)
       expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
       expect(frameworkErrors[0].error).toBeInstanceOf(Error)
+    })
+  })
+
+  it("does not emit framework errors for invalid client query attributes", async () => {
+    await Dummy.run(async () => {
+      for (const requestCase of [
+        {
+          expectedMessage: 'Unknown select attribute "missingAttribute" for Task',
+          payload: {select: ["id", "missingAttribute"]},
+          requestId: "invalid-select"
+        },
+        {
+          expectedMessage: 'Unknown where column "missingAttribute" for Task',
+          payload: {where: {missingAttribute: "value"}},
+          requestId: "invalid-where"
+        },
+        {
+          expectedMessage: 'Unknown search column "missingAttribute" for Task',
+          payload: {searches: [{column: "missingAttribute", operator: "eq", path: [], value: "value"}]},
+          requestId: "invalid-search"
+        },
+        {
+          expectedMessage: 'Unknown join relationship "missingRelationship" for Task',
+          payload: {joins: {missingRelationship: true}},
+          requestId: "invalid-join"
+        },
+        {
+          expectedMessage: 'Unknown group column "missingAttribute" for Task',
+          payload: {group: "missingAttribute"},
+          requestId: "invalid-group"
+        },
+        {
+          expectedMessage: 'Unknown pluck column "missingAttribute" for Task',
+          payload: {pluck: "missingAttribute"},
+          requestId: "invalid-pluck"
+        },
+        {
+          expectedMessage: 'Unknown sort column "missingAttribute" for Task',
+          payload: {sort: "missingAttribute asc"},
+          requestId: "invalid-sort"
+        },
+        {
+          expectedMessage: 'Unknown ransack attribute "missingAttribute" for Task',
+          payload: {ransack: {missingAttribute_eq: "value"}},
+          requestId: "invalid-ransack"
+        },
+        {
+          expectedMessage: 'Unknown ransack attribute "encryptedPassword" for User',
+          model: "User",
+          payload: {ransack: {encryptedPassword_eq: "secret"}},
+          requestId: "hidden-ransack"
+        }
+      ]) {
+        const configuration = buildFrontendModelControllerConfiguration("production", {resolveFrontendModelAbility: true})
+        /** @type {any[]} */
+        const allErrors = []
+        /** @type {any[]} */
+        const frameworkErrors = []
+
+        configuration.getErrorEvents().on("all-error", (/** @type {any} */ payload) => allErrors.push(payload))
+        configuration.getErrorEvents().on("framework-error", (/** @type {any} */ payload) => frameworkErrors.push(payload))
+
+        const payload = await runFrontendApi({
+          configuration,
+          params: {
+            modelName: requestCase.model || "Task",
+            requests: [{
+              commandType: "index",
+              model: requestCase.model || "Task",
+              payload: requestCase.payload,
+              requestId: requestCase.requestId
+            }]
+          }
+        })
+        const response = /** @type {Record<string, any>} */ (payload.responses?.[0]?.response || payload)
+
+        expect(response.status).toEqual("error")
+        expect(response.errorMessage).toEqual(requestCase.expectedMessage)
+        expect(response.velocious).toEqual({code: "frontend-model-query-error"})
+        expect(frameworkErrors).toEqual([])
+        expect(allErrors).toEqual([])
+      }
     })
   })
 })

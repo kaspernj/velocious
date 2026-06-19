@@ -6,6 +6,7 @@ import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
 const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
 const CONNECTION_CHECKED_OUT_AT = Symbol("velociousConnectionCheckedOutAt")
+const SUPPRESSED_CONNECTION_CONTEXT = Symbol("velociousSuppressedConnectionContext")
 const DEFAULT_MAX_CONNECTIONS = 10
 const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
 const DEFAULT_CHECKOUT_TIMEOUT_MILLIS = 10000
@@ -103,7 +104,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
      * Runs a callback without the inherited current connection context.
      * @type {(callback: () => ?) => ?}
      */
-    const withoutCurrentConnectionContext = (callback) => this.asyncLocalStorage.run(undefined, callback)
+    const withoutCurrentConnectionContext = (callback) => this.asyncLocalStorage.run(SUPPRESSED_CONNECTION_CONTEXT, callback)
     this._withoutCurrentConnectionContext = withoutCurrentConnectionContext
   }
 
@@ -720,6 +721,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const id = this.asyncLocalStorage.getStore()
 
     if (id === undefined) return this.currentFallbackConnectionOrFail()
+    if (id === SUPPRESSED_CONNECTION_CONTEXT) return this.currentFallbackConnectionOrFail()
 
     this.ensureConnectionIsInUse(id)
 
@@ -815,6 +817,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   getCurrentContextConnection() {
     const id = this.asyncLocalStorage.getStore()
 
+    if (id === SUPPRESSED_CONNECTION_CONTEXT) return undefined
     if (id === undefined) return this._testSharedConnection
 
     return this.getCurrentConnection()
@@ -825,7 +828,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {boolean} - Whether nested code can reuse the current connection context.
    */
   hasCurrentConnectionContext() {
-    return this.asyncLocalStorage.getStore() !== undefined
+    const id = this.asyncLocalStorage.getStore()
+
+    return id !== undefined && id !== SUPPRESSED_CONNECTION_CONTEXT
   }
 
   /**

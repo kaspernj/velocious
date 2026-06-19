@@ -4,6 +4,28 @@ import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import {resolveFrontendModelClass} from "../frontend-models/model-registry.js"
 
+/** Error raised when a Ransack descriptor is malformed. */
+export class RansackQueryError extends Error {
+  /**
+   * Creates a Ransack query error.
+   * @param {string} message - Error message.
+   */
+  constructor(message) {
+    super(message)
+
+    this.name = "RansackQueryError"
+  }
+}
+
+/**
+ * Builds a Ransack query error.
+ * @param {string} message - Error message.
+ * @returns {RansackQueryError} - Ransack query error.
+ */
+function ransackQueryError(message) {
+  return new RansackQueryError(message)
+}
+
 /**
  * RansackPredicate type.
  * @typedef {"cont" | "end" | "eq" | "gt" | "gteq" | "in" | "lt" | "lteq" | "not_eq" | "not_in" | "null" | "start"} RansackPredicate
@@ -76,7 +98,7 @@ export function normalizeRansackParams(modelClass, params) {
  */
 export function normalizeRansackGroup(modelClass, params) {
   if (!isPlainObject(params)) {
-    throw new Error(`ransack params must be a plain object, got: ${typeof params}`)
+    throw ransackQueryError(`ransack params must be a plain object, got: ${typeof params}`)
   }
 
   /**
@@ -124,7 +146,7 @@ function normalizeSimpleRansackCondition({key, modelClass, rawValue}) {
   const parsedKey = parseRansackKey(key)
 
   if (!parsedKey) {
-    throw new Error(`Unsupported ransack predicate in key: ${key}`)
+    throw ransackQueryError(`Unsupported ransack predicate in key: ${key}`)
   }
 
   const value = normalizeRansackValue({
@@ -159,17 +181,17 @@ function normalizeAdvancedRansackConditions({modelClass, value}) {
 
   for (const entry of normalizeRansackCollection(value, "conditions")) {
     if (!isPlainObject(entry)) {
-      throw new Error(`Ransack condition entries must be plain objects, got: ${typeof entry}`)
+      throw ransackQueryError(`Ransack condition entries must be plain objects, got: ${typeof entry}`)
     }
 
     const predicateValue = entry.p
 
     if (typeof predicateValue !== "string") {
-      throw new Error("Ransack condition predicate must be a string")
+      throw ransackQueryError("Ransack condition predicate must be a string")
     }
 
     if (!supportedPredicates.includes(predicateValue)) {
-      throw new Error(`Unsupported ransack predicate in condition: ${predicateValue}`)
+      throw ransackQueryError(`Unsupported ransack predicate in condition: ${predicateValue}`)
     }
 
     const predicate = /** @type {RansackPredicate} */ (predicateValue)
@@ -206,7 +228,7 @@ function normalizeAdvancedRansackGroups({modelClass, value}) {
 
   for (const entry of normalizeRansackCollection(value, "groupings")) {
     if (!isPlainObject(entry)) {
-      throw new Error(`Ransack grouping entries must be plain objects, got: ${typeof entry}`)
+      throw ransackQueryError(`Ransack grouping entries must be plain objects, got: ${typeof entry}`)
     }
 
     groupings.push(normalizeRansackGroup(modelClass, entry))
@@ -225,7 +247,7 @@ function normalizeRansackCombinator(value, defaultValue) {
   if (value === undefined || value === null || value === "") return defaultValue
   if (value === "and" || value === "or") return value
 
-  throw new Error(`Invalid ransack combinator: ${String(value)}`)
+  throw ransackQueryError(`Invalid ransack combinator: ${String(value)}`)
 }
 
 /**
@@ -253,7 +275,7 @@ function normalizeRansackCollection(value, name) {
       .map((key) => value[key])
   }
 
-  throw new Error(`Ransack ${name} must be an array or object, got: ${typeof value}`)
+  throw ransackQueryError(`Ransack ${name} must be an array or object, got: ${typeof value}`)
 }
 
 /**
@@ -292,7 +314,7 @@ function resolveRansackAttributesFromAdvancedValue({modelClass, value}) {
   }
 
   if (attributes.length < 1) {
-    throw new Error("Ransack condition must include at least one attribute")
+    throw ransackQueryError("Ransack condition must include at least one attribute")
   }
 
   return attributes
@@ -314,7 +336,7 @@ function normalizeAdvancedAttributeValues(value) {
     return normalizeRansackCollection(value, "attributes").map((entry) => normalizeAdvancedAttributeValue(entry))
   }
 
-  throw new Error(`Ransack condition attributes must be strings, arrays, or objects, got: ${typeof value}`)
+  throw ransackQueryError(`Ransack condition attributes must be strings, arrays, or objects, got: ${typeof value}`)
 }
 
 /**
@@ -329,7 +351,7 @@ function normalizeAdvancedAttributeValue(value) {
     return value.name
   }
 
-  throw new Error(`Ransack condition attribute entries must be strings or {name}, got: ${typeof value}`)
+  throw ransackQueryError(`Ransack condition attribute entries must be strings or {name}, got: ${typeof value}`)
 }
 
 /**
@@ -346,7 +368,7 @@ function resolveRansackAttributes({modelClass, value}) {
     const attributeName = resolveAttributeName({modelClass: targetModelClass, value: resolvedPath.attributeValue})
 
     if (!attributeName) {
-      throw new Error(`Unknown ransack attribute "${resolvedPath.attributeValue}" for ${targetModelClass.name}`)
+      throw ransackQueryError(`Unknown ransack attribute "${resolvedPath.attributeValue}" for ${targetModelClass.name}`)
     }
 
     return {
@@ -370,7 +392,7 @@ function modelClassAtPath({modelClass, path}) {
     const relationship = relationshipEntries(currentModelClass)[relationshipName]
 
     if (!relationship) {
-      throw new Error(`Unknown ransack relationship "${relationshipName}" for ${currentModelClass.name}`)
+      throw ransackQueryError(`Unknown ransack relationship "${relationshipName}" for ${currentModelClass.name}`)
     }
 
     currentModelClass = relationship.targetModelClass
@@ -412,7 +434,7 @@ function resolveRansackPath({modelClass, value}) {
   }
 
   if (remainingValue.length < 1) {
-    throw new Error(`Invalid ransack key path: ${value}`)
+    throw ransackQueryError(`Invalid ransack key path: ${value}`)
   }
 
   return {
@@ -648,7 +670,7 @@ function parseRansackKey(key) {
     const pathValue = key.slice(0, key.length - suffix.length)
 
     if (pathValue.length < 1) {
-      throw new Error(`Invalid ransack key: ${key}`)
+      throw ransackQueryError(`Invalid ransack key: ${key}`)
     }
 
     return {
@@ -665,7 +687,7 @@ function parseRansackKey(key) {
     const pathValue = key.slice(0, key.length - camelSuffix.length)
 
     if (pathValue.length < 1) {
-      throw new Error(`Invalid ransack key: ${key}`)
+      throw ransackQueryError(`Invalid ransack key: ${key}`)
     }
 
     return {
@@ -750,7 +772,7 @@ function normalizeRansackBoolean(value) {
   if (ransackFalseValues.has(value)) return false
   if (ransackValueIsBlank(value)) return null
 
-  throw new Error(`Invalid ransack boolean value: ${String(value)}`)
+  throw ransackQueryError(`Invalid ransack boolean value: ${String(value)}`)
 }
 
 /**
@@ -789,10 +811,10 @@ function normalizeRansackArray(value) {
  */
 
 /**
- * Parses and validates a ransack `s` sort string against model attributes.
- * @param {RansackModelClass} modelClass - Model class for attribute validation.
+ * Parses a ransack `s` sort string against model attributes.
+ * @param {RansackModelClass} modelClass - Model class for attribute lookup.
  * @param {string} sortString - Ransack sort string (e.g., "name asc" or "name asc, createdAt desc").
- * @returns {RansackSort[]} - Validated sort definitions.
+ * @returns {RansackSort[]} - Parsed sort definitions.
  */
 export function parseRansackSort(modelClass, sortString) {
   const segments = sortString.split(",").map((segment) => segment.trim()).filter((segment) => segment.length > 0)
@@ -808,13 +830,13 @@ export function parseRansackSort(modelClass, sortString) {
     const directionCandidate = parts.length > 1 ? parts[1].toLowerCase() : "asc"
 
     if (directionCandidate !== "asc" && directionCandidate !== "desc") {
-      throw new Error(`Invalid ransack sort direction "${directionCandidate}" in: ${segment}`)
+      throw ransackQueryError(`Invalid ransack sort direction "${directionCandidate}" in: ${segment}`)
     }
 
     const resolvedAttribute = resolveAttributeName({modelClass, value: columnCandidate})
 
     if (!resolvedAttribute) {
-      throw new Error(`Unknown ransack sort attribute "${columnCandidate}" for ${modelClass.name}`)
+      throw ransackQueryError(`Unknown ransack sort attribute "${columnCandidate}" for ${modelClass.name}`)
     }
 
     sorts.push({attribute: resolvedAttribute, direction: directionCandidate})

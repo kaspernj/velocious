@@ -3,6 +3,8 @@
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
+  suppressedConnectionContextCount = 0
+
   /**
    * Runs checkin.
    * @param {import("../drivers/base.js").default} connection - Connection.
@@ -59,6 +61,32 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
+   * Runs without current connection context.
+   * @template T
+   * @param {() => T} callback - Callback to run without the shared current connection.
+   * @returns {T} - Callback result.
+   */
+  withoutCurrentConnectionContext(callback) {
+    this.suppressedConnectionContextCount += 1
+
+    try {
+      const result = callback()
+
+      if (result instanceof Promise) {
+        return /** @type {T} */ (result.finally(() => {
+          this.suppressedConnectionContextCount -= 1
+        }))
+      }
+
+      this.suppressedConnectionContextCount -= 1
+      return result
+    } catch (error) {
+      this.suppressedConnectionContextCount -= 1
+      throw error
+    }
+  }
+
+  /**
    * Clears schema metadata cached by the reusable connection if it exists.
    * @returns {void} - No return value.
    */
@@ -97,7 +125,17 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
    */
   getCurrentContextConnection() {
+    if (this.suppressedConnectionContextCount > 0) return undefined
+
     return this.connection
+  }
+
+  /**
+   * Returns whether the shared connection is available to the current execution context.
+   * @returns {boolean} - Whether nested code can reuse the shared connection.
+   */
+  hasCurrentConnectionContext() {
+    return this.suppressedConnectionContextCount === 0
   }
 
   /**

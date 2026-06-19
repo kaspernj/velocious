@@ -5,6 +5,28 @@ import {normalizeRansackGroup, parseRansackSort} from "../utils/ransack.js"
 import {isModelScopeDescriptor} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
 
+/** Error raised when a frontend-model query descriptor is malformed. */
+export class FrontendModelQueryError extends Error {
+  /**
+   * Creates a frontend-model query error.
+   * @param {string} message - Error message.
+   */
+  constructor(message) {
+    super(message)
+
+    this.name = "FrontendModelQueryError"
+  }
+}
+
+/**
+ * Builds a query descriptor error.
+ * @param {string} message - Error message.
+ * @returns {FrontendModelQueryError} - Query descriptor error.
+ */
+function frontendModelQueryError(message) {
+  return new FrontendModelQueryError(message)
+}
+
 /**
  * FrontendModelSearch type.
  * @typedef {object} FrontendModelSearch
@@ -376,7 +398,7 @@ export function normalizeSearchOperator(operator) {
   const supportedOperators = new Set(["eq", "like", "notEq", "gt", "gteq", "lt", "lteq"])
 
   if (!supportedOperators.has(normalizedOperator)) {
-    throw new Error(`search operator must be one of: eq, like, notEq, gt, gteq, lt, lteq, >, >=, <, <= (got: ${operator})`)
+    throw frontendModelQueryError(`search operator must be one of: eq, like, notEq, gt, gteq, lt, lteq, >, >=, <, <= (got: ${operator})`)
   }
 
   return /** @type {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} */ (normalizedOperator)
@@ -400,7 +422,7 @@ function mergeJoinRecord(targetJoins, incomingJoins) {
     }
 
     if (!isPlainObject(incomingValue)) {
-      throw new Error(`Invalid join value for ${relationshipName}: ${typeof incomingValue}`)
+      throw frontendModelQueryError(`Invalid join value for ${relationshipName}: ${typeof incomingValue}`)
     }
 
     if (isPlainObject(existingValue)) {
@@ -433,7 +455,7 @@ export function normalizeJoins(joins) {
 
     for (const joinEntry of joins) {
       if (!isPlainObject(joinEntry)) {
-        throw new Error(`Invalid joins entry type: ${typeof joinEntry}`)
+        throw frontendModelQueryError(`Invalid joins entry type: ${typeof joinEntry}`)
       }
 
       mergeJoinRecord(normalized, normalizeJoins(joinEntry))
@@ -443,7 +465,7 @@ export function normalizeJoins(joins) {
   }
 
   if (!isPlainObject(joins)) {
-    throw new Error(`Invalid joins type: ${typeof joins}`)
+    throw frontendModelQueryError(`Invalid joins type: ${typeof joins}`)
   }
 
   /**
@@ -462,7 +484,7 @@ export function normalizeJoins(joins) {
       continue
     }
 
-    throw new Error(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
+    throw frontendModelQueryError(`Invalid join definition for "${relationshipName}": ${typeof relationshipJoin}`)
   }
 
   return normalized
@@ -497,13 +519,13 @@ export function normalizeJoins(joins) {
  */
 function normalizeSortDirection(direction) {
   if (typeof direction !== "string") {
-    throw new Error(`Invalid sort direction type: ${typeof direction}`)
+    throw frontendModelQueryError(`Invalid sort direction type: ${typeof direction}`)
   }
 
   const normalizedDirection = direction.trim().toLowerCase()
 
   if (normalizedDirection !== "asc" && normalizedDirection !== "desc") {
-    throw new Error(`Invalid sort direction: ${direction}`)
+    throw frontendModelQueryError(`Invalid sort direction: ${direction}`)
   }
 
   return normalizedDirection
@@ -551,14 +573,14 @@ function parseSortString(sortValue, path = []) {
   const trimmed = sortValue.trim()
 
   if (trimmed.length < 1) {
-    throw new Error("sort value must be a non-empty string")
+    throw frontendModelQueryError("sort value must be a non-empty string")
   }
 
   if (trimmed.startsWith("-")) {
     const column = trimmed.slice(1).trim()
 
     if (column.length < 1) {
-      throw new Error(`Invalid sort definition: ${sortValue}`)
+      throw frontendModelQueryError(`Invalid sort definition: ${sortValue}`)
     }
 
     return {
@@ -571,13 +593,13 @@ function parseSortString(sortValue, path = []) {
   const sortParts = trimmed.split(/\s+/).filter(Boolean)
 
   if (sortParts.length > 2) {
-    throw new Error(`Invalid sort definition: ${sortValue}`)
+    throw frontendModelQueryError(`Invalid sort definition: ${sortValue}`)
   }
 
   const column = sortParts[0]
 
   if (column.length < 1) {
-    throw new Error(`Invalid sort definition: ${sortValue}`)
+    throw frontendModelQueryError(`Invalid sort definition: ${sortValue}`)
   }
 
   const direction = sortParts.length === 2
@@ -602,7 +624,7 @@ function parseSortTuple(sortValue, path = []) {
   const column = columnValue.trim()
 
   if (column.length < 1) {
-    throw new Error("sort tuple column must be a non-empty string")
+    throw frontendModelQueryError("sort tuple column must be a non-empty string")
   }
 
   return {
@@ -641,12 +663,12 @@ function normalizeSortObject(sortValue, path) {
 
     if (Array.isArray(sortEntry)) {
       if (sortEntry.length < 1) {
-        throw new Error(`Invalid sort definition for "${sortKey}": empty array`)
+        throw frontendModelQueryError(`Invalid sort definition for "${sortKey}": empty array`)
       }
 
       for (const nestedSortEntry of sortEntry) {
         if (!sortTuple(nestedSortEntry)) {
-          throw new Error(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
+          throw frontendModelQueryError(`Invalid sort definition for "${sortKey}": expected [column, direction] tuples`)
         }
 
         normalizedSorts.push(parseSortTuple(nestedSortEntry, [...path, sortKey]))
@@ -659,7 +681,7 @@ function normalizeSortObject(sortValue, path) {
       continue
     }
 
-    throw new Error(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
+    throw frontendModelQueryError(`Invalid sort definition for "${sortKey}": ${typeof sortEntry}`)
   }
 
   return normalizedSorts
@@ -724,13 +746,13 @@ export function normalizeSort(sort) {
         continue
       }
 
-      throw new Error(`Invalid sort entry type: ${typeof sortEntry}`)
+      throw frontendModelQueryError(`Invalid sort entry type: ${typeof sortEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid sort type: ${typeof sort}`)
+  throw frontendModelQueryError(`Invalid sort type: ${typeof sort}`)
 }
 
 /**
@@ -743,7 +765,7 @@ function parseGroupString(groupValue, path = []) {
   const trimmed = groupValue.trim()
 
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
-    throw new Error(`Invalid group column: ${groupValue}`)
+    throw frontendModelQueryError(`Invalid group column: ${groupValue}`)
   }
 
   return {
@@ -789,12 +811,12 @@ function normalizeColumnProjectionObject(value, path, parseString, label) {
 
     if (Array.isArray(projectionEntry)) {
       if (projectionEntry.length < 1) {
-        throw new Error(`Invalid ${label} definition for "${projectionKey}": empty array`)
+        throw frontendModelQueryError(`Invalid ${label} definition for "${projectionKey}": empty array`)
       }
 
       for (const nestedProjectionEntry of projectionEntry) {
         if (typeof nestedProjectionEntry !== "string") {
-          throw new Error(`Invalid ${label} definition for "${projectionKey}": expected string columns`)
+          throw frontendModelQueryError(`Invalid ${label} definition for "${projectionKey}": expected string columns`)
         }
 
         normalized.push(parseString(nestedProjectionEntry, [...path, projectionKey]))
@@ -808,7 +830,7 @@ function normalizeColumnProjectionObject(value, path, parseString, label) {
       continue
     }
 
-    throw new Error(`Invalid ${label} definition for "${projectionKey}": ${typeof projectionEntry}`)
+    throw frontendModelQueryError(`Invalid ${label} definition for "${projectionKey}": ${typeof projectionEntry}`)
   }
 
   return normalized
@@ -862,13 +884,13 @@ export function normalizeGroup(group) {
         continue
       }
 
-      throw new Error(`Invalid group entry type: ${typeof groupEntry}`)
+      throw frontendModelQueryError(`Invalid group entry type: ${typeof groupEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid group type: ${typeof group}`)
+  throw frontendModelQueryError(`Invalid group type: ${typeof group}`)
 }
 
 /**
@@ -881,7 +903,7 @@ function parsePluckString(pluckValue, path = []) {
   const trimmed = pluckValue.trim()
 
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
-    throw new Error(`Invalid pluck column: ${pluckValue}`)
+    throw frontendModelQueryError(`Invalid pluck column: ${pluckValue}`)
   }
 
   return {
@@ -938,13 +960,13 @@ export function normalizePluck(pluck) {
         continue
       }
 
-      throw new Error(`Invalid pluck entry type: ${typeof pluckEntry}`)
+      throw frontendModelQueryError(`Invalid pluck entry type: ${typeof pluckEntry}`)
     }
 
     return normalized
   }
 
-  throw new Error(`Invalid pluck type: ${typeof pluck}`)
+  throw frontendModelQueryError(`Invalid pluck type: ${typeof pluck}`)
 }
 
 /**
@@ -997,13 +1019,13 @@ function frontendModelPluckTargetModelClass(modelClass, path) {
 }
 
 /**
- * Runs validate pluck definitions.
- * @param {object} args - Pluck validation args.
+ * Runs assert pluck definitions allowed.
+ * @param {object} args - Pluck assertion args.
  * @param {import("./base.js").FrontendModelClass} args.modelClass - Root model class.
  * @param {FrontendModelPluck[]} args.pluck - Pluck descriptors.
- * @returns {FrontendModelPluck[]} - Validated pluck descriptors.
+ * @returns {FrontendModelPluck[]} - Allowed pluck descriptors.
  */
-function validatePluckDefinitions({modelClass, pluck}) {
+function assertPluckDefinitionsAllowed({modelClass, pluck}) {
   return pluck.map((pluckEntry) => {
     const targetModelClass = frontendModelPluckTargetModelClass(modelClass, pluckEntry.path)
     const targetAttributes = frontendModelResourceAttributes(targetModelClass)
@@ -1036,7 +1058,7 @@ function serializeFindConditions(conditions) {
  * Runs normalize integer argument.
  * @param {?} value - Candidate integer value.
  * @param {string} argumentName - Argument name for errors.
- * @param {object} options - Validation options.
+ * @param {object} options - Integer options.
  * @param {number} options.min - Minimum allowed value.
  * @returns {number} - Normalized integer value.
  */
@@ -1961,7 +1983,7 @@ export default class FrontendModelQuery {
     }
 
     const normalizedPluck = normalizePluck(columns.length === 1 ? columns[0] : columns)
-    const validatedPluck = validatePluckDefinitions({
+    const allowedPluck = assertPluckDefinitionsAllowed({
       modelClass: this.modelClass,
       pluck: normalizedPluck
     })
@@ -1973,7 +1995,7 @@ export default class FrontendModelQuery {
       ...this.sortPayload(),
       ...this.wherePayload(),
       ...this.paginationPayload(),
-      pluck: validatedPluck
+      pluck: allowedPluck
     })
 
     if (!response || typeof response !== "object") {
