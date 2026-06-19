@@ -1159,6 +1159,10 @@ export default class ReportResource extends FrontendModelBaseResource {
     // An explicit resourceConfig returnType wins over the method's own JSDoc.
     expect(userContents).toContain("@returns {Promise<{fromConfig: boolean}>} - Command response.")
     expect(userContents).not.toContain("fromJsDoc")
+    // A multiline backend `@returns` is collapsed to a single line so the inline cast is valid.
+    expect(userContents).toContain("@returns {Promise<{ first: string, second: number }>} - Command response.")
+    expect(userContents).toContain("/** @type {{ first: string, second: number }} */ (await this.executeCustomCommand({")
+    expect(userContents).not.toContain("*   first: string")
 
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })

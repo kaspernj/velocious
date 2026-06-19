@@ -1852,13 +1852,25 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       throw new Error(`Could not parse JSDoc return type from: ${jsDocText}`)
     }
 
-    const returnType = jsDocText.slice(typeOpenIndex + 1, typeCloseIndex).trim()
+    const returnType = this.normalizeJsDocType(jsDocText.slice(typeOpenIndex + 1, typeCloseIndex))
 
     if (returnType.length < 1) {
       throw new Error(`Expected non-empty JSDoc return type in: ${jsDocText}`)
     }
 
     return returnType
+  }
+
+  /**
+   * Collapses a JSDoc type spanning multiple comment lines into a single line so it can
+   * be emitted into an inline type-assertion cast. A multiline backend return type keeps
+   * its leading continuation asterisks in the captured substring, which are invalid inside
+   * an inline cast and make TypeScript read the asserted type as `undefined`.
+   * @param {string} jsDocType - Raw captured JSDoc type, possibly multiline.
+   * @returns {string} - Single-line JSDoc type.
+   */
+  normalizeJsDocType(jsDocType) {
+    return jsDocType.replace(/\s*\n\s*\*?[ \t]*/g, " ").trim()
   }
 
   /**
@@ -1879,7 +1891,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         throw new Error(`Could not parse JSDoc parameter type from: ${jsDocText}`)
       }
 
-      const type = jsDocText.slice(typeOpenIndex + 1, typeCloseIndex).trim()
+      const type = this.normalizeJsDocType(jsDocText.slice(typeOpenIndex + 1, typeCloseIndex))
 
       if (type.length < 1) {
         throw new Error(`Expected non-empty JSDoc parameter type in: ${jsDocText}`)

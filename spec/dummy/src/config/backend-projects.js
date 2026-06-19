@@ -142,6 +142,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "delayedLookupByEmail",
         "echoMessage",
         "echoObjectStyle",
+        "multiLineReturn",
         {name: "echoOverride", returnType: "{fromConfig: boolean}"}
       ],
       memberCommands: ["refreshProfile", "echoMemberPayload"]
@@ -182,6 +183,18 @@ class UserFrontendResource extends FrontendModelBaseResource {
   /** @returns {Promise<{fromJsDoc: boolean}>} - JSDoc response the explicit resourceConfig returnType overrides. */
   async echoOverride() {
     return {fromJsDoc: true}
+  }
+
+  /**
+   * Has a multiline `@returns` so the generator must collapse it into a single line
+   * before emitting the inline cast (a multiline cast makes TypeScript read `undefined`).
+   * @returns {Promise<{
+   *   first: string,
+   *   second: number
+   * }>} - Multiline response.
+   */
+  async multiLineReturn() {
+    return {first: "x", second: 1}
   }
 
   /** @returns {Promise<{success: true}>} */
