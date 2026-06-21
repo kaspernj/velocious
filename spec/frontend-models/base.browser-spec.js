@@ -197,6 +197,7 @@ FrontendModelBase.registerModel(Project)
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
     shared: undefined,
+    timeZone: undefined,
     url: undefined,
     websocketClient: undefined
   })
@@ -339,6 +340,17 @@ function configureBrowserTransport() {
   const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
 
   FrontendModelBase.configureTransport({
+    url: `http://127.0.0.1:${backendPort}`
+  })
+}
+
+/** @returns {void} */
+function configureBrowserTransportWithTimeZone() {
+  const configuredPort = Number(process.env.VELOCIOUS_BROWSER_BACKEND_PORT)
+  const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
+
+  FrontendModelBase.configureTransport({
+    timeZone: () => "Europe/Berlin",
     url: `http://127.0.0.1:${backendPort}`
   })
 }
@@ -675,17 +687,17 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
     }
   })
 
-  it("findBy treats timezone-less datetime strings as UTC over real browser HTTP requests", async () => {
+  it("findBy applies the request timezone to timezone-less datetime strings over real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return
     }
 
-    configureBrowserTransport()
+    configureBrowserTransportWithTimeZone()
 
     try {
       await seedUsers()
 
-      const model = await User.findBy({createdAt: "2026-02-18 08:00:00.000"})
+      const model = await User.findBy({createdAt: "2026-02-18 09:00:00.000"})
 
       expect(model?.id()).toEqual(1)
       expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")

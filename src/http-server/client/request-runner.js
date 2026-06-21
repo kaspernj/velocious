@@ -7,6 +7,7 @@ import Logger from "../../logger.js"
 import RequestTiming from "./request-timing.js"
 import Response from "./response.js"
 import RoutesResolver from "../../routes/resolver.js"
+import {REQUEST_TIME_ZONE_HEADER} from "../../time-zone.js"
 
 /**
  * Runs stack frame line.
@@ -223,9 +224,10 @@ export default class VelociousHttpServerClientRequestRunner {
 
         setRequestTimeoutSeconds(configuration.getRequestTimeoutMs?.())
 
+        /** @type {Promise<void> | undefined} */
         let resolvePromise
 
-        try {
+        const runResolvedRequest = async () => {
           resolvePromise = routesResolver.resolve()
           // Keep Promise.race here to allow dynamic timeout updates.
           await Promise.race([resolvePromise, timeoutPromise])
@@ -236,6 +238,16 @@ export default class VelociousHttpServerClientRequestRunner {
             hasFilePath: Boolean(response.getFilePath()),
             bodyType: responseBodyTypeForLog(response)
           }])
+        }
+
+        try {
+          const requestTimeZone = request.header(REQUEST_TIME_ZONE_HEADER)
+
+          if (requestTimeZone !== undefined && requestTimeZone !== null) {
+            await configuration.runWithTimezone(requestTimeZone, runResolvedRequest)
+          } else {
+            await runResolvedRequest()
+          }
         } catch (error) {
           if (timedOut && resolvePromise) {
             void resolvePromise.catch((resolveError) => {

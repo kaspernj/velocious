@@ -49,12 +49,18 @@ describe("Record - datetime persistence", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("treats timezone-less datetime strings as UTC", async () => {
-    const task = new Task({name: "UTC string task", createdAt: "2025-06-12 12:34:56.789"})
-    const createdAt = task.createdAt()
+  it("interprets timezone-less datetime strings in the current request timezone", async () => {
+    await Configuration.current().getEnvironmentHandler().runWithTimezone("Europe/Berlin", async () => {
+      const winterTask = new Task({name: "Winter local string task", createdAt: "2026-02-18 09:00:00.000"})
+      const summerTask = new Task({name: "Summer local string task", createdAt: "2026-06-21 08:00:00.000"})
+      const winterCreatedAt = winterTask.createdAt()
+      const summerCreatedAt = summerTask.createdAt()
 
-    expect(createdAt).toBeInstanceOf(Date)
-    expectTimestampMatches(createdAt, new Date("2025-06-12T12:34:56.789Z"))
+      expect(winterCreatedAt).toBeInstanceOf(Date)
+      expect(summerCreatedAt).toBeInstanceOf(Date)
+      expectTimestampMatches(winterCreatedAt, new Date("2026-02-18T08:00:00.000Z"))
+      expectTimestampMatches(summerCreatedAt, new Date("2026-06-21T06:00:00.000Z"))
+    })
   })
 
   it("does not apply timezoneOffsetMinutes to persisted datetime values", async () => {

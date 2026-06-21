@@ -2315,7 +2315,7 @@ export default class FrontendModelController extends Controller {
       const isDateTimeColumn = typeof columnType === "string" && ["date", "datetime", "timestamp"].some((type) => columnType.includes(type))
 
       if (isDateTimeColumn) {
-        const parsedDate = normalizeDateStringForWrite(value)
+        const parsedDate = normalizeDateStringForWrite(value, {timeZone: this.getConfiguration().getEnvironmentHandler().getTimeZone(this.getConfiguration())})
 
         if (isDate(parsedDate)) {
           return parsedDate
@@ -3042,7 +3042,7 @@ export default class FrontendModelController extends Controller {
       json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue({
         errorMessage: frontendModelClientSafeErrorMessage,
         status: "error"
-      }))
+      }, this.transportSerializationOptions()))
     })
   }
 
@@ -3203,7 +3203,7 @@ export default class FrontendModelController extends Controller {
       if (!responsePayload) return
 
       await this.render({
-        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(responsePayload))
+        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(responsePayload, this.transportSerializationOptions()))
       })
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({action, commandType: action, error})
@@ -3211,7 +3211,7 @@ export default class FrontendModelController extends Controller {
       await this.frontendModelLogEndpointError({action, commandType: action, error, model: errorContext.model})
 
       await this.render({
-        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext)))
+        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext), this.transportSerializationOptions()))
       })
     }
   }
@@ -3529,7 +3529,7 @@ export default class FrontendModelController extends Controller {
       json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue({
         responses,
         status: "success"
-      }))
+      }, this.transportSerializationOptions()))
     })
   }
 
@@ -3736,7 +3736,7 @@ export default class FrontendModelController extends Controller {
       const responsePayload = await this.frontendModelCustomCommandPayload()
 
       await this.render({
-        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(responsePayload))
+        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(responsePayload, this.transportSerializationOptions()))
       })
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({action: "frontendCustomCommand", commandType: "custom-command", error})
@@ -3744,7 +3744,7 @@ export default class FrontendModelController extends Controller {
       await this.frontendModelLogEndpointError({action: errorContext.action, commandType: errorContext.commandType, error, model: errorContext.model})
 
       await this.render({
-        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext)))
+        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext), this.transportSerializationOptions()))
       })
     }
   }

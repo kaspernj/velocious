@@ -84,6 +84,18 @@ export default class VelociousController {
   getRequest() { return this._request }
 
   /**
+   * Runs transport serialization options.
+   * @returns {import("./frontend-models/transport-serialization.js").FrontendModelTransportSerializationOptions} - Serialization options.
+   */
+  transportSerializationOptions() {
+    const configuration = this.getConfiguration()
+
+    return {
+      timeZone: configuration.getEnvironmentHandler().getTimeZone(configuration)
+    }
+  }
+
+  /**
    * Runs set cookie.
    * @param {string} name - Cookie name.
    * @param {?} value - Cookie value.
@@ -257,7 +269,7 @@ export default class VelociousController {
    */
   renderJsonArg(json) {
     return this._measureViewRender(() => {
-      const body = JSON.stringify(serializeFrontendModelTransportValue(json))
+      const body = JSON.stringify(serializeFrontendModelTransportValue(json, this.transportSerializationOptions()))
 
       this._response.setHeader("Content-Type", "application/json; charset=UTF-8")
       this._response.setBody(body)

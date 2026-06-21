@@ -5,10 +5,11 @@ import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import FrontendModelQuery, {frontendModelEventOptionsPayload} from "./query.js"
 import FrontendModelPreloader from "./preloader.js"
-import { normalizeDateStringForWrite } from "../database/datetime-storage.js"
+import {normalizeDateStringForWrite} from "../database/datetime-storage.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {REQUEST_TIME_ZONE_HEADER, validateTimeZone} from "../time-zone.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 import {defineModelScope} from "../utils/model-scope.js"
@@ -102,6 +103,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @property {{post: (path: string, body?: ?, options?: {headers?: Record<string, string>}) => Promise<{json: () => ?}>, subscribe: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
  * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
+ * @property {string | (() => string | null | undefined)} [timeZone] - IANA timezone sent with every frontend-model API request for timezone-less datetime parsing.
  */
 /**
  * FrontendModelIdleWaitArgs type.
@@ -1591,15 +1593,63 @@ function frontendModelTransportPath(url) {
 }
 
 /**
+ * Resolves the browser runtime timezone when available.
+ * @returns {string | undefined} - Browser runtime timezone when available.
+ */
+function defaultFrontendModelTimeZone() {
+  if (typeof window === "undefined") return undefined
+
+  const intl = globalThis.Intl
+
+  if (!intl) return undefined
+  if (typeof intl.DateTimeFormat !== "function") {
+    throw new Error("Expected Intl.DateTimeFormat to be available as a function")
+  }
+
+  const timeZone = intl.DateTimeFormat().resolvedOptions().timeZone
+
+  if (typeof timeZone !== "string" || timeZone.trim().length < 1) return undefined
+
+  return validateTimeZone(timeZone, "browser timeZone")
+}
+
+/**
+ * Resolves the configured frontend-model request timezone.
+ * @returns {string | undefined} - Configured frontend-model timezone.
+ */
+function frontendModelTransportTimeZone() {
+  if (!Object.prototype.hasOwnProperty.call(frontendModelTransportConfig, "timeZone")) {
+    return defaultFrontendModelTimeZone()
+  }
+
+  const timeZone = typeof frontendModelTransportConfig.timeZone === "function"
+    ? frontendModelTransportConfig.timeZone()
+    : frontendModelTransportConfig.timeZone
+
+  if (timeZone === undefined || timeZone === null) {
+    throw new Error("Frontend model transport timeZone did not resolve to a timezone string")
+  }
+
+  return validateTimeZone(timeZone, "frontend model transport timeZone")
+}
+
+/**
  * Runs frontend model request headers.
+ * @param {string | undefined} [timeZone] - Pre-resolved timezone for this request.
  * @returns {Record<string, string>} - Headers for frontend-model HTTP requests.
  */
-function frontendModelRequestHeaders() {
+function frontendModelRequestHeaders(timeZone = frontendModelTransportTimeZone()) {
   const dynamicHeaders = typeof frontendModelTransportConfig.requestHeaders === "function"
     ? (frontendModelTransportConfig.requestHeaders() || {})
     : (frontendModelTransportConfig.requestHeaders || {})
+  /** @type {Record<string, string>} */
+  const headers = {"Content-Type": "application/json", ...dynamicHeaders}
 
-  return {"Content-Type": "application/json", ...dynamicHeaders}
+  if (timeZone) {
+    headers[REQUEST_TIME_ZONE_HEADER] = timeZone
+  }
+
+  return headers
 }
 
 /**
@@ -1608,10 +1658,11 @@ function frontendModelRequestHeaders() {
  * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
  */
 async function performSharedFrontendModelApiRequest(requestPayload) {
-  const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload)
+  const timeZone = frontendModelTransportTimeZone()
+  const serializedRequestPayload = serializeFrontendModelTransportValue(requestPayload, {timeZone})
   const websocketClient = frontendModelTransportConfig.websocketClient
   const url = frontendModelApiUrl()
-  const mergedHeaders = frontendModelRequestHeaders()
+  const mergedHeaders = frontendModelRequestHeaders(timeZone)
 
   if (websocketClient) {
     const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
@@ -2710,6 +2761,14 @@ export default class FrontendModelBase {
       frontendModelTransportConfig.requestHeaders = config.requestHeaders
     }
 
+    if (Object.prototype.hasOwnProperty.call(config, "timeZone")) {
+      if (config.timeZone === undefined) {
+        delete frontendModelTransportConfig.timeZone
+      } else {
+        frontendModelTransportConfig.timeZone = config.timeZone
+      }
+    }
+
     if (Object.prototype.hasOwnProperty.call(config, "sessionStore")) {
       frontendModelTransportConfig.sessionStore = config.sessionStore
       // Reset cached internal client so the new sessionStore is picked up.
@@ -3706,7 +3765,7 @@ export default class FrontendModelBase {
    */
   static findByPrimitiveValuesMatch(actualValue, expectedValue) {
     if (actualValue instanceof Date && typeof expectedValue === "string") {
-      const normalizedExpectedValue = normalizeDateStringForWrite(expectedValue)
+      const normalizedExpectedValue = normalizeDateStringForWrite(expectedValue, {timeZone: frontendModelTransportTimeZone()})
 
       if (normalizedExpectedValue instanceof Date) {
         return actualValue.toISOString() === normalizedExpectedValue.toISOString()
@@ -4183,7 +4242,8 @@ export default class FrontendModelBase {
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
-    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
+    const timeZone = frontendModelTransportTimeZone()
+    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
     const resourcePath = this.resourcePath()
     const containsAttachmentUpload = frontendModelPayloadContainsAttachmentUpload(serializedPayload)
     const useSharedTransport = !containsAttachmentUpload
@@ -4219,7 +4279,7 @@ export default class FrontendModelBase {
       const directResponse = await fetch(url, {
         body: JSON.stringify(serializedPayload),
         credentials: "include",
-        headers: frontendModelRequestHeaders(),
+        headers: frontendModelRequestHeaders(timeZone),
         method: "POST"
       })
 
@@ -4257,7 +4317,8 @@ export default class FrontendModelBase {
    * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Decoded response payload.
    */
   static async executeCustomCommand({commandName, commandType, memberId = null, payload, resourcePath}) {
-    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload))
+    const timeZone = frontendModelTransportTimeZone()
+    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
     const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,

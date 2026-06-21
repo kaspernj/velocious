@@ -49,6 +49,7 @@
   "homepage": "https://github.com/kaspernj/velocious#readme",
   "description": "",
   "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
     "awaitery": "^1.0.6",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",

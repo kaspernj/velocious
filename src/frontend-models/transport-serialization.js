@@ -2,6 +2,7 @@
 
 import {resolveFrontendModelClass} from "./model-registry.js"
 import isPlainObject from "../utils/plain-object.js"
+import {formatDateInTimeZone, validateTimeZone} from "../time-zone.js"
 
 const TYPE_KEY = "__velocious_type"
 const TYPE_DATE = "date"
@@ -13,6 +14,18 @@ const NUMBER_NAN = "NaN"
 const NUMBER_POSITIVE_INFINITY = "Infinity"
 const NUMBER_NEGATIVE_INFINITY = "-Infinity"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
+
+/**
+ * Frontend model transport serialization options.
+ * @typedef {object} FrontendModelTransportSerializationOptions
+ * @property {string | undefined} [timeZone] - IANA timezone used when serializing Date instants.
+ */
+
+/**
+ * Normalized frontend model transport serialization options.
+ * @typedef {object} NormalizedFrontendModelTransportSerializationOptions
+ * @property {string | undefined} timeZone - Validated IANA timezone used when serializing Date instants.
+ */
 
 /**
  * Assign a key to a plain object without triggering the `__proto__` setter.
@@ -150,9 +163,10 @@ export function isBackendModelInstance(value) {
  * Runs serialize frontend model transport value internal.
  * @param {?} value - Value to serialize.
  * @param {WeakSet<object>} seenModels - Models already visited in the current recursion path.
+ * @param {NormalizedFrontendModelTransportSerializationOptions} options - Serialization options.
  * @returns {?} - Serialized value with transport markers.
  */
-function serializeFrontendModelTransportValueInternal(value, seenModels) {
+function serializeFrontendModelTransportValueInternal(value, seenModels, options) {
   if (value === undefined) {
     return {[TYPE_KEY]: TYPE_UNDEFINED}
   }
@@ -160,7 +174,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
   if (value instanceof Date) {
     return {
       [TYPE_KEY]: TYPE_DATE,
-      value: value.toISOString()
+      value: options.timeZone ? formatDateInTimeZone(value, options.timeZone) : value.toISOString()
     }
   }
 
@@ -183,7 +197,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
   }
 
   if (Array.isArray(value)) {
-    return value.map((entry) => serializeFrontendModelTransportValueInternal(entry, seenModels))
+    return value.map((entry) => serializeFrontendModelTransportValueInternal(entry, seenModels, options))
   }
 
   if (isBackendModelInstance(value)) {
@@ -195,7 +209,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
      * @type {Record<string, ?>} */
     const serializedModel = {
       [TYPE_KEY]: TYPE_FRONTEND_MODEL,
-      attributes: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels)),
+      attributes: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels, options)),
       modelName
     }
 
@@ -220,7 +234,8 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
 
       assignSafeProperty(preloadedRelationships, relationshipName, serializeFrontendModelTransportValueInternal(
         loadedRelationship == undefined ? null : loadedRelationship,
-        seenModels
+        seenModels,
+        options
       ))
     }
 
@@ -240,13 +255,26 @@ function serializeFrontendModelTransportValueInternal(value, seenModels) {
     const serialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
-      assignSafeProperty(serialized, key, serializeFrontendModelTransportValueInternal(nestedValue, seenModels))
+      assignSafeProperty(serialized, key, serializeFrontendModelTransportValueInternal(nestedValue, seenModels, options))
     }
 
     return serialized
   }
 
   return value
+}
+
+/**
+ * Normalizes serializer options once per top-level serialization.
+ * @param {FrontendModelTransportSerializationOptions} options - Serialization options.
+ * @returns {NormalizedFrontendModelTransportSerializationOptions} - Normalized options.
+ */
+function normalizeFrontendModelTransportSerializationOptions(options) {
+  return {
+    timeZone: options.timeZone === undefined
+      ? undefined
+      : validateTimeZone(options.timeZone, "transport serialization timeZone")
+  }
 }
 
 /**
@@ -292,10 +320,15 @@ function deserializeFrontendModelMarker(marker) {
 /**
  * Runs the serializeFrontendModelTransportValue helper.
  * @param {?} value - Value to serialize.
+ * @param {FrontendModelTransportSerializationOptions} [options] - Serialization options.
  * @returns {?} - Serialized value with transport markers.
  */
-export function serializeFrontendModelTransportValue(value) {
-  return serializeFrontendModelTransportValueInternal(value, new WeakSet())
+export function serializeFrontendModelTransportValue(value, options = {}) {
+  return serializeFrontendModelTransportValueInternal(
+    value,
+    new WeakSet(),
+    normalizeFrontendModelTransportSerializationOptions(options)
+  )
 }
 
 /**

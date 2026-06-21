@@ -11,6 +11,17 @@ const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
+ * Runs transport serialization options for a configuration.
+ * @param {import("../configuration.js").default} configuration - Configuration instance.
+ * @returns {import("./transport-serialization.js").FrontendModelTransportSerializationOptions} - Serialization options.
+ */
+function transportSerializationOptionsForConfiguration(configuration) {
+  return {
+    timeZone: configuration.getEnvironmentHandler().getTimeZone(configuration)
+  }
+}
+
+/**
  * Defines this typedef.
  * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
  */
@@ -164,9 +175,15 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         return
       }
 
+      const configuration = this.session.configuration
+
+      if (!configuration) {
+        throw new Error("Frontend model websocket channel has no configuration for transport serialization")
+      }
+
       deliverBody = {
         ...deliverBody,
-        record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord))
+        record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord, transportSerializationOptionsForConfiguration(configuration)))
       }
     }
 

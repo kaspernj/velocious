@@ -32,10 +32,11 @@ import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import {timingSafeEqual} from "node:crypto"
 import toImportSpecifier from "../utils/to-import-specifier.js"
+import {validateTimeZone} from "../time-zone.js"
 
 /**
  * Defines this typedef.
- * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?}} TimezoneStore */
+ * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?, timeZone?: string}} TimezoneStore */
 
 /**
  * Runs path within allowed prefixes.
@@ -217,7 +218,30 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       ability: existingStore?.ability,
       offsetMinutes,
       requestTiming: existingStore?.requestTiming,
-      tenant: existingStore?.tenant
+      tenant: existingStore?.tenant,
+      timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
+    }, callback)
+  }
+
+  /**
+   * Runs run with timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @param {() => Promise<?>} callback - Callback to run.
+   * @returns {Promise<?>} - Result of the callback.
+   */
+  async runWithTimezone(timeZone, callback) {
+    if (!this._timezoneAsyncLocalStorage) {
+      return await super.runWithTimezone(timeZone, callback)
+    }
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return await this._timezoneAsyncLocalStorage.run({
+      ability: existingStore?.ability,
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      requestTiming: existingStore?.requestTiming,
+      tenant: existingStore?.tenant,
+      timeZone: validateTimeZone(timeZone, "timeZone")
     }, callback)
   }
 
@@ -240,7 +264,37 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         ability: existingStore?.ability,
         offsetMinutes,
         requestTiming: existingStore?.requestTiming,
-        tenant: existingStore?.tenant
+        tenant: existingStore?.tenant,
+        timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
+      })
+    }
+  }
+
+  /**
+   * Runs set timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @returns {void} - No return value.
+   */
+  setTimezone(timeZone) {
+    if (!this._timezoneAsyncLocalStorage) {
+      super.setTimezone(timeZone)
+      return
+    }
+
+    const normalizedTimeZone = validateTimeZone(timeZone, "timeZone")
+    const store = this._timezoneAsyncLocalStorage.getStore()
+
+    if (store) {
+      store.timeZone = normalizedTimeZone
+    } else {
+      const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+      this._timezoneAsyncLocalStorage.enterWith({
+        ability: existingStore?.ability,
+        offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+        requestTiming: existingStore?.requestTiming,
+        tenant: existingStore?.tenant,
+        timeZone: normalizedTimeZone
       })
     }
   }
@@ -263,6 +317,23 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * Runs get timezone.
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {string | undefined} - Timezone identifier.
+   */
+  getTimeZone(configuration) {
+    if (this._timezoneAsyncLocalStorage) {
+      const store = this._timezoneAsyncLocalStorage.getStore()
+
+      if (store && typeof store.timeZone === "string") {
+        return store.timeZone
+      }
+    }
+
+    return super.getTimeZone(configuration)
+  }
+
+  /**
    * Runs run with ability.
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
    * @param {() => Promise<?>} callback - Callback.
@@ -279,7 +350,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       ability,
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming: existingStore?.requestTiming,
-      tenant: existingStore?.tenant
+      tenant: existingStore?.tenant,
+      timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
 
@@ -303,7 +375,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         ability,
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
         requestTiming: undefined,
-        tenant: undefined
+        tenant: undefined,
+        timeZone: this.getTimeZone(this.getConfiguration())
       })
     }
   }
@@ -337,7 +410,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       ability: existingStore?.ability,
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming,
-      tenant: existingStore?.tenant
+      tenant: existingStore?.tenant,
+      timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
 
@@ -370,7 +444,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       ability: existingStore?.ability,
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming: existingStore?.requestTiming,
-      tenant
+      tenant,
+      timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
 
@@ -394,7 +469,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         ability: undefined,
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
         requestTiming: undefined,
-        tenant
+        tenant,
+        timeZone: this.getTimeZone(this.getConfiguration())
       })
     }
   }
