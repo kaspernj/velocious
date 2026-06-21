@@ -1227,4 +1227,28 @@ export default class ReportResource extends FrontendModelBaseResource {
 
     expect(returnTypes.get("CleanResource.index")).toEqual("Promise<number>")
   })
+
+  it("only treats single all-optional object-literal args as omittable", () => {
+    const configuration = /** @type {any} */ ({getEnvironmentHandler: () => ({})})
+    const command = new DbGenerateFrontendModels({args: {configuration}, cli: /** @type {any} */ (null)})
+
+    // Accept `{}`: object literals with only optional and/or index-signature members.
+    expect(command.argTypeAcceptsEmptyObject("{note?: string | null}")).toEqual(true)
+    expect(command.argTypeAcceptsEmptyObject("{a?: string[] | null, b?: number}")).toEqual(true)
+    expect(command.argTypeAcceptsEmptyObject("{ [key: string]: unknown }")).toEqual(true)
+    expect(command.argTypeAcceptsEmptyObject("{a?: {nested: string}}")).toEqual(true)
+
+    // Stay required: a required member makes `{}` unassignable.
+    expect(command.argTypeAcceptsEmptyObject("{accountId: string}")).toEqual(false)
+    expect(command.argTypeAcceptsEmptyObject("{a?: string, b: number}")).toEqual(false)
+    // Intersections/unions that merely start `{` and end `}` are not single literals.
+    expect(command.argTypeAcceptsEmptyObject("{a?: string} & {b: string}")).toEqual(false)
+    expect(command.argTypeAcceptsEmptyObject("{a?: string} | {b: string}")).toEqual(false)
+    // Non-object-literals (positional primitives, Record/Partial wrappers that may still
+    // require data such as fixed-key Records) are conservatively kept required.
+    expect(command.argTypeAcceptsEmptyObject("number")).toEqual(false)
+    expect(command.argTypeAcceptsEmptyObject("Record<string, unknown>")).toEqual(false)
+    expect(command.argTypeAcceptsEmptyObject("Record<\"accountId\", string>")).toEqual(false)
+    expect(command.argTypeAcceptsEmptyObject("Partial<Filters> & {accountId: string}")).toEqual(false)
+  })
 })
