@@ -1474,10 +1474,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     if (metadata.args.length > 0) {
       const parameterNames = metadata.args.map((arg) => arg.name)
+      // A single args object whose every field is optional accepts `{}`, so default
+      // the parameter and mark it optional — callers can then omit it entirely
+      // (`record.command()` instead of `record.command({})`). Required-field args keep
+      // the mandatory parameter (a `{}` default wouldn't satisfy their type).
+      const defaultsToEmptyObject = metadata.args.length === 1 && this.argTypeAcceptsEmptyObject(metadata.args[0].type)
 
       return {
-        paramDocs: metadata.args.map((arg) => `   * @param {${arg.type}} ${arg.name} - Command argument.\n`).join(""),
-        parameters: parameterNames.join(", "),
+        paramDocs: metadata.args.map((arg) => `   * @param {${arg.type}} ${defaultsToEmptyObject ? `[${arg.name}]` : arg.name} - Command argument.\n`).join(""),
+        parameters: defaultsToEmptyObject ? `${parameterNames[0]} = {}` : parameterNames.join(", "),
         payloadArguments: `[${parameterNames.join(", ")}]`,
         returnType
       }
@@ -1489,6 +1494,94 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       payloadArguments: "commandArguments",
       returnType
     }
+  }
+
+  /**
+   * Whether a single command-args JSDoc type accepts an empty object `{}` — i.e. an
+   * object literal whose top-level members are all optional (`name?:` or an index
+   * signature `[k: ...]:`), or a `Record<...>` / `Partial<...>` wrapper. Anything that
+   * can't be confidently classified (a required member, a non-object-literal such as a
+   * positional `number`, an intersection) returns false so the parameter stays required.
+   * @param {string} type - The arg's JSDoc type string.
+   * @returns {boolean} - Whether the generated parameter can default to `{}`.
+   */
+  argTypeAcceptsEmptyObject(type) {
+    const trimmedType = type.trim()
+
+    if (/^(Record|Partial)\s*</.test(trimmedType)) return true
+    if (!(trimmedType.startsWith("{") && trimmedType.endsWith("}"))) return false
+
+    const inner = trimmedType.slice(1, -1)
+
+    for (const member of this.splitTopLevelTypeMembers(inner)) {
+      const colonIndex = this.topLevelColonIndex(member)
+
+      // No top-level colon: a call/construct/mapped signature or malformed member —
+      // can't confirm it's optional, so treat the type as not empty-defaultable.
+      if (colonIndex < 0) return false
+
+      const key = member.slice(0, colonIndex).trim()
+
+      // Index signatures (`[k: string]`) don't require a value; optional props end in `?`.
+      // Anything else is a required property, so `{}` would not satisfy the type.
+      if (!key.startsWith("[") && !key.endsWith("?")) return false
+    }
+
+    return true
+  }
+
+  /**
+   * Splits the inner body of an object-literal type into its top-level members,
+   * respecting nested `{}` / `[]` / `<>` / `()` so field types like `string[] | null`
+   * or `{a: b}` aren't split mid-type. Members are separated by `,` or `;`.
+   * @param {string} inner - Object-literal body (without the outer braces).
+   * @returns {string[]} - Trimmed non-empty top-level members.
+   */
+  splitTopLevelTypeMembers(inner) {
+    const members = []
+    let depth = 0
+    let start = 0
+
+    for (let index = 0; index < inner.length; index += 1) {
+      const character = inner[index]
+
+      if (character === "{" || character === "[" || character === "<" || character === "(") {
+        depth += 1
+      } else if (character === "}" || character === "]" || character === ">" || character === ")") {
+        depth -= 1
+      } else if ((character === "," || character === ";") && depth === 0) {
+        members.push(inner.slice(start, index))
+        start = index + 1
+      }
+    }
+
+    members.push(inner.slice(start))
+
+    return members.map((member) => member.trim()).filter((member) => member.length > 0)
+  }
+
+  /**
+   * Index of the first top-level `:` in an object-literal member, ignoring colons
+   * nested inside `{}` / `[]` / `<>` / `()` (e.g. an index signature `[k: string]`).
+   * @param {string} member - A single object-literal member.
+   * @returns {number} - The colon index, or -1 when none is found at the top level.
+   */
+  topLevelColonIndex(member) {
+    let depth = 0
+
+    for (let index = 0; index < member.length; index += 1) {
+      const character = member[index]
+
+      if (character === "{" || character === "[" || character === "<" || character === "(") {
+        depth += 1
+      } else if (character === "}" || character === "]" || character === ">" || character === ")") {
+        depth -= 1
+      } else if (character === ":" && depth === 0) {
+        return index
+      }
+    }
+
+    return -1
   }
 
   /**

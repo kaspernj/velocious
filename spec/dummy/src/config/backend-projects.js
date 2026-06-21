@@ -142,6 +142,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "delayedLookupByEmail",
         "echoMessage",
         "echoObjectStyle",
+        "echoOptional",
         "multiLineReturn",
         {name: "echoOverride", returnType: "{fromConfig: boolean}"}
       ],
@@ -183,6 +184,16 @@ class UserFrontendResource extends FrontendModelBaseResource {
   /** @returns {Promise<{fromJsDoc: boolean}>} - JSDoc response the explicit resourceConfig returnType overrides. */
   async echoOverride() {
     return {fromJsDoc: true}
+  }
+
+  /**
+   * All its args are optional, so the generated frontend method must default the
+   * parameter (`echoOptional(args = {})`) and stay callable with no arguments.
+   * @param {{note?: string | null}} args - Optional echo arguments.
+   * @returns {Promise<{note: string | null}>} - Echo response.
+   */
+  async echoOptional(args) {
+    return {note: args.note ?? null}
   }
 
   /**

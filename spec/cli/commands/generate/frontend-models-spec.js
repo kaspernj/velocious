@@ -1145,8 +1145,13 @@ export default class ReportResource extends FrontendModelBaseResource {
     const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/user.js`, "utf8")
 
     // A string command whose method declares `@param {{...}} args` becomes a typed args parameter.
+    // Required fields keep the mandatory parameter (no `= {}` default).
     expect(userContents).toContain("static async echoMessage(args) {")
     expect(userContents).toContain("@param {{message: string, times: number}} args - Command argument.")
+    // All-optional args default the parameter so callers can omit it.
+    expect(userContents).toContain("static async echoOptional(args = {}) {")
+    expect(userContents).toContain("@param {{note?: string | null}} [args] - Command argument.")
+    expect(userContents).not.toContain("static async echoOptional(args) {")
     expect(userContents).toContain("@returns {Promise<{echoed: string, length: number}>} - Command response.")
     expect(userContents).toContain("normalizeCustomCommandPayloadArguments([args])")
     // The object-property `@param {object} args` + `args.label` style emits a single
