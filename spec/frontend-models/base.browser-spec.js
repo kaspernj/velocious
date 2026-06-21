@@ -375,6 +375,62 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
     }
   })
 
+  it("throws when the browser cannot resolve a timezone", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    const hadWindow = Object.prototype.hasOwnProperty.call(globalThis, "window")
+    const originalIntl = globalThis.Intl
+
+    try {
+      if (!hadWindow) {
+        Object.defineProperty(globalThis, "window", {
+          configurable: true,
+          value: {}
+        })
+      }
+
+      Object.defineProperty(globalThis, "Intl", {
+        configurable: true,
+        value: {
+          DateTimeFormat: () => ({
+            resolvedOptions: () => ({})
+          })
+        }
+      })
+
+      let thrownError = null
+
+      try {
+        await User.findBy({email: "jane@example.com"})
+      } catch (error) {
+        thrownError = error
+      }
+
+      expect(thrownError instanceof Error).toEqual(true)
+
+      if (!(thrownError instanceof Error)) {
+        throw new Error("Expected browser timezone detection to throw an Error")
+      }
+
+      expect(thrownError.message).toEqual("Expected Intl.DateTimeFormat to resolve a browser timezone string")
+    } finally {
+      Object.defineProperty(globalThis, "Intl", {
+        configurable: true,
+        value: originalIntl
+      })
+
+      if (!hadWindow) {
+        delete globalThis.window
+      }
+
+      resetFrontendModelTransport()
+    }
+  })
+
   it("uses resourceConfig.modelName for shared browser requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return

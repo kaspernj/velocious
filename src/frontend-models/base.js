@@ -1601,14 +1601,19 @@ function defaultFrontendModelTimeZone() {
 
   const intl = globalThis.Intl
 
-  if (!intl) return undefined
+  if (!intl) {
+    throw new Error("Expected Intl to be available for browser timezone detection")
+  }
+
   if (typeof intl.DateTimeFormat !== "function") {
     throw new Error("Expected Intl.DateTimeFormat to be available as a function")
   }
 
   const timeZone = intl.DateTimeFormat().resolvedOptions().timeZone
 
-  if (typeof timeZone !== "string" || timeZone.trim().length < 1) return undefined
+  if (typeof timeZone !== "string" || timeZone.trim().length < 1) {
+    throw new Error("Expected Intl.DateTimeFormat to resolve a browser timezone string")
+  }
 
   return validateTimeZone(timeZone, "browser timeZone")
 }
