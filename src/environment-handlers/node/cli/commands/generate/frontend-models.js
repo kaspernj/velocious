@@ -1497,19 +1497,23 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
-   * Whether a single command-args JSDoc type accepts an empty object `{}` — i.e. an
-   * object literal whose top-level members are all optional (`name?:` or an index
-   * signature `[k: ...]:`), or a `Record<...>` / `Partial<...>` wrapper. Anything that
-   * can't be confidently classified (a required member, a non-object-literal such as a
-   * positional `number`, an intersection) returns false so the parameter stays required.
+   * Whether a single command-args JSDoc type is known to accept an empty object `{}`:
+   * a single balanced object literal whose top-level members are all optional (`name?:`)
+   * or index signatures (`[k: ...]:`). Anything else returns false so the parameter stays
+   * required — including a required member, a non-object-literal (a positional `number`,
+   * a `Record<...>` / `Partial<...>` whose key/wrapper may still require data), and any
+   * intersection/union (e.g. `{a?: x} & {b: string}`), where `{}` is not assignable.
    * @param {string} type - The arg's JSDoc type string.
    * @returns {boolean} - Whether the generated parameter can default to `{}`.
    */
   argTypeAcceptsEmptyObject(type) {
     const trimmedType = type.trim()
 
-    if (/^(Record|Partial)\s*</.test(trimmedType)) return true
+    // Must be a single balanced object literal: starts with `{`, ends with `}`, and the
+    // opening brace closes only at the final character. This rejects intersections/unions
+    // like `{a?: x} & {b: string}` that merely happen to start `{` and end `}`.
     if (!(trimmedType.startsWith("{") && trimmedType.endsWith("}"))) return false
+    if (!this.isSingleBalancedObjectLiteral(trimmedType)) return false
 
     const inner = trimmedType.slice(1, -1)
 
@@ -1582,6 +1586,32 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     return -1
+  }
+
+  /**
+   * Whether the type is a single balanced object literal — its leading `{` closes only
+   * at the final character. Rejects top-level intersections/unions like `{a?: x} & {b: y}`
+   * or `{a?: x} | string` whose brace depth returns to 0 before the end.
+   * @param {string} type - A trimmed type string that starts with `{` and ends with `}`.
+   * @returns {boolean} - Whether the braces wrap the whole type.
+   */
+  isSingleBalancedObjectLiteral(type) {
+    let depth = 0
+
+    for (let index = 0; index < type.length; index += 1) {
+      const character = type[index]
+
+      if (character === "{" || character === "[" || character === "<" || character === "(") {
+        depth += 1
+      } else if (character === "}" || character === "]" || character === ">" || character === ")") {
+        depth -= 1
+
+        // The opening brace balanced before the end, so something follows the literal.
+        if (depth === 0 && index < type.length - 1) return false
+      }
+    }
+
+    return depth === 0
   }
 
   /**
