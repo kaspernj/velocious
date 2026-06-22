@@ -36,6 +36,11 @@ class CallFrontendResource extends FrontendModelBaseResource {
       }
     }
   }
+
+  /** @returns {Array<string>} - Permit spec for Call writes. */
+  permittedParams() {
+    return ["startedAt", "endedAt"]
+  }
 }
 
 class InferredCallFrontendResource extends FrontendModelBaseResource {
@@ -536,6 +541,8 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("@property {FrontendModelTransportValue | null} metadata - Attribute value.")
     expect(callContents).toContain("@property {boolean} active - Attribute value.")
     expect(callContents).toContain("@property {Date | null} endedAt - Attribute value.")
+    expect(callContents).toContain("@property {Date | string | null} [startedAt] - Permitted startedAt value.")
+    expect(callContents).toContain("@property {Date | string | null} [endedAt] - Permitted endedAt value.")
   })
 
   it("infers typed attribute typedefs from backend model columns for array attributes", async () => {
@@ -1168,6 +1175,9 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("@returns {Promise<{ first: string, second: number }>} - Command response.")
     expect(userContents).toContain("/** @type {{ first: string, second: number }} */ (await this.executeCustomCommand({")
     expect(userContents).not.toContain("*   first: string")
+    // A shared DTO outside the backend source tree remains resolvable from the generated model.
+    expect(userContents).toContain("@returns {Promise<import(\"../../shared/frontend-command-types.js\").SharedEchoResponse>} - Command response.")
+    expect(userContents).toContain("/** @type {import(\"../../shared/frontend-command-types.js\").SharedEchoResponse} */ (await this.executeCustomCommand({")
 
     await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })
@@ -1225,7 +1235,30 @@ export default class ReportResource extends FrontendModelBaseResource {
 
     command.addResourceMethodReturnTypesFromSource({returnTypes, sourceText})
 
-    expect(returnTypes.get("CleanResource.index")).toEqual("Promise<number>")
+    const returnType = returnTypes.get("CleanResource.index")
+
+    if (!returnType) throw new Error("Expected CleanResource.index return type")
+
+    expect(returnType.type).toEqual("Promise<number>")
+    expect(returnType.sourceFile).toEqual(null)
+    expect(returnType.importAliases.size).toEqual(0)
+  })
+
+  it("rejects backend-local ReturnType expressions in generated command types", () => {
+    const configuration = /** @type {any} */ ({
+      getBackendProjects: () => [],
+      getEnvironmentHandler: () => ({})
+    })
+    const command = new DbGenerateFrontendModels({args: {configuration}, cli: /** @type {any} */ (null)})
+
+    expect(() => {
+      command.frontendResolvableCommandJsDocType({
+        frontendModelFilePath: "/tmp/example-frontend/src/frontend-models/task.js",
+        importAliases: new Map(),
+        jsDocType: "{task: ReturnType<typeof serializeTask>}",
+        sourceFile: "/tmp/example-backend/src/resources/task.js"
+      })
+    }).toThrow(/Custom command JSDoc type cannot use backend-local ReturnType expressions/)
   })
 
   it("only treats single all-optional object-literal args as omittable", () => {

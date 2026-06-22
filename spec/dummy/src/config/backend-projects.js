@@ -6,6 +6,8 @@ import Project from "../models/project.js"
 import Task from "../models/task.js"
 import User from "../models/user.js"
 
+/** @import {SharedEchoResponse} from "../../shared/frontend-command-types.js" */
+
 class TaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
@@ -144,6 +146,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "echoObjectStyle",
         "echoOptional",
         "multiLineReturn",
+        "sharedEcho",
         {name: "echoOverride", returnType: "{fromConfig: boolean}"}
       ],
       memberCommands: ["refreshProfile", "echoMemberPayload"]
@@ -206,6 +209,11 @@ class UserFrontendResource extends FrontendModelBaseResource {
    */
   async multiLineReturn() {
     return {first: "x", second: 1}
+  }
+
+  /** @returns {Promise<SharedEchoResponse>} - Shared response. */
+  async sharedEcho() {
+    return {sharedLabel: "dummy"}
   }
 
   /** @returns {Promise<{success: true}>} */
