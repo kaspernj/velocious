@@ -22,6 +22,7 @@ import {requestDetails} from "./error-reporting/request-details.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
+import {validateTimeZone} from "./time-zone.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 
 export {CurrentConfigurationNotSetError}
@@ -125,7 +126,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -183,6 +184,7 @@ export default class VelociousConfiguration {
     this.locales = locales
     this._initializers = initializers
     this._testing = testing
+    this._timeZone = timeZone
     this._timezoneOffsetMinutes = timezoneOffsetMinutes
     this._trustedProxies = trustedProxies
     this._requestTimeoutMs = requestTimeoutMs
@@ -1849,6 +1851,20 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Runs get time zone.
+   * @returns {string | undefined} - Configured timezone identifier.
+   */
+  getTimeZone() {
+    const timeZone = typeof this._timeZone === "function"
+      ? this._timeZone()
+      : this._timeZone
+
+    if (timeZone === undefined || timeZone === null) return undefined
+
+    return validateTimeZone(timeZone, "configuration timeZone")
+  }
+
+  /**
    * Runs get websocket events.
    * @returns {import("./http-server/websocket-events.js").default | undefined} - The websocket events.
    */
@@ -2328,6 +2344,16 @@ export default class VelociousConfiguration {
    */
   async runWithRequestTiming(requestTiming, callback) {
     return await this.getEnvironmentHandler().runWithRequestTiming(requestTiming, callback)
+  }
+
+  /**
+   * Runs run with timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @param {() => Promise<?>} callback - Callback.
+   * @returns {Promise<?>} - Callback result.
+   */
+  async runWithTimezone(timeZone, callback) {
+    return await this.getEnvironmentHandler().runWithTimezone(timeZone, callback)
   }
 
   /**

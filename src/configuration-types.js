@@ -474,6 +474,7 @@
  * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
  * @property {Record<string, TenantDatabaseProviderType>} [tenantDatabaseProviders] - Tenant database lifecycle providers keyed by database identifier.
  * @property {string} [testing] - Path to the testing configuration file.
+ * @property {string | (() => string | undefined)} [timeZone] - Default timezone for timezone-less datetime strings.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.
  * @property {string | string[]} [trustedProxies] - Trusted reverse proxy address ranges used to resolve request remote addresses from forwarding headers.
  * @property {number | (() => number)} [requestTimeoutMs] - Timeout in seconds for completing a HTTP request.

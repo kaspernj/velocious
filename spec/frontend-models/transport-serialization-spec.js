@@ -64,6 +64,19 @@ describe("Frontend models - transport serialization", {databaseCleaning: {transa
     }
   })
 
+  it("serializes Date markers with the configured timezone offset", () => {
+    const payload = serializeFrontendModelTransportValue({
+      startsAt: new Date("2005-02-01T15:15:10.000Z")
+    }, {timeZone: "Pacific/Honolulu"})
+    const serialized = /** @type {{startsAt: {value: string}}} */ (payload)
+
+    expect(serialized.startsAt.value).toEqual("2005-02-01T05:15:10.000-10:00")
+
+    const deserialized = /** @type {{startsAt: Date}} */ (deserializeFrontendModelTransportValue(payload))
+
+    expect(deserialized.startsAt.toISOString()).toEqual("2005-02-01T15:15:10.000Z")
+  })
+
   it("hydrates serialized backend models into registered frontend models", () => {
     const backendTask = {
       attributes: () => ({

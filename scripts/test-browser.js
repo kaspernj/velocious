@@ -465,6 +465,7 @@ async function loadBrowserBackendConfiguration() {
 
   const dummyConfigurationImport = await import(pathToFileURL(dummyConfigurationPath).href)
   const backendConfiguration = dummyConfigurationImport.default
+  backendConfiguration.setEnvironment("test")
 
   const nodeEnvironmentHandler = new NodeEnvironmentHandler()
   nodeEnvironmentHandler.setConfiguration(backendConfiguration)

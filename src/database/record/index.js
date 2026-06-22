@@ -1800,7 +1800,7 @@ class VelociousDatabaseRecord {
    * @returns {?} - The date value.
    */
   _normalizeDateValue(value) {
-    return normalizeDateValueForWrite(value)
+    return normalizeDateValueForWrite(value, {timeZone: this.getModelClass()._timeZoneForDateWrite()})
   }
 
   /**
@@ -2164,7 +2164,7 @@ class VelociousDatabaseRecord {
    * @returns {?} - Normalized value.
    */
   static _normalizeDateValueForInsert(value) {
-    return normalizeDateValueForWrite(value)
+    return normalizeDateValueForWrite(value, {timeZone: this._timeZoneForDateWrite()})
   }
 
   /**
@@ -2173,7 +2173,17 @@ class VelociousDatabaseRecord {
    * @returns {string | Date} - Parsed date or original string.
    */
   static _normalizeDateStringForInsert(value) {
-    return normalizeDateStringForWrite(value)
+    return normalizeDateStringForWrite(value, {timeZone: this._timeZoneForDateWrite()})
+  }
+
+  /**
+   * Runs time zone for date writes.
+   * @returns {string | undefined} - Active timezone identifier.
+   */
+  static _timeZoneForDateWrite() {
+    const configuration = this._getConfiguration()
+
+    return configuration.getEnvironmentHandler().getTimeZone(configuration)
   }
 
   /**
@@ -3923,7 +3933,7 @@ class VelociousDatabaseRecord {
 
       const value = data[columnName]
 
-      data[columnName] = normalizeDateValueForWrite(value)
+      data[columnName] = normalizeDateValueForWrite(value, {timeZone: this.getModelClass()._timeZoneForDateWrite()})
     }
   }
 

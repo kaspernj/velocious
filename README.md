@@ -378,7 +378,7 @@ export default new Configuration({
 `frontendModels` entries must be `FrontendModelBaseResource` subclasses. Built-in CRUD/find/index/serialize behavior lives in the base class, and app resources override only the pieces they actually need.
 Resource-level index customization should prefer `indexQuery()` or the pagination/search/sort hooks over replacing `records()`, so built-in pluck and aggregate count support can keep using the same query. See [`docs/frontend-model-resources.md`](docs/frontend-model-resources.md) for the resource extension points.
 
-Custom class- and instance-level commands are declared via `collectionCommands` / `memberCommands`. Each entry is a plain camelCase method name, or a `{name, args?, returnType?}` object that types the command's arguments and response — e.g. `memberCommands: ["suspend", {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}]`. A command whose args are a single object literal with only optional fields generates an omittable parameter (`record.command()` works without passing `{}`); any required field keeps the argument mandatory. See [`docs/frontend-model-resources.md#custom-commands`](docs/frontend-model-resources.md#custom-commands).
+Custom class- and instance-level commands are declared via `collectionCommands` / `memberCommands`. Each entry is a plain camelCase method name, or a `{name, args?, returnType?}` object that types the command's arguments and response — e.g. `memberCommands: ["suspend", {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}]`. Plain string commands derive args and return types from the backend resource method JSDoc; shared DTO `@import` types outside the backend `src` tree are preserved in generated frontend models, while backend-local helper types such as `ReturnType<typeof serializePayload>` are rejected. A command whose args are a single object literal with only optional fields generates an omittable parameter (`record.command()` works without passing `{}`); any required field keeps the argument mandatory. See [`docs/frontend-model-resources.md#custom-commands`](docs/frontend-model-resources.md#custom-commands).
 
 Resources expose the full CRUD ability set (`create`, `destroy`, `read`, `update`) by default. To restrict the API surface — for example to a read-only resource — declare an explicit subset:
 
@@ -565,13 +565,15 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  url: "http://127.0.0.1:4501/frontend-models"
+  url: "http://127.0.0.1:4501/frontend-models",
+  timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone
 })
 ```
 
 Available transport options:
 
 - `url` (can also be a relative path like `"/frontend-models"` on web)
+- `timeZone` (an IANA timezone string or a function returning one). Browser clients auto-detect this when it is not configured. Frontend-model datetime strings without an explicit timezone are interpreted in this request timezone and stored/queried as UTC instants.
 
 Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle needs to wait for queued, scheduled, and active frontend-model transport requests to finish before resetting state.
 

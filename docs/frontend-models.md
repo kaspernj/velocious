@@ -3,6 +3,7 @@
 ## Core transport
 - Frontend models run over HTTP transport, not local database connections.
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
+- Browser transport sends the browser's IANA timezone automatically when it can be resolved. Use `FrontendModelBase.configureTransport({timeZone: "Europe/Berlin"})` or a function returning a timezone when an app needs to override it. Frontend-model datetime strings without an explicit timezone are interpreted in that request timezone before the backend stores or queries the UTC instant.
 - `FrontendModelBase.waitForIdle()` waits until queued, scheduled, and active frontend-model transport requests have resolved. Browser/system-test harnesses can call it during teardown before resetting app state.
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
 

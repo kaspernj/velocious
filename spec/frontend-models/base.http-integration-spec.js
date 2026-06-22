@@ -273,6 +273,7 @@ FrontendModelBase.registerModel(Project)
 /** @returns {void} */
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
+    timeZone: undefined,
     url: undefined,
     websocketClient: undefined
   })
@@ -281,6 +282,14 @@ function resetFrontendModelTransport() {
 /** @returns {void} */
 function configureNodeTransport() {
   FrontendModelBase.configureTransport({
+    url: "http://127.0.0.1:3006"
+  })
+}
+
+/** @returns {void} */
+function configureNodeTransportWithTimeZone() {
+  FrontendModelBase.configureTransport({
+    timeZone: () => "Europe/Berlin",
     url: "http://127.0.0.1:3006"
   })
 }
@@ -1038,15 +1047,15 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
-  it("findBy treats timezone-less datetime strings as UTC over real Node HTTP requests", async () => {
+  it("findBy applies the request timezone to timezone-less datetime strings over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
-      configureNodeTransport()
+      configureNodeTransportWithTimeZone()
 
       try {
         const {jane} = await seedHttpFrontendModels()
 
         await runWithProcessTimezone("Europe/Berlin", async () => {
-          const model = await User.findBy({createdAt: "2026-02-18 08:00:00.000"})
+          const model = await User.findBy({createdAt: "2026-02-18 09:00:00.000"})
 
           expect(model?.id()).toEqual(jane.id())
           expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")

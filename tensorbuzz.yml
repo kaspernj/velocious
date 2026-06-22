@@ -51,7 +51,8 @@ builds:
       mssql: &mssql_service
         environment:
           ACCEPT_EULA: Y
-          MSSQL_PID: Developer
+          MSSQL_MEMORY_LIMIT_MB: "2048"
+          MSSQL_PID: Express
           MSSQL_SA_PASSWORD: Super-Secret-Password
         healthcheck:
           test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -C -Q \"SELECT 1\" -b -o /dev/null || exit 1"]
@@ -61,7 +62,7 @@ builds:
           start_period: 300s
         healthcheck_restart_delay: 60
         healthcheck_restart_limit: 20
-        image: mcr.microsoft.com/mssql/server:2022-latest
+        image: mcr.microsoft.com/mssql/server:2022-CU24-ubuntu-22.04
         expose:
           - 1433
         mem_limit: 4096m

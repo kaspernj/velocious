@@ -23,13 +23,34 @@ import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigura
  * Permit spec returned by frontend-model resources during generation.
  * @typedef {Array<string | Record<string, FrontendModelGeneratorPermitSpec>>} FrontendModelGeneratorPermitSpec
  */
+/**
+ * JSDoc import alias extracted from a backend resource source file.
+ * @typedef {object} ResourceJsDocImportAlias
+ * @property {string} importedName - Exported type name.
+ * @property {string} specifier - Import specifier from the source file.
+ */
+/**
+ * JSDoc return type extracted from a backend resource method.
+ * @typedef {object} ResourceMethodReturnType
+ * @property {Map<string, ResourceJsDocImportAlias>} importAliases - Import aliases visible in the source file.
+ * @property {string | null} sourceFile - Source file that declared the method.
+ * @property {string} type - JSDoc return type.
+ */
+/**
+ * JSDoc parameter type extracted from a backend resource method.
+ * @typedef {object} ResourceMethodParameterType
+ * @property {Map<string, ResourceJsDocImportAlias>} importAliases - Import aliases visible in the source file.
+ * @property {string | null} name - Parameter name.
+ * @property {string | null} sourceFile - Source file that declared the method.
+ * @property {string} type - JSDoc parameter type.
+ */
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
-  /** @type {Map<string, string> | null} */
+  /** @type {Map<string, ResourceMethodReturnType> | null} */
   _resourceMethodReturnTypes = null
 
-  /** @type {Map<string, Array<{name: string | null, type: string}>> | null} */
+  /** @type {Map<string, ResourceMethodParameterType[]> | null} */
   _resourceMethodParameterTypes = null
 
   /**
@@ -128,6 +149,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
         const fileContent = await this.buildModelFileContent({
           className,
+          frontendModelFilePath: filePath,
           importPath,
           modelClass: resourceClass ? resourceClass.modelClass() : configuration.getModelClasses()[className],
           modelConfig,
@@ -253,13 +275,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * Runs build model file content.
    * @param {object} args - Method args.
    * @param {string} args.className - Model class name.
+   * @param {string} args.frontendModelFilePath - Generated frontend model file path.
    * @param {string} args.importPath - Base class import path.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.modelConfig - Model configuration.
    * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null} [args.resourceClass] - Resource class.
    * @returns {Promise<string>} - Generated file content.
    */
-  async buildModelFileContent({className, importPath, modelClass, modelConfig, resourceClass}) {
+  async buildModelFileContent({className, frontendModelFilePath, importPath, modelClass, modelConfig, resourceClass}) {
     const attributes = await this.attributeDefinitionsForModel({className, modelClass, modelConfig, resourceClass})
     const relationships = this.relationshipsForModel({className, modelConfig, resourceClass})
     const attachments = modelConfig.attachments && typeof modelConfig.attachments === "object"
@@ -292,6 +315,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     const commandMetadata = await this.commandMetadataWithResourceJsDoc({
       commandMetadata: declaredCommandMetadata,
       commandNames: [...Object.keys(collectionCommands), ...Object.keys(memberCommands)],
+      frontendModelFilePath,
       resourceClass
     })
     const builtInCollectionCommandsAreDefault = builtInCollectionCommands.create === "create" && builtInCollectionCommands.index === "index"
@@ -633,7 +657,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   /**
    * Runs write attributes typedef.
    * @param {object} args - Arguments.
-   * @param {Array<{jsDocType: string, name: string}>} args.attributes - Generated read attributes.
+   * @param {Array<{jsDocType: string, name: string, writeJsDocType: string}>} args.attributes - Generated read attributes.
    * @param {string} args.attributesTypeName - Generated read attributes typedef name.
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {Array<{attributes: Array<{name: string, type: string}>, relationshipName: string, typeName: string}>} args.nestedWriteTypes - Nested write typedefs.
@@ -691,7 +715,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Runs frontend write attribute type.
-   * @param {{attribute: {jsDocType: string, name: string} | undefined, attributeName: string, attributesTypeName: string, resourceClass: import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined}} args - Arguments.
+   * @param {{attribute: {jsDocType: string, name: string, writeJsDocType: string} | undefined, attributeName: string, attributesTypeName: string, resourceClass: import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined}} args - Arguments.
    * @returns {Promise<string>} - JSDoc type for the permitted write field.
    */
   async frontendWriteAttributeType({attribute, attributeName, attributesTypeName, resourceClass}) {
@@ -702,6 +726,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (!attribute) return "FrontendModelAttributeValue"
 
     if (attribute.jsDocType.trim() === "null") return "FrontendModelAttributeValue"
+
+    if (attribute.writeJsDocType !== attribute.jsDocType) return attribute.writeJsDocType
 
     return `${attributesTypeName}[${JSON.stringify(attribute.name)}] | null`
   }
@@ -823,7 +849,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       return {
         name: resolvedAttributeName,
-        type: attributeConfig ? this.jsDocTypeForFrontendAttribute({attributeConfig}) : "FrontendModelAttributeValue"
+        type: attributeConfig ? this.jsDocTypeForFrontendWriteAttribute({attributeConfig}) : "FrontendModelAttributeValue"
       }
     })
   }
@@ -979,7 +1005,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {typeof import("../../../../../database/record/index.js").default | undefined} args.modelClass - Backend model class.
    * @param {import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.modelConfig - Model configuration.
    * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null} [args.resourceClass] - Resource class.
-   * @returns {Promise<Array<{jsDocType: string, name: string}>>} - Attribute definitions.
+   * @returns {Promise<Array<{jsDocType: string, name: string, writeJsDocType: string}>>} - Attribute definitions.
    */
   async attributeDefinitionsForModel({className, modelClass, modelConfig, resourceClass}) {
     let attributes = modelConfig.attributes
@@ -1028,7 +1054,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
         attributeDefinitions.push({
           jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig: frontendAttributeConfig}),
-          name: attributeName
+          name: attributeName,
+          writeJsDocType: this.jsDocTypeForFrontendWriteAttribute({attributeConfig: frontendAttributeConfig})
         })
       }
 
@@ -1061,7 +1088,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
       attributeDefinitions.push({
         jsDocType: this.jsDocTypeForFrontendAttribute({attributeConfig: frontendAttributeConfig}),
-        name: attributeName
+        name: attributeName,
+        writeJsDocType: this.jsDocTypeForFrontendWriteAttribute({attributeConfig: frontendAttributeConfig})
       })
     }
 
@@ -1237,6 +1265,39 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   }
 
   /**
+   * Runs js doc type for frontend write attribute.
+   * @param {object} args - Arguments.
+   * @param {FrontendAttributeConfig | null | undefined} args.attributeConfig - Attribute configuration value.
+   * @returns {string} - JSDoc type accepted by create/update payloads.
+   */
+  jsDocTypeForFrontendWriteAttribute({attributeConfig}) {
+    if (attributeConfig && typeof attributeConfig.jsDocType == "string" && attributeConfig.jsDocType.length > 0) {
+      return attributeConfig.jsDocType
+    }
+
+    const jsDocType = this.jsDocTypeForFrontendWriteAttributeBaseType(attributeConfig)
+
+    if (!this.frontendAttributeCanBeNull(attributeConfig)) {
+      return jsDocType
+    }
+
+    return `${jsDocType} | null`
+  }
+
+  /**
+   * Runs js doc type for frontend write attribute base type.
+   * @param {FrontendAttributeConfig | null | undefined} attributeConfig - Attribute configuration value.
+   * @returns {string} - Non-nullable JSDoc type accepted by create/update payloads.
+   */
+  jsDocTypeForFrontendWriteAttributeBaseType(attributeConfig) {
+    const readType = this.jsDocTypeForFrontendAttributeBaseType(attributeConfig)
+
+    if (!this.frontendAttributeTypeIsTemporal(attributeConfig)) return readType
+
+    return `${readType} | string`
+  }
+
+  /**
    * Runs js doc type for frontend attribute base type.
    * @param {FrontendAttributeConfig | null | undefined} attributeConfig - Attribute configuration value.
    * @returns {string} - Non-nullable JSDoc type.
@@ -1256,11 +1317,24 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       return "string"
     } else if (type && ["bit", "bigint", "decimal", "double", "double precision", "float", "int", "integer", "numeric", "real", "smallint", "tinyint"].includes(type)) {
       return "number"
-    } else if (type && ["date", "datetime", "timestamp", "timestamp without time zone", "timestamptz"].includes(type)) {
+    } else if (this.frontendAttributeTypeIsTemporal(attributeConfig)) {
       return "Date"
     } else {
       return "FrontendModelAttributeValue"
     }
+  }
+
+  /**
+   * Runs frontend attribute type is temporal.
+   * @param {FrontendAttributeConfig | null | undefined} attributeConfig - Attribute configuration value.
+   * @returns {boolean} - Whether the attribute represents a date/time value.
+   */
+  frontendAttributeTypeIsTemporal(attributeConfig) {
+    if (!attributeConfig || typeof attributeConfig !== "object") return false
+
+    const type = this.frontendAttributeTypeValue(attributeConfig)
+
+    return type ? ["date", "datetime", "timestamp", "timestamp without time zone", "timestamptz"].includes(type) : false
   }
 
   /**
@@ -1437,25 +1511,209 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Rewrites a custom-command param/return JSDoc type so it resolves in the generated
-   * frontend model: each model-class (or otherwise non-frontend-resolvable) identifier
-   * becomes `any` in place, keeping the surrounding object fields typed. A command-result
-   * field holding a model arrives as a serialized transport value, so the consumer hydrates
-   * it with `Model.instantiateFromResponse(...)`. The word boundary avoids matching the
-   * capitalized middle of a camelCase property name (e.g. `adjustedTotalCents`).
-   * @param {string} jsDocType - Resolved (Promise-unwrapped) JSDoc type.
+   * frontend model: backend model imports are mapped to generated frontend model
+   * imports, and otherwise non-frontend-resolvable identifiers become `any` in place
+   * so sibling scalar fields keep their real types. The word boundary avoids matching
+   * the capitalized middle of a camelCase property name (e.g. `adjustedTotalCents`).
+   * @param {object} args - Arguments.
+   * @param {string | null} args.frontendModelFilePath - Generated frontend model file path.
+   * @param {Map<string, ResourceJsDocImportAlias>} args.importAliases - Import aliases visible to the source method.
+   * @param {string} args.jsDocType - Resolved (Promise-unwrapped) JSDoc type.
+   * @param {string | null} args.sourceFile - Source file that declared the method.
    * @returns {string} - A frontend-resolvable JSDoc type.
    */
-  frontendResolvableCommandJsDocType(jsDocType) {
+  frontendResolvableCommandJsDocType({frontendModelFilePath, importAliases, jsDocType, sourceFile}) {
     const safeTypeIdentifiers = this.frontendResolvableTypeIdentifiers()
+    /** @type {string[]} */
+    const preservedImports = []
+    /**
+     * Stores an import expression behind a lowercase placeholder while generic
+     * identifier cleanup runs.
+     * @param {string} importExpression - Import expression to preserve.
+     * @returns {string} Placeholder inserted into the type string.
+     */
+    const preserveImportExpression = (importExpression) => {
+      const placeholder = `__velocious_import_placeholder_${preservedImports.length}__`
 
-    return jsDocType
-      // A type that reaches into a backend source file via `import("...")` (optionally
-      // `.Member` and `[]`) can't resolve from the generated frontend model and would type
-      // a serialized result as a backend model instance, so collapse it to `any`.
-      .replace(/import\(\s*["'][^"']*["']\s*\)(\s*\.\s*[A-Za-z_$][\w$]*)*(\s*\[\s*\])*/g, "any")
+      preservedImports.push(importExpression)
+
+      return placeholder
+    }
+
+    this.assertNoBackendLocalCommandTypeExpressions(jsDocType)
+
+    const withRewrittenInlineImports = jsDocType
+      // A type that reaches into a backend source file via `import("...")`
+      // (optionally `.Member` and `[]`) is frontend-resolvable only when it
+      // points at a generated model file; other backend-local imports collapse
+      // to `any` so helper/service implementation details do not leak.
+      .replace(/import\(\s*["']([^"']*)["']\s*\)((?:\s*\.\s*[A-Za-z_$][\w$]*)*)((?:\s*\[\s*\])*)/g, (_match, specifier, memberChain, arraySuffix) => {
+        const rewrittenSpecifier = this.frontendResolvableJsDocImportSpecifier({
+          frontendModelFilePath,
+          sourceFile,
+          specifier
+        })
+
+        if (!rewrittenSpecifier) return "any"
+
+        return preserveImportExpression(`import(${JSON.stringify(rewrittenSpecifier)})${memberChain.replace(/\s+/g, "")}${arraySuffix.replace(/\s+/g, "")}`)
+      })
+
+    let withRewrittenAliases = withRewrittenInlineImports
+
+    for (const [aliasName, importAlias] of importAliases) {
+      const rewrittenSpecifier = this.frontendResolvableJsDocImportSpecifier({
+        frontendModelFilePath,
+        sourceFile,
+        specifier: importAlias.specifier
+      })
+
+      if (!rewrittenSpecifier) continue
+
+      const aliasRegex = new RegExp(`\\b${this.escapeRegExp(aliasName)}\\b`, "g")
+
+      withRewrittenAliases = withRewrittenAliases.replace(aliasRegex, preserveImportExpression(`import(${JSON.stringify(rewrittenSpecifier)}).${importAlias.importedName}`))
+    }
+
+    const sanitized = withRewrittenAliases
       // Remaining capitalized identifiers are model classes or otherwise non-resolvable
       // types; downgrade each in place so sibling scalar fields keep their real types.
       .replace(/\b[A-Z][A-Za-z0-9_$]*/g, (identifier) => safeTypeIdentifiers.has(identifier) ? identifier : "any")
+
+    return preservedImports.reduce(
+      (type, importExpression, index) => type.replaceAll(`__velocious_import_placeholder_${index}__`, importExpression),
+      sanitized
+    )
+  }
+
+  /**
+   * Raises when a command JSDoc type references a backend-local helper expression.
+   * @param {string} jsDocType - Command JSDoc type.
+   * @returns {void} No return value.
+   */
+  assertNoBackendLocalCommandTypeExpressions(jsDocType) {
+    const localReturnTypeMatch = jsDocType.match(/\b(?:Awaited\s*<\s*)?ReturnType\s*<\s*typeof\s+[A-Za-z_$][\w$]*\s*>\s*>?/)
+
+    if (!localReturnTypeMatch) return
+
+    throw new Error(`Custom command JSDoc type cannot use backend-local ReturnType expressions in generated frontend models: ${localReturnTypeMatch[0]}. Move the payload shape to a shared typedef and return that type from the command method.`)
+  }
+
+  /**
+   * Runs frontend resolvable js doc import specifier.
+   * @param {object} args - Arguments.
+   * @param {string | null} args.frontendModelFilePath - Generated frontend model file path.
+   * @param {string | null} args.sourceFile - Source file that declared the JSDoc type.
+   * @param {string} args.specifier - Source-file import specifier.
+   * @returns {string | null} - Rewritten frontend-model import specifier, or null when backend-local.
+   */
+  frontendResolvableJsDocImportSpecifier({frontendModelFilePath, sourceFile, specifier}) {
+    if (!sourceFile || !frontendModelFilePath) return null
+    if (!specifier.startsWith(".") && !specifier.startsWith("/")) return specifier
+
+    const importedPath = path.resolve(path.dirname(sourceFile), specifier)
+    const modelImportSpecifier = this.frontendModelImportSpecifierForBackendModelPath({
+      frontendModelFilePath,
+      importedPath
+    })
+
+    if (modelImportSpecifier) return modelImportSpecifier
+
+    if (this.filePathIsWithinAnyDirectory({directories: this.frontendModelJsDocSourceDirectories(), filePath: importedPath})) {
+      return null
+    }
+
+    return this.relativeImportSpecifier({fromFile: frontendModelFilePath, toFile: importedPath})
+  }
+
+  /**
+   * Runs frontend model import specifier for backend model path.
+   * @param {object} args - Arguments.
+   * @param {string} args.frontendModelFilePath - Generated frontend model file path.
+   * @param {string} args.importedPath - Source-file import path resolved from JSDoc.
+   * @returns {string | null} - Generated frontend-model import specifier, or null when the path is not a registered model file.
+   */
+  frontendModelImportSpecifierForBackendModelPath({frontendModelFilePath, importedPath}) {
+    const frontendModelsDirectory = path.dirname(frontendModelFilePath)
+    const importedModelPath = importedPath.endsWith(".js") ? importedPath : `${importedPath}.js`
+
+    for (const modelFileName of this.generatedFrontendModelFileNames()) {
+      for (const sourceDirectory of this.frontendModelJsDocSourceDirectories()) {
+        const modelsDirectory = path.join(sourceDirectory, "models")
+        const candidateModelPath = path.join(modelsDirectory, modelFileName)
+
+        if (path.resolve(candidateModelPath) !== path.resolve(importedModelPath)) continue
+
+        return this.relativeImportSpecifier({
+          fromFile: frontendModelFilePath,
+          toFile: path.join(frontendModelsDirectory, modelFileName)
+        })
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Runs generated frontend model file names.
+   * @returns {Set<string>} - Frontend model filenames that this generation run can emit.
+   */
+  generatedFrontendModelFileNames() {
+    /** @type {Set<string>} */
+    const fileNames = new Set()
+
+    for (const backendProject of this.getConfiguration().getBackendProjects()) {
+      const resources = this.resourcesForBackendProject(backendProject)
+
+      for (const resourceModelName of Object.keys(resources)) {
+        const className = inflection.camelize(resourceModelName.replaceAll("-", "_"))
+
+        fileNames.add(`${inflection.dasherize(inflection.underscore(className))}.js`)
+      }
+    }
+
+    return fileNames
+  }
+
+  /**
+   * Runs relative import specifier.
+   * @param {object} args - Arguments.
+   * @param {string} args.fromFile - Source file that will contain the import expression.
+   * @param {string} args.toFile - File being imported.
+   * @returns {string} - Relative import specifier.
+   */
+  relativeImportSpecifier({fromFile, toFile}) {
+    let relativeSpecifier = path.relative(path.dirname(fromFile), toFile).split(path.sep).join("/")
+
+    if (!relativeSpecifier.startsWith(".")) {
+      relativeSpecifier = `./${relativeSpecifier}`
+    }
+
+    return relativeSpecifier
+  }
+
+  /**
+   * Runs file path is within any directory.
+   * @param {object} args - Arguments.
+   * @param {string[]} args.directories - Candidate parent directories.
+   * @param {string} args.filePath - File path to test.
+   * @returns {boolean} - Whether the file path is under one candidate directory.
+   */
+  filePathIsWithinAnyDirectory({directories, filePath}) {
+    return directories.some((directory) => {
+      const relativePath = path.relative(path.resolve(directory), path.resolve(filePath))
+
+      return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+    })
+  }
+
+  /**
+   * Escapes text for use inside a RegExp.
+   * @param {string} value - Value to escape.
+   * @returns {string} - RegExp-safe value.
+   */
+  escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   }
 
   /**
@@ -1625,10 +1883,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @param {object} args - Arguments.
    * @param {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} args.commandMetadata - Declared per-command metadata.
    * @param {string[]} args.commandNames - Command method names to resolve.
+   * @param {string} args.frontendModelFilePath - Generated frontend model file path.
    * @param {import("../../../../../configuration-types.js").FrontendModelResourceClassType | null | undefined} args.resourceClass - Resource class.
    * @returns {Promise<Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>>} - Enriched metadata.
    */
-  async commandMetadataWithResourceJsDoc({commandMetadata, commandNames, resourceClass}) {
+  async commandMetadataWithResourceJsDoc({commandMetadata, commandNames, frontendModelFilePath, resourceClass}) {
     if (!resourceClass) return commandMetadata
 
     /** @type {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} */
@@ -1647,10 +1906,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       let returnType = declared.returnType
 
       if (!returnType) {
-        const jsDocReturnType = await this.resourceMethodReturnType({methodName: commandName, sourceClassName})
+        const jsDocReturnType = await this.resourceMethodReturnTypeDefinition({methodName: commandName, sourceClassName})
 
         if (jsDocReturnType) {
-          returnType = this.frontendResolvableCommandJsDocType(this.unwrappedPromiseJsDocType({jsDocType: jsDocReturnType}))
+          returnType = this.frontendResolvableCommandJsDocType({
+            frontendModelFilePath,
+            importAliases: jsDocReturnType.importAliases,
+            jsDocType: this.unwrappedPromiseJsDocType({jsDocType: jsDocReturnType.type}),
+            sourceFile: jsDocReturnType.sourceFile
+          })
         }
       }
 
@@ -1666,7 +1930,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         if (topLevelParameters.length > 0) {
           args = topLevelParameters.map((parameter) => ({
             name: /** @type {string} */ (parameter.name),
-            type: this.frontendResolvableCommandJsDocType(parameter.type)
+            type: this.frontendResolvableCommandJsDocType({
+              frontendModelFilePath,
+              importAliases: parameter.importAliases,
+              jsDocType: parameter.type,
+              sourceFile: parameter.sourceFile
+            })
           }))
         }
       }
@@ -1738,6 +2007,19 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    * @returns {Promise<string | null>} - JSDoc return type when documented.
    */
   async resourceMethodReturnType({methodName, sourceClassName}) {
+    const returnType = await this.resourceMethodReturnTypeDefinition({methodName, sourceClassName})
+
+    return returnType ? returnType.type : null
+  }
+
+  /**
+   * Runs resource method return type definition.
+   * @param {object} args - Arguments.
+   * @param {string} args.methodName - Method name.
+   * @param {string} args.sourceClassName - Source class name.
+   * @returns {Promise<ResourceMethodReturnType | null>} - JSDoc return type definition when documented.
+   */
+  async resourceMethodReturnTypeDefinition({methodName, sourceClassName}) {
     const resourceMethodReturnTypes = await this.resourceMethodReturnTypes()
     const returnTypeKey = `${sourceClassName}.${methodName}`
 
@@ -1745,7 +2027,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     const returnType = resourceMethodReturnTypes.get(returnTypeKey)
 
-    if (typeof returnType != "string" || returnType.length < 1) {
+    if (!returnType) {
+      throw new Error(`Expected JSDoc return type for ${returnTypeKey}`)
+    }
+
+    if (typeof returnType.type != "string" || returnType.type.length < 1) {
       throw new Error(`Expected non-empty JSDoc return type for ${returnTypeKey}`)
     }
 
@@ -1776,7 +2062,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   /**
    * Runs resource method parameters.
    * @param {{methodName: string, sourceClassName: string}} args - Arguments.
-   * @returns {Promise<Array<{name: string | null, type: string}> | null>} - JSDoc parameters (name + type) when documented.
+   * @returns {Promise<ResourceMethodParameterType[] | null>} - JSDoc parameters (name + type) when documented.
    */
   async resourceMethodParameters({methodName, sourceClassName}) {
     const resourceMethodParameterTypes = await this.resourceMethodParameterTypes()
@@ -1795,7 +2081,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Runs resource method return types.
-   * @returns {Promise<Map<string, string>>} - Resource method return types keyed by ClassName.methodName.
+   * @returns {Promise<Map<string, ResourceMethodReturnType>>} - Resource method return types keyed by ClassName.methodName.
    */
   async resourceMethodReturnTypes() {
     if (this._resourceMethodReturnTypes) return this._resourceMethodReturnTypes
@@ -1806,7 +2092,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     for (const sourceFile of sourceFiles) {
       const sourceText = await fs.readFile(sourceFile, "utf8")
 
-      this.addResourceMethodReturnTypesFromSource({returnTypes, sourceText})
+      this.addResourceMethodReturnTypesFromSource({returnTypes, sourceFile, sourceText})
     }
 
     this._resourceMethodReturnTypes = returnTypes
@@ -1816,7 +2102,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Runs resource method parameter types.
-   * @returns {Promise<Map<string, Array<{name: string | null, type: string}>>>} - Resource method parameters keyed by ClassName.methodName.
+   * @returns {Promise<Map<string, ResourceMethodParameterType[]>>} - Resource method parameters keyed by ClassName.methodName.
    */
   async resourceMethodParameterTypes() {
     if (this._resourceMethodParameterTypes) return this._resourceMethodParameterTypes
@@ -1827,7 +2113,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     for (const sourceFile of sourceFiles) {
       const sourceText = await fs.readFile(sourceFile, "utf8")
 
-      this.addResourceMethodParameterTypesFromSource({parameterTypes, sourceText})
+      this.addResourceMethodParameterTypesFromSource({parameterTypes, sourceFile, sourceText})
     }
 
     this._resourceMethodParameterTypes = parameterTypes
@@ -1868,12 +2154,14 @@ export default class DbGenerateFrontendModels extends BaseCommand {
   /**
    * Adds resource method return types from source.
    * @param {object} args - Arguments.
-   * @param {Map<string, string>} args.returnTypes - Mutable return types map.
+   * @param {Map<string, ResourceMethodReturnType>} args.returnTypes - Mutable return types map.
+   * @param {string | null} [args.sourceFile] - Source file path.
    * @param {string} args.sourceText - Source text.
    * @returns {void}
    */
-  addResourceMethodReturnTypesFromSource({returnTypes, sourceText}) {
+  addResourceMethodReturnTypesFromSource({returnTypes, sourceFile = null, sourceText}) {
     const classRegex = /class\s+([A-Za-z_$][\w$]*)\s+(?:extends\s+[^{]+)?\{/g
+    const importAliases = this.jsDocImportAliasesFromSource(sourceText)
     let classMatch
 
     while ((classMatch = classRegex.exec(sourceText))) {
@@ -1905,7 +2193,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const returnType = this.jsDocReturnType(jsDocMatch[1])
 
         if (returnType) {
-          returnTypes.set(`${className}.${methodName}`, returnType)
+          returnTypes.set(`${className}.${methodName}`, {importAliases, sourceFile, type: returnType})
         }
       }
 
@@ -1915,11 +2203,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Adds resource method parameter types from source.
-   * @param {{parameterTypes: Map<string, Array<{name: string | null, type: string}>>, sourceText: string}} args - Arguments.
+   * @param {{parameterTypes: Map<string, ResourceMethodParameterType[]>, sourceFile?: string | null, sourceText: string}} args - Arguments.
    * @returns {void}
    */
-  addResourceMethodParameterTypesFromSource({parameterTypes, sourceText}) {
+  addResourceMethodParameterTypesFromSource({parameterTypes, sourceFile = null, sourceText}) {
     const classRegex = /class\s+([A-Za-z_$][\w$]*)\s+(?:extends\s+[^{]+)?\{/g
+    const importAliases = this.jsDocImportAliasesFromSource(sourceText)
     let classMatch
 
     while ((classMatch = classRegex.exec(sourceText))) {
@@ -1950,12 +2239,47 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         const jsDocParameters = this.jsDocParameters(jsDocMatch[1])
 
         if (jsDocParameters.length > 0) {
-          parameterTypes.set(`${className}.${methodName}`, jsDocParameters)
+          parameterTypes.set(`${className}.${methodName}`, jsDocParameters.map((parameter) => ({...parameter, importAliases, sourceFile})))
         }
       }
 
       classRegex.lastIndex = classBodyEnd + 1
     }
+  }
+
+  /**
+   * Runs JSDoc import aliases from source.
+   * @param {string} sourceText - Source text.
+   * @returns {Map<string, ResourceJsDocImportAlias>} - Import aliases keyed by local name.
+   */
+  jsDocImportAliasesFromSource(sourceText) {
+    const importAliases = new Map()
+    const importRegex = /@import\s*\{\s*([^}]+?)\s*\}\s*from\s*["']([^"']+)["']/g
+    let importMatch
+
+    while ((importMatch = importRegex.exec(sourceText))) {
+      const importList = importMatch[1]
+      const specifier = importMatch[2]
+
+      for (const rawImportEntry of importList.split(",")) {
+        const importEntry = rawImportEntry.trim()
+
+        if (importEntry.length < 1) continue
+
+        const entryMatch = importEntry.match(/^(default|[A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
+
+        if (!entryMatch) {
+          throw new Error(`Could not parse JSDoc @import entry: ${importEntry}`)
+        }
+
+        const importedName = entryMatch[1]
+        const aliasName = entryMatch[2] || importedName
+
+        importAliases.set(aliasName, {importedName, specifier})
+      }
+    }
+
+    return importAliases
   }
 
   /**

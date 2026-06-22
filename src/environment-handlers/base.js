@@ -1,5 +1,7 @@
 // @ts-check
 
+import {validateTimeZone} from "../time-zone.js"
+
 /**
  * CommandFileObjectType type.
  * @typedef {object} CommandFileObjectType
@@ -70,6 +72,26 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * Runs run with timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @param {() => Promise<?>} callback - Callback to run.
+   * @returns {Promise<?>} - Result of the callback.
+   */
+  async runWithTimezone(timeZone, callback) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    const previousTimeZone = this.configuration._timeZone
+
+    this.configuration._timeZone = validateTimeZone(timeZone, "timeZone")
+
+    try {
+      return await callback()
+    } finally {
+      this.configuration._timeZone = previousTimeZone
+    }
+  }
+
+  /**
    * Runs set timezone offset.
    * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
    * @returns {void} - No return value.
@@ -81,6 +103,17 @@ export default class VelociousEnvironmentHandlerBase {
      * Narrows the runtime value to the documented type.
      * @type {number} */
     this.configuration._timezoneOffsetMinutes = _offsetMinutes
+  }
+
+  /**
+   * Runs set timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @returns {void} - No return value.
+   */
+  setTimezone(timeZone) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    this.configuration._timeZone = validateTimeZone(timeZone, "timeZone")
   }
 
   /**
@@ -98,6 +131,19 @@ export default class VelociousEnvironmentHandlerBase {
     }
 
     return /** @type {number} */ (activeConfiguration.getTimezoneOffsetMinutes())
+  }
+
+  /**
+   * Runs get timezone.
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {string | undefined} - Timezone identifier.
+   */
+  getTimeZone(configuration) {
+    const activeConfiguration = configuration || this.configuration
+
+    if (!activeConfiguration) throw new Error("Configuration hasn't been set")
+
+    return activeConfiguration.getTimeZone()
   }
 
   /**

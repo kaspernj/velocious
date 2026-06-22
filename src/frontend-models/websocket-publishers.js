@@ -12,6 +12,17 @@ const channelClassRegisteredConfigurations = new WeakSet()
 export const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
+ * Runs transport serialization options for a configuration.
+ * @param {import("../configuration.js").default} configuration - Configuration instance.
+ * @returns {import("./transport-serialization.js").FrontendModelTransportSerializationOptions} - Serialization options.
+ */
+function transportSerializationOptionsForConfiguration(configuration) {
+  return {
+    timeZone: configuration.getEnvironmentHandler().getTimeZone(configuration)
+  }
+}
+
+/**
  * Runs the frontendModelBroadcastChannelName helper.
  * @param {string} modelName - Model class name.
  * @returns {string} - Broadcast channel name (legacy, retained for migration compatibility).
@@ -169,7 +180,7 @@ function broadcastFrontendModelEvent(configuration, modelName, event) {
     action: event.action,
     id: event.id,
     model: modelName,
-    ...(event.record ? {record: serializeFrontendModelTransportValue(event.record)} : {})
+    ...(event.record ? {record: serializeFrontendModelTransportValue(event.record, transportSerializationOptionsForConfiguration(configuration))} : {})
   }
 
   configuration.broadcastToChannel(FRONTEND_MODELS_CHANNEL_NAME, {model: modelName}, body)

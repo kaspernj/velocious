@@ -197,6 +197,7 @@ FrontendModelBase.registerModel(Project)
 function resetFrontendModelTransport() {
   FrontendModelBase.configureTransport({
     shared: undefined,
+    timeZone: undefined,
     url: undefined,
     websocketClient: undefined
   })
@@ -343,6 +344,17 @@ function configureBrowserTransport() {
   })
 }
 
+/** @returns {void} */
+function configureBrowserTransportWithTimeZone() {
+  const configuredPort = Number(process.env.VELOCIOUS_BROWSER_BACKEND_PORT)
+  const backendPort = Number.isFinite(configuredPort) ? configuredPort : 4501
+
+  FrontendModelBase.configureTransport({
+    timeZone: () => "Europe/Berlin",
+    url: `http://127.0.0.1:${backendPort}`
+  })
+}
+
 describe("Frontend models - base browser integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("findBy loads through real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
@@ -359,6 +371,62 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
       expect(model?.id()).toEqual(2)
       expect(model?.email()).toEqual("john@example.com")
     } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("throws when the browser cannot resolve a timezone", async () => {
+    if (!runBrowserHttpIntegration()) {
+      return
+    }
+
+    configureBrowserTransport()
+
+    const hadWindow = Object.prototype.hasOwnProperty.call(globalThis, "window")
+    const originalIntl = globalThis.Intl
+
+    try {
+      if (!hadWindow) {
+        Object.defineProperty(globalThis, "window", {
+          configurable: true,
+          value: {}
+        })
+      }
+
+      Object.defineProperty(globalThis, "Intl", {
+        configurable: true,
+        value: {
+          DateTimeFormat: () => ({
+            resolvedOptions: () => ({})
+          })
+        }
+      })
+
+      let thrownError = null
+
+      try {
+        await User.findBy({email: "jane@example.com"})
+      } catch (error) {
+        thrownError = error
+      }
+
+      expect(thrownError instanceof Error).toEqual(true)
+
+      if (!(thrownError instanceof Error)) {
+        throw new Error("Expected browser timezone detection to throw an Error")
+      }
+
+      expect(thrownError.message).toEqual("Expected Intl.DateTimeFormat to resolve a browser timezone string")
+    } finally {
+      Object.defineProperty(globalThis, "Intl", {
+        configurable: true,
+        value: originalIntl
+      })
+
+      if (!hadWindow) {
+        delete globalThis.window
+      }
+
       resetFrontendModelTransport()
     }
   })
@@ -675,17 +743,17 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
     }
   })
 
-  it("findBy treats timezone-less datetime strings as UTC over real browser HTTP requests", async () => {
+  it("findBy applies the request timezone to timezone-less datetime strings over real browser HTTP requests", async () => {
     if (!runBrowserHttpIntegration()) {
       return
     }
 
-    configureBrowserTransport()
+    configureBrowserTransportWithTimeZone()
 
     try {
       await seedUsers()
 
-      const model = await User.findBy({createdAt: "2026-02-18 08:00:00.000"})
+      const model = await User.findBy({createdAt: "2026-02-18 09:00:00.000"})
 
       expect(model?.id()).toEqual(1)
       expect(model?.createdAt()?.toISOString()).toEqual("2026-02-18T08:00:00.000Z")
