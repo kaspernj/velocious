@@ -565,13 +565,15 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
-  url: "http://127.0.0.1:4501/frontend-models"
+  url: "http://127.0.0.1:4501/frontend-models",
+  timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone
 })
 ```
 
 Available transport options:
 
 - `url` (can also be a relative path like `"/frontend-models"` on web)
+- `timeZone` (an IANA timezone string or a function returning one). Browser clients auto-detect this when it is not configured. Frontend-model datetime strings without an explicit timezone are interpreted in this request timezone and stored/queried as UTC instants.
 
 Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle needs to wait for queued, scheduled, and active frontend-model transport requests to finish before resetting state.
 
