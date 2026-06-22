@@ -7,6 +7,7 @@ import Task from "../models/task.js"
 import User from "../models/user.js"
 
 /** @import {SharedEchoResponse} from "../../shared/frontend-command-types.js" */
+/** @import {default as ImportedUser} from "../models/user.js" */
 
 class TaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
@@ -234,7 +235,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
     return {value: cookie ? cookie.value() : null}
   }
 
-  /** @returns {Promise<{users: import("../models/user.js").default[]}>} */
+  /** @returns {Promise<{users: ImportedUser[]}>} */
   async lookupByEmail() {
     const email = this.params().email
     let query = this.authorizedQuery("index")

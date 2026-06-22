@@ -2266,7 +2266,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
         if (importEntry.length < 1) continue
 
-        const entryMatch = importEntry.match(/^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
+        const entryMatch = importEntry.match(/^(default|[A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/)
 
         if (!entryMatch) {
           throw new Error(`Could not parse JSDoc @import entry: ${importEntry}`)
