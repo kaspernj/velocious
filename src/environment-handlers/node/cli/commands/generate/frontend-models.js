@@ -1511,11 +1511,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Rewrites a custom-command param/return JSDoc type so it resolves in the generated
-   * frontend model: each model-class (or otherwise non-frontend-resolvable) identifier
-   * becomes `any` in place, keeping the surrounding object fields typed. A command-result
-   * field holding a model arrives as a serialized transport value, so the consumer hydrates
-   * it with `Model.instantiateFromResponse(...)`. The word boundary avoids matching the
-   * capitalized middle of a camelCase property name (e.g. `adjustedTotalCents`).
+   * frontend model: backend model imports are mapped to generated frontend model
+   * imports, and otherwise non-frontend-resolvable identifiers become `any` in place
+   * so sibling scalar fields keep their real types. The word boundary avoids matching
+   * the capitalized middle of a camelCase property name (e.g. `adjustedTotalCents`).
    * @param {object} args - Arguments.
    * @param {string | null} args.frontendModelFilePath - Generated frontend model file path.
    * @param {Map<string, ResourceJsDocImportAlias>} args.importAliases - Import aliases visible to the source method.
@@ -1544,9 +1543,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     this.assertNoBackendLocalCommandTypeExpressions(jsDocType)
 
     const withRewrittenInlineImports = jsDocType
-      // A type that reaches into a backend source file via `import("...")` (optionally
-      // `.Member` and `[]`) can't resolve from the generated frontend model and would type
-      // a serialized result as a backend model instance, so collapse it to `any`.
+      // A type that reaches into a backend source file via `import("...")`
+      // (optionally `.Member` and `[]`) is frontend-resolvable only when it
+      // points at a generated model file; other backend-local imports collapse
+      // to `any` so helper/service implementation details do not leak.
       .replace(/import\(\s*["']([^"']*)["']\s*\)((?:\s*\.\s*[A-Za-z_$][\w$]*)*)((?:\s*\[\s*\])*)/g, (_match, specifier, memberChain, arraySuffix) => {
         const rewrittenSpecifier = this.frontendResolvableJsDocImportSpecifier({
           frontendModelFilePath,
@@ -1612,12 +1612,67 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (!specifier.startsWith(".") && !specifier.startsWith("/")) return specifier
 
     const importedPath = path.resolve(path.dirname(sourceFile), specifier)
+    const modelImportSpecifier = this.frontendModelImportSpecifierForBackendModelPath({
+      frontendModelFilePath,
+      importedPath
+    })
+
+    if (modelImportSpecifier) return modelImportSpecifier
 
     if (this.filePathIsWithinAnyDirectory({directories: this.frontendModelJsDocSourceDirectories(), filePath: importedPath})) {
       return null
     }
 
     return this.relativeImportSpecifier({fromFile: frontendModelFilePath, toFile: importedPath})
+  }
+
+  /**
+   * Runs frontend model import specifier for backend model path.
+   * @param {object} args - Arguments.
+   * @param {string} args.frontendModelFilePath - Generated frontend model file path.
+   * @param {string} args.importedPath - Source-file import path resolved from JSDoc.
+   * @returns {string | null} - Generated frontend-model import specifier, or null when the path is not a registered model file.
+   */
+  frontendModelImportSpecifierForBackendModelPath({frontendModelFilePath, importedPath}) {
+    const frontendModelsDirectory = path.dirname(frontendModelFilePath)
+    const importedModelPath = importedPath.endsWith(".js") ? importedPath : `${importedPath}.js`
+
+    for (const modelFileName of this.generatedFrontendModelFileNames()) {
+      for (const sourceDirectory of this.frontendModelJsDocSourceDirectories()) {
+        const modelsDirectory = path.join(sourceDirectory, "models")
+        const candidateModelPath = path.join(modelsDirectory, modelFileName)
+
+        if (path.resolve(candidateModelPath) !== path.resolve(importedModelPath)) continue
+
+        return this.relativeImportSpecifier({
+          fromFile: frontendModelFilePath,
+          toFile: path.join(frontendModelsDirectory, modelFileName)
+        })
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Runs generated frontend model file names.
+   * @returns {Set<string>} - Frontend model filenames that this generation run can emit.
+   */
+  generatedFrontendModelFileNames() {
+    /** @type {Set<string>} */
+    const fileNames = new Set()
+
+    for (const backendProject of this.getConfiguration().getBackendProjects()) {
+      const resources = this.resourcesForBackendProject(backendProject)
+
+      for (const resourceModelName of Object.keys(resources)) {
+        const className = inflection.camelize(resourceModelName.replaceAll("-", "_"))
+
+        fileNames.add(`${inflection.dasherize(inflection.underscore(className))}.js`)
+      }
+    }
+
+    return fileNames
   }
 
   /**

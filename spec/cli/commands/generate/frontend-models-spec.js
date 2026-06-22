@@ -1166,8 +1166,9 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("static async echoObjectStyle(args) {")
     expect(userContents).toContain("@param {object} args - Command argument.")
     expect(userContents).not.toContain("echoObjectStyle(args, args)")
-    // A model-valued result field is downgraded to `any` (the frontend gets a serialized record).
-    expect(userContents).toContain("@returns {Promise<{users: any}>} - Command response.")
+    // Backend model imports are rewritten to generated frontend-model imports.
+    expect(userContents).toContain("@returns {Promise<{users: import(\"./user.js\").default[]}>} - Command response.")
+    expect(userContents).toContain("@returns {Promise<{user: import(\"./user.js\").default | null}>} - Command response.")
     // An explicit resourceConfig returnType wins over the method's own JSDoc.
     expect(userContents).toContain("@returns {Promise<{fromConfig: boolean}>} - Command response.")
     expect(userContents).not.toContain("fromJsDoc")
