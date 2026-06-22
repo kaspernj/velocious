@@ -1,0 +1,1 @@
+Prepend an "auto-generated, do not edit, changes will be overwritten" banner naming the regenerate command to every generated base-model and frontend-model file (per-model files plus index.js/setup.js), not just the frontend-models setup file.

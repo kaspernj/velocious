@@ -2,7 +2,10 @@ import BaseCommand from "../../../../../cli/base-command.js"
 import deburrColumnName from "../../../../../utils/deburr-column-name.js"
 import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
+import generatedFileBanner from "./generated-file-banner.js"
 import * as inflection from "inflection"
+
+const BASE_MODELS_REGENERATE_COMMAND = "velocious generate:base-models"
 
 /**
  * Maps an effective column type to the JSDoc type used in generated base models.
@@ -106,7 +109,7 @@ export default class DbGenerateModel extends BaseCommand {
           sourceModelFilePath = "velocious/build/src/database/record/index.js"
         }
 
-        let fileContent = ""
+        let fileContent = generatedFileBanner(BASE_MODELS_REGENERATE_COMMAND)
         let velociousPath
 
         if (devMode) {
