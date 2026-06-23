@@ -17,6 +17,13 @@ Without a resource definition, frontend models should not silently work.
 - Resource `commands` can map `attach`, `download`, and `url` in addition to CRUD/index commands.
 - Resource `attachments` defines attachment helpers generated on frontend models.
 
+## Shared resource fallback
+- Environment-specific resources may declare `static SharedResource = SharedModelResource` to reuse a bundled shared resource recipe.
+- Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value, framework default.
+- Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.
+- Shared `abilities()` runs with the environment resource's model class, so helpers such as `this.can("read")` authorize the concrete backend model.
+- Treat shared resources as reusable defaults, not a security boundary. Environment resources should still override attributes, permissions, commands, or hooks whenever a frontend/backend deployment needs narrower behavior.
+
 ## Custom index records
 - Override `indexQuery(options)` when the default index behavior is correct but the resource needs an additional scope. Call `super.indexQuery(options)` and add the resource-specific filters, joins, or select data. The `options` object can include `includePagination` and `includeSort`.
 - Override `countIndexQueryOptions()` when a resource-specific `count()` needs different index-query options, for example `{includePagination: false, includeSort: false}` to count the full filtered scope while keeping paginated records.

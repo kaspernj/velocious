@@ -159,6 +159,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static relationships = undefined
   /** @type {string[] | undefined} */
   static translatedAttributes = undefined
+  /** @type {?} */
+  static SharedResource = undefined
 
   /**
    * Runs constructor.
@@ -179,6 +181,119 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     this.modelNameValue = "modelName" in args ? args.modelName : this.modelClass().getModelName()
     this.paramsValue = "params" in args ? args.params : undefined
     this.resourceConfigurationValue = "resourceConfiguration" in args ? args.resourceConfiguration : defaultResourceConfiguration
+    /** @type {FrontendModelBaseResource | null | undefined} */
+    this.sharedResourceInstanceValue = undefined
+  }
+
+  /**
+   * Returns the configured shared resource class.
+   * @returns {?} - Shared resource class.
+   */
+  static sharedResourceClass() {
+    return this.SharedResource
+  }
+
+  /**
+   * Reads a static resource config value from the environment resource first,
+   * then from the shared resource.
+   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "memberCommands" | "relationships" | "translatedAttributes"} name - Static config property name.
+   * @returns {?} - Resolved config value.
+   */
+  static sharedResourceStaticValue(name) {
+    if (this[name] !== undefined) return this[name]
+
+    const SharedResource = this.sharedResourceClass()
+
+    if (!SharedResource) return undefined
+
+    return SharedResource[name]
+  }
+
+  /**
+   * Resolves translated attributes from environment and shared resources.
+   * @returns {string[] | undefined} - Translated attribute names.
+   */
+  static translatedAttributesConfig() {
+    return /** @type {string[] | undefined} */ (this.sharedResourceStaticValue("translatedAttributes"))
+  }
+
+  /**
+   * Builds a resource instance for shared-resource fallback calls.
+   * @returns {FrontendModelBaseResource | null} - Shared resource instance when configured.
+   */
+  sharedResourceInstance() {
+    if (this.sharedResourceInstanceValue !== undefined) return this.sharedResourceInstanceValue
+
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    const SharedResource = /** @type {typeof FrontendModelBaseResource | undefined} */ (ResourceClass.sharedResourceClass())
+
+    if (!SharedResource) {
+      this.sharedResourceInstanceValue = null
+      return this.sharedResourceInstanceValue
+    }
+
+    if (SharedResource === ResourceClass) {
+      throw new Error(`${ResourceClass.name}.SharedResource cannot point to itself.`)
+    }
+
+    this.sharedResourceInstanceValue = new SharedResource({
+      ability: this.ability,
+      controller: this.controller,
+      context: this.context,
+      locals: this.locals,
+      modelClass: this.modelClass(),
+      modelName: this.modelName(),
+      params: this.params(),
+      resourceConfiguration: this.resourceConfiguration()
+    })
+
+    return this.sharedResourceInstanceValue
+  }
+
+  /**
+   * Calls a shared-resource method only when the shared resource overrides the framework default.
+   * @param {string} methodName - Method name to resolve.
+   * @param {unknown[]} args - Method args.
+   * @returns {{called: boolean, result: unknown}} - Shared method call result.
+   */
+  callSharedResourceMethod(methodName, args) {
+    const sharedResource = this.sharedResourceInstance()
+
+    if (!sharedResource) return {called: false, result: undefined}
+
+    const methodOwner = prototypeOwnerForMethod(sharedResource, methodName)
+
+    if (!methodOwner || methodOwner === FrontendModelBaseResource.prototype || methodOwner === AuthorizationBaseResource.prototype) {
+      return {called: false, result: undefined}
+    }
+
+    const method = /** @type {Record<string, (...methodArgs: unknown[]) => unknown>} */ (/** @type {unknown} */ (sharedResource))[methodName]
+
+    return {called: true, result: method.apply(sharedResource, args)}
+  }
+
+  /**
+   * Runs shared method result or a fallback callback.
+   * @template Result
+   * @param {string} methodName - Shared method name.
+   * @param {unknown[]} args - Shared method args.
+   * @param {() => Result} fallback - Fallback callback.
+   * @returns {Result} - Shared or fallback result.
+   */
+  sharedResourceMethodOr(methodName, args, fallback) {
+    const sharedResult = this.callSharedResourceMethod(methodName, args)
+
+    if (sharedResult.called) return /** @type {Result} */ (sharedResult.result)
+
+    return fallback()
+  }
+
+  /**
+   * Runs abilities.
+   * @returns {void} - No return value.
+   */
+  abilities() {
+    this.sharedResourceMethodOr("abilities", [], () => undefined)
   }
 
   /**
@@ -194,18 +309,26 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {import("../configuration-types.js").FrontendModelResourceConfiguration} - Static resource config (raw user input shape; consumers normalize).
    */
   static resourceConfig() {
+    const attributes = this.sharedResourceStaticValue("attributes")
+    const abilities = this.sharedResourceStaticValue("abilities")
+    const attachments = this.sharedResourceStaticValue("attachments")
+    const builtInCollectionCommands = this.sharedResourceStaticValue("builtInCollectionCommands")
+    const builtInMemberCommands = this.sharedResourceStaticValue("builtInMemberCommands")
+    const collectionCommands = this.sharedResourceStaticValue("collectionCommands")
+    const memberCommands = this.sharedResourceStaticValue("memberCommands")
+    const relationships = this.sharedResourceStaticValue("relationships")
     /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
-      attributes: this.attributes || []
+      attributes: /** @type {Record<string, ?> | string[]} */ (attributes || [])
     }
 
-    if (this.abilities) config.abilities = this.abilities
-    if (this.attachments) config.attachments = this.attachments
-    if (this.builtInCollectionCommands) config.builtInCollectionCommands = this.builtInCollectionCommands
-    if (this.builtInMemberCommands) config.builtInMemberCommands = this.builtInMemberCommands
-    if (this.collectionCommands) config.collectionCommands = this.collectionCommands
-    if (this.memberCommands) config.memberCommands = this.memberCommands
-    if (this.relationships) config.relationships = this.relationships
+    if (abilities) config.abilities = /** @type {string[]} */ (abilities)
+    if (attachments) config.attachments = /** @type {Record<string, ?>} */ (attachments)
+    if (builtInCollectionCommands) config.builtInCollectionCommands = /** @type {string[]} */ (builtInCollectionCommands)
+    if (builtInMemberCommands) config.builtInMemberCommands = /** @type {string[]} */ (builtInMemberCommands)
+    if (collectionCommands) config.collectionCommands = /** @type {string[]} */ (collectionCommands)
+    if (memberCommands) config.memberCommands = /** @type {string[]} */ (memberCommands)
+    if (relationships) config.relationships = /** @type {string[]} */ (relationships)
 
     return config
   }
@@ -240,6 +363,14 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     }
 
     return /** @type {TModelClass} */ (this.modelClassValue)
+  }
+
+  /**
+   * Runs required model class for authorization helpers.
+   * @returns {TModelClass} - Backing model class.
+   */
+  requiredModelClass() {
+    return this.modelClass()
   }
 
   /**
@@ -307,9 +438,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Array<string | Record<string, ?>>} - Permit spec.
    */
   permittedParams(arg) {
-    void arg
+    return this.sharedResourceMethodOr("permittedParams", [arg], () => {
+      void arg
 
-    return []
+      return []
+    })
   }
 
   /**
@@ -319,9 +452,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {FrontendModelResourceAttributePayload | Promise<FrontendModelResourceAttributePayload>} - Normalized attributes.
    */
   normalizeCreateAttributes(attributes, options) {
-    void options
+    return this.sharedResourceMethodOr("normalizeCreateAttributes", [attributes, options], () => {
+      void options
 
-    return attributes
+      return attributes
+    })
   }
 
   /**
@@ -332,10 +467,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {FrontendModelResourceAttributePayload | Promise<FrontendModelResourceAttributePayload>} - Normalized attributes.
    */
   normalizeUpdateAttributes(model, attributes, options) {
-    void model
-    void options
+    return this.sharedResourceMethodOr("normalizeUpdateAttributes", [model, attributes, options], () => {
+      void model
+      void options
 
-    return attributes
+      return attributes
+    })
   }
 
   /**
@@ -346,9 +483,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void | Promise<void>} - Resolves when the hook finishes.
    */
   beforeCreate(model, attributes, options) {
-    void model
-    void attributes
-    void options
+    return this.sharedResourceMethodOr("beforeCreate", [model, attributes, options], () => {
+      void model
+      void attributes
+      void options
+    })
   }
 
   /**
@@ -359,9 +498,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void | Promise<void>} - Resolves when the hook finishes.
    */
   afterCreate(model, attributes, options) {
-    void model
-    void attributes
-    void options
+    return this.sharedResourceMethodOr("afterCreate", [model, attributes, options], () => {
+      void model
+      void attributes
+      void options
+    })
   }
 
   /**
@@ -372,9 +513,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void | Promise<void>} - Resolves when the hook finishes.
    */
   beforeUpdate(model, attributes, options) {
-    void model
-    void attributes
-    void options
+    return this.sharedResourceMethodOr("beforeUpdate", [model, attributes, options], () => {
+      void model
+      void attributes
+      void options
+    })
   }
 
   /**
@@ -385,9 +528,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void | Promise<void>} - Resolves when the hook finishes.
    */
   afterUpdate(model, attributes, options) {
-    void model
-    void attributes
-    void options
+    return this.sharedResourceMethodOr("afterUpdate", [model, attributes, options], () => {
+      void model
+      void attributes
+      void options
+    })
   }
 
   /**
@@ -396,7 +541,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void | Promise<void>} - Resolves when the hook finishes.
    */
   beforeDestroy(model) {
-    void model
+    return this.sharedResourceMethodOr("beforeDestroy", [model], () => {
+      void model
+    })
   }
 
   /**
@@ -405,7 +552,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void | Promise<void>} - Resolves when the hook finishes.
    */
   afterDestroy(model) {
-    void model
+    return this.sharedResourceMethodOr("afterDestroy", [model], () => {
+      void model
+    })
   }
 
   /**
@@ -418,10 +567,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<Result>} - Callback result.
    */
   async runMutationTransaction({action, model, callback}) {
-    void action
-    void model
+    return await this.sharedResourceMethodOr("runMutationTransaction", [{action, model, callback}], async () => {
+      void action
+      void model
 
-    return await callback()
+      return await callback()
+    })
   }
 
   /**
@@ -517,9 +668,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {boolean | void | Promise<boolean | void>} - Continue processing unless false.
    */
   beforeAction(action) {
-    void action
+    return this.sharedResourceMethodOr("beforeAction", [action], () => {
+      void action
 
-    // No-op by default.
+      // No-op by default.
+    })
   }
 
   /**
@@ -663,7 +816,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     /** @type {Record<string, ?>} */
     const directAttributes = {}
     const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
-    const translatedSet = new Set(ResourceClass.translatedAttributes || [])
+    const translatedSet = new Set(ResourceClass.translatedAttributesConfig() || [])
 
     for (const [name, value] of Object.entries(attributes)) {
       const resourceSetterName = `set${inflection.camelize(name)}Attribute`
@@ -1536,6 +1689,24 @@ function virtualSetterLookup(resource) {
 }
 
 /**
+ * Locates which prototype owns a method implementation.
+ * @param {object} instance - Instance receiving the method.
+ * @param {string} methodName - Method name.
+ * @returns {object | null} - Prototype that owns the method.
+ */
+function prototypeOwnerForMethod(instance, methodName) {
+  let prototype = Object.getPrototypeOf(instance)
+
+  while (prototype) {
+    if (Object.prototype.hasOwnProperty.call(prototype, methodName)) return prototype
+
+    prototype = Object.getPrototypeOf(prototype)
+  }
+
+  return null
+}
+
+/**
  * Runs filter writable frontend model attributes.
  * @param {Record<string, ?>} receiver - Model instance or prototype.
  * @param {WritableAttributeReceiverClass} receiverClass - Static helper owner for the receiver.
@@ -1567,7 +1738,7 @@ function filterWritableFrontendModelAttributes(
   if (resource) {
     const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (resource.constructor)
 
-    translatedAttributes = ResourceClass.translatedAttributes || []
+    translatedAttributes = ResourceClass.translatedAttributesConfig() || []
   }
 
   const translatedSet = new Set(translatedAttributes)

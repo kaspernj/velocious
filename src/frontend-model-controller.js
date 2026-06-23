@@ -2426,7 +2426,7 @@ export default class FrontendModelController extends Controller {
 
     const resource = this.frontendModelResourceInstance()
     const resourceClass = /** @type {typeof import("./frontend-model-resource/base-resource.js").default} */ (resource.constructor)
-    const translatedSet = new Set(resourceClass.translatedAttributes || [])
+    const translatedSet = new Set(resourceClass.translatedAttributesConfig() || [])
     let needsTranslations = false
 
     for (const attributeName of selectedAttributes) {
