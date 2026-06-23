@@ -359,6 +359,29 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Resolves tenant for event.
+   * @param {string | number} id - Event record id.
+   * @returns {Promise<?>} - Resolved tenant.
+   */
+  async _resolveEventTenant(id) {
+    const configuration = this.session.configuration
+
+    return await configuration.ensureConnections({name: "Frontend model websocket event tenant resolution"}, async () => {
+      // Mirror the subscribe-time tenant resolution (`WebsocketSession._resolveTenant`):
+      // pass `subscription: {channel, params}` so resolvers that derive scope from the
+      // subscription behave the same for broadcasts as they did at `channel-subscribe`.
+      // The synthetic request forwards the subscriber's params (e.g. authenticationToken),
+      // matching this channel's ability resolution above.
+      return await configuration.resolveTenant({
+        params: {...this.params, id, model: this._modelName()},
+        request: /** @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
+        response: new Response({configuration}),
+        subscription: {channel: FRONTEND_MODELS_CHANNEL_NAME, params: this.params}
+      })
+    })
+  }
+
+  /**
    * Resolves the subscriber's tenant for the broadcast record and runs `callback` inside that tenant
    * context. Broadcast delivery runs in whatever ambient tenant context the publisher left behind. For
    * multi-tenant records that ambient tenant may have been resolved without the subscriber's request
@@ -379,17 +402,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       return await callback()
     }
 
-    // Mirror the subscribe-time tenant resolution (`WebsocketSession._resolveTenant`):
-    // pass `subscription: {channel, params}` so resolvers that derive scope from the
-    // subscription behave the same for broadcasts as they did at `channel-subscribe`.
-    // The synthetic request forwards the subscriber's params (e.g. authenticationToken),
-    // matching this channel's ability resolution above.
-    const tenant = await configuration.resolveTenant({
-      params: {...this.params, id, model: this._modelName()},
-      request: /** @type {import("../http-server/client/request.js").default} */ (this._syntheticRequest()),
-      response: new Response({configuration}),
-      subscription: {channel: FRONTEND_MODELS_CHANNEL_NAME, params: this.params}
-    })
+    const tenant = await this._resolveEventTenant(id)
 
     // Always enter `runWithTenant`, even when no tenant resolved. Broadcast fan-out
     // runs in the publisher's ambient tenant context; falling back to `callback()`

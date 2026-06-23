@@ -180,7 +180,13 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
           activeCheckoutName = null
         }
       },
-      resolveTenant: async () => ({slug: "alpha"}),
+      resolveTenant: async () => {
+        if (!activeCheckoutName) {
+          throw new Error("Tenant resolution did not run inside a checkout")
+        }
+
+        return {slug: "alpha"}
+      },
       runWithTenant: async (/** @type {{slug: string}} */ _tenant, /** @type {() => Promise<boolean | void>} */ callback) => await callback()
     }
     const channel = new FrontendModelWebsocketChannel({
@@ -209,7 +215,10 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
       record: {id: "task-1", name: "Task 1"}
     })
 
-    expect(checkoutNames).toEqual(["Frontend model websocket event tenant"])
+    expect(checkoutNames).toEqual([
+      "Frontend model websocket event tenant resolution",
+      "Frontend model websocket event tenant"
+    ])
     expect(sentFrames.map((frame) => frame.body)).toEqual([
       {
         action: "update",
