@@ -116,6 +116,105 @@ export default class AuthorizationBaseResource {
   }
 
   /**
+   * Runs current device.
+   * @returns {unknown} - Current device from context.
+   */
+  currentDevice() {
+    return this.context.currentDevice
+  }
+
+  /**
+   * Runs offline grant.
+   * @returns {unknown} - Offline grant from context.
+   */
+  offlineGrant() {
+    return this.context.offlineGrant
+  }
+
+  /**
+   * Runs now.
+   * @returns {Date} - Current time from context or the system clock.
+   */
+  now() {
+    if (typeof this.context.now === "function") return this.context.now()
+    if (this.context.now instanceof Date) return this.context.now
+
+    return new Date()
+  }
+
+  /**
+   * Runs resource runtime.
+   * @returns {"backend" | "frontend" | "offline"} - Resource runtime context.
+   */
+  resourceRuntime() {
+    if (this.context.resourceRuntime === "frontend") return "frontend"
+    if (this.context.resourceRuntime === "offline") return "offline"
+
+    return "backend"
+  }
+
+  /**
+   * Runs is backend.
+   * @returns {boolean} - Whether the resource is running in the backend runtime.
+   */
+  isBackend() {
+    return this.resourceRuntime() === "backend"
+  }
+
+  /**
+   * Runs is frontend.
+   * @returns {boolean} - Whether the resource is running in the frontend runtime.
+   */
+  isFrontend() {
+    return this.resourceRuntime() === "frontend"
+  }
+
+  /**
+   * Runs is offline.
+   * @returns {boolean} - Whether the resource is running with offline context.
+   */
+  isOffline() {
+    return this.resourceRuntime() === "offline" || this.context.offlineGrant !== undefined
+  }
+
+  /**
+   * Resolves a model class from the portable resource context.
+   * @param {string} name - Model name.
+   * @returns {unknown} - Model class from registry.
+   */
+  model(name) {
+    const registry = this.context.modelRegistry
+
+    if (registry && typeof registry === "object") {
+      if ("model" in registry && typeof registry.model === "function") {
+        const modelClass = registry.model(name)
+
+        if (modelClass) return modelClass
+      }
+
+      if (name in registry) return /** @type {Record<string, unknown>} */ (registry)[name]
+    }
+
+    const contextModel = this.context.model
+
+    if (typeof contextModel === "function") {
+      const modelClass = contextModel(name)
+
+      if (modelClass) return modelClass
+    }
+
+    const configuration = this.context.configuration
+
+    if (configuration) {
+      const modelClasses = configuration.getModelClasses()
+
+      if (name in modelClasses) return modelClasses[name]
+    }
+
+    throw new Error(`${this.constructor.name} could not resolve model '${name}' from the resource context model registry.`)
+  }
+
+  /**
    * Runs request.
    * @returns {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default | undefined} - Request from context.
    */

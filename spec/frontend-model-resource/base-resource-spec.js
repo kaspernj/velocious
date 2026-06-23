@@ -216,6 +216,59 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     expect(attribute?.method.call(attribute.resource)).toEqual("shared-status")
   })
 
+  it("exposes portable context helpers and model registry to shared resources", () => {
+    const now = new Date("2026-01-02T03:04:05.000Z")
+    const currentUser = {id: 123}
+    const currentDevice = {id: "scanner-1"}
+    const offlineGrant = {id: "grant-1"}
+
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {Record<string, ?>} */
+      contextSnapshot() {
+        return {
+          currentDevice: this.currentDevice(),
+          currentUser: this.currentUser(),
+          isBackend: this.isBackend(),
+          isFrontend: this.isFrontend(),
+          isOffline: this.isOffline(),
+          now: this.now(),
+          offlineGrant: this.offlineGrant(),
+          taskModel: this.model("Task")
+        }
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      context: {
+        currentDevice,
+        currentUser,
+        modelRegistry: {Task},
+        now: () => now,
+        offlineGrant,
+        resourceRuntime: "backend"
+      },
+      modelClass: Project,
+      modelName: "Project",
+      params: {}
+    })
+    const method = resource.resourceMethod("contextSnapshot")
+
+    expect(method?.method.call(method.resource)).toEqual({
+      currentDevice,
+      currentUser,
+      isBackend: true,
+      isFrontend: false,
+      isOffline: true,
+      now,
+      offlineGrant,
+      taskModel: Task
+    })
+  })
+
   it("applies shared virtual setters", async () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       /** @returns {string[]} */

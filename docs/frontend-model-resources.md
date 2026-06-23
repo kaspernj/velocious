@@ -26,6 +26,9 @@ Without a resource definition, frontend models should not silently work.
 - Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.
 - Custom resource methods such as collection/member commands, computed `${name}Attribute` hooks, and virtual setters can live on the shared resource when their config is inherited from it.
 - Shared `abilities()` runs with the environment resource's model class, so helpers such as `this.can("read")` authorize the concrete backend model.
+- Shared resources should resolve portable model classes through `this.model("Task")` instead of importing backend-only files directly. The resource context can provide `modelRegistry`, `model(name)`, or a backend `configuration` model map.
+- Portable context helpers available to shared resources include `currentUser()`, `currentDevice()`, `offlineGrant()`, `now()`, `resourceRuntime()`, `isBackend()`, `isFrontend()`, and `isOffline()`.
+- Shared resources should treat `this.model(...)`, query APIs, and context helpers as the portability boundary. Avoid raw SQL, Node-only imports, secrets, direct database driver access, or environment-specific globals in shared resource files.
 - Treat shared resources as reusable defaults, not a security boundary. Environment resources should still override attributes, permissions, commands, or hooks whenever a frontend/backend deployment needs narrower behavior.
 
 ## Custom index records
