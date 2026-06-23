@@ -238,6 +238,14 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Flushes pending writes that the driver delayed for persistence.
+   * @returns {Promise<void>} - Resolves when pending writes are durable.
+   */
+  async flushPendingWrites() {
+    // No-op by default
+  }
+
+  /**
    * Runs set connection checkout name.
    * @param {string | undefined} name - Human-readable name for this active checkout.
    * @returns {Promise<void>} - Resolves when complete.
@@ -1504,6 +1512,7 @@ export default class VelociousDatabaseDriversBase {
         }
       }
     })
+    await this.flushPendingWrites()
   }
 
   /**
