@@ -638,11 +638,15 @@ export default class FrontendModelController extends Controller {
    */
   async withFrontendModelRequestContext(params, response, callback) {
     const configuration = this.getConfiguration()
-    const tenant = await configuration.resolveTenant({
-      params,
-      request: this.request(),
-      response
-    })
+    const tenant = configuration.getTenantResolver()
+      ? await configuration.ensureConnections({name: "Frontend model request tenant resolution"}, async () => {
+          return await configuration.resolveTenant({
+            params,
+            request: this.request(),
+            response
+          })
+        })
+      : undefined
 
     return await configuration.runWithTenant(tenant, async () => {
       return await configuration.ensureConnections({name: "Frontend model request"}, async () => {

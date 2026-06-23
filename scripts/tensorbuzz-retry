@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+attempts="${TENSORBUZZ_RETRY_ATTEMPTS:-5}"
+delay="${TENSORBUZZ_RETRY_DELAY:-5}"
+
+for attempt in $(seq 1 "$attempts"); do
+  if "$@"; then
+    exit 0
+  fi
+
+  if [ "$attempt" -eq "$attempts" ]; then
+    break
+  fi
+
+  echo "Command failed; retrying in ${delay}s (${attempt}/${attempts}): $*" >&2
+  sleep "$delay"
+  delay=$((delay * 2))
+done
+
+exec "$@"
