@@ -1,13 +1,39 @@
 before_install:
+  - |
+    cat > /tmp/tensorbuzz-retry <<'SH'
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    attempts="${TENSORBUZZ_RETRY_ATTEMPTS:-5}"
+    delay="${TENSORBUZZ_RETRY_DELAY:-5}"
+
+    for attempt in $(seq 1 "$attempts"); do
+      if "$@"; then
+        exit 0
+      fi
+
+      if [ "$attempt" -eq "$attempts" ]; then
+        break
+      fi
+
+      echo "Command failed; retrying in ${delay}s (${attempt}/${attempts}): $*" >&2
+      sleep "$delay"
+      delay=$((delay * 2))
+    done
+
+    exec "$@"
+    SH
+    chmod +x /tmp/tensorbuzz-retry
   - sudo mkdir -p /etc/apt/keyrings
-  - curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --no-tty --batch --yes --dearmor -o /etc/apt/keyrings/nodesource.gpg
+  - /tmp/tensorbuzz-retry curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o /tmp/nodesource-repo.gpg.key
+  - sudo gpg --no-tty --batch --yes --dearmor -o /etc/apt/keyrings/nodesource.gpg /tmp/nodesource-repo.gpg.key
   - echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
-  - sudo apt-get update
-  - sudo apt-get install -y nodejs
+  - /tmp/tensorbuzz-retry sudo apt-get update -o Acquire::Retries=5
+  - DEBIAN_FRONTEND=noninteractive /tmp/tensorbuzz-retry sudo apt-get install -y -o Acquire::Retries=5 nodejs
 before_script:
   - git clean -fd spec src
   - git clean -fdx spec/dummy/db
-  - npm install
+  - /tmp/tensorbuzz-retry npm install
 environment:
   NODE_ENV: test
   VELOCIOUS_TEST_DIR: /home/build/project/spec
