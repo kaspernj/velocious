@@ -10,6 +10,74 @@ import RoutesResolver from "../../src/routes/resolver.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 describe("routes - resolver params reset", {databaseCleaning: {transaction: true}}, async () => {
+  it("resolves tenants inside ensureConnections", async () => {
+    let inEnsureConnections = false
+
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: dummyDirectory(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {console: true, file: false, levels: ["info", "warn", "error"]},
+      tenantResolver: () => {
+        if (!inEnsureConnections) {
+          throw new Error("Tenant resolver called outside ensureConnections")
+        }
+
+        return {slug: "alpha"}
+      }
+    })
+    const originalEnsureConnections = configuration.ensureConnections.bind(configuration)
+
+    configuration.ensureConnections = async (...args) => {
+      inEnsureConnections = true
+
+      try {
+        return await originalEnsureConnections(...args)
+      } finally {
+        inEnsureConnections = false
+      }
+    }
+
+    let previousConfiguration
+    try {
+      previousConfiguration = Configuration.current()
+    } catch {
+      // Ignore missing configuration
+    }
+
+    configuration.setCurrent()
+    configuration.setRoutes(dummyRoutes.routes)
+
+    const client = {remoteAddress: "127.0.0.1"}
+    const request = new Request({client, configuration})
+    const response = new Response({configuration})
+    const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
+    const requestLines = [
+      "GET /ping HTTP/1.1",
+      "Host: example.com",
+      "",
+      ""
+    ].join("\r\n")
+
+    try {
+      request.feed(Buffer.from(requestLines, "utf8"))
+      await donePromise
+
+      const resolver = new RoutesResolver({configuration, request, response})
+
+      await resolver.resolve()
+    } finally {
+      if (previousConfiguration) previousConfiguration.setCurrent()
+    }
+
+    expect(JSON.parse(response.getBody())).toEqual({message: "Pong"})
+  })
+
   it("resolves abilities inside ensureConnections", async () => {
     let inEnsureConnections = false
 

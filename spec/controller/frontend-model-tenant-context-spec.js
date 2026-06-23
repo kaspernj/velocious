@@ -25,9 +25,10 @@ class TenantAwareFrontendModelController extends FrontendModelController {
 
 /**
  * @param {Record<string, any>} params
+ * @param {{configure?: (configuration: Configuration) => void}} [options]
  * @returns {Promise<Record<string, any>>}
  */
-async function runFrontendApi(params) {
+async function runFrontendApi(params, options = {}) {
   const configuration = new Configuration({
     database: {test: {}},
     directory: process.cwd(),
@@ -47,6 +48,9 @@ async function runFrontendApi(params) {
       return {slug: projectSlug}
     }
   })
+
+  if (options.configure) options.configure(configuration)
+
   const client = {remoteAddress: "127.0.0.1"}
   const request = new Request({client, configuration})
   const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
@@ -77,6 +81,45 @@ async function runFrontendApi(params) {
 }
 
 describe("Controller frontend model tenant context", {databaseCleaning: {transaction: true}}, () => {
+  it("resolves tenant context inside ensureConnections", async () => {
+    let inEnsureConnections = false
+    const response = await runFrontendApi(serializeFrontendModelTransportValue({
+      requests: [{
+        commandType: "index",
+        model: "Task",
+        payload: {
+          project_slug: "alpha"
+        },
+        requestId: "request-1"
+      }]
+    }), {
+      configure: (configuration) => {
+        const originalEnsureConnections = configuration.ensureConnections.bind(configuration)
+
+        configuration.setTenantResolver(() => {
+          if (!inEnsureConnections) {
+            throw new Error("Frontend-model tenant resolver called outside ensureConnections")
+          }
+
+          return {slug: "alpha"}
+        })
+
+        configuration.ensureConnections = async (...args) => {
+          inEnsureConnections = true
+
+          try {
+            return await originalEnsureConnections(...args)
+          } finally {
+            inEnsureConnections = false
+          }
+        }
+      }
+    })
+
+    expect(response.responses[0].response.status).toEqual("success")
+    expect(response.responses[0].response.tenantSlug).toEqual("alpha")
+  })
+
   it("resolves tenant context from each batched shared frontend-model request entry", async () => {
     const response = await runFrontendApi(serializeFrontendModelTransportValue({
       requests: [{
