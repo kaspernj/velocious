@@ -2663,10 +2663,10 @@ export default class FrontendModelController extends Controller {
      * Resource has attribute.
      * @param {string} attributeName - Attribute name.
      */
-    const resourceHasAttribute = (attributeName) => {
+    const resourceAttributeMethod = (attributeName) => {
       const methodName = resourceAttributeMethodName(attributeName)
 
-      return resourceInstance && typeof /** @type {Record<string, ?>} */ (/** @type {?} */ (resourceInstance))[methodName] === "function"
+      return resourceInstance?.resourceMethod(methodName) || null
     }
 
     /**
@@ -2696,10 +2696,10 @@ export default class FrontendModelController extends Controller {
      */
     const serializedAttributeValue = async (attributeName) => {
       // Check resource instance first (virtual/computed attributes via ${name}Attribute convention)
-      if (resourceHasAttribute(attributeName)) {
-        const methodName = resourceAttributeMethodName(attributeName)
+      const resourceAttribute = resourceAttributeMethod(attributeName)
 
-        return await /** @type {Record<string, Function>} */ (/** @type {?} */ (resourceInstance))[methodName](model)
+      if (resourceAttribute) {
+        return await resourceAttribute.method.call(resourceAttribute.resource, model)
       }
 
       // Fall back to model method
@@ -2718,7 +2718,7 @@ export default class FrontendModelController extends Controller {
      * @param {string} attributeName - Attribute name.
      */
     const attributeExists = (attributeName) => {
-      return (attributeName in modelAttributes) || (attributeName in /** @type {Record<string, ?>} */ (model)) || resourceHasAttribute(attributeName)
+      return (attributeName in modelAttributes) || (attributeName in /** @type {Record<string, ?>} */ (model)) || Boolean(resourceAttributeMethod(attributeName))
     }
 
     if (!selectedAttributes) {
@@ -3766,10 +3766,10 @@ export default class FrontendModelController extends Controller {
       return this.frontendModelErrorPayload("Expected frontend-model custom command scope.")
     }
 
-    const resource = /** @type {Record<string, ?>} */ (this.frontendModelResourceInstance())
-    const commandMethod = resource[methodName]
+    const resource = this.frontendModelResourceInstance()
+    const command = resource.resourceMethod(methodName)
 
-    if (typeof commandMethod !== "function") {
+    if (!command) {
       return this.frontendModelErrorPayload(`Missing frontend-model custom command '${methodName}'.`)
     }
 
@@ -3779,7 +3779,7 @@ export default class FrontendModelController extends Controller {
     // unchanged, so existing parameterless methods keep working. The args are untrusted
     // client input typed only by the declared contract, so methods must still validate.
     const commandArguments = this.frontendModelCustomCommandArguments(params)
-    const responsePayload = await commandMethod.call(resource, commandArguments)
+    const responsePayload = await command.method.call(command.resource, commandArguments)
 
     if (!responsePayload || typeof responsePayload !== "object") {
       return {status: "success"}
@@ -3788,7 +3788,7 @@ export default class FrontendModelController extends Controller {
     return /** @type {Record<string, ?>} */ (
       await this.autoSerializeFrontendModelsInPayload(
         responsePayload,
-        /** @type {{serialize: (model: ?, action: string) => Promise<Record<string, ?>>}} */ (resource),
+        /** @type {{serialize: (model: ?, action: string) => Promise<Record<string, ?>>}} */ (command.resource),
         methodName
       )
     )

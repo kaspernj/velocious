@@ -202,11 +202,20 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static sharedResourceStaticValue(name) {
     if (this[name] !== undefined) return this[name]
 
-    const SharedResource = this.sharedResourceClass()
+    const SharedResource = /** @type {typeof FrontendModelBaseResource | undefined} */ (this.sharedResourceClass())
 
     if (!SharedResource) return undefined
+    if (SharedResource[name] !== undefined) return SharedResource[name]
 
-    return SharedResource[name]
+    const resourceConfigOwner = staticMethodOwnerFor(SharedResource, "resourceConfig")
+
+    if (resourceConfigOwner && resourceConfigOwner !== FrontendModelBaseResource) {
+      const sharedConfig = /** @type {Record<string, ?>} */ (/** @type {unknown} */ (SharedResource.resourceConfig()))
+
+      return sharedConfig[name]
+    }
+
+    return undefined
   }
 
   /**
@@ -286,6 +295,35 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (sharedResult.called) return /** @type {Result} */ (sharedResult.result)
 
     return fallback()
+  }
+
+  /**
+   * Resolves a method on this resource or its shared fallback.
+   * @param {string} methodName - Method name.
+   * @returns {{method: (...methodArgs: unknown[]) => unknown, resource: FrontendModelBaseResource} | null} - Resolved method and receiver.
+   */
+  resourceMethod(methodName) {
+    const ownMethod = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (this))[methodName]
+
+    if (typeof ownMethod === "function") {
+      return {
+        method: /** @type {(...methodArgs: unknown[]) => unknown} */ (ownMethod),
+        resource: this
+      }
+    }
+
+    const sharedResource = this.sharedResourceInstance()
+
+    if (!sharedResource) return null
+
+    const sharedMethod = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (sharedResource))[methodName]
+
+    if (typeof sharedMethod !== "function") return null
+
+    return {
+      method: /** @type {(...methodArgs: unknown[]) => unknown} */ (sharedMethod),
+      resource: sharedResource
+    }
   }
 
   /**
@@ -820,10 +858,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     for (const [name, value] of Object.entries(attributes)) {
       const resourceSetterName = `set${inflection.camelize(name)}Attribute`
-      const resourceSetter = virtualSetterLookup(this)[resourceSetterName]
+      const resourceSetter = this.resourceMethod(resourceSetterName)
 
-      if (typeof resourceSetter === "function") {
-        await resourceSetter.call(this, model, value)
+      if (resourceSetter) {
+        await resourceSetter.method.call(resourceSetter.resource, model, value)
       } else if (translatedSet.has(name)) {
         await this._setTranslatedAttributeOnModel(model, name, value)
       } else {
@@ -1680,15 +1718,6 @@ function parsePermittedParams(permitSpec) {
 }
 
 /**
- * Narrows a resource to its dynamic virtual setter lookup surface.
- * @param {FrontendModelBaseResource} resource - Resource instance.
- * @returns {Record<string, FrontendModelResourceVirtualSetter>} Dynamic virtual setter lookup.
- */
-function virtualSetterLookup(resource) {
-  return /** @type {Record<string, FrontendModelResourceVirtualSetter>} */ (/** @type {unknown} */ (resource))
-}
-
-/**
  * Locates which prototype owns a method implementation.
  * @param {object} instance - Instance receiving the method.
  * @param {string} methodName - Method name.
@@ -1701,6 +1730,24 @@ function prototypeOwnerForMethod(instance, methodName) {
     if (Object.prototype.hasOwnProperty.call(prototype, methodName)) return prototype
 
     prototype = Object.getPrototypeOf(prototype)
+  }
+
+  return null
+}
+
+/**
+ * Locates which constructor owns a static method implementation.
+ * @param {typeof FrontendModelBaseResource} ResourceClass - Resource class.
+ * @param {string} methodName - Method name.
+ * @returns {typeof FrontendModelBaseResource | null} - Class that owns the static method.
+ */
+function staticMethodOwnerFor(ResourceClass, methodName) {
+  let currentClass = ResourceClass
+
+  while (currentClass && currentClass !== Function.prototype) {
+    if (Object.prototype.hasOwnProperty.call(currentClass, methodName)) return currentClass
+
+    currentClass = Object.getPrototypeOf(currentClass)
   }
 
   return null
@@ -1753,11 +1800,11 @@ function filterWritableFrontendModelAttributes(
     const requestedSetterName = `set${inflection.camelize(resolvedAttributeName)}`
     const setterName = receiverClass.findMemberNameInsensitive(receiver, requestedSetterName) || requestedSetterName
     const resourceSetterName = `set${inflection.camelize(attributeName)}Attribute`
-    const resourceSetter = resource ? virtualSetterLookup(resource)[resourceSetterName] : undefined
+    const resourceSetter = resource?.resourceMethod(resourceSetterName)
 
     if (setterName in receiver) {
       writableAttributes[attributeName] = value
-    } else if (typeof resourceSetter === "function") {
+    } else if (resourceSetter) {
       writableAttributes[attributeName] = value
     } else if (translatedSet.has(attributeName)) {
       writableAttributes[attributeName] = value

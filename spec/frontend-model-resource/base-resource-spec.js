@@ -54,6 +54,28 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     expect(ProjectResource.translatedAttributesConfig()).toEqual(["name", "description"])
   })
 
+  it("falls back to shared resourceConfig overrides", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      static resourceConfig() {
+        return {
+          attributes: ["id", "name"],
+          collectionCommands: ["refreshAll"],
+          memberCommands: ["archive"]
+        }
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    expect(ProjectResource.resourceConfig()).toEqual({
+      attributes: ["id", "name"],
+      collectionCommands: ["refreshAll"],
+      memberCommands: ["archive"]
+    })
+  })
+
   it("preserves inherited environment static config before shared resource static config", () => {
     class ParentProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "parentName"]
@@ -164,6 +186,69 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     })
 
     expect(resource.permittedParams({action: "create"})).toEqual(["environmentName"])
+  })
+
+  it("resolves shared custom command and attribute hook methods", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {{status: string}} */
+      refresh() {
+        return {status: "shared"}
+      }
+
+      /** @returns {string} */
+      statusAttribute() {
+        return "shared-status"
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      modelClass: class extends DatabaseRecord {},
+      modelName: "Project",
+      params: {}
+    })
+
+    const command = resource.resourceMethod("refresh")
+    const attribute = resource.resourceMethod("statusAttribute")
+
+    expect(command?.method.call(command.resource)).toEqual({status: "shared"})
+    expect(attribute?.method.call(attribute.resource)).toEqual("shared-status")
+  })
+
+  it("applies shared virtual setters", async () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {string[]} */
+      permittedParams() {
+        return ["status"]
+      }
+
+      /**
+       * @param {Project} model - Project model.
+       * @param {unknown} value - Status value.
+       * @returns {void}
+       */
+      setStatusAttribute(model, value) {
+        model.setTasksCount(Number(value))
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      modelClass: Project,
+      modelName: "Project",
+      params: {}
+    })
+    const model = await Project.create({})
+
+    await resource.update(model, {status: 42})
+
+    expect(model.tasksCount()).toEqual(42)
   })
 
   it("defaults to permitting nothing — subclasses must override to enable writes", () => {

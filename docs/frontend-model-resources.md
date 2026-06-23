@@ -19,8 +19,9 @@ Without a resource definition, frontend models should not silently work.
 
 ## Shared resource fallback
 - Environment-specific resources may declare `static SharedResource = SharedModelResource` to reuse a bundled shared resource recipe.
-- Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value, framework default.
+- Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value or shared `resourceConfig()` value, framework default.
 - Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.
+- Custom resource methods such as collection/member commands, computed `${name}Attribute` hooks, and virtual setters can live on the shared resource when their config is inherited from it.
 - Shared `abilities()` runs with the environment resource's model class, so helpers such as `this.can("read")` authorize the concrete backend model.
 - Treat shared resources as reusable defaults, not a security boundary. Environment resources should still override attributes, permissions, commands, or hooks whenever a frontend/backend deployment needs narrower behavior.
 
