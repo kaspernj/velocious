@@ -6,29 +6,23 @@ import {frontendModelActionForCommand, frontendModelResourceConfigurationFromDef
 import {describe, expect, it} from "../../src/testing/test.js"
 
 class UserFrontendResource extends FrontendModelBaseResource {
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find", "update"],
-      collectionCommands: ["reindexAll"],
-      memberCommands: ["resetPassword"]
-    }
-  }
+    static attributes = ["id"]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find", "update"]
+
+  static collectionCommands = ["reindexAll"]
+
+  static memberCommands = ["resetPassword"]
 }
 
 class ProjectFrontendResource extends FrontendModelBaseResource {
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find"]
-    }
-  }
+    static attributes = ["id"]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find"]
 }
 
 
@@ -167,25 +161,23 @@ describe("routes - frontend model command route hook", {databaseCleaning: {trans
     })
   })
 
-  it("normalizes array ability subsets to a read-only abilities map", () => {
+  it("normalizes omitted abilities to the base CRUD abilities map", () => {
     const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(UserFrontendResource)
 
     expect(resourceConfiguration?.abilities).toEqual({
+      create: "create",
+      destroy: "destroy",
       find: "read",
-      index: "read"
+      index: "read",
+      update: "update"
     })
   })
 
-  it("throws on unknown resourceConfig keys", () => {
+  it("throws on unknown static resource config keys", () => {
     class UnknownKeyUserFrontendResource extends FrontendModelBaseResource {
-      /** @returns {Record<string, any>} */
-      static resourceConfig() {
-        return {
-          attributes: ["id"],
-          capabilities: ["read"],
-          abilities: ["read"]
-        }
-      }
+      static attributes = ["id"]
+
+      static capabilities = ["read"]
     }
 
     expect(() => {
@@ -193,15 +185,11 @@ describe("routes - frontend model command route hook", {databaseCleaning: {trans
     }).toThrow("Unknown arguments: capabilities")
   })
 
-  it("throws when resourceConfig includes the removed path key", () => {
+  it("throws when static resource config includes the removed path key", () => {
     class PathUserFrontendResource extends FrontendModelBaseResource {
-      /** @returns {Record<string, any>} */
-      static resourceConfig() {
-        return {
-          attributes: ["id"],
-          path: "/users"
-        }
-      }
+      static attributes = ["id"]
+
+      static path = "/users"
     }
 
     expect(() => {

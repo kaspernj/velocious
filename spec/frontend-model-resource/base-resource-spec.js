@@ -10,7 +10,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
   it("falls back to shared resource static config when environment resource omits it", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]
-      static abilities = ["read", "update"]
+      static abilities = ["approve", "archive"]
       static relationships = ["tasks"]
     }
 
@@ -19,7 +19,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     }
 
     expect(ProjectResource.resourceConfig()).toEqual({
-      abilities: ["read", "update"],
+      abilities: ["approve", "archive"],
       attributes: ["id", "name"],
       relationships: ["tasks"]
     })
@@ -28,7 +28,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
   it("uses environment resource static config before shared resource static config", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]
-      static abilities = ["read"]
+      static abilities = ["approve"]
     }
 
     class ProjectResource extends FrontendModelBaseResource {
@@ -37,7 +37,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     }
 
     expect(ProjectResource.resourceConfig()).toEqual({
-      abilities: ["read"],
+      abilities: ["approve"],
       attributes: ["id", "title"]
     })
   })
@@ -54,15 +54,13 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     expect(ProjectResource.translatedAttributesConfig()).toEqual(["name", "description"])
   })
 
-  it("falls back to shared resourceConfig overrides", () => {
+  it("falls back to shared static command config", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
-      static resourceConfig() {
-        return {
-          attributes: ["id", "name"],
-          collectionCommands: ["refreshAll"],
-          memberCommands: ["archive"]
-        }
-      }
+      static attributes = ["id", "name"]
+
+      static collectionCommands = ["refreshAll"]
+
+      static memberCommands = ["archive"]
     }
 
     class ProjectResource extends FrontendModelBaseResource {

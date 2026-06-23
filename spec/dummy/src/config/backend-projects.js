@@ -12,21 +12,20 @@ import User from "../models/user.js"
 class TaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read", "create", "update", "destroy"],
-      attributes: ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", {name: "projectId", selectedByDefault: false}, {name: "createdAt", selectedByDefault: false}, "updatedAt"],
-      attachments: {
+    static attributes = ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", {name: "projectId", selectedByDefault: false}, {name: "createdAt", selectedByDefault: false}, "updatedAt"]
+
+  static attachments = {
         descriptionFile: {type: "hasOne"},
         files: {type: "hasMany"}
-      },
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find", "update", "destroy"],
-      relationships: ["project", "comments"],
-      primaryKey: "id"
-    }
-  }
+      }
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find", "update", "destroy"]
+
+  static relationships = ["project", "comments"]
+
+  static primaryKey = "id"
 
   /**
    * Virtual attribute: returns the task name in uppercase.
@@ -88,16 +87,13 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Project
   static translatedAttributes = ["name"]
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read", "create", "update"],
-      attributes: ["id", {name: "name", selectedByDefault: false}],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find"],
-      relationships: ["creatingUser", "interactions", "tasks"]
-    }
-  }
+    static attributes = ["id", {name: "name", selectedByDefault: false}]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find"]
+
+  static relationships = ["creatingUser", "interactions", "tasks"]
 
   /** @returns {Array<string | Record<string, ?>>} - Permit spec for Project writes (name is translated). */
   permittedParams() {
@@ -112,15 +108,11 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
 class InteractionFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Interaction
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read", "create", "update", "destroy"],
-      attributes: ["id", "kind", "subjectId", "subjectType"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find", "update", "destroy"]
-    }
-  }
+    static attributes = ["id", "kind", "subjectId", "subjectType"]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find", "update", "destroy"]
 
   /** @returns {Array<string>} - Permit spec for Interaction writes. */
   permittedParams() {
@@ -131,14 +123,13 @@ class InteractionFrontendResource extends FrontendModelBaseResource {
 class UserFrontendResource extends FrontendModelBaseResource {
   static ModelClass = User
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id", "email", "name", {name: "reference", selectedByDefault: false}, "createdAt"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find"],
-      collectionCommands: [
+    static attributes = ["id", "email", "name", {name: "reference", selectedByDefault: false}, "createdAt"]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find"]
+
+  static collectionCommands = [
         "currentSessionCookie",
         "setSessionCookie",
         "lookupByEmail",
@@ -149,10 +140,9 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "multiLineReturn",
         "sharedEcho",
         {name: "echoOverride", returnType: "{fromConfig: boolean}"}
-      ],
-      memberCommands: ["refreshProfile", "echoMemberPayload"]
-    }
-  }
+      ]
+
+  static memberCommands = ["refreshProfile", "echoMemberPayload"]
 
   /**
    * Returns the client's own `id` argument to prove the member route id does not
@@ -278,15 +268,11 @@ class UserFrontendResource extends FrontendModelBaseResource {
 class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Comment
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read", "create", "update", "destroy"],
-      attributes: ["id", "body"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find"]
-    }
-  }
+    static attributes = ["id", "body"]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find"]
 
   /** @returns {Array<string>} - Permit spec for Comment writes. */
   permittedParams() {

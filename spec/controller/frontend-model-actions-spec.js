@@ -289,14 +289,9 @@ async function createTaskWithProject({projectName, taskName, creatingUserReferen
 class ScopedTaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id", "name"],
-      builtInCollectionCommands: ["index"]
-    }
-  }
+    static attributes = ["id", "name"]
+
+  static builtInCollectionCommands = ["index"]
 
   /**
    * @param {{includePagination?: boolean, includeSort?: boolean}} [options] - Index-query options.
@@ -319,28 +314,18 @@ class ScopedTaskFrontendResource extends FrontendModelBaseResource {
 class DescriptionPluckTaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id", {name: "description", selectedByDefault: false}],
-      builtInCollectionCommands: ["index"]
-    }
-  }
+    static attributes = ["id", {name: "description", selectedByDefault: false}]
+
+  static builtInCollectionCommands = ["index"]
 }
 
 /** Task resource using the legacy all-model-columns serialization default. */
 class AllColumnsPluckTaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} - Resource config. */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: [],
-      builtInCollectionCommands: ["index"]
-    }
-  }
+    static attributes = []
+
+  static builtInCollectionCommands = ["index"]
 }
 
 describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
@@ -533,27 +518,17 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     class RequestedLazyFrontendResource extends FrontendModelBaseResource {
       static ModelClass = RequestedLazyFrontendModel
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          abilities: ["read"],
-          attributes: ["id"],
-          builtInCollectionCommands: ["index"]
-        }
-      }
+      static attributes = ["id"]
+
+      static builtInCollectionCommands = ["index"]
     }
 
     class UnrequestedLazyFrontendResource extends FrontendModelBaseResource {
       static ModelClass = UnrequestedLazyFrontendModel
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          abilities: ["read"],
-          attributes: ["id"],
-          builtInCollectionCommands: ["index"]
-        }
-      }
+      static attributes = ["id"]
+
+      static builtInCollectionCommands = ["index"]
     }
 
     const configuration = new Configuration({

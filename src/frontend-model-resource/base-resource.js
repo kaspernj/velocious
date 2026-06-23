@@ -148,6 +148,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /** @type {Record<string, ?> | undefined} */
   static attachments = undefined
   /** @type {string[] | undefined} */
+  static commands = undefined
+  /** @type {string[] | undefined} */
   static collectionCommands = undefined
   /** @type {string[] | undefined} */
   static builtInCollectionCommands = undefined
@@ -157,6 +159,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static builtInMemberCommands = undefined
   /** @type {string[] | undefined} */
   static relationships = undefined
+  /** @type {string | undefined} */
+  static modelName = undefined
+  /** @type {string | undefined} */
+  static primaryKey = undefined
+  /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration | undefined} */
+  static server = undefined
   /** @type {string[] | undefined} */
   static translatedAttributes = undefined
   /** @type {?} */
@@ -196,7 +204,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Reads a static resource config value from the environment resource first,
    * then from the shared resource.
-   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "memberCommands" | "relationships" | "translatedAttributes"} name - Static config property name.
+   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "translatedAttributes"} name - Static config property name.
    * @returns {?} - Resolved config value.
    */
   static sharedResourceStaticValue(name) {
@@ -206,14 +214,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     if (!SharedResource) return undefined
     if (SharedResource[name] !== undefined) return SharedResource[name]
-
-    const resourceConfigOwner = staticMethodOwnerFor(SharedResource, "resourceConfig")
-
-    if (resourceConfigOwner && resourceConfigOwner !== FrontendModelBaseResource) {
-      const sharedConfig = /** @type {Record<string, ?>} */ (/** @type {unknown} */ (SharedResource.resourceConfig()))
-
-      return sharedConfig[name]
-    }
 
     return undefined
   }
@@ -350,11 +350,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const attributes = this.sharedResourceStaticValue("attributes")
     const abilities = this.sharedResourceStaticValue("abilities")
     const attachments = this.sharedResourceStaticValue("attachments")
+    const commands = this.sharedResourceStaticValue("commands")
     const builtInCollectionCommands = this.sharedResourceStaticValue("builtInCollectionCommands")
     const builtInMemberCommands = this.sharedResourceStaticValue("builtInMemberCommands")
     const collectionCommands = this.sharedResourceStaticValue("collectionCommands")
     const memberCommands = this.sharedResourceStaticValue("memberCommands")
+    const modelName = this.sharedResourceStaticValue("modelName")
+    const primaryKey = this.sharedResourceStaticValue("primaryKey")
     const relationships = this.sharedResourceStaticValue("relationships")
+    const server = this.sharedResourceStaticValue("server")
     /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
       attributes: /** @type {Record<string, ?> | string[]} */ (attributes || [])
@@ -362,11 +366,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     if (abilities) config.abilities = /** @type {string[]} */ (abilities)
     if (attachments) config.attachments = /** @type {Record<string, ?>} */ (attachments)
+    if (commands) config.commands = /** @type {string[]} */ (commands)
     if (builtInCollectionCommands) config.builtInCollectionCommands = /** @type {string[]} */ (builtInCollectionCommands)
     if (builtInMemberCommands) config.builtInMemberCommands = /** @type {string[]} */ (builtInMemberCommands)
     if (collectionCommands) config.collectionCommands = /** @type {string[]} */ (collectionCommands)
     if (memberCommands) config.memberCommands = /** @type {string[]} */ (memberCommands)
+    if (modelName) config.modelName = /** @type {string} */ (modelName)
+    if (primaryKey) config.primaryKey = /** @type {string} */ (primaryKey)
     if (relationships) config.relationships = /** @type {string[]} */ (relationships)
+    if (server) config.server = /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration} */ (server)
 
     return config
   }
@@ -1730,24 +1738,6 @@ function prototypeOwnerForMethod(instance, methodName) {
     if (Object.prototype.hasOwnProperty.call(prototype, methodName)) return prototype
 
     prototype = Object.getPrototypeOf(prototype)
-  }
-
-  return null
-}
-
-/**
- * Locates which constructor owns a static method implementation.
- * @param {typeof FrontendModelBaseResource} ResourceClass - Resource class.
- * @param {string} methodName - Method name.
- * @returns {typeof FrontendModelBaseResource | null} - Class that owns the static method.
- */
-function staticMethodOwnerFor(ResourceClass, methodName) {
-  let currentClass = ResourceClass
-
-  while (currentClass && currentClass !== Function.prototype) {
-    if (Object.prototype.hasOwnProperty.call(currentClass, methodName)) return currentClass
-
-    currentClass = Object.getPrototypeOf(currentClass)
   }
 
   return null

@@ -3,13 +3,16 @@
 ## Resource recipe requirement
 Frontend model usage should require explicit backend resource recipes.
 
-A backend project should declare resources with:
-- `path`
-- `attributes`
-- `abilities`
+A backend project should declare resources with static resource properties:
+- `static attributes`
+- optional `abilities` for additional per-record `record.can(action)` checks
 - optional `commands`
 - optional `attachments`
 - optional server behavior (`records`, `serialize`, `beforeAction`)
+
+Backend resource classes must not override `static resourceConfig()`; Velocious throws during resource normalization. Use declarative static fields instead so resource config stays easy to scan and shared-resource fallback has one config path.
+
+Base CRUD ability actions (`read`, `create`, `update`, `destroy`) are always included by the framework; do not list them in `abilities` or Velocious throws during resource normalization.
 
 Without a resource definition, frontend models should not silently work.
 
@@ -19,7 +22,7 @@ Without a resource definition, frontend models should not silently work.
 
 ## Shared resource fallback
 - Environment-specific resources may declare `static SharedResource = SharedModelResource` to reuse a bundled shared resource recipe.
-- Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value or shared `resourceConfig()` value, framework default.
+- Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value, framework default.
 - Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.
 - Custom resource methods such as collection/member commands, computed `${name}Attribute` hooks, and virtual setters can live on the shared resource when their config is inherited from it.
 - Shared `abilities()` runs with the environment resource's model class, so helpers such as `this.can("read")` authorize the concrete backend model.
@@ -40,16 +43,12 @@ Without a resource definition, frontend models should not silently work.
 - Both forms can be mixed in the same array; string entries are unchanged and stay variadic (`async refresh(...commandArguments)`).
 
 ```js
-static resourceConfig() {
-  return {
-    abilities: ["read"],
-    attributes: ["id"],
-    memberCommands: [
-      "suspend",
-      {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}
-    ]
-  }
-}
+static attributes = ["id"]
+
+static memberCommands = [
+  "suspend",
+  {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}
+]
 ```
 
 generates, on the frontend model:
