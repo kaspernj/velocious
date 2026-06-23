@@ -20,6 +20,16 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
     await this.saveDatabase()
     await this.connection.close()
   }
+
+  /**
+   * Flushes any debounced database save and waits until persistence is complete.
+   * @returns {Promise<void>} - Resolves when the current database bytes are stored.
+   */
+  async flushDatabaseSave() {
+    this.saveDatabaseDebounce.clear()
+    await this.saveDatabase()
+  }
+
   /**
    * Runs query.
    * @param {string} sql - SQL string.
