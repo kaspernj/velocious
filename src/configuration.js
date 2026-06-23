@@ -20,6 +20,7 @@ import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channe
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
 import {requestDetails} from "./error-reporting/request-details.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
+import {currentOfflineGrantSigningKey, normalizeOfflineGrantSigningKey} from "./sync/offline-grant.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {validateTimeZone} from "./time-zone.js"
@@ -126,7 +127,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -189,6 +190,7 @@ export default class VelociousConfiguration {
     this._trustedProxies = trustedProxies
     this._requestTimeoutMs = requestTimeoutMs
     this._structureSql = structureSql
+    this._sync = this._normalizeSyncConfiguration(sync)
     this._tenantDatabaseProviders = tenantDatabaseProviders || {}
     this._tenantDatabaseResolver = tenantDatabaseResolver
     this._tenantResolver = tenantResolver
@@ -378,6 +380,44 @@ export default class VelociousConfiguration {
    */
   getCookieSecret() {
     return this._cookieSecret
+  }
+
+  /**
+   * Runs get sync configuration.
+   * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Sync configuration.
+   */
+  getSyncConfiguration() {
+    return this._sync
+  }
+
+  /**
+   * Runs current offline grant signing key.
+   * @returns {import("./sync/offline-grant.js").OfflineGrantSigningKey} - Current signing key.
+   */
+  currentOfflineGrantSigningKey() {
+    const signingKeys = this.getSyncConfiguration().offlineGrantSigningKeys
+
+    return currentOfflineGrantSigningKey(signingKeys)
+  }
+
+  /**
+   * Normalizes sync configuration.
+   * @param {import("./configuration-types.js").VelociousSyncConfiguration | undefined} sync - Sync configuration.
+   * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Normalized sync configuration.
+   */
+  _normalizeSyncConfiguration(sync) {
+    const offlineGrantSigningKeys = sync?.offlineGrantSigningKeys || []
+    const offlineGrantTtlMs = sync?.offlineGrantTtlMs
+
+    if (!Array.isArray(offlineGrantSigningKeys)) throw new Error("sync.offlineGrantSigningKeys must be an array")
+    if (offlineGrantTtlMs !== undefined && (!Number.isInteger(offlineGrantTtlMs) || offlineGrantTtlMs <= 0)) {
+      throw new Error("sync.offlineGrantTtlMs must be a positive integer number of milliseconds")
+    }
+
+    return {
+      offlineGrantSigningKeys: offlineGrantSigningKeys.map((key) => normalizeOfflineGrantSigningKey(key)),
+      offlineGrantTtlMs: offlineGrantTtlMs || 24 * 60 * 60 * 1000
+    }
   }
 
   /**

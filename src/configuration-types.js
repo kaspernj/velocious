@@ -356,6 +356,13 @@
  */
 
 /**
+ * Velocious sync configuration.
+ * @typedef {object} VelociousSyncConfiguration
+ * @property {Array<import("./sync/offline-grant.js").OfflineGrantSigningKey>} offlineGrantSigningKeys - Signing keys used to issue and verify offline grants. Secrets must never be exposed to clients.
+ * @property {number} [offlineGrantTtlMs] - Default offline grant TTL in milliseconds. Defaults to 24 hours.
+ */
+
+/**
  * Frontend-safe normalized sync metadata.
  * @typedef {object} NormalizedFrontendModelResourceSyncConfiguration
  * @property {boolean} enabled - Whether the resource is sync-enabled.
@@ -500,6 +507,7 @@
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {StructureSqlConfiguration} [structureSql] - Structure SQL generation configuration.
+ * @property {VelociousSyncConfiguration} [sync] - Local/offline sync framework configuration.
  * @property {TenantResolverType} [tenantResolver] - Resolver for creating request-scoped tenant context objects.
  * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
  * @property {Record<string, TenantDatabaseProviderType>} [tenantDatabaseProviders] - Tenant database lifecycle providers keyed by database identifier.

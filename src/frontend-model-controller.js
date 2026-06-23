@@ -5,7 +5,8 @@ import Controller from "./controller.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
 import Response from "./http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-models/built-in-resources.js"
-import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
+import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject, frontendModelSyncManifestForBackendProjects} from "./frontend-models/resource-definition.js"
+import {createOfflineGrantFromBootstrap} from "./sync/offline-grant.js"
 import {FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import {requestDetails} from "./error-reporting/request-details.js"
@@ -3436,6 +3437,106 @@ export default class FrontendModelController extends Controller {
     await resource.destroy(model)
 
     return {status: "success"}
+  }
+
+  /**
+   * Runs frontend sync bootstrap.
+   * @returns {Promise<void>} - Sync bootstrap response with manifest and signed offline grant.
+   */
+  async frontendSyncBootstrap() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = /** @type {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue | undefined>} */ (deserializeFrontendModelTransportValue(this.params()))
+    const configuration = this.getConfiguration()
+    const syncManifest = frontendModelSyncManifestForBackendProjects(configuration.getBackendProjects())
+    const offlineGrant = await createOfflineGrantFromBootstrap({
+      deviceId: this.frontendSyncBootstrapDeviceId(params),
+      grantId: this.frontendSyncBootstrapGrantId(params),
+      grantTtlMs: configuration.getSyncConfiguration().offlineGrantTtlMs,
+      now: this.frontendSyncBootstrapNow(params),
+      resources: syncManifest,
+      scopes: this.frontendSyncBootstrapScopes(params),
+      signingKey: configuration.currentOfflineGrantSigningKey(),
+      userId: this.frontendSyncBootstrapUserId()
+    })
+
+    await this.render({
+      json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue({
+        offlineGrant,
+        status: "success",
+        syncManifest
+      }, this.transportSerializationOptions()))
+    })
+  }
+
+  /**
+   * Resolves device id for sync bootstrap.
+   * @param {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue | undefined>} params - Request params.
+   * @returns {string} - Device id.
+   */
+  frontendSyncBootstrapDeviceId(params) {
+    if (typeof params.deviceId === "string" && params.deviceId.length > 0) return params.deviceId
+
+    throw new Error("Expected sync bootstrap deviceId")
+  }
+
+  /**
+   * Resolves grant id for sync bootstrap.
+   * @param {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue | undefined>} params - Request params.
+   * @returns {string | undefined} - Deterministic grant id for tests, generated id otherwise.
+   */
+  frontendSyncBootstrapGrantId(params) {
+    if (this.getConfiguration().getEnvironment() === "test" && typeof params.grantId === "string") return params.grantId
+
+    return undefined
+  }
+
+  /**
+   * Resolves bootstrap issue time.
+   * @param {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue | undefined>} params - Request params.
+   * @returns {Date} - Issue time.
+   */
+  frontendSyncBootstrapNow(params) {
+    if (this.getConfiguration().getEnvironment() === "test" && typeof params.now === "string") return new Date(params.now)
+
+    return new Date()
+  }
+
+  /**
+   * Resolves sync bootstrap scopes.
+   * @param {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue | undefined>} params - Request params.
+   * @returns {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue>} - Grant scopes.
+   */
+  frontendSyncBootstrapScopes(params) {
+    const scopes = params.scopes
+
+    if (scopes && typeof scopes === "object" && !Array.isArray(scopes)) {
+      return /** @type {Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue>} */ (scopes)
+    }
+
+    return {}
+  }
+
+  /**
+   * Resolves current user id for sync bootstrap.
+   * @returns {string} - User id.
+   */
+  frontendSyncBootstrapUserId() {
+    const ability = this.currentAbility()
+    const currentUser = ability?.currentUser()
+
+    if (typeof currentUser === "string" || typeof currentUser === "number") return String(currentUser)
+    if (currentUser && typeof currentUser === "object") {
+      const userRecord = /** @type {{id?: string | number | (() => string | number)}} */ (currentUser)
+      const idValue = typeof userRecord.id === "function" ? userRecord.id() : userRecord.id
+
+      if (typeof idValue === "string" || typeof idValue === "number") return String(idValue)
+    }
+
+    throw new Error("Expected sync bootstrap current user")
   }
 
   /**
