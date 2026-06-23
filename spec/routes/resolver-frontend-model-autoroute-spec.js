@@ -13,28 +13,20 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 class ClassBasedFrontendModelResource extends FrontendModelBaseResource {
   static ModelClass = Task
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id"],
-      builtInCollectionCommands: ["index"],
-      builtInMemberCommands: ["find"]
-    }
-  }
+    static attributes = ["id"]
+
+  static builtInCollectionCommands = ["index"]
+
+  static builtInMemberCommands = ["find"]
 }
 
 class CreateFrontendModelResource extends FrontendModelBaseResource {
   static ModelClass = Task
-  /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read", "create"],
-      attributes: ["id"],
-      builtInCollectionCommands: ["index", "create"],
-      builtInMemberCommands: ["find"]
-    }
-  }
+    static attributes = ["id"]
+
+  static builtInCollectionCommands = ["index", "create"]
+
+  static builtInMemberCommands = ["find"]
 }
 
 /**

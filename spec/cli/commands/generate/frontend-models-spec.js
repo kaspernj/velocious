@@ -23,10 +23,7 @@ class Call extends DatabaseRecord {
 class CallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: {
+    static attributes = {
         id: {type: "uuid"},
         startedAt: {type: "datetime", null: true},
         durationSeconds: {dataType: "integer"},
@@ -34,8 +31,6 @@ class CallFrontendResource extends FrontendModelBaseResource {
         active: {type: "boolean"},
         endedAt: {type: "timestamp without time zone", null: true}
       }
-    }
-  }
 
   /** @returns {Array<string>} - Permit spec for Call writes. */
   permittedParams() {
@@ -46,10 +41,7 @@ class CallFrontendResource extends FrontendModelBaseResource {
 class InferredCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: [
+    static attributes = [
         "id",
         {name: "startedAt", selectedByDefault: false},
         {name: "durationSeconds", selectedByDefault: false},
@@ -57,8 +49,6 @@ class InferredCallFrontendResource extends FrontendModelBaseResource {
         {name: "active", selectedByDefault: false},
         {name: "eA", selectedByDefault: false}
       ]
-    }
-  }
 }
 
 class TranslatedCall extends DatabaseRecord {}
@@ -69,34 +59,19 @@ class TranslatedCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = TranslatedCall
   static translatedAttributes = ["title"]
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: ["id", {name: "title", selectedByDefault: false}]
-    }
-  }
+    static attributes = ["id", {name: "title", selectedByDefault: false}]
 }
 
 class UninferableCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: ["unknownComputed"]
-    }
-  }
+    static attributes = ["unknownComputed"]
 }
 
 class MissingAbilitiesTaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = backendProjects[0].frontendModels.Task.ModelClass
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: ["id", "name"]
-    }
-  }
+    static attributes = ["id", "name"]
 }
 
 class MissingRelationshipTargetTask extends DatabaseRecord {}
@@ -105,51 +80,35 @@ MissingRelationshipTargetTask.belongsTo("project")
 class MissingRelationshipTargetTaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = MissingRelationshipTargetTask
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: {
+    static attributes = {
         id: {type: "integer"},
         name: {type: "varchar", null: true}
-      },
-      relationships: ["project"]
-    }
-  }
+      }
+
+  static relationships = ["project"]
 }
 
 class NullableIdCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: {id: {type: "uuid", null: true}}
-    }
-  }
+    static attributes = {id: {type: "uuid", null: true}}
 }
 
 class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: {id: {type: "uuid"}},
-      memberCommands: [
+    static attributes = {id: {type: "uuid"}}
+
+  static memberCommands = [
         "ping",
         {name: "refresh", args: [{name: "age", type: "number"}], returnType: "{refreshedAt: string}"}
       ]
-    }
-  }
 }
 
 // An abstract base resource other resources extend — deliberately has no static
 // ModelClass, like an app's shared `BaseResource`.
 class AbstractBaseFrontendResource extends FrontendModelBaseResource {
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {attributes: []}
-  }
+    static attributes = []
 }
 
 class User extends DatabaseRecord {}
@@ -158,15 +117,10 @@ User.setPrimaryKey("reference")
 class ReferenceUserFrontendResource extends FrontendModelBaseResource {
   static ModelClass = User
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: [
+    static attributes = [
         {name: "reference", type: "varchar"},
         {name: "email", type: "varchar"}
       ]
-    }
-  }
 }
 
 class LegacyPrimaryKeyUser extends DatabaseRecord {}
@@ -175,15 +129,10 @@ LegacyPrimaryKeyUser.setPrimaryKey("LegacyID")
 class LegacyPrimaryKeyUserFrontendResource extends FrontendModelBaseResource {
   static ModelClass = LegacyPrimaryKeyUser
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: [
+    static attributes = [
         {name: "legacyID", type: "integer"},
         {name: "email", type: "varchar"}
       ]
-    }
-  }
 }
 
 class ConfiguredPrimaryKeyUser extends DatabaseRecord {}
@@ -192,16 +141,12 @@ ConfiguredPrimaryKeyUser.setPrimaryKey("LegacyID")
 class ConfiguredPrimaryKeyUserFrontendResource extends FrontendModelBaseResource {
   static ModelClass = ConfiguredPrimaryKeyUser
 
-  /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      attributes: [
+    static attributes = [
         {name: "legacyID", type: "integer"},
         {name: "email", type: "varchar"}
-      ],
-      primaryKey: "legacyID"
-    }
-  }
+      ]
+
+  static primaryKey = "legacyID"
 }
 
 /** @returns {void} */
@@ -681,13 +626,7 @@ Report._attributeNameToColumnName = {
 export default class ReportResource extends FrontendModelBaseResource {
   static ModelClass = Report
 
-  /** @returns {import("${repositoryDirectory}/src/configuration-types.js").FrontendModelResourceConfiguration} */
-  static resourceConfig() {
-    return {
-      abilities: ["read"],
-      attributes: ["id", "statusCode"]
-    }
-  }
+    static attributes = ["id", "statusCode"]
 
   /**
    * Formats the numeric status code for frontend display.
@@ -935,14 +874,9 @@ export default class ReportResource extends FrontendModelBaseResource {
         ]
       }
 
-      /** @returns {import("../../../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: {
-            id: {type: "integer"},
-            name: {type: "varchar", null: true}
-          }
-        }
+      static attributes = {
+        id: {type: "integer"},
+        name: {type: "varchar", null: true}
       }
     }
 

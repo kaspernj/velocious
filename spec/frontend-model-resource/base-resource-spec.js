@@ -7,6 +7,301 @@ import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 
 describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, () => {
+  it("falls back to shared resource static config when environment resource omits it", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      static attributes = ["id", "name"]
+      static abilities = ["approve", "archive"]
+      static relationships = ["tasks"]
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    expect(ProjectResource.resourceConfig()).toEqual({
+      abilities: ["approve", "archive"],
+      attributes: ["id", "name"],
+      relationships: ["tasks"]
+    })
+  })
+
+  it("uses environment resource static config before shared resource static config", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      static attributes = ["id", "name"]
+      static abilities = ["approve"]
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+      static attributes = ["id", "title"]
+    }
+
+    expect(ProjectResource.resourceConfig()).toEqual({
+      abilities: ["approve"],
+      attributes: ["id", "title"]
+    })
+  })
+
+  it("falls back to shared resource translated attributes", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      static translatedAttributes = ["name", "description"]
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    expect(ProjectResource.translatedAttributesConfig()).toEqual(["name", "description"])
+  })
+
+  it("falls back to shared static command config", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      static attributes = ["id", "name"]
+
+      static collectionCommands = ["refreshAll"]
+
+      static memberCommands = ["archive"]
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    expect(ProjectResource.resourceConfig()).toEqual({
+      attributes: ["id", "name"],
+      collectionCommands: ["refreshAll"],
+      memberCommands: ["archive"]
+    })
+  })
+
+  it("preserves inherited environment static config before shared resource static config", () => {
+    class ParentProjectResource extends FrontendModelBaseResource {
+      static attributes = ["id", "parentName"]
+      static abilities = ["parentRead"]
+    }
+
+    class SharedProjectResource extends FrontendModelBaseResource {
+      static attributes = ["id", "sharedName", "sharedSecret"]
+      static abilities = ["sharedRead", "sharedUpdate"]
+    }
+
+    class ProjectResource extends ParentProjectResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    expect(ProjectResource.resourceConfig()).toEqual({
+      abilities: ["parentRead"],
+      attributes: ["id", "parentName"]
+    })
+  })
+
+  it("runs shared abilities against the environment resource model class", () => {
+    const ModelClass = class ProjectForSharedAbilities extends DatabaseRecord {}
+    /** @type {{actions: string, conditions: unknown, modelClass: typeof DatabaseRecord}[]} */
+    const calls = []
+    const ability = /** @type {import("../../src/authorization/ability.js").default} */ ({
+      /**
+       * @param {string} actions - Ability action.
+       * @param {typeof DatabaseRecord} modelClass - Ability model class.
+       * @param {unknown} conditions - Ability conditions.
+       * @returns {void}
+       */
+      can(actions, modelClass, conditions) {
+        calls.push({actions, conditions, modelClass})
+      }
+    })
+
+    class SharedProjectResource extends FrontendModelBaseResource {
+      abilities() {
+        this.can("read")
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      ability,
+      modelClass: ModelClass,
+      modelName: "Project",
+      params: {}
+    })
+
+    resource.abilities()
+
+    expect(calls).toEqual([{actions: "read", conditions: undefined, modelClass: ModelClass}])
+  })
+
+  it("falls back to shared resource instance methods when environment resource uses defaults", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {Array<string | Record<string, ?>>} */
+      permittedParams() {
+        return ["name", {tasksAttributes: ["name"]}]
+      }
+
+      /** @returns {{sharedNormalized: boolean}} */
+      normalizeCreateAttributes() {
+        return {sharedNormalized: true}
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      modelClass: class extends DatabaseRecord {},
+      modelName: "Project",
+      params: {}
+    })
+
+    expect(resource.permittedParams({action: "create"})).toEqual(["name", {tasksAttributes: ["name"]}])
+    expect(resource.normalizeCreateAttributes({}, {})).toEqual({sharedNormalized: true})
+  })
+
+  it("uses environment resource instance methods before shared resource methods", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {string[]} */
+      permittedParams() {
+        return ["sharedName"]
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+
+      /** @returns {string[]} */
+      permittedParams() {
+        return ["environmentName"]
+      }
+    }
+
+    const resource = new ProjectResource({
+      modelClass: class extends DatabaseRecord {},
+      modelName: "Project",
+      params: {}
+    })
+
+    expect(resource.permittedParams({action: "create"})).toEqual(["environmentName"])
+  })
+
+  it("resolves shared custom command and attribute hook methods", () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {{status: string}} */
+      refresh() {
+        return {status: "shared"}
+      }
+
+      /** @returns {string} */
+      statusAttribute() {
+        return "shared-status"
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      modelClass: class extends DatabaseRecord {},
+      modelName: "Project",
+      params: {}
+    })
+
+    const command = resource.resourceMethod("refresh")
+    const attribute = resource.resourceMethod("statusAttribute")
+
+    expect(command?.method.call(command.resource)).toEqual({status: "shared"})
+    expect(attribute?.method.call(attribute.resource)).toEqual("shared-status")
+  })
+
+  it("exposes portable context helpers and model registry to shared resources", () => {
+    const now = new Date("2026-01-02T03:04:05.000Z")
+    const currentUser = {id: 123}
+    const currentDevice = {id: "scanner-1"}
+    const offlineGrant = {id: "grant-1"}
+
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {Record<string, ?>} */
+      contextSnapshot() {
+        return {
+          currentDevice: this.currentDevice(),
+          currentUser: this.currentUser(),
+          isBackend: this.isBackend(),
+          isFrontend: this.isFrontend(),
+          isOffline: this.isOffline(),
+          now: this.now(),
+          offlineGrant: this.offlineGrant(),
+          taskModel: this.model("Task")
+        }
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      context: {
+        currentDevice,
+        currentUser,
+        modelRegistry: {Task},
+        now: () => now,
+        offlineGrant,
+        resourceRuntime: "backend"
+      },
+      modelClass: Project,
+      modelName: "Project",
+      params: {}
+    })
+    const method = resource.resourceMethod("contextSnapshot")
+
+    expect(method?.method.call(method.resource)).toEqual({
+      currentDevice,
+      currentUser,
+      isBackend: true,
+      isFrontend: false,
+      isOffline: true,
+      now,
+      offlineGrant,
+      taskModel: Task
+    })
+  })
+
+  it("applies shared virtual setters", async () => {
+    class SharedProjectResource extends FrontendModelBaseResource {
+      /** @returns {string[]} */
+      permittedParams() {
+        return ["status"]
+      }
+
+      /**
+       * @param {Project} model - Project model.
+       * @param {unknown} value - Status value.
+       * @returns {void}
+       */
+      setStatusAttribute(model, value) {
+        model.setTasksCount(Number(value))
+      }
+    }
+
+    class ProjectResource extends FrontendModelBaseResource {
+      static SharedResource = SharedProjectResource
+    }
+
+    const resource = new ProjectResource({
+      modelClass: Project,
+      modelName: "Project",
+      params: {}
+    })
+    const model = await Project.create({})
+
+    await resource.update(model, {status: 42})
+
+    expect(model.tasksCount()).toEqual(42)
+  })
+
   it("defaults to permitting nothing — subclasses must override to enable writes", () => {
     class ProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "name", "description"]

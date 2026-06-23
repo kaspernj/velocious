@@ -3,19 +3,33 @@
 ## Resource recipe requirement
 Frontend model usage should require explicit backend resource recipes.
 
-A backend project should declare resources with:
-- `path`
-- `attributes`
-- `abilities`
+A backend project should declare resources with static resource properties:
+- `static attributes`
+- optional `abilities` for additional per-record `record.can(action)` checks
 - optional `commands`
 - optional `attachments`
 - optional server behavior (`records`, `serialize`, `beforeAction`)
+
+Backend resource classes must not override `static resourceConfig()`; Velocious throws during resource normalization. Use declarative static fields instead so resource config stays easy to scan and shared-resource fallback has one config path.
+
+Base CRUD ability actions (`read`, `create`, `update`, `destroy`) are always included by the framework; do not list them in `abilities` or Velocious throws during resource normalization.
 
 Without a resource definition, frontend models should not silently work.
 
 ## Attachment command mapping
 - Resource `commands` can map `attach`, `download`, and `url` in addition to CRUD/index commands.
 - Resource `attachments` defines attachment helpers generated on frontend models.
+
+## Shared resource fallback
+- Environment-specific resources may declare `static SharedResource = SharedModelResource` to reuse a bundled shared resource recipe.
+- Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value, framework default.
+- Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.
+- Custom resource methods such as collection/member commands, computed `${name}Attribute` hooks, and virtual setters can live on the shared resource when their config is inherited from it.
+- Shared `abilities()` runs with the environment resource's model class, so helpers such as `this.can("read")` authorize the concrete backend model.
+- Shared resources should resolve portable model classes through `this.model("Task")` instead of importing backend-only files directly. The resource context can provide `modelRegistry`, `model(name)`, or a backend `configuration` model map.
+- Portable context helpers available to shared resources include `currentUser()`, `currentDevice()`, `offlineGrant()`, `now()`, `resourceRuntime()`, `isBackend()`, `isFrontend()`, and `isOffline()`.
+- Shared resources should treat `this.model(...)`, query APIs, and context helpers as the portability boundary. Avoid raw SQL, Node-only imports, secrets, direct database driver access, or environment-specific globals in shared resource files.
+- Treat shared resources as reusable defaults, not a security boundary. Environment resources should still override attributes, permissions, commands, or hooks whenever a frontend/backend deployment needs narrower behavior.
 
 ## Custom index records
 - Override `indexQuery(options)` when the default index behavior is correct but the resource needs an additional scope. Call `super.indexQuery(options)` and add the resource-specific filters, joins, or select data. The `options` object can include `includePagination` and `includeSort`.
@@ -32,16 +46,12 @@ Without a resource definition, frontend models should not silently work.
 - Both forms can be mixed in the same array; string entries are unchanged and stay variadic (`async refresh(...commandArguments)`).
 
 ```js
-static resourceConfig() {
-  return {
-    abilities: ["read"],
-    attributes: ["id"],
-    memberCommands: [
-      "suspend",
-      {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}
-    ]
-  }
-}
+static attributes = ["id"]
+
+static memberCommands = [
+  "suspend",
+  {name: "refresh", args: [{name: "age", type: "number"}], returnType: "string"}
+]
 ```
 
 generates, on the frontend model:

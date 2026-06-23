@@ -1439,7 +1439,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
    */
   frontendAttributeIsTranslated({attributeName, modelClass, resourceClass}) {
     if (resourceClass) {
-      const translatedAttributes = resourceClass.translatedAttributes
+      const translatedAttributes = resourceClass.translatedAttributesConfig()
 
       if (Array.isArray(translatedAttributes) && translatedAttributes.includes(attributeName)) return true
     }

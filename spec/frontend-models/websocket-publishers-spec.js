@@ -13,27 +13,21 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: ["id", "name"],
-          builtInCollectionCommands: ["index"],
-          builtInMemberCommands: ["find"]
-        }
-      }
+      static attributes = ["id", "name"]
+
+      static builtInCollectionCommands = ["index"]
+
+      static builtInMemberCommands = ["find"]
     }
 
     class TestUserResource extends FrontendModelBaseResource {
       static ModelClass = User
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: ["id", "email"],
-          builtInCollectionCommands: ["index"],
-          builtInMemberCommands: ["find"]
-        }
-      }
+      static attributes = ["id", "email"]
+
+      static builtInCollectionCommands = ["index"]
+
+      static builtInMemberCommands = ["find"]
     }
 
     /** @type {string[]} */
@@ -127,14 +121,11 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: ["id", "name"],
-          builtInCollectionCommands: ["index"],
-          builtInMemberCommands: ["find"]
-        }
-      }
+      static attributes = ["id", "name"]
+
+      static builtInCollectionCommands = ["index"]
+
+      static builtInMemberCommands = ["find"]
     }
 
     const mockConfiguration = {
@@ -163,14 +154,11 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: ["id", "name"],
-          builtInCollectionCommands: ["index"],
-          builtInMemberCommands: ["find"]
-        }
-      }
+      static attributes = ["id", "name"]
+
+      static builtInCollectionCommands = ["index"]
+
+      static builtInMemberCommands = ["find"]
     }
 
     const mockConfiguration = {
@@ -203,14 +191,11 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: ["id", "name"],
-          builtInCollectionCommands: ["index"],
-          builtInMemberCommands: ["find"]
-        }
-      }
+      static attributes = ["id", "name"]
+
+      static builtInCollectionCommands = ["index"]
+
+      static builtInMemberCommands = ["find"]
     }
 
     /** @type {{path: string, frontendModels?: Record<string, unknown>}} */

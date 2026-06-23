@@ -27,9 +27,6 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
   }
 
   /** @type {string[]} */
-  static abilities = ["read"]
-
-  /** @type {string[]} */
   static builtInCollectionCommands = ["index"]
 
   /** @type {string[]} */

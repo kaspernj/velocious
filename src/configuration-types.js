@@ -240,7 +240,7 @@
  */
 
 /**
- * @typedef {Record<string, unknown> & {configuration?: import("./configuration.js").default, currentUser?: unknown, params?: VelociousParams, request?: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default}} VelociousLooseObject
+ * @typedef {Record<string, unknown> & {configuration?: import("./configuration.js").default, currentDevice?: unknown, currentUser?: unknown, modelRegistry?: Record<string, unknown> | {model: (name: string) => unknown}, now?: Date | (() => Date), offlineGrant?: unknown, params?: VelociousParams, request?: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, resourceRuntime?: "backend" | "frontend" | "offline"}} VelociousLooseObject
  */
 
 /**
@@ -309,13 +309,14 @@
 /**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {Array<string | FrontendModelAttributeConfiguration> | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
- * @property {string[]} [abilities] - Ability action list (camelCase action names). Defaults to `["read"]` for `find` and `index` when omitted.
+ * @property {string[]} [abilities] - Additional camelCase ability action names to expose for per-record `record.can(action)` reads. Base CRUD actions (`read`, `create`, `update`, `destroy`) are always included and must not be listed here.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {string[]} [commands] - Legacy built-in command names (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
  * @property {Array<FrontendModelResourceCustomCommand>} [collectionCommands] - Custom collection commands. Each entry is a camelCase method name, or a `{name, args?, returnType?}` object declaring typed arguments and/or a response type. The runtime derives the kebab-case command slug from the name.
  * @property {Array<FrontendModelResourceCustomCommand>} [memberCommands] - Custom member commands. Each entry is a camelCase method name, or a `{name, args?, returnType?}` object declaring typed arguments and/or a response type. The runtime derives the kebab-case command slug from the name.
  * @property {string[]} [builtInCollectionCommands] - Built-in collection command names (`index`, `create`).
  * @property {string[]} [builtInMemberCommands] - Built-in member command names (`find`, `update`, `destroy`, `attach`, `download`, `url`).
+ * @property {string} [modelName] - Frontend model name override.
  * @property {string[]} [relationships] - Relationship names to expose in frontend models. Type and target model are inferred from the backend model's registered relationships.
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.

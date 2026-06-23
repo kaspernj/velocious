@@ -123,14 +123,11 @@ describe("routes - resolver hooks", {databaseCleaning: {transaction: true}}, asy
     class TaskFrontendResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
-      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
-      static resourceConfig() {
-        return {
-          attributes: ["id", "name"],
-          builtInCollectionCommands: ["index"],
-          builtInMemberCommands: ["find"]
-        }
-      }
+      static attributes = ["id", "name"]
+
+      static builtInCollectionCommands = ["index"]
+
+      static builtInMemberCommands = ["find"]
     }
 
     const routes = new Routes()

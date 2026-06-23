@@ -5,6 +5,25 @@ import FrontendModelBaseResource from "../frontend-model-resource/base-resource.
 import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
 
+const BASE_FRONTEND_MODEL_ABILITY_ACTIONS = ["create", "destroy", "read", "update"]
+const RESOURCE_STATIC_CONFIG_KEYS = new Set([
+  "abilities",
+  "attachments",
+  "attributes",
+  "builtInCollectionCommands",
+  "builtInMemberCommands",
+  "collectionCommands",
+  "commands",
+  "memberCommands",
+  "modelName",
+  "ModelClass",
+  "primaryKey",
+  "relationships",
+  "server",
+  "SharedResource",
+  "translatedAttributes"
+])
+
 /**
  * Runs the frontendModelResourcesForBackendProject helper.
  * @param {import("../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project config.
@@ -50,7 +69,72 @@ export function frontendModelResourceClassFromDefinition(resourceDefinition) {
 export function frontendModelResourceConfigurationFromDefinition(resourceDefinition) {
   if (!frontendModelResourceDefinitionIsClass(resourceDefinition)) return null
 
+  assertResourceConfigIsFrameworkDefined(resourceDefinition)
+
   return normalizeFrontendModelResourceConfiguration(resourceDefinition.resourceConfig())
+}
+
+/**
+ * Ensures resources use declarative static config properties instead of overriding resourceConfig().
+ * @param {import("../configuration-types.js").FrontendModelResourceClassType} ResourceClass - Resource class.
+ * @param {Set<import("../configuration-types.js").FrontendModelResourceClassType>} [visited] - Already inspected shared resources.
+ * @returns {void}
+ */
+function assertResourceConfigIsFrameworkDefined(ResourceClass, visited = new Set()) {
+  if (visited.has(ResourceClass)) return
+
+  visited.add(ResourceClass)
+  assertKnownResourceStaticConfigProperties(ResourceClass)
+
+  const owner = staticMethodOwnerFor(ResourceClass, "resourceConfig")
+
+  if (owner && owner !== FrontendModelBaseResource) {
+    throw new Error(`${ResourceClass.name} overrides static resourceConfig(), which is not supported. Use static resource properties instead.`)
+  }
+
+  const SharedResource = ResourceClass.sharedResourceClass()
+
+  if (SharedResource) assertResourceConfigIsFrameworkDefined(SharedResource, visited)
+}
+
+/**
+ * Ensures declarative static resource config does not silently ignore typos or removed keys.
+ * @param {import("../configuration-types.js").FrontendModelResourceClassType} ResourceClass - Resource class.
+ * @returns {void}
+ */
+function assertKnownResourceStaticConfigProperties(ResourceClass) {
+  let currentClass = ResourceClass
+
+  while (currentClass && currentClass !== FrontendModelBaseResource && currentClass !== Function.prototype) {
+    /** @type {Record<string, ?>} */
+    const unknownStaticConfig = {}
+
+    for (const key of Object.keys(currentClass)) {
+      if (!RESOURCE_STATIC_CONFIG_KEYS.has(key)) unknownStaticConfig[key] = /** @type {Record<string, ?>} */ (/** @type {unknown} */ (currentClass))[key]
+    }
+
+    restArgsError(unknownStaticConfig)
+
+    currentClass = Object.getPrototypeOf(currentClass)
+  }
+}
+
+/**
+ * Locates which constructor owns a static method implementation.
+ * @param {import("../configuration-types.js").FrontendModelResourceClassType} ResourceClass - Resource class.
+ * @param {string} methodName - Method name.
+ * @returns {import("../configuration-types.js").FrontendModelResourceClassType | typeof FrontendModelBaseResource | null} - Class that owns the static method.
+ */
+function staticMethodOwnerFor(ResourceClass, methodName) {
+  let currentClass = ResourceClass
+
+  while (currentClass && currentClass !== Function.prototype) {
+    if (Object.prototype.hasOwnProperty.call(currentClass, methodName)) return currentClass
+
+    currentClass = Object.getPrototypeOf(currentClass)
+  }
+
+  return null
 }
 
 /**
@@ -102,36 +186,27 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
  * @returns {Record<string, string>} - Normalized abilities config.
  */
 function normalizeFrontendModelResourceAbilities(abilities) {
-  if (abilities === undefined) {
-    return defaultCrudAbilities()
-  }
+  const normalized = defaultCrudAbilities()
+
+  if (abilities === undefined) return normalized
 
   if (!Array.isArray(abilities)) {
     throw new Error("Resource abilities must be an array of action names. Object form is no longer supported.")
   }
 
-  if (abilities.includes("manage")) {
-    return {
-      create: "manage",
-      destroy: "manage",
-      find: "manage",
-      index: "manage",
-      update: "manage"
+  const duplicatedBaseAbilities = abilities.filter((ability) => BASE_FRONTEND_MODEL_ABILITY_ACTIONS.includes(ability))
+
+  if (duplicatedBaseAbilities.length > 0) {
+    throw new Error(`Resource abilities must not include base actions: ${duplicatedBaseAbilities.join(", ")}`)
+  }
+
+  for (const ability of abilities) {
+    if (typeof ability !== "string" || ability.length < 1) {
+      throw new Error("Resource abilities entries must be non-empty strings.")
     }
-  }
 
-  /**
-   * Normalized.
-   * @type {Record<string, string>} */
-  const normalized = {}
-
-  if (abilities.includes("create")) normalized.create = "create"
-  if (abilities.includes("destroy")) normalized.destroy = "destroy"
-  if (abilities.includes("read")) {
-    normalized.find = "read"
-    normalized.index = "read"
+    normalized[ability] = ability
   }
-  if (abilities.includes("update")) normalized.update = "update"
 
   return normalized
 }

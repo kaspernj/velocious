@@ -5,6 +5,19 @@ import FrontendModelBaseResource from "../../src/frontend-model-resource/base-re
 import {frontendModelResourceConfigurationFromDefinition} from "../../src/frontend-models/resource-definition.js"
 
 describe("frontendModelResourceConfigurationFromDefinition abilities normalization", {databaseCleaning: {transaction: true}}, () => {
+  it("rejects resourceConfig overrides on resource classes", () => {
+    class FooResource extends FrontendModelBaseResource {
+      /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
+      static resourceConfig() {
+        return {attributes: ["id"]}
+      }
+    }
+
+    expect(() => {
+      frontendModelResourceConfigurationFromDefinition(FooResource)
+    }).toThrow("FooResource overrides static resourceConfig(), which is not supported. Use static resource properties instead.")
+  })
+
   it("defaults to full CRUD when abilities are not declared", () => {
     class FooResource extends FrontendModelBaseResource {
       static attributes = ["id"]
@@ -21,31 +34,33 @@ describe("frontendModelResourceConfigurationFromDefinition abilities normalizati
     })
   })
 
-  it("honors an explicit subset of CRUD abilities", () => {
+  it("rejects base CRUD abilities in explicit resource abilities", () => {
     class FooResource extends FrontendModelBaseResource {
       static attributes = ["id"]
       static abilities = ["read"]
     }
 
-    const config = frontendModelResourceConfigurationFromDefinition(FooResource)
-
-    expect(config?.abilities).toEqual({find: "read", index: "read"})
+    expect(() => {
+      frontendModelResourceConfigurationFromDefinition(FooResource)
+    }).toThrow("Resource abilities must not include base actions: read")
   })
 
-  it("collapses every CRUD action onto 'manage' when manage is listed", () => {
+  it("adds custom explicit abilities on top of default CRUD abilities", () => {
     class FooResource extends FrontendModelBaseResource {
       static attributes = ["id"]
-      static abilities = ["manage"]
+      static abilities = ["approve", "archive"]
     }
 
     const config = frontendModelResourceConfigurationFromDefinition(FooResource)
 
     expect(config?.abilities).toEqual({
-      create: "manage",
-      destroy: "manage",
-      find: "manage",
-      index: "manage",
-      update: "manage"
+      archive: "archive",
+      approve: "approve",
+      create: "create",
+      destroy: "destroy",
+      find: "read",
+      index: "read",
+      update: "update"
     })
   })
 })
