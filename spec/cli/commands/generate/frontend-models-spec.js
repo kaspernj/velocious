@@ -105,6 +105,19 @@ class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
       ]
 }
 
+class SyncPolicyCallFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+    static attributes = {id: {type: "uuid"}, startedAt: {type: "datetime", null: true}}
+
+  static sync = {
+    metadata: {scope: "event"},
+    operations: ["index", "update"],
+    policy: {grantScopeAttributes: ["eventId"], writableAttributes: ["startedAt"]},
+    policyVersion: "scanner-v1"
+  }
+}
+
 // An abstract base resource other resources extend — deliberately has no static
 // ModelClass, like an app's shared `BaseResource`.
 class AbstractBaseFrontendResource extends FrontendModelBaseResource {
@@ -392,6 +405,41 @@ describe("Cli - generate - frontend-models", () => {
     expect(userContents).toContain("@typedef {Record<string, never>} UserUpdateAttributes")
     expect(userContents).not.toContain("@typedef {object} UserCreateAttributes")
     expect(userContents).not.toContain("@typedef {object} UserUpdateAttributes")
+  })
+
+  it("writes frontend-safe sync policy metadata into generated resource config", async () => {
+    const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-sync-policy-models-"))
+    const backendProjectsList = [{
+      frontendModels: {Call: SyncPolicyCallFrontendResource},
+      frontendModelsOutputPath: outputDirectory,
+      path: "/tmp/backend"
+    }]
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList,
+        initializeModels: async () => configureCallColumns()
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const callContents = await fs.readFile(`${outputDirectory}/src/frontend-models/call.js`, "utf8")
+
+    expect(callContents).toContain("      sync: {\n")
+    expect(callContents).toContain("        enabled: true,\n")
+    expect(callContents).toContain("        operations: [\n")
+    expect(callContents).toContain("          \"index\",\n")
+    expect(callContents).toContain("          \"update\",\n")
+    expect(callContents).toContain("        policyHash: \"sha256-")
+    expect(callContents).toContain("        policyVersion: \"scanner-v1\",\n")
+    expect(callContents).toContain("        metadata: {\n")
+    expect(callContents).toContain("          scope: \"event\",\n")
+    expect(callContents).not.toContain("grantScopeAttributes")
+    expect(callContents).not.toContain("writableAttributes")
   })
 
   it("keeps generated frontend write attributes on inherited create and update", async () => {

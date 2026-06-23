@@ -31,6 +31,23 @@ Without a resource definition, frontend models should not silently work.
 - Shared resources should treat `this.model(...)`, query APIs, and context helpers as the portability boundary. Avoid raw SQL, Node-only imports, secrets, direct database driver access, or environment-specific globals in shared resource files.
 - Treat shared resources as reusable defaults, not a security boundary. Environment resources should still override attributes, permissions, commands, or hooks whenever a frontend/backend deployment needs narrower behavior.
 
+## Sync policy metadata
+- Resources that participate in local/offline sync may declare `static sync` with safe metadata:
+
+  ```js
+  static sync = {
+    operations: ["index", "find", "update", "scanTicket"],
+    policyVersion: "scanner-v1",
+    metadata: {scope: "event"},
+    policy: {grantScopeAttributes: ["eventId"], writableAttributes: ["scanState"]}
+  }
+  ```
+
+- `metadata` is copied into generated frontend-model `resourceConfig().sync` and the sync manifest. Keep it frontend-safe: no secrets, tokens, private keys, raw SQL, backend file paths, driver config, or environment-specific values.
+- `policy` is not copied into generated frontend config. It is deterministic JSON included in `policyHash` so clients and peers can detect that their bundled resource policy no longer matches the backend policy.
+- `policyHash` is a `sha256-...` hash over deterministic sync inputs (`operations`, `policyVersion`, safe `metadata`, and `policy`). Bump `policyVersion` whenever shared resource policy changes in a way that should invalidate offline grants or peer-applied mutations.
+- Sync config accepts deterministic JSON only. Functions, classes, Dates, Maps, Sets, and secret-looking keys such as `privateKey`, `token`, `password`, or `secret` are rejected during resource normalization.
+
 ## Custom index records
 - Override `indexQuery(options)` when the default index behavior is correct but the resource needs an additional scope. Call `super.indexQuery(options)` and add the resource-specific filters, joins, or select data. The `options` object can include `includePagination` and `includeSort`.
 - Override `countIndexQueryOptions()` when a resource-specific `count()` needs different index-query options, for example `{includePagination: false, includeSort: false}` to count the full filtered scope while keeping paginated records.

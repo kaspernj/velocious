@@ -58,7 +58,15 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Defines this typedef.
- * @typedef {{attributes?: Array<string | FrontendModelAttributeDefinition> | Record<string, FrontendModelAttributeDefinition>, builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[]}} FrontendModelResourceConfig
+ * @typedef {Record<string, FrontendModelTransportValue>} FrontendModelSyncMetadata
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{enabled: boolean, operations: string[], policyHash: string, policyVersion: string | null, metadata?: FrontendModelSyncMetadata}} FrontendModelSyncConfig
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{attributes?: Array<string | FrontendModelAttributeDefinition> | Record<string, FrontendModelAttributeDefinition>, builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[], sync?: FrontendModelSyncConfig}} FrontendModelResourceConfig
  */
 /**
  * Frontend model constructor type.

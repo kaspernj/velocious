@@ -320,6 +320,7 @@
  * @property {string[]} [relationships] - Relationship names to expose in frontend models. Type and target model are inferred from the backend model's registered relationships.
  * @property {string} [primaryKey] - Primary key attribute name.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
+ * @property {FrontendModelResourceSyncConfiguration | boolean} [sync] - Optional safe local/offline sync policy metadata. `policy` participates in the hash but is not exposed to generated frontend config/manifest.
  */
 
 /**
@@ -338,13 +339,41 @@
  */
 
 /**
- * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands"> & {
+ * JSON value accepted by sync policy metadata/hash inputs.
+ * @typedef {null | string | number | boolean | unknown[] | Record<string, unknown>} FrontendModelSyncJsonValue
+ */
+
+/**
+ * Frontend-model local/offline sync policy config. `metadata` is exposed to
+ * frontends and peers; `policy` is hashed but intentionally omitted from
+ * frontend-safe manifests.
+ * @typedef {object} FrontendModelResourceSyncConfiguration
+ * @property {boolean} [enabled] - Whether the resource is sync-enabled. Defaults to true when `sync` is configured.
+ * @property {string[]} [operations] - Sync operation names such as `index`, `find`, `create`, `update`, custom domain commands, etc.
+ * @property {string | number} [policyVersion] - App-controlled policy version used as a stable change signal.
+ * @property {Record<string, FrontendModelSyncJsonValue>} [metadata] - Safe frontend-visible metadata.
+ * @property {Record<string, FrontendModelSyncJsonValue>} [policy] - Deterministic non-secret policy inputs included in the policy hash only.
+ */
+
+/**
+ * Frontend-safe normalized sync metadata.
+ * @typedef {object} NormalizedFrontendModelResourceSyncConfiguration
+ * @property {boolean} enabled - Whether the resource is sync-enabled.
+ * @property {string[]} operations - Sorted, duplicate-free sync operation names.
+ * @property {string | null} policyVersion - App-controlled policy version, or null.
+ * @property {string} policyHash - Deterministic sha256 hash of safe policy inputs.
+ * @property {Record<string, FrontendModelSyncJsonValue>} [metadata] - Safe frontend-visible metadata.
+ */
+
+/**
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "sync"> & {
  *   abilities: FrontendModelResourceAbilitiesConfiguration
  *   builtInCollectionCommands: Record<string, string>
  *   builtInMemberCommands: Record<string, string>
  *   collectionCommands: Record<string, string>
  *   commandMetadata: Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>
  *   memberCommands: Record<string, string>
+ *   sync?: NormalizedFrontendModelResourceSyncConfiguration
  * }} NormalizedFrontendModelResourceConfiguration
  */
 

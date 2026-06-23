@@ -442,6 +442,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
       fileContent += "      },\n"
     }
+    if (modelConfig.sync?.enabled) {
+      fileContent += this.formattedJsonProperty({
+        indent: "      ",
+        propertyName: "sync",
+        value: modelConfig.sync
+      })
+    }
     fileContent += "    }\n"
     fileContent += "  }\n"
 
@@ -997,6 +1004,62 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     output += `${indent}},\n`
 
     return output
+  }
+
+  /**
+   * Runs formatted JSON property.
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Base indentation.
+   * @param {string} args.propertyName - Object property name.
+   * @param {unknown} args.value - JSON-compatible value.
+   * @returns {string} - Formatted property.
+   */
+  formattedJsonProperty({indent, propertyName, value}) {
+    return `${indent}${propertyName}: ${this.formattedJsonValue({indent, value})},\n`
+  }
+
+  /**
+   * Runs formatted JSON value.
+   * @param {object} args - Formatting args.
+   * @param {string} args.indent - Indentation before this value.
+   * @param {unknown} args.value - JSON-compatible value.
+   * @returns {string} - Formatted value.
+   */
+  formattedJsonValue({indent, value}) {
+    if (Array.isArray(value)) {
+      let output = "[\n"
+
+      for (const entry of value) {
+        output += `${indent}  ${this.formattedJsonValue({indent: `${indent}  `, value: entry})},\n`
+      }
+
+      output += `${indent}]`
+
+      return output
+    }
+
+    if (value && typeof value === "object") {
+      let output = "{\n"
+
+      for (const key of Object.keys(value)) {
+        output += `${indent}  ${this.formattedObjectKey(key)}: ${this.formattedJsonValue({indent: `${indent}  `, value: /** @type {Record<string, unknown>} */ (value)[key]})},\n`
+      }
+
+      output += `${indent}}`
+
+      return output
+    }
+
+    return JSON.stringify(value)
+  }
+
+  /**
+   * Runs formatted object key.
+   * @param {string} key - Object key.
+   * @returns {string} - JavaScript object key.
+   */
+  formattedObjectKey(key) {
+    return /^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key)
   }
 
   /**

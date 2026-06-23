@@ -1,6 +1,7 @@
 // @ts-check
 
 import * as inflection from "inflection"
+import crypto from "node:crypto"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
@@ -21,6 +22,7 @@ const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "relationships",
   "server",
   "SharedResource",
+  "sync",
   "translatedAttributes"
 ])
 
@@ -157,7 +159,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     "modelName",
     "primaryKey",
     "relationships",
-    "server"
+    "server",
+    "sync"
   ]) {
     delete restArgs[key]
   }
@@ -165,6 +168,7 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
   restArgsError(restArgs)
 
   const normalizedCommands = normalizeFrontendModelResourceCommands(resourceConfiguration)
+  const sync = normalizeFrontendModelResourceSync(resourceConfiguration)
 
   return {
     ...resourceConfiguration,
@@ -176,7 +180,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     // name, derived from `{name, args?, returnType?}` command entries. The
     // generator uses it to type each custom command method.
     commandMetadata: normalizedCommands.commandMetadata,
-    memberCommands: normalizedCommands.memberCommands
+    memberCommands: normalizedCommands.memberCommands,
+    sync
   }
 }
 
@@ -223,6 +228,166 @@ function defaultCrudAbilities() {
     index: "read",
     update: "update"
   }
+}
+
+/**
+ * Builds a frontend-safe sync manifest for all sync-enabled frontend-model resources.
+ * @param {import("../configuration-types.js").BackendProjectConfiguration[]} backendProjects - Backend projects to scan.
+ * @returns {Record<string, import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration>} - Sync metadata keyed by model name.
+ */
+export function frontendModelSyncManifestForBackendProjects(backendProjects) {
+  /** @type {Record<string, import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration>} */
+  const manifest = {}
+
+  for (const backendProject of backendProjects) {
+    const resources = frontendModelResourcesForBackendProject(backendProject)
+
+    for (const configuredModelName of Object.keys(resources).sort()) {
+      const resourceDefinition = resources[configuredModelName]
+      const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+
+      if (!resourceConfiguration) continue
+      if (!resourceConfiguration.sync?.enabled) continue
+
+      const modelName = resourceConfiguration.modelName || configuredModelName
+
+      manifest[modelName] = resourceConfiguration.sync
+    }
+  }
+
+  return manifest
+}
+
+/**
+ * Normalizes sync policy metadata and computes a deterministic hash from safe policy inputs.
+ * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
+ * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration | undefined} - Frontend-safe sync metadata.
+ */
+function normalizeFrontendModelResourceSync(resourceConfiguration) {
+  const sync = resourceConfiguration.sync
+
+  if (sync === undefined || sync === null) return undefined
+  if (sync === false) return {enabled: false, operations: [], policyHash: syncPolicyHash({enabled: false}), policyVersion: null}
+  if (sync === true) {
+    return normalizeFrontendModelResourceSync({
+      ...resourceConfiguration,
+      sync: {operations: ["index", "find"]}
+    })
+  }
+  if (!sync || typeof sync !== "object" || Array.isArray(sync)) {
+    throw new Error("Resource sync configuration must be true, false, or an object.")
+  }
+
+  const {enabled = true, metadata, operations, policy, policyVersion, ...rest} = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration} */ (sync)
+
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`Unexpected sync keys: ${Object.keys(rest).join(", ")}. Allowed: enabled, metadata, operations, policy, policyVersion`)
+  }
+  if (enabled !== true && enabled !== false) throw new Error("Resource sync enabled must be true or false when provided.")
+
+  const normalizedOperations = normalizeSyncOperations(operations)
+  const normalizedMetadata = metadata === undefined ? undefined : deterministicSyncJson({label: "metadata", value: metadata})
+  const normalizedPolicy = policy === undefined ? undefined : deterministicSyncJson({label: "policy", value: policy})
+  const normalizedPolicyVersion = policyVersion === undefined || policyVersion === null ? null : String(policyVersion)
+  const hashInput = {
+    enabled,
+    metadata: normalizedMetadata,
+    modelName: resourceConfiguration.modelName || null,
+    operations: normalizedOperations,
+    policy: normalizedPolicy,
+    policyVersion: normalizedPolicyVersion
+  }
+  /** @type {import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration} */
+  const normalized = {
+    enabled,
+    operations: normalizedOperations,
+    policyHash: syncPolicyHash(hashInput),
+    policyVersion: normalizedPolicyVersion
+  }
+
+  if (normalizedMetadata !== undefined) normalized.metadata = /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (normalizedMetadata)
+
+  return normalized
+}
+
+/**
+ * Normalizes sync operations into a stable, duplicate-free list.
+ * @param {unknown} operations - Raw operations value.
+ * @returns {string[]} - Normalized operations.
+ */
+function normalizeSyncOperations(operations) {
+  if (operations === undefined) return []
+  if (!Array.isArray(operations)) throw new Error("Resource sync operations must be an array of operation names.")
+
+  const normalized = operations.map((operation) => {
+    if (typeof operation !== "string" || operation.length < 1) throw new Error("Resource sync operations entries must be non-empty strings.")
+
+    return operation
+  })
+
+  return [...new Set(normalized)].sort()
+}
+
+/**
+ * Builds a deterministic policy hash.
+ * @param {unknown} value - Hash input.
+ * @returns {string} - sha256-prefixed hash.
+ */
+function syncPolicyHash(value) {
+  return `sha256-${crypto.createHash("sha256").update(stableJsonStringify(value)).digest("hex")}`
+}
+
+/**
+ * Validates that a sync config subtree is deterministic JSON and does not contain obvious secrets.
+ * @param {object} args - Arguments.
+ * @param {string} args.label - Diagnostic path label.
+ * @param {unknown} args.value - Value to validate.
+ * @returns {import("../configuration-types.js").FrontendModelSyncJsonValue} - Stable JSON value.
+ */
+function deterministicSyncJson({label, value}) {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value
+
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => deterministicSyncJson({label: `${label}/${index}`, value: entry}))
+  }
+
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */
+    const normalized = {}
+
+    for (const key of Object.keys(value).sort()) {
+      const childValue = /** @type {Record<string, unknown>} */ (value)[key]
+
+      if (childValue === undefined) continue
+      if (syncConfigKeyLooksSecret(key)) {
+        throw new Error(`Sync policy ${label}/${key} is not allowed in frontend-visible sync policy config`)
+      }
+
+      normalized[key] = deterministicSyncJson({label: `${label}/${key}`, value: childValue})
+    }
+
+    return normalized
+  }
+
+  throw new Error("Sync policy input must be deterministic JSON")
+}
+
+/**
+ * Stable JSON stringifier with sorted object keys.
+ * @param {unknown} value - Value to stringify.
+ * @returns {string} - Stable JSON.
+ */
+function stableJsonStringify(value) {
+  return JSON.stringify(deterministicSyncJson({label: "hash", value}))
+}
+
+/**
+ * Returns whether a sync config key looks like a credential/secret.
+ * @param {string} key - Object key.
+ * @returns {boolean} - Whether key is disallowed.
+ */
+function syncConfigKeyLooksSecret(key) {
+  return /secret|token|password|private.?key|signing.?key/i.test(key)
 }
 
 /**
