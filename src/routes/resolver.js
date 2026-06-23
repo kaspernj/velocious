@@ -202,12 +202,14 @@ export default class VelociousRoutesResolver {
     await this._logActionStart({action, controllerClass, logMethod})
 
     try {
-      const tenant = skipTenantResolution
+      const tenant = skipTenantResolution || !this.configuration.getTenantResolver()
         ? undefined
-        : await this.configuration.resolveTenant({
-            params: {...this.queryParameters(), ...this.params},
-            request: this.request,
-            response: this.response
+        : await this.configuration.ensureConnections({name: `${controllerClass.name}.${action} tenant resolution`}, async () => {
+            return await this.configuration.resolveTenant({
+              params: {...this.queryParameters(), ...this.params},
+              request: this.request,
+              response: this.response
+            })
           })
 
       const runAction = async () => {
