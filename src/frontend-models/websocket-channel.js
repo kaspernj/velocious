@@ -106,15 +106,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @returns {Promise<void>} Resolves after delivery.
    */
   async deliverBroadcast(body, meta) {
-    const configuration = this.session.configuration
-
-    if (configuration) {
-      await configuration.ensureConnections({name: "Frontend model websocket broadcast"}, async () => {
-        await this._deliverBroadcast(body, meta)
-      })
-      return
-    }
-
     await this._deliverBroadcast(body, meta)
   }
 

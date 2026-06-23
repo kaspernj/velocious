@@ -158,6 +158,70 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     ])
   })
 
+  it("does not hold a generic broadcast checkout while resolving tenant-scoped event access", async () => {
+    /** @type {string[]} */
+    const checkoutNames = []
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    /** @type {string | null} */
+    let activeCheckoutName = null
+    const configuration = {
+      ensureConnections: async (/** @type {{name: string}} */ options, /** @type {() => Promise<boolean | void>} */ callback) => {
+        if (activeCheckoutName) {
+          throw new Error(`Nested checkout ${options.name} while ${activeCheckoutName} is active`)
+        }
+
+        activeCheckoutName = options.name
+        checkoutNames.push(options.name)
+
+        try {
+          return await callback()
+        } finally {
+          activeCheckoutName = null
+        }
+      },
+      resolveTenant: async () => ({slug: "alpha"}),
+      runWithTenant: async (/** @type {{slug: string}} */ _tenant, /** @type {() => Promise<boolean | void>} */ callback) => await callback()
+    }
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "Task", project_slug: "alpha"},
+      // @ts-expect-error Minimal session stub for direct channel delivery.
+      session: {
+        configuration,
+        getMetadata: () => ({}),
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame),
+        upgradeRequest: {
+          headers: () => ({}),
+          remoteAddress: () => "127.0.0.1"
+        }
+      },
+      subscriptionId: "tenant-access-checkout"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._eventIsAccessible = async (id) => {
+      return await channel._withEventTenant(id, async () => true)
+    }
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: "task-1",
+      record: {id: "task-1", name: "Task 1"}
+    })
+
+    expect(checkoutNames).toEqual(["Frontend model websocket event tenant"])
+    expect(sentFrames.map((frame) => frame.body)).toEqual([
+      {
+        action: "update",
+        id: "task-1",
+        record: {
+          id: "task-1",
+          name: "Task 1"
+        }
+      }
+    ])
+  })
+
   it("forwards the subscriber's auth params to resolveAbility", async () => {
     /** @type {Array<Record<string, unknown>>} */
     const resolveAbilityParams = []
