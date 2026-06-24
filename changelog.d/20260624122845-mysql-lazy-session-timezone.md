@@ -1,0 +1,1 @@
+MySQL/MariaDB drivers now set the session timezone to UTC immediately before each query instead of only during connect, so pooled/retried physical sessions keep timezone-less datetime storage consistent.

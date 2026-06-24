@@ -7,6 +7,8 @@ const mysqlConfig = digg(configuration, "database", "test", "default")
 class QueryCapturingMysqlDriver extends DatabaseDriversMysql {
   /** @type {Array<{options: import("../../../../src/database/drivers/base.js").QueryOptions, sql: string}>} */
   queries = []
+  /** @type {string[]} */
+  actualQueries = []
 
   /**
    * @param {string} sql - SQL string.
@@ -15,6 +17,16 @@ class QueryCapturingMysqlDriver extends DatabaseDriversMysql {
    */
   async query(sql, options = {}) {
     this.queries.push({options, sql})
+
+    return []
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {Promise<import("../../../../src/database/drivers/base.js").QueryResultType>} - Query result.
+   */
+  async _queryActual(sql) {
+    this.actualQueries.push(sql)
 
     return []
   }
@@ -82,16 +94,59 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     ])
   })
 
-  it("sets the session time zone to UTC without process-list comments", async () => {
+  it("sets the session time zone before each query", async () => {
     const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
 
-    await mysql.setSessionTimezoneToUtc()
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 1")
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 2")
 
-    expect(mysql.queries).toEqual([
-      {
-        options: {logName: "Set Session Time Zone", processListComment: false},
-        sql: "SET time_zone = '+00:00'"
+    expect(mysql.actualQueries).toEqual([
+      "SET time_zone = '+00:00'",
+      "SELECT 1",
+      "SET time_zone = '+00:00'",
+      "SELECT 2"
+    ])
+  })
+
+  it("sets the session time zone before retried queries", async () => {
+    class RetryMysqlDriver extends QueryCapturingMysqlDriver {
+      attempts = 0
+
+      /** @returns {Promise<void>} - Resolves when complete. */
+      async reconnect() {
+        // No-op for this retry unit test.
       }
+
+      /**
+       * @param {string} sql - SQL string.
+       * @returns {Promise<import("../../../../src/database/drivers/base.js").QueryResultType>} - Query result.
+       */
+      async _queryActual(sql) {
+        this.actualQueries.push(sql)
+
+        if (sql == "SELECT retry_me") {
+          this.attempts++
+          if (this.attempts == 1) {
+            const error = new Error("Connection lost during query")
+            // @ts-expect-error error code is provided by the mysql package at runtime.
+            error.code = "PROTOCOL_CONNECTION_LOST"
+            throw error
+          }
+        }
+
+        return []
+      }
+    }
+
+    const mysql = new RetryMysqlDriver(mysqlConfig, configuration)
+
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT retry_me")
+
+    expect(mysql.actualQueries).toEqual([
+      "SET time_zone = '+00:00'",
+      "SELECT retry_me",
+      "SET time_zone = '+00:00'",
+      "SELECT retry_me"
     ])
   })
 })
