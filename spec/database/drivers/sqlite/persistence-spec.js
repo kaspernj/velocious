@@ -62,12 +62,18 @@ async function loadSqlJs() {
  * @returns {Promise<SqliteWebDriver>} - Connected SQLite web driver.
  */
 async function buildSqliteWebDriver({SQL, databaseName, storage}) {
-  const databaseContent = await storage.get(localStorageName(databaseName))
+  const storageKey = localStorageName(databaseName)
+  const persistence = {
+    name: "localstorage",
+    delete: async () => storage.values.delete(storageKey),
+    load: async () => storage.get(storageKey),
+    save: async (content) => storage.set(storageKey, content)
+  }
+  const databaseContent = await persistence.load()
   const driver = new SqliteWebDriver({name: databaseName}, Configuration.current())
 
   driver.args = driver.getArgs()
-  driver.betterLocalStorage = /** @type {import("better-localstorage")} */ (storage)
-  driver._connection = new ConnectionSqlJs(driver, new SQL.Database(databaseContent))
+  driver._connection = new ConnectionSqlJs(driver, new SQL.Database(databaseContent), persistence)
 
   return driver
 }
