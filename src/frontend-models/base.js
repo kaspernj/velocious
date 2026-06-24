@@ -4003,6 +4003,12 @@ export default class FrontendModelBase {
           this.setAttribute(primaryKey, clientMutationId)
           offlineAttributes[primaryKey] = clientMutationId
         }
+      } else {
+        offlineAttributes[ModelClass.primaryKey()] = payload.id
+      }
+
+      if (payload.nestedAttributes !== undefined || payload.attachments !== undefined) {
+        throw new Error(`Offline sync for ${ModelClass.name} does not support nested attributes or attachments yet`)
       }
 
       await queueFrontendModelMutationOffline({

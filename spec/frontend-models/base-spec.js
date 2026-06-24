@@ -96,6 +96,70 @@ function buildOfflineSyncTestModelClass({operations}) {
 }
 
 /**
+ * @returns {typeof FrontendModelBase} - Offline sync attachment test model class.
+ */
+function buildOfflineAttachmentSyncTestModelClass() {
+  /** Offline sync frontend model with attachment definitions. */
+  class Task extends FrontendModelBase {
+    /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource configuration. */
+    static resourceConfig() {
+      return {
+        attachments: {descriptionFile: {type: "hasOne"}},
+        attributes: ["id", "name"],
+        commands: ["update"],
+        primaryKey: "id",
+        sync: {
+          enabled: true,
+          operations: ["update"],
+          policyHash: "sha256-task",
+          policyVersion: null
+        }
+      }
+    }
+  }
+
+  return Task
+}
+
+/**
+ * @returns {{Project: typeof FrontendModelBase}} - Offline sync nested test classes.
+ */
+function buildOfflineNestedSyncTestClasses() {
+  /** Offline nested sync child model. */
+  class Task extends FrontendModelBase {
+    /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource configuration. */
+    static resourceConfig() {
+      return {attributes: ["id", "projectId", "name"], primaryKey: "id"}
+    }
+  }
+
+  /** Offline nested sync parent model. */
+  class Project extends FrontendModelBase {
+    /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource configuration. */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name"],
+        commands: ["create"],
+        nestedAttributes: {tasks: {allowDestroy: true}},
+        primaryKey: "id",
+        sync: {
+          enabled: true,
+          operations: ["create"],
+          policyHash: "sha256-project",
+          policyVersion: null
+        }
+      }
+    }
+    /** @returns {Record<string, typeof FrontendModelBase>} */
+    static relationshipModelClasses() { return {tasks: Task} }
+    /** @returns {Record<string, {type: "hasMany"}>} */
+    static relationshipDefinitions() { return {tasks: {type: "hasMany"}} }
+  }
+
+  return {Project}
+}
+
+/**
  * @returns {typeof FrontendModelBase} - Test model with createdAt attribute.
  */
 function buildCreatedAtTestModelClass() {
@@ -2423,6 +2487,123 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }
   })
 
+  it("offline update queues changed attributes with the primary key", async () => {
+    const User = buildOfflineSyncTestModelClass({operations: ["update"]})
+    const fetchStub = stubFetch({model: {email: "john@example.com", id: 5, name: "Network"}})
+    const mutationLog = new LocalMutationLog({
+      idGenerator: () => "log-1",
+      now: () => new Date("2026-06-24T10:00:00.000Z"),
+      storage: buildMemoryStorage()
+    })
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+
+    try {
+      FrontendModelBase.configureTransport({
+        offlineSync: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          clientMutationId: () => "mutation-1",
+          enabled: true,
+          mutationLog,
+          now: () => new Date("2026-06-24T09:59:59.000Z"),
+          offlineGrant: {id: "grant-1"}
+        }
+      })
+      user.setAttribute("name", "Offline Renamed")
+
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([])
+      expect(user.isChanged()).toEqual(false)
+      expect((await mutationLog.records())[0].mutation).toEqual({
+        actorDeviceId: "device-1",
+        actorUserId: "user-1",
+        attributes: {id: 5, name: "Offline Renamed"},
+        baseVersion: null,
+        clientMutationId: "mutation-1",
+        model: "User",
+        occurredAt: "2026-06-24T09:59:59.000Z",
+        offlineGrantId: "grant-1",
+        operation: "update",
+        policyHash: "sha256-user"
+      })
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("offline save rejects nested attributes without clearing queued nested state", async () => {
+    const {Project} = buildOfflineNestedSyncTestClasses()
+    const fetchStub = stubFetch({model: {id: 7, name: "Launch"}})
+    const mutationLog = new LocalMutationLog({storage: buildMemoryStorage()})
+    const project = new Project({name: "Launch"})
+    project.getRelationshipByName("tasks").build({name: "Design"})
+
+    try {
+      FrontendModelBase.configureTransport({
+        offlineSync: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          enabled: true,
+          mutationLog,
+          offlineGrant: {id: "grant-1"}
+        }
+      })
+
+      await expect(async () => {
+        await project.save()
+      }).toThrow("Offline sync for Project does not support nested attributes or attachments yet")
+      expect(await mutationLog.records()).toEqual([])
+
+      FrontendModelBase.configureTransport({offlineSync: undefined})
+      await project.save()
+
+      expect(fetchStub.calls[0].body.nestedAttributes).toEqual({tasks: [{attributes: {name: "Design"}}]})
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("offline save rejects attachments without clearing queued attachment state", async () => {
+    const Task = buildOfflineAttachmentSyncTestModelClass()
+    const fetchStub = stubFetch({model: {id: 5, name: "Task"}})
+    const mutationLog = new LocalMutationLog({storage: buildMemoryStorage()})
+    const task = Task.instantiateFromResponse({id: 5, name: "Task"})
+
+    try {
+      FrontendModelBase.configureTransport({
+        offlineSync: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          enabled: true,
+          mutationLog,
+          offlineGrant: {id: "grant-1"}
+        }
+      })
+
+      await expect(async () => {
+        await task.update({descriptionFile: {contentBase64: "YQ==", filename: "a.txt"}})
+      }).toThrow("Offline sync for Task does not support nested attributes or attachments yet")
+      expect(await mutationLog.records()).toEqual([])
+
+      FrontendModelBase.configureTransport({offlineSync: undefined})
+      await task.save()
+
+      expect(fetchStub.calls[0].body.attachments).toEqual({
+        descriptionFile: {
+          contentBase64: "YQ==",
+          contentType: null,
+          filename: "a.txt"
+        }
+      })
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
   it("offline save rejects writes not allowed by the local sync policy", async () => {
     const User = buildOfflineSyncTestModelClass({operations: ["find", "index"]})
     const mutationLog = new LocalMutationLog({storage: buildMemoryStorage()})
@@ -2439,14 +2620,9 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
         }
       })
 
-      let error
-      try {
+      await expect(async () => {
         await user.save()
-      } catch (caughtError) {
-        error = caughtError
-      }
-
-      expect(error.message).toEqual("Offline sync for User does not allow create")
+      }).toThrow("Offline sync for User does not allow create")
       expect(await mutationLog.records()).toEqual([])
     } finally {
       resetFrontendModelTransport()

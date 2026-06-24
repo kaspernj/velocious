@@ -83,6 +83,29 @@ describe("local sync mutation log", () => {
     })
     expect(await mutationLog.pendingRecords()).toEqual([])
   })
+
+  it("serializes concurrent appends so no mutation is lost", async () => {
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({
+      idGenerator: nextValue(["log-1", "log-2"]),
+      now: nextNow(["2026-06-24T10:00:00.000Z", "2026-06-24T10:00:01.000Z"]),
+      storage
+    })
+
+    await Promise.all([
+      mutationLog.append({mutation: buildMutation({clientMutationId: "mutation-1"})}),
+      mutationLog.append({mutation: buildMutation({clientMutationId: "mutation-2"})})
+    ])
+
+    expect((await mutationLog.records()).map((record) => ({
+      clientMutationId: record.mutation.clientMutationId,
+      id: record.id,
+      sequence: record.sequence
+    }))).toEqual([
+      {clientMutationId: "mutation-1", id: "log-1", sequence: 1},
+      {clientMutationId: "mutation-2", id: "log-2", sequence: 2}
+    ])
+  })
 })
 
 function buildMutation(overrides = {}) {
@@ -114,4 +137,10 @@ function nextNow(values) {
   let index = 0
 
   return () => new Date(values[index++] || values[values.length - 1])
+}
+
+function nextValue(values) {
+  let index = 0
+
+  return () => values[index++] || values[values.length - 1]
 }

@@ -20,7 +20,7 @@ The storage adapter must expose:
 - `getItem(key)`
 - `setItem(key, value)`
 
-Both methods may be synchronous or async. Browser `localStorage`, AsyncStorage-style wrappers, and SQLite-backed wrappers can all be adapted.
+Both methods may be synchronous or async. Browser `localStorage`, AsyncStorage-style wrappers, and SQLite-backed wrappers can all be adapted. Writes are serialized per `storageKey` before the log reads, appends, and persists a new record so concurrent `append()` calls do not drop mutations or reuse the same sequence number.
 
 Each appended record contains:
 
@@ -61,6 +61,10 @@ Supported first-slice operations:
 - `destroy()` queues `destroy`.
 
 When a new record has no primary key yet, Velocious assigns the client mutation id as the temporary primary key and includes it in the mutation attributes. This gives later replay logic a stable id for create dependencies and temporary-id mapping.
+
+For persisted records, offline `update` mutations include the primary key alongside changed attributes so replay and conflict handling can identify the target row even though normal online updates carry the id outside `attributes`.
+
+Nested attributes and attachment payloads are not replayable in this first slice. If an offline `save()` includes either, Velocious rejects the offline save before queueing a mutation and leaves the nested/attachment pending state intact so the caller can retry online or with a later sync implementation.
 
 If the local sync policy does not list the operation, the write is rejected locally and no mutation is queued.
 

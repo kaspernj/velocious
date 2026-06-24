@@ -3,6 +3,8 @@
 const DEFAULT_STORAGE_KEY = "velocious.sync.localMutationLog"
 const PENDING_STATUSES = new Set(["pending", "applied-locally", "peer-applied"])
 const MUTATION_STATUSES = new Set([...PENDING_STATUSES, "conflict", "rejected", "synced"])
+/** @type {Map<string, Promise<unknown>>} */
+const STORAGE_KEY_LOCKS = new Map()
 
 /**
  * Local mutation log storage adapter.
@@ -65,23 +67,25 @@ export default class LocalMutationLog {
    * @returns {Promise<LocalMutationLogRecord>} - Created log record.
    */
   async append({dependencies = [], mutation}) {
-    const state = await this.loadState()
-    const timestamp = this.currentTimestamp()
-    const record = {
-      createdAt: timestamp,
-      dependencies: normalizeDependencies(dependencies),
-      id: this.idGenerator(),
-      mutation: normalizeMutation(mutation),
-      sequence: state.nextSequence,
-      status: /** @type {LocalMutationStatus} */ ("pending"),
-      updatedAt: timestamp
-    }
+    return await withStorageKeyLock(this.storageKey, async () => {
+      const state = await this.loadState()
+      const timestamp = this.currentTimestamp()
+      const record = {
+        createdAt: timestamp,
+        dependencies: normalizeDependencies(dependencies),
+        id: this.idGenerator(),
+        mutation: normalizeMutation(mutation),
+        sequence: state.nextSequence,
+        status: /** @type {LocalMutationStatus} */ ("pending"),
+        updatedAt: timestamp
+      }
 
-    state.nextSequence += 1
-    state.records.push(record)
-    await this.saveState(state)
+      state.nextSequence += 1
+      state.records.push(record)
+      await this.saveState(state)
 
-    return cloneRecord(record)
+      return cloneRecord(record)
+    })
   }
 
   /**
@@ -118,17 +122,19 @@ export default class LocalMutationLog {
   async updateStatus({id, status, syncResult}) {
     if (!MUTATION_STATUSES.has(status)) throw new Error(`Unknown local mutation status '${status}'`)
 
-    const state = await this.loadState()
-    const record = state.records.find((candidate) => candidate.id === id)
+    return await withStorageKeyLock(this.storageKey, async () => {
+      const state = await this.loadState()
+      const record = state.records.find((candidate) => candidate.id === id)
 
-    if (!record) throw new Error(`No local mutation log record '${id}'`)
+      if (!record) throw new Error(`No local mutation log record '${id}'`)
 
-    record.status = status
-    if (syncResult !== undefined) record.syncResult = cloneJsonObject(syncResult, "syncResult")
-    record.updatedAt = this.currentTimestamp()
-    await this.saveState(state)
+      record.status = status
+      if (syncResult !== undefined) record.syncResult = cloneJsonObject(syncResult, "syncResult")
+      record.updatedAt = this.currentTimestamp()
+      await this.saveState(state)
 
-    return cloneRecord(record)
+      return cloneRecord(record)
+    })
   }
 
   /**
@@ -176,6 +182,31 @@ export default class LocalMutationLog {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) throw new Error("LocalMutationLog now() must return a valid Date")
 
     return date.toISOString()
+  }
+}
+
+/**
+ * Runs a callback after earlier writes for the same storage key have completed.
+ * @template T
+ * @param {string} storageKey - Storage key to serialize.
+ * @param {() => Promise<T>} callback - Callback to run under the storage-key lock.
+ * @returns {Promise<T>} - Callback result.
+ */
+async function withStorageKeyLock(storageKey, callback) {
+  const previous = STORAGE_KEY_LOCKS.get(storageKey) || Promise.resolve()
+  let release = () => {}
+  const current = new Promise((resolve) => { release = () => resolve(undefined) })
+  const chained = previous.catch((_error) => {}).then(() => current)
+
+  STORAGE_KEY_LOCKS.set(storageKey, chained)
+
+  try {
+    await previous.catch((_error) => {})
+
+    return await callback()
+  } finally {
+    release()
+    if (STORAGE_KEY_LOCKS.get(storageKey) === chained) STORAGE_KEY_LOCKS.delete(storageKey)
   }
 }
 
