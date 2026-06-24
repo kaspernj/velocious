@@ -112,6 +112,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
  * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
  * @property {string | (() => string | null | undefined)} [timeZone] - IANA timezone sent with every frontend-model API request for timezone-less datetime parsing.
+ * @property {{actorDeviceId: string, actorUserId: string, clientMutationId?: () => string, enabled?: boolean, mutationLog: import("../sync/local-mutation-log.js").default, now?: () => Date, offlineGrant: {id: string}}} [offlineSync] - Offline mutation queue configuration.
  */
 /**
  * FrontendModelIdleWaitArgs type.
@@ -783,6 +784,89 @@ function frontendModelClassFor(model) {
   const constructorValue = model.constructor
 
   return /** @type {FrontendModelClass} */ (constructorValue)
+}
+
+/**
+ * Whether the configured offline queue should handle a model operation.
+ * @param {FrontendModelClass} ModelClass - Model class.
+ * @param {"create" | "update" | "destroy"} operation - Sync operation.
+ * @returns {boolean} - Whether to queue locally.
+ */
+function shouldQueueFrontendModelOperationOffline(ModelClass, operation) {
+  const offlineSync = frontendModelTransportConfig.offlineSync
+
+  if (!offlineSync?.enabled) return false
+
+  const syncConfig = ModelClass.resourceConfig().sync
+
+  if (!syncConfig?.enabled) return false
+  if (!syncConfig.operations.includes(operation)) throw new Error(`Offline sync for ${ModelClass.getModelName()} does not allow ${operation}`)
+
+  return true
+}
+
+/**
+ * Queues an offline sync mutation.
+ * @param {object} args - Arguments.
+ * @param {Record<string, FrontendModelAttributeValue>} args.attributes - Mutation attributes.
+ * @param {string} [args.clientMutationId] - Pre-generated mutation id.
+ * @param {FrontendModelClass} args.ModelClass - Model class.
+ * @param {"create" | "update" | "destroy"} args.operation - Sync operation.
+ * @returns {Promise<string>} - Client mutation id.
+ */
+async function queueFrontendModelMutationOffline({attributes, clientMutationId: providedClientMutationId, ModelClass, operation}) {
+  const offlineSync = frontendModelTransportConfig.offlineSync
+
+  if (!offlineSync) throw new Error("Offline sync is not configured")
+
+  const syncConfig = ModelClass.resourceConfig().sync
+  if (!syncConfig?.enabled) throw new Error(`Offline sync is not enabled for ${ModelClass.getModelName()}`)
+
+  const now = offlineSync.now ? offlineSync.now() : new Date()
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) throw new Error("offlineSync.now must return a valid Date")
+
+  const clientMutationId = providedClientMutationId || (offlineSync.clientMutationId ? offlineSync.clientMutationId() : frontendModelOfflineMutationId())
+  if (typeof clientMutationId !== "string" || clientMutationId.length < 1) throw new Error("offlineSync.clientMutationId must return a non-empty string")
+
+  await offlineSync.mutationLog.append({
+    mutation: {
+      actorDeviceId: offlineSync.actorDeviceId,
+      actorUserId: offlineSync.actorUserId,
+      attributes: frontendModelSyncJsonObject(attributes),
+      baseVersion: null,
+      clientMutationId,
+      model: ModelClass.getModelName(),
+      occurredAt: now.toISOString(),
+      offlineGrantId: offlineSync.offlineGrant.id,
+      operation,
+      policyHash: syncConfig.policyHash
+    }
+  })
+
+  return clientMutationId
+}
+
+/**
+ * Generates a frontend-model offline mutation id.
+ * @returns {string} - Local mutation id.
+ */
+function frontendModelOfflineMutationId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID()
+
+  return `frontend-mutation-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+/**
+ * Converts model attributes to sync-safe JSON payload values.
+ * @param {Record<string, FrontendModelAttributeValue>} attributes - Frontend model attributes.
+ * @returns {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} - Sync-safe attributes.
+ */
+function frontendModelSyncJsonObject(attributes) {
+  const serialized = JSON.parse(JSON.stringify(attributes))
+
+  if (!serialized || typeof serialized !== "object" || Array.isArray(serialized)) throw new Error("Expected sync mutation attributes object")
+
+  return /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (serialized)
 }
 
 /**
@@ -2787,6 +2871,10 @@ export default class FrontendModelBase {
       // Reset cached internal client so the new sessionStore is picked up.
       internalWebsocketClient = null
     }
+
+    if (Object.prototype.hasOwnProperty.call(config, "offlineSync")) {
+      frontendModelTransportConfig.offlineSync = config.offlineSync
+    }
   }
 
   /**
@@ -3900,6 +3988,43 @@ export default class FrontendModelBase {
       payload.attachments = attachments
     }
 
+    if (shouldQueueFrontendModelOperationOffline(ModelClass, commandType)) {
+      const offlineAttributes = {...payload.attributes}
+      let clientMutationId
+
+      if (isNew) {
+        const primaryKey = ModelClass.primaryKey()
+        const currentPrimaryKey = this.readAttribute(primaryKey)
+
+        if (currentPrimaryKey === undefined || currentPrimaryKey === null) {
+          clientMutationId = frontendModelTransportConfig.offlineSync?.clientMutationId
+            ? frontendModelTransportConfig.offlineSync.clientMutationId()
+            : frontendModelOfflineMutationId()
+          this.setAttribute(primaryKey, clientMutationId)
+          offlineAttributes[primaryKey] = clientMutationId
+        }
+      } else {
+        offlineAttributes[ModelClass.primaryKey()] = payload.id
+      }
+
+      if (payload.nestedAttributes !== undefined || payload.attachments !== undefined) {
+        throw new Error(`Offline sync for ${ModelClass.name} does not support nested attributes or attachments yet`)
+      }
+
+      await queueFrontendModelMutationOffline({
+        attributes: offlineAttributes,
+        clientMutationId,
+        ModelClass,
+        operation: commandType
+      })
+      this.setIsNewRecord(false)
+      this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
+      this._pendingNestedAttributes = {}
+      this._clearPendingAttachments()
+
+      return this
+    }
+
     const response = await ModelClass.executeCommand(commandType, payload)
 
     this.assignAttributes(ModelClass.attributesFromResponse(response))
@@ -3952,9 +4077,20 @@ export default class FrontendModelBase {
    */
   async destroy() {
     const ModelClass = frontendModelClassFor(this)
+    const id = this.primaryKeyValue()
+
+    if (shouldQueueFrontendModelOperationOffline(ModelClass, "destroy")) {
+      await queueFrontendModelMutationOffline({
+        attributes: {[ModelClass.primaryKey()]: id},
+        ModelClass,
+        operation: "destroy"
+      })
+
+      return
+    }
 
     await ModelClass.executeCommand("destroy", {
-      id: this.primaryKeyValue()
+      id
     })
   }
 

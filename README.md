@@ -8,6 +8,7 @@
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
+* Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
