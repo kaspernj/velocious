@@ -4,12 +4,11 @@ Velocious's web SQLite driver uses `sql.js` for the in-browser SQLite runtime. T
 
 Selection order:
 
-1. Existing **localStorage** databases under the legacy key are preserved first.
-2. Existing **OPFS** database files are reused when OPFS is available.
-3. Existing **IndexedDB** database entries are reused before choosing a new higher-priority backend, so users are not moved to an empty OPFS database after OPFS becomes available later.
-4. New databases use **OPFS** (`navigator.storage.getDirectory`) when a small write/read/delete smoke test succeeds.
-5. New databases fall back to **IndexedDB** when OPFS is unavailable and IndexedDB passes its smoke test.
-6. **localStorage** is the compatibility fallback.
+1. Existing **localStorage** databases under the legacy key are preserved for compatibility with the previous web driver.
+2. If the selected backend already contains this database, Velocious keeps using that backend so browser capability changes do not open an empty database by accident.
+3. New databases use **OPFS** (`navigator.storage.getDirectory`) when a small write/read/delete smoke test succeeds.
+4. New databases fall back to **IndexedDB** when OPFS is unavailable and IndexedDB passes its smoke test.
+5. **localStorage** is the compatibility fallback.
 
 `reset` clears the database name from every available backend before selecting the backend for the fresh database, so stale bytes are not resurrected when browser capabilities change later.
 
