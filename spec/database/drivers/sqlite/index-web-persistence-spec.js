@@ -1,5 +1,6 @@
 import {describe, expect, it} from "../../../../src/testing/test.js"
 import {createSqliteWebPersistence, deleteSqliteWebPersistences, sqliteWebPersistenceKey} from "../../../../src/database/drivers/sqlite/web-persistence.js"
+import BetterLocalStorage from "better-localstorage"
 
 describe("database - drivers - sqlite web persistence", () => {
   it("chooses OPFS persistence when the browser storage directory is usable", async () => {
@@ -28,16 +29,52 @@ describe("database - drivers - sqlite web persistence", () => {
     expect(await readIndexedDbBytes(environment, "app")).toEqual(undefined)
   })
 
-  it("raises when IndexedDB fails the smoke test and OPFS is unavailable", async () => {
-    const environment = buildEnvironment({opfs: false, indexedDb: true, indexedDbUsable: false})
+  it("migrates an existing legacy localStorage database to OPFS when OPFS is available", async () => {
+    const environment = buildEnvironment({indexedDb: true, opfs: true})
 
-    await expectSqliteWebPersistenceError({databaseName: "app", environment})
+    await withLegacyLocalStorage(environment, async () => {
+      await writeLegacyLocalStorageBytes("app", new Uint8Array([10, 11, 12]))
+
+      const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
+
+      expect(persistence.name).toEqual("opfs")
+      expect(Array.from(await persistence.load() || [])).toEqual([10, 11, 12])
+      expect(await readLegacyLocalStorageBytes("app")).toEqual(undefined)
+    })
   })
 
-  it("raises when OPFS and IndexedDB are unavailable", async () => {
+  it("migrates an existing legacy localStorage database to IndexedDB when OPFS is unavailable", async () => {
+    const environment = buildEnvironment({indexedDb: true, opfs: false})
+
+    await withLegacyLocalStorage(environment, async () => {
+      await writeLegacyLocalStorageBytes("app", new Uint8Array([13, 14, 15]))
+
+      const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
+
+      expect(persistence.name).toEqual("indexeddb")
+      expect(Array.from(await persistence.load() || [])).toEqual([13, 14, 15])
+      expect(await readLegacyLocalStorageBytes("app")).toEqual(undefined)
+    })
+  })
+
+  it("uses legacy localStorage persistence when IndexedDB fails the smoke test and OPFS is unavailable", async () => {
+    const environment = buildEnvironment({opfs: false, indexedDb: true, indexedDbUsable: false})
+
+    await withLegacyLocalStorage(buildEnvironment({opfs: false, indexedDb: true}), async () => {
+      const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
+
+      expect(persistence.name).toEqual("localstorage")
+    })
+  })
+
+  it("uses legacy localStorage persistence when OPFS and IndexedDB are unavailable", async () => {
     const environment = buildEnvironment({opfs: false, indexedDb: false})
 
-    await expectSqliteWebPersistenceError({databaseName: "app", environment})
+    await withLegacyLocalStorage(buildEnvironment({opfs: false, indexedDb: true}), async () => {
+      const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
+
+      expect(persistence.name).toEqual("localstorage")
+    })
   })
 
   it("stores SQL.js database bytes in the selected OPFS file", async () => {
@@ -77,17 +114,6 @@ describe("database - drivers - sqlite web persistence", () => {
     expect(await readIndexedDbBytes(environment, "app")).toEqual(undefined)
   })
 })
-
-async function expectSqliteWebPersistenceError({databaseName, environment}) {
-  try {
-    await createSqliteWebPersistence({databaseName, environment})
-  } catch (error) {
-    expect(error.message).toEqual("SQLite web persistence requires OPFS or IndexedDB support")
-    return
-  }
-
-  throw new Error("Expected SQLite web persistence selection to fail")
-}
 
 function buildEnvironment({opfs, indexedDb, indexedDbContent = undefined, indexedDbUsable = true, opfsContent = undefined}) {
   const directory = buildOpfsDirectory({databaseContent: opfsContent})
@@ -162,6 +188,7 @@ function buildOpfsDirectory({databaseContent}) {
 
 function buildIndexedDb({databaseContent, usable}) {
   const stores = new Map()
+  const keyPaths = new Map()
 
   if (databaseContent) stores.set("databases", new Map([[sqliteWebPersistenceKey("app"), databaseContent]]))
 
@@ -176,8 +203,8 @@ function buildIndexedDb({databaseContent, usable}) {
           return
         }
 
-        request.result = buildIndexedDbDatabase(stores)
-        request.onupgradeneeded?.()
+        request.result = buildIndexedDbDatabase({keyPaths, stores})
+        request.onupgradeneeded?.({target: {result: request.result}})
         request.onsuccess?.()
       })
 
@@ -186,33 +213,58 @@ function buildIndexedDb({databaseContent, usable}) {
   }
 }
 
-function buildIndexedDbDatabase(stores) {
+function buildIndexedDbDatabase({keyPaths, stores}) {
   return {
     close: () => {},
-    createObjectStore: (name) => {
+    createObjectStore: (name, options = {}) => {
       if (!stores.has(name)) stores.set(name, new Map())
+      if (options.keyPath) keyPaths.set(name, options.keyPath)
     },
     objectStoreNames: {
       contains: (name) => stores.has(name)
     },
     transaction: (name) => ({
-      objectStore: () => buildIndexedDbObjectStore(stores.get(name))
+      objectStore: () => buildIndexedDbObjectStore({keyPath: keyPaths.get(name), store: stores.get(name)})
     })
   }
 }
 
-function buildIndexedDbObjectStore(store) {
+function buildIndexedDbObjectStore({keyPath, store}) {
   return {
     delete: (key) => resolveIndexedDbRequest(() => {
       store.delete(key)
       return undefined
     }),
     get: (key) => resolveIndexedDbRequest(() => store.get(key)),
-    put: (value, key) => resolveIndexedDbRequest(() => {
+    put: (value, key = value?.[keyPath]) => resolveIndexedDbRequest(() => {
       store.set(key, value)
       return key
     })
   }
+}
+
+
+async function withLegacyLocalStorage(environment, callback) {
+  const originalIndexedDb = globalThis.indexedDB
+  const originalWindow = globalThis.window
+
+  globalThis.indexedDB = environment.indexedDB
+  globalThis.window = {indexedDB: environment.indexedDB}
+
+  try {
+    await callback()
+  } finally {
+    globalThis.indexedDB = originalIndexedDb
+    globalThis.window = originalWindow
+  }
+}
+
+async function writeLegacyLocalStorageBytes(databaseName, bytes) {
+  await new BetterLocalStorage().set(sqliteWebPersistenceKey(databaseName), bytes)
+}
+
+async function readLegacyLocalStorageBytes(databaseName) {
+  return await new BetterLocalStorage().get(sqliteWebPersistenceKey(databaseName))
 }
 
 function buildIndexedDbRequest() {

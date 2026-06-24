@@ -7,7 +7,7 @@ Selection order:
 1. Use **OPFS** (`navigator.storage.getDirectory`) when a small write/read/delete smoke test succeeds.
 2. Otherwise use **IndexedDB** when it passes its smoke test.
 3. If existing database bytes are found in another backend, migrate them into the selected backend and clear the old copy.
-4. If neither OPFS nor IndexedDB is available, opening the web SQLite database raises an error instead of silently falling back to localStorage-style storage.
+4. If neither OPFS nor IndexedDB is available, use the legacy localStorage-style backend as a compatibility fallback.
 
 `reset` clears the database name from every available backend before selecting the backend for the fresh database, so stale bytes are not resurrected when browser capabilities change later.
 
@@ -25,9 +25,9 @@ IndexedDB is used for browsers where OPFS is unavailable or fails the smoke test
 
 ### Legacy localStorage-style storage
 
-The previous web driver stored the whole exported SQLite database blob under the legacy `VelociousDatabaseDriversSqliteWeb---<name>` key. That backend is no longer selected for new databases. When legacy bytes are available and OPFS or IndexedDB works, Velocious migrates the bytes into the selected backend and clears the legacy copy.
+The previous web driver stored the whole exported SQLite database blob under the legacy `VelociousDatabaseDriversSqliteWeb---<name>` key. When legacy bytes are available and OPFS or IndexedDB works, Velocious migrates the bytes into the selected backend and clears the legacy copy instead of continuing to use the worse backend.
 
-If no better backend is available, Velocious fails fast instead of writing new SQLite databases to the legacy backend.
+If no better backend is available, Velocious keeps using the legacy backend so browsers without OPFS/IndexedDB support can still open web SQLite databases.
 
 ## Database configuration
 

@@ -8,7 +8,7 @@ const SUPPORT_CHECK_BYTES = new Uint8Array([118, 101, 108, 111, 99, 105, 111, 11
 /**
  * SQLite web persistence adapter.
  * @typedef {object} SqliteWebPersistence
- * @property {"indexeddb" | "opfs"} name - Persistence backend name.
+ * @property {"indexeddb" | "localstorage" | "opfs"} name - Persistence backend name.
  * @property {() => Promise<void>} delete - Deletes the persisted database.
  * @property {() => Promise<Uint8Array | undefined>} load - Loads persisted database bytes.
  * @property {(content: Uint8Array) => Promise<void>} save - Saves persisted database bytes.
@@ -33,7 +33,7 @@ export async function createSqliteWebPersistence({databaseName, environment = gl
   const opfsPersistence = new OpfsPersistence({databaseName, environment})
   const indexedDbPersistence = new IndexedDbPersistence({databaseName, environment})
 
-  const selectedPersistence = await selectSupportedPersistence({environment, indexedDbPersistence, opfsPersistence})
+  const selectedPersistence = await selectSupportedPersistence({environment, indexedDbPersistence, localStoragePersistence, opfsPersistence})
 
   await migratePersistedDatabase({
     databaseName,
@@ -227,6 +227,9 @@ class IndexedDbPersistence {
 /** LocalStorage-backed SQL.js database blob persistence for legacy migrations. */
 class LocalStoragePersistence {
 
+  /** @type {"localstorage"} */
+  name = "localstorage"
+
   /**
    * Creates localStorage persistence.
    * @param {object} args - Arguments.
@@ -300,14 +303,15 @@ class LocalStoragePersistence {
  * @param {object} args - Arguments.
  * @param {SqliteWebPersistenceEnvironment} args.environment - Browser-like environment.
  * @param {IndexedDbPersistence} args.indexedDbPersistence - IndexedDB persistence adapter.
+ * @param {LocalStoragePersistence} args.localStoragePersistence - Legacy localStorage persistence adapter.
  * @param {OpfsPersistence} args.opfsPersistence - OPFS persistence adapter.
  * @returns {Promise<SqliteWebPersistence>} - Selected persistence adapter.
  */
-async function selectSupportedPersistence({environment, indexedDbPersistence, opfsPersistence}) {
+async function selectSupportedPersistence({environment, indexedDbPersistence, localStoragePersistence, opfsPersistence}) {
   if (await supportsOpfsPersistence(environment)) return opfsPersistence
   if (await supportsIndexedDbPersistence(environment)) return indexedDbPersistence
 
-  throw new Error("SQLite web persistence requires OPFS or IndexedDB support")
+  return localStoragePersistence
 }
 
 /**

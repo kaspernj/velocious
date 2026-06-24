@@ -607,7 +607,7 @@ configuration.addClientErrorPayloadReporter(async ({error, requestDetails, conte
 
 `requestDetails` includes `httpMethod`, `path`, and a parsed `body` snapshot when available. The body snapshot redacts common secret keys, truncates large strings and arrays, summarizes uploaded files and buffers without bytes, and compacts oversized frontend-model batches while preserving `requestId`, `model`, `commandType` / `customPath`, and payload shape.
 
-For sqlite web databases, Velocious automatically picks the best browser persistence backend it can use: OPFS when a smoke test succeeds, then IndexedDB. Existing persisted bytes in another backend are migrated into the selected backend when possible. If neither OPFS nor IndexedDB is usable, Velocious fails fast instead of writing new databases to localStorage-style storage. See [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md) for the backend selection details.
+For sqlite web databases, Velocious automatically picks the best browser persistence backend it can use: OPFS when a smoke test succeeds, then IndexedDB. Existing persisted bytes in a worse backend are migrated into the selected backend when possible. If neither OPFS nor IndexedDB is usable, Velocious keeps the legacy localStorage-style backend as a compatibility fallback. See [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md) for the backend selection details.
 
 Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
 
