@@ -30,11 +30,15 @@ import Update from "./sql/update.js"
 const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
 
 export default class VelociousDatabaseDriversMysql extends Base{
+  /** @type {boolean} */
+  _sessionTimezoneSetToUtc = false
+
   /**
    * Runs connect.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async connect() {
+    this._sessionTimezoneSetToUtc = false
     this.pool = mysql.createPool(Object.assign({connectionLimit: 1}, this.connectArgs()))
     this.pool.on("error", this.onPoolError)
   }
@@ -54,6 +58,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   async close() {
     await this.pool?.end()
     this.pool = undefined
+    this._sessionTimezoneSetToUtc = false
   }
 
   /**
@@ -62,6 +67,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async setConnectionCheckoutName(name) {
+    this._sessionTimezoneSetToUtc = false
+    await this.setSessionTimezoneToUtc()
     await this.query(`SET @velocious_connection_checkout_name = ${name === undefined ? "NULL" : this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false})
     await super.setConnectionCheckoutName(name)
   }
@@ -82,7 +89,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async beforeQuery(_sql, _options) {
-    await this.setSessionTimezoneToUtc()
+    if (!this._sessionTimezoneSetToUtc) await this.setSessionTimezoneToUtc()
   }
 
   /**
@@ -91,6 +98,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    */
   async setSessionTimezoneToUtc() {
     await this._queryActual("SET time_zone = '+00:00'")
+    this._sessionTimezoneSetToUtc = true
   }
 
   /**

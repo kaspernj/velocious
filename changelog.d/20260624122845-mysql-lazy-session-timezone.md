@@ -1,1 +1,1 @@
-MySQL/MariaDB drivers now set the session timezone to UTC immediately before each query instead of only during connect, so pooled/retried physical sessions keep timezone-less datetime storage consistent.
+MySQL/MariaDB drivers now set the session timezone to UTC lazily when a connection is checked out or first used instead of only during connect, so pooled physical sessions keep timezone-less datetime storage consistent without issuing redundant setup SQL before every query.

@@ -7,6 +7,7 @@ const mysqlConfig = digg(configuration, "database", "test", "default")
 class QueryCapturingMysqlDriver extends DatabaseDriversMysql {
   /** @type {Array<{options: import("../../../../src/database/drivers/base.js").QueryOptions, sql: string}>} */
   queries = []
+
   /** @type {string[]} */
   actualQueries = []
 
@@ -94,7 +95,7 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     ])
   })
 
-  it("sets the session time zone before each query", async () => {
+  it("sets the session time zone once before a query sequence", async () => {
     const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
 
     await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 1")
@@ -103,18 +104,35 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     expect(mysql.actualQueries).toEqual([
       "SET time_zone = '+00:00'",
       "SELECT 1",
-      "SET time_zone = '+00:00'",
       "SELECT 2"
     ])
   })
 
-  it("sets the session time zone before retried queries", async () => {
+  it("resets the session time zone on each connection checkout", async () => {
+    const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
+
+    await mysql.setConnectionCheckoutName("first checkout")
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 1")
+    await mysql.clearConnectionCheckoutName()
+    await mysql.setConnectionCheckoutName("second checkout")
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 2")
+
+    expect(mysql.actualQueries).toEqual([
+      "SET time_zone = '+00:00'",
+      '/* velocious checkout="first checkout" */ SELECT 1',
+      "SET time_zone = '+00:00'",
+      '/* velocious checkout="second checkout" */ SELECT 2'
+    ])
+  })
+
+  it("sets the session time zone before retried queries after reconnect", async () => {
     class RetryMysqlDriver extends QueryCapturingMysqlDriver {
       attempts = 0
 
       /** @returns {Promise<void>} - Resolves when complete. */
       async reconnect() {
-        // No-op for this retry unit test.
+        // Simulate the base reconnect behavior without touching a real MySQL pool.
+        this._sessionTimezoneSetToUtc = false
       }
 
       /**

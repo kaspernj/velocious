@@ -48,6 +48,7 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
 
     driver.connect = async () => {
       connectCount++
+      driver._sessionTimezoneSetToUtc = false
       driver.pool = {
         escape: (value) => `'${value}'`,
         query: (sql, callback) => {
