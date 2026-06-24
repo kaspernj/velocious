@@ -6,6 +6,28 @@ import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
 
 const BASE_FRONTEND_MODEL_ABILITY_ACTIONS = ["create", "destroy", "read", "update"]
+const SHA256_INITIAL_HASH = [
+  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+  0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+]
+const SHA256_K = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+  0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+  0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+  0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+  0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+  0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+]
 const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "abilities",
   "attachments",
@@ -21,6 +43,7 @@ const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "relationships",
   "server",
   "SharedResource",
+  "sync",
   "translatedAttributes"
 ])
 
@@ -157,7 +180,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     "modelName",
     "primaryKey",
     "relationships",
-    "server"
+    "server",
+    "sync"
   ]) {
     delete restArgs[key]
   }
@@ -165,6 +189,7 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
   restArgsError(restArgs)
 
   const normalizedCommands = normalizeFrontendModelResourceCommands(resourceConfiguration)
+  const sync = normalizeFrontendModelResourceSync(resourceConfiguration)
 
   return {
     ...resourceConfiguration,
@@ -176,7 +201,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     // name, derived from `{name, args?, returnType?}` command entries. The
     // generator uses it to type each custom command method.
     commandMetadata: normalizedCommands.commandMetadata,
-    memberCommands: normalizedCommands.memberCommands
+    memberCommands: normalizedCommands.memberCommands,
+    sync
   }
 }
 
@@ -223,6 +249,282 @@ function defaultCrudAbilities() {
     index: "read",
     update: "update"
   }
+}
+
+/**
+ * Builds a frontend-safe sync manifest for all sync-enabled frontend-model resources.
+ * @param {import("../configuration-types.js").BackendProjectConfiguration[]} backendProjects - Backend projects to scan.
+ * @returns {Record<string, import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration>} - Sync metadata keyed by model name.
+ */
+export function frontendModelSyncManifestForBackendProjects(backendProjects) {
+  /** @type {Record<string, import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration>} */
+  const manifest = {}
+
+  for (const backendProject of backendProjects) {
+    const resources = frontendModelResourcesForBackendProject(backendProject)
+
+    for (const configuredModelName of Object.keys(resources).sort()) {
+      const resourceDefinition = resources[configuredModelName]
+      const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+
+      if (!resourceConfiguration) continue
+      if (!resourceConfiguration.sync?.enabled) continue
+
+      const modelName = resourceConfiguration.modelName || configuredModelName
+
+      manifest[modelName] = resourceConfiguration.sync
+    }
+  }
+
+  return manifest
+}
+
+/**
+ * Normalizes sync policy metadata and computes a deterministic hash from safe policy inputs.
+ * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
+ * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration | undefined} - Frontend-safe sync metadata.
+ */
+function normalizeFrontendModelResourceSync(resourceConfiguration) {
+  const sync = resourceConfiguration.sync
+
+  if (sync === undefined || sync === null) return undefined
+  if (sync === false) return {enabled: false, operations: [], policyHash: syncPolicyHash({enabled: false}), policyVersion: null}
+  if (sync === true) {
+    return normalizeFrontendModelResourceSync({
+      ...resourceConfiguration,
+      sync: {operations: ["index", "find"]}
+    })
+  }
+  if (!sync || typeof sync !== "object" || Array.isArray(sync)) {
+    throw new Error("Resource sync configuration must be true, false, or an object.")
+  }
+
+  const {enabled = true, metadata, operations, policy, policyVersion, ...rest} = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration} */ (sync)
+
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`Unexpected sync keys: ${Object.keys(rest).join(", ")}. Allowed: enabled, metadata, operations, policy, policyVersion`)
+  }
+  if (enabled !== true && enabled !== false) throw new Error("Resource sync enabled must be true or false when provided.")
+
+  const normalizedOperations = normalizeSyncOperations(operations)
+  const normalizedMetadata = metadata === undefined ? undefined : deterministicSyncJson({label: "metadata", value: metadata})
+  const normalizedPolicy = policy === undefined ? undefined : deterministicSyncJson({label: "policy", value: policy})
+  const normalizedPolicyVersion = policyVersion === undefined || policyVersion === null ? null : String(policyVersion)
+  const hashInput = {
+    enabled,
+    metadata: normalizedMetadata,
+    modelName: resourceConfiguration.modelName || null,
+    operations: normalizedOperations,
+    policy: normalizedPolicy,
+    policyVersion: normalizedPolicyVersion
+  }
+  /** @type {import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration} */
+  const normalized = {
+    enabled,
+    operations: normalizedOperations,
+    policyHash: syncPolicyHash(hashInput),
+    policyVersion: normalizedPolicyVersion
+  }
+
+  if (normalizedMetadata !== undefined) normalized.metadata = /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (normalizedMetadata)
+
+  return normalized
+}
+
+/**
+ * Normalizes sync operations into a stable, duplicate-free list.
+ * @param {unknown} operations - Raw operations value.
+ * @returns {string[]} - Normalized operations.
+ */
+function normalizeSyncOperations(operations) {
+  if (operations === undefined) return []
+  if (!Array.isArray(operations)) throw new Error("Resource sync operations must be an array of operation names.")
+
+  const normalized = operations.map((operation) => {
+    if (typeof operation !== "string" || operation.length < 1) throw new Error("Resource sync operations entries must be non-empty strings.")
+
+    return operation
+  })
+
+  return [...new Set(normalized)].sort()
+}
+
+/**
+ * Builds a deterministic policy hash.
+ * @param {unknown} value - Hash input.
+ * @returns {string} - sha256-prefixed hash.
+ */
+function syncPolicyHash(value) {
+  return `sha256-${sha256Hex(stableJsonStringify(value))}`
+}
+
+/**
+ * Computes SHA-256 without importing Node-only crypto modules, keeping this
+ * resource-definition module safe for Expo/browser bundles.
+ * @param {string} message - UTF-8 message.
+ * @returns {string} - Hex digest.
+ */
+function sha256Hex(message) {
+  const bytes = utf8Bytes(message)
+  const padded = [...bytes]
+  const bitLength = bytes.length * 8
+  const hash = [...SHA256_INITIAL_HASH]
+  /** @type {number[]} */
+  const words = new Array(64)
+
+  padded.push(0x80)
+  while (padded.length % 64 !== 56) padded.push(0)
+
+  const highLength = Math.floor(bitLength / 0x100000000)
+  const lowLength = bitLength >>> 0
+
+  for (const value of [highLength, lowLength]) {
+    padded.push((value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff)
+  }
+
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let i = 0; i < 16; i++) {
+      const index = offset + (i * 4)
+
+      words[i] = (((padded[index] || 0) << 24) | ((padded[index + 1] || 0) << 16) | ((padded[index + 2] || 0) << 8) | (padded[index + 3] || 0)) >>> 0
+    }
+
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotateRight(words[i - 15], 7) ^ rotateRight(words[i - 15], 18) ^ (words[i - 15] >>> 3)
+      const s1 = rotateRight(words[i - 2], 17) ^ rotateRight(words[i - 2], 19) ^ (words[i - 2] >>> 10)
+
+      words[i] = add32(words[i - 16], s0, words[i - 7], s1)
+    }
+
+    let [a, b, c, d, e, f, g, h] = hash
+
+    for (let i = 0; i < 64; i++) {
+      const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)
+      const ch = (e & f) ^ ((~e) & g)
+      const temp1 = add32(h, s1, ch, SHA256_K[i], words[i])
+      const s0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22)
+      const maj = (a & b) ^ (a & c) ^ (b & c)
+      const temp2 = add32(s0, maj)
+
+      h = g
+      g = f
+      f = e
+      e = add32(d, temp1)
+      d = c
+      c = b
+      b = a
+      a = add32(temp1, temp2)
+    }
+
+    hash[0] = add32(hash[0], a)
+    hash[1] = add32(hash[1], b)
+    hash[2] = add32(hash[2], c)
+    hash[3] = add32(hash[3], d)
+    hash[4] = add32(hash[4], e)
+    hash[5] = add32(hash[5], f)
+    hash[6] = add32(hash[6], g)
+    hash[7] = add32(hash[7], h)
+  }
+
+  return hash.map((value) => value.toString(16).padStart(8, "0")).join("")
+}
+
+/**
+ * Converts a string to UTF-8 bytes.
+ * @param {string} value - String value.
+ * @returns {number[]} - UTF-8 bytes.
+ */
+function utf8Bytes(value) {
+  /** @type {number[]} */
+  const bytes = []
+
+  for (const character of value) {
+    const codePoint = /** @type {number} */ (character.codePointAt(0))
+
+    if (codePoint <= 0x7f) {
+      bytes.push(codePoint)
+    } else if (codePoint <= 0x7ff) {
+      bytes.push(0xc0 | (codePoint >>> 6), 0x80 | (codePoint & 0x3f))
+    } else if (codePoint <= 0xffff) {
+      bytes.push(0xe0 | (codePoint >>> 12), 0x80 | ((codePoint >>> 6) & 0x3f), 0x80 | (codePoint & 0x3f))
+    } else {
+      bytes.push(0xf0 | (codePoint >>> 18), 0x80 | ((codePoint >>> 12) & 0x3f), 0x80 | ((codePoint >>> 6) & 0x3f), 0x80 | (codePoint & 0x3f))
+    }
+  }
+
+  return bytes
+}
+
+/**
+ * Adds unsigned 32-bit integers.
+ * @param {...number} values - Values to add.
+ * @returns {number} - Unsigned 32-bit result.
+ */
+function add32(...values) {
+  return values.reduce((sum, value) => (sum + value) >>> 0, 0)
+}
+
+/**
+ * Rotates a 32-bit integer right.
+ * @param {number} value - Value to rotate.
+ * @param {number} bits - Bit count.
+ * @returns {number} - Rotated value.
+ */
+function rotateRight(value, bits) {
+  return (value >>> bits) | (value << (32 - bits))
+}
+
+/**
+ * Validates that a sync config subtree is deterministic JSON and does not contain obvious secrets.
+ * @param {object} args - Arguments.
+ * @param {string} args.label - Diagnostic path label.
+ * @param {unknown} args.value - Value to validate.
+ * @returns {import("../configuration-types.js").FrontendModelSyncJsonValue} - Stable JSON value.
+ */
+function deterministicSyncJson({label, value}) {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value
+
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => deterministicSyncJson({label: `${label}/${index}`, value: entry}))
+  }
+
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */
+    const normalized = {}
+
+    for (const key of Object.keys(value).sort()) {
+      const childValue = /** @type {Record<string, unknown>} */ (value)[key]
+
+      if (childValue === undefined) continue
+      if (syncConfigKeyLooksSecret(key)) {
+        throw new Error(`Sync policy ${label}/${key} is not allowed in frontend-visible sync policy config`)
+      }
+
+      normalized[key] = deterministicSyncJson({label: `${label}/${key}`, value: childValue})
+    }
+
+    return normalized
+  }
+
+  throw new Error("Sync policy input must be deterministic JSON")
+}
+
+/**
+ * Stable JSON stringifier with sorted object keys.
+ * @param {unknown} value - Value to stringify.
+ * @returns {string} - Stable JSON.
+ */
+function stableJsonStringify(value) {
+  return JSON.stringify(deterministicSyncJson({label: "hash", value}))
+}
+
+/**
+ * Returns whether a sync config key looks like a credential/secret.
+ * @param {string} key - Object key.
+ * @returns {boolean} - Whether key is disallowed.
+ */
+function syncConfigKeyLooksSecret(key) {
+  return /secret|token|password|private.?key|signing.?key/i.test(key)
 }
 
 /**

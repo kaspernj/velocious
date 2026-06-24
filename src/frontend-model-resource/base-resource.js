@@ -165,6 +165,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static primaryKey = undefined
   /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration | undefined} */
   static server = undefined
+  /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration | boolean | undefined} */
+  static sync = undefined
   /** @type {string[] | undefined} */
   static translatedAttributes = undefined
   /** @type {?} */
@@ -204,7 +206,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Reads a static resource config value from the environment resource first,
    * then from the shared resource.
-   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "translatedAttributes"} name - Static config property name.
+   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes"} name - Static config property name.
    * @returns {?} - Resolved config value.
    */
   static sharedResourceStaticValue(name) {
@@ -359,6 +361,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const primaryKey = this.sharedResourceStaticValue("primaryKey")
     const relationships = this.sharedResourceStaticValue("relationships")
     const server = this.sharedResourceStaticValue("server")
+    const sync = this.sharedResourceStaticValue("sync")
     /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
       attributes: /** @type {Record<string, ?> | string[]} */ (attributes || [])
@@ -375,6 +378,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (primaryKey) config.primaryKey = /** @type {string} */ (primaryKey)
     if (relationships) config.relationships = /** @type {string[]} */ (relationships)
     if (server) config.server = /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration} */ (server)
+    if (sync !== undefined) config.sync = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration | boolean} */ (sync)
 
     return config
   }
