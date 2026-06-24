@@ -1,5 +1,5 @@
 import {describe, expect, it} from "../../../../src/testing/test.js"
-import {createSqliteWebPersistence, sqliteWebPersistenceKey} from "../../../../src/database/drivers/sqlite/web-persistence.js"
+import {createSqliteWebPersistence, deleteSqliteWebPersistences, sqliteWebPersistenceKey} from "../../../../src/database/drivers/sqlite/web-persistence.js"
 
 describe("database - drivers - sqlite web persistence", () => {
   it("chooses OPFS persistence when the browser storage directory is usable", async () => {
@@ -16,6 +16,15 @@ describe("database - drivers - sqlite web persistence", () => {
     const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
 
     expect(persistence.name).toEqual("indexeddb")
+  })
+
+  it("keeps using an existing IndexedDB database even when OPFS becomes available later", async () => {
+    const environment = buildEnvironment({indexedDb: true, indexedDbContent: new Uint8Array([7, 8, 9]), opfs: true})
+
+    const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
+
+    expect(persistence.name).toEqual("indexeddb")
+    expect(Array.from(await persistence.load() || [])).toEqual([7, 8, 9])
   })
 
   it("falls back to localStorage persistence when IndexedDB fails the smoke test", async () => {
@@ -61,13 +70,22 @@ describe("database - drivers - sqlite web persistence", () => {
   it("uses the existing localStorage key for compatibility", () => {
     expect(sqliteWebPersistenceKey("app")).toEqual("VelociousDatabaseDriversSqliteWeb---app")
   })
+
+  it("deletes persisted database bytes from every available backend", async () => {
+    const environment = buildEnvironment({indexedDb: true, indexedDbContent: new Uint8Array([4, 5, 6]), opfs: true, opfsContent: new Uint8Array([1, 2, 3])})
+
+    await deleteSqliteWebPersistences({databaseName: "app", environment})
+
+    expect(await readOpfsBytes(environment, "app")).toEqual(undefined)
+    expect(await readIndexedDbBytes(environment, "app")).toEqual(undefined)
+  })
 })
 
-function buildEnvironment({opfs, indexedDb, indexedDbUsable = true}) {
-  const directory = buildOpfsDirectory()
+function buildEnvironment({opfs, indexedDb, indexedDbContent = undefined, indexedDbUsable = true, opfsContent = undefined}) {
+  const directory = buildOpfsDirectory({databaseContent: opfsContent})
 
   return {
-    indexedDB: indexedDb ? buildIndexedDb({usable: indexedDbUsable}) : undefined,
+    indexedDB: indexedDb ? buildIndexedDb({databaseContent: indexedDbContent, usable: indexedDbUsable}) : undefined,
     navigator: {
       storage: {
         getDirectory: async () => {
@@ -80,8 +98,34 @@ function buildEnvironment({opfs, indexedDb, indexedDbUsable = true}) {
   }
 }
 
-function buildOpfsDirectory() {
+async function readOpfsBytes(environment, databaseName) {
+  try {
+    const directory = await environment.navigator.storage.getDirectory()
+    const fileHandle = await directory.getFileHandle(sqliteWebPersistenceKey(databaseName))
+
+    return Array.from(new Uint8Array(await (await fileHandle.getFile()).arrayBuffer()))
+  } catch (error) {
+    if (error instanceof Error && error.name === "NotFoundError") return undefined
+
+    throw error
+  }
+}
+
+async function readIndexedDbBytes(environment, databaseName) {
+  const openRequest = environment.indexedDB.open("VelociousDatabaseDriversSqliteWeb", 1)
+  const database = await resolveRawIndexedDbRequest(openRequest)
+  const request = database.transaction("databases", "readonly").objectStore("databases").get(sqliteWebPersistenceKey(databaseName))
+  const bytes = await resolveRawIndexedDbRequest(request)
+
+  database.close()
+
+  return bytes ? Array.from(bytes) : undefined
+}
+
+function buildOpfsDirectory({databaseContent}) {
   const files = new Map()
+
+  if (databaseContent) files.set(sqliteWebPersistenceKey("app"), databaseContent)
 
   return {
     getFileHandle: async (name, options = {}) => {
@@ -108,8 +152,10 @@ function buildOpfsDirectory() {
   }
 }
 
-function buildIndexedDb({usable}) {
+function buildIndexedDb({databaseContent, usable}) {
   const stores = new Map()
+
+  if (databaseContent) stores.set("databases", new Map([[sqliteWebPersistenceKey("app"), databaseContent]]))
 
   return {
     open: () => {
@@ -185,6 +231,13 @@ function resolveIndexedDbRequest(callback) {
   })
 
   return request
+}
+
+function resolveRawIndexedDbRequest(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
 }
 
 function domException(name) {

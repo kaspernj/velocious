@@ -2,7 +2,7 @@
 
 import ConnectionSqlJs from "./connection-sql-js.js"
 import initSqlJs from "sql.js"
-import {createSqliteWebPersistence, sqliteWebPersistenceKey} from "./web-persistence.js"
+import {createSqliteWebPersistence, deleteSqliteWebPersistences, sqliteWebPersistenceKey} from "./web-persistence.js"
 
 import Base from "./base.js"
 
@@ -35,12 +35,11 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     this.args = this.getArgs()
 
     if (!this.args.getConnection) {
-      const persistence = await createSqliteWebPersistence({databaseName: this.databaseName()})
-
       if (this.args.reset) {
-        await persistence.delete()
+        await deleteSqliteWebPersistences({databaseName: this.databaseName()})
       }
 
+      const persistence = await createSqliteWebPersistence({databaseName: this.databaseName()})
       const SQL = await initSqlJs({locateFile: this.sqlJsLocateFile()})
       const databaseContent = await persistence.load()
       const connectionSqlJs = new ConnectionSqlJs(this, new SQL.Database(databaseContent), persistence)

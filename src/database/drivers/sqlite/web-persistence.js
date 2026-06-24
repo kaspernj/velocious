@@ -30,12 +30,33 @@ const SUPPORT_CHECK_BYTES = new Uint8Array([118, 101, 108, 111, 99, 105, 111, 11
  */
 export async function createSqliteWebPersistence({databaseName, environment = globalThis}) {
   const localStoragePersistence = new LocalStoragePersistence({databaseName})
+  const opfsPersistence = new OpfsPersistence({databaseName, environment})
+  const indexedDbPersistence = new IndexedDbPersistence({databaseName, environment})
 
   if (await localStoragePersistence.exists()) return localStoragePersistence
-  if (await supportsOpfsPersistence(environment)) return new OpfsPersistence({databaseName, environment})
-  if (await supportsIndexedDbPersistence(environment)) return new IndexedDbPersistence({databaseName, environment})
+  if (await opfsPersistence.exists()) return opfsPersistence
+  if (await indexedDbPersistence.exists()) return indexedDbPersistence
+  if (await supportsOpfsPersistence(environment)) return opfsPersistence
+  if (await supportsIndexedDbPersistence(environment)) return indexedDbPersistence
 
   return localStoragePersistence
+}
+
+/**
+ * Deletes SQLite web database bytes from every available persistence backend.
+ * @param {object} args - Arguments.
+ * @param {string} args.databaseName - Database name.
+ * @param {SqliteWebPersistenceEnvironment} [args.environment] - Browser-like environment.
+ * @returns {Promise<void>} - Resolves when all available backends were cleared.
+ */
+export async function deleteSqliteWebPersistences({databaseName, environment = globalThis}) {
+  const persistences = [
+    new LocalStoragePersistence({databaseName}),
+    new OpfsPersistence({databaseName, environment}),
+    new IndexedDbPersistence({databaseName, environment})
+  ]
+
+  for (const persistence of persistences) await deletePersistenceIfAvailable(persistence)
 }
 
 /**
@@ -100,6 +121,18 @@ class OpfsPersistence {
   }
 
   /**
+   * Checks whether the OPFS database file exists.
+   * @returns {Promise<boolean>} - Whether content exists.
+   */
+  async exists() {
+    try {
+      return (await this.load()) !== undefined
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Saves database bytes.
    * @param {Uint8Array} content - Database bytes.
    * @returns {Promise<void>} - Resolves when saved.
@@ -156,6 +189,23 @@ class IndexedDbPersistence {
     if (result instanceof ArrayBuffer) return new Uint8Array(result)
 
     throw new Error("SQLite web IndexedDB persistence returned unsupported content")
+  }
+
+  /**
+   * Checks whether the IndexedDB database entry exists.
+   * @returns {Promise<boolean>} - Whether content exists.
+   */
+  async exists() {
+    try {
+      const database = await openIndexedDb(this.environment)
+      const result = await indexedDbRequest(database.transaction("databases", "readonly").objectStore("databases").get(sqliteWebPersistenceKey(this.databaseName)))
+
+      database.close()
+
+      return result !== undefined && result !== null
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -322,6 +372,19 @@ function indexedDbRequest(request) {
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error || new Error("IndexedDB request failed"))
   })
+}
+
+/**
+ * Deletes a persistence backend, ignoring unavailable backend errors.
+ * @param {SqliteWebPersistence} persistence - Persistence adapter.
+ * @returns {Promise<void>} - Resolves when deletion was attempted.
+ */
+async function deletePersistenceIfAvailable(persistence) {
+  try {
+    await persistence.delete()
+  } catch {
+    // Ignore unavailable backends so reset clears every backend the browser can access.
+  }
 }
 
 /**
