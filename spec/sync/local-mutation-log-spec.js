@@ -47,9 +47,10 @@ describe("local sync mutation log", () => {
       updatedAt: "2026-06-24T10:00:00.000Z"
     })
     expect(await mutationLog.records()).toEqual([record])
+    expect(storage.calls.map((call) => call.method)).toEqual(["nextSequence", "appendRecord", "records"])
   })
 
-  it("persists pending mutations across new log instances", async () => {
+  it("persists pending mutations across new log instances without one JSON blob", async () => {
     const storage = buildMemoryStorage()
     const firstLog = new LocalMutationLog({idGenerator: () => "log-1", storage})
 
@@ -58,6 +59,7 @@ describe("local sync mutation log", () => {
     const reloadedLog = new LocalMutationLog({storage})
 
     expect((await reloadedLog.pendingRecords()).map((record) => record.mutation.clientMutationId)).toEqual(["mutation-1"])
+    expect(storage.calls.some((call) => call.method === "getItem" || call.method === "setItem")).toEqual(false)
   })
 
   it("updates mutation status without rewriting the original actor payload", async () => {
@@ -84,6 +86,22 @@ describe("local sync mutation log", () => {
     expect(await mutationLog.pendingRecords()).toEqual([])
   })
 
+  it("asks storage for pending statuses instead of loading all terminal records", async () => {
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({idGenerator: nextValue(["log-1", "log-2"]), storage})
+
+    const pending = await mutationLog.append({mutation: buildMutation({clientMutationId: "pending-1"})})
+    const synced = await mutationLog.append({mutation: buildMutation({clientMutationId: "synced-1"})})
+    await mutationLog.updateStatus({id: synced.id, status: "synced"})
+
+    expect(await mutationLog.pendingRecords()).toEqual([pending])
+    expect(storage.calls[storage.calls.length - 1]).toEqual({
+      method: "records",
+      options: {statuses: ["pending", "applied-locally", "peer-applied"]},
+      storageKey: "velocious.sync.localMutationLog"
+    })
+  })
+
   it("serializes concurrent appends so no mutation is lost", async () => {
     const storage = buildMemoryStorage()
     const mutationLog = new LocalMutationLog({
@@ -106,6 +124,39 @@ describe("local sync mutation log", () => {
       {clientMutationId: "mutation-2", id: "log-2", sequence: 2}
     ])
   })
+
+  it("compacts old terminal records while preserving pending dependencies", async () => {
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({
+      idGenerator: nextValue(["log-1", "log-2", "log-3", "log-4"]),
+      now: nextNow([
+        "2026-06-24T10:00:00.000Z",
+        "2026-06-24T10:00:01.000Z",
+        "2026-06-24T10:00:02.000Z",
+        "2026-06-24T10:00:03.000Z",
+        "2026-06-24T10:00:04.000Z",
+        "2026-06-24T10:00:05.000Z",
+        "2026-06-24T10:00:06.000Z"
+      ]),
+      storage
+    })
+    const dependency = await mutationLog.append({mutation: buildMutation({clientMutationId: "dependency-1"})})
+    const prunable = await mutationLog.append({mutation: buildMutation({clientMutationId: "prunable-1"})})
+    const newestTerminal = await mutationLog.append({mutation: buildMutation({clientMutationId: "newest-1"})})
+    const pending = await mutationLog.append({
+      dependencies: [{clientMutationId: "dependency-1", model: "Task"}],
+      mutation: buildMutation({clientMutationId: "pending-1"})
+    })
+
+    await mutationLog.updateStatus({id: dependency.id, status: "synced"})
+    await mutationLog.updateStatus({id: prunable.id, status: "synced"})
+    await mutationLog.updateStatus({id: newestTerminal.id, status: "synced"})
+
+    const result = await mutationLog.compact({maxTerminalRecords: 1})
+
+    expect(result.deletedRecordIds).toEqual([prunable.id])
+    expect((await mutationLog.records()).map((record) => record.id)).toEqual([dependency.id, newestTerminal.id, pending.id])
+  })
 })
 
 function buildMutation(overrides = {}) {
@@ -125,11 +176,57 @@ function buildMutation(overrides = {}) {
 }
 
 function buildMemoryStorage() {
-  const values = new Map()
+  const recordsByKey = new Map()
+  const calls = []
+
+  function recordsFor(storageKey) {
+    if (!recordsByKey.has(storageKey)) recordsByKey.set(storageKey, [])
+
+    return recordsByKey.get(storageKey)
+  }
 
   return {
-    getItem: async (key) => values.get(key) || null,
-    setItem: async (key, value) => values.set(key, value)
+    calls,
+    appendRecord: async (storageKey, record) => {
+      calls.push({method: "appendRecord", record, storageKey})
+      recordsFor(storageKey).push(JSON.parse(JSON.stringify(record)))
+    },
+    deleteRecords: async (storageKey, ids) => {
+      calls.push({ids, method: "deleteRecords", storageKey})
+      const idSet = new Set(ids)
+      recordsByKey.set(storageKey, recordsFor(storageKey).filter((record) => !idSet.has(record.id)))
+    },
+    nextSequence: async (storageKey) => {
+      calls.push({method: "nextSequence", storageKey})
+
+      return recordsFor(storageKey).reduce((max, record) => Math.max(max, record.sequence + 1), 1)
+    },
+    record: async (storageKey, id) => {
+      calls.push({id, method: "record", storageKey})
+      const record = recordsFor(storageKey).find((candidate) => candidate.id === id)
+
+      return record ? JSON.parse(JSON.stringify(record)) : null
+    },
+    records: async (storageKey, options = {}) => {
+      calls.push({method: "records", options, storageKey})
+      let records = recordsFor(storageKey)
+
+      if (options.statuses) {
+        const statuses = new Set(options.statuses)
+        records = records.filter((record) => statuses.has(record.status))
+      }
+
+      return records.map((record) => JSON.parse(JSON.stringify(record)))
+    },
+    updateRecord: async (storageKey, record) => {
+      calls.push({method: "updateRecord", record, storageKey})
+      const rows = recordsFor(storageKey)
+      const index = rows.findIndex((candidate) => candidate.id === record.id)
+
+      if (index === -1) throw new Error(`No record ${record.id}`)
+
+      rows[index] = JSON.parse(JSON.stringify(record))
+    }
   }
 }
 

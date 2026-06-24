@@ -287,12 +287,45 @@ function restoreFrontendModelFetch(fetchStub) {
 }
 
 function buildMemoryStorage() {
-  const values = new Map()
+  const recordsByKey = new Map()
+
+  function recordsFor(storageKey) {
+    if (!recordsByKey.has(storageKey)) recordsByKey.set(storageKey, [])
+
+    return recordsByKey.get(storageKey)
+  }
 
   return {
-    getItem: async (key) => values.get(key) || null,
-    setItem: async (key, value) => {
-      values.set(key, value)
+    appendRecord: async (storageKey, record) => {
+      recordsFor(storageKey).push(JSON.parse(JSON.stringify(record)))
+    },
+    deleteRecords: async (storageKey, ids) => {
+      const idSet = new Set(ids)
+      recordsByKey.set(storageKey, recordsFor(storageKey).filter((record) => !idSet.has(record.id)))
+    },
+    nextSequence: async (storageKey) => recordsFor(storageKey).reduce((max, record) => Math.max(max, record.sequence + 1), 1),
+    record: async (storageKey, id) => {
+      const record = recordsFor(storageKey).find((candidate) => candidate.id === id)
+
+      return record ? JSON.parse(JSON.stringify(record)) : null
+    },
+    records: async (storageKey, options = {}) => {
+      let records = recordsFor(storageKey)
+
+      if (options.statuses) {
+        const statuses = new Set(options.statuses)
+        records = records.filter((record) => statuses.has(record.status))
+      }
+
+      return records.map((record) => JSON.parse(JSON.stringify(record)))
+    },
+    updateRecord: async (storageKey, record) => {
+      const rows = recordsFor(storageKey)
+      const index = rows.findIndex((candidate) => candidate.id === record.id)
+
+      if (index === -1) throw new Error(`No record ${record.id}`)
+
+      rows[index] = JSON.parse(JSON.stringify(record))
     }
   }
 }

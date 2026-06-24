@@ -1,16 +1,33 @@
 // @ts-check
 
 const DEFAULT_STORAGE_KEY = "velocious.sync.localMutationLog"
-const PENDING_STATUSES = new Set(["pending", "applied-locally", "peer-applied"])
+const PENDING_STATUS_VALUES = /** @type {LocalMutationStatus[]} */ (["pending", "applied-locally", "peer-applied"])
+const PENDING_STATUSES = new Set(PENDING_STATUS_VALUES)
 const MUTATION_STATUSES = new Set([...PENDING_STATUSES, "conflict", "rejected", "synced"])
+const TERMINAL_STATUSES = new Set(["rejected", "synced"])
 /** @type {Map<string, Promise<unknown>>} */
 const STORAGE_KEY_LOCKS = new Map()
 
 /**
- * Local mutation log storage adapter.
+ * Local mutation log record query options.
+ * @typedef {object} LocalMutationLogRecordsOptions
+ * @property {LocalMutationStatus[]} [statuses] - Optional status filter.
+ */
+
+/**
+ * Local mutation log row-oriented storage adapter.
+ *
+ * Implementations should store each mutation log record as its own row/entry.
+ * Native apps should back this with SQLite and indexes on storage key, status,
+ * and sequence. Avoid storing the whole log as one JSON blob.
+ *
  * @typedef {object} LocalMutationLogStorage
- * @property {(key: string) => Promise<string | null | undefined> | string | null | undefined} getItem - Reads a stored value.
- * @property {(key: string, value: string) => Promise<void> | void} setItem - Stores a value.
+ * @property {(storageKey: string, record: LocalMutationLogRecord) => Promise<void> | void} appendRecord - Appends one log record.
+ * @property {(storageKey: string, ids: string[]) => Promise<void> | void} deleteRecords - Deletes log records by id.
+ * @property {(storageKey: string) => Promise<number> | number} nextSequence - Returns the next local sequence number.
+ * @property {(storageKey: string, id: string) => Promise<LocalMutationLogRecord | null | undefined> | LocalMutationLogRecord | null | undefined} record - Reads one log record by id.
+ * @property {(storageKey: string, options?: LocalMutationLogRecordsOptions) => Promise<LocalMutationLogRecord[]> | LocalMutationLogRecord[]} records - Reads log records.
+ * @property {(storageKey: string, record: LocalMutationLogRecord) => Promise<void> | void} updateRecord - Replaces one log record.
  */
 
 /**
@@ -49,8 +66,8 @@ export default class LocalMutationLog {
    * @param {string} [args.storageKey] - Storage key.
    */
   constructor({idGenerator = randomRecordId, now = () => new Date(), storage, storageKey = DEFAULT_STORAGE_KEY}) {
-    if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") {
-      throw new Error("LocalMutationLog requires storage with getItem/setItem")
+    if (!validStorage(storage)) {
+      throw new Error("LocalMutationLog requires row storage with appendRecord/deleteRecords/nextSequence/record/records/updateRecord")
     }
 
     this.idGenerator = idGenerator
@@ -68,21 +85,18 @@ export default class LocalMutationLog {
    */
   async append({dependencies = [], mutation}) {
     return await withStorageKeyLock(this.storageKey, async () => {
-      const state = await this.loadState()
       const timestamp = this.currentTimestamp()
-      const record = {
+      const record = normalizeRecord({
         createdAt: timestamp,
-        dependencies: normalizeDependencies(dependencies),
+        dependencies,
         id: this.idGenerator(),
-        mutation: normalizeMutation(mutation),
-        sequence: state.nextSequence,
-        status: /** @type {LocalMutationStatus} */ ("pending"),
+        mutation,
+        sequence: await this.storage.nextSequence(this.storageKey),
+        status: "pending",
         updatedAt: timestamp
-      }
+      })
 
-      state.nextSequence += 1
-      state.records.push(record)
-      await this.saveState(state)
+      await this.storage.appendRecord(this.storageKey, cloneRecord(record))
 
       return cloneRecord(record)
     })
@@ -93,12 +107,7 @@ export default class LocalMutationLog {
    * @returns {Promise<LocalMutationLogRecord[]>} - Log records.
    */
   async records() {
-    const state = await this.loadState()
-
-    return state.records
-      .slice()
-      .sort((left, right) => left.sequence - right.sequence)
-      .map((record) => cloneRecord(record))
+    return normalizeRecordList(await this.storage.records(this.storageKey))
   }
 
   /**
@@ -106,9 +115,7 @@ export default class LocalMutationLog {
    * @returns {Promise<LocalMutationLogRecord[]>} - Pending records.
    */
   async pendingRecords() {
-    const records = await this.records()
-
-    return records.filter((record) => PENDING_STATUSES.has(record.status))
+    return normalizeRecordList(await this.storage.records(this.storageKey, {statuses: PENDING_STATUS_VALUES}))
   }
 
   /**
@@ -123,53 +130,60 @@ export default class LocalMutationLog {
     if (!MUTATION_STATUSES.has(status)) throw new Error(`Unknown local mutation status '${status}'`)
 
     return await withStorageKeyLock(this.storageKey, async () => {
-      const state = await this.loadState()
-      const record = state.records.find((candidate) => candidate.id === id)
+      const rawRecord = await this.storage.record(this.storageKey, id)
 
-      if (!record) throw new Error(`No local mutation log record '${id}'`)
+      if (!rawRecord) throw new Error(`No local mutation log record '${id}'`)
 
-      record.status = status
+      const record = normalizeRecord(rawRecord)
+
+      record.status = /** @type {LocalMutationStatus} */ (status)
       if (syncResult !== undefined) record.syncResult = cloneJsonObject(syncResult, "syncResult")
       record.updatedAt = this.currentTimestamp()
-      await this.saveState(state)
+      await this.storage.updateRecord(this.storageKey, cloneRecord(record))
 
       return cloneRecord(record)
     })
   }
 
   /**
-   * Loads the persisted log state.
-   * @returns {Promise<{nextSequence: number, records: LocalMutationLogRecord[]}>} - Log state.
+   * Prunes terminal records that are no longer needed for replay dependencies.
+   * @param {object} [args] - Compaction options.
+   * @param {number} [args.maxTerminalRecords] - Maximum terminal records to retain.
+   * @param {number} [args.terminalRetentionMs] - Minimum age before pruning terminal records.
+   * @returns {Promise<{deletedRecordIds: string[]}>} - Compaction result.
    */
-  async loadState() {
-    const raw = await this.storage.getItem(this.storageKey)
+  async compact({maxTerminalRecords, terminalRetentionMs} = {}) {
+    return await withStorageKeyLock(this.storageKey, async () => {
+      const records = await this.records()
+      const protectedClientMutationIds = new Set(
+        records
+          .filter((record) => PENDING_STATUSES.has(record.status) || record.status === "conflict")
+          .flatMap((record) => record.dependencies.map((dependency) => dependency.clientMutationId))
+      )
+      const terminalRecords = records
+        .filter((record) => TERMINAL_STATUSES.has(record.status))
+        .filter((record) => !protectedClientMutationIds.has(record.mutation.clientMutationId))
+        .sort(compareRecordsNewestFirst)
+      const deleteIds = new Set()
 
-    if (raw === undefined || raw === null || raw === "") return {nextSequence: 1, records: []}
-    if (typeof raw !== "string") throw new Error("Local mutation log storage returned a non-string value")
+      if (typeof maxTerminalRecords === "number" && maxTerminalRecords >= 0) {
+        for (const record of terminalRecords.slice(maxTerminalRecords)) deleteIds.add(record.id)
+      }
 
-    const parsed = JSON.parse(raw)
+      if (typeof terminalRetentionMs === "number" && terminalRetentionMs >= 0) {
+        const cutoff = this.now().getTime() - terminalRetentionMs
 
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("Local mutation log storage payload must be an object")
-    }
+        for (const record of terminalRecords) {
+          if (new Date(record.updatedAt).getTime() < cutoff) deleteIds.add(record.id)
+        }
+      }
 
-    const rawState = /** @type {{nextSequence?: unknown, records?: unknown}} */ (parsed)
-    const records = Array.isArray(rawState.records) ? rawState.records.map(normalizeRecord) : []
-    const rawNextSequence = rawState.nextSequence
-    const nextSequence = Number.isInteger(rawNextSequence) && typeof rawNextSequence === "number" && rawNextSequence > 0
-      ? rawNextSequence
-      : records.reduce((max, record) => Math.max(max, record.sequence + 1), 1)
+      const deletedRecordIds = Array.from(deleteIds)
 
-    return {nextSequence, records}
-  }
+      if (deletedRecordIds.length > 0) await this.storage.deleteRecords(this.storageKey, deletedRecordIds)
 
-  /**
-   * Persists the log state.
-   * @param {{nextSequence: number, records: LocalMutationLogRecord[]}} state - Log state.
-   * @returns {Promise<void>} - Resolves when stored.
-   */
-  async saveState(state) {
-    await this.storage.setItem(this.storageKey, JSON.stringify(state))
+      return {deletedRecordIds}
+    })
   }
 
   /**
@@ -183,6 +197,52 @@ export default class LocalMutationLog {
 
     return date.toISOString()
   }
+}
+
+/**
+ * Checks whether a storage adapter has all required row-store methods.
+ * @param {unknown} storage - Storage adapter candidate.
+ * @returns {storage is LocalMutationLogStorage} - Whether storage is valid.
+ */
+function validStorage(storage) {
+  if (!storage || typeof storage !== "object") return false
+
+  const storageObject = /** @type {Record<string, unknown>} */ (storage)
+
+  return typeof storageObject.appendRecord === "function"
+    && typeof storageObject.deleteRecords === "function"
+    && typeof storageObject.nextSequence === "function"
+    && typeof storageObject.record === "function"
+    && typeof storageObject.records === "function"
+    && typeof storageObject.updateRecord === "function"
+}
+
+/**
+ * Sorts records by newest update/sequence first.
+ * @param {LocalMutationLogRecord} left - Left record.
+ * @param {LocalMutationLogRecord} right - Right record.
+ * @returns {number} - Sort result.
+ */
+function compareRecordsNewestFirst(left, right) {
+  const updatedAtComparison = right.updatedAt.localeCompare(left.updatedAt)
+
+  if (updatedAtComparison !== 0) return updatedAtComparison
+
+  return right.sequence - left.sequence
+}
+
+/**
+ * Normalizes and sorts a list of records.
+ * @param {unknown} records - Raw records.
+ * @returns {LocalMutationLogRecord[]} - Normalized records.
+ */
+function normalizeRecordList(records) {
+  if (!Array.isArray(records)) throw new Error("Expected local mutation log storage records array")
+
+  return records
+    .map(normalizeRecord)
+    .sort((left, right) => left.sequence - right.sequence)
+    .map((record) => cloneRecord(record))
 }
 
 /**

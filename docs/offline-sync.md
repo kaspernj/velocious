@@ -10,17 +10,23 @@ Velocious has a client-side local mutation log for the first local-first/offline
 import LocalMutationLog from "velocious/build/src/sync/local-mutation-log.js"
 
 const mutationLog = new LocalMutationLog({
-  storage: window.localStorage,
+  storage: sqliteMutationLogStorage,
   storageKey: "my-app.sync.mutations"
 })
 ```
 
+The storage adapter is intentionally **row-oriented**. Do not store the entire log as one JSON blob: native devices have SQLite available and small devices should not have to parse/stringify a growing mutation history for every append.
+
 The storage adapter must expose:
 
-- `getItem(key)`
-- `setItem(key, value)`
+- `appendRecord(storageKey, record)`
+- `deleteRecords(storageKey, ids)`
+- `nextSequence(storageKey)`
+- `record(storageKey, id)`
+- `records(storageKey, options)`
+- `updateRecord(storageKey, record)`
 
-Both methods may be synchronous or async. Browser `localStorage`, AsyncStorage-style wrappers, and SQLite-backed wrappers can all be adapted. Writes are serialized per `storageKey` before the log reads, appends, and persists a new record so concurrent `append()` calls do not drop mutations or reuse the same sequence number.
+Methods may be synchronous or async. On native/Expo, back this with SQLite using one row per mutation and indexes on `storageKey`, `status`, and `sequence`. On web, use IndexedDB or another row/key-per-record store rather than `localStorage` as one growing blob. Writes are serialized per `storageKey` so concurrent `append()` calls do not drop mutations or reuse the same sequence number.
 
 Each appended record contains:
 
@@ -32,7 +38,7 @@ Each appended record contains:
 - `createdAt` / `updatedAt`.
 - optional `syncResult` for backend replay metadata.
 
-Use `pendingRecords()` to get records that still need reconciliation. Use `updateStatus(...)` after a replay, conflict, rejection, or successful sync.
+Use `pendingRecords()` to get records that still need reconciliation; storage adapters can service this through a status index rather than loading terminal history. Use `updateStatus(...)` after a replay, conflict, rejection, or successful sync. Use `compact(...)` after successful replay/sync to delete old terminal records while preserving pending/conflict records and records referenced by pending dependencies.
 
 ## Offline frontend-model writes
 
