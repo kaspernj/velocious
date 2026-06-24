@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase, {AttributeNotSelectedError} from "../../src/frontend-models/base.js"
+import LocalMutationLog from "../../src/sync/local-mutation-log.js"
 import {buildPreloadTestModelClasses, resetFrontendModelTransport, stubFrontendModelFetch} from "../helpers/frontend-model-test-helpers.js"
 
 /** @typedef {{body: Record<string, any>, url: string}} FetchCall */
@@ -60,6 +61,35 @@ function buildTestModelClass() {
      * @returns {any}
      */
     setUserId(newValue) { return this.setAttribute("userId", newValue) }
+  }
+
+  return User
+}
+
+/**
+ * @param {{operations: string[]}} args - Sync configuration args.
+ * @returns {typeof FrontendModelBase} - Offline sync test frontend model class.
+ */
+function buildOfflineSyncTestModelClass({operations}) {
+  /** Test model implementation for offline sync specs. */
+  class User extends FrontendModelBase {
+    /** @returns {{attributes: string[], commands: string[], primaryKey: string, sync: {enabled: boolean, operations: string[], policyHash: string, policyVersion: string | null}}} - Resource configuration. */
+    static resourceConfig() {
+      return {
+        attributes: ["id", "name", "email", "userId"],
+        commands: ["create", "destroy", "find", "index", "update"],
+        primaryKey: "id",
+        sync: {
+          enabled: true,
+          operations,
+          policyHash: "sha256-user",
+          policyVersion: null
+        }
+      }
+    }
+
+    /** @returns {any} */
+    id() { return this.readAttribute("id") }
   }
 
   return User
@@ -190,6 +220,23 @@ function buildCustomPrimaryKeyTestModelClass() {
 function restoreFrontendModelFetch(fetchStub) {
   resetFrontendModelTransport()
   fetchStub.restore()
+}
+
+function buildMemoryStorage() {
+  const values = new Map()
+
+  return {
+    getItem: async (key) => values.get(key) || null,
+    setItem: async (key, value) => {
+      values.set(key, value)
+    }
+  }
+}
+
+function nextNow(values) {
+  let index = 0
+
+  return () => new Date(values[index++] || values[values.length - 1])
 }
 
 /**
@@ -2315,6 +2362,143 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
       expect(user.isPersisted()).toEqual(true)
       expect(user.id()).toEqual(7)
       expect(user.isChanged()).toEqual(false)
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("offline save queues a local create mutation and applies optimistic persisted state without network", async () => {
+    const User = buildOfflineSyncTestModelClass({operations: ["create", "update", "destroy"]})
+    const fetchStub = stubFetch({model: {email: "network@example.com", id: 99, name: "Network"}})
+    const mutationLog = new LocalMutationLog({
+      idGenerator: () => "log-1",
+      now: nextNow(["2026-06-24T10:00:00.000Z"]),
+      storage: buildMemoryStorage()
+    })
+    const user = new User({email: "offline@example.com", name: "Offline"})
+
+    try {
+      FrontendModelBase.configureTransport({
+        offlineSync: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          clientMutationId: () => "mutation-1",
+          enabled: true,
+          mutationLog,
+          now: () => new Date("2026-06-24T09:59:59.000Z"),
+          offlineGrant: {id: "grant-1"}
+        }
+      })
+
+      await user.save()
+
+      expect(fetchStub.calls).toEqual([])
+      expect(user.isNewRecord()).toEqual(false)
+      expect(user.id()).toEqual("mutation-1")
+      expect(user.isChanged()).toEqual(false)
+      expect(await mutationLog.records()).toEqual([{
+        createdAt: "2026-06-24T10:00:00.000Z",
+        dependencies: [],
+        id: "log-1",
+        mutation: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          attributes: {email: "offline@example.com", id: "mutation-1", name: "Offline"},
+          baseVersion: null,
+          clientMutationId: "mutation-1",
+          model: "User",
+          occurredAt: "2026-06-24T09:59:59.000Z",
+          offlineGrantId: "grant-1",
+          operation: "create",
+          policyHash: "sha256-user"
+        },
+        sequence: 1,
+        status: "pending",
+        updatedAt: "2026-06-24T10:00:00.000Z"
+      }])
+    } finally {
+      resetFrontendModelTransport()
+      fetchStub.restore()
+    }
+  })
+
+  it("offline save rejects writes not allowed by the local sync policy", async () => {
+    const User = buildOfflineSyncTestModelClass({operations: ["find", "index"]})
+    const mutationLog = new LocalMutationLog({storage: buildMemoryStorage()})
+    const user = new User({email: "offline@example.com", name: "Offline"})
+
+    try {
+      FrontendModelBase.configureTransport({
+        offlineSync: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          enabled: true,
+          mutationLog,
+          offlineGrant: {id: "grant-1"}
+        }
+      })
+
+      let error
+      try {
+        await user.save()
+      } catch (caughtError) {
+        error = caughtError
+      }
+
+      expect(error.message).toEqual("Offline sync for User does not allow create")
+      expect(await mutationLog.records()).toEqual([])
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("offline destroy queues a local destroy mutation without network", async () => {
+    const User = buildOfflineSyncTestModelClass({operations: ["destroy"]})
+    const fetchStub = stubFetch({status: "success"})
+    const mutationLog = new LocalMutationLog({
+      idGenerator: () => "log-1",
+      now: () => new Date("2026-06-24T10:00:00.000Z"),
+      storage: buildMemoryStorage()
+    })
+    const user = User.instantiateFromResponse({email: "john@example.com", id: 5, name: "John"})
+
+    try {
+      FrontendModelBase.configureTransport({
+        offlineSync: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          clientMutationId: () => "mutation-1",
+          enabled: true,
+          mutationLog,
+          now: () => new Date("2026-06-24T09:59:59.000Z"),
+          offlineGrant: {id: "grant-1"}
+        }
+      })
+
+      await user.destroy()
+
+      expect(fetchStub.calls).toEqual([])
+      expect(await mutationLog.records()).toEqual([{
+        createdAt: "2026-06-24T10:00:00.000Z",
+        dependencies: [],
+        id: "log-1",
+        mutation: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          attributes: {id: 5},
+          baseVersion: null,
+          clientMutationId: "mutation-1",
+          model: "User",
+          occurredAt: "2026-06-24T09:59:59.000Z",
+          offlineGrantId: "grant-1",
+          operation: "destroy",
+          policyHash: "sha256-user"
+        },
+        sequence: 1,
+        status: "pending",
+        updatedAt: "2026-06-24T10:00:00.000Z"
+      }])
     } finally {
       resetFrontendModelTransport()
       fetchStub.restore()
