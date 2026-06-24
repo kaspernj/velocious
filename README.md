@@ -9,6 +9,7 @@
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))
+* SQLite web persistence that automatically prefers OPFS, then IndexedDB, then localStorage fallback (see [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
@@ -606,7 +607,9 @@ configuration.addClientErrorPayloadReporter(async ({error, requestDetails, conte
 
 `requestDetails` includes `httpMethod`, `path`, and a parsed `body` snapshot when available. The body snapshot redacts common secret keys, truncates large strings and arrays, summarizes uploaded files and buffers without bytes, and compacts oversized frontend-model batches while preserving `requestId`, `model`, `commandType` / `customPath`, and payload shape.
 
-For sqlite web databases, Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
+For sqlite web databases, Velocious automatically picks the best browser persistence backend it can use: existing localStorage databases keep using the legacy localStorage key, new databases prefer OPFS when a smoke test succeeds, then IndexedDB, then localStorage as a compatibility fallback. See [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md) for the backend selection details.
+
+Velocious defaults to `https://sql.js.org/dist/<file>` for `sql.js` wasm loading. You can override wasm resolution per database config with `locateFile`:
 
 ```js
 import SqliteDriver from "velocious/build/src/database/drivers/sqlite/index.web.js"

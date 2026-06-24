@@ -1,8 +1,8 @@
 // @ts-check
 
-import BetterLocalStorage from "better-localstorage"
 import ConnectionSqlJs from "./connection-sql-js.js"
 import initSqlJs from "sql.js"
+import {createSqliteWebPersistence, sqliteWebPersistenceKey} from "./web-persistence.js"
 
 import Base from "./base.js"
 
@@ -12,10 +12,6 @@ import Base from "./base.js"
  */
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
-  /**
-   * Better local storage.
-   * @type {BetterLocalStorage | undefined} */
-  betterLocalStorage = undefined
   /**
    * Connection.
    * @type {ConnectionSqlJs | undefined} */
@@ -39,16 +35,15 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     this.args = this.getArgs()
 
     if (!this.args.getConnection) {
-      this.betterLocalStorage ||= new BetterLocalStorage()
+      const persistence = await createSqliteWebPersistence({databaseName: this.databaseName()})
 
       if (this.args.reset) {
-        await this.betterLocalStorage.delete(this.localStorageName())
+        await persistence.delete()
       }
 
       const SQL = await initSqlJs({locateFile: this.sqlJsLocateFile()})
-
-      const databaseContent = await this.betterLocalStorage.get(this.localStorageName())
-      const connectionSqlJs = new ConnectionSqlJs(this, new SQL.Database(databaseContent))
+      const databaseContent = await persistence.load()
+      const connectionSqlJs = new ConnectionSqlJs(this, new SQL.Database(databaseContent), persistence)
 
       this._connection = connectionSqlJs
     }
@@ -72,11 +67,19 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   }
 
   localStorageName() {
-    if (!this.args?.name) {
-      throw new Error("No name given in arguments for SQLite Web database")
-    }
+    return sqliteWebPersistenceKey(this.databaseName())
+  }
 
-    return `VelociousDatabaseDriversSqliteWeb---${this.args?.name}`
+  /**
+   * Returns the configured database name.
+   * @returns {string} - Database name.
+   */
+  databaseName() {
+    const name = this.args?.name
+
+    if (typeof name !== "string" || name.length < 1) throw new Error("No name given in arguments for SQLite Web database")
+
+    return name
   }
 
   /**
