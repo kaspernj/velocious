@@ -17,7 +17,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   }
 
   async close() {
-    await this.saveDatabase()
+    await this.flushDatabaseSave()
     await this.connection.close()
   }
 
