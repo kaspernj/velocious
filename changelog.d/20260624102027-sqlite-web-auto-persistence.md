@@ -1,0 +1,1 @@
+SQLite web databases now automatically choose OPFS or IndexedDB when possible, migrate existing persisted bytes from worse backends into the selected backend, and keep the legacy localStorage-style backend only as a compatibility fallback when no better backend is usable.

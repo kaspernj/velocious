@@ -8,10 +8,12 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
    * Runs constructor.
    * @param {import("../base.js").default} driver - Database driver instance.
    * @param {import("sql.js").Database} connection - Connection.
+   * @param {import("./web-persistence.js").SqliteWebPersistence} persistence - Database persistence adapter.
    */
-  constructor(driver, connection) {
+  constructor(driver, connection, persistence) {
     this.connection = connection
     this.driver = driver
+    this.persistence = persistence
   }
 
   async close() {
@@ -36,10 +38,9 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   }
 
   saveDatabase = async () => {
-    const localStorageContent = this.connection.export()
+    const databaseContent = this.connection.export()
 
-    // @ts-expect-error
-    await this.driver.betterLocalStorage.set(this.driver.localStorageName(), localStorageContent)
+    await this.persistence.save(databaseContent)
   }
 
   saveDatabaseDebounce = debounce(this.saveDatabase, 500)
