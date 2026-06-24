@@ -10,7 +10,7 @@ describe("database - drivers - sqlite web persistence", () => {
     expect(persistence.name).toEqual("opfs")
   })
 
-  it("falls back to IndexedDB persistence when OPFS is unavailable", async () => {
+  it("uses IndexedDB persistence when OPFS is unavailable", async () => {
     const environment = buildEnvironment({opfs: false, indexedDb: true})
 
     const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
@@ -18,29 +18,26 @@ describe("database - drivers - sqlite web persistence", () => {
     expect(persistence.name).toEqual("indexeddb")
   })
 
-  it("keeps using an existing IndexedDB database even when OPFS becomes available later", async () => {
+  it("migrates an existing IndexedDB database to OPFS when OPFS becomes available later", async () => {
     const environment = buildEnvironment({indexedDb: true, indexedDbContent: new Uint8Array([7, 8, 9]), opfs: true})
 
     const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
 
-    expect(persistence.name).toEqual("indexeddb")
+    expect(persistence.name).toEqual("opfs")
     expect(Array.from(await persistence.load() || [])).toEqual([7, 8, 9])
+    expect(await readIndexedDbBytes(environment, "app")).toEqual(undefined)
   })
 
-  it("falls back to localStorage persistence when IndexedDB fails the smoke test", async () => {
+  it("raises when IndexedDB fails the smoke test and OPFS is unavailable", async () => {
     const environment = buildEnvironment({opfs: false, indexedDb: true, indexedDbUsable: false})
 
-    const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
-
-    expect(persistence.name).toEqual("localStorage")
+    await expectSqliteWebPersistenceError({databaseName: "app", environment})
   })
 
-  it("falls back to localStorage persistence when OPFS and IndexedDB are unavailable", async () => {
+  it("raises when OPFS and IndexedDB are unavailable", async () => {
     const environment = buildEnvironment({opfs: false, indexedDb: false})
 
-    const persistence = await createSqliteWebPersistence({databaseName: "app", environment})
-
-    expect(persistence.name).toEqual("localStorage")
+    await expectSqliteWebPersistenceError({databaseName: "app", environment})
   })
 
   it("stores SQL.js database bytes in the selected OPFS file", async () => {
@@ -80,6 +77,17 @@ describe("database - drivers - sqlite web persistence", () => {
     expect(await readIndexedDbBytes(environment, "app")).toEqual(undefined)
   })
 })
+
+async function expectSqliteWebPersistenceError({databaseName, environment}) {
+  try {
+    await createSqliteWebPersistence({databaseName, environment})
+  } catch (error) {
+    expect(error.message).toEqual("SQLite web persistence requires OPFS or IndexedDB support")
+    return
+  }
+
+  throw new Error("Expected SQLite web persistence selection to fail")
+}
 
 function buildEnvironment({opfs, indexedDb, indexedDbContent = undefined, indexedDbUsable = true, opfsContent = undefined}) {
   const directory = buildOpfsDirectory({databaseContent: opfsContent})

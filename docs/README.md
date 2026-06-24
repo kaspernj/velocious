@@ -14,7 +14,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/mailers.md`: EJS mailer templates, direct delivery, background delivery, and payload rendering.
 - `docs/model-initialization.md`: Eager and lazy record/frontend-model initialization behavior.
 - `docs/schema-metadata-cache.md`: Driver schema metadata caching, invalidation, and disabling.
-- `docs/sqlite-web-persistence.md`: SQLite web persistence backend auto-selection: OPFS, IndexedDB, then localStorage fallback.
+- `docs/sqlite-web-persistence.md`: SQLite web persistence backend auto-selection: OPFS, IndexedDB, and legacy-byte migration.
 - `docs/tenant-databases.md`: Tenant-only database identifiers and tenant lifecycle commands.
 - `docs/frontend-model-resources.md`: Resource recipe requirements for generated frontend models.
 - `docs/translations.md`: Translated record attributes, `currentTranslation`, and translated frontend-model sorting.

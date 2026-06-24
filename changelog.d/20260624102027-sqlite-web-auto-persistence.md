@@ -1,1 +1,1 @@
-SQLite web databases now automatically preserve legacy localStorage data, choose OPFS or IndexedDB for new databases, and keep using a backend that already contains data if browser storage support changes later.
+SQLite web databases now automatically choose OPFS or IndexedDB, migrate existing persisted bytes into the selected backend when possible, and fail fast instead of falling back to localStorage-style storage for new databases.

@@ -8,7 +8,7 @@ const SUPPORT_CHECK_BYTES = new Uint8Array([118, 101, 108, 111, 99, 105, 111, 11
 /**
  * SQLite web persistence adapter.
  * @typedef {object} SqliteWebPersistence
- * @property {"indexeddb" | "localStorage" | "opfs"} name - Persistence backend name.
+ * @property {"indexeddb" | "opfs"} name - Persistence backend name.
  * @property {() => Promise<void>} delete - Deletes the persisted database.
  * @property {() => Promise<Uint8Array | undefined>} load - Loads persisted database bytes.
  * @property {(content: Uint8Array) => Promise<void>} save - Saves persisted database bytes.
@@ -33,13 +33,16 @@ export async function createSqliteWebPersistence({databaseName, environment = gl
   const opfsPersistence = new OpfsPersistence({databaseName, environment})
   const indexedDbPersistence = new IndexedDbPersistence({databaseName, environment})
 
-  if (await localStoragePersistence.exists()) return localStoragePersistence
-  if (await opfsPersistence.exists()) return opfsPersistence
-  if (await indexedDbPersistence.exists()) return indexedDbPersistence
-  if (await supportsOpfsPersistence(environment)) return opfsPersistence
-  if (await supportsIndexedDbPersistence(environment)) return indexedDbPersistence
+  const selectedPersistence = await selectSupportedPersistence({environment, indexedDbPersistence, opfsPersistence})
 
-  return localStoragePersistence
+  await migratePersistedDatabase({
+    databaseName,
+    destinationPersistence: selectedPersistence,
+    environment,
+    sourcePersistences: [localStoragePersistence, indexedDbPersistence, opfsPersistence]
+  })
+
+  return selectedPersistence
 }
 
 /**
@@ -221,10 +224,8 @@ class IndexedDbPersistence {
   }
 }
 
-/** LocalStorage-backed SQL.js database blob persistence. */
+/** LocalStorage-backed SQL.js database blob persistence for legacy migrations. */
 class LocalStoragePersistence {
-  /** @type {"localStorage"} */
-  name = "localStorage"
 
   /**
    * Creates localStorage persistence.
@@ -290,6 +291,60 @@ class LocalStoragePersistence {
     this.storage ||= new BetterLocalStorage()
 
     return this.storage
+  }
+}
+
+
+/**
+ * Selects the preferred available SQLite web persistence backend.
+ * @param {object} args - Arguments.
+ * @param {SqliteWebPersistenceEnvironment} args.environment - Browser-like environment.
+ * @param {IndexedDbPersistence} args.indexedDbPersistence - IndexedDB persistence adapter.
+ * @param {OpfsPersistence} args.opfsPersistence - OPFS persistence adapter.
+ * @returns {Promise<SqliteWebPersistence>} - Selected persistence adapter.
+ */
+async function selectSupportedPersistence({environment, indexedDbPersistence, opfsPersistence}) {
+  if (await supportsOpfsPersistence(environment)) return opfsPersistence
+  if (await supportsIndexedDbPersistence(environment)) return indexedDbPersistence
+
+  throw new Error("SQLite web persistence requires OPFS or IndexedDB support")
+}
+
+/**
+ * Migrates any existing database bytes into the selected persistence backend.
+ * @param {object} args - Arguments.
+ * @param {string} args.databaseName - Database name.
+ * @param {SqliteWebPersistence} args.destinationPersistence - Selected persistence adapter.
+ * @param {SqliteWebPersistenceEnvironment} args.environment - Browser-like environment.
+ * @param {{delete: () => Promise<void>, load: () => Promise<Uint8Array | undefined>}[]} args.sourcePersistences - Persistence adapters to scan for existing bytes.
+ * @returns {Promise<void>} - Resolves when migration is complete.
+ */
+async function migratePersistedDatabase({databaseName, destinationPersistence, environment, sourcePersistences}) {
+  if (await destinationPersistence.load() !== undefined) return
+
+  for (const sourcePersistence of sourcePersistences) {
+    if (sourcePersistence === destinationPersistence) continue
+
+    const databaseBytes = await loadPersistenceIfAvailable(sourcePersistence)
+    if (databaseBytes === undefined) continue
+
+    await destinationPersistence.save(databaseBytes)
+    await deleteSqliteWebPersistences({databaseName, environment})
+    await destinationPersistence.save(databaseBytes)
+    return
+  }
+}
+
+/**
+ * Loads a persistence backend, ignoring unavailable backend errors.
+ * @param {{load: () => Promise<Uint8Array | undefined>}} persistence - Persistence adapter.
+ * @returns {Promise<Uint8Array | undefined>} - Persisted bytes, if available.
+ */
+async function loadPersistenceIfAvailable(persistence) {
+  try {
+    return await persistence.load()
+  } catch {
+    return undefined
   }
 }
 
@@ -376,7 +431,7 @@ function indexedDbRequest(request) {
 
 /**
  * Deletes a persistence backend, ignoring unavailable backend errors.
- * @param {SqliteWebPersistence} persistence - Persistence adapter.
+ * @param {{delete: () => Promise<void>}} persistence - Persistence adapter.
  * @returns {Promise<void>} - Resolves when deletion was attempted.
  */
 async function deletePersistenceIfAvailable(persistence) {

@@ -1,14 +1,13 @@
 # SQLite web persistence
 
-Velocious's web SQLite driver uses `sql.js` for the in-browser SQLite runtime. The driver now chooses the best persistence backend it can detect automatically; application code does not need to configure a persistence strategy.
+Velocious's web SQLite driver uses `sql.js` for the in-browser SQLite runtime. The driver automatically chooses a durable browser persistence backend; application code does not need to configure a persistence strategy.
 
 Selection order:
 
-1. Existing **localStorage** databases under the legacy key are preserved for compatibility with the previous web driver.
-2. If the selected backend already contains this database, Velocious keeps using that backend so browser capability changes do not open an empty database by accident.
-3. New databases use **OPFS** (`navigator.storage.getDirectory`) when a small write/read/delete smoke test succeeds.
-4. New databases fall back to **IndexedDB** when OPFS is unavailable and IndexedDB passes its smoke test.
-5. **localStorage** is the compatibility fallback.
+1. Use **OPFS** (`navigator.storage.getDirectory`) when a small write/read/delete smoke test succeeds.
+2. Otherwise use **IndexedDB** when it passes its smoke test.
+3. If existing database bytes are found in another backend, migrate them into the selected backend and clear the old copy.
+4. If neither OPFS nor IndexedDB is available, opening the web SQLite database raises an error instead of silently falling back to localStorage-style storage.
 
 `reset` clears the database name from every available backend before selecting the backend for the fresh database, so stale bytes are not resurrected when browser capabilities change later.
 
@@ -16,17 +15,19 @@ Selection order:
 
 ### OPFS
 
-OPFS is preferred because it stores the SQLite database bytes in the browser origin's private filesystem instead of putting the exported database into localStorage. The current implementation still runs `sql.js` in memory and persists exported database bytes after writes; it is a better storage target than localStorage, but it is not yet a page-level SQLite VFS.
+OPFS is preferred because it stores the SQLite database bytes in the browser origin's private filesystem instead of putting the exported database into localStorage-style storage. The current implementation still runs `sql.js` in memory and persists exported database bytes after writes; it is a better storage target than localStorage, but it is not yet a page-level SQLite VFS.
 
 Future work can replace the export-on-write path with a true SQLite WASM OPFS VFS without changing application configuration.
 
 ### IndexedDB
 
-IndexedDB is the fallback for browsers where OPFS is unavailable or fails the smoke test. It stores the exported database bytes under the same stable Velocious database key in an IndexedDB object store. Like OPFS in this slice, this keeps SQLite semantics and avoids localStorage, but it is still SQL.js export persistence rather than a page-level VFS.
+IndexedDB is used for browsers where OPFS is unavailable or fails the smoke test. It stores the exported database bytes under the same stable Velocious database key in an IndexedDB object store. Like OPFS in this slice, this keeps SQLite semantics and avoids localStorage, but it is still SQL.js export persistence rather than a page-level VFS.
 
-### localStorage
+### Legacy localStorage-style storage
 
-localStorage remains available for compatibility, tests, demos, older browsers, and existing databases already persisted with the previous driver. It stores the whole exported SQLite database blob under the legacy `VelociousDatabaseDriversSqliteWeb---<name>` key and should not be treated as the preferred storage for large offline/sync-heavy web apps.
+The previous web driver stored the whole exported SQLite database blob under the legacy `VelociousDatabaseDriversSqliteWeb---<name>` key. That backend is no longer selected for new databases. When legacy bytes are available and OPFS or IndexedDB works, Velocious migrates the bytes into the selected backend and clears the legacy copy.
+
+If no better backend is available, Velocious fails fast instead of writing new SQLite databases to the legacy backend.
 
 ## Database configuration
 
