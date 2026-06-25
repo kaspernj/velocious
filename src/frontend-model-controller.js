@@ -26,7 +26,11 @@ import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./util
 function normalizeFrontendModelPreload(preload) {
   if (!preload) return null
 
-  return normalizeQueryPreload(preload)
+  try {
+    return normalizeQueryPreload(preload)
+  } catch (error) {
+    throwFrontendModelQueryErrorForParserError(error)
+  }
 }
 
 /**
@@ -864,7 +868,11 @@ export default class FrontendModelController extends Controller {
     for (const [relationshipName, relationshipPreload] of Object.entries(preload)) {
       if (relationshipPreload === false) continue
 
-      const relationship = modelClass.getRelationshipByName(relationshipName)
+      const relationship = modelClass.getRelationshipsMap()[relationshipName]
+      if (!relationship) {
+        throw frontendModelQueryError(`Unknown preload relationship "${relationshipName}" for ${modelClass.name}`)
+      }
+
       const targetModelClass = await this.ensureFrontendModelRelationshipTargetClassInitialized({
         backendProject,
         relationship

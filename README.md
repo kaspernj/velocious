@@ -582,7 +582,7 @@ Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle
 Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
 Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
-Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `group`, `sort`, `pluck`, or Ransack attributes, return the specific frontend-model query error message with `velocious.code: "frontend-model-query-error"` and are not emitted as framework errors.
+Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `preload`, `group`, `sort`, `pluck`, or Ransack attributes, return the specific frontend-model query error message with `velocious.code: "frontend-model-query-error"` and are not emitted as framework errors.
 In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
 Other non-production environments, such as `staging`, keep the same client-safe default unless you explicitly opt in with `exposeInternalErrorsToClients: true`:
 
