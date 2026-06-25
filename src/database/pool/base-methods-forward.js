@@ -23,6 +23,7 @@ export default function baseMethodsForward(PoolBase) {
     "quote",
     "quoteColumn",
     "quoteTable",
+    "removeIndexSQLs",
     "select",
     "update",
     "updateSql"

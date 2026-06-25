@@ -15,6 +15,7 @@ import Options from "./options.js"
 import mssql from "mssql"
 import net from "node:net"
 import QueryParser from "./query-parser.js"
+import RemoveIndex from "./sql/remove-index.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
 import timeout from "awaitery/build/timeout.js"
@@ -111,6 +112,18 @@ export default class VelociousDatabaseDriversMssql extends Base{
     const createIndex = new CreateIndex(createArgs)
 
     return await createIndex.toSQLs()
+  }
+
+  /**
+   * Runs remove index sqls.
+   * @param {import("../base.js").RemoveIndexSqlArgs} indexData - Index data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
+   */
+  async removeIndexSQLs(indexData) {
+    const removeArgs = Object.assign({driver: this}, indexData)
+    const removeIndex = new RemoveIndex(removeArgs)
+
+    return await removeIndex.toSQLs()
   }
 
   /**

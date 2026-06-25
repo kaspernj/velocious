@@ -185,6 +185,20 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Runs remove index.
+   * @param {string} tableName - Table name.
+   * @param {string} name - Index name to remove.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async removeIndex(tableName, name) {
+    const sqls = await this.getDriver().removeIndexSQLs({name, tableName})
+
+    for (const sql of sqls) {
+      await this.getDriver().query(sql)
+    }
+  }
+
+  /**
    * AddForeignKeyArgsType type.
    * @typedef {object} AddForeignKeyArgsType
    * @property {string} [columnName] - Override the derived FK column name (default: `${reference_underscored}_id`).
