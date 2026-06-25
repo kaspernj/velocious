@@ -1,0 +1,1 @@
+Belongs-to relationship setters now synchronize the owner foreign key immediately, including custom relationship primary keys, so callbacks, `changes()`, and `actsAsList` scoped moves see the assigned relationship before save.

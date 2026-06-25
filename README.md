@@ -723,6 +723,8 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
+Generated belongs-to setters synchronize the loaded relationship and foreign key before save, so `task.setProject(project)` updates `task.projectId()`, `task.changes()`, callbacks, and scoped features such as `actsAsList`. See [docs/relationships.md](docs/relationships.md#assigning-belongs-to-relationships).
+
 Translated models also get a `currentTranslation` `hasOne` relationship scoped to the first available row in the current locale fallback order. See [docs/translations.md](docs/translations.md) for preloading and frontend-model sorting behavior.
 
 Async class APIs initialize record metadata on first use when a model has not

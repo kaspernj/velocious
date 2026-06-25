@@ -51,6 +51,14 @@ database), while `Model.actsAsList` takes camelCase attribute names.
 | Update scope | Moves the record between scopes: closes the gap in the old scope, opens room in the new scope. Without an explicit position, the record is appended to the new scope. |
 | Destroy | Closes the gap by shifting all higher positions down by 1. |
 
+When the scope column is backed by a belongs-to relationship, callers can assign the relationship object instead of the raw foreign key:
+
+```js
+await item.update({project: targetProject, position: 1})
+```
+
+This is equivalent to assigning `projectId` for list reordering purposes.
+
 ## Concurrency
 
 Position shifts run as raw SQL UPDATE statements inside the same database
