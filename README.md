@@ -1076,6 +1076,7 @@ export default class CreateEvents extends Migration {
   }
 
   async down() {
+    await this.removeIndex("task_translations", ["task_id", "locale"])
     await this.dropTable("task_translations")
     await this.dropTable("examples")
     await this.dropTable("tasks")

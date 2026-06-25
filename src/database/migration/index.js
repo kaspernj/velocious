@@ -39,6 +39,7 @@
 import { convertLegacyDateValueToUtcStorage } from "../datetime-storage.js"
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
+import CreateIndexBase from "../query/create-index-base.js"
 import TableData from "../table-data/index.js"
 class NotImplementedError extends Error {}
 
@@ -185,17 +186,46 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * RemoveIndexArgsType type.
+   * @typedef {object} RemoveIndexArgsType
+   * @property {string} [name] - Explicit index name to remove.
+   */
+  /**
    * Runs remove index.
    * @param {string} tableName - Table name.
-   * @param {string} name - Index name to remove.
+   * @param {string | Array<string | import("../table-data/table-column.js").default>} nameOrColumns - Index name or columns whose default addIndex name should be removed.
+   * @param {RemoveIndexArgsType} [args] - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async removeIndex(tableName, name) {
-    const sqls = await this.getDriver().removeIndexSQLs({name, tableName})
+  async removeIndex(tableName, nameOrColumns, args = {}) {
+    const {name, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    const removeIndexName = name || this._removeIndexName(tableName, nameOrColumns)
+    const sqls = await this.getDriver().removeIndexSQLs({name: removeIndexName, tableName})
 
     for (const sql of sqls) {
       await this.getDriver().query(sql)
     }
+  }
+
+  /**
+   * Runs remove index name.
+   * @param {string} tableName - Table name.
+   * @param {string | Array<string | import("../table-data/table-column.js").default>} nameOrColumns - Index name or columns.
+   * @returns {string} - The index name.
+   */
+  _removeIndexName(tableName, nameOrColumns) {
+    if (typeof nameOrColumns === "string") return nameOrColumns
+
+    const createIndex = new CreateIndexBase({
+      columns: nameOrColumns,
+      driver: this.getDriver(),
+      tableName
+    })
+
+    return createIndex.generateIndexName()
   }
 
   /**

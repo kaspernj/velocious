@@ -31,4 +31,35 @@ describe("database - migration - removeIndex", {tags: ["dummy"]}, () => {
       }
     })
   })
+
+  it("removes an index by deriving the addIndex default name from columns", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      try {
+        await driver.dropTable("remove_index_default_widgets", {cascade: true, ifExists: true})
+        await migration.createTable("remove_index_default_widgets", (table) => {
+          table.string("name", {null: false})
+        })
+        await migration.addIndex("remove_index_default_widgets", ["name"])
+
+        const tableWithIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
+        const existingIndexNames = (await tableWithIndex.getIndexes()).map((index) => index.getName())
+
+        await migration.removeIndex("remove_index_default_widgets", ["name"])
+
+        const tableWithoutIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
+        const remainingIndexNames = (await tableWithoutIndex.getIndexes()).map((index) => index.getName())
+
+        for (const indexName of existingIndexNames) {
+          expect(remainingIndexNames).not.toContain(indexName)
+        }
+      } finally {
+        await driver.dropTable("remove_index_default_widgets", {cascade: true, ifExists: true})
+      }
+    })
+  })
 })
