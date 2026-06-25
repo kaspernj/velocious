@@ -33,6 +33,22 @@ export default async function frontendModelCommandRouteHook({configuration, curr
     }
   }
 
+  if (["/frontend-models/sync/change-feed", "/frontend-models/sync/changes", "/sync/changes"].includes(normalizedCurrentPath)) {
+    return {
+      action: "frontend-sync-change-feed",
+      controller: "velocious/api",
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
+    }
+  }
+
+  if (["/frontend-models/sync/snapshot", "/sync/snapshot"].includes(normalizedCurrentPath)) {
+    return {
+      action: "frontend-sync-snapshot",
+      controller: "velocious/api",
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
+    }
+  }
+
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
     return {
       action: "frontend-api",

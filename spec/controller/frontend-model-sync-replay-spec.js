@@ -11,6 +11,7 @@ import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model
 import {createDeviceCertificate, createSignedMutation, generateSyncSigningKeyPair} from "../../src/sync/device-identity.js"
 import {createOfflineGrantFromBootstrap} from "../../src/sync/offline-grant.js"
 import {frontendModelSyncManifestForBackendProjects} from "../../src/frontend-models/resource-definition.js"
+import ServerChangeFeedStore from "../../src/sync/server-change-feed.js"
 
 /** @typedef {import("../../src/sync/device-identity.js").SignedSyncMutation} SignedSyncMutation */
 
@@ -26,7 +27,78 @@ describe("frontend-model sync replay", () => {
     expect(routeMatch?.controller).toEqual("velocious/api")
   })
 
-  it("verifies and replays signed CRUD mutations through frontend-model command payloads", async () => {
+  it("routes the sync change-feed endpoint through the frontend-model controller", async () => {
+    const {configuration} = await syncReplayConfiguration()
+
+    for (const currentPath of ["/frontend-models/sync/change-feed", "/frontend-models/sync/changes", "/sync/changes"]) {
+      const routeMatch = await frontendModelCommandRouteHook({
+        configuration,
+        currentPath
+      })
+
+      expect(routeMatch?.action).toEqual("frontend-sync-change-feed")
+      expect(routeMatch?.controller).toEqual("velocious/api")
+    }
+  })
+
+  it("routes the sync snapshot endpoint through the frontend-model controller", async () => {
+    const {configuration} = await syncReplayConfiguration()
+
+    for (const currentPath of ["/frontend-models/sync/snapshot", "/sync/snapshot"]) {
+      const routeMatch = await frontendModelCommandRouteHook({
+        configuration,
+        currentPath
+      })
+
+      expect(routeMatch?.action).toEqual("frontend-sync-snapshot")
+      expect(routeMatch?.controller).toEqual("velocious/api")
+    }
+  })
+
+  it("pages stable server-sequenced changes without skipping newly inserted changes", async () => {
+    const {configuration} = await syncReplayConfiguration()
+    const store = new ServerChangeFeedStore({configuration})
+
+    await appendTestChange(store, {clientMutationId: "mutation-1", recordId: "ticket-1"})
+    await appendTestChange(store, {clientMutationId: "mutation-2", recordId: "ticket-2"})
+
+    const firstPage = await store.changesAfter({afterSequence: 0, limit: 1})
+
+    expect(firstPage.changes.map((change) => change.recordId)).toEqual(["ticket-1"])
+    expect(firstPage.hasMore).toEqual(true)
+    expect(firstPage.nextSequence).toEqual(1)
+    expect(firstPage.upToSequence).toEqual(2)
+
+    await appendTestChange(store, {clientMutationId: "mutation-3", recordId: "ticket-3"})
+
+    const secondPage = await store.changesAfter({afterSequence: firstPage.nextSequence, limit: 1, upToSequence: firstPage.upToSequence})
+    const catchUpPage = await store.changesAfter({afterSequence: secondPage.nextSequence, limit: 10})
+
+    expect(secondPage.changes.map((change) => change.recordId)).toEqual(["ticket-2"])
+    expect(secondPage.hasMore).toEqual(false)
+    expect(secondPage.upToSequence).toEqual(2)
+    expect(catchUpPage.changes.map((change) => change.recordId)).toEqual(["ticket-3"])
+    expect(catchUpPage.upToSequence).toEqual(3)
+  })
+
+  it("requires snapshots when retention no longer covers the requested sequence", async () => {
+    const {configuration} = await syncReplayConfiguration({changeFeedRetentionSize: 1})
+    const store = new ServerChangeFeedStore({configuration})
+
+    await appendTestChange(store, {clientMutationId: "mutation-1", recordId: "ticket-1"})
+    await appendTestChange(store, {clientMutationId: "mutation-2", recordId: "ticket-2"})
+    await appendTestChange(store, {clientMutationId: "mutation-3", recordId: "ticket-3"})
+
+    const page = await store.changesAfter({afterSequence: 0, limit: 10})
+    const expiredPage = await store.changesAfter({afterSequence: 1, limit: 10})
+
+    expect(page.changes.map((change) => change.serverSequence)).toEqual([3])
+    expect(expiredPage.status).toEqual(undefined)
+    expect(expiredPage.snapshotRequired).toEqual(true)
+    expect(expiredPage.oldestSequence).toEqual(3)
+  })
+
+  it("assigns server sequences to replayed mutations and returns snapshot/change-feed cursors", async () => {
     const {backendKeys, configuration} = await syncReplayConfiguration()
     const signedMutation = await signedReplayMutation({
       backendKeys,
@@ -64,6 +136,50 @@ describe("frontend-model sync replay", () => {
     expect(payload.results[0].status).toEqual("success")
     expect(payload.results[0].idempotencyKey).toEqual("user-1:scanner-1:mutation-1")
     expect(payload.results[0].response).toEqual({status: "success", replayed: true})
+    expect(payload.results[0].serverSequence).toEqual(1)
+
+    const snapshotResponse = new Response({configuration})
+    const snapshotController = new ReplayTestController({
+      action: "frontendSyncChangeFeed",
+      configuration,
+      controller: "velocious/api",
+      params: {afterSequence: 0},
+      request: requestFor(configuration, "/frontend-models/sync/change-feed"),
+      response: snapshotResponse,
+      viewPath: "/tmp"
+    })
+
+    await snapshotController.frontendSyncChangeFeed()
+
+    const snapshotPayload = JSON.parse(String(snapshotResponse.getBody()))
+
+    expect(snapshotPayload.status).toEqual("success")
+    expect(snapshotPayload.serverSequence).toEqual(1)
+    expect(snapshotPayload.hasMore).toEqual(false)
+    expect(snapshotPayload.nextSequence).toEqual(1)
+    expect(snapshotPayload.upToSequence).toEqual(1)
+    expect(snapshotPayload.changes).toEqual([{actorDeviceId: "scanner-1", actorUserId: "user-1", attributes: {scanned: true}, createdAt: snapshotPayload.changes[0].createdAt, id: snapshotPayload.changes[0].id, idempotencyKey: "user-1:scanner-1:mutation-1", model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1", response: {status: "success", replayed: true}, scope: {eventId: "event-1"}, serverSequence: 1}])
+    expect(snapshotPayload.snapshot).toEqual({resources: {Ticket: {models: [{id: "ticket-1", scanned: true}], status: "success"}}, serverSequence: 1})
+
+    const changesResponse = new Response({configuration})
+    const changesController = new ReplayTestController({
+      action: "frontendSyncChangeFeed",
+      configuration,
+      controller: "velocious/api",
+      params: {afterSequence: 1},
+      request: requestFor(configuration, "/frontend-models/sync/change-feed"),
+      response: changesResponse,
+      viewPath: "/tmp"
+    })
+
+    await changesController.frontendSyncChangeFeed()
+
+    const changesPayload = JSON.parse(String(changesResponse.getBody()))
+
+    expect(changesPayload.status).toEqual("success")
+    expect(changesPayload.serverSequence).toEqual(1)
+    expect(changesPayload.changes).toEqual([])
+    expect(changesPayload.snapshot).toEqual(undefined)
     expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "ticket-1", model: "Ticket"}}])
   })
 
@@ -267,6 +383,29 @@ describe("frontend-model sync replay", () => {
   })
 })
 
+/**
+ * Appends a deterministic test change.
+ * @param {ServerChangeFeedStore} store - Change-feed store.
+ * @param {object} args - Arguments.
+ * @param {string} args.clientMutationId - Client mutation id.
+ * @param {string} args.recordId - Record id.
+ * @returns {Promise<void>} - Resolves when appended.
+ */
+async function appendTestChange(store, {clientMutationId, recordId}) {
+  await store.append({
+    actorDeviceId: "scanner-1",
+    actorUserId: "user-1",
+    attributes: {scanned: true},
+    idempotencyKey: `user-1:scanner-1:${clientMutationId}`,
+    model: "Ticket",
+    operation: "update",
+    payload: {id: recordId},
+    recordId,
+    response: {status: "success", replayed: true},
+    scope: {eventId: "event-1"}
+  })
+}
+
 class TicketResource extends FrontendModelBaseResource {
   static attributes = ["id", "scanned"]
   static sync = {
@@ -295,6 +434,10 @@ class ReplayTestController extends FrontendModelController {
    * @returns {Promise<Record<string, ?>>} - Replay result.
    */
   async frontendModelCommandPayload(action) {
+    if (action === "index") {
+      return {models: [{id: "ticket-1", scanned: true}], status: "success"}
+    }
+
     this.replayedCommands.push({action, params: this.frontendModelParams()})
 
     return {status: "success", replayed: true}
@@ -316,9 +459,11 @@ class ThrowingReplayTestController extends ReplayTestController {
 
 /**
  * Builds test configuration for sync replay specs.
+ * @param {object} [options] - Configuration options.
+ * @param {number} [options.changeFeedRetentionSize] - Change-feed retention size.
  * @returns {Promise<{backendKeys: {privateKey: import("../../src/sync/device-identity.js").SyncJsonWebKey, publicKey: import("../../src/sync/device-identity.js").SyncJsonWebKey}, configuration: Configuration}>} - Test configuration.
  */
-async function syncReplayConfiguration() {
+async function syncReplayConfiguration({changeFeedRetentionSize} = {}) {
   const backendKeys = await generateSyncSigningKeyPair()
 
   const configuration = new Configuration({
@@ -332,6 +477,7 @@ async function syncReplayConfiguration() {
     locales: ["en"],
     backendProjects: [{frontendModels: {Ticket: TicketResource}, path: "/tmp/backend"}],
     sync: {
+      changeFeedRetentionSize,
       deviceCertificateBackendPublicKey: backendKeys.publicKey,
       offlineGrantSigningKeys: [{current: true, id: "key-1", secret: "test-signing-secret"}],
       offlineGrantTtlMs: 1000 * 60 * 60 * 24 * 365 * 100
@@ -402,14 +548,15 @@ function syncPolicyHash(configuration, model) {
 /**
  * Builds a minimal request object for sync replay specs.
  * @param {Configuration} configuration - Test configuration.
+ * @param {string} [path] - Request path.
  * @returns {Request} - Request.
  */
-function requestFor(configuration) {
+function requestFor(configuration, path = "/frontend-models/sync/replay") {
   const client = /** @type {any} */ ({remoteAddress: "127.0.0.1"})
   const request = new Request({client, configuration})
 
   request.feed(Buffer.from([
-    "POST /frontend-models/sync/replay HTTP/1.1",
+    `POST ${path} HTTP/1.1`,
     "Host: example.com",
     "Content-Length: 0",
     "",

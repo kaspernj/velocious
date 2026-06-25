@@ -7,6 +7,7 @@ import Response from "./http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-models/built-in-resources.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject, frontendModelSyncManifestForBackendProjects} from "./frontend-models/resource-definition.js"
 import {createOfflineGrantFromBootstrap, verifyOfflineGrant} from "./sync/offline-grant.js"
+import {serverChangeFeedStoreForConfiguration} from "./sync/server-change-feed.js"
 import {mutationIdempotencyKey, verifySignedMutation} from "./sync/device-identity.js"
 import {FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
@@ -3594,9 +3595,14 @@ export default class FrontendModelController extends Controller {
 
       try {
         idempotencyKey = mutationIdempotencyKey(/** @type {import("./sync/device-identity.js").SignedSyncMutation} */ (signedMutation))
-        const response = await this.frontendSyncReplaySignedMutation(signedMutation)
+        const {response, serverSequence} = await this.frontendSyncReplaySignedMutation(signedMutation)
 
-        results.push({idempotencyKey, response, status: "success"})
+        results.push({
+          idempotencyKey,
+          response,
+          serverSequence,
+          status: "success"
+        })
       } catch (error) {
         const errorContext = this.frontendModelEndpointErrorContext({
           action: "frontendSyncReplay",
@@ -3647,7 +3653,7 @@ export default class FrontendModelController extends Controller {
   /**
    * Verifies and replays one signed sync mutation.
    * @param {?} signedMutation - Signed mutation envelope.
-   * @returns {Promise<Record<string, ?>>} - Frontend-model command response.
+   * @returns {Promise<{response: Record<string, ?>, serverSequence: number | null}>} - Frontend-model command response and appended server sequence.
    */
   async frontendSyncReplaySignedMutation(signedMutation) {
     const configuration = this.getConfiguration()
@@ -3692,11 +3698,19 @@ export default class FrontendModelController extends Controller {
     const commandParams = await this.frontendSyncReplayCommandParams(mutation)
 
     try {
-      return await this.withFrontendModelParams(commandParams, async () => {
+      const response = await this.withFrontendModelParams(commandParams, async () => {
         return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
           return await this.frontendModelCommandPayload(/** @type {"create" | "update" | "destroy"} */ (mutation.operation)) || this.frontendModelErrorPayload("Action halted by beforeAction.")
         })
       })
+      const serverSequence = await this.frontendSyncAppendServerChange({
+        idempotencyKey: mutationIdempotencyKey(/** @type {import("./sync/device-identity.js").SignedSyncMutation} */ (signedMutation)),
+        mutation,
+        offlineGrant,
+        response
+      })
+
+      return {response, serverSequence}
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({
         action: "frontendSyncReplay",
@@ -3712,7 +3726,10 @@ export default class FrontendModelController extends Controller {
         model: errorContext.model
       })
 
-      return await this.frontendModelClientErrorPayloadForError(error, errorContext)
+      return {
+        response: await this.frontendModelClientErrorPayloadForError(error, errorContext),
+        serverSequence: null
+      }
     }
   }
 
@@ -3833,6 +3850,178 @@ export default class FrontendModelController extends Controller {
     if (primaryKeyValue !== undefined && mutation.operation !== "create") delete attributes[primaryKey]
 
     return {attributes, primaryKeyValue}
+  }
+
+  /**
+   * Appends a successfully replayed mutation to the server change feed.
+   * @param {object} args - Arguments.
+   * @param {string | null} args.idempotencyKey - Mutation idempotency key.
+   * @param {import("./sync/device-identity.js").SyncMutation} args.mutation - Verified mutation.
+   * @param {import("./sync/offline-grant.js").OfflineGrant} args.offlineGrant - Verified offline grant.
+   * @param {Record<string, ?>} args.response - Replay command response.
+   * @returns {Promise<number | null>} - Assigned server sequence, or null when no change was appended.
+   */
+  async frontendSyncAppendServerChange({idempotencyKey, mutation, offlineGrant, response}) {
+    if (response.status !== "success") return null
+
+    const payload = /** @type {Record<string, ?>} */ (mutation.payload && typeof mutation.payload === "object" && !Array.isArray(mutation.payload) ? mutation.payload : {})
+    const attributes = /** @type {Record<string, ?>} */ (mutation.attributes && typeof mutation.attributes === "object" && !Array.isArray(mutation.attributes) ? mutation.attributes : {})
+    const rawRecordId = payload.id || payload.recordId || attributes.id || null
+    const recordId = rawRecordId === null || rawRecordId === undefined ? null : String(rawRecordId)
+    const change = await serverChangeFeedStoreForConfiguration(this.getConfiguration()).append({
+      actorDeviceId: mutation.actorDeviceId,
+      actorUserId: mutation.actorUserId,
+      attributes,
+      idempotencyKey,
+      model: mutation.model,
+      operation: mutation.operation,
+      payload,
+      recordId,
+      response,
+      scope: offlineGrant.scopes
+    })
+
+    return change.serverSequence
+  }
+
+  /**
+   * Runs frontend sync change feed.
+   * @returns {Promise<void>} - Sync change-feed response.
+   */
+  async frontendSyncChangeFeed() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(this.params()))
+    const afterSequence = this.frontendSyncChangeFeedAfterSequence(params)
+    const store = serverChangeFeedStoreForConfiguration(this.getConfiguration())
+    const limit = this.frontendSyncChangeFeedLimit(params)
+    const currentServerSequence = await store.latestSequence()
+    const serverSequence = this.frontendSyncChangeFeedUpToSequence(params, currentServerSequence)
+    const page = await store.changesAfter({afterSequence, limit, upToSequence: serverSequence})
+
+    if (page.snapshotRequired) {
+      await this.render({
+        json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue({
+          changes: [],
+          oldestSequence: page.oldestSequence,
+          requestedAfterSequence: afterSequence,
+          serverSequence,
+          snapshot: await this.frontendSyncSnapshotPayload({serverSequence}),
+          status: "snapshot_required"
+        }, this.transportSerializationOptions()))
+      })
+      return
+    }
+
+    const changes = page.changes
+    const includeSnapshot = params.snapshot === true || params.includeSnapshot === true || afterSequence === 0
+    const snapshot = includeSnapshot ? await this.frontendSyncSnapshotPayload({serverSequence}) : undefined
+
+    const payload = /** @type {Record<string, ?>} */ ({
+      changes,
+      hasMore: page.hasMore,
+      nextSequence: page.nextSequence,
+      serverSequence,
+      status: "success",
+      upToSequence: page.upToSequence
+    })
+
+    if (snapshot) payload.snapshot = snapshot
+
+    await this.render({
+      json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload, this.transportSerializationOptions()))
+    })
+  }
+
+  /**
+   * Resolves sync change-feed cursor.
+   * @param {Record<string, ?>} params - Request params.
+   * @returns {number} - Exclusive lower-bound sequence.
+   */
+  frontendSyncChangeFeedAfterSequence(params) {
+    const afterSequence = params.afterSequence ?? params.cursor ?? 0
+
+    if (typeof afterSequence === "number" && Number.isInteger(afterSequence) && afterSequence >= 0) return afterSequence
+    if (typeof afterSequence === "string" && /^\d+$/.test(afterSequence)) return Number(afterSequence)
+
+    throw new Error("Expected sync change-feed afterSequence")
+  }
+
+  /**
+   * Resolves sync change-feed page limit.
+   * @param {Record<string, ?>} params - Request params.
+   * @returns {number} - Page limit.
+   */
+  frontendSyncChangeFeedLimit(params) {
+    const limit = params.limit ?? params.pageSize ?? 100
+
+    if (typeof limit === "number" && Number.isInteger(limit) && limit > 0) return limit
+    if (typeof limit === "string" && /^\d+$/.test(limit)) return Number(limit)
+
+    throw new Error("Expected sync change-feed positive limit")
+  }
+
+  /**
+   * Resolves sync change-feed stable high-water mark.
+   * @param {Record<string, ?>} params - Request params.
+   * @param {number} currentServerSequence - Current latest server sequence.
+   * @returns {number} - Inclusive upper-bound sequence.
+   */
+  frontendSyncChangeFeedUpToSequence(params, currentServerSequence) {
+    const upToSequence = params.upToSequence ?? params.serverSequence ?? currentServerSequence
+
+    if (typeof upToSequence === "number" && Number.isInteger(upToSequence) && upToSequence >= 0) return Math.min(upToSequence, currentServerSequence)
+    if (typeof upToSequence === "string" && /^\d+$/.test(upToSequence)) return Math.min(Number(upToSequence), currentServerSequence)
+
+    throw new Error("Expected sync change-feed upToSequence")
+  }
+
+  /**
+   * Runs frontend sync snapshot endpoint.
+   * @returns {Promise<void>} - Sync snapshot response.
+   */
+  async frontendSyncSnapshot() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const store = serverChangeFeedStoreForConfiguration(this.getConfiguration())
+    const serverSequence = await store.latestSequence()
+    const snapshot = await this.frontendSyncSnapshotPayload({serverSequence})
+
+    await this.render({
+      json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue({
+        snapshot,
+        status: "success"
+      }, this.transportSerializationOptions()))
+    })
+  }
+
+  /**
+   * Builds a snapshot of sync-enabled frontend model resources at a stable server sequence.
+   * @param {object} args - Arguments.
+   * @param {number} args.serverSequence - Snapshot sequence.
+   * @returns {Promise<{resources: Record<string, ?>, serverSequence: number}>} - Snapshot payload.
+   */
+  async frontendSyncSnapshotPayload({serverSequence}) {
+    const syncManifest = frontendModelSyncManifestForBackendProjects(this.getConfiguration().getBackendProjects())
+    const resources = /** @type {Record<string, ?>} */ ({})
+
+    for (const modelName of Object.keys(syncManifest).sort()) {
+      const commandParams = {model: modelName}
+
+      resources[modelName] = await this.withFrontendModelParams(commandParams, async () => {
+        return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
+          return await this.frontendModelCommandPayload("index") || this.frontendModelErrorPayload("Action halted by beforeAction.")
+        })
+      })
+    }
+
+    return {resources, serverSequence}
   }
 
   /**

@@ -407,11 +407,15 @@ export default class VelociousConfiguration {
    */
   _normalizeSyncConfiguration(sync) {
     const deviceCertificateBackendPublicKey = sync?.deviceCertificateBackendPublicKey || null
+    const changeFeedRetentionSize = sync?.changeFeedRetentionSize
     const offlineGrantSigningKeys = sync?.offlineGrantSigningKeys || []
     const offlineGrantTtlMs = sync?.offlineGrantTtlMs
 
     if (deviceCertificateBackendPublicKey !== null && (typeof deviceCertificateBackendPublicKey !== "object" || Array.isArray(deviceCertificateBackendPublicKey))) {
       throw new Error("sync.deviceCertificateBackendPublicKey must be a public JSON Web Key object")
+    }
+    if (changeFeedRetentionSize !== undefined && (!Number.isInteger(changeFeedRetentionSize) || changeFeedRetentionSize <= 0)) {
+      throw new Error("sync.changeFeedRetentionSize must be a positive integer")
     }
     if (!Array.isArray(offlineGrantSigningKeys)) throw new Error("sync.offlineGrantSigningKeys must be an array")
     if (offlineGrantTtlMs !== undefined && (!Number.isInteger(offlineGrantTtlMs) || offlineGrantTtlMs <= 0)) {
@@ -419,6 +423,7 @@ export default class VelociousConfiguration {
     }
 
     return {
+      changeFeedRetentionSize: changeFeedRetentionSize || 10000,
       deviceCertificateBackendPublicKey,
       offlineGrantSigningKeys: offlineGrantSigningKeys.map((key) => normalizeOfflineGrantSigningKey(key)),
       offlineGrantTtlMs: offlineGrantTtlMs || 24 * 60 * 60 * 1000
