@@ -348,6 +348,7 @@
  * frontends and peers; `policy` is hashed but intentionally omitted from
  * frontend-safe manifests.
  * @typedef {object} FrontendModelResourceSyncConfiguration
+ * @property {"optimisticVersion" | "serverWins" | "lastWriterWins" | "fieldThreeWay" | "appendOnly"} [conflictStrategy] - Strategy used when replay detects server/client divergence. Defaults to `optimisticVersion`.
  * @property {boolean} [enabled] - Whether the resource is sync-enabled. Defaults to true when `sync` is configured.
  * @property {string[]} [operations] - Sync operation names such as `index`, `find`, `create`, `update`, custom domain commands, etc.
  * @property {string | number} [policyVersion] - App-controlled policy version used as a stable change signal.
@@ -367,6 +368,7 @@
 /**
  * Frontend-safe normalized sync metadata.
  * @typedef {object} NormalizedFrontendModelResourceSyncConfiguration
+ * @property {"optimisticVersion" | "serverWins" | "lastWriterWins" | "fieldThreeWay" | "appendOnly"} conflictStrategy - Normalized replay conflict strategy.
  * @property {boolean} enabled - Whether the resource is sync-enabled.
  * @property {string[]} operations - Sorted, duplicate-free sync operation names.
  * @property {string | null} policyVersion - App-controlled policy version, or null.

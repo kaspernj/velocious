@@ -288,7 +288,7 @@ function normalizeFrontendModelResourceSync(resourceConfiguration) {
   const sync = resourceConfiguration.sync
 
   if (sync === undefined || sync === null) return undefined
-  if (sync === false) return {enabled: false, operations: [], policyHash: syncPolicyHash({enabled: false}), policyVersion: null}
+  if (sync === false) return {conflictStrategy: "optimisticVersion", enabled: false, operations: [], policyHash: syncPolicyHash({conflictStrategy: "optimisticVersion", enabled: false}), policyVersion: null}
   if (sync === true) {
     return normalizeFrontendModelResourceSync({
       ...resourceConfiguration,
@@ -299,18 +299,20 @@ function normalizeFrontendModelResourceSync(resourceConfiguration) {
     throw new Error("Resource sync configuration must be true, false, or an object.")
   }
 
-  const {enabled = true, metadata, operations, policy, policyVersion, ...rest} = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration} */ (sync)
+  const {conflictStrategy, enabled = true, metadata, operations, policy, policyVersion, ...rest} = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration} */ (sync)
 
   if (Object.keys(rest).length > 0) {
-    throw new Error(`Unexpected sync keys: ${Object.keys(rest).join(", ")}. Allowed: enabled, metadata, operations, policy, policyVersion`)
+    throw new Error(`Unexpected sync keys: ${Object.keys(rest).join(", ")}. Allowed: conflictStrategy, enabled, metadata, operations, policy, policyVersion`)
   }
   if (enabled !== true && enabled !== false) throw new Error("Resource sync enabled must be true or false when provided.")
 
+  const normalizedConflictStrategy = normalizeSyncConflictStrategy(conflictStrategy)
   const normalizedOperations = normalizeSyncOperations(operations)
   const normalizedMetadata = metadata === undefined ? undefined : deterministicSyncJson({label: "metadata", value: metadata})
   const normalizedPolicy = policy === undefined ? undefined : deterministicSyncJson({label: "policy", value: policy})
   const normalizedPolicyVersion = policyVersion === undefined || policyVersion === null ? null : String(policyVersion)
   const hashInput = {
+    conflictStrategy: normalizedConflictStrategy,
     enabled,
     metadata: normalizedMetadata,
     modelName: resourceConfiguration.modelName || null,
@@ -320,6 +322,7 @@ function normalizeFrontendModelResourceSync(resourceConfiguration) {
   }
   /** @type {import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration} */
   const normalized = {
+    conflictStrategy: normalizedConflictStrategy,
     enabled,
     operations: normalizedOperations,
     policyHash: syncPolicyHash(hashInput),
@@ -329,6 +332,20 @@ function normalizeFrontendModelResourceSync(resourceConfiguration) {
   if (normalizedMetadata !== undefined) normalized.metadata = /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (normalizedMetadata)
 
   return normalized
+}
+
+/**
+ * Normalizes the sync conflict strategy for replay clients/servers.
+ * @param {unknown} conflictStrategy - Raw strategy.
+ * @returns {"optimisticVersion" | "serverWins" | "lastWriterWins" | "fieldThreeWay" | "appendOnly"} - Normalized strategy.
+ */
+function normalizeSyncConflictStrategy(conflictStrategy) {
+  if (conflictStrategy === undefined || conflictStrategy === null) return "optimisticVersion"
+  if (["optimisticVersion", "serverWins", "lastWriterWins", "fieldThreeWay", "appendOnly"].includes(String(conflictStrategy))) {
+    return /** @type {"optimisticVersion" | "serverWins" | "lastWriterWins" | "fieldThreeWay" | "appendOnly"} */ (conflictStrategy)
+  }
+
+  throw new Error(`Unknown resource sync conflictStrategy: ${String(conflictStrategy)}`)
 }
 
 /**

@@ -70,6 +70,7 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
     class FooResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]
       static sync = {
+        conflictStrategy: "fieldThreeWay",
         metadata: {scope: "event", strategy: "snapshot"},
         operations: ["update", "index", "update"],
         policy: {grantScopeAttributes: ["eventId"], writableAttributes: ["name"]},
@@ -80,6 +81,7 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
     class SamePolicyResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]
       static sync = {
+        conflictStrategy: "fieldThreeWay",
         operations: ["index", "update"],
         policyVersion: "scanner-v1",
         policy: {writableAttributes: ["name"], grantScopeAttributes: ["eventId"]},
@@ -101,6 +103,7 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
     const changedConfig = frontendModelResourceConfigurationFromDefinition(ChangedPolicyResource)
 
     expect(config?.sync).toEqual({
+      conflictStrategy: "fieldThreeWay",
       enabled: true,
       metadata: {scope: "event", strategy: "snapshot"},
       operations: ["index", "update"],
@@ -138,6 +141,7 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
       static attributes = ["id"]
       static modelName = "Ticket"
       static sync = {
+        conflictStrategy: "fieldThreeWay",
         metadata: {scope: "event"},
         operations: ["index", "update"],
         policyVersion: "scanner-v1"
@@ -157,6 +161,7 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
     expect(Object.keys(manifest)).toEqual(["Ticket"])
     expect(manifest.Ticket).toEqual({
       enabled: true,
+      conflictStrategy: "fieldThreeWay",
       metadata: {scope: "event"},
       operations: ["index", "update"],
       policyHash: manifest.Ticket.policyHash,

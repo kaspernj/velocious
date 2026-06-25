@@ -1,5 +1,6 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import LocalMutationLog from "../../src/sync/local-mutation-log.js"
+import {applySyncReplayResultToLocalMutationLog, replayResultLocalStatus, resolveSyncConflict} from "../../src/sync/conflict-strategy.js"
 
 describe("local sync mutation log", () => {
   it("appends pending mutations with actor device grant policy and dependency metadata", async () => {
@@ -156,6 +157,79 @@ describe("local sync mutation log", () => {
 
     expect(result.deletedRecordIds).toEqual([prunable.id])
     expect((await mutationLog.records()).map((record) => record.id)).toEqual([dependency.id, newestTerminal.id, pending.id])
+  })
+
+  it("maps server replay result statuses onto durable local mutation statuses", async () => {
+    expect(replayResultLocalStatus({status: "success"})).toEqual("synced")
+    expect(replayResultLocalStatus({status: "duplicate"})).toEqual("synced")
+    expect(replayResultLocalStatus({status: "conflict"})).toEqual("conflict")
+    expect(replayResultLocalStatus({status: "error"})).toEqual("rejected")
+  })
+
+  it("persists conflict replay results on the local mutation log for UI resolution", async () => {
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({
+      idGenerator: () => "log-1",
+      now: nextNow(["2026-06-24T10:00:00.000Z", "2026-06-24T10:01:00.000Z"]),
+      storage
+    })
+    const record = await mutationLog.append({mutation: buildMutation({clientMutationId: "mutation-1"})})
+    const syncResult = {
+      conflict: {affectedFields: ["name"], serverModel: {id: "task-1", name: "Server task"}},
+      idempotencyKey: "user-1:device-1:mutation-1",
+      status: "conflict"
+    }
+
+    const updated = await applySyncReplayResultToLocalMutationLog({mutationLog, record, result: syncResult})
+
+    expect(updated.status).toEqual("conflict")
+    expect(updated.syncResult).toEqual(syncResult)
+    expect(updated.updatedAt).toEqual("2026-06-24T10:01:00.000Z")
+  })
+
+  it("detects optimistic-version conflicts and returns structured server/local state", async () => {
+    const result = await resolveSyncConflict({
+      mutation: buildMutation({attributes: {name: "Offline edit"}, baseVersion: "v1", clientMutationId: "mutation-1", operation: "update", payload: {id: "task-1"}}),
+      serverRecord: {attributes: {id: "task-1", name: "Server edit", updatedAt: "v2"}}
+    })
+
+    expect(result.status).toEqual("conflict")
+    expect(result.strategy).toEqual("optimisticVersion")
+    expect(result.conflict).toEqual({
+      affectedFields: ["name"],
+      baseRecord: null,
+      baseVersion: "v1",
+      localMutation: {
+        attributes: {name: "Offline edit"},
+        clientMutationId: "mutation-1",
+        model: "Task",
+        operation: "update",
+        payload: {id: "task-1"}
+      },
+      serverModel: {id: "task-1", name: "Server edit", updatedAt: "v2"},
+      serverVersion: "v2",
+      suggestedResolution: "manual",
+      versionAttribute: "updatedAt"
+    })
+  })
+
+  it("three-way merges non-overlapping field edits while reporting overlapping conflicts", async () => {
+    const nonOverlapping = await resolveSyncConflict({
+      baseRecord: {attributes: {id: "task-1", name: "Original", scanned: false}},
+      mutation: buildMutation({attributes: {scanned: true}, clientMutationId: "mutation-1", operation: "update", payload: {id: "task-1"}}),
+      serverRecord: {attributes: {id: "task-1", name: "Server edit", scanned: false}},
+      strategy: "fieldThreeWay"
+    })
+    const overlapping = await resolveSyncConflict({
+      baseRecord: {attributes: {id: "task-1", name: "Original"}},
+      mutation: buildMutation({attributes: {name: "Offline edit"}, clientMutationId: "mutation-2", operation: "update", payload: {id: "task-1"}}),
+      serverRecord: {attributes: {id: "task-1", name: "Server edit"}},
+      strategy: "fieldThreeWay"
+    })
+
+    expect(nonOverlapping).toEqual({attributes: {scanned: true}, status: "applied", strategy: "fieldThreeWay"})
+    expect(overlapping.status).toEqual("conflict")
+    expect(overlapping.conflict?.affectedFields).toEqual(["name"])
   })
 })
 
