@@ -3685,9 +3685,6 @@ export default class FrontendModelController extends Controller {
     if (syncResource.policyHash !== mutation.policyHash) {
       throw frontendSyncReplaySafeError(`Sync replay policy hash mismatch for ${mutation.model}`)
     }
-    if (!["create", "update", "destroy"].includes(mutation.operation)) {
-      throw frontendSyncReplaySafeError(`Sync replay operation is not supported yet: ${mutation.operation}`)
-    }
 
     const signedOfflineGrant = this.frontendSyncReplaySignedOfflineGrant(signedMutation)
     const offlineGrant = await this.frontendSyncReplayVerifiedOfflineGrant({
@@ -3698,19 +3695,24 @@ export default class FrontendModelController extends Controller {
     this.frontendSyncReplayValidateOfflineGrant({mutation, offlineGrant, syncResource})
 
     const commandParams = await this.frontendSyncReplayCommandParams(mutation)
+    const replayCommand = this.frontendSyncReplayCommandForMutation(mutation)
 
     let response
 
     try {
       response = await this.withFrontendModelParams(commandParams, async () => {
         return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
-          return await this.frontendModelCommandPayload(/** @type {"create" | "update" | "destroy"} */ (mutation.operation)) || this.frontendModelErrorPayload("Action halted by beforeAction.")
+          if (["create", "update", "destroy"].includes(mutation.operation)) {
+            return await this.frontendModelCommandPayload(/** @type {"create" | "update" | "destroy"} */ (mutation.operation)) || this.frontendModelErrorPayload("Action halted by beforeAction.")
+          }
+
+          return await this.frontendSyncReplayCustomCommandPayload({mutation, replayCommand}) || this.frontendModelErrorPayload("Action halted by beforeAction.")
         })
       })
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({
         action: "frontendSyncReplay",
-        commandType: /** @type {"create" | "update" | "destroy"} */ (mutation.operation),
+        commandType: /** @type {?} */ (replayCommand.commandType),
         error,
         model: mutation.model
       })
@@ -3740,7 +3742,7 @@ export default class FrontendModelController extends Controller {
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({
         action: "frontendSyncReplay",
-        commandType: /** @type {"create" | "update" | "destroy"} */ (mutation.operation),
+        commandType: /** @type {?} */ (replayCommand.commandType),
         error,
         model: mutation.model
       })
@@ -3834,6 +3836,60 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Replays a verified custom sync mutation through the resource command API.
+   * @param {object} args - Arguments.
+   * @param {import("./sync/device-identity.js").SyncMutation} args.mutation - Verified mutation.
+   * @param {{commandType: string, methodName?: string, scope?: "collection" | "member"}} args.replayCommand - Resolved replay command metadata.
+   * @returns {Promise<Record<string, ?>>} - Command response payload.
+   */
+  async frontendSyncReplayCustomCommandPayload({mutation, replayCommand}) {
+    if (typeof replayCommand.methodName !== "string" || replayCommand.methodName.length < 1) {
+      throw frontendSyncReplaySafeError(`Sync replay command is not registered for ${mutation.model}: ${mutation.operation}`)
+    }
+
+    const frontendModelResource = this.getConfiguration().getBackendProjects()
+      .map((backendProject) => this.frontendModelResourceConfigurationForBackendProjectModelName({backendProject, modelName: mutation.model}))
+      .find((resourceConfiguration) => resourceConfiguration)
+
+    if (!frontendModelResource) throw frontendSyncReplaySafeError(`Sync replay model is not enabled: ${mutation.model}`)
+
+    const resource = new frontendModelResource.resourceClass({
+      ability: this.currentAbility(),
+      controller: this,
+      context: {
+        ...(this.currentAbility()?.getContext() || {}),
+        params: this.frontendModelParams(),
+        request: this.request()
+      },
+      locals: this.currentAbility()?.getLocals() || {},
+      modelClass: undefined,
+      modelName: frontendModelResource.modelName,
+      params: this.frontendModelParams(),
+      resourceConfiguration: frontendModelResource.resourceConfiguration
+    })
+    const command = resource.resourceMethod(replayCommand.methodName)
+
+    if (!command) {
+      return this.frontendModelErrorPayload(`Missing frontend-model custom command '${replayCommand.methodName}'.`)
+    }
+
+    const commandArguments = /** @type {Record<string, ?>} */ (mutation.payload && typeof mutation.payload === "object" && !Array.isArray(mutation.payload) ? mutation.payload : {})
+    const responsePayload = await command.method.call(command.resource, commandArguments)
+
+    if (!responsePayload || typeof responsePayload !== "object") {
+      return {status: "success"}
+    }
+
+    return /** @type {Record<string, ?>} */ (
+      await this.autoSerializeFrontendModelsInPayload(
+        responsePayload,
+        /** @type {{serialize: (model: ?, action: string) => Promise<Record<string, ?>>}} */ (command.resource),
+        replayCommand.methodName
+      )
+    )
+  }
+
+  /**
    * Builds frontend-model command params for a verified replay mutation.
    * @param {import("./sync/device-identity.js").SyncMutation} mutation - Verified mutation.
    * @returns {Promise<Record<string, ?>>} - Frontend-model command params.
@@ -3847,7 +3903,24 @@ export default class FrontendModelController extends Controller {
       model: mutation.model
     })
 
-    if (mutation.operation !== "create") {
+    if (["create", "update", "destroy"].includes(mutation.operation)) {
+      if (mutation.operation !== "create") {
+        const id = commandParams.id || commandParams.recordId || primaryKeyValue
+
+        if (typeof id !== "string" && typeof id !== "number") throw frontendSyncReplaySafeError(`Sync replay ${mutation.operation} requires an id`)
+
+        commandParams.id = id
+      }
+
+      return commandParams
+    }
+
+    const replayCommand = this.frontendSyncReplayCommandForMutation(mutation)
+
+    commandParams.frontendModelCustomCommandMethodName = replayCommand.methodName
+    commandParams.frontendModelCustomCommandScope = replayCommand.scope
+
+    if (replayCommand.scope === "member") {
       const id = commandParams.id || commandParams.recordId || primaryKeyValue
 
       if (typeof id !== "string" && typeof id !== "number") throw frontendSyncReplaySafeError(`Sync replay ${mutation.operation} requires an id`)
@@ -3856,6 +3929,36 @@ export default class FrontendModelController extends Controller {
     }
 
     return commandParams
+  }
+
+  /**
+   * Resolves the frontend-model command used for a verified replay mutation.
+   * @param {import("./sync/device-identity.js").SyncMutation} mutation - Verified mutation.
+   * @returns {{commandType: string, methodName?: string, scope?: "collection" | "member"}} - Command metadata.
+   */
+  frontendSyncReplayCommandForMutation(mutation) {
+    if (["create", "update", "destroy"].includes(mutation.operation)) {
+      return {commandType: mutation.operation}
+    }
+
+    const frontendModelResource = this.getConfiguration().getBackendProjects()
+      .map((backendProject) => this.frontendModelResourceConfigurationForBackendProjectModelName({backendProject, modelName: mutation.model}))
+      .find((resourceConfiguration) => resourceConfiguration)
+
+    if (!frontendModelResource) throw frontendSyncReplaySafeError(`Sync replay model is not enabled: ${mutation.model}`)
+
+    const commandName = typeof mutation.command === "string" && mutation.command.length > 0 ? mutation.command : mutation.operation
+    const resourceConfiguration = frontendModelResource.resourceConfiguration
+
+    if (Object.prototype.hasOwnProperty.call(resourceConfiguration.collectionCommands, commandName)) {
+      return {commandType: commandName, methodName: commandName, scope: "collection"}
+    }
+
+    if (Object.prototype.hasOwnProperty.call(resourceConfiguration.memberCommands, commandName)) {
+      return {commandType: commandName, methodName: commandName, scope: "member"}
+    }
+
+    throw frontendSyncReplaySafeError(`Sync replay command is not registered for ${mutation.model}: ${commandName}`)
   }
 
   /**
@@ -3892,24 +3995,43 @@ export default class FrontendModelController extends Controller {
   async frontendSyncAppendServerChange({idempotencyKey, mutation, offlineGrant, response}) {
     if (response.status !== "success") return null
 
-    const payload = /** @type {Record<string, ?>} */ (mutation.payload && typeof mutation.payload === "object" && !Array.isArray(mutation.payload) ? mutation.payload : {})
-    const attributes = /** @type {Record<string, ?>} */ (mutation.attributes && typeof mutation.attributes === "object" && !Array.isArray(mutation.attributes) ? mutation.attributes : {})
-    const rawRecordId = payload.id || payload.recordId || attributes.id || null
-    const recordId = rawRecordId === null || rawRecordId === undefined ? null : String(rawRecordId)
-    const change = await serverChangeFeedStoreForConfiguration(this.getConfiguration()).append({
-      actorDeviceId: mutation.actorDeviceId,
-      actorUserId: mutation.actorUserId,
-      attributes,
-      idempotencyKey,
+    const store = serverChangeFeedStoreForConfiguration(this.getConfiguration())
+    const responseSyncChanges = Array.isArray(response.syncChanges) ? response.syncChanges : []
+    const syncChanges = responseSyncChanges.length > 0 ? responseSyncChanges : [{
+      attributes: mutation.attributes,
       model: mutation.model,
       operation: mutation.operation,
-      payload,
-      recordId,
-      response,
-      scope: offlineGrant.scopes
-    })
+      payload: mutation.payload
+    }]
+    let serverSequence = /** @type {number | null} */ (null)
 
-    return change.serverSequence
+    for (const syncChange of syncChanges) {
+      if (!syncChange || typeof syncChange !== "object" || Array.isArray(syncChange)) continue
+
+      const change = /** @type {Record<string, ?>} */ (syncChange)
+      const payload = /** @type {Record<string, ?>} */ (change.payload && typeof change.payload === "object" && !Array.isArray(change.payload) ? change.payload : {})
+      const attributes = /** @type {Record<string, ?>} */ (change.attributes && typeof change.attributes === "object" && !Array.isArray(change.attributes) ? change.attributes : {})
+      const model = typeof change.model === "string" && change.model.length > 0 ? change.model : mutation.model
+      const operation = typeof change.operation === "string" && change.operation.length > 0 ? change.operation : mutation.operation
+      const rawRecordId = change.recordId ?? payload.id ?? payload.recordId ?? attributes.id ?? null
+      const recordId = rawRecordId === null || rawRecordId === undefined ? null : String(rawRecordId)
+      const appendedChange = await store.append({
+        actorDeviceId: mutation.actorDeviceId,
+        actorUserId: mutation.actorUserId,
+        attributes,
+        idempotencyKey,
+        model,
+        operation,
+        payload,
+        recordId,
+        response,
+        scope: offlineGrant.scopes
+      })
+
+      serverSequence = appendedChange.serverSequence
+    }
+
+    return serverSequence
   }
 
   /**

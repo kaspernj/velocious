@@ -11,7 +11,7 @@ import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model
 import {createDeviceCertificate, createSignedMutation, generateSyncSigningKeyPair} from "../../src/sync/device-identity.js"
 import {createOfflineGrantFromBootstrap} from "../../src/sync/offline-grant.js"
 import {frontendModelSyncManifestForBackendProjects} from "../../src/frontend-models/resource-definition.js"
-import ServerChangeFeedStore from "../../src/sync/server-change-feed.js"
+import ServerChangeFeedStore, {serverChangeFeedStoreForConfiguration} from "../../src/sync/server-change-feed.js"
 
 /** @typedef {import("../../src/sync/device-identity.js").SignedSyncMutation} SignedSyncMutation */
 
@@ -271,6 +271,86 @@ describe("frontend-model sync replay", () => {
     expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "ticket-1", model: "Ticket"}}])
   })
 
+  it("replays custom sync commands through the resource command API and appends emitted changes", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        clientMutationId: "mutation-scan-attempt",
+        command: "scanAttempt",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-1",
+        operation: "scanAttempt",
+        payload: {ticketId: "ticket-1", scannerId: "gate-a"},
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      }
+    })
+    const response = new Response({configuration})
+    const controller = new ReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("success")
+    expect(payload.results[0].response).toEqual({scan: {scannerId: "gate-a", ticketId: "ticket-1"}, status: "success", syncChanges: [{attributes: {lastScannerId: "gate-a", scanned: true}, model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1"}]})
+    expect(payload.results[0].serverSequence).toEqual(1)
+
+    const store = serverChangeFeedStoreForConfiguration(configuration)
+    const changePage = await store.changesAfter({afterSequence: 0, limit: 10})
+
+    expect(changePage.changes).toEqual([{actorDeviceId: "scanner-1", actorUserId: "user-1", attributes: {lastScannerId: "gate-a", scanned: true}, createdAt: changePage.changes[0].createdAt, id: changePage.changes[0].id, idempotencyKey: "user-1:scanner-1:mutation-scan-attempt", model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1", response: {scan: {scannerId: "gate-a", ticketId: "ticket-1"}, status: "success", syncChanges: [{attributes: {lastScannerId: "gate-a", scanned: true}, model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1"}]}, scope: {eventId: "event-1"}, serverSequence: 1}])
+  })
+
+  it("rejects custom sync commands that are not registered on the resource", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        clientMutationId: "mutation-unknown-command",
+        command: "closeGate",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-1",
+        operation: "closeGate",
+        payload: {ticketId: "ticket-1"},
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      }
+    })
+    const response = new Response({configuration})
+    const controller = new ReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("error")
+    expect(payload.results[0].response.errorMessage).toEqual("Sync replay command is not registered for Ticket: closeGate")
+  })
+
   it("emits framework errors for unexpected replay command failures", async () => {
     const {backendKeys, configuration} = await syncReplayConfiguration()
     const frameworkErrors = []
@@ -466,11 +546,34 @@ async function appendTestChange(store, {clientMutationId, recordId, scope = {eve
 
 class TicketResource extends FrontendModelBaseResource {
   static attributes = ["id", "scanned"]
+  static collectionCommands = ["scanAttempt"]
   static sync = {
     metadata: {scope: "event"},
-    operations: ["find", "update"],
+    operations: ["find", "update", "scanAttempt", "closeGate"],
     policy: {grantScopeAttributes: ["eventId"]},
     policyVersion: "scanner-v1"
+  }
+
+  /**
+   * Applies a scanner domain command.
+   * @param {Record<string, ?>} args - Command arguments.
+   * @returns {Promise<Record<string, ?>>} - Command response with emitted sync changes.
+   */
+  async scanAttempt(args) {
+    const ticketId = String(args.ticketId)
+    const scannerId = String(args.scannerId)
+
+    return {
+      scan: {scannerId, ticketId},
+      status: "success",
+      syncChanges: [{
+        attributes: {lastScannerId: scannerId, scanned: true},
+        model: "Ticket",
+        operation: "update",
+        payload: {id: ticketId},
+        recordId: ticketId
+      }]
+    }
   }
 }
 
