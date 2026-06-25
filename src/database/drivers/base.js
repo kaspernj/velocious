@@ -10,6 +10,12 @@
  * @property {string} tableName - Name of the table to add the index to.
  */
 /**
+ * RemoveIndexSqlArgs type.
+ * @typedef {object} RemoveIndexSqlArgs
+ * @property {string} name - Index name to drop.
+ * @property {string} tableName - Name of the table the index belongs to.
+ */
+/**
  * DropTableSqlArgsType type.
  * @typedef {object} DropTableSqlArgsType
  * @property {boolean} [cascade] - Whether dependent objects should be dropped too.
@@ -305,6 +311,16 @@ export default class VelociousDatabaseDriversBase {
    */
   async createIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
     throw new Error("'createIndexSQLs' not implemented")
+  }
+
+  /**
+   * Runs remove index sqls.
+   * @abstract
+   * @param {RemoveIndexSqlArgs} indexData - Index data.
+   * @returns {Promise<string[]>} - Resolves with SQL statements.
+   */
+  async removeIndexSQLs(indexData) { // eslint-disable-line no-unused-vars
+    throw new Error("'removeIndexSQLs' not implemented")
   }
 
   /**

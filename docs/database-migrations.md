@@ -38,6 +38,18 @@ await this.createTable("legacy_events", {id: {type: "bigint"}}, (table) => {
 
 SQLite stores auto-increment primary keys through its special `INTEGER PRIMARY KEY` form even when a migration asks for `bigint`, while non-primary reference columns keep the configured `bigint` type. PostgreSQL emits `BIGSERIAL` for auto-increment `bigint` primary keys.
 
+`removeIndex(tableName, nameOrColumns, args)` drops an index by explicit name, or by deriving the same database-specific default name that `addIndex(...)` uses when passed columns:
+
+```js
+await this.addIndex("tasks", ["project_id", "position"], {unique: true})
+await this.removeIndex("tasks", ["project_id", "position"])
+
+await this.addIndex("tasks", ["slug"], {name: "index_tasks_slug_unique", unique: true})
+await this.removeIndex("tasks", "index_tasks_slug_unique")
+```
+
+Use the columns form for indexes created by `addIndex(...)` without an explicit name so SQLite and the other drivers drop their own generated names correctly.
+
 ## Datetime Storage
 
 Velocious stores persisted `Date` values as UTC instants. Runtime-local timezone and `timezoneOffsetMinutes` are not applied when records are inserted, updated, queried, or read back from storage.
