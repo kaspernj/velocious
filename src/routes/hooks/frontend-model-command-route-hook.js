@@ -25,6 +25,14 @@ export default async function frontendModelCommandRouteHook({configuration, curr
     }
   }
 
+  if (normalizedCurrentPath === "/frontend-models/sync/replay") {
+    return {
+      action: "frontend-sync-replay",
+      controller: "velocious/api",
+      controllerPath: FRONTEND_MODEL_CONTROLLER_PATH
+    }
+  }
+
   if (normalizedCurrentPath === SHARED_FRONTEND_MODEL_API_PATH) {
     return {
       action: "frontend-api",

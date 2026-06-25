@@ -7,6 +7,7 @@ import Response from "./http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-models/built-in-resources.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject, frontendModelSyncManifestForBackendProjects} from "./frontend-models/resource-definition.js"
 import {createOfflineGrantFromBootstrap} from "./sync/offline-grant.js"
+import {mutationIdempotencyKey, verifySignedMutation} from "./sync/device-identity.js"
 import {FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import {requestDetails} from "./error-reporting/request-details.js"
@@ -3559,6 +3560,119 @@ export default class FrontendModelController extends Controller {
     }
 
     throw new Error("Expected sync bootstrap current user")
+  }
+
+  /**
+   * Runs frontend sync replay.
+   * @returns {Promise<void>} - Sync replay response with per-mutation results.
+   */
+  async frontendSyncReplay() {
+    if (this.request().httpMethod() === "OPTIONS") {
+      await this.render({status: 204, json: {}})
+      return
+    }
+
+    const params = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(this.params()))
+    const signedMutations = this.frontendSyncReplaySignedMutations(params)
+    const results = []
+
+    for (const signedMutation of signedMutations) {
+      let idempotencyKey = null
+
+      try {
+        idempotencyKey = mutationIdempotencyKey(/** @type {import("./sync/device-identity.js").SignedSyncMutation} */ (signedMutation))
+        const response = await this.frontendSyncReplaySignedMutation(signedMutation)
+
+        results.push({idempotencyKey, response, status: "success"})
+      } catch (error) {
+        results.push({
+          idempotencyKey,
+          response: this.frontendModelErrorPayload(error instanceof Error ? error.message : String(error)),
+          status: "error"
+        })
+      }
+    }
+
+    await this.render({
+      json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue({
+        results,
+        status: "success"
+      }, this.transportSerializationOptions()))
+    })
+  }
+
+  /**
+   * Resolves signed replay mutations from request params.
+   * @param {Record<string, ?>} params - Request params.
+   * @returns {Array<?>} - Signed mutation envelopes.
+   */
+  frontendSyncReplaySignedMutations(params) {
+    if (Array.isArray(params.mutations)) return params.mutations
+    if (params.mutation) return [params.mutation]
+
+    throw new Error("Expected sync replay mutation or mutations")
+  }
+
+  /**
+   * Verifies and replays one signed sync mutation.
+   * @param {?} signedMutation - Signed mutation envelope.
+   * @returns {Promise<Record<string, ?>>} - Frontend-model command response.
+   */
+  async frontendSyncReplaySignedMutation(signedMutation) {
+    const configuration = this.getConfiguration()
+    const backendPublicKey = configuration.getSyncConfiguration().deviceCertificateBackendPublicKey
+
+    if (!backendPublicKey) throw new Error("sync.deviceCertificateBackendPublicKey is required for sync replay")
+
+    const mutation = await verifySignedMutation({
+      backendPublicKey,
+      signedMutation: /** @type {import("./sync/device-identity.js").SignedSyncMutation} */ (signedMutation)
+    })
+    const syncManifest = frontendModelSyncManifestForBackendProjects(configuration.getBackendProjects())
+    const syncResource = syncManifest[mutation.model]
+
+    if (!syncResource) throw new Error(`Sync replay model is not enabled: ${mutation.model}`)
+    if (!syncResource.operations.includes(mutation.operation)) {
+      throw new Error(`Sync replay operation is not enabled for ${mutation.model}: ${mutation.operation}`)
+    }
+    if (syncResource.policyHash !== mutation.policyHash) {
+      throw new Error(`Sync replay policy hash mismatch for ${mutation.model}`)
+    }
+    if (!["create", "update", "destroy"].includes(mutation.operation)) {
+      throw new Error(`Sync replay operation is not supported yet: ${mutation.operation}`)
+    }
+
+    const commandParams = this.frontendSyncReplayCommandParams(mutation)
+
+    return await this.withFrontendModelParams(commandParams, async () => {
+      return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
+        return await this.frontendModelCommandPayload(/** @type {"create" | "update" | "destroy"} */ (mutation.operation)) || this.frontendModelErrorPayload("Action halted by beforeAction.")
+      })
+    })
+  }
+
+  /**
+   * Builds frontend-model command params for a verified replay mutation.
+   * @param {import("./sync/device-identity.js").SyncMutation} mutation - Verified mutation.
+   * @returns {Record<string, ?>} - Frontend-model command params.
+   */
+  frontendSyncReplayCommandParams(mutation) {
+    const payload = mutation.payload && typeof mutation.payload === "object" && !Array.isArray(mutation.payload) ? mutation.payload : {}
+    const commandParams = /** @type {Record<string, ?>} */ ({
+      attributes: mutation.attributes || {},
+      model: mutation.model,
+      ...payload
+    })
+
+    if (mutation.operation !== "create") {
+      const id = commandParams.id || commandParams.recordId
+
+      if (typeof id !== "string" && typeof id !== "number") throw new Error(`Sync replay ${mutation.operation} requires an id`)
+
+      commandParams.id = id
+    }
+
+    return commandParams
   }
 
   /**

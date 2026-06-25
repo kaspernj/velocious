@@ -406,15 +406,20 @@ export default class VelociousConfiguration {
    * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Normalized sync configuration.
    */
   _normalizeSyncConfiguration(sync) {
+    const deviceCertificateBackendPublicKey = sync?.deviceCertificateBackendPublicKey || null
     const offlineGrantSigningKeys = sync?.offlineGrantSigningKeys || []
     const offlineGrantTtlMs = sync?.offlineGrantTtlMs
 
+    if (deviceCertificateBackendPublicKey !== null && (typeof deviceCertificateBackendPublicKey !== "object" || Array.isArray(deviceCertificateBackendPublicKey))) {
+      throw new Error("sync.deviceCertificateBackendPublicKey must be a public JSON Web Key object")
+    }
     if (!Array.isArray(offlineGrantSigningKeys)) throw new Error("sync.offlineGrantSigningKeys must be an array")
     if (offlineGrantTtlMs !== undefined && (!Number.isInteger(offlineGrantTtlMs) || offlineGrantTtlMs <= 0)) {
       throw new Error("sync.offlineGrantTtlMs must be a positive integer number of milliseconds")
     }
 
     return {
+      deviceCertificateBackendPublicKey,
       offlineGrantSigningKeys: offlineGrantSigningKeys.map((key) => normalizeOfflineGrantSigningKey(key)),
       offlineGrantTtlMs: offlineGrantTtlMs || 24 * 60 * 60 * 1000
     }

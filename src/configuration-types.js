@@ -358,6 +358,7 @@
 /**
  * Velocious sync configuration.
  * @typedef {object} VelociousSyncConfiguration
+ * @property {import("./sync/device-identity.js").SyncJsonWebKey | null} [deviceCertificateBackendPublicKey] - Public backend key used to verify offline device certificates for sync replay.
  * @property {Array<import("./sync/offline-grant.js").OfflineGrantSigningKey>} offlineGrantSigningKeys - Signing keys used to issue and verify offline grants. Secrets must never be exposed to clients.
  * @property {number} [offlineGrantTtlMs] - Default offline grant TTL in milliseconds. Defaults to 24 hours.
  */
