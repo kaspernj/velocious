@@ -1,0 +1,1 @@
+Add a server-side frontend-model sync replay endpoint that verifies signed device mutations, checks current sync policy hashes, and dispatches supported CRUD replays through the normal frontend-model command pipeline.
