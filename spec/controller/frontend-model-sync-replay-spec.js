@@ -9,6 +9,7 @@ import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model-command-route-hook.js"
 import {createDeviceCertificate, createSignedMutation, generateSyncSigningKeyPair} from "../../src/sync/device-identity.js"
+import {createOfflineGrantFromBootstrap} from "../../src/sync/offline-grant.js"
 import {frontendModelSyncManifestForBackendProjects} from "../../src/frontend-models/resource-definition.js"
 
 /** @typedef {import("../../src/sync/device-identity.js").SignedSyncMutation} SignedSyncMutation */
@@ -29,6 +30,7 @@ describe("frontend-model sync replay", () => {
     const {backendKeys, configuration} = await syncReplayConfiguration()
     const signedMutation = await signedReplayMutation({
       backendKeys,
+      configuration,
       mutation: {
         actorDeviceId: "scanner-1",
         actorUserId: "user-1",
@@ -65,10 +67,172 @@ describe("frontend-model sync replay", () => {
     expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "ticket-1", model: "Ticket"}}])
   })
 
+  it("keeps signed mutation model and attributes authoritative over replay payload", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        attributes: {id: "ticket-1", scanned: true},
+        clientMutationId: "mutation-override",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-1",
+        operation: "update",
+        payload: {attributes: {scanned: false}, id: "payload-ticket", model: "OtherModel"},
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      }
+    })
+    const response = new Response({configuration})
+    const controller = new ReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("success")
+    expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "payload-ticket", model: "Ticket"}}])
+  })
+
+  it("reads replay ids from generated mutation attributes", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        attributes: {id: "ticket-1", scanned: true},
+        clientMutationId: "mutation-generated-id",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-1",
+        operation: "update",
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      }
+    })
+    const response = new Response({configuration})
+    const controller = new ReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("success")
+    expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "ticket-1", model: "Ticket"}}])
+  })
+
+  it("emits framework errors for unexpected replay command failures", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const frameworkErrors = []
+    const allErrors = []
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
+    configuration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        attributes: {scanned: true},
+        clientMutationId: "mutation-command-failure",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-1",
+        operation: "update",
+        payload: {id: "ticket-1"},
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      }
+    })
+
+    const response = new Response({configuration})
+    const controller = new ThrowingReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("success")
+    expect(payload.results[0].response.status).toEqual("error")
+    expect(payload.results[0].response.errorMessage).toEqual("Request failed.")
+    expect(frameworkErrors.length).toEqual(1)
+    expect(frameworkErrors[0].error.message).toEqual("Replay command exploded")
+    expect(frameworkErrors[0].context.action).toEqual("frontendSyncReplay")
+    expect(allErrors.length).toEqual(1)
+    expect(allErrors[0].errorType).toEqual("framework-error")
+  })
+
+  it("rejects replay when the signed offline grant does not authorize the mutation", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        attributes: {scanned: true},
+        clientMutationId: "mutation-grant-mismatch",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-2",
+        operation: "update",
+        payload: {id: "ticket-1"},
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      },
+      offlineGrantId: "grant-1"
+    })
+
+    const response = new Response({configuration})
+    const controller = new ReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("error")
+    expect(payload.results[0].response.errorMessage).toEqual("Sync replay offline grant does not match mutation")
+    expect(controller.replayedCommands).toEqual([])
+  })
+
   it("rejects replay when the signed policy hash is stale", async () => {
     const {backendKeys, configuration} = await syncReplayConfiguration()
     const signedMutation = await signedReplayMutation({
       backendKeys,
+      configuration,
       mutation: {
         actorDeviceId: "scanner-1",
         actorUserId: "user-1",
@@ -137,6 +301,19 @@ class ReplayTestController extends FrontendModelController {
   }
 }
 
+class ThrowingReplayTestController extends ReplayTestController {
+  /**
+   * Throws an unexpected replay command failure.
+   * @param {"create" | "update" | "destroy"} action - Frontend action.
+   * @returns {Promise<Record<string, ?>>} - Never resolves successfully.
+   */
+  async frontendModelCommandPayload(action) {
+    this.replayedCommands.push({action, params: this.frontendModelParams()})
+
+    throw new Error("Replay command exploded")
+  }
+}
+
 /**
  * Builds test configuration for sync replay specs.
  * @returns {Promise<{backendKeys: {privateKey: import("../../src/sync/device-identity.js").SyncJsonWebKey, publicKey: import("../../src/sync/device-identity.js").SyncJsonWebKey}, configuration: Configuration}>} - Test configuration.
@@ -157,7 +334,7 @@ async function syncReplayConfiguration() {
     sync: {
       deviceCertificateBackendPublicKey: backendKeys.publicKey,
       offlineGrantSigningKeys: [{current: true, id: "key-1", secret: "test-signing-secret"}],
-      offlineGrantTtlMs: 60_000
+      offlineGrantTtlMs: 1000 * 60 * 60 * 24 * 365 * 100
     }
   })
 
@@ -168,10 +345,12 @@ async function syncReplayConfiguration() {
  * Creates a signed replay mutation.
  * @param {object} args - Arguments.
  * @param {{privateKey: import("../../src/sync/device-identity.js").SyncJsonWebKey}} args.backendKeys - Backend signing keys.
+ * @param {Configuration} args.configuration - Test configuration.
  * @param {import("../../src/sync/device-identity.js").SyncMutation} args.mutation - Mutation.
- * @returns {Promise<SignedSyncMutation>} - Signed mutation.
+ * @param {string} [args.offlineGrantId] - Signed grant id override.
+ * @returns {Promise<SignedSyncMutation & {signedOfflineGrant: import("../../src/sync/offline-grant.js").SignedOfflineGrant}>} - Signed mutation.
  */
-async function signedReplayMutation({backendKeys, mutation}) {
+async function signedReplayMutation({backendKeys, configuration, mutation, offlineGrantId}) {
   const deviceKeys = await generateSyncSigningKeyPair()
   const deviceCertificate = await createDeviceCertificate({
     backendPrivateKey: backendKeys.privateKey,
@@ -185,11 +364,27 @@ async function signedReplayMutation({backendKeys, mutation}) {
     }
   })
 
-  return await createSignedMutation({
+  const signedMutation = await createSignedMutation({
     deviceCertificate,
     devicePrivateKey: deviceKeys.privateKey,
     mutation
   })
+  const signingKey = {current: true, id: "key-1", secret: "test-signing-secret"}
+  const signedOfflineGrant = await createOfflineGrantFromBootstrap({
+    deviceId: mutation.actorDeviceId,
+    grantId: offlineGrantId || mutation.offlineGrantId,
+    grantTtlMs: 1000 * 60 * 60 * 24 * 365 * 100,
+    now: new Date("2026-01-02T03:04:05.000Z"),
+    resources: frontendModelSyncManifestForBackendProjects(configuration.getBackendProjects()),
+    scopes: {eventId: "event-1"},
+    signingKey,
+    userId: mutation.actorUserId
+  })
+
+  return {
+    ...signedMutation,
+    signedOfflineGrant
+  }
 }
 
 /**
