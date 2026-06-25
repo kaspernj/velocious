@@ -42,7 +42,7 @@ task.setProject(project)
 await task.save()
 ```
 
-After `setProject(project)`, `task.projectId()`, `task.changes().project_id`, lifecycle callbacks, and scoped model features such as `actsAsList` see the new foreign key before the record is saved. Relationships with a custom `primaryKey` option use that configured target key when writing the foreign key.
+After `setProject(project)`, `task.projectId()`, `task.changes().project_id`, lifecycle callbacks, and scoped model features such as `actsAsList` see the new foreign key before the record is saved. Generated backend write attributes also accept belongs-to relationship names, so `Task.create({project})` and `task.update({project})` typecheck the same way as the generated setter. Relationships with a custom `primaryKey` option use that configured target key when writing the foreign key.
 
 ### Common options
 

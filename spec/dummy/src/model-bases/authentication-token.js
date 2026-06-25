@@ -10,6 +10,7 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {number | null} [userId] - Value for the userId attribute.
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ * @property {import("../models/user.js").default} [user] - Related user record.
  */
 
 /** @augments {DatabaseRecord<AuthenticationTokenWriteAttributes>} */
