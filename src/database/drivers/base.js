@@ -50,6 +50,7 @@
  * @property {string} [logName] - Query log subject.
  * @property {boolean} [logQuery] - Whether to log the query.
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
+ * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
 

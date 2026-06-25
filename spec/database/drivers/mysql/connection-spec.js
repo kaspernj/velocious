@@ -85,11 +85,11 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
 
     expect(mysql.queries).toEqual([
       {
-        options: {logName: "Set Connection Checkout Name", processListComment: false},
+        options: {logName: "Set Connection Checkout Name", processListComment: false, sessionTimeZone: false},
         sql: "SET @velocious_connection_checkout_name = 'mysql checkout spec'"
       },
       {
-        options: {logName: "Clear Connection Checkout Name", processListComment: false},
+        options: {logName: "Clear Connection Checkout Name", processListComment: false, sessionTimeZone: false},
         sql: "SET @velocious_connection_checkout_name = NULL"
       }
     ])
@@ -108,7 +108,7 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     ])
   })
 
-  it("resets the session time zone on each connection checkout", async () => {
+  it("does not reset the session time zone on connection checkout", async () => {
     const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
 
     await mysql.setConnectionCheckoutName("first checkout")
@@ -120,8 +120,26 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     expect(mysql.actualQueries).toEqual([
       "SET time_zone = '+00:00'",
       '/* velocious checkout="first checkout" */ SELECT 1',
-      "SET time_zone = '+00:00'",
       '/* velocious checkout="second checkout" */ SELECT 2'
+    ])
+  })
+
+  it("sets the session time zone lazily when the desired time zone changed", async () => {
+    const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
+
+    mysql.setDesiredSessionTimeZone("+00:00")
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 1")
+    mysql.setDesiredSessionTimeZone("+01:00")
+    await mysql.setConnectionCheckoutName("timezone changed checkout")
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 2")
+    await DatabaseDriversMysql.prototype.query.call(mysql, "SELECT 3")
+
+    expect(mysql.actualQueries).toEqual([
+      "SET time_zone = '+00:00'",
+      "SELECT 1",
+      "SET time_zone = '+01:00'",
+      '/* velocious checkout="timezone changed checkout" */ SELECT 2',
+      '/* velocious checkout="timezone changed checkout" */ SELECT 3'
     ])
   })
 
@@ -132,7 +150,7 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
       /** @returns {Promise<void>} - Resolves when complete. */
       async reconnect() {
         // Simulate the base reconnect behavior without touching a real MySQL pool.
-        this._sessionTimezoneSetToUtc = false
+        this.resetCurrentSessionTimeZone()
       }
 
       /**
