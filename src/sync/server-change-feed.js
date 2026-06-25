@@ -102,7 +102,7 @@ export default class ServerChangeFeedStore {
           payload_json: JSON.stringify(change.payload || null),
           record_id: change.recordId === null || change.recordId === undefined ? null : String(change.recordId),
           response_json: JSON.stringify(change.response || null),
-          scope_json: JSON.stringify(change.scope || null)
+          scope_json: stableJsonStringify(change.scope || null)
         }
       })
 
@@ -155,14 +155,15 @@ export default class ServerChangeFeedStore {
    * @param {number} args.afterSequence - Exclusive lower bound.
    * @param {number} [args.limit] - Maximum number of changes.
    * @param {number} [args.upToSequence] - Inclusive upper bound.
+   * @param {Record<string, ?>} [args.scope] - Caller sync scope.
    * @returns {Promise<{changes: ServerChangeFeedEntry[], hasMore: boolean, nextSequence: number, oldestSequence: number | null, snapshotRequired: boolean, upToSequence: number}>} - Ordered page.
    */
-  async changesAfter({afterSequence, limit = DEFAULT_PAGE_SIZE, upToSequence}) {
+  async changesAfter({afterSequence, limit = DEFAULT_PAGE_SIZE, scope, upToSequence}) {
     await this.ensureReady()
 
     const pageSize = normalizeLimit(limit)
 
-    if (this._usesMemoryStorage()) return this._memoryChangesAfter({afterSequence, limit: pageSize, upToSequence})
+    if (this._usesMemoryStorage()) return this._memoryChangesAfter({afterSequence, limit: pageSize, scope, upToSequence})
 
     return await this._withDb(async (db) => {
       const latestSequence = typeof upToSequence === "number" ? upToSequence : await this._latestSequence(db)
@@ -185,6 +186,7 @@ export default class ServerChangeFeedStore {
         .from(TABLE_NAME)
         .where(`server_sequence > ${db.quote(afterSequence)}`)
         .where(`server_sequence <= ${db.quote(latestSequence)}`)
+        .where(scope === undefined ? "1 = 1" : {scope_json: stableJsonStringify(scope)})
         .order("server_sequence ASC")
         .limit(pageSize + 1)
         .results())
@@ -389,9 +391,10 @@ export default class ServerChangeFeedStore {
    * @param {number} args.afterSequence - Exclusive lower bound.
    * @param {number} args.limit - Page size.
    * @param {number} [args.upToSequence] - Inclusive upper bound.
+   * @param {Record<string, ?>} [args.scope] - Caller sync scope.
    * @returns {{changes: ServerChangeFeedEntry[], hasMore: boolean, nextSequence: number, oldestSequence: number | null, snapshotRequired: boolean, upToSequence: number}} - Ordered page.
    */
-  _memoryChangesAfter({afterSequence, limit, upToSequence}) {
+  _memoryChangesAfter({afterSequence, limit, scope, upToSequence}) {
     const latestSequence = typeof upToSequence === "number" ? upToSequence : this._memorySequence
     const oldestSequence = this._memoryChanges[0]?.serverSequence || null
     const snapshotRequired = afterSequence > 0 && oldestSequence !== null && oldestSequence > afterSequence + 1
@@ -400,7 +403,9 @@ export default class ServerChangeFeedStore {
       return {changes: [], hasMore: false, nextSequence: afterSequence, oldestSequence, snapshotRequired: true, upToSequence: latestSequence}
     }
 
-    const rows = this._memoryChanges.filter((change) => change.serverSequence > afterSequence && change.serverSequence <= latestSequence)
+    const rows = this._memoryChanges.filter((change) => {
+      return change.serverSequence > afterSequence && change.serverSequence <= latestSequence && scopesEqual(change.scope, scope)
+    })
     const hasMore = rows.length > limit
     const changes = rows.slice(0, limit)
     const lastChange = changes[changes.length - 1]
@@ -445,6 +450,43 @@ function parseJsonOrNull(value) {
   if (typeof value !== "string" || value.length < 1) return null
 
   return JSON.parse(value)
+}
+
+/**
+ * Compares sync scopes by stable JSON representation.
+ * @param {Record<string, ?> | null} changeScope - Persisted change scope.
+ * @param {Record<string, ?> | undefined} requestedScope - Caller scope.
+ * @returns {boolean} - Whether the change is visible for the requested scope.
+ */
+function scopesEqual(changeScope, requestedScope) {
+  if (requestedScope === undefined) return true
+
+  return stableJsonStringify(changeScope || null) === stableJsonStringify(requestedScope)
+}
+
+/**
+ * Stable JSON serialization for persisted sync scopes.
+ * @param {?} value - JSON-compatible value.
+ * @returns {string} - Stable JSON representation.
+ */
+function stableJsonStringify(value) {
+  return JSON.stringify(stableJsonValue(value))
+}
+
+/**
+ * Produces a recursively key-sorted JSON value.
+ * @param {?} value - JSON-compatible value.
+ * @returns {?} - Stable JSON-compatible value.
+ */
+function stableJsonValue(value) {
+  if (Array.isArray(value)) return value.map((item) => stableJsonValue(item))
+  if (!value || typeof value !== "object") return value
+
+  return Object.keys(value).sort().reduce((memo, key) => {
+    memo[key] = stableJsonValue(value[key])
+
+    return memo
+  }, /** @type {Record<string, ?>} */ ({}))
 }
 
 /**

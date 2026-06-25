@@ -98,6 +98,21 @@ describe("frontend-model sync replay", () => {
     expect(expiredPage.oldestSequence).toEqual(3)
   })
 
+  it("filters server change-feed pages to the verified offline grant scope", async () => {
+    const {configuration} = await syncReplayConfiguration()
+    const store = new ServerChangeFeedStore({configuration})
+
+    await appendTestChange(store, {clientMutationId: "mutation-event-1", recordId: "ticket-1", scope: {eventId: "event-1", userId: "user-1"}})
+    await appendTestChange(store, {clientMutationId: "mutation-event-2", recordId: "ticket-2", scope: {eventId: "event-2", userId: "user-1"}})
+    await appendTestChange(store, {clientMutationId: "mutation-event-1b", recordId: "ticket-3", scope: {userId: "user-1", eventId: "event-1"}})
+
+    const page = await store.changesAfter({afterSequence: 0, limit: 10, scope: {userId: "user-1", eventId: "event-1"}})
+
+    expect(page.changes.map((change) => change.recordId)).toEqual(["ticket-1", "ticket-3"])
+    expect(page.changes.every((change) => change.scope?.eventId === "event-1" && change.scope?.userId === "user-1")).toEqual(true)
+    expect(page.nextSequence).toEqual(3)
+  })
+
   it("assigns server sequences to replayed mutations and returns snapshot/change-feed cursors", async () => {
     const {backendKeys, configuration} = await syncReplayConfiguration()
     const signedMutation = await signedReplayMutation({
@@ -143,7 +158,7 @@ describe("frontend-model sync replay", () => {
       action: "frontendSyncChangeFeed",
       configuration,
       controller: "velocious/api",
-      params: {afterSequence: 0},
+      params: {afterSequence: 0, signedOfflineGrant: signedMutation.signedOfflineGrant},
       request: requestFor(configuration, "/frontend-models/sync/change-feed"),
       response: snapshotResponse,
       viewPath: "/tmp"
@@ -166,7 +181,7 @@ describe("frontend-model sync replay", () => {
       action: "frontendSyncChangeFeed",
       configuration,
       controller: "velocious/api",
-      params: {afterSequence: 1},
+      params: {afterSequence: 1, signedOfflineGrant: signedMutation.signedOfflineGrant},
       request: requestFor(configuration, "/frontend-models/sync/change-feed"),
       response: changesResponse,
       viewPath: "/tmp"
@@ -304,6 +319,48 @@ describe("frontend-model sync replay", () => {
     expect(allErrors[0].errorType).toEqual("framework-error")
   })
 
+  it("keeps successful replay responses visible when the change-feed append fails", async () => {
+    const {backendKeys, configuration} = await syncReplayConfiguration()
+    const signedMutation = await signedReplayMutation({
+      backendKeys,
+      configuration,
+      mutation: {
+        actorDeviceId: "scanner-1",
+        actorUserId: "user-1",
+        attributes: {scanned: true},
+        clientMutationId: "mutation-feed-failure",
+        model: "Ticket",
+        occurredAt: "2026-01-02T03:04:05.000Z",
+        offlineGrantId: "grant-1",
+        operation: "update",
+        payload: {id: "ticket-1"},
+        policyHash: syncPolicyHash(configuration, "Ticket")
+      }
+    })
+
+    const response = new Response({configuration})
+    const controller = new FeedAppendFailingReplayTestController({
+      action: "frontendSyncReplay",
+      configuration,
+      controller: "velocious/api",
+      params: {mutation: signedMutation},
+      request: requestFor(configuration),
+      response,
+      viewPath: "/tmp"
+    })
+
+    await controller.frontendSyncReplay()
+
+    const payload = JSON.parse(String(response.getBody()))
+
+    expect(payload.results[0].status).toEqual("success")
+    expect(payload.results[0].response).toEqual({status: "success", replayed: true})
+    expect(payload.results[0].serverSequence).toEqual(null)
+    expect(payload.results[0].serverChangeFeedStatus).toEqual("error")
+    expect(payload.results[0].serverChangeFeedError.errorMessage).toEqual("Request failed.")
+    expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "ticket-1", model: "Ticket"}}])
+  })
+
   it("rejects replay when the signed offline grant does not authorize the mutation", async () => {
     const {backendKeys, configuration} = await syncReplayConfiguration()
     const signedMutation = await signedReplayMutation({
@@ -389,9 +446,10 @@ describe("frontend-model sync replay", () => {
  * @param {object} args - Arguments.
  * @param {string} args.clientMutationId - Client mutation id.
  * @param {string} args.recordId - Record id.
+ * @param {Record<string, ?>} [args.scope] - Change scope.
  * @returns {Promise<void>} - Resolves when appended.
  */
-async function appendTestChange(store, {clientMutationId, recordId}) {
+async function appendTestChange(store, {clientMutationId, recordId, scope = {eventId: "event-1"}}) {
   await store.append({
     actorDeviceId: "scanner-1",
     actorUserId: "user-1",
@@ -402,7 +460,7 @@ async function appendTestChange(store, {clientMutationId, recordId}) {
     payload: {id: recordId},
     recordId,
     response: {status: "success", replayed: true},
-    scope: {eventId: "event-1"}
+    scope
   })
 }
 
@@ -441,6 +499,16 @@ class ReplayTestController extends FrontendModelController {
     this.replayedCommands.push({action, params: this.frontendModelParams()})
 
     return {status: "success", replayed: true}
+  }
+}
+
+class FeedAppendFailingReplayTestController extends ReplayTestController {
+  /**
+   * Simulates a change-feed append failure after the replay command succeeds.
+   * @returns {Promise<number | null>} - Never resolves successfully.
+   */
+  async frontendSyncAppendServerChange() {
+    throw new Error("Change feed exploded")
   }
 }
 
