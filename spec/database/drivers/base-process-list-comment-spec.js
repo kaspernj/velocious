@@ -11,6 +11,9 @@ class ProcessListCommentDriver extends DatabaseDriverBase {
   /** @type {string[]} */
   queries = []
 
+  /** @type {string[]} */
+  hookEvents = []
+
   async connect() {}
 
   /** @returns {string} - Driver type. */
@@ -30,6 +33,22 @@ class ProcessListCommentDriver extends DatabaseDriverBase {
     this.queries.push(sql)
 
     return []
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async beforeQuery(sql) {
+    this.hookEvents.push(`before:${sql}`)
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async afterQuery(sql) {
+    this.hookEvents.push(`after:${sql}`)
   }
 
   /** @returns {void} - No return value. */
@@ -100,5 +119,44 @@ describe("Database drivers - process-list comments", {databaseCleaning: {transac
       "/* velocious checkout=\"migration\" */ CREATE TABLE schema_cache_test(id int)"
     ])
     expect(driver.clearSchemaCacheCalls).toBe(1)
+  })
+
+  it("runs before and after query hooks around executed SQL", async () => {
+    const driver = new ProcessListCommentDriver({}, buildConfiguration())
+
+    await driver.query("SELECT 1")
+
+    expect(driver.hookEvents).toEqual([
+      "before:SELECT 1",
+      "after:SELECT 1"
+    ])
+    expect(driver.queries).toEqual(["SELECT 1"])
+  })
+
+  it("runs after query hooks when the driver query fails", async () => {
+    class FailingProcessListCommentDriver extends ProcessListCommentDriver {
+      /**
+       * @param {string} sql - SQL string.
+       * @returns {Promise<import("../../../src/database/drivers/base.js").QueryResultType>} - Query result.
+       */
+      async _queryActual(sql) {
+        this.queries.push(sql)
+        throw new Error("query failed")
+      }
+    }
+
+    const driver = new FailingProcessListCommentDriver({}, buildConfiguration())
+    const error = await driver.query("SELECT fail").then(
+      () => undefined,
+      (caughtError) => caughtError
+    )
+
+    expect(error.message).toEqual("query failed")
+
+    expect(driver.hookEvents).toEqual([
+      "before:SELECT fail",
+      "after:SELECT fail"
+    ])
+    expect(driver.queries).toEqual(["SELECT fail"])
   })
 })

@@ -53,6 +53,18 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   }
 
   /**
+   * Flushes pending SQL.js local persistence writes.
+   * @returns {Promise<void>} - Resolves when pending writes are durable.
+   */
+  async flushPendingWrites() {
+    if (!this.args?.getConnection) {
+      if (!this._connection) throw new Error("SQLite web connection has not been initialized")
+
+      await this._connection.flushDatabaseSave()
+    }
+  }
+
+  /**
    * Runs get connection.
    * @returns {ConnectionSqlJs | SqliteWebConnection} - The connection.
    */

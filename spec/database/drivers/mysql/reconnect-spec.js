@@ -48,9 +48,15 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
 
     driver.connect = async () => {
       connectCount++
+      driver._sessionTimezoneSetToUtc = false
       driver.pool = {
         escape: (value) => `'${value}'`,
         query: (sql, callback) => {
+          if (sql == "SET time_zone = '+00:00'") {
+            callback(null, [], [])
+            return
+          }
+
           attempts++
 
           if (attempts < 3) {
@@ -85,6 +91,11 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
       driver.pool = {
         escape: (value) => `'${value}'`,
         query: (sql, callback) => {
+          if (sql == "SET time_zone = '+00:00'") {
+            callback(null, [], [])
+            return
+          }
+
           callback(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
         }
       }

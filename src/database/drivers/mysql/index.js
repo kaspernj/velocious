@@ -30,15 +30,20 @@ import Update from "./sql/update.js"
 const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
 
 export default class VelociousDatabaseDriversMysql extends Base{
+  /** @type {string | null} */
+  _desiredSessionTimeZone = "+00:00"
+
+  /** @type {string | null} */
+  _currentSessionTimeZone = null
+
   /**
    * Runs connect.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async connect() {
+    this.resetCurrentSessionTimeZone()
     this.pool = mysql.createPool(Object.assign({connectionLimit: 1}, this.connectArgs()))
     this.pool.on("error", this.onPoolError)
-
-    await this.setSessionTimezoneToUtc()
   }
 
   /**
@@ -56,6 +61,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
   async close() {
     await this.pool?.end()
     this.pool = undefined
+    this.resetCurrentSessionTimeZone()
   }
 
   /**
@@ -64,7 +70,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async setConnectionCheckoutName(name) {
-    await this.query(`SET @velocious_connection_checkout_name = ${name === undefined ? "NULL" : this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false})
+    await this.query(`SET @velocious_connection_checkout_name = ${name === undefined ? "NULL" : this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false, sessionTimeZone: false})
     await super.setConnectionCheckoutName(name)
   }
 
@@ -73,16 +79,77 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async clearConnectionCheckoutName() {
-    await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false})
+    await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false, sessionTimeZone: false})
     await super.clearConnectionCheckoutName()
   }
 
   /**
-   * Sets the database session timezone to UTC so bare timestamp literals store UTC instants.
+   * Hook before every query.
+   * @param {string} _sql - SQL string.
+   * @param {import("../base.js").QueryOptions} options - Query options.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async setSessionTimezoneToUtc() {
-    await this.query("SET time_zone = '+00:00'", {logName: "Set Session Time Zone", processListComment: false})
+  async beforeQuery(_sql, options) {
+    if (options.sessionTimeZone !== false) await this.ensureSessionTimeZone()
+  }
+
+  /**
+   * Gets the desired database session time zone for this connection context.
+   * @returns {string | null} - Desired session time zone.
+   */
+  getDesiredSessionTimeZone() {
+    return this._desiredSessionTimeZone
+  }
+
+  /**
+   * Sets the desired database session time zone without querying MySQL immediately.
+   * @param {string | null} timeZone - Desired session time zone.
+   */
+  setDesiredSessionTimeZone(timeZone) {
+    this._desiredSessionTimeZone = timeZone
+  }
+
+  /**
+   * Gets the database session time zone last confirmed through SET time_zone.
+   * @returns {string | null} - Current known session time zone.
+   */
+  getCurrentSessionTimeZone() {
+    return this._currentSessionTimeZone
+  }
+
+  /**
+   * Clears the current known database session time zone when the physical connection changes.
+   */
+  resetCurrentSessionTimeZone() {
+    this._currentSessionTimeZone = null
+  }
+
+  /**
+   * Ensures MySQL has the desired session time zone before user SQL runs.
+   * @returns {Promise<boolean>} - True when SET time_zone was executed.
+   */
+  async ensureSessionTimeZone() {
+    const desiredSessionTimeZone = this.getDesiredSessionTimeZone()
+
+    if (desiredSessionTimeZone === null || this.getCurrentSessionTimeZone() === desiredSessionTimeZone) return false
+
+    await this.setSessionTimeZone(desiredSessionTimeZone)
+
+    return true
+  }
+
+  /**
+   * Sets the database session time zone if it changed from the last confirmed value.
+   * @param {string} timeZone - Session time zone value accepted by MySQL.
+   * @returns {Promise<boolean>} - True when SET time_zone was executed.
+   */
+  async setSessionTimeZone(timeZone) {
+    if (this.getCurrentSessionTimeZone() === timeZone) return false
+
+    await this._queryActual(`SET time_zone = ${this.quote(timeZone)}`)
+    this._currentSessionTimeZone = timeZone
+
+    return true
   }
 
   /**

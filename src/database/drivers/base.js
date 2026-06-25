@@ -50,6 +50,7 @@
  * @property {string} [logName] - Query log subject.
  * @property {boolean} [logQuery] - Whether to log the query.
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
+ * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
 
@@ -234,6 +235,14 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async close() {
+    // No-op by default
+  }
+
+  /**
+   * Flushes pending writes that the driver delayed for persistence.
+   * @returns {Promise<void>} - Resolves when pending writes are durable.
+   */
+  async flushPendingWrites() {
     // No-op by default
   }
 
@@ -1041,12 +1050,14 @@ export default class VelociousDatabaseDriversBase {
     let result
 
     try {
+      const runQueryActualWithHooks = async () => await this._queryActualWithHooks(querySql, options)
+
       if (requestTiming && tries === 1) {
-        result = await requestTiming.measureDbQuery(async () => await this._queryActual(querySql))
+        result = await requestTiming.measureDbQuery(runQueryActualWithHooks)
       } else if (requestTiming) {
-        result = await requestTiming.measure("db", async () => await this._queryActual(querySql))
+        result = await requestTiming.measure("db", runQueryActualWithHooks)
       } else {
-        result = await this._queryActual(querySql)
+        result = await runQueryActualWithHooks()
       }
     } finally {
       this._activeQuery = previousActiveQuery
@@ -1068,6 +1079,42 @@ export default class VelociousDatabaseDriversBase {
     }
 
     return result
+  }
+
+  /**
+   * Runs query actual with before/after hooks.
+   * @param {string} sql - SQL string.
+   * @param {QueryOptions} options - Query options.
+   * @returns {Promise<QueryResultType>} - Resolves with the query.
+   */
+  async _queryActualWithHooks(sql, options) {
+    await this.beforeQuery(sql, options)
+
+    try {
+      return await this._queryActual(sql)
+    } finally {
+      await this.afterQuery(sql, options)
+    }
+  }
+
+  /**
+   * Hook that runs immediately before a SQL query is sent to the driver.
+   * @param {string} _sql - SQL string.
+   * @param {QueryOptions} _options - Query options.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async beforeQuery(_sql, _options) {
+    // No-op by default
+  }
+
+  /**
+   * Hook that runs immediately after a SQL query has completed or failed.
+   * @param {string} _sql - SQL string.
+   * @param {QueryOptions} _options - Query options.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async afterQuery(_sql, _options) {
+    // No-op by default
   }
 
   /**
@@ -1504,6 +1551,7 @@ export default class VelociousDatabaseDriversBase {
         }
       }
     })
+    await this.flushPendingWrites()
   }
 
   /**

@@ -1,0 +1,1 @@
+MySQL/MariaDB drivers now set the session timezone to UTC lazily before the first real query on a physical connection and reuse the confirmed session timezone across checkouts, avoiding redundant setup SQL for checked-out connections that are never queried or already have the desired timezone.
