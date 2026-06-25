@@ -6,6 +6,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
 import Request from "../../src/http-server/client/request.js"
+import DatabaseRecord from "../../src/database/record/index.js"
 import Response from "../../src/http-server/client/response.js"
 import frontendModelCommandRouteHook from "../../src/routes/hooks/frontend-model-command-route-hook.js"
 import {createDeviceCertificate, createSignedMutation, generateSyncSigningKeyPair} from "../../src/sync/device-identity.js"
@@ -305,13 +306,13 @@ describe("frontend-model sync replay", () => {
     const payload = JSON.parse(String(response.getBody()))
 
     expect(payload.results[0].status).toEqual("success")
-    expect(payload.results[0].response).toEqual({scan: {scannerId: "gate-a", ticketId: "ticket-1"}, status: "success", syncChanges: [{attributes: {lastScannerId: "gate-a", scanned: true}, model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1"}]})
+    expect(payload.results[0].response).toEqual({modelName: "Ticket", scan: {scannerId: "gate-a", ticketId: "ticket-1"}, status: "success", syncChanges: [{attributes: {lastScannerId: "gate-a", scanned: true}, model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1"}]})
     expect(payload.results[0].serverSequence).toEqual(1)
 
     const store = serverChangeFeedStoreForConfiguration(configuration)
     const changePage = await store.changesAfter({afterSequence: 0, limit: 10})
 
-    expect(changePage.changes).toEqual([{actorDeviceId: "scanner-1", actorUserId: "user-1", attributes: {lastScannerId: "gate-a", scanned: true}, createdAt: changePage.changes[0].createdAt, id: changePage.changes[0].id, idempotencyKey: "user-1:scanner-1:mutation-scan-attempt", model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1", response: {scan: {scannerId: "gate-a", ticketId: "ticket-1"}, status: "success", syncChanges: [{attributes: {lastScannerId: "gate-a", scanned: true}, model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1"}]}, scope: {eventId: "event-1"}, serverSequence: 1}])
+    expect(changePage.changes).toEqual([{actorDeviceId: "scanner-1", actorUserId: "user-1", attributes: {lastScannerId: "gate-a", scanned: true}, createdAt: changePage.changes[0].createdAt, id: changePage.changes[0].id, idempotencyKey: "user-1:scanner-1:mutation-scan-attempt", model: "Ticket", operation: "update", payload: {id: "ticket-1"}, recordId: "ticket-1", response: payload.results[0].response, scope: {eventId: "event-1"}, serverSequence: 1}])
   })
 
   it("rejects custom sync commands that are not registered on the resource", async () => {
@@ -544,9 +545,14 @@ async function appendTestChange(store, {clientMutationId, recordId, scope = {eve
   })
 }
 
+class Ticket extends DatabaseRecord {
+  static modelName = "Ticket"
+}
+
 class TicketResource extends FrontendModelBaseResource {
   static attributes = ["id", "scanned"]
   static collectionCommands = ["scanAttempt"]
+  static ModelClass = Ticket
   static sync = {
     metadata: {scope: "event"},
     operations: ["find", "update", "scanAttempt", "closeGate"],
@@ -564,6 +570,7 @@ class TicketResource extends FrontendModelBaseResource {
     const scannerId = String(args.scannerId)
 
     return {
+      modelName: this.modelClass().getModelName(),
       scan: {scannerId, ticketId},
       status: "success",
       syncChanges: [{

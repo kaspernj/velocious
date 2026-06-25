@@ -3862,7 +3862,7 @@ export default class FrontendModelController extends Controller {
         request: this.request()
       },
       locals: this.currentAbility()?.getLocals() || {},
-      modelClass: undefined,
+      modelClass: this.frontendModelResourceModelClass(frontendModelResource),
       modelName: frontendModelResource.modelName,
       params: this.frontendModelParams(),
       resourceConfiguration: frontendModelResource.resourceConfiguration
