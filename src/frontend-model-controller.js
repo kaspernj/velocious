@@ -878,7 +878,21 @@ export default class FrontendModelController extends Controller {
         relationship
       })
 
-      if (!targetModelClass || !isPlainObject(relationshipPreload)) continue
+      if (!targetModelClass) {
+        if (isPlainObject(relationshipPreload) && Object.keys(relationshipPreload).length > 0) {
+          let message = `Cannot preload nested relationships through relationship "${relationshipName}" for ${modelClass.name} because its target model class could not be resolved`
+
+          if (relationship.getPolymorphic() && relationship.getType() === "belongsTo") {
+            message = `Cannot preload nested relationships through polymorphic relationship "${relationshipName}" for ${modelClass.name}`
+          }
+
+          throw frontendModelQueryError(message)
+        }
+
+        continue
+      }
+
+      if (!isPlainObject(relationshipPreload)) continue
 
       await this.ensureFrontendModelPreloadClassesInitialized({
         backendProject,

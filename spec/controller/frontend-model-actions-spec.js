@@ -2085,6 +2085,12 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
           requestId: "invalid-nested-preload-select"
         },
         {
+          expectedMessage: 'Cannot preload nested relationships through polymorphic relationship "subject" for Interaction',
+          model: "Interaction",
+          payload: {preload: {subject: {missingRelationship: true}}},
+          requestId: "invalid-nested-polymorphic-preload"
+        },
+        {
           expectedMessage: "Invalid preload value for project: number",
           payload: {preload: {project: 1}},
           requestId: "invalid-preload-value"
