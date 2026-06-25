@@ -3,7 +3,7 @@
 import {createSignedMutation, mutationIdempotencyKey, verifySignedMutation} from "./device-identity.js"
 
 const PEER_MUTATION_BUNDLE_FORMAT = "velocious.sync.peer-mutation-bundle.v1"
-const EXPORTABLE_STATUSES = new Set(["pending", "applied-locally", "peer-applied", "conflict"])
+const EXPORTABLE_STATUSES = new Set(["pending", "applied-locally", "conflict"])
 
 /**
  * Peer mutation bundle exported by a device for offline/P2P transfer.
@@ -79,31 +79,51 @@ export async function importPeerMutationBundle({backendPublicKey, bundle, mutati
   const skipped = []
 
   for (const [index, entry] of normalizedBundle.mutations.entries()) {
-    try {
-      const mutation = await verifySignedMutation({backendPublicKey, now, signedMutation: entry.signedMutation})
-      const idempotencyKey = mutationIdempotencyKey(entry.signedMutation)
-      const duplicateRecord = existingByIdempotencyKey.get(idempotencyKey)
+    const mutation = await verifiedBundleMutation({backendPublicKey, entry, index, now, rejected})
 
-      if (duplicateRecord) {
-        skipped.push({
-          clientMutationId: mutation.clientMutationId,
-          idempotencyKey,
-          localRecordId: duplicateRecord.id,
-          reason: /** @type {"duplicate"} */ ("duplicate")
-        })
-        continue
-      }
+    if (!mutation) continue
 
-      const record = await mutationLog.append({mutation})
-      const updated = await mutationLog.updateStatus({id: record.id, status: "peer-applied"})
-      existingByIdempotencyKey.set(idempotencyKey, updated)
-      imported.push({clientMutationId: mutation.clientMutationId, idempotencyKey, localRecordId: updated.id})
-    } catch (error) {
-      rejected.push({errorMessage: errorMessage(error), index})
+    const idempotencyKey = mutationIdempotencyKey(entry.signedMutation)
+    const duplicateRecord = existingByIdempotencyKey.get(idempotencyKey)
+
+    if (duplicateRecord) {
+      skipped.push({
+        clientMutationId: mutation.clientMutationId,
+        idempotencyKey,
+        localRecordId: duplicateRecord.id,
+        reason: /** @type {"duplicate"} */ ("duplicate")
+      })
+      continue
     }
+
+    const record = await mutationLog.append({mutation})
+    const updated = await mutationLog.updateStatus({id: record.id, status: "peer-applied"})
+    existingByIdempotencyKey.set(idempotencyKey, updated)
+    imported.push({clientMutationId: mutation.clientMutationId, idempotencyKey, localRecordId: updated.id})
   }
 
   return {imported, rejected, skipped}
+}
+
+/**
+ * Verifies a bundle mutation and records normal per-entry verification rejections.
+ * Storage writes intentionally happen outside this helper so storage failures escape import.
+ * @param {object} args - Arguments.
+ * @param {import("./device-identity.js").SyncJsonWebKey} args.backendPublicKey - Backend public key.
+ * @param {PeerMutationBundleEntry} args.entry - Bundle entry.
+ * @param {number} args.index - Entry index.
+ * @param {Date} args.now - Verification time.
+ * @param {{errorMessage: string, index: number}[]} args.rejected - Rejection accumulator.
+ * @returns {Promise<import("./device-identity.js").SyncMutation | null>} - Verified mutation, or null when rejected.
+ */
+async function verifiedBundleMutation({backendPublicKey, entry, index, now, rejected}) {
+  try {
+    return await verifySignedMutation({backendPublicKey, now, signedMutation: entry.signedMutation})
+  } catch (error) {
+    rejected.push({errorMessage: errorMessage(error), index})
+
+    return null
+  }
 }
 
 /**

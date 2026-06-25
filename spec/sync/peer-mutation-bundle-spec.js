@@ -139,6 +139,84 @@ describe("sync peer mutation import/export", () => {
     expect(result.rejected).toEqual([{errorMessage: "Sync mutation signature did not match", index: 0}])
     expect(await mutationLog.records()).toEqual([])
   })
+
+  it("does not re-export imported peer-applied mutations with the local device certificate", async () => {
+    const backendKeys = await generateSyncSigningKeyPair()
+    const localKeys = await generateSyncSigningKeyPair()
+    const peerKeys = await generateSyncSigningKeyPair()
+    const localCertificate = await buildDeviceCertificate({backendKeys, deviceKeys: localKeys})
+    const peerCertificate = await buildDeviceCertificate({
+      actorDeviceId: "peer-device-1",
+      actorUserId: "peer-user-1",
+      backendKeys,
+      deviceKeys: peerKeys
+    })
+    const mutationLog = new LocalMutationLog({idGenerator: nextValue(["local-1", "peer-1"]), storage: buildMemoryStorage()})
+    const localRecord = await mutationLog.append({mutation: buildMutation({clientMutationId: "local-mutation-1"})})
+    const peerSignedMutation = await createSignedMutation({
+      deviceCertificate: peerCertificate,
+      devicePrivateKey: peerKeys.privateKey,
+      mutation: buildMutation({
+        actorDeviceId: "peer-device-1",
+        actorUserId: "peer-user-1",
+        clientMutationId: "peer-mutation-1"
+      })
+    })
+    await importPeerMutationBundle({
+      backendPublicKey: backendKeys.publicKey,
+      bundle: {
+        exportedAt: "2026-06-25T10:00:00.000Z",
+        format: "velocious.sync.peer-mutation-bundle.v1",
+        mutations: [{signedMutation: peerSignedMutation}]
+      },
+      mutationLog,
+      now: new Date("2026-06-25T10:00:00.000Z")
+    })
+
+    const bundle = await exportPeerMutationBundle({
+      deviceCertificate: localCertificate,
+      devicePrivateKey: localKeys.privateKey,
+      mutationLog,
+      now: () => new Date("2026-06-25T11:00:00.000Z")
+    })
+
+    expect(bundle.mutations.map((entry) => entry.localRecordId)).toEqual([localRecord.id])
+    expect(bundle.mutations.map((entry) => entry.signedMutation.mutation.clientMutationId)).toEqual(["local-mutation-1"])
+  })
+
+  it("lets storage failures escape peer import after signature verification", async () => {
+    const backendKeys = await generateSyncSigningKeyPair()
+    const peerKeys = await generateSyncSigningKeyPair()
+    const peerCertificate = await buildDeviceCertificate({backendKeys, deviceKeys: peerKeys})
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({idGenerator: () => "import-1", storage: {
+      ...storage,
+      updateRecord() {
+        throw new Error("storage unavailable")
+      }
+    }})
+    const signedMutation = await createSignedMutation({
+      deviceCertificate: peerCertificate,
+      devicePrivateKey: peerKeys.privateKey,
+      mutation: buildMutation({clientMutationId: "peer-mutation-1"})
+    })
+
+    try {
+      await importPeerMutationBundle({
+        backendPublicKey: backendKeys.publicKey,
+        bundle: {
+          exportedAt: "2026-06-25T10:00:00.000Z",
+          format: "velocious.sync.peer-mutation-bundle.v1",
+          mutations: [{signedMutation}]
+        },
+        mutationLog,
+        now: new Date("2026-06-25T10:00:00.000Z")
+      })
+      throw new Error("Expected peer import to reject")
+    } catch (error) {
+      expect(error instanceof Error ? error.message : String(error)).toEqual("storage unavailable")
+    }
+  })
 })
 
 async function buildDeviceCertificate({actorDeviceId = "device-1", actorUserId = "user-1", backendKeys, deviceKeys}) {
