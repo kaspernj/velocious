@@ -71,8 +71,11 @@ export async function importPeerMutationBundle({backendPublicKey, bundle, mutati
   const normalizedBundle = normalizePeerMutationBundle(bundle)
   const existingRecords = await mutationLog.records()
   const existingByIdempotencyKey = new Map(existingRecords.map((record) => [mutationIdempotencyKey({mutation: record.mutation}), record]))
+  /** @type {{clientMutationId: string, idempotencyKey: string, localRecordId: string}[]} */
   const imported = []
+  /** @type {{errorMessage: string, index: number}[]} */
   const rejected = []
+  /** @type {{clientMutationId: string, idempotencyKey: string, localRecordId: string, reason: "duplicate"}[]} */
   const skipped = []
 
   for (const [index, entry] of normalizedBundle.mutations.entries()) {
@@ -86,7 +89,7 @@ export async function importPeerMutationBundle({backendPublicKey, bundle, mutati
           clientMutationId: mutation.clientMutationId,
           idempotencyKey,
           localRecordId: duplicateRecord.id,
-          reason: "duplicate"
+          reason: /** @type {"duplicate"} */ ("duplicate")
         })
         continue
       }
