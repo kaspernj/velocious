@@ -44,17 +44,24 @@ describe("database - migration - removeIndex", {tags: ["dummy"]}, () => {
         await migration.createTable("remove_index_default_widgets", (table) => {
           table.string("name", {null: false})
         })
+        const tableBeforeIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
+        const initialIndexNames = (await tableBeforeIndex.getIndexes()).map((index) => index.getName())
+
         await migration.addIndex("remove_index_default_widgets", ["name"])
 
         const tableWithIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
-        const existingIndexNames = (await tableWithIndex.getIndexes()).map((index) => index.getName())
+        const addedIndexNames = (await tableWithIndex.getIndexes())
+          .map((index) => index.getName())
+          .filter((indexName) => indexName != "PRIMARY" && !initialIndexNames.includes(indexName))
+
+        expect(addedIndexNames).toHaveLength(1)
 
         await migration.removeIndex("remove_index_default_widgets", ["name"])
 
         const tableWithoutIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
         const remainingIndexNames = (await tableWithoutIndex.getIndexes()).map((index) => index.getName())
 
-        for (const indexName of existingIndexNames) {
+        for (const indexName of addedIndexNames) {
           expect(remainingIndexNames).not.toContain(indexName)
         }
       } finally {
