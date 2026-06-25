@@ -12,6 +12,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  * @property {boolean | null} [isDone] - Value for the isDone attribute.
+ * @property {import("../models/project.js").default} [project] - Related project record.
+ * @property {import("../models/project.js").default} [reviewProject] - Related reviewProject record.
  * @property {Array<import("./comment.js").CommentWriteAttributes & {_destroy?: boolean}>} [commentsAttributes] - Nested comments attributes.
  * @property {import("./project.js").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.
  */

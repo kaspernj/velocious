@@ -11,6 +11,7 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {string | null} [name] - Value for the name attribute.
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ * @property {import("../models/project.js").default} [project] - Related project record.
  */
 
 /** @augments {DatabaseRecord<ActsAsListItemWriteAttributes>} */

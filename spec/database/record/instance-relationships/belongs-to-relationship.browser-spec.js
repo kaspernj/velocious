@@ -1,6 +1,7 @@
 import Project from "../../../dummy/src/models/project.js"
 import Task from "../../../dummy/src/models/task.js"
 import Comment from "../../../dummy/src/models/comment.js"
+import User from "../../../dummy/src/models/user.js"
 
 describe("Record - instance relationships - belongs to relationship", {tags: ["dummy"]}, () => {
   it("loads a relationship", async () => {
@@ -50,6 +51,41 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     task.setProjectId(project.id())
 
     expect(task.project().name()).toEqual("Matching loaded project")
+  })
+
+  it("tracks foreign key changes when assigning a belongs-to relationship", async () => {
+    const originalProject = await Project.create({name: "Original setter project"})
+    const targetProject = await Project.create({name: "Target setter project"})
+    const task = await Task.create({name: "Relationship setter task", project: originalProject})
+
+    task.setProject(targetProject)
+
+    expect(task.projectId()).toEqual(targetProject.id())
+    expect(task.changes().project_id).toEqual([originalProject.id(), targetProject.id()])
+  })
+
+  it("uses the relationship primary key when assigning a belongs-to relationship", async () => {
+    const creator = await User.create({email: "creator-primary-key@example.com", encryptedPassword: "secret", reference: "creator-reference"})
+    const project = await Project.create({name: "Custom primary key relationship project"})
+
+    project.setCreatingUser(creator)
+
+    expect(project.creatingUserReference()).toEqual("creator-reference")
+    expect(project.changes().creating_user_reference).toEqual([null, "creator-reference"])
+  })
+
+  it("uses the relationship primary key when autosaving an assigned belongs-to relationship", async () => {
+    const creator = new User({email: "creator-autosave-primary-key@example.com", encryptedPassword: "secret", reference: "creator-autosave-reference"})
+    const project = new Project({name: "Custom primary key autosave relationship project"})
+
+    project.setCreatingUser(creator)
+    await project.save()
+
+    expect(project.creatingUserReference()).toEqual("creator-autosave-reference")
+
+    const reloadedProject = /** @type {Project} */ (await Project.find(project.id()))
+
+    expect(reloadedProject.creatingUserReference()).toEqual("creator-autosave-reference")
   })
 
   it("preloads translations when explicitly requested for a reloaded changed belongs-to foreign key", async () => {

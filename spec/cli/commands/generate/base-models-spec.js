@@ -111,6 +111,7 @@ describe("Cli - generate - base-models", () => {
     expect(taskContents).toContain("@typedef {object} TaskWriteAttributes")
     expect(taskContents).toContain("@property {number} [id] - Value for the id attribute.")
     expect(taskContents).toContain("@property {Date | string | null} [createdAt] - Value for the createdAt attribute.")
+    expect(taskContents).toContain("@property {import(\"../models/project.js\").default} [project] - Related project record.")
     expect(taskContents).toContain("@property {Array<import(\"./comment.js\").CommentWriteAttributes & {_destroy?: boolean}>} [commentsAttributes] - Nested comments attributes.")
     expect(taskContents).toContain("@property {import(\"./project.js\").ProjectWriteAttributes} [projectAttributes] - Nested project attributes.")
     expect(taskContents).toContain("/** @augments {DatabaseRecord<TaskWriteAttributes>} */")
@@ -134,16 +135,25 @@ describe("Cli - generate - base-models", () => {
 
     const sourceText = `
       import Task from "${dummyDirectory()}/src/models/task.js"
+      import Project from "${dummyDirectory()}/src/models/project.js"
 
       async function checkWrites() {
+        const project = await Project.create({})
+
         await Task.create({name: "Generated typing works"})
+        await Task.create({name: "Generated typing works", project})
         // @ts-expect-error unknown create attributes must stay rejected
         await Task.create({typo: "Generated typing works"})
+        // @ts-expect-error belongs-to write attributes require the related model
+        await Task.create({name: "Generated typing works", project: "wrong"})
 
         const task = new Task()
         await task.update({name: "Generated typing works"})
+        await task.update({project})
         // @ts-expect-error unknown update attributes must stay rejected
         await task.update({typo: "Generated typing works"})
+        // @ts-expect-error belongs-to write attributes require the related model
+        await task.update({project: "wrong"})
       }
 
       checkWrites()

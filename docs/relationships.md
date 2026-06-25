@@ -29,6 +29,21 @@ Project.hasOne("activeDetail", function() { return this.where({isActive: true}) 
 Comment.belongsTo("acceptedTask", (scope) => scope.where({state: "accepted"}), {className: "Task"})
 ```
 
+## Assigning belongs-to relationships
+
+Generated belongs-to setters keep the relationship cache and foreign key in sync:
+
+```js
+const project = await Project.find(1)
+const task = await Task.find(5)
+
+task.setProject(project)
+
+await task.save()
+```
+
+After `setProject(project)`, `task.projectId()`, `task.changes().project_id`, lifecycle callbacks, and scoped model features such as `actsAsList` see the new foreign key before the record is saved. Generated backend write attributes also accept belongs-to relationship names, so `Task.create({project})` and `task.update({project})` typecheck the same way as the generated setter. Relationships with a custom `primaryKey` option use that configured target key when writing the foreign key, including after autosaving an assigned new or dirty related record.
+
 ### Common options
 
 | Option | Description |

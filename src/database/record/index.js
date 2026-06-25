@@ -690,11 +690,14 @@ class VelociousDatabaseRecord {
         return await this.relationshipOrLoad(relationshipName, {preloadTranslations: true})
       }
 
-      prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {?} */ model) {
+      prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {VelociousDatabaseRecord | null | undefined} */ model) {
         const relationship = this.getRelationshipByName(relationshipName)
+        const foreignKeyValue = this._belongsToForeignKeyValue({model, relationship})
 
-        relationship.setLoaded(model)
+        relationship.setLoaded(model || undefined)
+        relationship.setPreloaded(true)
         relationship.setDirty(true)
+        this._setColumnAttribute(relationship.getForeignKey(), foreignKeyValue)
       }
     } else if (actualData.type == "hasMany") {
       relationship = new HasManyRelationship(actualData)
@@ -1784,6 +1787,20 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns the foreign key value for a belongs-to relationship assignment.
+   * @param {object} args - Relationship assignment arguments.
+   * @param {VelociousDatabaseRecord | null | undefined} args.model - Assigned model.
+   * @param {import("./instance-relationships/base.js").default} args.relationship - Belongs-to relationship instance.
+   * @returns {string | number | null | undefined} - Foreign key value for the assignment.
+   */
+  _belongsToForeignKeyValue({model, relationship}) {
+    if (model == null) return null
+    if (!(model instanceof VelociousDatabaseRecord)) throw new Error(`Unexpected model type: ${typeof model}`)
+
+    return /** @type {string | number | null | undefined} */ (model.readColumn(relationship.getPrimaryKey()))
+  }
+
+  /**
    * Runs clear loaded belongs to relationship.
    * @param {?} relationship - Relationship instance.
    * @returns {void} - No return value.
@@ -2364,8 +2381,9 @@ class VelociousDatabaseRecord {
             await model.save()
 
             const foreignKey = this._relationshipForeignKeyAttribute(instanceRelationship)
+            const foreignKeyValue = this._belongsToForeignKeyValue({model, relationship: instanceRelationship})
 
-            this.setAttribute(foreignKey, model.id())
+            this.setAttribute(foreignKey, foreignKeyValue)
 
             instanceRelationship.setPreloaded(true)
             instanceRelationship.setDirty(false)
@@ -3801,14 +3819,12 @@ class VelociousDatabaseRecord {
         const relationship = this._instanceRelationships[relationshipName]
 
         if (relationship.getType() == "belongsTo" && relationship.getDirty()) {
-          const model = relationship.loaded()
+          const model = relationship.getLoadedOrUndefined()
 
           if (model) {
-            if (model instanceof VelociousDatabaseRecord) {
-              belongsToChanges[relationship.getForeignKey()] = model?.id()
-            } else {
-              throw new Error(`Unexpected model type: ${typeof model}`)
-            }
+            if (Array.isArray(model)) throw new Error("Unexpected belongs-to model array")
+
+            belongsToChanges[relationship.getForeignKey()] = this._belongsToForeignKeyValue({model, relationship})
           }
         }
       }

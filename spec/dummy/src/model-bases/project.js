@@ -10,6 +10,7 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
  * @property {number} [tasksCount] - Value for the tasksCount attribute.
+ * @property {import("../models/user.js").default} [creatingUser] - Related creatingUser record.
  * @property {Array<import("./task.js").TaskWriteAttributes & {_destroy?: boolean}>} [tasksAttributes] - Nested tasks attributes.
  * @property {Array<import("./interaction.js").InteractionWriteAttributes & {_destroy?: boolean}>} [interactionsAttributes] - Nested interactions attributes.
  */

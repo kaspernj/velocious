@@ -120,6 +120,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         const columns = await table.getColumns()
         const writeAttributeTypeName = `${modelNameCamelized}WriteAttributes`
+        const belongsToWriteAttributes = await this.belongsToWriteAttributesForModel({modelClass, modelsDir})
         const nestedWriteAttributes = this.nestedWriteAttributesForModel({modelClass})
 
         fileContent += `import DatabaseRecord from "${velociousPath}/database/record/index.js"\n\n`
@@ -134,6 +135,9 @@ export default class DbGenerateModel extends BaseCommand {
           if (setterJsdocType) {
             fileContent += ` * @property {${setterJsdocType}${column.getNull() ? " | null" : ""}} [${camelizedColumnName}] - Value for the ${camelizedColumnName} attribute.\n`
           }
+        }
+        for (const belongsToWriteAttribute of belongsToWriteAttributes) {
+          fileContent += ` * @property {${belongsToWriteAttribute.propertyType}} [${belongsToWriteAttribute.propertyName}] - Related ${belongsToWriteAttribute.relationshipName} record.\n`
         }
         for (const nestedWriteAttribute of nestedWriteAttributes) {
           fileContent += ` * @property {${nestedWriteAttribute.propertyType}} [${nestedWriteAttribute.propertyName}] - Nested ${nestedWriteAttribute.relationshipName} attributes.\n`
@@ -438,6 +442,38 @@ export default class DbGenerateModel extends BaseCommand {
     }
 
     return this.jsDocTypeFromColumn(column, modelClass)
+  }
+
+  /**
+   * Runs belongs to write attributes for model.
+   * @param {object} args - Arguments.
+   * @param {typeof import("../../../../../database/record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.modelsDir - Source models directory.
+   * @returns {Promise<Array<{propertyName: string, propertyType: string, relationshipName: string}>>} - Belongs-to write attributes.
+   */
+  async belongsToWriteAttributesForModel({modelClass, modelsDir}) {
+    const writeAttributes = []
+
+    for (const relationship of modelClass.getRelationships()) {
+      if (relationship.getType() !== "belongsTo") continue
+      if (relationship.getPolymorphic()) continue
+
+      const targetModelClass = relationship.getTargetModelClass()
+
+      if (!targetModelClass) throw new Error(`Relationship '${relationship.getRelationshipName()}' on '${modelClass.getModelName()}' has no target model class`)
+
+      const targetModelFileName = inflection.dasherize(inflection.underscore(targetModelClass.getModelName()))
+      const targetModelPath = `${modelsDir}/${targetModelFileName}.js`
+      const targetImportPath = await fileExists(targetModelPath) ? `../models/${targetModelFileName}.js` : `./${targetModelFileName}.js`
+
+      writeAttributes.push({
+        propertyName: relationship.getRelationshipName(),
+        propertyType: `import("${targetImportPath}").default`,
+        relationshipName: relationship.getRelationshipName()
+      })
+    }
+
+    return writeAttributes
   }
 
   /**

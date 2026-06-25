@@ -10,6 +10,8 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {string | null} [body] - Value for the body attribute.
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ * @property {import("../models/task.js").default} [task] - Related task record.
+ * @property {import("../models/task.js").default} [doneTask] - Related doneTask record.
  */
 
 /** @augments {DatabaseRecord<CommentWriteAttributes>} */
