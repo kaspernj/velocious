@@ -68,9 +68,23 @@ export async function applySyncReplayResultToLocalMutationLog({mutationLog, reco
 export function replayResultLocalStatus(result) {
   if (result.status === "conflict") return "conflict"
   if (result.status === "error" || result.status === "rejected") return "rejected"
+  if (result.status === "success" && replayResultHasFailedApplication(result)) return "rejected"
   if (result.status === "success" || result.status === "applied" || result.status === "duplicate") return "synced"
 
   throw new Error(`Unknown sync replay result status '${String(result.status)}'`)
+}
+
+/**
+ * Checks whether an otherwise successful replay result contains a failed
+ * frontend-model command or change-feed write.
+ * @param {Record<string, SyncJsonValue>} result - Replay result.
+ * @returns {boolean} - Whether the local mutation must stay unsynced.
+ */
+function replayResultHasFailedApplication(result) {
+  if (result.serverSequence === null || result.serverChangeFeedStatus === "error") return true
+  if (!result.response || typeof result.response !== "object" || Array.isArray(result.response)) return false
+
+  return /** @type {Record<string, SyncJsonValue>} */ (result.response).status === "error"
 }
 
 /**

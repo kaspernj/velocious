@@ -62,7 +62,11 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Defines this typedef.
- * @typedef {{enabled: boolean, operations: string[], policyHash: string, policyVersion: string | null, metadata?: FrontendModelSyncMetadata}} FrontendModelSyncConfig
+ * @typedef {"optimisticVersion" | "serverWins" | "lastWriterWins" | "fieldThreeWay" | "appendOnly"} FrontendModelSyncConflictStrategy
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{enabled: boolean, operations: string[], policyHash: string, policyVersion: string | null, conflictStrategy?: FrontendModelSyncConflictStrategy, metadata?: FrontendModelSyncMetadata}} FrontendModelSyncConfig
  */
 /**
  * Defines this typedef.

@@ -161,9 +161,15 @@ describe("local sync mutation log", () => {
 
   it("maps server replay result statuses onto durable local mutation statuses", async () => {
     expect(replayResultLocalStatus({status: "success"})).toEqual("synced")
+    expect(replayResultLocalStatus({response: {status: "success"}, serverSequence: 42, status: "success"})).toEqual("synced")
     expect(replayResultLocalStatus({status: "duplicate"})).toEqual("synced")
     expect(replayResultLocalStatus({status: "conflict"})).toEqual("conflict")
     expect(replayResultLocalStatus({status: "error"})).toEqual("rejected")
+  })
+
+  it("keeps failed replay command responses unsynced", async () => {
+    expect(replayResultLocalStatus({response: {errorMessage: "Request failed.", status: "error"}, serverSequence: null, status: "success"})).toEqual("rejected")
+    expect(replayResultLocalStatus({response: {status: "success"}, serverChangeFeedStatus: "error", serverSequence: null, status: "success"})).toEqual("rejected")
   })
 
   it("persists conflict replay results on the local mutation log for UI resolution", async () => {
