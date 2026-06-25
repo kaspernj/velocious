@@ -129,14 +129,14 @@ export function normalizePreload(preload) {
         continue
       }
 
-      throw new Error(`Invalid preload entry type: ${typeof entry}`)
+      throw frontendModelQueryError(`Invalid preload entry type: ${typeof entry}`)
     }
 
     return normalized
   }
 
   if (!isPlainObject(preload)) {
-    throw new Error(`Invalid preload type: ${typeof preload}`)
+    throw frontendModelQueryError(`Invalid preload type: ${typeof preload}`)
   }
 
   /**
@@ -155,7 +155,7 @@ export function normalizePreload(preload) {
       continue
     }
 
-    throw new Error(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
+    throw frontendModelQueryError(`Invalid preload value for ${relationshipName}: ${typeof relationshipPreload}`)
   }
 
   return normalized
