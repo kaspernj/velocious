@@ -74,6 +74,20 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     expect(project.changes().creating_user_reference).toEqual([null, "creator-reference"])
   })
 
+  it("uses the relationship primary key when autosaving an assigned belongs-to relationship", async () => {
+    const creator = new User({email: "creator-autosave-primary-key@example.com", encryptedPassword: "secret", reference: "creator-autosave-reference"})
+    const project = new Project({name: "Custom primary key autosave relationship project"})
+
+    project.setCreatingUser(creator)
+    await project.save()
+
+    expect(project.creatingUserReference()).toEqual("creator-autosave-reference")
+
+    const reloadedProject = /** @type {Project} */ (await Project.find(project.id()))
+
+    expect(reloadedProject.creatingUserReference()).toEqual("creator-autosave-reference")
+  })
+
   it("preloads translations when explicitly requested for a reloaded changed belongs-to foreign key", async () => {
     const originalProject = await Project.create({name: "Original translated project"})
     const targetProject = await Project.create({name: "Target translated project"})

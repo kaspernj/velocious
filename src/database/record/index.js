@@ -2381,8 +2381,9 @@ class VelociousDatabaseRecord {
             await model.save()
 
             const foreignKey = this._relationshipForeignKeyAttribute(instanceRelationship)
+            const foreignKeyValue = this._belongsToForeignKeyValue({model, relationship: instanceRelationship})
 
-            this.setAttribute(foreignKey, model.id())
+            this.setAttribute(foreignKey, foreignKeyValue)
 
             instanceRelationship.setPreloaded(true)
             instanceRelationship.setDirty(false)
