@@ -42,12 +42,12 @@ describe("database - migration - removeIndex", {tags: ["dummy"]}, () => {
       try {
         await driver.dropTable("remove_index_default_widgets", {cascade: true, ifExists: true})
         await migration.createTable("remove_index_default_widgets", (table) => {
-          table.string("name", {null: false})
+          table.string("remove_index_default_widget_name", {null: false})
         })
         const tableBeforeIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
         const initialIndexNames = (await tableBeforeIndex.getIndexes()).map((index) => index.getName())
 
-        await migration.addIndex("remove_index_default_widgets", ["name"])
+        await migration.addIndex("remove_index_default_widgets", ["remove_index_default_widget_name"])
 
         const tableWithIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
         const addedIndexNames = (await tableWithIndex.getIndexes())
@@ -56,7 +56,7 @@ describe("database - migration - removeIndex", {tags: ["dummy"]}, () => {
 
         expect(addedIndexNames).toHaveLength(1)
 
-        await migration.removeIndex("remove_index_default_widgets", ["name"])
+        await migration.removeIndex("remove_index_default_widgets", ["remove_index_default_widget_name"])
 
         const tableWithoutIndex = await driver.getTableByNameOrFail("remove_index_default_widgets")
         const remainingIndexNames = (await tableWithoutIndex.getIndexes()).map((index) => index.getName())
