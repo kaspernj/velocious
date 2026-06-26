@@ -232,6 +232,9 @@ export default class VelociousConfiguration {
     /** Grace period for paused WebSocket sessions before permanent teardown. */
     this._websocketSessionGraceSeconds = 300
 
+    /** Interval (seconds) between server→client heartbeat pings; 0 disables reaping of silent sockets. */
+    this._websocketSessionHeartbeatSeconds = 30
+
     /**
      * Optional wrapper called around every WebSocket-borne request /
      * connection message / channel dispatch. Apps register it here
@@ -2043,6 +2046,12 @@ export default class VelociousConfiguration {
   getWebsocketSessionGraceSeconds() { return this._websocketSessionGraceSeconds }
 
   /**
+   * Runs get websocket session heartbeat seconds.
+   * @returns {number} - Interval (seconds) between server→client heartbeat pings; 0 disables reaping.
+   */
+  getWebsocketSessionHeartbeatSeconds() { return this._websocketSessionHeartbeatSeconds }
+
+  /**
    * Registers a wrapper invoked around every WS-borne request /
    * connection message / channel dispatch. The wrapper receives the
    * session and a `next` callback; it must call `next()` to run the
@@ -2117,6 +2126,16 @@ export default class VelociousConfiguration {
   setWebsocketSessionGraceSeconds(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`Invalid grace seconds: ${seconds}`)
     this._websocketSessionGraceSeconds = seconds
+  }
+
+  /**
+   * Runs set websocket session heartbeat seconds.
+   * @param {number} seconds
+   * @returns {void}
+   */
+  setWebsocketSessionHeartbeatSeconds(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`Invalid heartbeat seconds: ${seconds}`)
+    this._websocketSessionHeartbeatSeconds = seconds
   }
 
   /**
