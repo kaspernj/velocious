@@ -1,11 +1,11 @@
 import {describe, expect, it} from "../../src/testing/test.js"
-import LegacySyncReplayService from "../../src/sync/legacy-sync-replay-service.js"
+import SyncEnvelopeReplayService from "../../src/sync/sync-envelope-replay-service.js"
 
-describe("legacy sync replay service", () => {
-  it("normalizes legacy sync envelopes and delegates replay hooks", async () => {
+describe("sync envelope replay service", () => {
+  it("normalizes sync envelopes and delegates replay hooks", async () => {
     const calls = []
     const existingSync = {clientUpdatedAt: () => new Date("2026-06-25T10:00:00.000Z")}
-    const service = new TestLegacySyncReplayService({
+    const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async (params) => {
         calls.push(["authenticate", params.authenticationToken])
         return {actor: {id: "actor-1"}, authenticated: true}
@@ -45,7 +45,7 @@ describe("legacy sync replay service", () => {
   })
 
   it("returns authentication errors before replaying sync items", async () => {
-    const service = new TestLegacySyncReplayService({
+    const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({
         authenticated: false,
         errorCode: "invalid-token",
@@ -67,7 +67,7 @@ describe("legacy sync replay service", () => {
   })
 
   it("marks malformed sync items as failed and continues the batch", async () => {
-    const service = new TestLegacySyncReplayService({
+    const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
       applyReplayMutation: async ({mutation}) => ({resourceType: mutation.resourceType})
     })
@@ -91,7 +91,7 @@ describe("legacy sync replay service", () => {
 
   it("skips applying stale mutations while still persisting replay state", async () => {
     const calls = []
-    const service = new TestLegacySyncReplayService({
+    const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
       findExistingReplaySync: async () => ({clientUpdatedAt: () => new Date("2026-06-25T11:00:00.000Z")}),
       applyReplayMutation: async () => {
@@ -118,7 +118,7 @@ describe("legacy sync replay service", () => {
   })
 
   it("lets apps reject individual mutations from authorization hooks", async () => {
-    const service = new TestLegacySyncReplayService({
+    const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
       authorizeReplayMutation: async () => ({allowed: false, reason: "mandant-mismatch"}),
       applyReplayMutation: async () => {
@@ -134,7 +134,7 @@ describe("legacy sync replay service", () => {
   })
 })
 
-class TestLegacySyncReplayService extends LegacySyncReplayService {
+class TestSyncEnvelopeReplayService extends SyncEnvelopeReplayService {
   constructor(callbacks) {
     super({logger: {warn: () => {}}})
     this.callbacks = callbacks

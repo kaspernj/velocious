@@ -1,17 +1,17 @@
 // @ts-check
 
 /**
- * Replays legacy client sync envelopes through project supplied authentication,
+ * Replays client sync envelopes through project supplied authentication,
  * authorization, application, and persistence hooks.
  *
  * This is intentionally transport/model agnostic: Velocious owns the generic
  * replay loop, normalization, stale-client comparison, and per-sync result
- * shape while each app owns its legacy token lookup, model handlers, and
+ * shape while each app owns its token lookup, model handlers, and
  * domain authorization rules.
  */
-export default class LegacySyncReplayService {
+export default class SyncEnvelopeReplayService {
   /**
-   * Creates a legacy sync replay service.
+   * Creates a sync envelope replay service.
    * @param {object} [args] - Constructor arguments.
    * @param {{debug?: (...args: Array<unknown>) => void, warn?: (...args: Array<unknown>) => void}} [args.logger] - Logger used for normalization warnings.
    */
@@ -20,7 +20,7 @@ export default class LegacySyncReplayService {
   }
 
   /**
-   * Replays a legacy sync batch.
+   * Replays a sync batch.
    * @param {Record<string, ?>} params - Request params carrying authentication and syncs.
    * @returns {Promise<{syncs: Array<Record<string, ?>>, status?: string, errorCode?: string, errorMessage?: string}>} Replay response.
    */
@@ -80,7 +80,7 @@ export default class LegacySyncReplayService {
    * @returns {Promise<{authenticated: true, actor: ?} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
    */
   async authenticateReplay(_params) {
-    throw new Error("LegacySyncReplayService.authenticateReplay must be implemented")
+    throw new Error("SyncEnvelopeReplayService.authenticateReplay must be implemented")
   }
 
   /**
@@ -102,9 +102,9 @@ export default class LegacySyncReplayService {
   }
 
   /**
-   * Normalizes one legacy sync entry.
+   * Normalizes one sync entry.
    * @param {?} rawSync - Raw sync entry.
-   * @returns {{ok: true, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation} | {ok: false, response: Record<string, ?>}} Normalized mutation or failed response.
+   * @returns {{ok: true, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation} | {ok: false, response: Record<string, ?>}} Normalized mutation or failed response.
    */
   normalizeReplaySync(rawSync) {
     if (!rawSync || typeof rawSync !== "object" || Array.isArray(rawSync)) {
@@ -169,7 +169,7 @@ export default class LegacySyncReplayService {
 
   /**
    * Authorizes one normalized mutation.
-   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation}} _args - Actor, batch context, and mutation.
+   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, and mutation.
    * @returns {Promise<{allowed: boolean, reason?: string}>} Access result.
    */
   async authorizeReplayMutation(_args) {
@@ -178,7 +178,7 @@ export default class LegacySyncReplayService {
 
   /**
    * Loads the previously stored sync/change row for stale-client comparison.
-   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation}} _args - Actor, batch context, and mutation.
+   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, and mutation.
    * @returns {Promise<?>} Existing sync row.
    */
   async findExistingReplaySync(_args) {
@@ -187,7 +187,7 @@ export default class LegacySyncReplayService {
 
   /**
    * Returns whether a normalized mutation should be applied to domain models.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<boolean>} Whether to apply the mutation.
    */
   async shouldApplyReplayMutation({existingSync, mutation}) {
@@ -214,7 +214,7 @@ export default class LegacySyncReplayService {
 
   /**
    * Applies one normalized mutation to domain models.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<?>} Project-specific apply result.
    */
   async applyReplayMutation(_args) {
@@ -223,7 +223,7 @@ export default class LegacySyncReplayService {
 
   /**
    * Resolves an apply result for stale mutations that should not touch domain models.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<?>} Project-specific apply result.
    */
   async skippedReplayMutation(_args) {
@@ -232,26 +232,26 @@ export default class LegacySyncReplayService {
 
   /**
    * Persists one normalized mutation into the app sync/change store.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation, shouldApply: boolean}} _args - Replay persistence arguments.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} _args - Replay persistence arguments.
    * @returns {Promise<void>}
    */
   async persistReplayMutation(_args) {}
 
   /**
    * Runs side effects after a successful mutation replay and persistence.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./legacy-sync-replay-service.js").LegacySyncReplayMutation, shouldApply: boolean}} _args - Replay side-effect arguments.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} _args - Replay side-effect arguments.
    * @returns {Promise<void>}
    */
   async afterReplayMutation(_args) {}
 }
 
 /**
- * @typedef {object} LegacySyncReplayMutation
+ * @typedef {object} SyncReplayMutation
  * @property {Date} clientUpdatedAt - Client-side mutation timestamp.
  * @property {Record<string, ?>} data - Parsed mutation payload.
  * @property {?} id - Client sync row id for per-sync responses.
  * @property {string} resourceId - Resource id as a string.
  * @property {string} resourceType - Resource/model name.
  * @property {string} serializedData - JSON serialized mutation payload.
- * @property {string} syncType - Legacy sync operation type.
+ * @property {string} syncType - Sync operation type.
  */
