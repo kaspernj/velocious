@@ -210,12 +210,13 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._heartbeatAlive = true
 
     /**
-     * Per-session heartbeat interval handle.
+     * Per-session heartbeat interval handle. Started from
+     * `sendSessionEstablished` once the socket is live, not at
+     * construction, so directly-constructed sessions in tests don't
+     * spin up a background timer.
      * @type {ReturnType<typeof setInterval> | null}
      */
     this._heartbeatTimer = null
-
-    this._startHeartbeat()
   }
 
   /**
@@ -229,6 +230,9 @@ export default class VelociousHttpServerClientWebsocketSession {
       sessionId: this.sessionId,
       graceSeconds: this.configuration.getWebsocketSessionGraceSeconds?.() || 300
     })
+
+    // The socket is live now, so begin reaping it if it goes silent.
+    this._startHeartbeat()
   }
 
   /**
