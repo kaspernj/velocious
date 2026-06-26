@@ -24,10 +24,8 @@ describe("Cli - Commands - db:rollback", () => {
         })
       }
 
-      await dropTables(dbs.default)
-
-      if (dbs.default.getType() != "mssql") {
-        await dropTables(dbs.mssql)
+      for (const db of Object.values(dbs)) {
+        await dropTables(db)
       }
     })
   }
@@ -61,10 +59,10 @@ describe("Cli - Commands - db:rollback", () => {
       testing: true
     })
 
-    let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = []
+    let defaultSchemaMigrations = [], tablesResult = [], databaseIdentifiers = []
 
     await cliRollback.configuration.ensureConnections(async (dbs) => {
-      defaultDatabaseType = dbs.default.getType()
+      databaseIdentifiers = Object.keys(dbs)
 
       for (const dbIdentifier in dbs) {
         const db = dbs[dbIdentifier]
@@ -82,7 +80,7 @@ describe("Cli - Commands - db:rollback", () => {
       }
     })
 
-    return {defaultDatabaseType, defaultSchemaMigrations, tablesResult}
+    return {databaseIdentifiers, defaultSchemaMigrations, tablesResult}
   }
 
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
@@ -103,175 +101,57 @@ describe("Cli - Commands - db:rollback", () => {
       await cliRollback.execute()
     })
 
-    const {defaultDatabaseType, defaultSchemaMigrations, tablesResult} = await getTestData()
+    const {databaseIdentifiers, defaultSchemaMigrations, tablesResult} = await getTestData()
 
     const filteredTables = tablesResult.filter((tableName) => !internalTables.has(tableName))
+    const expectedRolledBackTables = [
+      ...(databaseIdentifiers.includes("mssql") ? ["accounts"] : []),
+      "authentication_tokens",
+      "comments",
+      "interactions",
+      "project_details",
+      "project_translations",
+      "projects",
+      "schema_migrations",
+      "string_subject_interactions",
+      "string_subjects",
+      "tasks",
+      "users",
+      "uuid_interactions",
+      "uuid_items"
+    ]
+    const expectedRolledBackMigrations = [
+      "20230728075328",
+      "20230728075329",
+      "20250605133926",
+      ...(databaseIdentifiers.includes("mssql") ? ["20250903112845"] : []),
+      "20250912183605",
+      "20250912183606",
+      "20250915085450",
+      "20250916111330",
+      "20250921121002",
+      "20251223194400",
+      "20251223210800",
+      "20251223214200",
+      "20251225230806",
+      "20251228090000",
+      "20251228090010",
+      "20260418090000"
+    ]
 
-    if (defaultDatabaseType == "mssql") {
-      expect(uniqunize(filteredTables.sort())).toEqual(
-        [
-          "accounts",
-          "authentication_tokens",
-          "comments",
-          "interactions",
-          "project_details",
-          "project_translations",
-          "projects",
-          "schema_migrations",
-          "string_subject_interactions",
-          "string_subjects",
-          "tasks",
-          "users",
-          "uuid_interactions",
-          "uuid_items"
-        ]
-      )
+    expect(uniqunize(filteredTables.sort())).toEqual(expectedRolledBackTables)
 
-      expect(uniqunize(defaultSchemaMigrations.sort())).toEqual([
-        "20230728075328",
-        "20230728075329",
-        "20250605133926",
-        "20250903112845",
-        "20250912183605",
-        "20250912183606",
-        "20250915085450",
-        "20250916111330",
-        "20250921121002",
-        "20251223194400",
-        "20251223210800",
-        "20251223214200",
-        "20251225230806",
-        "20251228090000",
-        "20251228090010",
-        "20260418090000"
-      ])
-    } else {
-      expect(filteredTables.sort()).toEqual(
-        [
-          "accounts",
-          "authentication_tokens",
-          "comments",
-          "interactions",
-          "project_details",
-          "project_translations",
-          "projects",
-          "schema_migrations",
-          "schema_migrations",
-          "string_subject_interactions",
-          "string_subjects",
-          "tasks",
-          "users",
-          "uuid_interactions",
-          "uuid_items"
-        ]
-      )
-
-      expect(defaultSchemaMigrations.sort()).toEqual([
-        "20230728075328",
-        "20230728075329",
-        "20250605133926",
-        "20250903112845",
-        "20250912183605",
-        "20250912183606",
-        "20250915085450",
-        "20250916111330",
-        "20250921121002",
-        "20251223194400",
-        "20251223210800",
-        "20251223214200",
-        "20251225230806",
-        "20251228090000",
-        "20251228090010",
-        "20260418090000"
-      ])
-    }
+    expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(expectedRolledBackMigrations)
 
     await runMigrations()
 
     const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
     const filteredNewTablesResult = newTablesResult.filter((tableName) => !internalTables.has(tableName))
+    const expectedMigratedTables = [...expectedRolledBackTables, "acts_as_list_items"].sort()
+    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260601052206"].sort()
 
-    if (defaultDatabaseType == "mssql") {
-      expect(uniqunize(filteredNewTablesResult.sort())).toEqual(
-        [
-          "accounts",
-          "acts_as_list_items",
-          "authentication_tokens",
-          "comments",
-          "interactions",
-          "project_details",
-          "project_translations",
-          "projects",
-          "schema_migrations",
-          "string_subject_interactions",
-          "string_subjects",
-          "tasks",
-          "users",
-          "uuid_interactions",
-          "uuid_items"
-        ]
-      )
+    expect(uniqunize(filteredNewTablesResult.sort())).toEqual(expectedMigratedTables)
 
-      expect(uniqunize(newDefaultSchemaMigrations.sort())).toEqual([
-        "20230728075328",
-        "20230728075329",
-        "20250605133926",
-        "20250903112845",
-        "20250912183605",
-        "20250912183606",
-        "20250915085450",
-        "20250916111330",
-        "20250921121002",
-        "20251223194400",
-        "20251223210800",
-        "20251223214200",
-        "20251225230806",
-        "20251228090000",
-        "20251228090010",
-        "20260418090000",
-        "20260601052206"
-      ])
-    } else {
-      expect(filteredNewTablesResult.sort()).toEqual(
-        [
-          "accounts",
-          "acts_as_list_items",
-          "authentication_tokens",
-          "comments",
-          "interactions",
-          "project_details",
-          "project_translations",
-          "projects",
-          "schema_migrations",
-          "schema_migrations",
-          "string_subject_interactions",
-          "string_subjects",
-          "tasks",
-          "users",
-          "uuid_interactions",
-          "uuid_items"
-        ]
-      )
-
-      expect(newDefaultSchemaMigrations.sort()).toEqual([
-        "20230728075328",
-        "20230728075329",
-        "20250605133926",
-        "20250903112845",
-        "20250912183605",
-        "20250912183606",
-        "20250915085450",
-        "20250916111330",
-        "20250921121002",
-        "20251223194400",
-        "20251223210800",
-        "20251223214200",
-        "20251225230806",
-        "20251228090000",
-        "20251228090010",
-        "20260418090000",
-        "20260601052206"
-      ])
-    }
+    expect(uniqunize(newDefaultSchemaMigrations.sort())).toEqual(expectedMigratedMigrations)
   })
 })

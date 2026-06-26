@@ -92,7 +92,7 @@ describe("WebsocketSession heartbeat", () => {
     dummyConfiguration._expireWebsocketSession(session.sessionId)
 
     expect(dummyConfiguration._websocketSessions.has(session)).toEqual(false)
-    await waitFor(() => !dummyConfiguration._websocketChannelSubscriptions.has("frontend-models"))
+    await waitFor(() => !dummyConfiguration._websocketChannelSubscriptions.get("frontend-models")?.has(subscription))
   })
 
   it("fully tears down a silent session that has no resumable state", () => {
