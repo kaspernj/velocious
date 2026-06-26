@@ -199,6 +199,24 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._fragmentedBytes = 0
 
     this.configuration._websocketSessions.add(this)
+
+    /**
+     * Heartbeat liveness flag. Set true on every inbound frame
+     * (including the client's auto-pong) and cleared each time a ping
+     * is sent; a still-false flag at the next tick means the socket
+     * has gone silent.
+     * @type {boolean}
+     */
+    this._heartbeatAlive = true
+
+    /**
+     * Per-session heartbeat interval handle. Started from
+     * `sendSessionEstablished` once the socket is live, not at
+     * construction, so directly-constructed sessions in tests don't
+     * spin up a background timer.
+     * @type {ReturnType<typeof setInterval> | null}
+     */
+    this._heartbeatTimer = null
   }
 
   /**
@@ -212,6 +230,9 @@ export default class VelociousHttpServerClientWebsocketSession {
       sessionId: this.sessionId,
       graceSeconds: this.configuration.getWebsocketSessionGraceSeconds?.() || 300
     })
+
+    // The socket is live now, so begin reaping it if it goes silent.
+    this._startHeartbeat()
   }
 
   /**
@@ -251,6 +272,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   destroy() {
+    this._stopHeartbeat()
     this.configuration._websocketSessions.delete(this)
     this._paused = false
     void this._teardownChannel()
@@ -274,6 +296,11 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void} - No return value.
    */
   onData(data) {
+    // Any inbound bytes — a data frame, the auto-pong answering our
+    // heartbeat, or a partial frame still being uploaded — prove the
+    // socket is alive. Mark it here, before `_processBuffer` may return
+    // early waiting for the rest of an incomplete frame.
+    this._heartbeatAlive = true
     this.buffer = Buffer.concat([this.buffer, data])
     this._processBuffer()
   }
@@ -611,6 +638,11 @@ export default class VelociousHttpServerClientWebsocketSession {
         continue
       }
 
+      if (opcode === WEBSOCKET_OPCODE_PONG) {
+        // Answer to a heartbeat ping; liveness is recorded in onData.
+        continue
+      }
+
       if (opcode >= 0x8) {
         this.logger.warn(`Unsupported websocket control opcode: ${opcode}`)
         continue
@@ -757,6 +789,60 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+   * Starts the per-session heartbeat. Each tick pings the client and
+   * reaps the session if the previous ping went unanswered, so a
+   * half-open socket (client gone without a TCP FIN / close frame)
+   * cannot linger forever holding channel subscriptions. Disabled when
+   * the configured interval is 0.
+   * @returns {void}
+   */
+  _startHeartbeat() {
+    const intervalSeconds = this.configuration.getWebsocketSessionHeartbeatSeconds()
+
+    if (!intervalSeconds || intervalSeconds <= 0) return
+
+    this._heartbeatTimer = setInterval(() => this._heartbeatTick(), intervalSeconds * 1000)
+
+    // Don't let the heartbeat timer keep the process alive.
+    if (typeof this._heartbeatTimer.unref === "function") this._heartbeatTimer.unref()
+  }
+
+  /**
+   * One heartbeat cycle. Reaps the session via the normal close path
+   * when the previous ping was not answered; otherwise marks it
+   * pending and pings again. Browsers and React Native sockets answer
+   * server pings with an automatic pong, which lands in `_processBuffer`
+   * and re-marks the session alive.
+   * @returns {void}
+   */
+  _heartbeatTick() {
+    if (this._paused || !this.client?.events) return
+
+    if (!this._heartbeatAlive) {
+      // No frame arrived since the last ping — the socket is dead.
+      // Route through `_handleClose` so resumable state still pauses
+      // for the grace window and everything else is torn down.
+      this._stopHeartbeat()
+      this._handleClose()
+      return
+    }
+
+    this._heartbeatAlive = false
+    this._sendControlFrame(WEBSOCKET_OPCODE_PING, Buffer.alloc(0))
+  }
+
+  /**
+   * Stops the per-session heartbeat timer, if any.
+   * @returns {void}
+   */
+  _stopHeartbeat() {
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer)
+      this._heartbeatTimer = null
+    }
+  }
+
+  /**
    * Runs send control frame.
    * @param {number} opcode - Opcode.
    * @param {Buffer} payload - Payload data.
@@ -891,6 +977,9 @@ export default class VelociousHttpServerClientWebsocketSession {
     const hasResumableState = this._connections.size > 0 || this._channelSubscriptions.size > 0
 
     if (hasResumableState && !this._paused) {
+      // Paused sessions have no live socket to ping; the grace timer
+      // owns their eventual teardown from here.
+      this._stopHeartbeat()
       this._paused = true
       this.socket = null
       // Kick off auth-identity capture for resume verification. Runs
@@ -905,6 +994,8 @@ export default class VelociousHttpServerClientWebsocketSession {
       return
     }
 
+    this._stopHeartbeat()
+    this.configuration._websocketSessions.delete(this)
     void this._runMessageHandlerClose()
     void this._teardownChannel()
     void this._teardownConnections("session_destroyed")
@@ -919,6 +1010,8 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void}
    */
   _finalizeGraceExpiry() {
+    this._stopHeartbeat()
+    this.configuration._websocketSessions.delete(this)
     void this._runMessageHandlerClose()
     void this._teardownChannel()
     void this._teardownConnections("grace_expired")
