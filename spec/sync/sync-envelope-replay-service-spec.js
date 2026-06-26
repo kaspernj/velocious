@@ -93,7 +93,7 @@ describe("sync envelope replay service", () => {
     const calls = []
     const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
-      findExistingReplaySync: async () => ({clientUpdatedAt: () => new Date("2026-06-25T11:00:00.000Z")}),
+      findExistingReplaySync: async () => ({clientUpdatedAt: () => "2026-06-25T11:00:00.000Z"}),
       applyReplayMutation: async () => {
         throw new Error("Should not apply stale sync")
       },
@@ -115,6 +115,33 @@ describe("sync envelope replay service", () => {
 
     expect(result).toEqual({syncs: [{id: 1, syncState: "successful"}]})
     expect(calls).toEqual([["persist", false, {skippedResourceId: "old-1"}]])
+  })
+
+  it("parses existing sync timestamp strings before stale comparisons", async () => {
+    const calls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      findExistingReplaySync: async () => ({clientUpdatedAt: "2026-06-25T11:00:00.000Z"}),
+      applyReplayMutation: async () => {
+        throw new Error("Should not apply stale sync")
+      },
+      persistReplayMutation: async ({shouldApply}) => {
+        calls.push(["persist", shouldApply])
+      }
+    })
+
+    const result = await service.replay({
+      syncs: [{
+        clientUpdatedAt: "2026-06-25T10:00:00.000Z",
+        id: 9,
+        resourceId: "old-9",
+        resourceType: "Task",
+        syncType: "update"
+      }]
+    })
+
+    expect(result).toEqual({syncs: [{id: 9, syncState: "successful"}]})
+    expect(calls).toEqual([["persist", false]])
   })
 
   it("lets apps reject individual mutations from authorization hooks", async () => {

@@ -209,7 +209,13 @@ export default class SyncEnvelopeReplayService {
       ? syncRecord.clientUpdatedAt()
       : syncRecord.clientUpdatedAt
 
-    return value instanceof Date ? value : null
+    if (value instanceof Date) return value
+
+    if (typeof value !== "string") return null
+
+    const parsedValue = new Date(value)
+
+    return Number.isNaN(parsedValue.getTime()) ? null : parsedValue
   }
 
   /**

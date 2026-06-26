@@ -9,6 +9,7 @@
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))
+* Server-side sync envelope replay orchestration for app-owned sync receivers (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
 * SQLite web persistence that automatically prefers OPFS, then IndexedDB, and migrates legacy persisted bytes when possible (see [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))

@@ -1,0 +1,1 @@
+Add `SyncEnvelopeReplayService`, a server-side primitive for replaying batches of client sync envelopes through app-owned authentication, authorization, stale-client checks, persistence, and domain handler hooks.
