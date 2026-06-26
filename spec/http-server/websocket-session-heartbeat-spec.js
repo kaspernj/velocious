@@ -61,6 +61,21 @@ describe("WebsocketSession heartbeat", () => {
     session.destroy()
   })
 
+  it("stays alive while a large frame is still being uploaded across ticks", () => {
+    const {session} = buildSession()
+
+    session._heartbeatTick()
+    // Incomplete binary frame: header declares a 4096-byte payload but
+    // no payload bytes have arrived yet, so _processBuffer returns early.
+    session.onData(Buffer.from([0x82, 0x7E, 0x10, 0x00]))
+    session._heartbeatTick()
+
+    expect(session.isPaused()).toEqual(false)
+    expect(dummyConfiguration._websocketSessions.has(session)).toEqual(true)
+
+    session.destroy()
+  })
+
   it("reaps a silent resumable session whose ping went unanswered and removes it on grace expiry", async () => {
     const {session} = buildSession()
     const subscription = new ResumableChannel({params: {}, session, subscriptionId: "s1"})

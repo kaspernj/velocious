@@ -296,6 +296,11 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void} - No return value.
    */
   onData(data) {
+    // Any inbound bytes — a data frame, the auto-pong answering our
+    // heartbeat, or a partial frame still being uploaded — prove the
+    // socket is alive. Mark it here, before `_processBuffer` may return
+    // early waiting for the rest of an incomplete frame.
+    this._heartbeatAlive = true
     this.buffer = Buffer.concat([this.buffer, data])
     this._processBuffer()
   }
@@ -618,10 +623,6 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       this.buffer = this.buffer.slice(offset + maskLength + payloadLength)
 
-      // Any complete inbound frame — data, ping, or the auto-pong sent
-      // in response to our heartbeat — proves the socket is alive.
-      this._heartbeatAlive = true
-
       // Control frames (opcode >= 0x8) must not be fragmented per
       // RFC 6455 and can arrive interleaved with a fragmented data
       // message. Handle them first without touching the fragment
@@ -638,7 +639,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       if (opcode === WEBSOCKET_OPCODE_PONG) {
-        // Answer to a heartbeat ping; liveness already recorded above.
+        // Answer to a heartbeat ping; liveness is recorded in onData.
         continue
       }
 
@@ -796,7 +797,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void}
    */
   _startHeartbeat() {
-    const intervalSeconds = this.configuration.getWebsocketSessionHeartbeatSeconds?.() ?? 0
+    const intervalSeconds = this.configuration.getWebsocketSessionHeartbeatSeconds()
 
     if (!intervalSeconds || intervalSeconds <= 0) return
 
