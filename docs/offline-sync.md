@@ -127,7 +127,7 @@ Local writes update SQLite optimistically after shared resource policy checks pa
 
 ### Server replay
 
-The backend sync receiver should treat sync as batched delayed resource commands, not as a separate privileged write path.
+The backend sync receiver should treat sync as batched delayed resource commands, not as a separate privileged write path. Apps that already receive batches of sync envelopes can use [`SyncEnvelopeReplayService`](sync-envelope-replay-service.md) for the generic replay loop while keeping resource policy, token/device lookup, and domain handlers app-owned.
 
 Replay pipeline:
 
