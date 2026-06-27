@@ -6,8 +6,8 @@ import TestJob from "../dummy/src/jobs/test-job.js"
 describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, () => {
   it("parses sidekiq-style duration strings", () => {
     expect(parseScheduledDuration("1m", "example.every")).toEqual(60000)
-    expect(parseScheduledDuration("5 seconds", "example.first_in")).toEqual(5000)
-    expect(parseScheduledDuration(250, "example.first_in")).toEqual(250)
+    expect(parseScheduledDuration("5 seconds", "example.firstIn")).toEqual(5000)
+    expect(parseScheduledDuration(250, "example.firstIn")).toEqual(250)
   })
 
   it("rejects string every intervals that round down below one millisecond", async () => {
@@ -72,7 +72,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
                 scheduledTestJob: {
                   args: ["hello", "/tmp/out.json"],
                   class: TestJob,
-                  every: ["1m", {first_in: "5s"}],
+                  every: ["1m", {firstIn: "5s"}],
                   options: {forked: false}
                 }
               }

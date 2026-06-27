@@ -2051,7 +2051,7 @@ export default new Configuration({
     jobs: {
       buildCleanup: {
         class: BuildCleanupJob,
-        every: ["1h", {first_in: "10s"}],
+        every: ["1h", {firstIn: "10s"}],
         options: {executionMode: "inline"}
       }
     }
@@ -2062,7 +2062,7 @@ export default new Configuration({
 Supported schedule syntax:
 
 - `every: "5m"`
-- `every: ["1h", {first_in: "30s"}]`
+- `every: ["1h", {firstIn: "30s"}]`
 - `every: ["1 day", {firstIn: "5 minutes"}]`
 
 Or a 5-field POSIX crontab expression via `cron`:
