@@ -191,7 +191,6 @@
 /**
  * @typedef {object} ScheduledBackgroundJobEveryOptions
  * @property {number | string} [firstIn] - Delay before the first enqueue.
- * @property {number | string} [first_in] - Sidekiq-style alias for `firstIn`.
  */
 
 /**

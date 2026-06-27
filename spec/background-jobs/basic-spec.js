@@ -56,7 +56,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
         scheduledTestJob: {
           args: ["scheduled", outputPath],
           class: TestJob,
-          every: ["1 hour", {first_in: "25ms"}],
+          every: ["1 hour", {firstIn: "25ms"}],
           options: {forked: false}
         }
       }
@@ -93,7 +93,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
       jobs: {
         validScheduledTestJob: {
           class: TestJob,
-          every: ["1 hour", {first_in: "25ms"}],
+          every: ["1 hour", {firstIn: "25ms"}],
           options: {forked: false}
         },
         invalidScheduledTestJob: {

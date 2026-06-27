@@ -169,7 +169,7 @@ export default class BackgroundJobsScheduler {
     const everyConfig = /** @type {NonNullable<typeof jobConfiguration.every>} */ (jobConfiguration.every)
     const {everyValue, firstInValue} = this.normalizeEvery(everyConfig)
     const intervalMs = parseScheduledDuration(everyValue, `${jobKey}.every`)
-    const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.first_in`) : intervalMs
+    const firstInMs = firstInValue !== undefined ? parseScheduledDuration(firstInValue, `${jobKey}.firstIn`) : intervalMs
 
     if (intervalMs < 1) {
       throw new Error(`Scheduled background job ${jobKey}.every must be at least 1 millisecond.`)
@@ -262,7 +262,7 @@ export default class BackgroundJobsScheduler {
         return {everyValue}
       }
 
-      return {everyValue, firstInValue: everyOptions.firstIn ?? everyOptions.first_in}
+      return {everyValue, firstInValue: everyOptions.firstIn}
     }
 
     return {everyValue: every}
