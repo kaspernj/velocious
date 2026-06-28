@@ -72,6 +72,8 @@ Project.hasMany("tasks", {dependent: "restrict"})
 
 The restrict error message follows the pattern `"Cannot delete record because dependent <relationship> exist"`.
 
+When a non-tenant parent declares `dependent: "restrict"` against a tenant-switched child model, Velocious checks every tenant returned by the matching `tenantDatabaseProviders[identifier].listRestrictTenants` provider, falling back to `listTenants` when no restrict-specific list exists. It runs the relationship count inside each tenant context and stops after the first dependent row. If a tenant-switched child cannot be enumerated because no provider exists, destroy raises an error instead of falling through to the database delete.
+
 ## Counter cache
 
 The `counterCache` option on `belongsTo` automatically syncs a count column on the parent model when child records are created, destroyed, or reparented:

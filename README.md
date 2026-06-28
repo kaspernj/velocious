@@ -2231,7 +2231,7 @@ Use `configuration.runWithTenant(tenant, callback)` or `Current.tenant()` when c
 
 Tenant-switched model classes fail closed by default: if `switchesTenantDatabase(...)` cannot resolve a tenant database identifier for the current tenant, Velocious raises `TenantDatabaseScopeError` instead of running the query against the configured fallback database. Set `enforceTenantDatabaseScopes: false` only for legacy apps that still need the old fallback behavior during migration.
 
-For Apartment-style project/account databases, mark the logical per-tenant identifier with `tenantOnly: true`, provide `tenantDatabaseProviders`, and run tenant lifecycle commands explicitly. One logical identifier can resolve to any number of physical tenant databases at runtime; provider `listTenants` is queried for every command run so added/removed tenants do not require configuration changes or redeploys.
+For Apartment-style project/account databases, mark the logical per-tenant identifier with `tenantOnly: true`, provide `tenantDatabaseProviders`, and run tenant lifecycle commands explicitly. One logical identifier can resolve to any number of physical tenant databases at runtime; provider `listTenants` is queried for every command run so added/removed tenants do not require configuration changes or redeploys. Cross-tenant `dependent: "restrict"` checks use the matching provider's optional `listRestrictTenants` when present, otherwise `listTenants`, and fail closed when the target tenant identifier has no configured provider.
 
 ```sh
 npx velocious db:tenants:create projectTenant
