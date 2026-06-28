@@ -4,6 +4,11 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import MigrationsLedger from "../../src/database/migrations-ledger.js"
 import {createTenantTestConfiguration} from "../helpers/tenant-test-helpers.js"
 
+// Unit coverage for the cases the dummy-app browser matrix can't exercise: creating
+// the ledger table from scratch and the cross-database `baselineFromDatabase`
+// orchestration (the dummy app exposes only a single `default` database). The
+// per-driver DDL/CRUD primitives are covered against the real matrix in
+// migrations-ledger.browser-spec.js.
 describe("MigrationsLedger", () => {
   it("creates the ledger table and records versions as applied without running migrations", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("migrations-ledger")
