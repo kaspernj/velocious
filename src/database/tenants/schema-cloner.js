@@ -236,13 +236,18 @@ export default class SchemaCloner {
    * @returns {TableIndex}
    */
   tableDataIndexFromSourceIndex(sourceIndex) {
-    if (this.targetDb.getType() === "sqlite") {
-      return new TableIndex(sourceIndex.getColumnNames(), {
-        unique: sourceIndex.isUnique()
-      })
+    /** @type {{name?: string, unique: boolean}} */
+    const args = {unique: sourceIndex.isUnique()}
+
+    // SQLite index names are unique per-database, not per-table, so let the driver
+    // generate one; other drivers preserve the source index name. Build the TableIndex
+    // directly (rather than via the driver's getTableDataIndex, which only MySQL and
+    // SQLite implement) so cloning a PostgreSQL or MS-SQL source table works too.
+    if (this.targetDb.getType() !== "sqlite") {
+      args.name = sourceIndex.getName()
     }
 
-    return sourceIndex.getTableDataIndex()
+    return new TableIndex(sourceIndex.getColumnNames(), args)
   }
 
   /**
@@ -347,7 +352,7 @@ export default class SchemaCloner {
    * @returns {Record<string, unknown>}
    */
   columnArgsFromSourceColumn(sourceColumn, {isNewColumn}) {
-    /** @type {{default?: unknown, isNewColumn: boolean, maxLength?: number, notes?: string, null: boolean, primaryKey?: boolean, type: string}} */
+    /** @type {{autoIncrement?: boolean, default?: unknown, isNewColumn: boolean, maxLength?: number, notes?: string, null: boolean, primaryKey?: boolean, type: string}} */
     const columnArgs = {
       isNewColumn,
       null: sourceColumn.getNull(),
@@ -361,7 +366,14 @@ export default class SchemaCloner {
       columnArgs.primaryKey = true
     }
 
-    if (maxLength !== undefined) {
+    if (sourceColumn.getAutoIncrement()) {
+      columnArgs.autoIncrement = true
+    }
+
+    // A maxLength of -1 is the MS-SQL "max" sentinel (NVARCHAR(MAX) / VARBINARY(MAX),
+    // backing Velocious text/json/blob columns); the column type drives the unbounded
+    // SQL, so don't forward -1 as an explicit length (it would emit NVARCHAR(-1)).
+    if (maxLength !== undefined && maxLength >= 0) {
       columnArgs.maxLength = maxLength
     }
 

@@ -89,6 +89,25 @@ describe("SchemaCloner", () => {
     })
   })
 
+  it("clones an integer auto-increment primary key", async () => {
+    await withCloner(async ({cloner, sourceDb, targetDb}) => {
+      const counters = new TableData("counters")
+
+      counters.integer("id", {null: false, primaryKey: true})
+      counters.string("label", {maxLength: 64, null: true})
+
+      await sourceDb.createTable(counters)
+      sourceDb.clearSchemaCache()
+
+      await cloner.syncTables(["counters"])
+
+      const targetTable = await targetDb.getTableByNameOrFail("counters")
+      const idColumn = (await targetTable.getColumns()).find((column) => column.getName() === "id")
+
+      expect(idColumn?.getAutoIncrement()).toEqual(true)
+    })
+  })
+
   it("detects and heals ledger drift from the source", async () => {
     await withCloner(async ({cloner, sourceDb, targetDb}) => {
       await cloner.syncTables(["widgets"])
