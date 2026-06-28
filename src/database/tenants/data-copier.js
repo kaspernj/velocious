@@ -36,11 +36,13 @@ function uniqueStrings(values) {
  * apps that keep each tenant's data in its own database use it to (re)materialise the
  * tenant's rows from a global/template database.
  *
- * The copy is delete-then-reinsert and therefore idempotent: for every table touched by
- * the plan the matching target rows are deleted (children first) and the freshly loaded
- * source rows inserted (parents first), all inside one target transaction with foreign-key
- * enforcement disabled so the ordering never trips a constraint. Reads, deletes and inserts
- * are chunked to bound statement size.
+ * The copy is delete-then-reinsert and therefore idempotent, and it mirrors the source
+ * snapshot: the rows to delete are the tenant's *current* rows in the target (selected with
+ * the same plan traversal run against the target), so a row that was removed from the source
+ * since the last copy is dropped from the target too rather than lingering. The deletes run
+ * children first and the source inserts parents first, all inside one target transaction with
+ * foreign-key enforcement disabled so the ordering never trips a constraint. Reads, deletes
+ * and inserts are chunked to bound statement size.
  *
  * The copier is policy-free: the caller supplies the plan, the source/target databases and
  * the tenant key, and {@link DataCopier#copy} returns the loaded rows keyed by table name so
@@ -72,31 +74,35 @@ export default class DataCopier {
 
   /**
    * Copies every plan table's rows for `keyValue` from the source into the target and
-   * returns the loaded rows keyed by table name. Deletes (children first) and inserts
-   * (parents first) run in a single target transaction with foreign keys disabled.
+   * returns the copied source rows keyed by table name. The target's current tenant rows
+   * are deleted (children first) and the source rows inserted (parents first) in a single
+   * target transaction with foreign keys disabled.
    * @param {string} keyValue
    * @returns {Promise<Map<string, Record<string, unknown>[]>>}
    */
   async copy(keyValue) {
-    const rowsByTableName = await this.loadRows(keyValue)
+    const sourceRowsByTableName = await this.loadRows(this.sourceDb, keyValue)
+    const targetRowsByTableName = await this.loadRows(this.targetDb, keyValue)
 
     await this.targetDb.withDisabledForeignKeys(async () => {
       await this.targetDb.transaction(async () => {
-        await this.deleteTargetRows(rowsByTableName)
-        await this.insertTargetRows(rowsByTableName)
+        await this.deleteTargetRows(targetRowsByTableName)
+        await this.insertTargetRows(sourceRowsByTableName)
       })
     })
 
-    return rowsByTableName
+    return sourceRowsByTableName
   }
 
   /**
-   * Loads the source rows for `keyValue` for every table in the plan, resolving
-   * parent-scoped tables from the ids already selected for their parent table.
+   * Loads the rows for `keyValue` for every table in the plan from `db`, resolving
+   * parent-scoped tables from the ids already selected for their parent table. Used for
+   * both the source rows to copy and the target's current tenant rows to delete.
+   * @param {import("../drivers/base.js").default} db
    * @param {string} keyValue
    * @returns {Promise<Map<string, Record<string, unknown>[]>>}
    */
-  async loadRows(keyValue) {
+  async loadRows(db, keyValue) {
     /** @type {Map<string, string[]>} */
     const idsByTableName = new Map()
     /** @type {Map<string, Record<string, unknown>[]>} */
@@ -108,6 +114,7 @@ export default class DataCopier {
       if (tableConfig.keyColumn) {
         rows = await this.queryRowsByColumn({
           columnName: tableConfig.keyColumn,
+          db,
           tableName: tableConfig.tableName,
           values: [keyValue]
         })
@@ -116,12 +123,15 @@ export default class DataCopier {
           throw new Error(`Expected keyColumn or parentTableName+parentColumn for table ${tableConfig.tableName} in the tenant table plan.`)
         }
 
-        const parentIds = idsByTableName.get(tableConfig.parentTableName) || []
+        if (!idsByTableName.has(tableConfig.parentTableName)) {
+          throw new Error(`Tenant table plan entry ${tableConfig.tableName} references parent table ${tableConfig.parentTableName}, which has not been loaded; parent tables must appear before their children in the plan.`)
+        }
 
         rows = await this.queryRowsByColumn({
           columnName: tableConfig.parentColumn,
+          db,
           tableName: tableConfig.tableName,
-          values: parentIds
+          values: idsByTableName.get(tableConfig.parentTableName) || []
         })
       }
 
@@ -137,11 +147,11 @@ export default class DataCopier {
   }
 
   /**
-   * Selects all source rows of `tableName` whose `columnName` is in `values`, chunked.
-   * @param {{columnName: string, tableName: string, values: string[]}} args
+   * Selects all rows of `tableName` in `db` whose `columnName` is in `values`, chunked.
+   * @param {{columnName: string, db: import("../drivers/base.js").default, tableName: string, values: string[]}} args
    * @returns {Promise<Record<string, unknown>[]>}
    */
-  async queryRowsByColumn({columnName, tableName, values}) {
+  async queryRowsByColumn({columnName, db, tableName, values}) {
     const normalizedValues = uniqueStrings(values)
 
     if (normalizedValues.length <= 0) {
@@ -149,13 +159,13 @@ export default class DataCopier {
     }
 
     const rows = []
-    const quotedTable = this.sourceDb.quoteTable(tableName)
-    const quotedColumn = this.sourceDb.quoteColumn(columnName)
+    const quotedTable = db.quoteTable(tableName)
+    const quotedColumn = db.quoteColumn(columnName)
 
     for (const valuesChunk of chunks(normalizedValues, this.queryChunkSize)) {
-      const sql = `SELECT ${quotedTable}.* FROM ${quotedTable} WHERE ${quotedColumn} IN (${this.quotedValuesSql(this.sourceDb, valuesChunk)})`
+      const sql = `SELECT ${quotedTable}.* FROM ${quotedTable} WHERE ${quotedColumn} IN (${this.quotedValuesSql(db, valuesChunk)})`
 
-      rows.push(...await this.executeQuietQuery(this.sourceDb, sql))
+      rows.push(...await this.executeQuietQuery(db, sql))
     }
 
     return rows

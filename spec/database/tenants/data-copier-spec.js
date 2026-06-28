@@ -100,6 +100,48 @@ describe("DataCopier", () => {
     })
   })
 
+  it("removes target rows that no longer exist in the source on re-copy", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+
+      await copier.copy("acct-a")
+
+      // A child that was copied before is later removed from the source snapshot.
+      await sourceDb.query("DELETE FROM gizmo_parts WHERE id = 'p2'")
+
+      await copier.copy("acct-a")
+
+      const gizmoParts = await targetDb.query("SELECT id FROM gizmo_parts ORDER BY id")
+
+      expect(gizmoParts.map((row) => row.id)).toEqual(["p1"])
+    })
+  })
+
+  it("throws when a parent-scoped entry appears before its parent in the plan", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      /** @type {import("../../../src/database/tenants/tenant-table-plan.js").TenantTablePlanEntry[]} */
+      const misorderedPlan = [
+        {parentColumn: "gizmo_id", parentTableName: "gizmos", tableName: "gizmo_parts"},
+        {keyColumn: "account_id", tableName: "gizmos"}
+      ]
+      const copier = new DataCopier({sourceDb, tablePlan: misorderedPlan, targetDb})
+
+      let caughtError = null
+
+      try {
+        await copier.copy("acct-a")
+      } catch (error) {
+        caughtError = error
+      }
+
+      expect(caughtError instanceof Error && caughtError.message.includes("has not been loaded")).toEqual(true)
+    })
+  })
+
   it("refreshes stale target rows with the current source values", async () => {
     await withDatabases(async ({sourceDb, targetDb}) => {
       await seedSource(sourceDb)
