@@ -324,6 +324,34 @@ describe("DatabaseRecord tenant database switching", {databaseCleaning: {transac
     }
   })
 
+  it("fails closed when the target tenant provider is not configured", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-tenant-dependent-restrict-missing-provider")
+    let previousConfiguration
+
+    try {
+      try {
+        previousConfiguration = Current.configuration()
+      } catch {
+        // Ignore missing current configuration.
+      }
+
+      configuration.setCurrent()
+      configuration.setTenantDatabaseProviders({
+        analytics: {
+          listTenants: async () => [{slug: "alpha"}]
+        }
+      })
+      await createTenantRestrictTables(configuration, [])
+
+      const parent = await TenantRestrictParent.create({name: "Restricted parent"})
+
+      await expect(async () => parent.destroy()).toThrowError("Cannot check dependent tenantRestrictChildren because TenantRestrictChild switches tenant database projectTenant but no tenant database provider is configured for projectTenant")
+    } finally {
+      previousConfiguration?.setCurrent()
+      await cleanup()
+    }
+  })
+
   it("allows dependent restrict destroys when listed tenant databases have no dependents", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-tenant-dependent-restrict-empty")
     const tenants = [{slug: "alpha"}, {slug: "beta"}]

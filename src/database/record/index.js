@@ -22,6 +22,8 @@
  * @typedef {import("./instance-relationships/base.js").default & {query: () => ModelClassQuery<typeof VelociousDatabaseRecord>}} RestrictInstanceRelationship
  */
 
+/** @typedef {import("../../configuration-types.js").TenantDatabaseProviderType} TenantDatabaseProviderType */
+
 import timeout from "awaitery/build/timeout.js"
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
@@ -3401,38 +3403,33 @@ class VelociousDatabaseRecord {
     const configuration = this.getModelClass()._getConfiguration()
     const tenantDatabaseProviders = configuration.getTenantDatabaseProviders()
     const providerEntries = Object.entries(tenantDatabaseProviders)
+    const targetIdentifier = TargetModelClass.getTenantDatabaseIdentifier(null)
 
     if (providerEntries.length == 0) {
       throw new Error(`Cannot check dependent ${instanceRelationship.getRelationship().getRelationshipName()} because ${TargetModelClass.getModelName()} switches tenant databases but no tenant database providers are configured`)
     }
 
+    if (targetIdentifier) {
+      const provider = tenantDatabaseProviders[targetIdentifier]
+
+      if (!provider) {
+        throw new Error(`Cannot check dependent ${instanceRelationship.getRelationship().getRelationshipName()} because ${TargetModelClass.getModelName()} switches tenant database ${targetIdentifier} but no tenant database provider is configured for ${targetIdentifier}`)
+      }
+
+      return await this._dependentRestrictProviderCount(instanceRelationship, TargetModelClass, targetIdentifier, provider)
+    }
+
+    let matchingProviderSeen = false
+
     for (const [identifier, provider] of providerEntries) {
-      const listTenants = typeof provider.listRestrictTenants == "function"
-        ? provider.listRestrictTenants
-        : provider.listTenants
-      const listTenantsMethodName = typeof provider.listRestrictTenants == "function"
-        ? "listRestrictTenants"
-        : "listTenants"
-
-      if (typeof listTenants != "function") {
-        throw new Error(`Tenant database provider for ${identifier} must define listTenants or listRestrictTenants before dependent restrict can check ${instanceRelationship.getRelationship().getRelationshipName()}`)
-      }
-
-      const tenants = await configuration.ensureConnections({name: `Dependent restrict tenants: ${TargetModelClass.getModelName()}`}, async () => {
-        return await listTenants({
-          configuration,
-          identifier
-        })
-      })
-
-      if (!Array.isArray(tenants)) {
-        throw new Error(`Tenant database provider for ${identifier} must return an array from ${listTenantsMethodName}`)
-      }
+      const tenants = await this._dependentRestrictProviderTenants(instanceRelationship, TargetModelClass, identifier, provider)
 
       for (const tenant of tenants) {
         if (TargetModelClass.getTenantDatabaseIdentifier(tenant) != identifier) {
           continue
         }
+
+        matchingProviderSeen = true
 
         const count = await configuration.runWithTenant(tenant, async () => {
           if (!configuration.isDatabaseIdentifierActive(identifier)) {
@@ -3448,7 +3445,75 @@ class VelociousDatabaseRecord {
       }
     }
 
+    if (!matchingProviderSeen) {
+      throw new Error(`Cannot check dependent ${instanceRelationship.getRelationship().getRelationshipName()} because no tenant database provider matched ${TargetModelClass.getModelName()}`)
+    }
+
     return 0
+  }
+
+  /**
+   * Counts tenant-scoped dependent records for one configured tenant provider.
+   * @param {RestrictInstanceRelationship} instanceRelationship - Relationship instance to count.
+   * @param {typeof VelociousDatabaseRecord} TargetModelClass - Related model class.
+   * @param {string} identifier - Tenant database identifier.
+   * @param {TenantDatabaseProviderType} provider - Tenant database provider.
+   * @returns {Promise<number>} - Dependent row count.
+   */
+  async _dependentRestrictProviderCount(instanceRelationship, TargetModelClass, identifier, provider) {
+    const configuration = this.getModelClass()._getConfiguration()
+    const tenants = await this._dependentRestrictProviderTenants(instanceRelationship, TargetModelClass, identifier, provider)
+
+    for (const tenant of tenants) {
+      const count = await configuration.runWithTenant(tenant, async () => {
+        if (!configuration.isDatabaseIdentifierActive(identifier)) {
+          throw new Error(`Tenant database identifier ${identifier} is inactive while checking dependent ${instanceRelationship.getRelationship().getRelationshipName()}`)
+        }
+
+        return await configuration.ensureConnections({name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
+          return await instanceRelationship.query().count()
+        })
+      })
+
+      if (count > 0) return count
+    }
+
+    return 0
+  }
+
+  /**
+   * Lists restrict-check tenants for one configured tenant provider.
+   * @param {RestrictInstanceRelationship} instanceRelationship - Relationship instance to count.
+   * @param {typeof VelociousDatabaseRecord} TargetModelClass - Related model class.
+   * @param {string} identifier - Tenant database identifier.
+   * @param {TenantDatabaseProviderType} provider - Tenant database provider.
+   * @returns {Promise<Array<?>>} - Listed tenant objects.
+   */
+  async _dependentRestrictProviderTenants(instanceRelationship, TargetModelClass, identifier, provider) {
+    const configuration = this.getModelClass()._getConfiguration()
+    const listTenants = typeof provider.listRestrictTenants == "function"
+      ? provider.listRestrictTenants
+      : provider.listTenants
+    const listTenantsMethodName = typeof provider.listRestrictTenants == "function"
+      ? "listRestrictTenants"
+      : "listTenants"
+
+    if (typeof listTenants != "function") {
+      throw new Error(`Tenant database provider for ${identifier} must define listTenants or listRestrictTenants before dependent restrict can check ${instanceRelationship.getRelationship().getRelationshipName()}`)
+    }
+
+    const tenants = await configuration.ensureConnections({name: `Dependent restrict tenants: ${TargetModelClass.getModelName()}`}, async () => {
+      return await listTenants({
+        configuration,
+        identifier
+      })
+    })
+
+    if (!Array.isArray(tenants)) {
+      throw new Error(`Tenant database provider for ${identifier} must return an array from ${listTenantsMethodName}`)
+    }
+
+    return tenants
   }
 
   /**
