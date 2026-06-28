@@ -55,6 +55,11 @@ export default new Configuration({
         // Adding/removing projects changes the next command run immediately.
         return await Project.all().select(["id", "databaseName"]).toArray()
       },
+      listRestrictTenants: async ({configuration}) => {
+        // Optional: return only existing/readable tenant databases for
+        // cross-tenant dependent: "restrict" checks.
+        return await Project.where({tenantState: "migrated"}).select(["id", "databaseName"]).toArray()
+      },
       createDatabase: async ({databaseConfiguration, tenant}) => {
         // App-specific database creation, grants, and structure loading.
       },
@@ -114,5 +119,9 @@ Because `listTenants` runs every time, tenant databases are dynamic:
 - newly created tenants are included in the next `db:tenants:create/check/migrate` run;
 - removed tenants disappear from the next provider result and are no longer migrated;
 - the app can still serve any one tenant immediately by resolving its tenant object through `tenantDatabaseResolver`.
+
+The same provider list is used when a non-tenant model destroys with `dependent: "restrict"` relationships pointing at tenant-switched child models. Velocious counts the relationship inside each tenant context and blocks the parent destroy if any tenant has dependent rows. This keeps application code from duplicating tenant scans just to avoid foreign-key failures at delete time.
+
+If lifecycle commands need to include tenants whose databases are not readable yet, add `listRestrictTenants`. Dependent restrict checks use `listRestrictTenants` when present and otherwise fall back to `listTenants`.
 
 If the targeted identifier is disabled with `VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS`, tenant lifecycle commands fail fast instead of silently skipping the tenant connection.

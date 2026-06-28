@@ -475,6 +475,7 @@
 /**
  * @typedef {object} TenantDatabaseProviderType
  * @property {function({configuration: import("./configuration.js").default, identifier: string}) : Array<?> | Promise<Array<?>>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
+ * @property {function({configuration: import("./configuration.js").default, identifier: string}) : Array<?> | Promise<Array<?>>} [listRestrictTenants] - Lists existing tenants that should be checked for dependent restrict destroys. Defaults to listTenants.
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : void | Promise<void>} [dropDatabase] - Drops the tenant database/schema for one tenant.
  * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : void | Promise<void>} [checkTenant] - Checks one tenant database before generic connection validation.
