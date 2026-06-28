@@ -83,7 +83,10 @@ Run tenant lifecycle commands by database identifier:
 npx velocious db:tenants:create projectTenant
 npx velocious db:tenants:check projectTenant
 npx velocious db:tenants:migrate projectTenant
+npx velocious db:tenants:drop projectTenant
 ```
+
+`db:tenants:drop` drops every listed tenant's database through the provider's `dropDatabase` hook (define it alongside `createDatabase`). Like the other lifecycle commands it honors `--parallel`.
 
 Tenant lifecycle commands run one tenant at a time by default. Add `--parallel` to process up to 20 tenants at once, or pass a positive integer to choose a different concurrency:
 
@@ -113,6 +116,36 @@ export default CreateBuilds
 ```
 
 Normal `db:migrate` continues to migrate non-tenant databases only. Use `db:tenants:migrate <identifier>` when you want to run migrations for every tenant returned by the provider.
+
+## Runtime tenant façade
+
+At runtime, the apartment-style `Tenant` façade is the single entry point for working with tenants. It composes the existing primitives (`Current.withTenant`/`runWithTenant`, the tenant database provider, and the connection pools), so it does not introduce any separate tenant bookkeeping:
+
+```js
+import Tenant from "velocious/build/src/tenants/tenant.js"
+
+// Switch into a tenant's context (a "tenant" is whatever descriptor your
+// tenantDatabaseResolver understands) and read the current one back.
+await Tenant.with({slug: "alpha"}, async () => {
+  Tenant.current() // => {slug: "alpha"}
+})
+
+// Run a callback within every tenant the provider lists, optionally filtered
+// and a few at a time. Returns how many tenants the callback ran for.
+await Tenant.each({
+  identifier: "projectTenant",
+  parallel: 8,
+  filter: (tenant) => tenant.migrated,
+  callback: async ({tenant}) => { /* runs inside this tenant's context */ }
+})
+
+// Drop one tenant's database through the provider's dropDatabase hook.
+await Tenant.drop({identifier: "projectTenant", tenant: {slug: "alpha"}})
+```
+
+`Tenant.with` / `Tenant.current` delegate to `Current` (which owns the async-context tenant state); `Tenant.each` is the runtime counterpart of the `db:tenants:*` per-tenant iteration and shares its engine; `Tenant.drop` refuses to run for a tenant that does not resolve to an active tenant database, so an unresolved descriptor can never drop the base/template database. `each` and `drop` default to the current configuration but accept an explicit `configuration` for non-global use.
+
+Provisioning a tenant database from the default/template database is mechanism the framework also provides: `SchemaCloner` clones table structure and baselines the `schema_migrations` ledger, and `DataCopier` copies a tenant's owned rows following a `TenantTablePlan`. Call these from your provider's `createDatabase`/migration hooks to materialize a new tenant.
 
 Because `listTenants` runs every time, tenant databases are dynamic:
 

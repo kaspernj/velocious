@@ -67,6 +67,14 @@ export default class Tenant {
     }
 
     await configuration.runWithTenant(tenant, async () => {
+      // Guard against an unresolved tenant. resolveDatabaseConfiguration falls back to the
+      // base (template/default) tenant database when the resolver returns nothing for this
+      // descriptor, so without this check a provider that drops by databaseConfiguration.name
+      // would drop the template database instead of rejecting the bad tenant.
+      if (!configuration.isDatabaseIdentifierActive(identifier)) {
+        throw new Error(`Tenant database identifier ${identifier} is inactive for tenant: ${TenantIterator.tenantLabel(tenant)}`)
+      }
+
       await provider.dropDatabase?.({
         configuration,
         databaseConfiguration: configuration.resolveDatabaseConfiguration(identifier),

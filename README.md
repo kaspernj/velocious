@@ -2242,4 +2242,6 @@ npx velocious db:tenants:migrate projectTenant --parallel 20
 
 `afterMigrateTenant` hooks run inside the active default and tenant database connection scope for the tenant being migrated.
 
+At runtime, the apartment-style `Tenant` façade (`velocious/build/src/tenants/tenant.js`) is the single entry point: `Tenant.with(tenant, callback)` / `Tenant.current()` to switch into and read a tenant context, `Tenant.each({identifier, callback, parallel?, filter?})` to run a callback within every provider-listed tenant, and `Tenant.drop({identifier, tenant})` (plus the `db:tenants:drop` CLI command) to drop a tenant's database through the provider's `dropDatabase` hook.
+
 See [docs/tenant-databases.md](docs/tenant-databases.md) for the full configuration and migration pattern.

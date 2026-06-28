@@ -63,7 +63,7 @@ export default class TenantIterator {
     await Promise.all(workers)
 
     if (failures.length > 0) {
-      const failedTenantLabels = failures.map((failure) => this.tenantLabel(failure.tenant)).join(", ")
+      const failedTenantLabels = failures.map((failure) => TenantIterator.tenantLabel(failure.tenant)).join(", ")
 
       throw new AggregateError(
         failures.map((failure) => failure.error),
@@ -82,7 +82,7 @@ export default class TenantIterator {
   async runTenantCallback({callback, tenant}) {
     await this.configuration.runWithTenant(tenant, async () => {
       if (!this.configuration.isDatabaseIdentifierActive(this.identifier)) {
-        throw new Error(`Tenant database identifier ${this.identifier} is inactive for tenant: ${this.tenantLabel(tenant)}`)
+        throw new Error(`Tenant database identifier ${this.identifier} is inactive for tenant: ${TenantIterator.tenantLabel(tenant)}`)
       }
 
       await callback({
@@ -97,7 +97,7 @@ export default class TenantIterator {
    * @param {?} tenant
    * @returns {string}
    */
-  tenantLabel(tenant) {
+  static tenantLabel(tenant) {
     if (tenant && typeof tenant === "object") {
       const tenantObject = /** @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
 

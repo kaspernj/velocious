@@ -99,6 +99,31 @@ describe("Tenant", () => {
     })
   })
 
+  it("refuses to drop an unresolved tenant instead of dropping the template database", async () => {
+    /** @type {string[]} */
+    const dropped = []
+    const provider = {
+      dropDatabase: async (/** @type {{databaseConfiguration: {name: string}}} */ {databaseConfiguration}) => {
+        dropped.push(databaseConfiguration.name)
+      },
+      listTenants: () => []
+    }
+
+    await withConfiguration(provider, async ({configuration}) => {
+      let caughtError = null
+
+      // A blank slug does not resolve to a tenant database for the tenantOnly identifier.
+      try {
+        await Tenant.drop({configuration, identifier: "projectTenant", tenant: {slug: ""}})
+      } catch (error) {
+        caughtError = error
+      }
+
+      expect(caughtError instanceof Error && caughtError.message.includes("is inactive for tenant")).toEqual(true)
+      expect(dropped).toEqual([])
+    })
+  })
+
   it("throws when dropping a tenant whose provider has no dropDatabase hook", async () => {
     await withConfiguration({listTenants: () => []}, async ({configuration}) => {
       let caughtError = null
