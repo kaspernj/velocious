@@ -3,9 +3,9 @@
 import {digg} from "diggerize"
 import * as inflection from "inflection"
 import Logger from "../logger.js"
+import MigrationsLedger from "./migrations-ledger.js"
 import {NotImplementedError} from "./migration/index.js"
 import restArgsError from "../utils/rest-args-error.js"
-import TableData from "./table-data/index.js"
 
 export default class VelociousDatabaseMigrator {
   /**
@@ -79,22 +79,11 @@ export default class VelociousDatabaseMigrator {
       return
     }
 
-    const exists = await this.migrationsTableExist(db)
-
-    if (exists) {
+    if (await this.migrationsTableExist(db)) {
       this.logger.debug(`${dbIdentifier} migrations table already exists - skipping`)
     } else {
-      this.logger.debug("New TableData for schema_migrations")
-      const schemaMigrationsTable = new TableData("schema_migrations", {ifNotExists: true})
-
-      schemaMigrationsTable.string("version", {null: false, primaryKey: true})
-
-      const createSchemaMigrationsTableSqls = await db.createTableSql(schemaMigrationsTable)
-
-      for (const createSchemaMigrationsTableSql of createSchemaMigrationsTableSqls) {
-        this.logger.debug(`Creating migrations table with SQL`, createSchemaMigrationsTableSql)
-        await db.query(createSchemaMigrationsTableSql)
-      }
+      this.logger.debug("Creating schema_migrations table via MigrationsLedger")
+      await MigrationsLedger.ensureTable(db)
     }
   }
 
@@ -255,13 +244,11 @@ export default class VelociousDatabaseMigrator {
       return
     }
 
-    const rows = await db.select("schema_migrations")
+    const versions = await MigrationsLedger.appliedVersions(db)
 
     this.migrationsVersions[dbIdentifier] = {}
 
-    for (const row of rows) {
-      const version = digg(row, "version")
-
+    for (const version of versions) {
       this.migrationsVersions[dbIdentifier][version] = true
     }
   }
@@ -272,11 +259,7 @@ export default class VelociousDatabaseMigrator {
    * @returns {Promise<boolean>} - Resolves with Whether migrations table exist.
    */
   async migrationsTableExist(db) {
-    const schemaTable = await db.getTableByName("schema_migrations", {throwError: false})
-
-    if (!schemaTable) return false
-
-    return true
+    return await MigrationsLedger.tableExists(db)
   }
 
   /**
@@ -525,14 +508,7 @@ export default class VelociousDatabaseMigrator {
           }
         }
 
-        const existingSchemaMigrations = await db.newQuery()
-          .from("schema_migrations")
-          .where({version: dateString})
-          .results()
-
-        if (existingSchemaMigrations.length == 0) {
-          await db.insert({tableName: "schema_migrations", data: {version: dateString}})
-        }
+        await MigrationsLedger.recordVersion(db, dateString)
       } else if (direction == "down") {
         try {
           await migrationInstance.down()
@@ -544,7 +520,7 @@ export default class VelociousDatabaseMigrator {
           }
         }
 
-        await db.delete({tableName: "schema_migrations", conditions: {version: dateString}})
+        await MigrationsLedger.removeVersion(db, dateString)
       } else {
         throw new Error(`Unknown direction: ${direction}`)
       }
