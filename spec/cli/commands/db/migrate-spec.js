@@ -58,6 +58,9 @@ describe("Cli - Commands - db:migrate", () => {
       const tableNames = [
         "accounts",
         "acts_as_list_items",
+        "audit_actions",
+        "audit_auditable_types",
+        "audits",
         "authentication_tokens",
         "autoindex_test",
         "comments",
@@ -178,6 +181,9 @@ describe("Cli - Commands - db:migrate", () => {
         [
           "accounts",
           "acts_as_list_items",
+          "audit_actions",
+          "audit_auditable_types",
+          "audits",
           "authentication_tokens",
           "comments",
           "interactions",
@@ -211,13 +217,17 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090000",
         "20251228090010",
         "20260418090000",
-        "20260601052206"
+        "20260601052206",
+        "20260629160000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
         [
           "accounts",
           "acts_as_list_items",
+          "audit_actions",
+          "audit_auditable_types",
+          "audits",
           "authentication_tokens",
           "comments",
           "interactions",
@@ -252,7 +262,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090000",
         "20251228090010",
         "20260418090000",
-        "20260601052206"
+        "20260601052206",
+        "20260629160000"
       ])
     }
   })

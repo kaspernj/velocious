@@ -152,7 +152,8 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
     currentDate
   })
 
-  await db.insert({
+  const insertResult = await db.query(db.insertSql({
+    returnLastInsertedColumnNames: ["id"],
     tableName: "audits",
     data: {
       audit_action_id: auditActionId,
@@ -164,9 +165,8 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
       created_at: currentDate,
       updated_at: currentDate
     }
-  })
-
-  const auditId = await db.lastInsertID()
+  }))
+  const auditId = auditIdFromInsertResult(insertResult) ?? await db.lastInsertID()
 
   await emitAuditEvent(modelClass, action, {
     action,
@@ -177,6 +177,25 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
   })
 
   return auditId
+}
+
+/**
+ * Reads an audit id returned by INSERT ... RETURNING / OUTPUT.
+ * @param {Array<Record<string, ?>> | null | undefined} insertResult - Insert query result.
+ * @returns {number | string | null} Created audit id when the driver returned it.
+ */
+function auditIdFromInsertResult(insertResult) {
+  if (!Array.isArray(insertResult)) return null
+
+  const row = insertResult[0]
+
+  if (!row) return null
+
+  const id = row.id
+
+  if (typeof id == "number" || typeof id == "string") return id
+
+  return null
 }
 
 /**
