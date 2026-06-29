@@ -4,6 +4,7 @@
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
+* Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * Controllers and views for HTTP endpoints
