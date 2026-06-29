@@ -10,6 +10,17 @@ import Task from "../../dummy/src/models/task.js"
  */
 
 /**
+ * AuditRow type.
+ * @typedef {object} AuditRow
+ * @property {string} action
+ * @property {AuditJson | null} auditedChanges
+ * @property {number} auditableId
+ * @property {string} auditableType
+ * @property {AuditJson | null} params
+ * @property {string} typeName
+ */
+
+/**
  * @param {string | AuditJson | null} value - JSON value from the database.
  * @returns {AuditJson | null} Parsed JSON.
  */
@@ -21,7 +32,21 @@ function parsedJson(value) {
   return value
 }
 
-/** @returns {Promise<Array<{action: string, auditedChanges: AuditJson | null, auditableId: number, auditableType: string, params: AuditJson | null, typeName: string}>>} */
+/**
+ * @param {AuditRow[]} rows - Audit rows.
+ * @param {string} action - Audit action.
+ * @param {number} auditableId - Audited record id.
+ * @returns {AuditRow} Matching audit row.
+ */
+function auditRowFor(rows, action, auditableId) {
+  const row = rows.find((auditRow) => auditRow.action === action && auditRow.auditableId === auditableId)
+
+  expect(row).toBeDefined()
+
+  return /** @type {AuditRow} */ (row)
+}
+
+/** @returns {Promise<AuditRow[]>} */
 async function auditRows() {
   return await Configuration.current().ensureConnections(async (dbs) => {
     const db = dbs.default
@@ -36,7 +61,6 @@ async function auditRows() {
       FROM ${db.quoteTable("audits")}
       INNER JOIN ${db.quoteTable("audit_actions")} ON ${db.quoteTable("audit_actions")}.${db.quoteColumn("id")} = ${db.quoteTable("audits")}.${db.quoteColumn("audit_action_id")}
       INNER JOIN ${db.quoteTable("audit_auditable_types")} ON ${db.quoteTable("audit_auditable_types")}.${db.quoteColumn("id")} = ${db.quoteTable("audits")}.${db.quoteColumn("audit_auditable_type_id")}
-      ORDER BY ${db.quoteTable("audits")}.${db.quoteColumn("id")} ASC
     `))
 
     return rows.map((row) => ({
@@ -70,26 +94,32 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
       await taskWithCustomAudit.destroy()
 
       const rows = await auditRows()
+      const rowSummaries = rows.map((row) => [row.action, row.auditableType, row.auditableId, row.typeName])
+      const taskWithCustomAuditCreateRow = auditRowFor(rows, "create", taskWithCustomAudit.id())
+      const taskWithCustomAuditUpdateRow = auditRowFor(rows, "update", taskWithCustomAudit.id())
+      const taskWithCustomAuditCustomRow = auditRowFor(rows, "custom", taskWithCustomAudit.id())
+      const taskWithCustomAuditDestroyRow = auditRowFor(rows, "destroy", taskWithCustomAudit.id())
 
-      expect(rows.map((row) => [row.action, row.auditableType, row.auditableId, row.typeName])).toEqual([
-        ["create", "Task", taskWithCustomAudit.id(), "Task"],
-        ["update", "Task", taskWithCustomAudit.id(), "Task"],
-        ["custom", "Task", taskWithCustomAudit.id(), "Task"],
-        ["create", "Task", taskWithoutCustomAudit.id(), "Task"],
-        ["destroy", "Task", taskWithCustomAudit.id(), "Task"]
-      ])
-      expect(rows[0].auditedChanges).toEqual({
+      expect(rowSummaries).toHaveLength(5)
+      expect(rowSummaries).toContainEqual(["create", "Task", taskWithCustomAudit.id(), "Task"])
+      expect(rowSummaries).toContainEqual(["update", "Task", taskWithCustomAudit.id(), "Task"])
+      expect(rowSummaries).toContainEqual(["custom", "Task", taskWithCustomAudit.id(), "Task"])
+      expect(rowSummaries).toContainEqual(["create", "Task", taskWithoutCustomAudit.id(), "Task"])
+      expect(rowSummaries).toContainEqual(["destroy", "Task", taskWithCustomAudit.id(), "Task"])
+      expect(taskWithCustomAuditCreateRow.auditedChanges).toEqual({
         description: "Initial description",
         name: "Audited task",
         projectId: project.id()
       })
-      expect(rows[1].auditedChanges).toEqual({
+      expect(taskWithCustomAuditUpdateRow.auditedChanges).toEqual({
         description: "Updated description",
         name: "Updated audited task"
       })
-      expect(rows[2].params).toEqual({source: "spec"})
-      expect(rows[4].auditedChanges?.id).toEqual(taskWithCustomAudit.id())
-      expect(rows[4].auditedChanges?.name).toEqual("Updated audited task")
+      expect(taskWithCustomAuditCustomRow.params).toEqual({source: "spec"})
+      expect(taskWithCustomAuditDestroyRow.auditedChanges).toMatchObject({
+        id: taskWithCustomAudit.id(),
+        name: "Updated audited task"
+      })
       expect(events).toEqual([{action: "create", recordId: taskWithCustomAudit.id()}, {action: "create", recordId: taskWithoutCustomAudit.id()}])
 
       const withoutCustomAudit = await Task.withoutAudit("custom")

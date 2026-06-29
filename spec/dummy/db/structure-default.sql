@@ -1,10 +1,10 @@
 CREATE TABLE `acts_as_list_items` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `position` INTEGER, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE `audit_actions` (`id` INTEGER PRIMARY KEY NOT NULL, `action` VARCHAR(255) NOT NULL, `created_at` DATETIME, `updated_at` DATETIME);
+CREATE TABLE `audit_actions` (`id` UUID PRIMARY KEY NOT NULL, `action` VARCHAR(255) NOT NULL, `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE `audit_auditable_types` (`id` INTEGER PRIMARY KEY NOT NULL, `name` VARCHAR(255) NOT NULL, `created_at` DATETIME, `updated_at` DATETIME);
+CREATE TABLE `audit_auditable_types` (`id` UUID PRIMARY KEY NOT NULL, `name` VARCHAR(255) NOT NULL, `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE `audits` (`id` INTEGER PRIMARY KEY NOT NULL, `audit_action_id` BIGINT NOT NULL REFERENCES `audit_actions`(`id`), `audit_auditable_type_id` BIGINT NOT NULL REFERENCES `audit_auditable_types`(`id`), `auditable_id` BIGINT NOT NULL, `auditable_type` VARCHAR(255), `audited_changes` JSON, `params` JSON, `created_at` DATETIME, `updated_at` DATETIME);
+CREATE TABLE `audits` (`id` UUID PRIMARY KEY NOT NULL, `audit_action_id` UUID NOT NULL REFERENCES `audit_actions`(`id`), `audit_auditable_type_id` UUID NOT NULL REFERENCES `audit_auditable_types`(`id`), `auditable_id` BIGINT NOT NULL, `auditable_type` VARCHAR(255), `audited_changes` JSON, `params` JSON, `created_at` DATETIME, `updated_at` DATETIME);
 
 CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT, `created_at` DATETIME, `updated_at` DATETIME, CONSTRAINT `authentication_tokens_user_id_0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));
 

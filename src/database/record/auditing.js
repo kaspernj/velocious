@@ -1,5 +1,7 @@
 // @ts-check
 
+import UUID from "pure-uuid"
+
 /**
  * AuditChanges type.
  * @typedef {Record<string, ?>} AuditChanges
@@ -151,11 +153,13 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
     value: modelClass.getModelName(),
     currentDate
   })
+  const auditId = new UUID(4).format()
 
   const insertResult = await db.query(db.insertSql({
     returnLastInsertedColumnNames: ["id"],
     tableName: "audits",
     data: {
+      id: auditId,
       audit_action_id: auditActionId,
       audit_auditable_type_id: auditAuditableTypeId,
       auditable_id: record.id(),
@@ -166,17 +170,17 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
       updated_at: currentDate
     }
   }))
-  const auditId = auditIdFromInsertResult(insertResult) ?? await db.lastInsertID()
+  const insertedAuditId = auditIdFromInsertResult(insertResult) ?? auditId
 
   await emitAuditEvent(modelClass, action, {
     action,
-    auditId,
+    auditId: insertedAuditId,
     auditedChanges,
     params,
     record
   })
 
-  return auditId
+  return insertedAuditId
 }
 
 /**
@@ -310,6 +314,7 @@ async function findOrCreateLookupId({columnName, currentDate, db, tableName, val
     conflictColumns: [columnName],
     updateColumns: [columnName],
     data: {
+      id: new UUID(4).format(),
       [columnName]: value,
       created_at: currentDate,
       updated_at: currentDate
