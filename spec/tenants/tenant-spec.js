@@ -3,7 +3,7 @@
 import Current from "../../src/current.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import Tenant from "../../src/tenants/tenant.js"
-import {createTenantTestConfiguration} from "../helpers/tenant-test-helpers.js"
+import {createTenantTestConfiguration, seedTenantValue} from "../helpers/tenant-test-helpers.js"
 
 describe("Tenant", () => {
   /**
@@ -41,6 +41,43 @@ describe("Tenant", () => {
 
       expect(insideTenant).toEqual({slug: "alpha"})
       expect(Tenant.current()).toBeUndefined()
+    })
+  })
+
+  it("establishes the tenant's connections so a query inside the callback works without ensureConnections", async () => {
+    await withConfiguration({listTenants: () => []}, async ({configuration}) => {
+      await seedTenantValue(configuration, "projectTenant", "alpha", "from-alpha")
+
+      const readValue = await Tenant.with({slug: "alpha"}, async (connections) => {
+        const rows = await connections.projectTenant.query("SELECT value FROM tenant_values LIMIT 1")
+
+        return rows[0]?.value
+      })
+
+      expect(readValue).toEqual("from-alpha")
+    })
+  })
+
+  it("establishes each tenant's connections during iteration without ensureConnections", async () => {
+    await withConfiguration({listTenants: () => [{slug: "alpha"}, {slug: "beta"}]}, async ({configuration}) => {
+      await seedTenantValue(configuration, "projectTenant", "alpha", "from-alpha")
+      await seedTenantValue(configuration, "projectTenant", "beta", "from-beta")
+
+      /** @type {string[]} */
+      const readValues = []
+
+      await Tenant.each({
+        callback: async () => {
+          const connections = configuration.getCurrentConnections()
+          const rows = await connections.projectTenant.query("SELECT value FROM tenant_values LIMIT 1")
+
+          readValues.push(rows[0]?.value)
+        },
+        configuration,
+        identifier: "projectTenant"
+      })
+
+      expect(readValues.sort()).toEqual(["from-alpha", "from-beta"])
     })
   })
 
