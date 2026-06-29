@@ -70,9 +70,10 @@ export default class Current {
 
   /**
    * Runs with tenant.
+   * @template T
    * @param {object} tenant - Tenant. Any caller-defined object shape; read back (and narrowed) via tenant().
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<T>} callback - Callback.
+   * @returns {Promise<T>} - Callback result.
    */
   static async withTenant(tenant, callback) {
     return await this.configuration().runWithTenant(tenant, callback)

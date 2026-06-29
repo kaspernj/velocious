@@ -23,9 +23,10 @@ export default class Tenant {
    * the caller wiring up connections. Already-checked-out connections are reused, so nesting
    * `Tenant.with` calls does not open redundant connections. The callback receives the active
    * connections keyed by identifier, the same as `ensureConnections`.
+   * @template T
    * @param {object} tenant Descriptor understood by the app's tenantDatabaseResolver.
-   * @param {(connections: Record<string, import("../database/drivers/base.js").default>) => Promise<?>} callback
-   * @returns {Promise<?>}
+   * @param {(connections: Record<string, import("../database/drivers/base.js").default>) => Promise<T>} callback
+   * @returns {Promise<T>}
    */
   static async with(tenant, callback) {
     const configuration = Current.configuration()
