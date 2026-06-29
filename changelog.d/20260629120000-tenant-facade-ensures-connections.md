@@ -1,0 +1,3 @@
+## Changed
+
+- `Tenant.with` and `Tenant.each` now run their callbacks inside `ensureConnections`, so entering a tenant context establishes the global and tenant database connections for the callback's duration — switching into a tenant makes its models immediately queryable without the caller wiring up connections (apartment-style "switch" semantics). Already-open connections are reused, so nesting does not double-connect. The `db:tenants:*` CLI commands are unchanged: they intentionally do not pre-establish the per-tenant connection because `db:tenants:create` runs before the tenant database exists.

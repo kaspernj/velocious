@@ -8,19 +8,29 @@ import TenantIterator from "./tenant-iterator.js"
  * object the app's `tenantDatabaseResolver` understands (an account, a project, …); this
  * class is the single discoverable home for switching into a tenant's context, reading the
  * current one, iterating every tenant of a database identifier, and dropping a tenant's
- * database. Switching/reading delegate to {@link Current} (which owns the async-context
- * tenant state), so they compose with the existing connection pools and request lifecycle;
- * iteration and drop drive the app's tenant database provider hooks.
+ * database. Switching delegates to {@link Current} (which owns the async-context tenant
+ * state) and additionally runs the callback inside `ensureConnections`, so entering a tenant
+ * makes its database immediately queryable — the apartment-style "switch" semantics — without
+ * the caller establishing connections itself; iteration and drop drive the app's tenant
+ * database provider hooks.
  */
 export default class Tenant {
   /**
    * Runs `callback` with `tenant` as the current tenant, restoring the previous tenant after.
+   * The callback runs inside `ensureConnections`, so every database identifier the tenant
+   * activates (the global database plus the tenant's database) has a checked-out connection
+   * available for the callback's duration: switching into a tenant makes it queryable without
+   * the caller wiring up connections. Already-checked-out connections are reused, so nesting
+   * `Tenant.with` calls does not open redundant connections. The callback receives the active
+   * connections keyed by identifier, the same as `ensureConnections`.
    * @param {object} tenant Descriptor understood by the app's tenantDatabaseResolver.
-   * @param {() => Promise<?>} callback
+   * @param {(connections: Record<string, import("../database/drivers/base.js").default>) => Promise<?>} callback
    * @returns {Promise<?>}
    */
   static async with(tenant, callback) {
-    return await Current.withTenant(tenant, callback)
+    const configuration = Current.configuration()
+
+    return await Current.withTenant(tenant, async () => await configuration.ensureConnections(callback))
   }
 
   /**
@@ -33,8 +43,10 @@ export default class Tenant {
 
   /**
    * Lists the tenants for a database identifier through the provider and runs `callback`
-   * within each tenant's context, optionally filtered and several at a time. Returns how
-   * many tenants the callback ran for (after filtering).
+   * within each tenant's context, optionally filtered and several at a time. Like
+   * {@link Tenant.with}, the callback runs inside `ensureConnections` so each tenant's
+   * database is queryable without the caller wiring up connections. Returns how many tenants
+   * the callback ran for (after filtering).
    * @param {{identifier: string, callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, parallel?: number, filter?: (tenant: ?) => boolean, configuration?: import("../configuration.js").default}} args
    * @returns {Promise<number>}
    */
@@ -51,7 +63,13 @@ export default class Tenant {
     const tenants = filter ? listedTenants.filter(filter) : listedTenants
     const iterator = new TenantIterator({configuration, identifier, parallelCount: parallel})
 
-    return await iterator.run(tenants, callback)
+    // Run each tenant's callback inside ensureConnections so the iterator stays
+    // connection-agnostic (the db:tenants:* CLI commands share TenantIterator and must run
+    // their callbacks, such as create, before the tenant database exists) while runtime
+    // iteration here gets the tenant's connections established the same way Tenant.with does.
+    return await iterator.run(tenants, async (callbackArgs) => {
+      await configuration.ensureConnections({name: `Tenant.each: ${identifier}`}, async () => await callback(callbackArgs))
+    })
   }
 
   /**
