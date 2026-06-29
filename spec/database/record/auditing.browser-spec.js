@@ -25,14 +25,14 @@ function parsedJson(value) {
 async function auditRows() {
   return await Configuration.current().ensureConnections(async (dbs) => {
     const db = dbs.default
-    const rows = /** @type {Array<{action: string, auditedChanges: string | AuditJson | null, auditableId: number, auditableType: string, params: string | AuditJson | null, typeName: string}>>} */ (await db.query(`
+    const rows = /** @type {Array<{action: string, audited_changes: string | AuditJson | null, auditable_id: number, auditable_type: string, params: string | AuditJson | null, type_name: string}>>} */ (await db.query(`
       SELECT
         audit_actions.action AS action,
-        audits.audited_changes AS auditedChanges,
-        audits.auditable_id AS auditableId,
-        audits.auditable_type AS auditableType,
+        audits.audited_changes AS audited_changes,
+        audits.auditable_id AS auditable_id,
+        audits.auditable_type AS auditable_type,
         audits.params AS params,
-        audit_auditable_types.name AS typeName
+        audit_auditable_types.name AS type_name
       FROM ${db.quoteTable("audits")}
       INNER JOIN ${db.quoteTable("audit_actions")} ON ${db.quoteTable("audit_actions")}.${db.quoteColumn("id")} = ${db.quoteTable("audits")}.${db.quoteColumn("audit_action_id")}
       INNER JOIN ${db.quoteTable("audit_auditable_types")} ON ${db.quoteTable("audit_auditable_types")}.${db.quoteColumn("id")} = ${db.quoteTable("audits")}.${db.quoteColumn("audit_auditable_type_id")}
@@ -40,9 +40,12 @@ async function auditRows() {
     `))
 
     return rows.map((row) => ({
-      ...row,
-      auditedChanges: parsedJson(row.auditedChanges),
-      params: parsedJson(row.params)
+      action: row.action,
+      auditedChanges: parsedJson(row.audited_changes),
+      auditableId: row.auditable_id,
+      auditableType: row.auditable_type,
+      params: parsedJson(row.params),
+      typeName: row.type_name
     }))
   })
 }
