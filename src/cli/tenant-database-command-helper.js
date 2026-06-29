@@ -1,5 +1,7 @@
 // @ts-check
 
+import TenantIterator from "../tenants/tenant-iterator.js"
+
 export default class TenantDatabaseCommandHelper {
   /**
    * Runs constructor.
@@ -76,55 +78,13 @@ export default class TenantDatabaseCommandHelper {
    */
   async eachTenant(callback) {
     const tenants = await this.listTenants()
-    const parallelCount = this.parallelCount()
+    const iterator = new TenantIterator({
+      configuration: this.configuration,
+      identifier: this.identifier,
+      parallelCount: this.parallelCount()
+    })
 
-    if (parallelCount <= 1) {
-      for (const tenant of tenants) {
-        await this.runTenantCallback({callback, tenant})
-      }
-
-      return tenants.length
-    }
-
-    /**
-     * Failures.
-     * @type {Array<{error: Error, tenant: ?}>} */
-    const failures = []
-    const workers = []
-    let tenantIndex = 0
-    const workerCount = Math.min(parallelCount, tenants.length)
-
-    for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
-      workers.push((async () => {
-        while (tenantIndex < tenants.length) {
-          const tenant = tenants[tenantIndex]
-
-          tenantIndex++
-
-          try {
-            await this.runTenantCallback({callback, tenant})
-          } catch (error) {
-            failures.push({
-              error: error instanceof Error ? error : new Error(String(error)),
-              tenant
-            })
-          }
-        }
-      })())
-    }
-
-    await Promise.all(workers)
-
-    if (failures.length > 0) {
-      const failedTenantLabels = failures.map((failure) => this.tenantLabel(failure.tenant)).join(", ")
-
-      throw new AggregateError(
-        failures.map((failure) => failure.error),
-        `Failed tenant database command for tenant(s): ${failedTenantLabels}`
-      )
-    }
-
-    return tenants.length
+    return await iterator.run(tenants, callback)
   }
 
   /**
@@ -155,42 +115,5 @@ export default class TenantDatabaseCommandHelper {
     }
 
     return parallelCount
-  }
-
-  /**
-   * Runs run tenant callback.
-   * @param {object} args - Tenant callback args.
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} args.callback - Callback.
-   * @param {?} args.tenant - Tenant.
-   * @returns {Promise<void>}
-   */
-  async runTenantCallback({callback, tenant}) {
-    await this.configuration.runWithTenant(tenant, async () => {
-      if (!this.configuration.isDatabaseIdentifierActive(this.identifier)) {
-        throw new Error(`Tenant database identifier ${this.identifier} is inactive for tenant: ${this.tenantLabel(tenant)}`)
-      }
-
-      await callback({
-        databaseConfiguration: this.configuration.resolveDatabaseConfiguration(this.identifier),
-        tenant
-      })
-    })
-  }
-
-  /**
-   * Runs tenant label.
-   * @param {?} tenant - Tenant.
-   * @returns {string} - Human readable tenant label.
-   */
-  tenantLabel(tenant) {
-    if (tenant && typeof tenant === "object") {
-      const tenantObject = /** @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
-
-      if (tenantObject.slug) return String(tenantObject.slug)
-      if (tenantObject.name) return String(tenantObject.name)
-      if (tenantObject.id) return String(tenantObject.id)
-    }
-
-    return JSON.stringify(tenant)
   }
 }
