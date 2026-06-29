@@ -93,4 +93,16 @@ describe("database - query - create-table foreign-key SQL", {databaseCleaning: {
 
     expect(sqls[0]).toContain("`id` BIGSERIAL PRIMARY KEY NOT NULL")
   })
+
+  it("uses table-qualified default index names for PostgreSQL column indexes", async () => {
+    const tableData = new TableData("velocious_attachments")
+
+    tableData.addColumn("name", {index: true, null: false, type: "string"})
+
+    const inlineSqls = await new CreateTableBase({driver: buildDriver("pgsql"), tableData}).toSql()
+    const sqls = await new CreateTableBase({driver: buildDriver("pgsql"), indexInCreateTable: false, tableData}).toSql()
+
+    expect(inlineSqls[0]).toContain("INDEX `index_on_velocious_attachments_name` (`name`)")
+    expect(sqls[1]).toEqual("CREATE INDEX `index_on_velocious_attachments_name` ON `velocious_attachments` (`name`)")
+  })
 })

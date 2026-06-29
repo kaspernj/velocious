@@ -32,7 +32,7 @@ export default class VelociousDatabaseQueryCreateIndexBase extends QueryBase {
     let indexName = `index_on_`
     let columnCount = 0
 
-    if (databaseType == "sqlite") indexName += `${this.tableName}_`
+    if (databaseType == "sqlite" || databaseType == "pgsql") indexName += `${this.tableName}_`
 
     for (const column of this.columns) {
       columnCount++

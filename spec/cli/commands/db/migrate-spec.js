@@ -120,7 +120,7 @@ describe("Cli - Commands - db:migrate", () => {
 
       if (defaultDatabaseType == "mysql") {
         expect(indexesNames).toEqual(["index_on_token","user_id"])
-      } else if (defaultDatabaseType == "sqlite") {
+      } else if (defaultDatabaseType == "sqlite" || defaultDatabaseType == "pgsql") {
         expect(indexesNames).toEqual(["index_on_authentication_tokens_token", "index_on_authentication_tokens_user_id"])
       } else {
         expect(indexesNames).toEqual(["index_on_token", "index_on_user_id"])
@@ -129,7 +129,7 @@ describe("Cli - Commands - db:migrate", () => {
       // It creates unique indexes
       let tokenIndexName
 
-      if (defaultDatabaseType == "sqlite") {
+      if (defaultDatabaseType == "sqlite" || defaultDatabaseType == "pgsql") {
         tokenIndexName = "index_on_authentication_tokens_token"
       } else {
         tokenIndexName = "index_on_token"
