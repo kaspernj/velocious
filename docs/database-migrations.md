@@ -38,6 +38,10 @@ await this.createTable("legacy_events", {id: {type: "bigint"}}, (table) => {
 
 SQLite stores auto-increment primary keys through its special `INTEGER PRIMARY KEY` form even when a migration asks for `bigint`, while non-primary reference columns keep the configured `bigint` type. PostgreSQL emits `BIGSERIAL` for auto-increment `bigint` primary keys.
 
+Features that need framework-owned tables, such as record auditing, should
+still be declared through normal application migrations. See
+[record auditing](auditing.md#schema) for the shared `audits` table layout.
+
 `removeIndex(tableName, nameOrColumns, args)` drops an index by explicit name, or by deriving the same database-specific default name that `addIndex(...)` uses when passed columns:
 
 ```js

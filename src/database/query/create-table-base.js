@@ -111,7 +111,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
         let indexName = `index_on_`
 
-        if (databaseType == "sqlite") sql += `${tableData.getName()}_`
+        if (databaseType == "sqlite" || databaseType == "pgsql") indexName += `${tableData.getName()}_`
 
         indexName += column.getName()
 
@@ -181,7 +181,7 @@ export default class VelociousDatabaseQueryCreateTableBase extends QueryBase {
 
         let indexName = `index_on_`
 
-        if (databaseType == "sqlite") indexName += `${tableData.getName()}_`
+        if (databaseType == "sqlite" || databaseType == "pgsql") indexName += `${tableData.getName()}_`
 
         indexName += column.getName()
 

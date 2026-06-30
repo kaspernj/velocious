@@ -1,0 +1,75 @@
+CREATE TABLE `acts_as_list_items` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `position` INTEGER, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `audit_actions` (`id` UUID PRIMARY KEY NOT NULL, `action` VARCHAR(255) NOT NULL, `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `audit_auditable_types` (`id` UUID PRIMARY KEY NOT NULL, `name` VARCHAR(255) NOT NULL, `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `audits` (`id` UUID PRIMARY KEY NOT NULL, `audit_action_id` UUID NOT NULL REFERENCES `audit_actions`(`id`), `audit_auditable_type_id` UUID NOT NULL REFERENCES `audit_auditable_types`(`id`), `auditable_id` BIGINT NOT NULL, `auditable_type` VARCHAR(255), `audited_changes` JSON, `params` JSON, `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT, `created_at` DATETIME, `updated_at` DATETIME, CONSTRAINT `authentication_tokens_user_id_0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));
+
+CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` BIGINT NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE "project_details" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `note` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_active` BOOLEAN, CONSTRAINT `project_details_project_id_0` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`));
+
+CREATE TABLE `project_translations` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL REFERENCES `projects`(`id`), `locale` VARCHAR(255) NOT NULL, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE "projects" (`id` INTEGER PRIMARY KEY NOT NULL, `creating_user_reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME, `tasks_count` INTEGER DEFAULT 0 NOT NULL);
+
+CREATE TABLE `schema_migrations` (`version` VARCHAR(255) PRIMARY KEY NOT NULL);
+
+CREATE TABLE `string_subject_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` VARCHAR(255) NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `string_subjects` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE "tasks" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `name` VARCHAR(255), `description` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_done` BOOLEAN, CONSTRAINT `tasks_project_id_0` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`));
+
+CREATE TABLE `users` (`id` INTEGER PRIMARY KEY NOT NULL, `email` VARCHAR(255) NOT NULL, `encrypted_password` VARCHAR(255) NOT NULL, `reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `uuid_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id` UUID NOT NULL, `subject_type` VARCHAR(255), `kind` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `uuid_items` (`id` UUID PRIMARY KEY NOT NULL, `title` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
+
+CREATE TABLE `velocious_attachments` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` VARCHAR(255) NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL);
+
+CREATE INDEX `index_on_acts_as_list_items_project_id` ON `acts_as_list_items` (`project_id`);
+
+CREATE UNIQUE INDEX `index_on_acts_as_list_items_project_id_and_position` ON `acts_as_list_items` (`project_id`, `position`);
+
+CREATE UNIQUE INDEX `index_on_audit_actions_action` ON `audit_actions` (`action`);
+
+CREATE UNIQUE INDEX `index_on_audit_auditable_types_name` ON `audit_auditable_types` (`name`);
+
+CREATE INDEX `index_on_audits_audit_action_id` ON `audits` (`audit_action_id`);
+
+CREATE INDEX `index_on_audits_audit_auditable_type_id` ON `audits` (`audit_auditable_type_id`);
+
+CREATE INDEX `index_on_audits_auditable_id` ON `audits` (`auditable_id`);
+
+CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_tokens` (`user_token`);
+
+CREATE INDEX `index_on_authentication_tokens_user_id` ON `authentication_tokens` (`user_id`);
+
+CREATE INDEX `index_on_comments_task_id` ON `comments` (`task_id`);
+
+CREATE INDEX `index_on_interactions_subject_id` ON `interactions` (`subject_id`);
+
+CREATE INDEX `index_on_project_details_project_id` ON `project_details` (`project_id`);
+
+CREATE INDEX `index_on_project_translations_project_id` ON `project_translations` (`project_id`);
+
+CREATE INDEX `index_on_string_subject_interactions_subject_id` ON `string_subject_interactions` (`subject_id`);
+
+CREATE INDEX `index_on_tasks_project_id` ON `tasks` (`project_id`);
+
+CREATE UNIQUE INDEX `index_on_users_email` ON `users` (`email`);
+
+CREATE INDEX `index_on_uuid_interactions_subject_id` ON `uuid_interactions` (`subject_id`);
+
+CREATE INDEX `index_on_velocious_attachments_name` ON `velocious_attachments` (`name`);
+
+CREATE INDEX `index_on_velocious_attachments_record_id` ON `velocious_attachments` (`record_id`);
+
+CREATE INDEX `index_on_velocious_attachments_record_type` ON `velocious_attachments` (`record_type`);

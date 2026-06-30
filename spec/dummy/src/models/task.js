@@ -31,5 +31,6 @@ Task.hasOneAttachment("descriptionFile")
 Task.acceptsNestedAttributesFor("comments", {allowDestroy: true})
 Task.acceptsNestedAttributesFor("project")
 Task.validates("name", {presence: true, uniqueness: {scope: "projectId"}})
+Task.audited()
 
 export default Task

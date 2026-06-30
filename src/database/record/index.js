@@ -46,6 +46,7 @@ import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
 import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateValueForWrite } from "../datetime-storage.js"
 import {formatValue} from "../../utils/format-value.js"
+import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
@@ -248,6 +249,16 @@ class VelociousDatabaseRecord {
   static _eagerLoadRecordMetadata
 
   /**
+   * Narrows the runtime value to the documented type.
+   * @type {Record<string, import("./auditing.js").AuditCallback[]> | undefined} */
+  static _auditCallbacks
+
+  /**
+   * Narrows the runtime value to the documented type.
+   * @type {boolean | undefined} */
+  static _auditLifecycleCallbacksRegistered
+
+  /**
    * Returns the model name, preferring an explicit `static modelName` declaration
    * over the JavaScript class `.name` property. This allows minified builds to
    * preserve correct model names without relying on `keep_classnames`.
@@ -445,6 +456,16 @@ class VelociousDatabaseRecord {
   _changes = {}
 
   /**
+   * Changes captured before a create audit is written.
+   * @type {import("./auditing.js").AuditChanges | undefined} */
+  _pendingCreateAuditChanges = undefined
+
+  /**
+   * Changes captured before an update audit is written.
+   * @type {import("./auditing.js").AuditChanges | undefined} */
+  _pendingUpdateAuditChanges = undefined
+
+  /**
    * Attribute names explicitly assigned in the current update call.
    * @type {Set<string> | undefined}
    */
@@ -611,6 +632,37 @@ class VelociousDatabaseRecord {
    */
   static afterDestroy(callback) {
     VelociousDatabaseRecord.registerLifecycleCallback.call(this, "afterDestroy", /** @type {LifecycleCallbackType} */ (callback))
+  }
+
+  /**
+   * Enables automatic create/update/destroy auditing for this model.
+   * @returns {void}
+   */
+  static audited() {
+    registerAuditing(this)
+  }
+
+  /**
+   * Registers a callback invoked after this model writes an audit row for the action.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {string} action - Audit action name.
+   * @param {import("./auditing.js").AuditCallback} callback - Callback to run after audit creation.
+   * @returns {() => void} Unsubscribe function.
+   */
+  static onAudit(action, callback) {
+    return registerAuditCallback(this, action, callback)
+  }
+
+  /**
+   * Returns records that do not have an audit row for the given action.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {string} action - Audit action name.
+   * @returns {ModelClassQuery<MC>} Query scoped to records without that audit action.
+   */
+  static withoutAudit(action) {
+    return withoutAudit(this, action)
   }
 
   /**
@@ -3595,6 +3647,55 @@ class VelociousDatabaseRecord {
 
     await this._connection().query(sql, {logName: `${this.getModelClass().name} Destroy`})
     await this._runLifecycleCallbacks("afterDestroy")
+  }
+
+  /**
+   * Stores an audit row for this record.
+   * @param {import("./auditing.js").CreateAuditArgs} args - Audit row options.
+   * @returns {Promise<number | string>} Created audit row id.
+   */
+  async createAudit(args) {
+    return await createAudit(this, args)
+  }
+
+  /**
+   * Captures create changes before persistence clears the change set.
+   * @returns {void}
+   */
+  captureCreateAuditChanges() {
+    captureCreateAuditChanges(this)
+  }
+
+  /**
+   * Writes the create audit row.
+   * @returns {Promise<void>}
+   */
+  async createCreateAudit() {
+    await createCreateAudit(this)
+  }
+
+  /**
+   * Captures update changes before persistence clears the change set.
+   * @returns {void}
+   */
+  captureUpdateAuditChanges() {
+    captureUpdateAuditChanges(this)
+  }
+
+  /**
+   * Writes the update audit row.
+   * @returns {Promise<void>}
+   */
+  async createUpdateAudit() {
+    await createUpdateAudit(this)
+  }
+
+  /**
+   * Writes the destroy audit row.
+   * @returns {Promise<void>}
+   */
+  async createDestroyAudit() {
+    await createDestroyAudit(this)
   }
 
   /**

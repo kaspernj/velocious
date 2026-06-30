@@ -58,6 +58,9 @@ describe("Cli - Commands - db:migrate", () => {
       const tableNames = [
         "accounts",
         "acts_as_list_items",
+        "audit_actions",
+        "audit_auditable_types",
+        "audits",
         "authentication_tokens",
         "autoindex_test",
         "comments",
@@ -117,7 +120,7 @@ describe("Cli - Commands - db:migrate", () => {
 
       if (defaultDatabaseType == "mysql") {
         expect(indexesNames).toEqual(["index_on_token","user_id"])
-      } else if (defaultDatabaseType == "sqlite") {
+      } else if (defaultDatabaseType == "sqlite" || defaultDatabaseType == "pgsql") {
         expect(indexesNames).toEqual(["index_on_authentication_tokens_token", "index_on_authentication_tokens_user_id"])
       } else {
         expect(indexesNames).toEqual(["index_on_token", "index_on_user_id"])
@@ -126,7 +129,7 @@ describe("Cli - Commands - db:migrate", () => {
       // It creates unique indexes
       let tokenIndexName
 
-      if (defaultDatabaseType == "sqlite") {
+      if (defaultDatabaseType == "sqlite" || defaultDatabaseType == "pgsql") {
         tokenIndexName = "index_on_authentication_tokens_token"
       } else {
         tokenIndexName = "index_on_token"
@@ -178,6 +181,9 @@ describe("Cli - Commands - db:migrate", () => {
         [
           "accounts",
           "acts_as_list_items",
+          "audit_actions",
+          "audit_auditable_types",
+          "audits",
           "authentication_tokens",
           "comments",
           "interactions",
@@ -211,13 +217,17 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090000",
         "20251228090010",
         "20260418090000",
-        "20260601052206"
+        "20260601052206",
+        "20260629160000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
         [
           "accounts",
           "acts_as_list_items",
+          "audit_actions",
+          "audit_auditable_types",
+          "audits",
           "authentication_tokens",
           "comments",
           "interactions",
@@ -252,7 +262,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090000",
         "20251228090010",
         "20260418090000",
-        "20260601052206"
+        "20260601052206",
+        "20260629160000"
       ])
     }
   })
