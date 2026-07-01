@@ -419,6 +419,7 @@
  * @typedef {object} BackendProjectConfiguration
  * @property {string} path - Path to the backend project. May be an app root or a contributing package root (package entries are appended internally from `packages`).
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
+ * @property {string} [resourcesPath] - Optional override for the resources directory to auto-discover; defaults to `<path>/src/resources`. Set internally for package entries.
  * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Auto-discovered frontend model definitions keyed by model class name. Set internally by the environment handler — do not set manually.
  */
 

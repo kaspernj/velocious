@@ -99,7 +99,8 @@ export default class VelociousPackage {
   toBackendProjectConfiguration({frontendModelsOutputPath}) {
     return {
       frontendModelsOutputPath,
-      path: this.getPath()
+      path: this.getPath(),
+      resourcesPath: this.getResourcesPath()
     }
   }
 }

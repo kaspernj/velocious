@@ -6,6 +6,7 @@
 * Database models that work almost the same in frontend and backend
 * Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
+* External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))

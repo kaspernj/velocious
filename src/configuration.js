@@ -164,7 +164,9 @@ export default class VelociousConfiguration {
     this._beaconLastDownError = undefined
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
-    this._backendProjects = backendProjects || []
+    // Copy so appending package-derived entries below never mutates a caller's
+    // shared array (config modules commonly export a reused backendProjects array).
+    this._backendProjects = backendProjects ? [...backendProjects] : []
     /** @type {import("./configuration-types.js").ClientErrorPayloadReporterType[]} */
     this._clientErrorPayloadReporters = []
     this.cors = cors
