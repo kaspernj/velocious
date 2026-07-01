@@ -1,8 +1,5 @@
 // @ts-check
 
-import {dirname} from "path"
-import {fileURLToPath} from "url"
-
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
@@ -28,6 +25,18 @@ export default class VelociousPackage {
   }
 
   /**
+   * Derives the containing directory of a module url without Node's `path`/`url`
+   * modules, so this class stays safe to import in browser/Expo bundles.
+   * @param {string} url - A module url (usually `import.meta.url`).
+   * @returns {string} - The directory path that contains the module.
+   */
+  static _directoryFromUrl(url) {
+    const directoryUrl = new URL(".", url)
+
+    return decodeURIComponent(directoryUrl.pathname).replace(/\/$/, "")
+  }
+
+  /**
    * Runs constructor.
    * @param {import("../configuration-types.js").VelociousPackageDescriptor} args - Package descriptor.
    */
@@ -43,7 +52,7 @@ export default class VelociousPackage {
     }
 
     this._name = name
-    this._path = path || dirname(fileURLToPath(/** @type {string} */ (url)))
+    this._path = path || VelociousPackage._directoryFromUrl(/** @type {string} */ (url))
     this._modelsPath = modelsPath
     this._resourcesPath = resourcesPath
     this._migrationsPath = migrationsPath

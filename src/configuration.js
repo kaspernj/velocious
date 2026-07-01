@@ -25,10 +25,7 @@ import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {validateTimeZone} from "./time-zone.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
-import InitializerFromRequireContext from "./database/initializer-from-require-context.js"
 import VelociousPackage from "./packages/velocious-package.js"
-import requireContext from "require-context"
-import {access} from "node:fs/promises"
 
 export {CurrentConfigurationNotSetError}
 
@@ -1695,43 +1692,9 @@ export default class VelociousConfiguration {
         await this._initializeModels({configuration: this, type: args.type})
       }
 
-      await this._initializePackageModels()
+      await this.getEnvironmentHandler().initializePackageModels(this)
 
       await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
-    }
-  }
-
-  /**
-   * Loads models contributed by registered packages into the model registry,
-   * after the app's own `initializeModels` hook has run. A package whose models
-   * directory is absent is skipped; a package model whose name collides with an
-   * already-registered different class throws a clear error.
-   * @returns {Promise<void>} - Resolves when complete.
-   */
-  async _initializePackageModels() {
-    for (const velociousPackage of this._packages) {
-      const modelsPath = velociousPackage.getModelsPath()
-
-      try {
-        await access(modelsPath)
-      } catch {
-        continue
-      }
-
-      const packageRequireContext = /** @type {import("./database/initializer-from-require-context.js").ModelClassRequireContextType} */ (requireContext(modelsPath, true, /^(.+)\.js$/))
-
-      for (const fileName of packageRequireContext.keys()) {
-        const modelClass = packageRequireContext(fileName)?.default
-        const existing = modelClass && this.modelClasses[modelClass.getModelName()]
-
-        if (existing && existing !== modelClass) {
-          throw new Error(`Package "${velociousPackage.getName()}" model "${modelClass.getModelName()}" collides with an already-registered model.`)
-        }
-      }
-
-      await this.ensureConnections({name: `Initialize ${velociousPackage.getName()} package models`}, async () => {
-        await new InitializerFromRequireContext({requireContext: packageRequireContext}).initialize({configuration: this})
-      })
     }
   }
 

@@ -31,6 +31,8 @@ import * as inflection from "inflection"
 import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import {timingSafeEqual} from "node:crypto"
+import requireContext from "require-context"
+import InitializerFromRequireContext from "../database/initializer-from-require-context.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
 
@@ -142,6 +144,43 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       if (Object.keys(discovered).length > 0) {
         backendProject.frontendModels = discovered
       }
+    }
+  }
+
+  /**
+   * Loads models contributed by registered packages into the model registry,
+   * after the app's own `initializeModels` hook. A package whose models directory
+   * is absent is skipped; a package model whose name collides with an
+   * already-registered different class throws. Node-only (uses the filesystem), so
+   * it lives here rather than in the browser-bundled Configuration.
+   * @param {import("../configuration.js").default} configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializePackageModels(configuration) {
+    for (const velociousPackage of configuration.getPackages()) {
+      const modelsPath = velociousPackage.getModelsPath()
+
+      try {
+        await fs.access(modelsPath)
+      } catch {
+        continue
+      }
+
+      const packageRequireContext = /** @type {import("../database/initializer-from-require-context.js").ModelClassRequireContextType} */ (requireContext(modelsPath, true, /^(.+)\.js$/))
+      const modelClasses = configuration.getModelClasses()
+
+      for (const fileName of packageRequireContext.keys()) {
+        const modelClass = packageRequireContext(fileName)?.default
+        const existing = modelClass && modelClasses[modelClass.getModelName()]
+
+        if (existing && existing !== modelClass) {
+          throw new Error(`Package "${velociousPackage.getName()}" model "${modelClass.getModelName()}" collides with an already-registered model.`)
+        }
+      }
+
+      await configuration.ensureConnections({name: `Initialize ${velociousPackage.getName()} package models`}, async () => {
+        await new InitializerFromRequireContext({requireContext: packageRequireContext}).initialize({configuration})
+      })
     }
   }
 
