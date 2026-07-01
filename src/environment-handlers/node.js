@@ -761,32 +761,79 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Resolves with the migrations.
    */
   async findMigrations() {
-    const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
-    const glob = await fs.glob(`${migrationsPath}/**/*.js`)
-    let files = []
+    const configuration = this.getConfiguration()
+    const migrationDirectories = [`${configuration.getDirectory()}/src/database/migrations`]
 
-    for await (const fullPath of glob) {
-      const file = await path.basename(fullPath)
-
-      const match = file.match(/^(\d{14})-(.+)\.js$/)
-
-      if (!match) continue
-
-      const date = parseInt(match[1])
-      const migrationName = match[2]
-      const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
-
-      files.push({
-        file,
-        fullPath: `${migrationsPath}/${file}`,
-        date,
-        migrationClassName
-      })
+    for (const velociousPackage of configuration.getPackages()) {
+      migrationDirectories.push(velociousPackage.getMigrationsPath())
     }
 
-    files = files.sort((migration1, migration2) => migration1.date - migration2.date)
+    /** @type {Array<import("./base.js").MigrationObjectType>} */
+    const files = []
 
-    return files
+    for (const migrationsPath of migrationDirectories) {
+      await this._collectMigrationsFromDirectory(migrationsPath, files)
+    }
+
+    this._ensureNoMigrationTimestampCollisions(files)
+
+    return files.sort((migration1, migration2) => migration1.date - migration2.date)
+  }
+
+  /**
+   * Collects migration files from one directory into `files`, preserving each
+   * file's real absolute path (so app and package migrations keep their own
+   * source location). A missing directory is skipped.
+   * @param {string} migrationsPath - Directory to scan.
+   * @param {Array<import("./base.js").MigrationObjectType>} files - Accumulator to push into.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _collectMigrationsFromDirectory(migrationsPath, files) {
+    const glob = await fs.glob(`${migrationsPath}/**/*.js`)
+
+    try {
+      for await (const fullPath of glob) {
+        const file = await path.basename(fullPath)
+        const match = file.match(/^(\d{14})-(.+)\.js$/)
+
+        if (!match) continue
+
+        const date = parseInt(match[1])
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+        files.push({file, fullPath, date, migrationClassName})
+      }
+    } catch (error) {
+      if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "ENOENT") {
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Throws if two migrations from different files share the same 14-digit
+   * timestamp. The `schema_migrations` ledger keys on the timestamp, so a silent
+   * collision (e.g. between the app and a package, or two packages) would leave
+   * the second migration un-run — a data bug. Fail loudly instead.
+   * @param {Array<import("./base.js").MigrationObjectType>} files - Collected migrations.
+   * @returns {void} - No return value.
+   */
+  _ensureNoMigrationTimestampCollisions(files) {
+    /** @type {Map<number, string>} */
+    const pathsByDate = new Map()
+
+    for (const migration of files) {
+      if (!migration.fullPath) continue
+
+      const existing = pathsByDate.get(migration.date)
+
+      if (existing && existing !== migration.fullPath) {
+        throw new Error(`Two migrations share the timestamp ${migration.date}: ${existing} and ${migration.fullPath}. Migration timestamps must be unique across the app and all packages.`)
+      }
+
+      pathsByDate.set(migration.date, migration.fullPath)
+    }
   }
 
   /**

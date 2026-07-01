@@ -17,7 +17,11 @@
     "spec/dummy/src/connections/**/*.js",
     "spec/dummy/src/routes/**/*.js",
     "spec/dummy/src/config/**/*.js",
-    "spec/dummy/shared/frontend-command-types.js"
+    "spec/dummy/shared/frontend-command-types.js",
+    "spec/dummy-package/velocious-package.js",
+    "spec/dummy-package/src/models/**/*.js",
+    "spec/dummy-package/src/resources/**/*.js",
+    "spec/dummy-package/src/database/migrations/**/*.js"
   ],
   "ignorePatterns": [
     "build/**",

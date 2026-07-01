@@ -25,6 +25,10 @@ import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {validateTimeZone} from "./time-zone.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
+import InitializerFromRequireContext from "./database/initializer-from-require-context.js"
+import VelociousPackage from "./packages/velocious-package.js"
+import requireContext from "require-context"
+import {access} from "node:fs/promises"
 
 export {CurrentConfigurationNotSetError}
 
@@ -127,7 +131,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -174,6 +178,18 @@ export default class VelociousConfiguration {
     this._exposeInternalErrorsToClients = exposeInternalErrorsToClients
     this._directory = directory
     this._initializeModels = initializeModels
+    /** @type {VelociousPackage[]} */
+    this._packages = (packages || []).map((entry) => VelociousPackage.from(entry))
+
+    // Append a derived backend-project per package so the existing resource
+    // discovery + frontend-model generation machinery includes it. Package
+    // frontend models are generated into the app's frontend-models output.
+    const appFrontendModelsOutputPath = this._backendProjects[0]?.frontendModelsOutputPath
+
+    for (const velociousPackage of this._packages) {
+      this._backendProjects.push(velociousPackage.toBackendProjectConfiguration({frontendModelsOutputPath: appFrontendModelsOutputPath}))
+    }
+
     this._isInitialized = false
     this.httpServer = httpServer || {}
     /**
@@ -840,6 +856,12 @@ export default class VelociousConfiguration {
    * @returns {import("./configuration-types.js").BackendProjectConfiguration[]} - Backend projects.
    */
   getBackendProjects() { return this._backendProjects }
+
+  /**
+   * Runs get packages.
+   * @returns {VelociousPackage[]} - Registered Velocious packages.
+   */
+  getPackages() { return this._packages }
 
   /**
    * Runs get ability resources.
@@ -1671,7 +1693,43 @@ export default class VelociousConfiguration {
         await this._initializeModels({configuration: this, type: args.type})
       }
 
+      await this._initializePackageModels()
+
       await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
+    }
+  }
+
+  /**
+   * Loads models contributed by registered packages into the model registry,
+   * after the app's own `initializeModels` hook has run. A package whose models
+   * directory is absent is skipped; a package model whose name collides with an
+   * already-registered different class throws a clear error.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _initializePackageModels() {
+    for (const velociousPackage of this._packages) {
+      const modelsPath = velociousPackage.getModelsPath()
+
+      try {
+        await access(modelsPath)
+      } catch {
+        continue
+      }
+
+      const packageRequireContext = /** @type {import("./database/initializer-from-require-context.js").ModelClassRequireContextType} */ (requireContext(modelsPath, true, /^(.+)\.js$/))
+
+      for (const fileName of packageRequireContext.keys()) {
+        const modelClass = packageRequireContext(fileName)?.default
+        const existing = modelClass && this.modelClasses[modelClass.getModelName()]
+
+        if (existing && existing !== modelClass) {
+          throw new Error(`Package "${velociousPackage.getName()}" model "${modelClass.getModelName()}" collides with an already-registered model.`)
+        }
+      }
+
+      await this.ensureConnections({name: `Initialize ${velociousPackage.getName()} package models`}, async () => {
+        await new InitializerFromRequireContext({requireContext: packageRequireContext}).initialize({configuration: this})
+      })
     }
   }
 

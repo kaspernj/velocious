@@ -417,9 +417,25 @@
 
 /**
  * @typedef {object} BackendProjectConfiguration
- * @property {string} path - Path to the backend project.
+ * @property {string} path - Path to the backend project. May be an app root or a contributing package root (package entries are appended internally from `packages`).
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
  * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Auto-discovered frontend model definitions keyed by model class name. Set internally by the environment handler — do not set manually.
+ */
+
+/**
+ * A descriptor for an external Velocious package (engine) that contributes models,
+ * resources and migrations. A package usually exports `new VelociousPackage({name, url: import.meta.url})`.
+ * @typedef {object} VelociousPackageDescriptor
+ * @property {string} name - The package name.
+ * @property {string} [url] - The descriptor module's `import.meta.url`; the package root is derived from it when `path` is omitted.
+ * @property {string} [path] - The package root directory (the one containing `src`). Derived from `url` when omitted.
+ * @property {string} [modelsPath] - Override for the package's models directory (default `<path>/src/models`).
+ * @property {string} [resourcesPath] - Override for the package's frontend-model resources directory (default `<path>/src/resources`).
+ * @property {string} [migrationsPath] - Override for the package's migrations directory (default `<path>/src/database/migrations`).
+ */
+
+/**
+ * @typedef {import("./packages/velocious-package.js").default | VelociousPackageDescriptor} VelociousPackageConfiguration
  */
 
 /**
@@ -490,6 +506,7 @@
  * @property {AbilityResolverType} [abilityResolver] - Resolver for creating request-scoped ability instances.
  * @property {AttachmentsConfiguration} [attachments] - Attachment storage configuration.
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
+ * @property {VelociousPackageConfiguration[]} [packages] - External Velocious packages that contribute models, frontend-model resources and migrations.
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
  * @property {boolean | DebugEndpointConfiguration} [debugEndpoint] - Enable the built-in debug endpoint. Defaults to false.
