@@ -25,6 +25,7 @@ import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import {validateTimeZone} from "./time-zone.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
+import VelociousPackage from "./packages/velocious-package.js"
 
 export {CurrentConfigurationNotSetError}
 
@@ -127,7 +128,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -160,7 +161,9 @@ export default class VelociousConfiguration {
     this._beaconLastDownError = undefined
     this._scheduledBackgroundJobs = scheduledBackgroundJobs
     this._attachments = attachments || {}
-    this._backendProjects = backendProjects || []
+    // Copy so appending package-derived entries below never mutates a caller's
+    // shared array (config modules commonly export a reused backendProjects array).
+    this._backendProjects = backendProjects ? [...backendProjects] : []
     /** @type {import("./configuration-types.js").ClientErrorPayloadReporterType[]} */
     this._clientErrorPayloadReporters = []
     this.cors = cors
@@ -174,6 +177,18 @@ export default class VelociousConfiguration {
     this._exposeInternalErrorsToClients = exposeInternalErrorsToClients
     this._directory = directory
     this._initializeModels = initializeModels
+    /** @type {VelociousPackage[]} */
+    this._packages = (packages || []).map((entry) => VelociousPackage.from(entry))
+
+    // Append a derived backend-project per package so the existing resource
+    // discovery + frontend-model generation machinery includes it. Package
+    // frontend models are generated into the app's frontend-models output.
+    const appFrontendModelsOutputPath = this._backendProjects[0]?.frontendModelsOutputPath
+
+    for (const velociousPackage of this._packages) {
+      this._backendProjects.push(velociousPackage.toBackendProjectConfiguration({frontendModelsOutputPath: appFrontendModelsOutputPath}))
+    }
+
     this._isInitialized = false
     this.httpServer = httpServer || {}
     /**
@@ -840,6 +855,12 @@ export default class VelociousConfiguration {
    * @returns {import("./configuration-types.js").BackendProjectConfiguration[]} - Backend projects.
    */
   getBackendProjects() { return this._backendProjects }
+
+  /**
+   * Runs get packages.
+   * @returns {VelociousPackage[]} - Registered Velocious packages.
+   */
+  getPackages() { return this._packages }
 
   /**
    * Runs get ability resources.
@@ -1670,6 +1691,8 @@ export default class VelociousConfiguration {
       if (this._initializeModels) {
         await this._initializeModels({configuration: this, type: args.type})
       }
+
+      await this.getEnvironmentHandler().initializePackageModels(this)
 
       await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
     }

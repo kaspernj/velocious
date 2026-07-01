@@ -614,4 +614,13 @@ export default class VelociousEnvironmentHandlerBase {
   async initializeFrontendModelWebsocketPublishers(_configuration) {
     // No-op in base handler; Node handler does the real registration.
   }
+
+  /**
+   * Loads models contributed by registered packages.
+   * @param {import("../configuration.js").default} _configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializePackageModels(_configuration) {
+    // No-op in base handler; Node handler loads package models from the filesystem.
+  }
 }

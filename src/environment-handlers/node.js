@@ -31,6 +31,8 @@ import * as inflection from "inflection"
 import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import {timingSafeEqual} from "node:crypto"
+import requireContext from "require-context"
+import InitializerFromRequireContext from "../database/initializer-from-require-context.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
 
@@ -103,7 +105,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     for (const backendProject of backendProjects) {
       if (backendProject.frontendModels) continue
 
-      const resourcesDir = path.join(backendProject.path, "src", "resources")
+      const resourcesDir = backendProject.resourcesPath || path.join(backendProject.path, "src", "resources")
       let files
 
       try {
@@ -142,6 +144,43 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       if (Object.keys(discovered).length > 0) {
         backendProject.frontendModels = discovered
       }
+    }
+  }
+
+  /**
+   * Loads models contributed by registered packages into the model registry,
+   * after the app's own `initializeModels` hook. A package whose models directory
+   * is absent is skipped; a package model whose name collides with an
+   * already-registered different class throws. Node-only (uses the filesystem), so
+   * it lives here rather than in the browser-bundled Configuration.
+   * @param {import("../configuration.js").default} configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializePackageModels(configuration) {
+    for (const velociousPackage of configuration.getPackages()) {
+      const modelsPath = velociousPackage.getModelsPath()
+
+      try {
+        await fs.access(modelsPath)
+      } catch {
+        continue
+      }
+
+      const packageRequireContext = /** @type {import("../database/initializer-from-require-context.js").ModelClassRequireContextType} */ (requireContext(modelsPath, true, /^(.+)\.js$/))
+      const modelClasses = configuration.getModelClasses()
+
+      for (const fileName of packageRequireContext.keys()) {
+        const modelClass = packageRequireContext(fileName)?.default
+        const existing = modelClass && modelClasses[modelClass.getModelName()]
+
+        if (existing && existing !== modelClass) {
+          throw new Error(`Package "${velociousPackage.getName()}" model "${modelClass.getModelName()}" collides with an already-registered model.`)
+        }
+      }
+
+      await configuration.ensureConnections({name: `Initialize ${velociousPackage.getName()} package models`}, async () => {
+        await new InitializerFromRequireContext({requireContext: packageRequireContext}).initialize({configuration})
+      })
     }
   }
 
@@ -761,32 +800,79 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<Array<import("./base.js").MigrationObjectType>>} - Resolves with the migrations.
    */
   async findMigrations() {
-    const migrationsPath = `${this.getConfiguration().getDirectory()}/src/database/migrations`
-    const glob = await fs.glob(`${migrationsPath}/**/*.js`)
-    let files = []
+    const configuration = this.getConfiguration()
+    const migrationDirectories = [`${configuration.getDirectory()}/src/database/migrations`]
 
-    for await (const fullPath of glob) {
-      const file = await path.basename(fullPath)
-
-      const match = file.match(/^(\d{14})-(.+)\.js$/)
-
-      if (!match) continue
-
-      const date = parseInt(match[1])
-      const migrationName = match[2]
-      const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
-
-      files.push({
-        file,
-        fullPath: `${migrationsPath}/${file}`,
-        date,
-        migrationClassName
-      })
+    for (const velociousPackage of configuration.getPackages()) {
+      migrationDirectories.push(velociousPackage.getMigrationsPath())
     }
 
-    files = files.sort((migration1, migration2) => migration1.date - migration2.date)
+    /** @type {Array<import("./base.js").MigrationObjectType>} */
+    const files = []
 
-    return files
+    for (const migrationsPath of migrationDirectories) {
+      await this._collectMigrationsFromDirectory(migrationsPath, files)
+    }
+
+    this._ensureNoMigrationTimestampCollisions(files)
+
+    return files.sort((migration1, migration2) => migration1.date - migration2.date)
+  }
+
+  /**
+   * Collects migration files from one directory into `files`, preserving each
+   * file's real absolute path (so app and package migrations keep their own
+   * source location). A missing directory is skipped.
+   * @param {string} migrationsPath - Directory to scan.
+   * @param {Array<import("./base.js").MigrationObjectType>} files - Accumulator to push into.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _collectMigrationsFromDirectory(migrationsPath, files) {
+    const glob = await fs.glob(`${migrationsPath}/**/*.js`)
+
+    try {
+      for await (const fullPath of glob) {
+        const file = await path.basename(fullPath)
+        const match = file.match(/^(\d{14})-(.+)\.js$/)
+
+        if (!match) continue
+
+        const date = parseInt(match[1])
+        const migrationName = match[2]
+        const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
+
+        files.push({file, fullPath, date, migrationClassName})
+      }
+    } catch (error) {
+      if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "ENOENT") {
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Throws if two migrations from different files share the same 14-digit
+   * timestamp. The `schema_migrations` ledger keys on the timestamp, so a silent
+   * collision (e.g. between the app and a package, or two packages) would leave
+   * the second migration un-run — a data bug. Fail loudly instead.
+   * @param {Array<import("./base.js").MigrationObjectType>} files - Collected migrations.
+   * @returns {void} - No return value.
+   */
+  _ensureNoMigrationTimestampCollisions(files) {
+    /** @type {Map<number, string>} */
+    const pathsByDate = new Map()
+
+    for (const migration of files) {
+      if (!migration.fullPath) continue
+
+      const existing = pathsByDate.get(migration.date)
+
+      if (existing && existing !== migration.fullPath) {
+        throw new Error(`Two migrations share the timestamp ${migration.date}: ${existing} and ${migration.fullPath}. Migration timestamps must be unique across the app and all packages.`)
+      }
+
+      pathsByDate.set(migration.date, migration.fullPath)
+    }
   }
 
   /**
