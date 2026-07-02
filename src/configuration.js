@@ -876,6 +876,34 @@ export default class VelociousConfiguration {
   setAbilityResources(resources) { this._abilityResources = resources }
 
   /**
+   * Merges resource classes discovered from the app and every registered package
+   * into the ability-resources list. `autoDiscoverResources` populates each backend
+   * project's `frontendModels` (including package projects), so this makes a
+   * package-contributed model's abilities reach subscription and per-record
+   * authorization automatically — consuming apps do not have to hand-register
+   * package resources. Already-present classes (e.g. an app's explicitly-set
+   * resources) are left untouched.
+   * @returns {void} - No return value.
+   */
+  _mergeDiscoveredAbilityResources() {
+    const merged = [...this._abilityResources]
+    const seen = new Set(merged)
+
+    for (const backendProject of this._backendProjects) {
+      if (!backendProject.abilityResources) continue
+
+      for (const ResourceClass of backendProject.abilityResources) {
+        if (seen.has(ResourceClass)) continue
+
+        seen.add(ResourceClass)
+        merged.push(ResourceClass)
+      }
+    }
+
+    this._abilityResources = merged
+  }
+
+  /**
    * Runs get ability resolver.
    * @returns {import("./configuration-types.js").AbilityResolverType | undefined} - Ability resolver.
    */
@@ -1723,6 +1751,7 @@ export default class VelociousConfiguration {
 
       await this.initializeModels({type})
       await this.getEnvironmentHandler().autoDiscoverResources(this)
+      this._mergeDiscoveredAbilityResources()
       this._validateResourceRelationshipsOnModels()
 
       if (this._initializers) {

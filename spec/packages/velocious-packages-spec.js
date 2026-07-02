@@ -58,6 +58,20 @@ describe("Configuration with packages", () => {
     expect(joblerMigration.date).toEqual(20230728075330)
   })
 
+  it("auto-discovers a package's ability resource (incl. authorization-only) into the ability resources", async () => {
+    const configuration = buildConfigurationWithPackage()
+
+    // The real discovery path — the dummy package's resource extends the
+    // authorization base (not FrontendModelBaseResource), so this proves such
+    // resources are still collected for the ability system.
+    await configuration.getEnvironmentHandler().autoDiscoverResources(configuration)
+    configuration._mergeDiscoveredAbilityResources()
+
+    const {default: JoblerJobResource} = await import("../dummy-package/src/resources/jobler-job-resource.js")
+
+    expect(configuration.getAbilityResources().includes(JoblerJobResource)).toEqual(true)
+  })
+
   it("leaves a configuration without packages unchanged", () => {
     const configuration = new Configuration({
       backendProjects: [{path: "/tmp/app-backend"}],
