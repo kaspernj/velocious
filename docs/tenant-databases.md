@@ -60,6 +60,9 @@ export default new Configuration({
         // cross-tenant dependent: "restrict" checks.
         return await Project.where({tenantState: "migrated"}).select(["id", "databaseName"]).toArray()
       },
+      // Optional: override only if you need custom creation (grants, structure
+      // loading, …). Omit it and the framework's driver-agnostic default runs
+      // (see below), so most apps do not implement createDatabase/dropDatabase.
       createDatabase: async ({databaseConfiguration, tenant}) => {
         // App-specific database creation, grants, and structure loading.
       },
@@ -86,7 +89,9 @@ npx velocious db:tenants:migrate projectTenant
 npx velocious db:tenants:drop projectTenant
 ```
 
-`db:tenants:drop` drops every listed tenant's database through the provider's `dropDatabase` hook (define it alongside `createDatabase`). Like the other lifecycle commands it honors `--parallel`.
+`db:tenants:drop` drops every listed tenant's database through the provider's `dropDatabase` hook. Like the other lifecycle commands it honors `--parallel`.
+
+`createDatabase`/`dropDatabase` are optional. When a provider omits them, `db:tenants:create`, `db:tenants:drop`, and `Tenant.drop` fall back to the framework default (`src/tenants/default-tenant-database-provisioning.js`): file-backed drivers (sqlite) create by ensuring the tenant connection and treat drop as a no-op, while server drivers (mysql, pgsql, …) connect to the maintenance database (`useDatabase`) and run the driver's own `createDatabaseSql`/`dropDatabaseSql` after validating the tenant database name. Define your own hook only when you need custom provisioning.
 
 Tenant lifecycle commands run one tenant at a time by default. Add `--parallel` to process up to 20 tenants at once, or pass a positive integer to choose a different concurrency:
 
