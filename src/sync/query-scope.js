@@ -30,7 +30,13 @@ export function serializedScopeFromQuery(query) {
     }
 
     for (const [attributeName, value] of Object.entries(whereHash)) {
-      conditions[attributeName] = scalarConditionValue(attributeName, value)
+      const conditionValue = scalarConditionValue(attributeName, value)
+
+      if (attributeName in conditions && stableJsonStringify(conditions[attributeName]) !== stableJsonStringify(conditionValue)) {
+        throw new Error(`sync(query) got conflicting conditions for: ${attributeName}`)
+      }
+
+      conditions[attributeName] = conditionValue
     }
   }
 

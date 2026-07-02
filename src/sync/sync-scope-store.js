@@ -7,6 +7,17 @@ import {scopeKey} from "./query-scope.js"
 import stableJsonStringify from "./stable-json.js"
 
 const TABLE_NAME = "velocious_sync_scopes"
+const SCOPE_DIGEST_PREFIX = "velocious-sync-scope:"
+
+/**
+ * Digests a serialized scope into a fixed-size deterministic key, so scope
+ * identities with long condition values fit an indexed string column.
+ * @param {import("./sync-client-types.js").SerializedSyncScope} scope - Serialized sync scope.
+ * @returns {string} Deterministic UUIDv5 digest of the canonical scope key.
+ */
+function scopeDigestForScope(scope) {
+  return new UUID(5, "ns:URL", `${SCOPE_DIGEST_PREFIX}${scopeKey(scope)}`).format()
+}
 
 /**
  * @typedef {object} SyncScopeRow
@@ -14,7 +25,7 @@ const TABLE_NAME = "velocious_sync_scopes"
  * @property {string | null} cursorPayload - Persisted cursor JSON payload.
  * @property {string} id - Scope row id.
  * @property {string} resourceType - Scope resource/model name.
- * @property {string} scopeKey - Stable canonical scope key.
+ * @property {string} scopeDigest - Fixed-size deterministic digest of the canonical scope key.
  * @property {string} state - Scope state ("active" or "removed").
  */
 
@@ -76,10 +87,10 @@ export default class SyncScopeStore {
   async findOrCreateScope(scope) {
     await this.ensureReady()
 
-    const key = scopeKey(scope)
+    const digest = scopeDigestForScope(scope)
 
     if (this._usesMemoryStorage()) {
-      const existingScope = this._memoryScopes.get(key)
+      const existingScope = this._memoryScopes.get(digest)
 
       if (existingScope) {
         if (existingScope.state !== "active") existingScope.state = "active"
@@ -92,17 +103,17 @@ export default class SyncScopeStore {
         cursorPayload: null,
         id: new UUID(4).format(),
         resourceType: scope.resourceType,
-        scopeKey: key,
+        scopeDigest: digest,
         state: "active"
       }
 
-      this._memoryScopes.set(key, newScope)
+      this._memoryScopes.set(digest, newScope)
 
       return newScope
     }
 
     return await this._withDb(async (db) => {
-      const existingRow = await this._rowByScopeKey(db, key)
+      const existingRow = await this._rowByScopeDigest(db, digest)
 
       if (existingRow) {
         if (existingRow.state !== "active") {
@@ -121,13 +132,13 @@ export default class SyncScopeStore {
           cursor_json: null,
           id: new UUID(4).format(),
           resource_type: scope.resourceType,
-          scope_key: key,
+          scope_digest: digest,
           state: "active",
           updated_at: new Date()
         }
       })
 
-      const createdRow = await this._rowByScopeKey(db, key)
+      const createdRow = await this._rowByScopeDigest(db, digest)
 
       if (!createdRow) throw new Error("Failed to persist sync scope")
 
@@ -167,11 +178,11 @@ export default class SyncScopeStore {
     await this.ensureReady()
 
     if (this._usesMemoryStorage()) {
-      return this._memoryScopes.get(scopeRow.scopeKey)?.cursorPayload ?? null
+      return this._memoryScopes.get(scopeRow.scopeDigest)?.cursorPayload ?? null
     }
 
     return await this._withDb(async (db) => {
-      const row = await this._rowByScopeKey(db, scopeRow.scopeKey)
+      const row = await this._rowByScopeDigest(db, scopeRow.scopeDigest)
 
       return row ? row.cursorPayload : null
     })
@@ -191,9 +202,9 @@ export default class SyncScopeStore {
     const cursorPayload = JSON.stringify(cursor)
 
     if (this._usesMemoryStorage()) {
-      const memoryScope = this._memoryScopes.get(scopeRow.scopeKey)
+      const memoryScope = this._memoryScopes.get(scopeRow.scopeDigest)
 
-      if (!memoryScope) throw new Error(`No sync scope found for: ${scopeRow.scopeKey}`)
+      if (!memoryScope) throw new Error(`No sync scope found for: ${scopeRow.scopeDigest}`)
 
       memoryScope.cursorPayload = cursorPayload
       return
@@ -201,7 +212,7 @@ export default class SyncScopeStore {
 
     await this._withDb(async (db) => {
       await db.update({
-        conditions: {scope_key: scopeRow.scopeKey},
+        conditions: {scope_digest: scopeRow.scopeDigest},
         data: {cursor_json: cursorPayload, updated_at: new Date()},
         tableName: TABLE_NAME
       })
@@ -216,10 +227,10 @@ export default class SyncScopeStore {
   async deactivate(scope) {
     await this.ensureReady()
 
-    const key = scopeKey(scope)
+    const digest = scopeDigestForScope(scope)
 
     if (this._usesMemoryStorage()) {
-      const memoryScope = this._memoryScopes.get(key)
+      const memoryScope = this._memoryScopes.get(digest)
 
       if (memoryScope) memoryScope.state = "removed"
 
@@ -227,7 +238,7 @@ export default class SyncScopeStore {
     }
 
     await this._withDb(async (db) => {
-      await db.update({conditions: {scope_key: key}, data: {state: "removed", updated_at: new Date()}, tableName: TABLE_NAME})
+      await db.update({conditions: {scope_digest: digest}, data: {state: "removed", updated_at: new Date()}, tableName: TABLE_NAME})
     })
   }
 
@@ -270,7 +281,7 @@ export default class SyncScopeStore {
     const table = new TableData(TABLE_NAME, {ifNotExists: true})
 
     table.string("id", {null: false, primaryKey: true})
-    table.string("scope_key", {index: true, null: false})
+    table.string("scope_digest", {index: true, null: false})
     table.string("resource_type", {index: true, null: false})
     table.text("conditions_json", {null: false})
     table.text("cursor_json", {null: true})
@@ -282,16 +293,16 @@ export default class SyncScopeStore {
   }
 
   /**
-   * Resolves a scope row by its stable key.
+   * Resolves a scope row by its digest.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @param {string} key - Stable scope key.
+   * @param {string} digest - Fixed-size scope digest.
    * @returns {Promise<SyncScopeRow | null>} Scope row or null.
    */
-  async _rowByScopeKey(db, key) {
+  async _rowByScopeDigest(db, digest) {
     const rows = /** @type {Array<Record<string, ?>>} */ (await db
       .newQuery()
       .from(TABLE_NAME)
-      .where({scope_key: key})
+      .where({scope_digest: digest})
       .limit(1)
       .results())
 
@@ -309,7 +320,7 @@ export default class SyncScopeStore {
       cursorPayload: row.cursor_json === null || row.cursor_json === undefined ? null : String(row.cursor_json),
       id: String(row.id),
       resourceType: String(row.resource_type),
-      scopeKey: String(row.scope_key),
+      scopeDigest: String(row.scope_digest),
       state: String(row.state)
     }
   }

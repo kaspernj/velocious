@@ -51,6 +51,17 @@ describe("sync query scope", {tags: ["dummy"]}, () => {
       .toThrow(/does not support offset/u)
   })
 
+  it("fails loudly on conflicting duplicate conditions", async () => {
+    await expect(() => serializedScopeFromQuery(Task.where({projectId: 5}).where({projectId: 6})))
+      .toThrow(/conflicting conditions/u)
+  })
+
+  it("allows repeating an identical condition", () => {
+    const scope = serializedScopeFromQuery(Task.where({projectId: 5}).where({projectId: 5}))
+
+    expect(scope.conditions).toEqual({project_id: 5})
+  })
+
   it("fails loudly on non-scalar condition values", async () => {
     await expect(() => serializedScopeFromQuery(Task.where({name: {nested: true}})))
       .toThrow(/must be scalar/u)

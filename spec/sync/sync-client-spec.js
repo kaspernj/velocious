@@ -327,6 +327,25 @@ describe("sync client", () => {
     expect(syncRow.attributes.state).toEqual("pending")
   })
 
+  it("fails loudly instead of skipping pulled changes without an applyable resource", async () => {
+    const harness = buildHarness()
+
+    harness.state.changesResponses.push({
+      nextCursor: {id: "s-1", serverSequence: 1, updatedAt: "2026-07-01T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "Someone"}, id: "s-1", resourceId: "c-1", resourceType: "Customer", syncType: "update"}],
+      upToCursor: null
+    })
+
+    await expect(async () => await harness.client.sync(fakeQuery("Ticket", {partner_id: 5})))
+      .toThrow(/No sync resource with pull attributes configured for pulled change: Customer/u)
+
+    await harness.client.pull()
+
+    expect(harness.postChangesCalls.length).toEqual(2)
+    expect(harness.postChangesCalls[1].afterId).toEqual(undefined)
+  })
+
   it("fails loudly when queueing a resource type that is not configured", async () => {
     const harness = buildHarness()
 

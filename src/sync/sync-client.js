@@ -213,11 +213,26 @@ export default class SyncClient {
     await SyncApiClient.singleFlight(`velocious-sync-client-pull-${this._clientNumber}`, async () => {
       const authenticationToken = await this.config.authenticationToken()
       const scopeStore = this.scopeStore()
-      const applySync = SyncApiClient.resourceApplier(this.pullResourceConfigs(), (record) => {
+      const pullResourceConfigs = this.pullResourceConfigs()
+      const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => {
         this._remoteApplyRecords.add(record)
 
         return () => this._remoteApplyRecords.delete(record)
       })
+      /**
+       * Applies one pulled change, failing loudly instead of silently skipping unconfigured resources.
+       * @param {import("./sync-api-client-types.js").SyncChangeEnvelope} sync - Pulled change.
+       * @returns {Promise<import("./sync-api-client-types.js").SyncChangeApplyResult>} Apply result.
+       */
+      const applySync = async (sync) => {
+        const resourceType = sync.resourceType()
+
+        if (!resourceType || !pullResourceConfigs[resourceType]) {
+          throw new Error(`No sync resource with pull attributes configured for pulled change: ${String(resourceType)}`)
+        }
+
+        return await applier(sync)
+      }
       const result = {
         changed: false,
         pages: 0,

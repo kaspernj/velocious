@@ -44,6 +44,19 @@ describe("sync scope store", {tags: ["dummy"], databaseCleaning: {transaction: f
     expect(await store.loadCursor(secondScopeRow)).toEqual(null)
   })
 
+  it("stores long scope identities in a fixed-size digest key", async () => {
+    const store = buildStore()
+    const longName = "n".repeat(400)
+    const scopeRow = await store.findOrCreateScope(serializedScopeFromQuery(Task.where({name: longName, projectId: 5})))
+
+    expect(scopeRow.scopeDigest.length).toEqual(36)
+
+    const reusedRow = await store.findOrCreateScope(serializedScopeFromQuery(Task.where({projectId: 5}).where({name: longName})))
+
+    expect(reusedRow.id).toEqual(scopeRow.id)
+    expect((await store.activeScopes()).length).toEqual(1)
+  })
+
   it("deactivates and reactivates scopes", async () => {
     const store = buildStore()
     const scope = serializedScopeFromQuery(Task.where({projectId: 5}))
