@@ -3,6 +3,7 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import SyncApiController from "../../src/sync/sync-api-controller.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 
 class TestSyncModel {}
@@ -51,7 +52,7 @@ describe("sync configuration mount", () => {
   it("auto-mounts sync changes and replay routes when sync.api is configured", async () => {
     const configuration = buildConfiguration({api: {resourceClass: TestSyncResource}})
 
-    await configuration.mountConfiguredSyncApi()
+    SyncApiController.mountFromConfiguration(configuration)
 
     const changesRoute = await resolveRoute(configuration, "/velocious/sync/changes")
     const replayRoute = await resolveRoute(configuration, "/velocious/sync/replay")
@@ -63,7 +64,7 @@ describe("sync configuration mount", () => {
   it("mounts sync routes at a configured mount path", async () => {
     const configuration = buildConfiguration({api: {mountPath: "/api/sync", resourceClass: TestSyncResource}})
 
-    await configuration.mountConfiguredSyncApi()
+    SyncApiController.mountFromConfiguration(configuration)
 
     expect((await resolveRoute(configuration, "/api/sync/changes"))?.action).toEqual("changes")
     expect(await resolveRoute(configuration, "/velocious/sync/changes")).toEqual(null)
@@ -72,7 +73,7 @@ describe("sync configuration mount", () => {
   it("does not mount sync routes when sync.api is absent", async () => {
     const configuration = buildConfiguration()
 
-    await configuration.mountConfiguredSyncApi()
+    SyncApiController.mountFromConfiguration(configuration)
 
     expect(await resolveRoute(configuration, "/velocious/sync/changes")).toEqual(null)
   })
@@ -80,11 +81,11 @@ describe("sync configuration mount", () => {
   it("only mounts the sync routes once across repeated initializations", async () => {
     const configuration = buildConfiguration({api: {resourceClass: TestSyncResource}})
 
-    await configuration.mountConfiguredSyncApi()
+    SyncApiController.mountFromConfiguration(configuration)
 
     const hookCountAfterFirstMount = configuration.getRouteResolverHooks().length
 
-    await configuration.mountConfiguredSyncApi()
+    SyncApiController.mountFromConfiguration(configuration)
 
     expect(configuration.getRouteResolverHooks().length).toEqual(hookCountAfterFirstMount)
   })

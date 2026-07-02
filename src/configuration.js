@@ -478,23 +478,6 @@ export default class VelociousConfiguration {
   }
 
   /**
-   * Auto-mounts the Velocious sync changes/replay endpoints when sync.api is configured.
-   * Guarded so repeated initializations don't register the routes more than once.
-   * @returns {Promise<void>} - Resolves when the configured sync API is mounted.
-   */
-  async mountConfiguredSyncApi() {
-    const api = this.getSyncConfiguration().api
-
-    if (!api || this._mountedSyncApi) return
-
-    this._mountedSyncApi = true
-
-    const SyncApiController = (await import("./sync/sync-api-controller.js")).default
-
-    SyncApiController.mountInto({at: api.mountPath, configuration: this, syncResourceClass: api.resourceClass})
-  }
-
-  /**
    * Runs get database configuration.
    * @returns {Record<string, import("./configuration-types.js").DatabaseConfigurationType>} - The database configuration.
    */
@@ -1799,7 +1782,6 @@ export default class VelociousConfiguration {
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
       this._validateResourceRelationshipsOnModels()
-      await this.mountConfiguredSyncApi()
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})
