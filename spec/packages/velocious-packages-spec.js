@@ -58,6 +58,22 @@ describe("Configuration with packages", () => {
     expect(joblerMigration.date).toEqual(20230728075330)
   })
 
+  it("merges discovered package resources into the ability resources", () => {
+    const configuration = buildConfigurationWithPackage()
+    class JoblerJobResource {}
+    const packageBackendProject = configuration.getBackendProjects().find((backendProject) => backendProject.path.endsWith("/spec/dummy-package"))
+
+    if (!packageBackendProject) {
+      throw new Error("Expected the derived package backend project.")
+    }
+
+    // Stand in for autoDiscoverResources having populated the package's resources.
+    packageBackendProject.frontendModels = {JoblerJob: JoblerJobResource}
+    configuration._mergeDiscoveredAbilityResources()
+
+    expect(configuration.getAbilityResources().includes(JoblerJobResource)).toEqual(true)
+  })
+
   it("leaves a configuration without packages unchanged", () => {
     const configuration = new Configuration({
       backendProjects: [{path: "/tmp/app-backend"}],
