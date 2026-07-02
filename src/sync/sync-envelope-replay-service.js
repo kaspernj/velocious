@@ -12,11 +12,26 @@
 export default class SyncEnvelopeReplayService {
   /**
    * Creates a sync envelope replay service.
+   *
+   * When a sync model is given, `findExistingReplaySync` and
+   * `persistReplayMutation` get model-backed default implementations. The sync
+   * model must expose `findBy`/`create` statics plus instance
+   * `assign`/`save`/`clientUpdatedAt` and `advanceServerSequence` (the
+   * change-feed sequence contract), and the actor returned from
+   * `authenticateReplay` must expose an `id()` method.
    * @param {object} [args] - Constructor arguments.
    * @param {{debug?: (...args: Array<unknown>) => void, warn?: (...args: Array<unknown>) => void}} [args.logger] - Logger used for normalization warnings.
+   * @param {?} [args.syncModel] - Sync/change model enabling model-backed default hooks.
+   * @param {string} [args.actorForeignKeyColumn] - Sync model column linking rows to the replay actor.
    */
   constructor(args = {}) {
     this.logger = args.logger || console
+    this.syncModel = args.syncModel || null
+    this.actorForeignKeyColumn = args.actorForeignKeyColumn || "authentication_token_id"
+
+    if (args.actorForeignKeyColumn !== undefined && (typeof args.actorForeignKeyColumn !== "string" || args.actorForeignKeyColumn.length < 1)) {
+      throw new Error(`actorForeignKeyColumn must be a non-blank string, got: ${String(args.actorForeignKeyColumn)}`)
+    }
   }
 
   /**
@@ -178,11 +193,33 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Loads the previously stored sync/change row for stale-client comparison.
-   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, and mutation.
+   *
+   * Defaults to a sync-model lookup by actor and resource identity when a sync
+   * model is configured; otherwise apps override this hook.
+   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, and mutation.
    * @returns {Promise<?>} Existing sync row.
    */
-  async findExistingReplaySync(_args) {
-    return null
+  async findExistingReplaySync({actor, mutation}) {
+    if (!this.syncModel) return null
+
+    return await this.syncModel.findBy({
+      [this.actorForeignKeyColumn]: this.replayActorId(actor),
+      resource_id: mutation.resourceId,
+      resource_type: mutation.resourceType
+    })
+  }
+
+  /**
+   * Resolves the persisted actor id used by model-backed default hooks.
+   * @param {?} actor - Actor returned from authenticateReplay.
+   * @returns {?} Actor id.
+   */
+  replayActorId(actor) {
+    if (!actor || typeof actor !== "object" || typeof actor.id !== "function") {
+      throw new Error("SyncEnvelopeReplayService model-backed defaults require an actor with an id() method from authenticateReplay")
+    }
+
+    return actor.id()
   }
 
   /**
@@ -238,10 +275,45 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Persists one normalized mutation into the app sync/change store.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} _args - Replay persistence arguments.
+   *
+   * Defaults to a stale-guarded sync-model upsert (with server re-sequencing on
+   * updates) when a sync model is configured; otherwise apps override this hook.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay persistence arguments.
    * @returns {Promise<void>}
    */
-  async persistReplayMutation(_args) {}
+  async persistReplayMutation({actor, existingSync, mutation}) {
+    if (!this.syncModel) return
+
+    const attributes = this.replayPersistAttributes({actor, mutation})
+
+    if (existingSync) {
+      const existingClientUpdatedAt = this.existingReplaySyncClientUpdatedAt(existingSync)
+
+      if (existingClientUpdatedAt && mutation.clientUpdatedAt <= existingClientUpdatedAt) return
+
+      existingSync.assign(attributes)
+      await existingSync.advanceServerSequence()
+      await existingSync.save()
+    } else {
+      await this.syncModel.create(attributes)
+    }
+  }
+
+  /**
+   * Builds the sync-model attributes persisted by the model-backed default.
+   * @param {{actor: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor and mutation.
+   * @returns {Record<string, ?>} Sync row attributes.
+   */
+  replayPersistAttributes({actor, mutation}) {
+    return {
+      [this.actorForeignKeyColumn]: this.replayActorId(actor),
+      client_updated_at: mutation.clientUpdatedAt,
+      data: mutation.serializedData,
+      resource_id: mutation.resourceId,
+      resource_type: mutation.resourceType,
+      sync_type: mutation.syncType
+    }
+  }
 
   /**
    * Runs side effects after a successful mutation replay and persistence.

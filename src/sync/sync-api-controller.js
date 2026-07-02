@@ -3,6 +3,9 @@
 import Controller from "../controller.js"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 
+/** Configurations whose sync.api routes have already been mounted. */
+const mountedConfigurations = new WeakSet()
+
 /**
  * Generic `/velocious/sync` transport controller.
  *
@@ -97,6 +100,23 @@ export default class SyncApiController extends Controller {
       routes.post(`${at}/changes`, {to: [ControllerClass, "changes"]})
       routes.post(`${at}/replay`, {to: [ControllerClass, "replay"]})
     })
+  }
+
+  /**
+   * Auto-mounts the sync endpoints configured through `sync.api` on a configuration.
+   * No-op when `sync.api` is absent; guarded so repeated server boots with the
+   * same configuration register the routes only once.
+   * @param {import("../configuration.js").default} configuration - Configuration instance.
+   * @returns {void}
+   */
+  static mountFromConfiguration(configuration) {
+    const api = configuration.getSyncConfiguration().api
+
+    if (!api || mountedConfigurations.has(configuration)) return
+
+    mountedConfigurations.add(configuration)
+
+    this.mountInto({at: api.mountPath, configuration, syncResourceClass: api.resourceClass})
   }
 
   /**

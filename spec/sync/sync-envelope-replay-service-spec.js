@@ -159,7 +159,168 @@ describe("sync envelope replay service", () => {
 
     expect(result).toEqual({syncs: [{id: 7, reason: "mandant-mismatch", syncState: "failed"}]})
   })
+
+  it("finds existing sync rows through the configured sync model", async () => {
+    const syncModel = buildFakeSyncModel()
+    const service = new ModelBackedReplayService({syncModel})
+    const result = await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{
+        clientUpdatedAt: "2026-06-25T11:00:00.000Z",
+        data: {name: "Changed"},
+        id: 12,
+        resourceId: 34,
+        resourceType: "Task",
+        syncType: "update"
+      }]
+    })
+
+    expect(result).toEqual({syncs: [{id: 12, syncState: "successful"}]})
+    expect(syncModel.findByCalls).toEqual([{
+      authentication_token_id: "actor-1",
+      resource_id: "34",
+      resource_type: "Task"
+    }])
+  })
+
+  it("creates a sync row through the configured sync model when none exists", async () => {
+    const syncModel = buildFakeSyncModel()
+    const service = new ModelBackedReplayService({syncModel})
+
+    await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{
+        clientUpdatedAt: "2026-06-25T11:00:00.000Z",
+        data: {name: "Changed"},
+        id: 12,
+        resourceId: 34,
+        resourceType: "Task",
+        syncType: "update"
+      }]
+    })
+
+    const {client_updated_at: clientUpdatedAt, ...createdAttributes} = syncModel.createCalls[0]
+
+    expect(clientUpdatedAt.toISOString()).toEqual("2026-06-25T11:00:00.000Z")
+    expect(createdAttributes).toEqual({
+      authentication_token_id: "actor-1",
+      data: JSON.stringify({name: "Changed"}),
+      resource_id: "34",
+      resource_type: "Task",
+      sync_type: "update"
+    })
+  })
+
+  it("updates and re-sequences an existing sync row for newer client mutations", async () => {
+    const existingSync = buildFakeSyncRecord({clientUpdatedAt: new Date("2026-06-25T10:00:00.000Z")})
+    const syncModel = buildFakeSyncModel({existingSync})
+    const service = new ModelBackedReplayService({syncModel})
+
+    await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{
+        clientUpdatedAt: "2026-06-25T11:00:00.000Z",
+        data: {name: "Changed"},
+        id: 12,
+        resourceId: 34,
+        resourceType: "Task",
+        syncType: "update"
+      }]
+    })
+
+    expect(syncModel.createCalls).toEqual([])
+    expect(existingSync.calls).toEqual(["assign", "advanceServerSequence", "save"])
+    expect(existingSync.assignedAttributes.sync_type).toEqual("update")
+  })
+
+  it("does not persist stale mutations over a newer existing sync row", async () => {
+    const existingSync = buildFakeSyncRecord({clientUpdatedAt: new Date("2026-06-25T12:00:00.000Z")})
+    const syncModel = buildFakeSyncModel({existingSync})
+    const service = new ModelBackedReplayService({syncModel})
+    const result = await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{
+        clientUpdatedAt: "2026-06-25T11:00:00.000Z",
+        data: {name: "Changed"},
+        id: 12,
+        resourceId: 34,
+        resourceType: "Task",
+        syncType: "update"
+      }]
+    })
+
+    expect(result).toEqual({syncs: [{id: 12, syncState: "successful"}]})
+    expect(syncModel.createCalls).toEqual([])
+    expect(existingSync.calls).toEqual([])
+  })
+
+  it("fails loudly when model-backed defaults get an actor without an id", async () => {
+    const syncModel = buildFakeSyncModel()
+    const service = new ModelBackedReplayService({actor: {}, syncModel})
+
+    await expect(async () => await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{clientUpdatedAt: "2026-06-25T11:00:00.000Z", id: 1, resourceId: "1", resourceType: "Task", syncType: "update"}]
+    })).toThrow(/actor with an id/u)
+  })
 })
+
+/**
+ * Builds a fake sync record for model-backed replay tests.
+ * @param {{clientUpdatedAt: Date}} args - Existing record state.
+ * @returns {{assign: Function, advanceServerSequence: Function, save: Function, clientUpdatedAt: Function, calls: Array<string>, assignedAttributes: Record<string, ?>}} Fake sync record.
+ */
+function buildFakeSyncRecord({clientUpdatedAt}) {
+  const record = {
+    assignedAttributes: {},
+    calls: [],
+    assign(attributes) {
+      record.calls.push("assign")
+      record.assignedAttributes = attributes
+    },
+    async advanceServerSequence() {
+      record.calls.push("advanceServerSequence")
+    },
+    clientUpdatedAt: () => clientUpdatedAt,
+    async save() {
+      record.calls.push("save")
+    }
+  }
+
+  return record
+}
+
+/**
+ * Builds a fake sync model class for model-backed replay tests.
+ * @param {{existingSync?: ?}} [args] - Existing record returned from findBy.
+ * @returns {{findBy: Function, create: Function, findByCalls: Array<Record<string, ?>>, createCalls: Array<Record<string, ?>>}} Fake sync model.
+ */
+function buildFakeSyncModel({existingSync = null} = {}) {
+  const model = {
+    createCalls: [],
+    findByCalls: [],
+    async create(attributes) {
+      model.createCalls.push(attributes)
+    },
+    async findBy(conditions) {
+      model.findByCalls.push(conditions)
+      return existingSync
+    }
+  }
+
+  return model
+}
+
+class ModelBackedReplayService extends SyncEnvelopeReplayService {
+  constructor({actor = {id: () => "actor-1"}, syncModel}) {
+    super({logger: {warn: () => {}}, syncModel})
+    this.actor = actor
+  }
+
+  async authenticateReplay() {
+    return {actor: this.actor, authenticated: true}
+  }
+}
 
 class TestSyncEnvelopeReplayService extends SyncEnvelopeReplayService {
   constructor(callbacks) {
