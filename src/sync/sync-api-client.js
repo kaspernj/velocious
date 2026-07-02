@@ -362,7 +362,9 @@ export default class SyncApiClient {
       batchSize: args.batchSize,
       markSuccessful: async (sync) => {
         const syncId = (/** @type {{id: () => string | number | null | undefined}} */ (sync)).id()
-        const currentSync = await args.syncModel.findBy({id: syncId})
+        // Reload with the resource preloaded so rows relying on the resource-attributes
+        // fallback in localSyncData compare against the same snapshot they posted.
+        const currentSync = await args.syncModel.preload({resource: true}).where({id: syncId}).first()
 
         if (!currentSync) return
         // A row edited while its old payload was in flight stays pending, so the

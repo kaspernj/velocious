@@ -81,10 +81,11 @@ function buildFakeSyncModel() {
       return rows.find((row) => row.attributes.resourceId === conditions.resourceId && row.attributes.resourceType === conditions.resourceType) || null
     },
     preload: () => ({
-      /** @param {{state: string}} conditions - Where conditions. @returns {?} Chainable query. */
-      where: ({state}) => ({
+      /** @param {Record<string, ?>} conditions - Where conditions. @returns {?} Chainable query. */
+      where: (conditions) => ({
+        first: async () => rows.find((row) => row.attributes.id === conditions.id) || null,
         order: () => ({
-          toArray: async () => rows.filter((row) => row.attributes.state === state)
+          toArray: async () => rows.filter((row) => row.attributes.state === conditions.state)
         })
       })
     }),
