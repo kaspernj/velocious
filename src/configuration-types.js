@@ -356,8 +356,16 @@
  */
 
 /**
+ * Velocious sync API endpoint configuration.
+ * @typedef {object} VelociousSyncApiConfiguration
+ * @property {string} [mountPath] - Mount path for the sync endpoints. Defaults to "/velocious/sync".
+ * @property {FrontendModelResourceClassType} resourceClass - App sync resource class served by the auto-mounted sync endpoints.
+ */
+
+/**
  * Velocious sync configuration.
  * @typedef {object} VelociousSyncConfiguration
+ * @property {VelociousSyncApiConfiguration} [api] - Auto-mounts the Velocious sync changes/replay endpoints for this resource class.
  * @property {import("./sync/device-identity.js").SyncJsonWebKey | null} [deviceCertificateBackendPublicKey] - Public backend key used to verify offline device certificates for sync replay.
  * @property {number} [changeFeedRetentionSize] - Number of accepted server changes retained before clients must refresh from snapshot.
  * @property {Array<import("./sync/offline-grant.js").OfflineGrantSigningKey>} offlineGrantSigningKeys - Signing keys used to issue and verify offline grants. Secrets must never be exposed to clients.

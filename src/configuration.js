@@ -424,6 +424,7 @@ export default class VelociousConfiguration {
    * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Normalized sync configuration.
    */
   _normalizeSyncConfiguration(sync) {
+    const api = sync?.api
     const deviceCertificateBackendPublicKey = sync?.deviceCertificateBackendPublicKey || null
     const changeFeedRetentionSize = sync?.changeFeedRetentionSize
     const offlineGrantSigningKeys = sync?.offlineGrantSigningKeys || []
@@ -441,11 +442,56 @@ export default class VelociousConfiguration {
     }
 
     return {
+      api: this._normalizeSyncApiConfiguration(api),
       changeFeedRetentionSize: changeFeedRetentionSize || 10000,
       deviceCertificateBackendPublicKey,
       offlineGrantSigningKeys: offlineGrantSigningKeys.map((key) => normalizeOfflineGrantSigningKey(key)),
       offlineGrantTtlMs: offlineGrantTtlMs || 24 * 60 * 60 * 1000
     }
+  }
+
+  /**
+   * Normalizes sync API endpoint configuration.
+   * @param {import("./configuration-types.js").VelociousSyncApiConfiguration | undefined} api - Sync API configuration.
+   * @returns {import("./configuration-types.js").VelociousSyncApiConfiguration | undefined} - Normalized sync API configuration.
+   */
+  _normalizeSyncApiConfiguration(api) {
+    if (api === undefined || api === null) return undefined
+
+    if (typeof api !== "object" || Array.isArray(api)) {
+      throw new Error("sync.api must be an object with a resourceClass")
+    }
+
+    const {mountPath, resourceClass} = api
+
+    if (typeof resourceClass !== "function") {
+      throw new Error(`sync.api.resourceClass must be a resource class, got: ${String(resourceClass)}`)
+    }
+    if (!resourceClass.ModelClass) {
+      throw new Error(`sync.api.resourceClass ${resourceClass.name} must define static ModelClass`)
+    }
+    if (mountPath !== undefined && (typeof mountPath !== "string" || !mountPath.startsWith("/"))) {
+      throw new Error(`sync.api.mountPath must start with '/', got: ${String(mountPath)}`)
+    }
+
+    return {mountPath, resourceClass}
+  }
+
+  /**
+   * Auto-mounts the Velocious sync changes/replay endpoints when sync.api is configured.
+   * Guarded so repeated initializations don't register the routes more than once.
+   * @returns {Promise<void>} - Resolves when the configured sync API is mounted.
+   */
+  async mountConfiguredSyncApi() {
+    const api = this.getSyncConfiguration().api
+
+    if (!api || this._mountedSyncApi) return
+
+    this._mountedSyncApi = true
+
+    const SyncApiController = (await import("./sync/sync-api-controller.js")).default
+
+    SyncApiController.mountInto({at: api.mountPath, configuration: this, syncResourceClass: api.resourceClass})
   }
 
   /**
@@ -1753,6 +1799,7 @@ export default class VelociousConfiguration {
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
       this._validateResourceRelationshipsOnModels()
+      await this.mountConfiguredSyncApi()
 
       if (this._initializers) {
         const initializers = await this._initializers({configuration: this})
