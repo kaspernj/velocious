@@ -38,10 +38,17 @@ export default class SyncApiController extends Controller {
    */
   syncResource(params) {
     const ResourceClass = this.syncResourceClass()
+    const ability = this.currentAbility()
 
     return new ResourceClass({
-      ability: this.currentAbility(),
+      ability,
       controller: /** @type {import("../frontend-model-resource/base-resource.js").FrontendModelResourceController} */ (/** @type {unknown} */ (this)),
+      context: {
+        ...(ability?.getContext() || {}),
+        params: this.params(),
+        request: this.request()
+      },
+      locals: ability?.getLocals() || {},
       modelClass: this.syncModelClass(),
       modelName: this.syncModelName(),
       params: /** @type {import("../configuration-types.js").VelociousParams} */ (/** @type {unknown} */ (params)),

@@ -61,11 +61,11 @@ export default class SyncModelChangeFeedService {
 
     const limit = Number(value)
 
-    if (!Number.isFinite(limit) || limit <= 0) {
-      throw VelociousError.safe("Sync changes limit must be a positive number.", {code: "sync-invalid-changes-limit"})
+    if (!Number.isSafeInteger(limit) || limit <= 0) {
+      throw VelociousError.safe("Sync changes limit must be a positive integer.", {code: "sync-invalid-changes-limit"})
     }
 
-    return Math.min(Math.floor(limit), this.maxLimit)
+    return Math.min(limit, this.maxLimit)
   }
 
   /**
