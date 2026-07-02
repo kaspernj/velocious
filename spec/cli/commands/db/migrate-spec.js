@@ -45,6 +45,7 @@ describe("Cli - Commands - db:migrate", () => {
       "background_jobs",
       "velocious_attachments",
       "velocious_internal_migrations",
+      "velocious_sync_scopes",
       "websocket_channel_events",
       "websocket_replay_channels"
     ])
@@ -71,6 +72,7 @@ describe("Cli - Commands - db:migrate", () => {
         "schema_migrations",
         "string_subject_interactions",
         "string_subjects",
+        "sync_entries",
         "tasks",
         "users",
         "uuid_default_test",
@@ -193,6 +195,7 @@ describe("Cli - Commands - db:migrate", () => {
           "schema_migrations",
           "string_subject_interactions",
           "string_subjects",
+          "sync_entries",
           "tasks",
           "users",
           "uuid_interactions",
@@ -218,7 +221,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090010",
         "20260418090000",
         "20260601052206",
-        "20260629160000"
+        "20260629160000",
+        "20260702150000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
@@ -238,6 +242,7 @@ describe("Cli - Commands - db:migrate", () => {
           "schema_migrations",
           "string_subject_interactions",
           "string_subjects",
+          "sync_entries",
           "tasks",
           "users",
           "uuid_interactions",
@@ -263,7 +268,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20251228090010",
         "20260418090000",
         "20260601052206",
-        "20260629160000"
+        "20260629160000",
+        "20260702150000"
       ])
     }
   })
