@@ -82,7 +82,7 @@ describe("Cli - Commands - db:tenants:drop", () => {
     }
   })
 
-  it("throws when the provider does not define dropDatabase", async () => {
+  it("drops tenants through the framework default when the provider does not define dropDatabase", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenants-drop-missing-"))
     const configuration = new Configuration({
       database: {
@@ -133,15 +133,9 @@ describe("Cli - Commands - db:tenants:drop", () => {
     })
 
     try {
-      let caughtError = null
+      const result = await cli.execute()
 
-      try {
-        await cli.execute()
-      } catch (error) {
-        caughtError = error
-      }
-
-      expect(caughtError instanceof Error && caughtError.message.includes("must define dropDatabase")).toEqual(true)
+      expect(result).toEqual({identifier: "projectTenant", tenantCount: 1})
     } finally {
       await configuration.closeDatabaseConnections()
       await fs.rm(directory, {force: true, recursive: true})
