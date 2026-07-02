@@ -103,6 +103,28 @@ describe("sync API client", () => {
     expect(sync.attributes.state).toEqual("success")
   })
 
+  it("marks rows relying on the preloaded resource fallback successful after acknowledgement", async () => {
+    const sync = new TestSync({data: {}, id: 6, resourceId: 12, resourceType: "TicketScan", syncType: "scanAttempt"})
+
+    sync.resource = () => ({attributes: () => ({accepted: true, ticketNr: "T-9"})})
+
+    const syncModel = buildReplaySyncModel([sync])
+    const posted = []
+
+    await SyncApiClient.replayLocalSyncs({
+      authenticationToken: "token-1",
+      postReplay: async (payload) => {
+        posted.push(payload)
+
+        return {syncs: [{id: 6, syncState: "successful"}]}
+      },
+      syncModel
+    })
+
+    expect(posted[0].syncs[0].data).toEqual({accepted: true, ticketNr: "T-9"})
+    expect(sync.attributes.state).toEqual("success")
+  })
+
   it("persists pull cursors and projects resource result keys", async () => {
     const option = new TestOption()
     const cursorModel = {
@@ -168,16 +190,30 @@ describe("sync API client", () => {
 
 /**
  * Builds a fake local sync model with pending-row querying and id lookup.
+ * Plain findBy reloads behave like non-preloaded records: their resource() throws.
  * @param {TestSync[]} rows - Local sync rows.
  * @returns {?} Fake sync model.
  */
 function buildReplaySyncModel(rows) {
   return {
-    findBy: async ({id}) => rows.find((row) => row.id() === id) || null,
+    findBy: async ({id}) => {
+      const row = rows.find((row) => row.id() === id)
+
+      if (!row) return null
+
+      const bareRow = Object.create(row)
+
+      bareRow.resource = () => {
+        throw new Error("resource is not loaded")
+      }
+
+      return bareRow
+    },
     preload: () => ({
-      where: ({state}) => ({
+      where: (conditions) => ({
+        first: async () => rows.find((row) => row.id() === conditions.id) || null,
         order: () => ({
-          toArray: async () => rows.filter((row) => row.attributes.state !== "success" && state === "pending")
+          toArray: async () => rows.filter((row) => row.attributes.state !== "success" && conditions.state === "pending")
         })
       })
     })
