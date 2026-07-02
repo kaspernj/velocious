@@ -100,6 +100,23 @@ Override these methods as needed:
 
 `existingReplaySyncClientUpdatedAt(existingSync)` accepts either a raw `clientUpdatedAt` property or a `clientUpdatedAt()` accessor. The value may be a `Date` or a parseable timestamp string.
 
+## Model-backed defaults
+
+Passing a sync model to the constructor enables default implementations of `findExistingReplaySync` and `persistReplayMutation`, so apps persisting into a standard sync/change table override neither:
+
+```js
+class AppSyncReplayService extends SyncEnvelopeReplayService {
+  constructor(args = {}) {
+    super({logger: args.logger, syncModel: Sync})
+  }
+}
+```
+
+- `findExistingReplaySync` looks the row up by actor + resource identity: `{[actorForeignKeyColumn]: actor.id(), resource_id, resource_type}`. `actorForeignKeyColumn` defaults to `"authentication_token_id"` and can be passed to the constructor.
+- `persistReplayMutation` performs a stale-guarded upsert: existing rows newer than the mutation stay untouched, older rows get `assign` + `advanceServerSequence()` + `save`, and missing rows are created.
+- The sync model must expose `findBy`/`create` statics plus instance `assign`/`save`/`clientUpdatedAt` and `advanceServerSequence` (the change-feed sequence contract), and the actor returned from `authenticateReplay` must expose an `id()` method.
+- `replayPersistAttributes({actor, mutation})` builds the persisted attributes hash and can be reused by apps that only enrich it (for example with an `event_id`) before persisting themselves.
+
 ## Boundary
 
 Use this service only for replaying envelopes through app-owned hooks. Do not put app-specific resource policy, scanner/device token rules, or model mutation logic in Velocious. New sync implementations should still move toward signed offline mutations, resource/domain-command replay, and server-sequenced change feeds described in [`offline-sync.md`](offline-sync.md).

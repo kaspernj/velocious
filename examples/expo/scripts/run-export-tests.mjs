@@ -84,6 +84,9 @@ async function main() {
 
   const systemTest = SystemTest.current({
     debug: process.env.SYSTEM_TEST_DEBUG === "true",
+    // Cold CI runners can take well over the default 60s to launch Chrome + Chromedriver
+    // for the first time, which surfaced as "timeout while starting Selenium WebDriver".
+    driver: {options: {driverStartTimeout: parsePositiveIntegerEnv("SYSTEM_TEST_DRIVER_START_TIMEOUT", 180000)}},
     httpHost: process.env.SYSTEM_TEST_HTTP_HOST || "127.0.0.1",
     httpPort: parsePositiveIntegerEnv("SYSTEM_TEST_HTTP_PORT", 1984)
   })

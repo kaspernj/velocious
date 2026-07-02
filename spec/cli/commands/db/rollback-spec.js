@@ -9,6 +9,7 @@ describe("Cli - Commands - db:rollback", () => {
     "background_jobs",
     "velocious_attachments",
     "velocious_internal_migrations",
+    "velocious_sync_scopes",
     "websocket_channel_events",
     "websocket_replay_channels"
   ])
@@ -107,6 +108,9 @@ describe("Cli - Commands - db:rollback", () => {
     const expectedRolledBackTables = [
       ...(databaseIdentifiers.includes("mssql") ? ["accounts"] : []),
       "acts_as_list_items",
+      "audit_actions",
+      "audit_auditable_types",
+      "audits",
       "authentication_tokens",
       "comments",
       "interactions",
@@ -138,7 +142,8 @@ describe("Cli - Commands - db:rollback", () => {
       "20251228090000",
       "20251228090010",
       "20260418090000",
-      "20260601052206"
+      "20260601052206",
+      "20260629160000"
     ]
 
     expect(uniqunize(filteredTables.sort())).toEqual(expectedRolledBackTables)
@@ -149,8 +154,8 @@ describe("Cli - Commands - db:rollback", () => {
 
     const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
     const filteredNewTablesResult = newTablesResult.filter((tableName) => !internalTables.has(tableName))
-    const expectedMigratedTables = [...expectedRolledBackTables, "audit_actions", "audit_auditable_types", "audits"].sort()
-    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260629160000"].sort()
+    const expectedMigratedTables = [...expectedRolledBackTables, "sync_entries"].sort()
+    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260702150000"].sort()
 
     expect(uniqunize(filteredNewTablesResult.sort())).toEqual(expectedMigratedTables)
 

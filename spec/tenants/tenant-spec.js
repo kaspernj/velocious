@@ -161,17 +161,19 @@ describe("Tenant", () => {
     })
   })
 
-  it("throws when dropping a tenant whose provider has no dropDatabase hook", async () => {
+  it("drops through the framework default when the provider has no dropDatabase hook", async () => {
     await withConfiguration({listTenants: () => []}, async ({configuration}) => {
       let caughtError = null
 
+      // No provider.dropDatabase — the framework's default provisioning handles it
+      // (a no-op for the file-backed test driver) instead of requiring a hook.
       try {
         await Tenant.drop({configuration, identifier: "projectTenant", tenant: {slug: "alpha"}})
       } catch (error) {
         caughtError = error
       }
 
-      expect(caughtError instanceof Error && caughtError.message.includes("must define dropDatabase")).toEqual(true)
+      expect(caughtError).toEqual(null)
     })
   })
 })
