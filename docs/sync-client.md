@@ -45,11 +45,32 @@ The query is serialized into a `{resourceType, conditions}` scope (only plain at
 
 Devices migrating from a pre-scope cursor store can seed newly declared scopes through the `legacyCursor({scope})` config hook, avoiding a full re-pull.
 
+## Automatic mutation tracking
+
+Resources with `track` enabled queue sync rows automatically when their local models change — no app-side queue calls:
+
+```js
+resources: {
+  TicketScan: {
+    modelClass: TicketScan,
+    track: true, // or {operations: ["update"]}
+    syncType: ({operation}) => operation === "create" ? "scanAttempt" : "update",
+    trackedData: ({record}) => ({...record.attributes(), deviceId: currentDeviceId()})
+  }
+}
+
+await syncClient.start() // registers afterCreate/afterUpdate/afterDestroy callbacks
+```
+
+`start()` registers model lifecycle callbacks for every tracked resource (destroys queue `"delete"` sync rows); `stop()` unregisters them. Records written by pull-apply are excluded (echo suppression), so applying remote changes never queues them back to the server.
+
 ## Local changes and replay
 
 ```js
 await syncClient.queue({resource: ticketScan, syncType: "scanAttempt"})
 ```
+
+Explicit `queue()` stays available for command-style mutations whose payload carries more than the record's attributes.
 
 `queue()` persists a pending row on the app's `syncModel` (stripping `localOnlyAttributes`, coercing `booleanAttributes`) and schedules an immediate background replay. Replays are single-flighted and online-gated; rows are marked successful only after the backend acknowledges them, so offline or rejected changes stay pending for the next attempt. Background failures go to the `onError` config hook (rethrown when none is configured). `waitForScheduledReplay()` awaits the last scheduled attempt (useful in tests and shutdown flows).
 

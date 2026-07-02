@@ -356,4 +356,227 @@ describe("sync client", () => {
 
     expect(SyncClient.current()).toEqual(harness.client)
   })
+
+  it("automatically queues tracked model mutations and replays them", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {
+          booleanAttributes: ["accepted"],
+          localOnlyAttributes: ["localOnly"],
+          modelClass: TrackedScan,
+          syncType: ({operation}) => operation === "create" ? "scanAttempt" : "update",
+          track: true
+        }
+      }
+    })
+
+    await harness.client.start()
+
+    const record = buildTrackedRecord(TrackedScan, {accepted: 1, localOnly: "internal", ticketId: "t-1"})
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+    await harness.client.waitForScheduledReplay()
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("scanAttempt")
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, ticketId: "t-1"})
+    expect(harness.syncModel.rows[0].attributes.state).toEqual("success")
+    expect(harness.postReplayCalls.length).toEqual(1)
+  })
+
+  it("tracks only the configured operations", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {modelClass: TrackedScan, track: {operations: ["update"]}}
+      }
+    })
+
+    await harness.client.start()
+
+    expect(Object.keys(TrackedScan.lifecycleCallbacks)).toEqual(["afterUpdate"])
+  })
+
+  it("maps tracked destroys to delete sync rows", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {modelClass: TrackedScan, track: true}
+      }
+    })
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+
+    await triggerLifecycle(TrackedScan, "afterDestroy", record)
+
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("delete")
+  })
+
+  it("uses trackedData to build tracked payloads", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {
+          modelClass: TrackedScan,
+          track: true,
+          trackedData: ({operation, record}) => ({deviceId: "device-1", operation, ticketId: record.attributes().ticketId})
+        }
+      }
+    })
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({deviceId: "device-1", operation: "update", ticketId: "t-1"})
+  })
+
+  it("does not queue tracked mutations for records written by pull-apply", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+
+    record.assign = () => {}
+    record.isChanged = () => true
+    record.save = async () => {
+      await triggerLifecycle(TrackedScan, "afterUpdate", record)
+    }
+
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {
+          attributes: ({data}) => ({ticketId: data.ticketId}),
+          findRecord: async () => record,
+          modelClass: TrackedScan,
+          track: true
+        }
+      }
+    })
+
+    harness.state.changesResponses.push({
+      nextCursor: {id: "s-1", serverSequence: 1, updatedAt: "2026-07-01T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {ticketId: "t-2"}, id: "s-1", resourceId: "scan-1", resourceType: "TrackedScan", syncType: "update"}],
+      upToCursor: null
+    })
+
+    await harness.client.start()
+    await harness.client.sync(fakeQuery("TrackedScan", {event_id: 5}))
+    await harness.client.waitForScheduledReplay()
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+  })
+
+  it("unregisters tracking callbacks when stopped", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {modelClass: TrackedScan, track: true}
+      }
+    })
+
+    await harness.client.start()
+
+    expect(TrackedScan.lifecycleCallbacks.afterCreate.length).toEqual(1)
+
+    harness.client.stop()
+
+    expect(TrackedScan.lifecycleCallbacks.afterCreate.length).toEqual(0)
+    expect(TrackedScan.lifecycleCallbacks.afterUpdate.length).toEqual(0)
+    expect(TrackedScan.lifecycleCallbacks.afterDestroy.length).toEqual(0)
+  })
+
+  it("fails loudly on invalid track configuration", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {modelClass: TrackedScan, track: {operations: ["upsert"]}}
+      }
+    })
+
+    await expect(async () => await harness.client.start()).toThrow(/track\.operations/u)
+  })
 })
+
+/**
+ * Builds a fake model class implementing the lifecycle-callback registration contract.
+ * @param {string} name - Model class name.
+ * @returns {?} Fake trackable model class.
+ */
+function buildTrackedModelClass(name) {
+  const klass = class {
+    /** @type {Record<string, Array<Function>>} */
+    static lifecycleCallbacks = {}
+
+    /** @param {Function} callback - Lifecycle callback. @returns {void} */
+    static afterCreate(callback) {
+      (this.lifecycleCallbacks.afterCreate ||= []).push(callback)
+    }
+
+    /** @param {Function} callback - Lifecycle callback. @returns {void} */
+    static afterUpdate(callback) {
+      (this.lifecycleCallbacks.afterUpdate ||= []).push(callback)
+    }
+
+    /** @param {Function} callback - Lifecycle callback. @returns {void} */
+    static afterDestroy(callback) {
+      (this.lifecycleCallbacks.afterDestroy ||= []).push(callback)
+    }
+
+    /** @param {string} callbackName - Callback type. @param {Function} callback - Registered callback. @returns {void} */
+    static unregisterLifecycleCallback(callbackName, callback) {
+      const callbacks = this.lifecycleCallbacks[callbackName]
+
+      if (!callbacks) return
+
+      const index = callbacks.indexOf(callback)
+
+      if (index >= 0) callbacks.splice(index, 1)
+    }
+  }
+
+  Object.defineProperty(klass, "name", {value: name})
+
+  return klass
+}
+
+/**
+ * Builds a fake record instance of a tracked model class.
+ * @param {?} modelClass - Tracked model class.
+ * @param {Record<string, ?>} attributes - Record attributes.
+ * @returns {?} Fake record.
+ */
+function buildTrackedRecord(modelClass, attributes) {
+  const record = Object.create(modelClass.prototype)
+
+  record.id = () => "scan-1"
+  record.attributes = () => attributes
+
+  return record
+}
+
+/**
+ * Invokes the registered lifecycle callbacks like the record layer would.
+ * @param {?} modelClass - Tracked model class.
+ * @param {string} callbackName - Callback type.
+ * @param {?} record - Mutated record.
+ * @returns {Promise<void>}
+ */
+async function triggerLifecycle(modelClass, callbackName, record) {
+  for (const callback of modelClass.lifecycleCallbacks[callbackName] || []) {
+    await callback(record)
+  }
+}

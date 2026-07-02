@@ -11,6 +11,9 @@ import {currentSyncClient, setCurrentSyncClient} from "./sync-client-registry.js
 
 let clientCounter = 0
 
+/** @type {{create: "afterCreate", update: "afterUpdate", destroy: "afterDestroy"}} */
+const TRACKED_CALLBACK_NAMES = {create: "afterCreate", destroy: "afterDestroy", update: "afterUpdate"}
+
 /**
  * Declarative client-side sync driver.
  *
@@ -53,6 +56,103 @@ export default class SyncClient {
     this._scheduledReplay = null
     /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null} */
     this._pullResourceConfigs = null
+    /** @type {Array<{callback: (record: ?) => Promise<void>, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy", modelClass: ?}>} */
+    this._trackedCallbacks = []
+    /** @type {WeakSet<object>} */
+    this._remoteApplyRecords = new WeakSet()
+    this._started = false
+  }
+
+  /**
+   * Registers automatic mutation tracking for every resource with `track` enabled:
+   * local model creates/updates/destroys queue pending sync rows and schedule an
+   * immediate replay attempt, without app-side queue calls.
+   * @returns {Promise<void>}
+   */
+  async start() {
+    if (this._started) return
+
+    this._started = true
+
+    for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
+      const operations = this.trackedOperations({resourceConfig, resourceType})
+
+      for (const operation of operations) {
+        const callbackName = TRACKED_CALLBACK_NAMES[operation]
+        const callback = this.trackedMutationCallback({operation, resourceConfig})
+
+        resourceConfig.modelClass[callbackName](callback)
+        this._trackedCallbacks.push({callback, callbackName, modelClass: resourceConfig.modelClass})
+      }
+    }
+  }
+
+  /**
+   * Unregisters all tracking callbacks (tests, sign-out, hot reload).
+   * @returns {void}
+   */
+  stop() {
+    for (const {callback, callbackName, modelClass} of this._trackedCallbacks) {
+      modelClass.unregisterLifecycleCallback(callbackName, callback)
+    }
+
+    this._trackedCallbacks = []
+    this._started = false
+  }
+
+  /**
+   * Resolves and validates the tracked operations for a resource config.
+   * @param {{resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig, resourceType: string}} args - Resource config and name.
+   * @returns {Array<"create" | "update" | "destroy">} Tracked operations.
+   */
+  trackedOperations({resourceConfig, resourceType}) {
+    const track = resourceConfig.track
+
+    if (track === undefined || track === false) return []
+    if (track === true) return ["create", "update", "destroy"]
+
+    if (!track || typeof track !== "object" || !Array.isArray(track.operations) || track.operations.length === 0) {
+      throw new Error(`SyncClient resource ${resourceType} track must be true or {operations: [...]}`)
+    }
+
+    for (const operation of track.operations) {
+      if (!(operation in TRACKED_CALLBACK_NAMES)) {
+        throw new Error(`SyncClient resource ${resourceType} track.operations must be create/update/destroy, got: ${String(operation)}`)
+      }
+    }
+
+    return track.operations
+  }
+
+  /**
+   * Builds the lifecycle callback queueing one tracked mutation.
+   * @param {{operation: "create" | "update" | "destroy", resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Operation and resource config.
+   * @returns {(record: ?) => Promise<void>} Lifecycle callback.
+   */
+  trackedMutationCallback({operation, resourceConfig}) {
+    return async (record) => {
+      if (this.isRemoteApply(record)) return
+
+      await SyncApiClient.queueLocalSync({
+        booleanAttributes: resourceConfig.booleanAttributes || [],
+        data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
+        localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+        resource: record,
+        syncModel: this.config.syncModel,
+        syncType: this.defaultSyncType({operation, record, resourceConfig})
+      })
+
+      this.scheduleReplay()
+    }
+  }
+
+  /**
+   * Whether a record is currently being written by pull-apply (echo suppression).
+   * @param {?} record - Local model record.
+   * @returns {boolean} Whether the record write originates from a remote change.
+   */
+  isRemoteApply(record) {
+    return this._remoteApplyRecords.has(record)
   }
 
   /**
@@ -113,7 +213,11 @@ export default class SyncClient {
     await SyncApiClient.singleFlight(`velocious-sync-client-pull-${this._clientNumber}`, async () => {
       const authenticationToken = await this.config.authenticationToken()
       const scopeStore = this.scopeStore()
-      const applySync = SyncApiClient.resourceApplier(this.pullResourceConfigs())
+      const applySync = SyncApiClient.resourceApplier(this.pullResourceConfigs(), (record) => {
+        this._remoteApplyRecords.add(record)
+
+        return () => this._remoteApplyRecords.delete(record)
+      })
       const result = {
         changed: false,
         pages: 0,
