@@ -3,6 +3,7 @@
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
+import {currentSyncClient} from "../../sync/sync-client-registry.js"
 import Logger from "../../logger.js"
 import Preloader from "./preloader.js"
 import {normalizeQueryDataSpec, runQueryData} from "./query-data.js"
@@ -1113,6 +1114,22 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    */
   queryLogName(operation) {
     return `${this.getModelClass().name} ${operation}`
+  }
+
+  /**
+   * Declares this query as a sync scope on the current sync client.
+   * @returns {Promise<?>} - Declared scope and pull result.
+   */
+  async sync() {
+    return await currentSyncClient().sync(this)
+  }
+
+  /**
+   * Deactivates this query's sync scope on the current sync client.
+   * @returns {Promise<void>} - Resolves when the scope is deactivated.
+   */
+  async unsync() {
+    await currentSyncClient().unsync(this)
   }
 }
 

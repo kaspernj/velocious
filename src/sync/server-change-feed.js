@@ -2,6 +2,7 @@
 
 import {randomUUID} from "crypto"
 import TableData from "../database/table-data/index.js"
+import stableJsonStringify from "./stable-json.js"
 
 const DEFAULT_RETENTION_SIZE = 10000
 const DEFAULT_PAGE_SIZE = 100
@@ -462,31 +463,6 @@ function scopesEqual(changeScope, requestedScope) {
   if (requestedScope === undefined) return true
 
   return stableJsonStringify(changeScope || null) === stableJsonStringify(requestedScope)
-}
-
-/**
- * Stable JSON serialization for persisted sync scopes.
- * @param {?} value - JSON-compatible value.
- * @returns {string} - Stable JSON representation.
- */
-function stableJsonStringify(value) {
-  return JSON.stringify(stableJsonValue(value))
-}
-
-/**
- * Produces a recursively key-sorted JSON value.
- * @param {?} value - JSON-compatible value.
- * @returns {?} - Stable JSON-compatible value.
- */
-function stableJsonValue(value) {
-  if (Array.isArray(value)) return value.map((item) => stableJsonValue(item))
-  if (!value || typeof value !== "object") return value
-
-  return Object.keys(value).sort().reduce((memo, key) => {
-    memo[key] = stableJsonValue(value[key])
-
-    return memo
-  }, /** @type {Record<string, ?>} */ ({}))
 }
 
 /**

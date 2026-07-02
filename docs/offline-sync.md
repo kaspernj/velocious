@@ -264,6 +264,10 @@ The proof should validate that shared resources, offline grants, local mutation 
 - How much snapshot integrity data is required for peer bootstrap in v1.
 - Whether frontend-local resources are generated automatically from shared resources or configured explicitly per app.
 
+## Implemented slice: declarative sync client
+
+`SyncClient` implements the declarative client-side driver: query-declared sync scopes with per-scope cursors, pull paging/apply, declarative local queueing, and online-gated replay. See `docs/sync-client.md`.
+
 ## Implemented slice: local mutation log
 
 Velocious has a client-side local mutation log for the first local-first/offline write path. It is intentionally small and append-only: frontend code records what the user tried to do, applies the allowed change optimistically to the in-memory model instance, and leaves server replay/conflict resolution to later sync pipeline steps.
