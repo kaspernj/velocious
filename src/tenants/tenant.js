@@ -1,7 +1,6 @@
 // @ts-check
 
 import Current from "../current.js"
-import {dropTenantDatabase} from "./default-tenant-database-provisioning.js"
 import TenantIterator from "./tenant-iterator.js"
 
 /**
@@ -81,9 +80,10 @@ export default class Tenant {
    */
   static async drop({identifier, tenant, configuration = Current.configuration()}) {
     const provider = configuration.getTenantDatabaseProvider(identifier)
-    const dropDatabase = typeof provider.dropDatabase === "function"
-      ? provider.dropDatabase.bind(provider)
-      : dropTenantDatabase
+
+    if (typeof provider.dropDatabase !== "function") {
+      throw new Error(`Tenant database provider for ${identifier} must define dropDatabase to drop a tenant`)
+    }
 
     await configuration.runWithTenant(tenant, async () => {
       // Guard against an unresolved tenant. resolveDatabaseConfiguration falls back to the
@@ -94,7 +94,7 @@ export default class Tenant {
         throw new Error(`Tenant database identifier ${identifier} is inactive for tenant: ${TenantIterator.tenantLabel(tenant)}`)
       }
 
-      await dropDatabase({
+      await provider.dropDatabase?.({
         configuration,
         databaseConfiguration: configuration.resolveDatabaseConfiguration(identifier),
         identifier,
