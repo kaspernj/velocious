@@ -536,6 +536,22 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Runs unregister lifecycle callback.
+   * @param {"afterCreate" | "afterDestroy" | "afterSave" | "afterUpdate" | "beforeCreate" | "beforeDestroy" | "beforeSave" | "beforeUpdate" | "beforeValidation"} callbackName - Callback type.
+   * @param {LifecycleCallbackType} callback - Previously registered callback.
+   * @returns {void}
+   */
+  static unregisterLifecycleCallback(callbackName, callback) {
+    const callbacks = this.getLifecycleCallbacksMap()[callbackName]
+
+    if (!callbacks) return
+
+    const callbackIndex = callbacks.indexOf(callback)
+
+    if (callbackIndex >= 0) callbacks.splice(callbackIndex, 1)
+  }
+
+  /**
    * Runs before validation.
    * @template R
    * @this {ModelConstructor<R>}

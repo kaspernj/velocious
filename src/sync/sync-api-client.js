@@ -255,43 +255,49 @@ export default class SyncApiClient {
    * mechanics stay here; apps only declare which models/attributes/hooks are
    * allowed for each resource type.
    * @param {Record<string, SyncResourceConfig>} resources - Resource policy map.
+   * @param {(record: ?) => () => void} [onRecord] - Called with each record about to be written; returns a release callback invoked after the write (used for echo suppression).
    * @returns {(sync: SyncChangeEnvelope) => Promise<SyncChangeApplyResult>} Sync apply callback.
    */
-  static resourceApplier(resources) {
-    return async (sync) => await this.applyResourceSync({resources, sync})
+  static resourceApplier(resources, onRecord) {
+    return async (sync) => await this.applyResourceSync({onRecord, resources, sync})
   }
 
   /**
    * Applies one sync row using declarative resource policy.
-   * @param {{resources: Record<string, SyncResourceConfig>, sync: SyncChangeEnvelope}} args - Apply args.
+   * @param {{resources: Record<string, SyncResourceConfig>, sync: SyncChangeEnvelope, onRecord?: (record: ?) => () => void}} args - Apply args.
    * @returns {Promise<SyncChangeApplyResult>} Apply result.
    */
-  static async applyResourceSync({resources, sync}) {
+  static async applyResourceSync({onRecord, resources, sync}) {
     const resourceType = sync.resourceType()
     const resource = resourceType ? resources[resourceType] : undefined
 
     if (!resource || !resource.enabled) return {changed: false, resourceType}
 
     if (sync.syncType() === "delete") {
-      return {changed: await this.destroySyncedResource({resource, sync}), resourceType}
+      return {changed: await this.destroySyncedResource({onRecord, resource, sync}), resourceType}
     }
 
     const data = this.syncData(sync)
     const record = resource.findRecord ? await resource.findRecord({data, resourceId: sync.resourceId(), sync}) : await resource.modelClass.findOrInitializeBy({id: data.id ?? sync.resourceId()})
     const attributes = await resource.attributes({data, record, sync})
+    const releaseRecord = onRecord ? onRecord(record) : null
     let changed = false
 
-    record.assign(attributes)
+    try {
+      record.assign(attributes)
 
-    if (record.isChanged()) {
-      await record.save()
-      changed = true
-    }
+      if (record.isChanged()) {
+        await record.save()
+        changed = true
+      }
 
-    if (resource.afterApply) {
-      const hookChanged = await resource.afterApply({attributes, data, record, sync})
+      if (resource.afterApply) {
+        const hookChanged = await resource.afterApply({attributes, data, record, sync})
 
-      changed ||= hookChanged === true
+        changed ||= hookChanged === true
+      }
+    } finally {
+      if (releaseRecord) releaseRecord()
     }
 
     return {changed, resourceType}
@@ -299,16 +305,23 @@ export default class SyncApiClient {
 
   /**
    * Destroys a synced resource via its declared model policy.
-   * @param {{resource: SyncResourceConfig, sync: SyncChangeEnvelope}} args - Destroy args.
+   * @param {{resource: SyncResourceConfig, sync: SyncChangeEnvelope, onRecord?: (record: ?) => () => void}} args - Destroy args.
    * @returns {Promise<boolean>} Whether a local row was destroyed.
    */
-  static async destroySyncedResource({resource, sync}) {
+  static async destroySyncedResource({onRecord, resource, sync}) {
     const id = sync.resourceId()
     const record = resource.findRecordForDelete ? await resource.findRecordForDelete({resourceId: id, sync}) : await resource.modelClass.findBy({id})
 
     if (!record) return false
 
-    await record.destroy()
+    const releaseRecord = onRecord ? onRecord(record) : null
+
+    try {
+      await record.destroy()
+    } finally {
+      if (releaseRecord) releaseRecord()
+    }
+
     return true
   }
 

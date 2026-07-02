@@ -236,16 +236,46 @@ export default class VelociousDatabaseQuery {
   }
 
   /**
+   * Runs get joins.
+   * @returns {Array<?>} - The joins.
+   */
+  getJoins() { return this._joins }
+
+  /**
+   * Runs get limit.
+   * @returns {number | null} - The limit.
+   */
+  getLimit() { return this._limit }
+
+  /**
+   * Runs get offset.
+   * @returns {number | null} - The offset.
+   */
+  getOffset() { return this._offset }
+
+  /**
    * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */
   getOptions() { return this.driver.options() }
 
   /**
+   * Runs get orders.
+   * @returns {Array<?>} - The orders.
+   */
+  getOrders() { return this._orders }
+
+  /**
    * Runs get selects.
    * @returns {Array<import("./select-base.js").default>} - The selects.
    */
   getSelects() { return this._selects }
+
+  /**
+   * Runs get wheres.
+   * @returns {Array<import("./where-base.js").default>} - The wheres.
+   */
+  getWheres() { return this._wheres }
 
   /**
    * Runs from.
