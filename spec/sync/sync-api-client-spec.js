@@ -13,7 +13,7 @@ describe("sync API client", () => {
     }
     const resource = {
       id: () => 12,
-      constructor: {name: "TicketScan"},
+      constructor: {getModelName: () => "TicketScan", name: "t"},
       attributes: () => ({accepted: 1, id: 12, ticketNr: "T-1"})
     }
 
@@ -35,18 +35,21 @@ describe("sync API client", () => {
     expect(created).toEqual([sync])
   })
 
+  it("fails loudly when queueing a resource without a stable model name", async () => {
+    const resource = {
+      id: () => 12,
+      constructor: {name: "t"},
+      attributes: () => ({ticketNr: "T-1"})
+    }
+
+    await expect(async () => await SyncApiClient.queueLocalSync({resource, syncModel: {findBy: async () => null}}))
+      .toThrow(/getModelName/u)
+  })
+
   it("replays local sync rows through framework-built envelopes", async () => {
     const sync = new TestSync({data: {ticketNr: "T-1"}, id: 5, resourceId: 12, resourceType: "TicketScan", syncType: "scanAttempt"})
     const posted = []
-    const syncModel = {
-      preload: () => ({
-        where: () => ({
-          order: () => ({
-            toArray: async () => [sync]
-          })
-        })
-      })
-    }
+    const syncModel = buildReplaySyncModel([sync])
 
     await SyncApiClient.replayLocalSyncs({
       authenticationToken: "token-1",
@@ -68,6 +71,35 @@ describe("sync API client", () => {
         syncType: "scanAttempt"
       }]
     }])
+    expect(sync.attributes.state).toEqual("success")
+  })
+
+  it("keeps rows pending when they were edited during the replay flight", async () => {
+    const sync = new TestSync({data: {ticketNr: "T-1"}, id: 5, resourceId: 12, resourceType: "TicketScan", syncType: "scanAttempt"})
+    const syncModel = buildReplaySyncModel([sync])
+
+    await SyncApiClient.replayLocalSyncs({
+      authenticationToken: "token-1",
+      postReplay: async () => {
+        sync.attributes.data = {ticketNr: "T-1", whereaboutState: "inside"}
+
+        return {syncs: [{id: 5, syncState: "successful"}]}
+      },
+      syncModel
+    })
+
+    expect(sync.attributes.state).toEqual("pending")
+
+    await SyncApiClient.replayLocalSyncs({
+      authenticationToken: "token-1",
+      postReplay: async (payload) => {
+        expect(payload.syncs[0].data).toEqual({ticketNr: "T-1", whereaboutState: "inside"})
+
+        return {syncs: [{id: 5, syncState: "successful"}]}
+      },
+      syncModel
+    })
+
     expect(sync.attributes.state).toEqual("success")
   })
 
@@ -96,7 +128,7 @@ describe("sync API client", () => {
     }
     const resource = {
       id: () => 13,
-      constructor: {name: "TicketScan"},
+      constructor: {getModelName: () => "TicketScan", name: "t"},
       attributes: () => ({accepted: 0, id: 13, ticketNr: "T-2"})
     }
     let pendingSyncCalls = 0
@@ -115,11 +147,46 @@ describe("sync API client", () => {
     expect(pendingSyncCalls).toEqual(2)
   })
 
+  it("lets queued sync work retry after a failed flight", async () => {
+    let rejectFirstFlight
+    let secondFlightRan = false
+    const firstFlight = SyncApiClient.singleFlight("retry-key", () => new Promise((_resolve, reject) => {
+      rejectFirstFlight = reject
+    }))
+    const secondFlight = SyncApiClient.singleFlight("retry-key", async () => {
+      secondFlightRan = true
+    })
+
+    rejectFirstFlight(new Error("Transient replay failure"))
+
+    await expect(async () => await firstFlight).toThrow("Transient replay failure")
+    await secondFlight
+
+    expect(secondFlightRan).toEqual(true)
+  })
 })
+
+/**
+ * Builds a fake local sync model with pending-row querying and id lookup.
+ * @param {TestSync[]} rows - Local sync rows.
+ * @returns {?} Fake sync model.
+ */
+function buildReplaySyncModel(rows) {
+  return {
+    findBy: async ({id}) => rows.find((row) => row.id() === id) || null,
+    preload: () => ({
+      where: ({state}) => ({
+        order: () => ({
+          toArray: async () => rows.filter((row) => row.attributes.state !== "success" && state === "pending")
+        })
+      })
+    })
+  }
+}
 
 class TestSync {
   constructor(attributes) {
-    this.attributes = attributes
+    this.attributes = {state: "pending", ...attributes}
   }
 
   createdAt() {

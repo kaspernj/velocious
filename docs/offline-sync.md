@@ -268,6 +268,39 @@ The proof should validate that shared resources, offline grants, local mutation 
 
 `SyncClient` implements the declarative client-side driver: query-declared sync scopes with per-scope cursors, pull paging/apply, declarative local queueing, and online-gated replay. See `docs/sync-client.md`.
 
+## Implemented slice: auto-mounted server sync API
+
+Servers enable the sync endpoints through configuration instead of route files:
+
+```js
+import SyncResource from "../resources/sync-resource.js"
+
+const configuration = new Configuration({
+  // ...
+  sync: {
+    api: {resourceClass: SyncResource}, // mountPath defaults to "/velocious/sync"
+    offlineGrantSigningKeys: []
+  }
+})
+```
+
+During server boot Velocious registers `POST <mountPath>/changes` and `POST <mountPath>/replay` for the configured resource class (`SyncApiController.mountFromConfiguration`; the manual `route.mount(SyncApiController, ...)` path keeps working). Invalid `sync.api` values fail at configuration time.
+
+The resource class subclasses `SyncResourceBase` (`velocious/build/src/sync/sync-resource-base.js`), which owns the changes/replay orchestration — optional client scope parsing (`{resourceType, conditions}` request param), change-feed paging through `SyncModelChangeFeedService`, and replay delegation/response shaping. Apps only declare:
+
+```js
+class SyncResource extends SyncResourceBase {
+  static ModelClass = Sync
+
+  async authorizeChanges({params, scope}) { /* throw unless the caller may read */ }
+  scopeChangesQuery({params, query, scope}) { /* query.where({...}) visibility scoping */ }
+  replayServiceClass() { return AppSyncReplayService }
+  replayServiceArgs() { return {} } // optional constructor args
+}
+```
+
+Unimplemented hooks fail loudly. Replay services extend `SyncEnvelopeReplayService` — see [`sync-envelope-replay-service.md`](sync-envelope-replay-service.md), including its model-backed `findExistingReplaySync`/`persistReplayMutation` defaults.
+
 ## Implemented slice: local mutation log
 
 Velocious has a client-side local mutation log for the first local-first/offline write path. It is intentionally small and append-only: frontend code records what the user tried to do, applies the allowed change optimistically to the in-memory model instance, and leaves server replay/conflict resolution to later sync pipeline steps.

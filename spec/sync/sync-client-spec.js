@@ -5,8 +5,19 @@ import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import SyncClient from "../../src/sync/sync-client.js"
 
-class Ticket {}
-class TicketScan {}
+class Ticket {
+  /** @returns {string} Stable model name. */
+  static getModelName() {
+    return "Ticket"
+  }
+}
+
+class TicketScan {
+  /** @returns {string} Stable model name. */
+  static getModelName() {
+    return "TicketScan"
+  }
+}
 
 /** @returns {Configuration} Database-less configuration so the scope store uses memory storage. */
 function buildConfiguration() {
@@ -63,8 +74,12 @@ function buildFakeSyncModel() {
 
       return row
     },
-    /** @param {{resourceId: string, resourceType: string}} conditions - Lookup conditions. @returns {Promise<?>} Existing row. */
-    findBy: async ({resourceId, resourceType}) => rows.find((row) => row.attributes.resourceId === resourceId && row.attributes.resourceType === resourceType) || null,
+    /** @param {Record<string, ?>} conditions - Lookup conditions. @returns {Promise<?>} Existing row. */
+    findBy: async (conditions) => {
+      if ("id" in conditions) return rows.find((row) => row.attributes.id === conditions.id) || null
+
+      return rows.find((row) => row.attributes.resourceId === conditions.resourceId && row.attributes.resourceType === conditions.resourceType) || null
+    },
     preload: () => ({
       /** @param {{state: string}} conditions - Where conditions. @returns {?} Chainable query. */
       where: ({state}) => ({
@@ -349,7 +364,12 @@ describe("sync client", () => {
   it("fails loudly when queueing a resource type that is not configured", async () => {
     const harness = buildHarness()
 
-    class UnknownModel {}
+    class UnknownModel {
+      /** @returns {string} Stable model name. */
+      static getModelName() {
+        return "UnknownModel"
+      }
+    }
 
     const record = Object.create(UnknownModel.prototype)
 
@@ -539,6 +559,11 @@ function buildTrackedModelClass(name) {
   const klass = class {
     /** @type {Record<string, Array<Function>>} */
     static lifecycleCallbacks = {}
+
+    /** @returns {string} Stable model name. */
+    static getModelName() {
+      return name
+    }
 
     /** @param {Function} callback - Lifecycle callback. @returns {void} */
     static afterCreate(callback) {

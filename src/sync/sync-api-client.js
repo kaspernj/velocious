@@ -28,7 +28,12 @@ export default class SyncApiClient {
    */
   static async singleFlight(key, callback) {
     while (syncTaskPromises.has(key)) {
-      await syncTaskPromises.get(key)
+      try {
+        await syncTaskPromises.get(key)
+      } catch (_error) {
+        // The failed flight's own caller observes that rejection; callers queued
+        // behind it still run their own work so pending rows retry after the lock clears.
+      }
     }
 
     const promise = callback()
@@ -350,17 +355,40 @@ export default class SyncApiClient {
    * @returns {Promise<void>}
    */
   static async replayLocalSyncs(args) {
+    const postedSnapshotsBySyncId = new Map()
+
     await this.replayPending({
       authenticationToken: args.authenticationToken,
       batchSize: args.batchSize,
       markSuccessful: async (sync) => {
-        await (/** @type {{update: (attributes: Record<string, unknown>) => Promise<void>}} */ (sync)).update({state: "success"})
+        const syncId = (/** @type {{id: () => string | number | null | undefined}} */ (sync)).id()
+        const currentSync = await args.syncModel.findBy({id: syncId})
+
+        if (!currentSync) return
+        // A row edited while its old payload was in flight stays pending, so the
+        // newer local change replays on the next drain instead of being lost.
+        if (this.localSyncReplaySnapshot(currentSync) !== postedSnapshotsBySyncId.get(String(syncId))) return
+
+        await currentSync.update({state: "success"})
       },
       pendingSyncs: async () => await args.syncModel.preload({resource: true}).where({state: "pending"}).order("created_at").toArray(),
       postReplay: args.postReplay,
       syncId: (sync) => (/** @type {{id: () => string | number | null | undefined}} */ (sync)).id(),
-      syncPayload: (sync) => this.localSyncPayload(sync)
+      syncPayload: (sync) => {
+        postedSnapshotsBySyncId.set(String((/** @type {{id: () => string | number | null | undefined}} */ (sync)).id()), this.localSyncReplaySnapshot(sync))
+
+        return this.localSyncPayload(sync)
+      }
     })
+  }
+
+  /**
+   * Serializes the replay-relevant state of a local sync row for in-flight comparisons.
+   * @param {?} sync - Local sync row.
+   * @returns {string} Stable snapshot of the row's replayed payload.
+   */
+  static localSyncReplaySnapshot(sync) {
+    return JSON.stringify({data: this.localSyncData(sync), syncType: sync.syncType()})
   }
 
   /**
@@ -420,12 +448,17 @@ export default class SyncApiClient {
    */
   static async queueLocalSync(args) {
     const resourceRecordId = args.resource.id()
-    const resourceType = args.resource.constructor.name
+    const modelClass = args.resource.constructor
+
+    if (typeof modelClass.getModelName !== "function") {
+      throw new Error("The resource model class must implement static getModelName() to queue sync data - class names are not stable across explicit model names and minified bundles")
+    }
+
+    const resourceType = modelClass.getModelName()
     const syncData = this.queuedSyncData(args)
     const syncType = args.syncType || "update"
 
     if (!resourceRecordId) throw new Error("resource.id() is required to queue sync data")
-    if (!resourceType) throw new Error("resource.constructor.name is required to queue sync data")
 
     const resourceId = String(resourceRecordId)
     const existingSync = await args.syncModel.findBy({resourceId, resourceType})

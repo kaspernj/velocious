@@ -375,10 +375,16 @@ export default class SyncClient {
    * @returns {import("./sync-client-types.js").SyncClientResourceConfig} Declared resource config.
    */
   resourceConfigFor(resource) {
-    const resourceType = resource?.constructor?.name
-    const resourceConfig = resourceType ? this.config.resources[resourceType] : undefined
+    const modelClass = resource?.constructor
 
-    if (!resourceConfig) throw new Error(`No sync resource configured for: ${resourceType || String(resource)}`)
+    if (typeof modelClass?.getModelName !== "function") {
+      throw new Error(`Sync resources must be model records with a static getModelName(), got: ${String(resource)}`)
+    }
+
+    const resourceType = modelClass.getModelName()
+    const resourceConfig = this.config.resources[resourceType]
+
+    if (!resourceConfig) throw new Error(`No sync resource configured for: ${resourceType}`)
 
     return resourceConfig
   }
