@@ -21,4 +21,16 @@ describe("sync model change-feed service", () => {
 
     expect(service.normalizedLimit("10")).toEqual(2)
   })
+
+  it("fails early when asked to read a value from an invalid sync row", () => {
+    const service = new SyncModelChangeFeedService({modelClass: TestSyncModel, params: {}})
+
+    expect(() => service.recordValue(null, "id")).toThrow("Sync changes row must be an object.")
+  })
+
+  it("fails early when a sync row is missing an expected field", () => {
+    const service = new SyncModelChangeFeedService({modelClass: TestSyncModel, params: {}})
+
+    expect(() => service.recordValue({}, "id")).toThrow("Sync changes row is missing id.")
+  })
 })

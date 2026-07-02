@@ -211,14 +211,19 @@ export default class SyncModelChangeFeedService {
    * @returns {unknown} Record value.
    */
   recordValue(record, name) {
-    if (!record || typeof record !== "object") return undefined
+    if (!record || typeof record !== "object") {
+      throw VelociousError.safe("Sync changes row must be an object.", {code: "sync-invalid-changes-row"})
+    }
 
     const recordObject = /** @type {Record<string, ?>} */ (record)
     const method = recordObject[name]
+    const value = typeof method === "function" ? method.call(record) : method
 
-    if (typeof method === "function") return method.call(record)
+    if (value === undefined) {
+      throw VelociousError.safe(`Sync changes row is missing ${name}.`, {code: "sync-invalid-changes-row"})
+    }
 
-    return method
+    return value
   }
 
   /**
