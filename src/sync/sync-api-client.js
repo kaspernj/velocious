@@ -401,6 +401,7 @@ export default class SyncApiClient {
    * @param {Record<string, unknown>} [args.data] - Explicit sync data.
    * @param {string} [args.syncType] - Sync operation type.
    * @param {string[]} [args.localOnlyAttributes] - Attributes to strip from queued payloads.
+   * @param {string[]} [args.booleanAttributes] - Attributes to coerce through sync boolean parsing.
    * @param {(data: Record<string, unknown>) => Record<string, unknown>} [args.normalizeData] - App-specific data normalizer.
    * @returns {Promise<?>} Local sync row.
    */
@@ -437,7 +438,7 @@ export default class SyncApiClient {
 
   /**
    * Builds backend-safe queued sync data without mutating caller data.
-   * @param {{resource: ?, data?: Record<string, unknown>, localOnlyAttributes?: string[], normalizeData?: (data: Record<string, unknown>) => Record<string, unknown>}} args - Data args.
+   * @param {{resource: ?, data?: Record<string, unknown>, localOnlyAttributes?: string[], booleanAttributes?: string[], normalizeData?: (data: Record<string, unknown>) => Record<string, unknown>}} args - Data args.
    * @returns {Record<string, unknown>} Queued data.
    */
   static queuedSyncData(args) {
@@ -446,8 +447,33 @@ export default class SyncApiClient {
     const syncData = {...normalizedData}
 
     for (const attributeName of args.localOnlyAttributes || []) delete syncData[attributeName]
+    for (const attributeName of args.booleanAttributes || []) {
+      if (Object.hasOwn(syncData, attributeName)) syncData[attributeName] = this.optionalBooleanSyncValue(syncData[attributeName], attributeName)
+    }
 
     return syncData
+  }
+
+  /**
+   * Builds a small app-facing local sync queue facade from declarative model config.
+   * @param {object} args - Queue config.
+   * @param {?} args.syncModel - Local Sync model class.
+   * @param {string} args.singleFlightKey - Key used to serialize backend replay.
+   * @param {() => Promise<void>} args.syncPending - Backend replay callback.
+   * @param {(resource: ?) => string[]} [args.localOnlyAttributes] - Resource-specific local-only attributes.
+   * @param {(resource: ?) => string[]} [args.booleanAttributes] - Resource-specific SQLite boolean attributes.
+   * @returns {{queue: (queueArgs: {resource: ?, data?: Record<string, unknown>, syncType?: string}) => Promise<?>, syncPending: () => Promise<void>}} Configured local sync queue.
+   */
+  static localSyncQueue(args) {
+    return {
+      queue: async (queueArgs) => await this.queueLocalSync({
+        ...queueArgs,
+        booleanAttributes: args.booleanAttributes ? args.booleanAttributes(queueArgs.resource) : [],
+        localOnlyAttributes: args.localOnlyAttributes ? args.localOnlyAttributes(queueArgs.resource) : [],
+        syncModel: args.syncModel
+      }),
+      syncPending: async () => await this.singleFlight(args.singleFlightKey, args.syncPending)
+    }
   }
 
   /**

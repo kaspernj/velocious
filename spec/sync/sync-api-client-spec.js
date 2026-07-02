@@ -18,8 +18,8 @@ describe("sync API client", () => {
     }
 
     const sync = await SyncApiClient.queueLocalSync({
+      booleanAttributes: ["accepted"],
       localOnlyAttributes: ["id"],
-      normalizeData: (data) => ({...data, accepted: SyncApiClient.optionalBooleanSyncValue(data.accepted)}),
       resource,
       syncModel,
       syncType: "scanAttempt"
@@ -88,6 +88,33 @@ describe("sync API client", () => {
       result: {changed: true, pages: 2, resourceChanged: {Ticket: true}, resourceCounts: {Ticket: 3}, syncedCount: 3}
     })).toEqual({changed: true, pages: 2, syncedCount: 3, ticketSyncCount: 3, ticketsChanged: true})
   })
+
+  it("builds declarative local sync queue facades", async () => {
+    const syncModel = {
+      findBy: async () => null,
+      create: async (attributes) => attributes
+    }
+    const resource = {
+      id: () => 13,
+      constructor: {name: "TicketScan"},
+      attributes: () => ({accepted: 0, id: 13, ticketNr: "T-2"})
+    }
+    let pendingSyncCalls = 0
+    const queue = SyncApiClient.localSyncQueue({
+      booleanAttributes: () => ["accepted"],
+      localOnlyAttributes: () => ["id"],
+      singleFlightKey: "test-sync",
+      syncModel,
+      syncPending: async () => { pendingSyncCalls += 1 }
+    })
+
+    const sync = await queue.queue({resource, syncType: "scanAttempt"})
+    await Promise.all([queue.syncPending(), queue.syncPending()])
+
+    expect(sync.data).toEqual({accepted: false, ticketNr: "T-2"})
+    expect(pendingSyncCalls).toEqual(2)
+  })
+
 })
 
 class TestSync {
