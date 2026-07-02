@@ -890,9 +890,9 @@ export default class VelociousConfiguration {
     const seen = new Set(merged)
 
     for (const backendProject of this._backendProjects) {
-      if (!backendProject.frontendModels) continue
+      if (!backendProject.abilityResources) continue
 
-      for (const ResourceClass of Object.values(backendProject.frontendModels)) {
+      for (const ResourceClass of backendProject.abilityResources) {
         if (seen.has(ResourceClass)) continue
 
         seen.add(ResourceClass)

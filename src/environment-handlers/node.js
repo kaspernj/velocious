@@ -100,10 +100,11 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async autoDiscoverResources(configuration) {
     const {frontendModelResourceDefinitionIsClass} = await import("../frontend-models/resource-definition.js")
+    const {default: AuthorizationBaseResource} = await import("../authorization/base-resource.js")
     const backendProjects = configuration.getBackendProjects()
 
     for (const backendProject of backendProjects) {
-      if (backendProject.frontendModels) continue
+      if (backendProject.abilityResources) continue
 
       const resourcesDir = backendProject.resourcesPath || path.join(backendProject.path, "src", "resources")
       let files
@@ -115,9 +116,13 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       }
 
       /**
-       * Discovered.
+       * Discovered frontend-model resources keyed by model name.
        * @type {Record<string, ?>} */
       const discovered = {}
+      /**
+       * Every discovered ability resource class (frontend-model and authorization).
+       * @type {Array<?>} */
+      const abilityResourceClasses = []
 
       for (const file of files) {
         if (!file.endsWith(".js") && !file.endsWith(".mjs")) continue
@@ -127,10 +132,17 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         const imported = await import(filePath)
         const ResourceClass = imported.default
 
+        // Any authorization resource (frontend-model resources also extend it) that
+        // declares a `ModelClass`; skip abstract/common base resources without one.
+        const isAbilityResource = typeof ResourceClass === "function"
+          && (ResourceClass === AuthorizationBaseResource || ResourceClass.prototype instanceof AuthorizationBaseResource)
+
+        if (!isAbilityResource || !ResourceClass.ModelClass) continue
+
+        abilityResourceClasses.push(ResourceClass)
+
+        // Only frontend-model resources drive routing/generation/publisher discovery.
         if (!frontendModelResourceDefinitionIsClass(ResourceClass)) continue
-        // Skip abstract/common base resources that declare no `ModelClass` — they are
-        // not models, so they must not be recorded as discovered frontend models.
-        if (!ResourceClass.ModelClass) continue
 
         const baseName = file.replace(/\.(js|mjs)$/, "")
         const modelName = baseName.replace(/-resource$/, "")
@@ -141,8 +153,12 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         discovered[modelName] = ResourceClass
       }
 
-      if (Object.keys(discovered).length > 0) {
+      if (!backendProject.frontendModels && Object.keys(discovered).length > 0) {
         backendProject.frontendModels = discovered
+      }
+
+      if (abilityResourceClasses.length > 0) {
+        backendProject.abilityResources = abilityResourceClasses
       }
     }
   }
