@@ -421,6 +421,7 @@
  * @property {string} [frontendModelsOutputPath] - Optional output project path where `src/frontend-models` should be generated.
  * @property {string} [resourcesPath] - Optional override for the resources directory to auto-discover; defaults to `<path>/src/resources`. Set internally for package entries.
  * @property {Record<string, FrontendModelResourceDefinition>} [frontendModels] - Auto-discovered frontend model definitions keyed by model class name. Set internally by the environment handler — do not set manually.
+ * @property {AbilityResourceClassType[]} [abilityResources] - Auto-discovered ability resource classes (frontend-model and authorization) from this project's resources directory. Set internally by the environment handler — do not set manually.
  */
 
 /**
