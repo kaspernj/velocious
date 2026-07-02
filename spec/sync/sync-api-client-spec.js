@@ -1,0 +1,149 @@
+import {describe, expect, it} from "../../src/testing/test.js"
+import SyncApiClient from "../../src/sync/sync-api-client.js"
+
+describe("sync API client", () => {
+  it("queues local sync rows while normalizing and stripping app-local attributes", async () => {
+    const created = []
+    const syncModel = {
+      findBy: async () => null,
+      create: async (attributes) => {
+        created.push(attributes)
+        return attributes
+      }
+    }
+    const resource = {
+      id: () => 12,
+      constructor: {name: "TicketScan"},
+      attributes: () => ({accepted: 1, id: 12, ticketNr: "T-1"})
+    }
+
+    const sync = await SyncApiClient.queueLocalSync({
+      localOnlyAttributes: ["id"],
+      normalizeData: (data) => ({...data, accepted: SyncApiClient.optionalBooleanSyncValue(data.accepted)}),
+      resource,
+      syncModel,
+      syncType: "scanAttempt"
+    })
+
+    expect(sync).toEqual({
+      data: {accepted: true, ticketNr: "T-1"},
+      resourceId: "12",
+      resourceType: "TicketScan",
+      state: "pending",
+      syncType: "scanAttempt"
+    })
+    expect(created).toEqual([sync])
+  })
+
+  it("replays local sync rows through framework-built envelopes", async () => {
+    const sync = new TestSync({data: {ticketNr: "T-1"}, id: 5, resourceId: 12, resourceType: "TicketScan", syncType: "scanAttempt"})
+    const posted = []
+    const syncModel = {
+      preload: () => ({
+        where: () => ({
+          order: () => ({
+            toArray: async () => [sync]
+          })
+        })
+      })
+    }
+
+    await SyncApiClient.replayLocalSyncs({
+      authenticationToken: "token-1",
+      postReplay: async (payload) => {
+        posted.push(payload)
+        return {syncs: [{id: 5, syncState: "successful"}]}
+      },
+      syncModel
+    })
+
+    expect(posted).toEqual([{
+      authenticationToken: "token-1",
+      syncs: [{
+        clientUpdatedAt: "2026-07-02T10:00:00.000Z",
+        data: {ticketNr: "T-1"},
+        id: 5,
+        resourceId: "12",
+        resourceType: "TicketScan",
+        syncType: "scanAttempt"
+      }]
+    }])
+    expect(sync.attributes.state).toEqual("success")
+  })
+
+  it("persists pull cursors and projects resource result keys", async () => {
+    const option = new TestOption()
+    const cursorModel = {
+      findBy: async () => option,
+      findOrInitializeBy: async () => option
+    }
+    const saved = await SyncApiClient.loadSyncCursor({cursorKey: "sync:key", cursorModel})
+
+    await SyncApiClient.saveSyncCursor({cursor: {id: "1", serverSequence: 2, updatedAt: "2026-07-02T10:00:00.000Z"}, cursorKey: "sync:key", cursorModel})
+
+    expect(saved).toEqual("old-cursor")
+    expect(option.attributes.value).toEqual(JSON.stringify({id: "1", serverSequence: 2, updatedAt: "2026-07-02T10:00:00.000Z"}))
+    expect(SyncApiClient.syncResultForResources({
+      resources: {Ticket: {changedKey: "ticketsChanged", countKey: "ticketSyncCount"}},
+      result: {changed: true, pages: 2, resourceChanged: {Ticket: true}, resourceCounts: {Ticket: 3}, syncedCount: 3}
+    })).toEqual({changed: true, pages: 2, syncedCount: 3, ticketSyncCount: 3, ticketsChanged: true})
+  })
+})
+
+class TestSync {
+  constructor(attributes) {
+    this.attributes = attributes
+  }
+
+  createdAt() {
+    return new Date("2026-07-02T09:00:00.000Z")
+  }
+
+  data() {
+    return this.attributes.data
+  }
+
+  id() {
+    return this.attributes.id
+  }
+
+  resourceId() {
+    return this.attributes.resourceId
+  }
+
+  resourceType() {
+    return this.attributes.resourceType
+  }
+
+  syncType() {
+    return this.attributes.syncType
+  }
+
+  updatedAt() {
+    return new Date("2026-07-02T10:00:00.000Z")
+  }
+
+  async update(attributes) {
+    Object.assign(this.attributes, attributes)
+  }
+}
+
+class TestOption {
+  constructor() {
+    this.attributes = {value: "old-cursor"}
+  }
+
+  assign(attributes) {
+    Object.assign(this.attributes, attributes)
+  }
+
+  isChanged() {
+    return true
+  }
+
+  async save() {}
+
+  value() {
+    return this.attributes.value
+  }
+}

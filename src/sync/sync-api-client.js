@@ -1,6 +1,8 @@
 // @ts-check
 
-import {optionalInteger} from "typanic"
+import {optionalBoolean, optionalInteger} from "typanic"
+
+const syncTaskPromises = new Map()
 
 /** @typedef {import("./sync-api-client-types.js").SyncChangeApplyResult} SyncChangeApplyResult */
 /** @typedef {import("./sync-api-client-types.js").SyncChangeEnvelope} SyncChangeEnvelope */
@@ -18,6 +20,76 @@ import {optionalInteger} from "typanic"
  * persistence/auth hooks.
  */
 export default class SyncApiClient {
+  /**
+   * Serializes sync work with the same key so callers do not have to keep app-local locks.
+   * @param {string} key - Lock key.
+   * @param {() => Promise<void>} callback - Work to run once previous work finished.
+   * @returns {Promise<void>}
+   */
+  static async singleFlight(key, callback) {
+    while (syncTaskPromises.has(key)) {
+      await syncTaskPromises.get(key)
+    }
+
+    const promise = callback()
+    syncTaskPromises.set(key, promise)
+
+    try {
+      await promise
+    } finally {
+      if (syncTaskPromises.get(key) === promise) syncTaskPromises.delete(key)
+    }
+  }
+
+  /**
+   * Pulls backend sync changes with a framework-managed cursor row.
+   * @param {object} args - Pull args.
+   * @param {string} args.authenticationToken - Auth token to send with change requests.
+   * @param {number} [args.batchSize] - Max syncs per request.
+   * @param {?} args.cursorModel - Model that responds to findBy/findOrInitializeBy for cursor persistence.
+   * @param {string} args.cursorKey - Cursor option key.
+   * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
+   * @param {Record<string, SyncResourceConfig>} args.resources - Resource policies.
+   * @param {(progress: {pages: number, syncedCount: number}) => void} [args.onProgress] - Progress callback.
+   * @returns {Promise<SyncChangesResult>} Pull result.
+   */
+  static async pullChangesWithCursor(args) {
+    return await this.pullChanges({
+      authenticationToken: args.authenticationToken,
+      batchSize: args.batchSize,
+      loadCursor: async () => await this.loadSyncCursor({cursorKey: args.cursorKey, cursorModel: args.cursorModel}),
+      saveCursor: async (cursor) => await this.saveSyncCursor({cursor, cursorKey: args.cursorKey, cursorModel: args.cursorModel}),
+      postChanges: args.postChanges,
+      applySync: this.resourceApplier(args.resources),
+      onProgress: args.onProgress
+    })
+  }
+
+  /**
+   * Loads a persisted sync cursor from a model row with a value column.
+   * @param {{cursorKey: string, cursorModel: ?}} args - Cursor args.
+   * @returns {Promise<string | null>} Persisted cursor payload.
+   */
+  static async loadSyncCursor({cursorKey, cursorModel}) {
+    const option = await cursorModel.findBy({key: cursorKey})
+
+    return option ? option.value() : null
+  }
+
+  /**
+   * Saves a persisted sync cursor to a model row with a value column.
+   * @param {{cursor: SyncCursor, cursorKey: string, cursorModel: ?}} args - Cursor args.
+   * @returns {Promise<void>}
+   */
+  static async saveSyncCursor({cursor, cursorKey, cursorModel}) {
+    if (!cursor) return
+
+    const option = await cursorModel.findOrInitializeBy({key: cursorKey})
+
+    option.assign({value: JSON.stringify(cursor)})
+    if (option.isChanged()) await option.save()
+  }
+
   /**
    * Pulls backend sync changes in stable pages, applies them locally, and stores
    * the acknowledged cursor. Apps provide only auth, persistence, transport, and
@@ -253,6 +325,174 @@ export default class SyncApiClient {
     if (typeof data === "object" && !Array.isArray(data)) return /** @type {Record<string, unknown>} */ (data)
 
     throw new Error(`Sync ${sync.id()} has invalid data`)
+  }
+
+  /**
+   * Drains pending sync records from a local Velocious model in stable order.
+   * @param {object} args - Replay args.
+   * @param {string} args.authenticationToken - Auth token to send with replay requests.
+   * @param {number} [args.batchSize] - Max syncs per request.
+   * @param {?} args.syncModel - Local Sync model class.
+   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ?>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
+   * @returns {Promise<void>}
+   */
+  static async replayLocalSyncs(args) {
+    await this.replayPending({
+      authenticationToken: args.authenticationToken,
+      batchSize: args.batchSize,
+      markSuccessful: async (sync) => {
+        await (/** @type {{update: (attributes: Record<string, unknown>) => Promise<void>}} */ (sync)).update({state: "success"})
+      },
+      pendingSyncs: async () => await args.syncModel.preload({resource: true}).where({state: "pending"}).order("created_at").toArray(),
+      postReplay: args.postReplay,
+      syncId: (sync) => (/** @type {{id: () => string | number | null | undefined}} */ (sync)).id(),
+      syncPayload: (sync) => this.localSyncPayload(sync)
+    })
+  }
+
+  /**
+   * Builds one replay envelope from a local sync row.
+   * @param {?} sync - Local sync row.
+   * @returns {{clientUpdatedAt?: string, data: Record<string, unknown>, id: number, resourceId: string, resourceType: string, syncType: string}} Sync replay envelope.
+   */
+  static localSyncPayload(sync) {
+    const clientUpdatedAt = sync.updatedAt() || sync.createdAt()
+
+    return {
+      clientUpdatedAt: clientUpdatedAt ? clientUpdatedAt.toISOString() : undefined,
+      data: this.localSyncData(sync),
+      id: /** @type {number} */ (/** @type {unknown} */ (sync.id())),
+      resourceId: String(sync.resourceId()),
+      resourceType: sync.resourceType() || "",
+      syncType: sync.syncType()
+    }
+  }
+
+  /**
+   * Resolves one local sync row payload, falling back to preloaded resource attributes.
+   * @param {?} sync - Local sync row.
+   * @returns {Record<string, unknown>} Sync data.
+   */
+  static localSyncData(sync) {
+    let syncData = /** @type {string | Record<string, unknown>} */ (sync.data() || {})
+
+    if (typeof syncData === "string") {
+      try {
+        syncData = /** @type {Record<string, unknown>} */ (JSON.parse(syncData))
+      } catch (_error) {
+        syncData = {}
+      }
+    }
+
+    if (Object.keys(syncData).length > 0) return syncData
+
+    try {
+      return /** @type {Record<string, unknown>} */ (sync.resource().attributes())
+    } catch (_error) {
+      return {}
+    }
+  }
+
+  /**
+   * Queues a local sync row for a Velocious model resource.
+   * @param {object} args - Queue args.
+   * @param {?} args.resource - Resource being synced.
+   * @param {?} args.syncModel - Local Sync model class.
+   * @param {Record<string, unknown>} [args.data] - Explicit sync data.
+   * @param {string} [args.syncType] - Sync operation type.
+   * @param {string[]} [args.localOnlyAttributes] - Attributes to strip from queued payloads.
+   * @param {(data: Record<string, unknown>) => Record<string, unknown>} [args.normalizeData] - App-specific data normalizer.
+   * @returns {Promise<?>} Local sync row.
+   */
+  static async queueLocalSync(args) {
+    const resourceRecordId = args.resource.id()
+    const resourceType = args.resource.constructor.name
+    const syncData = this.queuedSyncData(args)
+    const syncType = args.syncType || "update"
+
+    if (!resourceRecordId) throw new Error("resource.id() is required to queue sync data")
+    if (!resourceType) throw new Error("resource.constructor.name is required to queue sync data")
+
+    const resourceId = String(resourceRecordId)
+    const existingSync = await args.syncModel.findBy({resourceId, resourceType})
+
+    if (existingSync) {
+      await existingSync.update({
+        data: syncData,
+        state: "pending",
+        syncType
+      })
+
+      return existingSync
+    }
+
+    return await args.syncModel.create({
+      data: syncData,
+      resourceId,
+      resourceType,
+      state: "pending",
+      syncType
+    })
+  }
+
+  /**
+   * Builds backend-safe queued sync data without mutating caller data.
+   * @param {{resource: ?, data?: Record<string, unknown>, localOnlyAttributes?: string[], normalizeData?: (data: Record<string, unknown>) => Record<string, unknown>}} args - Data args.
+   * @returns {Record<string, unknown>} Queued data.
+   */
+  static queuedSyncData(args) {
+    const inputData = args.data ?? /** @type {Record<string, unknown>} */ (args.resource.attributes())
+    const normalizedData = args.normalizeData ? args.normalizeData(inputData) : inputData
+    const syncData = {...normalizedData}
+
+    for (const attributeName of args.localOnlyAttributes || []) delete syncData[attributeName]
+
+    return syncData
+  }
+
+  /**
+   * Parses booleans commonly used by SQLite/offline sync payloads.
+   * @param {unknown} value - Sync decision value.
+   * @param {string} [description] - Error context.
+   * @returns {boolean | null} Parsed boolean-like backend/local value.
+   */
+  static optionalBooleanSyncValue(value, description = "sync boolean") {
+    if (value == null) return null
+    if (value === 1) return true
+    if (value === 0) return false
+
+    return optionalBoolean(value, description)
+  }
+
+  /**
+   * Converts a boolean sync value to SQLite boolean storage.
+   * @param {boolean | null} value - Sync boolean value.
+   * @returns {0 | 1} SQLite-compatible boolean value.
+   */
+  static sqliteBooleanSyncValue(value) {
+    return value === true ? 1 : 0
+  }
+
+  /**
+   * Projects generic sync counters into app-specific result keys.
+   * @param {object} args - Result args.
+   * @param {SyncChangesResult} args.result - Generic Velocious sync result.
+   * @param {Record<string, {changedKey: string, countKey: string}>} args.resources - Resource result key map.
+   * @returns {Record<string, unknown>} Projected result.
+   */
+  static syncResultForResources({result, resources}) {
+    const syncResult = /** @type {Record<string, unknown>} */ ({
+      changed: result.changed,
+      pages: result.pages,
+      syncedCount: result.syncedCount
+    })
+
+    for (const [resourceType, keys] of Object.entries(resources)) {
+      syncResult[keys.countKey] = result.resourceCounts[resourceType] || 0
+      syncResult[keys.changedKey] = result.resourceChanged[resourceType] || false
+    }
+
+    return syncResult
   }
 
   /**
