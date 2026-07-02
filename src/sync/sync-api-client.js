@@ -1,5 +1,7 @@
 // @ts-check
 
+import {optionalInteger} from "typanic"
+
 /**
  * Generic client-side helper for replaying pending sync envelopes through the
  * framework-owned `/velocious/sync/replay` endpoint. Apps provide only local
@@ -142,24 +144,9 @@ export default class SyncApiClient {
 
     return {
       id: payload.id === null || payload.id === undefined ? null : String(payload.id),
-      serverSequence: this.optionalInteger(payload.serverSequence),
+      serverSequence: optionalInteger(payload.serverSequence === "" ? null : payload.serverSequence),
       updatedAt
     }
-  }
-
-  /**
-   * Normalizes an optional integer-ish value.
-   * @param {?} value - Raw value.
-   * @returns {number | null} Parsed integer.
-   */
-  static optionalInteger(value) {
-    if (value === null || value === undefined || value === "") return null
-
-    const integer = Number(value)
-
-    if (!Number.isSafeInteger(integer)) throw new Error("Sync cursor serverSequence must be an integer")
-
-    return integer
   }
 
   /**
