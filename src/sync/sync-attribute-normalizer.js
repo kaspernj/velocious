@@ -1,6 +1,8 @@
 // @ts-check
 
-import {snakeCaseKey} from "typanic"
+import {optionalBoolean, optionalFloat, optionalInteger, snakeCaseKey} from "typanic"
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * Builds the error thrown for a failed sync attribute validation.
@@ -20,14 +22,20 @@ import {snakeCaseKey} from "typanic"
  * label defaults to the camelCase attribute name; apps pin exact messages per
  * attribute through the `*Message` overrides.
  * @typedef {object} SyncAttributeSchemaEntry
- * @property {"date" | "json" | "raw" | "string"} type - Attribute value type.
+ * @property {"boolean" | "date" | "float" | "ignored" | "integer" | "json" | "raw" | "rawOrNull" | "string" | "uuid"} type - Attribute value type.
  * @property {boolean} [required] - Whether present blank/absent values are rejected (strings reject blank-after-trim, dates reject null).
- * @property {number} [maxLength] - Maximum string length, checked after trimming.
+ * @property {number} [maxLength] - Maximum string length, checked after trimming (or untrimmed when `trim` is false).
+ * @property {number} [min] - Minimum integer value (inclusive).
+ * @property {number} [max] - Maximum integer value (inclusive).
+ * @property {boolean} [trim] - Whether string values are trimmed before validation. Defaults to true.
+ * @property {"error" | "null"} [invalid] - Invalid-date handling: "error" rejects, "null" maps invalid values to null. Defaults to "error".
  * @property {string} [label] - Label used in derived messages and codes.
  * @property {string} [column] - Output column key. Defaults to the snake_cased attribute name.
  * @property {string} [requiredMessage] - Pinned message for required rejections.
  * @property {string} [tooLongMessage] - Pinned message for too-long rejections.
- * @property {string} [invalidMessage] - Pinned message for invalid dates and non-object/non-string json values.
+ * @property {string} [tooSmallMessage] - Pinned message for below-min integer rejections.
+ * @property {string} [tooLargeMessage] - Pinned message for above-max integer rejections.
+ * @property {string} [invalidMessage] - Pinned message for invalid dates, booleans, integers, floats, uuids and non-object/non-string json values.
  * @property {string} [invalidJsonMessage] - Pinned message for unparseable json strings.
  */
 
@@ -67,6 +75,7 @@ export default function normalizeAttributesWithSchema({attributes, errorFactory,
     for (const inputKey of inputKeys) {
       knownInputKeys.add(inputKey)
 
+      if (entry.type == "ignored") continue
       if (!Object.prototype.hasOwnProperty.call(attributes, inputKey)) continue
 
       normalized[column] = normalizeAttributeValue({attributeName, entry, errorFactory, value: attributes[inputKey]})
@@ -99,13 +108,145 @@ function normalizeAttributeValue({attributeName, entry, errorFactory, value}) {
   if (entry.type == "string") return normalizeString({entry, errorFactory, label, value})
   if (entry.type == "date") return normalizeDate({entry, errorFactory, label, value})
   if (entry.type == "json") return normalizeJson({entry, errorFactory, label, value})
+  if (entry.type == "boolean") return normalizeBoolean({entry, errorFactory, label, value})
+  if (entry.type == "integer") return normalizeInteger({entry, errorFactory, label, value})
+  if (entry.type == "float") return normalizeFloat({entry, errorFactory, label, value})
+  if (entry.type == "uuid") return normalizeUuid({entry, errorFactory, label, value})
   if (entry.type == "raw") return value
+  if (entry.type == "rawOrNull") return value === undefined ? null : value
 
   throw new Error(`Unknown sync attribute schema type for ${attributeName}: ${String(entry.type)}`)
 }
 
 /**
- * Normalizes a string attribute: trims, rejects blank required values after trimming, maps empty optional values to null and bounds the trimmed length.
+ * Builds the required-rejection error for an empty required attribute value.
+ * @param {object} args - Options.
+ * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
+ * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
+ * @param {string} args.label - Message/code label.
+ * @returns {Error} Required-rejection error.
+ */
+function requiredError({entry, errorFactory, label}) {
+  return errorFactory(entry.requiredMessage ?? `${label} is required.`, {code: `sync-${label}-required`})
+}
+
+/**
+ * Normalizes a boolean attribute: booleans pass through, 1/0 coerce, empty values become null and anything else is rejected.
+ * @param {object} args - Options.
+ * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
+ * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
+ * @param {string} args.label - Message/code label.
+ * @param {?} args.value - Raw value.
+ * @returns {boolean | null} Normalized boolean.
+ */
+function normalizeBoolean({entry, errorFactory, label, value}) {
+  if (value === null || value === undefined || value === "") {
+    if (entry.required) throw requiredError({entry, errorFactory, label})
+
+    return null
+  }
+
+  if (value === 1) return true
+  if (value === 0) return false
+
+  try {
+    return optionalBoolean(value, label)
+  } catch (error) {
+    throw errorFactory(entry.invalidMessage ?? `${label} must be a boolean.`, {
+      cause: /** @type {Error} */ (error),
+      code: `sync-${label}-invalid-boolean`
+    })
+  }
+}
+
+/**
+ * Normalizes an integer attribute: integers pass through, empty values become null, non-integers are rejected and min/max bounds are enforced.
+ * @param {object} args - Options.
+ * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
+ * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
+ * @param {string} args.label - Message/code label.
+ * @param {?} args.value - Raw value.
+ * @returns {number | null} Normalized integer.
+ */
+function normalizeInteger({entry, errorFactory, label, value}) {
+  if (value === null || value === undefined || value === "") {
+    if (entry.required) throw requiredError({entry, errorFactory, label})
+
+    return null
+  }
+
+  /** @type {number | null} */
+  let integerValue
+
+  try {
+    integerValue = optionalInteger(value, label)
+  } catch (error) {
+    throw errorFactory(entry.invalidMessage ?? `${label} must be an integer.`, {
+      cause: /** @type {Error} */ (error),
+      code: `sync-${label}-invalid-integer`
+    })
+  }
+
+  if (integerValue !== null && entry.min !== undefined && integerValue < entry.min) {
+    throw errorFactory(entry.tooSmallMessage ?? `${label} must be at least ${entry.min}.`, {code: `sync-${label}-too-small`})
+  }
+
+  if (integerValue !== null && entry.max !== undefined && integerValue > entry.max) {
+    throw errorFactory(entry.tooLargeMessage ?? `${label} must be at most ${entry.max}.`, {code: `sync-${label}-too-large`})
+  }
+
+  return integerValue
+}
+
+/**
+ * Normalizes a float attribute: finite numbers pass through, empty values become null and non-numbers are rejected.
+ * @param {object} args - Options.
+ * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
+ * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
+ * @param {string} args.label - Message/code label.
+ * @param {?} args.value - Raw value.
+ * @returns {number | null} Normalized float.
+ */
+function normalizeFloat({entry, errorFactory, label, value}) {
+  if (value === null || value === undefined || value === "") {
+    if (entry.required) throw requiredError({entry, errorFactory, label})
+
+    return null
+  }
+
+  try {
+    return optionalFloat(value, label)
+  } catch (error) {
+    throw errorFactory(entry.invalidMessage ?? `${label} must be a number.`, {
+      cause: /** @type {Error} */ (error),
+      code: `sync-${label}-invalid-float`
+    })
+  }
+}
+
+/**
+ * Normalizes a uuid attribute: matching strings pass through unchanged, empty values become null and anything else is rejected.
+ * @param {object} args - Options.
+ * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
+ * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
+ * @param {string} args.label - Message/code label.
+ * @param {?} args.value - Raw value.
+ * @returns {string | null} Normalized uuid.
+ */
+function normalizeUuid({entry, errorFactory, label, value}) {
+  if (value === null || value === undefined || value === "") {
+    if (entry.required) throw requiredError({entry, errorFactory, label})
+
+    return null
+  }
+
+  if (typeof value == "string" && UUID_REGEX.test(value)) return value
+
+  throw errorFactory(entry.invalidMessage ?? `${label} must be a valid UUID.`, {code: `sync-${label}-invalid-uuid`})
+}
+
+/**
+ * Normalizes a string attribute: trims (unless `trim` is false), rejects blank required values, maps empty optional values to null and bounds the length.
  * @param {object} args - Options.
  * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
  * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
@@ -114,18 +255,16 @@ function normalizeAttributeValue({attributeName, entry, errorFactory, value}) {
  * @returns {string | null} Normalized string.
  */
 function normalizeString({entry, errorFactory, label, value}) {
-  const requiredError = () => errorFactory(entry.requiredMessage ?? `${label} is required.`, {code: `sync-${label}-required`})
-
   if (value === null || value === undefined || value === "") {
-    if (entry.required) throw requiredError()
+    if (entry.required) throw requiredError({entry, errorFactory, label})
 
     return null
   }
 
-  const stringValue = String(value).trim()
+  const stringValue = entry.trim === false ? String(value) : String(value).trim()
 
   if (stringValue === "") {
-    if (entry.required) throw requiredError()
+    if (entry.required) throw requiredError({entry, errorFactory, label})
 
     return null
   }
@@ -138,7 +277,7 @@ function normalizeString({entry, errorFactory, label, value}) {
 }
 
 /**
- * Normalizes a date attribute: Date instances pass through, strings/numbers are parsed and invalid or missing-required values are rejected.
+ * Normalizes a date attribute: Date instances pass through, strings/numbers are parsed and invalid or missing-required values are rejected (or mapped to null with `invalid: "null"`).
  * @param {object} args - Options.
  * @param {SyncAttributeSchemaEntry} args.entry - Schema entry.
  * @param {SyncAttributeErrorFactory} args.errorFactory - Error factory.
@@ -152,6 +291,12 @@ function normalizeDate({entry, errorFactory, label, value}) {
   const dateValue = value instanceof Date ? value : typeof value == "string" || typeof value == "number" ? new Date(value) : null
 
   if (!dateValue || Number.isNaN(dateValue.getTime())) {
+    if (entry.invalid == "null") {
+      if (entry.required) throw requiredError({entry, errorFactory, label})
+
+      return null
+    }
+
     throw errorFactory(entry.invalidMessage ?? `${label} must be a valid datetime.`, {code: `sync-${label}-invalid-datetime`})
   }
 
