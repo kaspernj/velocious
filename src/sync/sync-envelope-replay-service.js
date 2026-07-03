@@ -359,11 +359,13 @@ export default class SyncEnvelopeReplayService {
 
     const attributes = this.replayPersistAttributes({actor, mutation})
 
-    if (this.persistExtraAttributes) {
+    // Stale replays never applied anything, so the applyResult-driven extension
+    // hooks must not run against the default null skipped result.
+    if (this.persistExtraAttributes && shouldApply) {
       Object.assign(attributes, this.persistExtraAttributes({actor, applyResult, context, existingSync, mutation, shouldApply}))
     }
 
-    if (this.persistSerializedData) {
+    if (this.persistSerializedData && shouldApply) {
       const serializedData = this.persistSerializedData({applyResult, mutation})
 
       if (serializedData !== undefined && serializedData !== null) {
@@ -410,6 +412,9 @@ export default class SyncEnvelopeReplayService {
    */
   async afterReplayMutation(args) {
     if (!this.broadcasts || !this.broadcaster) return
+    // Stale replays never applied anything - broadcasting their skipped results
+    // would fan out stale side effects (or crash on the default null applyResult).
+    if (!args.shouldApply) return
 
     for (const broadcast of this.broadcasts) {
       if (broadcast.when && !broadcast.when(args)) continue

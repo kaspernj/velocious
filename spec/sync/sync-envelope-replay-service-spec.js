@@ -352,6 +352,58 @@ describe("sync envelope replay service", () => {
     expect(syncModel.createCalls[0].data).toEqual(JSON.stringify({embedded: true}))
   })
 
+  it("skips persistence extension hooks for stale replays", async () => {
+    const existingSync = buildFakeSyncRecord({clientUpdatedAt: new Date("2026-07-03T12:00:00.000Z")})
+    const syncModel = buildFakeSyncModel({existingSync})
+    const service = new ModelBackedReplayService({
+      options: {
+        persistExtraAttributes: ({applyResult}) => ({event_id: applyResult.appliedEventId}),
+        persistSerializedData: ({applyResult}) => applyResult.snapshot
+      },
+      syncModel
+    })
+
+    service.applyReplayMutation = async () => ({appliedEventId: "event-7", snapshot: {embedded: true}})
+
+    const result = await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {name: "stale"}, id: 1, resourceId: "r-1", resourceType: "Task", syncType: "update"}]
+    })
+
+    expect(result).toEqual({syncs: [{id: 1, syncState: "successful"}]})
+    expect(syncModel.createCalls).toEqual([])
+    expect(existingSync.calls).toEqual([])
+  })
+
+  it("skips declarative broadcasts for stale replays", async () => {
+    /** @type {Array<Record<string, ?>>} */
+    const broadcastCalls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      findExistingReplaySync: async () => ({clientUpdatedAt: () => "2026-07-03T12:00:00.000Z"}),
+      applyReplayMutation: async () => {
+        throw new Error("Should not apply stale sync")
+      },
+      persistReplayMutation: async () => {}
+    }, {
+      broadcaster: async (broadcast) => {
+        broadcastCalls.push(broadcast)
+      },
+      broadcasts: [{
+        body: ({applyResult}) => applyResult.published,
+        broadcastParams: ({applyResult}) => ({eventId: applyResult.eventId}),
+        channel: "ticket-scans"
+      }]
+    })
+
+    const result = await service.replay({
+      syncs: [{clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {}, id: 1, resourceId: "t-1", resourceType: "Ticket", syncType: "update"}]
+    })
+
+    expect(result).toEqual({syncs: [{id: 1, syncState: "successful"}]})
+    expect(broadcastCalls).toEqual([])
+  })
+
   it("fans applied mutations out through declarative broadcasts", async () => {
     /** @type {Array<Record<string, ?>>} */
     const broadcastCalls = []
