@@ -40,11 +40,13 @@ const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "modelName",
   "ModelClass",
   "primaryKey",
+  "quickSearchColumns",
   "relationships",
   "server",
   "SharedResource",
   "sync",
-  "translatedAttributes"
+  "translatedAttributes",
+  "writableAttributes"
 ])
 
 /**
