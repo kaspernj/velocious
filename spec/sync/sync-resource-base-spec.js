@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import SyncEnvelopeReplayService from "../../src/sync/sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "../../src/sync/sync-model-change-feed-service.js"
 import SyncResourceBase from "../../src/sync/sync-resource-base.js"
+import {frontendModelResourceConfigurationFromDefinition} from "../../src/frontend-models/resource-definition.js"
 import SyncEntry from "../dummy/src/models/sync-entry.js"
 import VelociousError from "../../src/velocious-error.js"
 
@@ -291,6 +292,19 @@ async function createQuickSearchEntry({resourceId, syncType}) {
 
   return entry
 }
+
+describe("sync resource base - registration", () => {
+  it("passes the declarative static config assertion when registered as a frontend-model resource", () => {
+    class RegisteredSyncResource extends SyncResourceBase {
+      static ModelClass = SyncEntry
+      static attributes = {id: true}
+    }
+
+    const configuration = frontendModelResourceConfigurationFromDefinition(RegisteredSyncResource)
+
+    if (!configuration) throw new Error("Expected a normalized resource configuration")
+  })
+})
 
 describe("sync resource base - quick search", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("expands quickSearch searches to LIKE conditions over the declared columns", async () => {
