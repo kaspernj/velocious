@@ -678,7 +678,17 @@ export default class TestRunner {
      * @param {unknown} reason - Rejection reason.
      * @returns {void}
      */
-    const onUnhandledRejection = (reason) => this.recordAsyncCrash("unhandledRejection", reason)
+    const onUnhandledRejection = (reason) => {
+      // If a test attached its OWN unhandledRejection listener, it is
+      // intentionally observing/triggering the rejection (e.g. beacon
+      // error-reporting-spec.js) — Node dispatches to EVERY listener, so also
+      // failing the suite here would break those tests. Defer to the test's
+      // handler; only treat a rejection as a silent-death crash when ours is the
+      // sole listener (no persistent framework listener exists to mask this).
+      if (process.listenerCount("unhandledRejection") > 1) return
+
+      this.recordAsyncCrash("unhandledRejection", reason)
+    }
 
     process.on("unhandledRejection", onUnhandledRejection)
 
@@ -691,6 +701,15 @@ export default class TestRunner {
           descriptions: [],
           indentLevel: 0
         })
+
+        // A rejection scheduled by the final test (a detached rejected promise,
+        // or an afterCommit callback rejecting as the suite drains) is reported
+        // by Node on a LATER turn. Drain a few turns while the handler is still
+        // attached — and connections still open — so those late rejections are
+        // recorded instead of escaping to the default crash path after cleanup.
+        for (let drainTurn = 0; drainTurn < 3; drainTurn++) {
+          await new Promise((resolve) => setImmediate(resolve))
+        }
       })
     } finally {
       process.off("unhandledRejection", onUnhandledRejection)
