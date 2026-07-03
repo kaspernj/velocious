@@ -3,6 +3,8 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
+import normalizeAttributesWithSchema from "../sync/sync-attribute-normalizer.js"
+import VelociousError from "../velocious-error.js"
 
 /**
  * Built-in frontend-model resource action.
@@ -171,6 +173,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static translatedAttributes = undefined
   /** @type {?} */
   static SharedResource = undefined
+
+  /**
+   * Declarative writable-attribute schema consumed by
+   * {@link FrontendModelBaseResource#normalizeWritableAttributes}, keyed by
+   * camelCase attribute name.
+   * @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} */
+  static writableAttributes = null
 
   /**
    * Runs constructor.
@@ -493,6 +502,40 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
       return []
     })
+  }
+
+  /**
+   * Normalizes incoming writable attributes through the declared
+   * {@link FrontendModelBaseResource.writableAttributes} schema: camelCase and
+   * snake_case input keys are accepted, values are validated per type and the
+   * normalized values are written under snake_case column keys. Validation
+   * failures throw client-safe errors built by
+   * {@link FrontendModelBaseResource#writableAttributeError}.
+   * @param {Record<string, ?>} attributes - Raw incoming attributes.
+   * @param {{unknownAttributes?: "error" | "ignore"}} [options] - Unknown input-key handling. Defaults to "error".
+   * @returns {Record<string, ?>} Normalized attributes keyed by column names.
+   */
+  normalizeWritableAttributes(attributes, options = {}) {
+    const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
+
+    if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
+
+    return normalizeAttributesWithSchema({
+      attributes,
+      errorFactory: (message, details) => this.writableAttributeError(message, details),
+      schema,
+      unknownAttributes: options.unknownAttributes
+    })
+  }
+
+  /**
+   * Builds the client-safe error thrown for a failed writable-attribute validation.
+   * @param {string} message - Human-readable validation message.
+   * @param {{cause?: Error, code: string}} details - Stable machine-readable code and optional cause.
+   * @returns {Error} Client-safe error.
+   */
+  writableAttributeError(message, {cause, code}) {
+    return VelociousError.safe(message, cause ? {cause, code} : {code})
   }
 
   /**
