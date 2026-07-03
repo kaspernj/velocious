@@ -51,7 +51,7 @@ export default class SyncReplayUpsertApplier {
    * Creates a declarative upsert applier.
    * @param {object} args - Applier configuration.
    * @param {?} args.modelClass - Model class receiving the mutations.
-   * @param {Record<string, string | {type: string, column?: string}>} args.fields - Data-key → field-type map (optionally renaming to a column).
+   * @param {Record<string, string | {type: string, column?: string} | ((value: ?, label: string) => ?)>} args.fields - Data-key → field-type map: a named type, a {type, column} rename spec, "ignored" for accepted-but-dropped keys, or a custom coercer function.
    * @param {(args: {data: Record<string, ?>, mutation: ?, context: Record<string, ?>}) => Promise<?>} [args.findRecord] - Custom record resolver. Defaults to findBy({id: mutation.resourceId}).
    * @param {(args: {mutation: ?, context: Record<string, ?>}) => Promise<?>} [args.findRecordForDelete] - Custom delete resolver. Defaults to findRecord.
    * @param {"error" | "ignore"} [args.restArgs] - Unknown data-key handling. Defaults to "error".
@@ -66,9 +66,13 @@ export default class SyncReplayUpsertApplier {
     }
 
     for (const [fieldName, fieldSpec] of Object.entries(fields)) {
+      if (typeof fieldSpec === "function") continue
+
       const fieldType = typeof fieldSpec === "string" ? fieldSpec : fieldSpec.type
 
-      if (!(fieldType in FIELD_TYPES)) throw new Error(`Unknown sync field type: ${fieldType} for: ${fieldName}`)
+      if (fieldType !== "ignored" && !(fieldType in FIELD_TYPES)) {
+        throw new Error(`Unknown sync field type: ${fieldType} for: ${fieldName}`)
+      }
     }
 
     this.afterApply = afterApply
@@ -152,7 +156,15 @@ export default class SyncReplayUpsertApplier {
         continue
       }
 
+      if (typeof fieldSpec === "function") {
+        mappedAttributes[dataKey] = fieldSpec(value, dataKey)
+        continue
+      }
+
       const fieldType = typeof fieldSpec === "string" ? fieldSpec : fieldSpec.type
+
+      if (fieldType === "ignored") continue
+
       const column = typeof fieldSpec === "string" ? dataKey : fieldSpec.column || dataKey
 
       mappedAttributes[column] = FIELD_TYPES[fieldType](value, dataKey)

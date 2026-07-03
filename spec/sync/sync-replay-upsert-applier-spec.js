@@ -254,6 +254,33 @@ describe("sync replay upsert applier", () => {
     expect(result.serializedData).toEqual({id: "row-1", title: "Snapshot"})
   })
 
+  it("supports custom function coercers and ignored fields", async () => {
+    const modelClass = buildFakeModelClass()
+    const applier = new SyncReplayUpsertApplier({
+      fields: {
+        createdAt: "ignored",
+        pytId: (value) => value === null || value === undefined ? null : String(value),
+        startsAt: (value) => {
+          const dateValue = value ? new Date(String(value)) : null
+
+          return dateValue && !Number.isNaN(dateValue.getTime()) ? dateValue : null
+        }
+      },
+      modelClass
+    })
+
+    await applier.apply({
+      actor: null,
+      context: {},
+      existingSync: null,
+      mutation: buildMutation({data: {createdAt: "2020-01-01", pytId: 88051, startsAt: "not-a-date"}})
+    })
+
+    expect(modelClass.rows[0].attributes.pytId).toEqual("88051")
+    expect(modelClass.rows[0].attributes.startsAt).toEqual(null)
+    expect("createdAt" in modelClass.rows[0].attributes).toEqual(false)
+  })
+
   it("fails loudly on invalid field types and field values", async () => {
     await expect(() => new SyncReplayUpsertApplier({fields: {title: "nope"}, modelClass: buildFakeModelClass()}))
       .toThrow(/Unknown sync field type: nope/u)
