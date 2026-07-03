@@ -254,6 +254,168 @@ describe("sync envelope replay service", () => {
     expect(existingSync.calls).toEqual([])
   })
 
+  it("authenticates replay actors through a configured token model", async () => {
+    const tokenRecord = {id: () => "token-row-1"}
+    /** @type {Array<Record<string, ?>>} */
+    const findByCalls = []
+
+    class TokenAuthedReplayService extends SyncEnvelopeReplayService {
+      constructor() {
+        super({
+          authenticationTokenModel: {
+            /** @param {Record<string, ?>} conditions - Lookup conditions. @returns {Promise<?>} Token row. */
+            findBy: async (conditions) => {
+              findByCalls.push(conditions)
+
+              return conditions.token === "valid-token" ? tokenRecord : null
+            }
+          },
+          logger: {warn: () => {}}
+        })
+      }
+    }
+
+    const service = new TokenAuthedReplayService()
+
+    expect(await service.authenticateReplay({authenticationToken: "valid-token"}))
+      .toEqual({actor: tokenRecord, authenticated: true})
+    expect(await service.authenticateReplay({}))
+      .toEqual({authenticated: false, errorCode: "missing-authentication-token", errorMessage: "Missing authentication token"})
+    expect(await service.authenticateReplay({authenticationToken: "wrong"}))
+      .toEqual({authenticated: false, errorCode: "invalid-authentication-token", errorMessage: "Invalid authentication token"})
+    expect(findByCalls).toEqual([{token: "valid-token"}, {token: "wrong"}])
+  })
+
+  it("dispatches replay mutations through the declarative apply-handler registry", async () => {
+    /** @type {Array<string>} */
+    const calls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true})
+    }, {
+      applyHandlers: {
+        Task: async ({mutation}) => {
+          calls.push(`task:${mutation.resourceId}`)
+
+          return {appliedTask: true}
+        }
+      }
+    })
+    /** @type {Array<?>} */
+    const persisted = []
+
+    service.callbacks.persistReplayMutation = async ({applyResult}) => {
+      persisted.push(applyResult)
+    }
+
+    const result = await service.replay({
+      syncs: [{data: {}, id: 3, resourceId: "t-3", resourceType: "Task", syncType: "update"}]
+    })
+
+    expect(result).toEqual({syncs: [{id: 3, syncState: "successful"}]})
+    expect(calls).toEqual(["task:t-3"])
+    expect(persisted).toEqual([{appliedTask: true}])
+  })
+
+  it("fails loudly for mutations without a registered apply handler", async () => {
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true})
+    }, {
+      applyHandlers: {
+        Task: async () => ({})
+      }
+    })
+
+    await expect(async () => await service.replay({
+      syncs: [{data: {}, id: 4, resourceId: "u-1", resourceType: "Unknown", syncType: "update"}]
+    })).toThrow(/No sync apply handler registered for: Unknown/u)
+  })
+
+  it("persists extra attributes and serialized data through the configured hooks", async () => {
+    const syncModel = buildFakeSyncModel()
+    const service = new ModelBackedReplayService({
+      options: {
+        persistExtraAttributes: ({applyResult}) => ({event_id: applyResult.appliedEventId}),
+        persistSerializedData: ({applyResult}) => applyResult.snapshot
+      },
+      syncModel
+    })
+
+    service.applyReplayMutation = async () => ({appliedEventId: "event-7", snapshot: {embedded: true}})
+
+    await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {name: "x"}, id: 1, resourceId: "r-1", resourceType: "Task", syncType: "update"}]
+    })
+
+    expect(syncModel.createCalls.length).toEqual(1)
+    expect(syncModel.createCalls[0].event_id).toEqual("event-7")
+    expect(syncModel.createCalls[0].data).toEqual(JSON.stringify({embedded: true}))
+  })
+
+  it("fans applied mutations out through declarative broadcasts", async () => {
+    /** @type {Array<Record<string, ?>>} */
+    const broadcastCalls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      applyReplayMutation: async () => ({eventId: "event-1", mandantenNr: 7, published: {id: "t-1"}}),
+      persistReplayMutation: async () => {}
+    }, {
+      broadcaster: async (broadcast) => {
+        broadcastCalls.push(broadcast)
+      },
+      broadcasts: [{
+        body: ({applyResult}) => applyResult.published,
+        broadcastParams: ({applyResult}) => ({eventId: applyResult.eventId, mandantenNr: applyResult.mandantenNr}),
+        channel: "ticket-scans",
+        when: ({applyResult}) => Boolean(applyResult.published)
+      }]
+    })
+
+    await service.replay({
+      syncs: [
+        {data: {}, id: 1, resourceId: "t-1", resourceType: "Ticket", syncType: "update"},
+        {data: {}, id: 2, resourceId: "t-2", resourceType: "Ticket", syncType: "update"}
+      ]
+    })
+
+    expect(broadcastCalls).toEqual([
+      {body: {id: "t-1"}, channel: "ticket-scans", params: {eventId: "event-1", mandantenNr: 7}},
+      {body: {id: "t-1"}, channel: "ticket-scans", params: {eventId: "event-1", mandantenNr: 7}}
+    ])
+  })
+
+  it("skips broadcasts whose when-gate declines", async () => {
+    /** @type {Array<Record<string, ?>>} */
+    const broadcastCalls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      applyReplayMutation: async () => ({published: null}),
+      persistReplayMutation: async () => {}
+    }, {
+      broadcaster: async (broadcast) => {
+        broadcastCalls.push(broadcast)
+      },
+      broadcasts: [{
+        body: ({applyResult}) => applyResult.published,
+        broadcastParams: () => ({}),
+        channel: "ticket-scans",
+        when: ({applyResult}) => Boolean(applyResult.published)
+      }]
+    })
+
+    await service.replay({syncs: [{data: {}, id: 1, resourceId: "t-1", resourceType: "Ticket", syncType: "update"}]})
+
+    expect(broadcastCalls).toEqual([])
+  })
+
+  it("rejects broadcasts configuration without a broadcaster", async () => {
+    await expect(() => new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true})
+    }, {
+      broadcasts: [{body: () => ({}), broadcastParams: () => ({}), channel: "x"}]
+    })).toThrow(/broadcaster/u)
+  })
+
   it("fails loudly when model-backed defaults get an actor without an id", async () => {
     const syncModel = buildFakeSyncModel()
     const service = new ModelBackedReplayService({actor: {}, syncModel})
@@ -312,8 +474,8 @@ function buildFakeSyncModel({existingSync = null} = {}) {
 }
 
 class ModelBackedReplayService extends SyncEnvelopeReplayService {
-  constructor({actor = {id: () => "actor-1"}, syncModel}) {
-    super({logger: {warn: () => {}}, syncModel})
+  constructor({actor = {id: () => "actor-1"}, options = {}, syncModel}) {
+    super({logger: {warn: () => {}}, syncModel, ...options})
     this.actor = actor
   }
 
@@ -323,8 +485,8 @@ class ModelBackedReplayService extends SyncEnvelopeReplayService {
 }
 
 class TestSyncEnvelopeReplayService extends SyncEnvelopeReplayService {
-  constructor(callbacks) {
-    super({logger: {warn: () => {}}})
+  constructor(callbacks, options = {}) {
+    super({logger: {warn: () => {}}, ...options})
     this.callbacks = callbacks
   }
 

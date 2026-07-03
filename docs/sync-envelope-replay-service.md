@@ -117,6 +117,39 @@ class AppSyncReplayService extends SyncEnvelopeReplayService {
 - The sync model must expose `findBy`/`create` statics plus instance `assign`/`save`/`clientUpdatedAt` and `advanceServerSequence` (the change-feed sequence contract), and the actor returned from `authenticateReplay` must expose an `id()` method.
 - `replayPersistAttributes({actor, mutation})` builds the persisted attributes hash and can be reused by apps that only enrich it (for example with an `event_id`) before persisting themselves.
 
+## Declarative configuration
+
+Beyond the model-backed defaults, the constructor accepts declarative options so most apps override no hooks at all:
+
+```js
+new AppSyncReplayService({
+  authenticationTokenModel: AuthenticationToken, // + authenticationTokenColumn/authenticationTokenParam
+  syncModel: Sync,
+  applyHandlers: {
+    Event: {
+      modelClass: Event,
+      fields: {pytId: "stringOrNull", title: "stringOrNull", startsAt: "dateOrNull", visible: "booleanOrNull"},
+      afterApply: async ({record}) => ({appliedEventId: record.id()}) // domain tail; merges into the apply result
+    },
+    TicketScan: async (args) => await new TicketScanSyncCommandService().apply(args) // full custom handler
+  },
+  persistExtraAttributes: ({applyResult}) => ({event_id: applyResult.appliedEventId}),
+  persistSerializedData: ({applyResult}) => applyResult.serializedData,
+  broadcaster: async ({channel, params, body}) => configuration.broadcastToChannel(channel, params, body),
+  broadcasts: [{
+    channel: "ticket-scans",
+    broadcastParams: ({applyResult}) => ({eventId: applyResult.appliedEventId, mandantenNr: applyResult.mandantenNr}),
+    body: ({applyResult}) => applyResult.published,
+    when: ({applyResult}) => Boolean(applyResult.published)
+  }]
+})
+```
+
+- **Token auth**: with `authenticationTokenModel`, the default `authenticateReplay` looks the token up by `authenticationTokenColumn` from `params[authenticationTokenParam]` and returns the standard missing/invalid error codes.
+- **Apply-handler registry**: the default `applyReplayMutation` dispatches by `mutation.resourceType`; a mutation without a registered handler fails loudly. Declarative specs are executed by `SyncReplayUpsertApplier` (`src/sync/sync-replay-upsert-applier.js`), which owns present-key filtering, per-field coercion (`stringOrNull`, `booleanOrNull` incl. sqlite 0/1, `integerOrNull`, `floatOrNull`, `dateOrNull`, `raw`), unknown-key rejection (`restArgs: "ignore"` opts out), the find-or-create upsert, the delete branch, an optional `serialize` snapshot (landing on `applyResult.serializedData`), and the `afterApply` domain tail.
+- **Persist extension points**: `persistExtraAttributes` merges app columns (e.g. event scoping) into the model-backed persisted row; `persistSerializedData` overrides the persisted `data` payload (objects are JSON stringified).
+- **Broadcast fan-out**: the default `afterReplayMutation` runs each declarative broadcast through the injected `broadcaster`; `when` gates skip irrelevant mutations. Configuring `broadcasts` without a `broadcaster` fails at construction time.
+
 ## Boundary
 
 Use this service only for replaying envelopes through app-owned hooks. Do not put app-specific resource policy, scanner/device token rules, or model mutation logic in Velocious. New sync implementations should still move toward signed offline mutations, resource/domain-command replay, and server-sequenced change feeds described in [`offline-sync.md`](offline-sync.md).
