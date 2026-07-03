@@ -45,6 +45,7 @@ describe("Cli - Commands - db:migrate", () => {
       "background_jobs",
       "velocious_attachments",
       "velocious_internal_migrations",
+      "velocious_server_sequences",
       "velocious_sync_scopes",
       "websocket_channel_events",
       "websocket_replay_channels"

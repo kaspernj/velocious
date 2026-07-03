@@ -67,6 +67,36 @@ describe("server sequence allocator", {tags: ["dummy"], databaseCleaning: {trans
 
     expect(first).toBeGreaterThan(0)
     expect(second).toBeGreaterThan(first)
+
+    // Spec-created tables must not leak into other specs' table-list assertions (for example db:migrate's).
+    await Configuration.current().ensureConnections({name: "Bare sequence table cleanup"}, async (dbs) => {
+      await dbs.default.dropTable("bare_server_sequences", {ifExists: true})
+    })
+  })
+
+  it("recreates the sequence table when a surrounding rolled-back transaction removed it", async () => {
+    const allocator = new ServerSequenceAllocator({configuration: Configuration.current(), tableName: "rollback_server_sequences"})
+
+    // The mixin's beforeCreate allocation always runs inside the record save
+    // transaction, so the first-ever allocation can create the table inside a
+    // transaction that later rolls back. On transactional-DDL databases that
+    // removes the table again, and the allocator must not stay poisoned by a
+    // cached readiness pointing at the dropped table.
+    await expect(async () => {
+      await SyncEntry.transaction(async () => {
+        await allocator.next()
+        throw new Error("Rolls back the surrounding transaction")
+      })
+    }).toThrow("Rolls back the surrounding transaction")
+
+    const value = await allocator.next()
+
+    expect(value).toBeGreaterThan(0)
+
+    // Spec-created tables must not leak into other specs' table-list assertions (for example db:migrate's).
+    await Configuration.current().ensureConnections({name: "Rollback sequence table cleanup"}, async (dbs) => {
+      await dbs.default.dropTable("rollback_server_sequences", {ifExists: true})
+    })
   })
 
   it("assigns a sequence on create through withServerSequence and leaves existing values", async () => {

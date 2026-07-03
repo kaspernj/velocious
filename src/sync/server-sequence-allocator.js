@@ -76,8 +76,15 @@ export default class ServerSequenceAllocator {
     if (this._readyPromise) return await this._readyPromise
 
     this._readyPromise = this._withDb(async (db) => {
-      await this._ensureSequencesTable(db)
-      this._isReady = true
+      const created = await this._ensureSequencesTable(db)
+
+      // DDL joins any transaction already open on this connection (the mixin's
+      // beforeCreate allocation always runs inside the record save transaction),
+      // and on transactional-DDL databases (MSSQL, PostgreSQL, SQLite) a rollback
+      // of that outer transaction removes the just-created table again. Only
+      // cache readiness when the table was not created inside an active
+      // transaction; otherwise the next allocation re-verifies the table.
+      if (!created || !db.insideTransaction()) this._isReady = true
     })
 
     try {
@@ -99,7 +106,21 @@ export default class ServerSequenceAllocator {
     }
 
     return await this._withDb(async (db) => {
-      await db.insert({data: this._insertPayload(), tableName: this.tableName})
+      // The allocated id must be returned by the insert statement itself (OUTPUT
+      // INSERTED/RETURNING), like the record create path does: MSSQL's
+      // SCOPE_IDENTITY() only sees inserts from the same batch/scope, so reading
+      // the last-insert id as a separate query always returns NULL there. Drivers
+      // without insert-returning support (older SQLite) keep the reliable
+      // connection-scoped last-insert-id fallback.
+      const insertSql = db.insertSql({
+        data: this._insertPayload(),
+        returnLastInsertedColumnNames: ["id"],
+        tableName: this.tableName
+      })
+      const insertResult = await db.query(insertSql)
+      const insertedId = Array.isArray(insertResult) ? insertResult[0]?.id : undefined
+
+      if (insertedId !== undefined && insertedId !== null) return Number(insertedId)
 
       return Number(await db.lastInsertID())
     })
@@ -152,10 +173,10 @@ export default class ServerSequenceAllocator {
   /**
    * Ensures the sequences table exists.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} Whether the table had to be created.
    */
   async _ensureSequencesTable(db) {
-    if (await db.tableExists(this.tableName)) return
+    if (await db.tableExists(this.tableName)) return false
 
     const table = new TableData(this.tableName, {ifNotExists: true})
 
@@ -163,6 +184,8 @@ export default class ServerSequenceAllocator {
     table.datetime("created_at", {null: false})
 
     await db.createTable(table)
+
+    return true
   }
 }
 
