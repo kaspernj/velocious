@@ -150,6 +150,54 @@ new AppSyncReplayService({
 - **Persist extension points**: `persistExtraAttributes` merges app columns (e.g. event scoping) into the model-backed persisted row; `persistSerializedData` overrides the persisted `data` payload (objects are JSON stringified).
 - **Broadcast fan-out**: the default `afterReplayMutation` runs each declarative broadcast through the injected `broadcaster`; `when` gates skip irrelevant mutations. Configuring `broadcasts` without a `broadcaster` fails at construction time.
 
+## Resource-routed replay
+
+Instead of per-resourceType `applyHandlers`, the service can route mutations through the app's registered frontend-model resource classes. Pass a `configuration` (its `frontendModels` registry resolves `mutation.resourceType`, honoring `static modelName` overrides) and/or `resourceTypeOverrides` (a resource class, or a string alias resolved through the registry). `SyncResourceBase#buildReplayService` plumbs `configuration`, `ability`, `abilityContext` and `locals` in automatically and defaults `replayServiceClass()` to `SyncEnvelopeReplayService`, so a sync resource with registered frontend models needs no replay wiring at all.
+
+```js
+class TicketResource extends FrontendModelBaseResource {
+  static ModelClass = Ticket
+
+  // Entries can be `true` (fully inferred from column metadata: type,
+  // maxLength, required) or partial objects overriding inferred fields.
+  static writableAttributes = {
+    barcode: true,
+    scannedAt: {invalid: "null", type: "date"},
+    title: true
+  }
+
+  abilities() {
+    this.can(["create", "update", "destroy"], {eventId: this.context.currentEventIds})
+  }
+
+  syncAuthorizationFailureReason({action}) {
+    return action == "create" ? "ticket-create-denied" : null
+  }
+}
+
+new SyncEnvelopeReplayService({
+  ability,
+  abilityContext: {currentEventIds},
+  configuration, // frontendModels registry routing
+  resourceTypeOverrides: {LegacyTicket: "Ticket", Special: SpecialResource},
+  syncModel: Sync
+})
+```
+
+The routed default apply flow per mutation:
+
+1. `applyHandlers` keep precedence — a matching handler wins over routing (compat).
+2. Unresolvable resource types fail that single sync with `reason: "unknown-resource-type"`; the batch continues.
+3. `resource.applySync(args)` returning non-null replaces the whole flow (full escape hatch).
+4. `resource.authorizeSyncMutation({context, mutation})` returning `{allowed: false, reason}` fails the sync with that reason.
+5. Deletes: `findSyncRecord({forDelete: true, mutation})` (ability-scoped through the resource's normalized `destroy` ability action); missing records no-op; `syncDeleteBehavior() === "ignore"` keeps the record; otherwise it is destroyed.
+6. Upserts: `mutation.data` is normalized through `syncWritableAttributes()` (defaults to the resolved `writableAttributes` schema — declaring neither fails loudly). Found records (via the `update`-scoped `findSyncRecord`) get `assign` + `save`. Missing records follow `syncMissingRecordBehavior()`: `"ignore"` no-ops, the default creates the record with the client-generated primary key (`mutation.resourceId`) and then verifies create-scope membership when an ability is configured — records outside the ability's `create` scope are destroyed again and the sync fails with `syncAuthorizationFailureReason({action: "create", mutation})` (default `"access-denied"`).
+7. `afterSyncApply({context, created, mutation, record})` extras merge into the apply result, reaching `persistExtraAttributes` and broadcasts.
+
+`shouldApplySync({existingSync, mutation})` on the routed resource can force-apply or force-skip before the timestamp default decides.
+
+Per-sync failure semantics: every client-safe apply failure (`VelociousError` with `safeToExpose`) — schema validation errors, model validation errors (converted with their translated `ValidationError` message and `reason: "validation-error"`), authorization denials, unknown resource types — fails only that sync with `{id, syncState: "failed", reason, message}` and the batch continues. Unexpected errors keep propagating and fail the request.
+
 ## Boundary
 
 Use this service only for replaying envelopes through app-owned hooks. Do not put app-specific resource policy, scanner/device token rules, or model mutation logic in Velocious. New sync implementations should still move toward signed offline mutations, resource/domain-command replay, and server-sequenced change feeds described in [`offline-sync.md`](offline-sync.md).

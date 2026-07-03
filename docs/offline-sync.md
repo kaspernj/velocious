@@ -332,32 +332,32 @@ withServerSequence(Sync, {allocator: new ServerSequenceAllocator({insertData: {}
 
 `SyncResourceBase` inherits the full frontend-model index assembly (`records()`/`count()` through the controller's `frontendModelIndexQuery`: ability-authorized query, preload, joins, where, distinct, searches, sort and pagination) from `FrontendModelBaseResource`, so sync resources do not override `records`/`count`. Pagination policy plugs into the existing `applyFrontendModelIndexPagination({controller, pagination, query})` hook.
 
-On top of that, `SyncResourceBase` adds two declarative statics:
+On top of that:
 
-- `static quickSearchColumns = ["resource_id", "resource_type", "sync_type"]` — an index search on the pseudo-column `quickSearch` (with the `like` operator and a string value; anything else is rejected with the client-safe `sync-invalid-quick-search` error) expands to an OR of LIKE conditions over the declared root-table columns, using driver quoting. Blank values are treated as handled without filtering. Resources without declared columns keep the controller's default search behavior.
-- `static writableAttributes = {...}` — a per-attribute validation schema consumed by `normalizeWritableAttributes(attributes)`, for `normalizeCreateAttributes`/`normalizeUpdateAttributes` implementations:
+- `SyncResourceBase` adds `static quickSearchColumns = ["resource_id", "resource_type", "sync_type"]` — an index search on the pseudo-column `quickSearch` (with the `like` operator and a string value; anything else is rejected with the client-safe `sync-invalid-quick-search` error) expands to an OR of LIKE conditions over the declared root-table columns, using driver quoting. Blank values are treated as handled without filtering. Resources without declared columns keep the controller's default search behavior.
+- `FrontendModelBaseResource` (so every frontend-model resource, sync or not) owns `static writableAttributes = {...}` — a per-attribute validation schema consumed by `normalizeWritableAttributes(attributes)`. When declared, the default `permittedParams()` derives the permit from the schema's camelCase keys and the default `normalizeCreateAttributes`/`normalizeUpdateAttributes` run the schema automatically, so most resources declare only the schema:
 
 ```js
 class SyncResource extends SyncResourceBase {
   static quickSearchColumns = ["resource_id", "resource_type", "sync_type"]
 
+  // `true` entries infer type, maxLength and required from column metadata;
+  // partial entries infer their missing fields the same way.
   static writableAttributes = {
     authenticationTokenId: {type: "raw"},
-    clientUpdatedAt: {required: true, type: "date"},
+    clientUpdatedAt: true,
     data: {invalidJsonMessage: "Data must be valid JSON.", invalidMessage: "Data must be an object or JSON string.", type: "json"},
-    eventId: {maxLength: 255, type: "string"},
-    resourceId: {maxLength: 255, type: "string"},
-    resourceType: {maxLength: 255, type: "string"},
-    syncType: {maxLength: 255, required: true, type: "string"}
-  }
-
-  async normalizeCreateAttributes(attributes) {
-    return this.normalizeWritableAttributes(attributes)
+    eventId: true,
+    resourceId: true,
+    resourceType: true,
+    syncType: {required: true, type: "string"}
   }
 }
 ```
 
-`normalizeWritableAttributes` accepts both camelCase and snake_case input keys per attribute (camelCase wins when both are present), rejects unknown input keys by default so misspelled or read-only attributes fail loudly instead of being silently dropped (`{unknownAttributes: "ignore"}` opts out), validates only present keys (absent required attributes are left to create defaults) and writes normalized values under snake_case column keys. Types: `string` trims, rejects blank required values after trimming, maps empty and whitespace-only optional values to null and bounds the trimmed length; `date` passes `Date` instances through, parses strings/numbers and rejects invalid values; `json` maps empty values to null, passes objects through, parses JSON strings and rejects other types; `raw` passes through untouched. Failures throw `VelociousError.safe` with derived messages (`<label> is required.`, `<label> is too long (maximum is N characters).`, `<label> must be a valid datetime.`) and codes (`sync-<label>-required`, `sync-<label>-too-long`, `sync-<label>-invalid-datetime`, `sync-<label>-invalid-json`, `sync-<label>-invalid`); apps pin exact messages per attribute through `requiredMessage`/`tooLongMessage`/`invalidMessage`/`invalidJsonMessage` and override the error class through `writableAttributeError`. The underlying schema engine is exported standalone as `normalizeAttributesWithSchema` (`velocious/build/src/sync/sync-attribute-normalizer.js`).
+`normalizeWritableAttributes` accepts both camelCase and snake_case input keys per attribute (camelCase wins when both are present), rejects unknown input keys by default so misspelled or read-only attributes fail loudly instead of being silently dropped (`{unknownAttributes: "ignore"}` opts out), validates only present keys (absent required attributes are left to create defaults) and writes normalized values under snake_case column keys (`{keyCase: "attribute"}` emits camelCase keys — the HTTP create/update bridge uses this so normalized keys pass the raw-key permit filter). Types: `string` trims (unless `trim: false`), rejects blank required values, maps empty optional values to null and bounds the length; `date` passes `Date` instances through, parses strings/numbers and rejects invalid values (`invalid: "null"` maps them to null instead); `json` maps empty values to null, passes objects through, parses JSON strings and rejects other types; `boolean` accepts booleans and 1/0; `integer` and `float` follow typanic semantics (numeric strings parse) with `min`/`max` bounds on integers; `uuid` accepts UUID-shaped strings; `raw` passes through untouched; `rawOrNull` maps undefined to null; `ignored` accepts the key and drops it.
+
+Entry values of `true` (or partial entries) infer `type`, `maxLength` and `required` from the backing model's column metadata via `resolvedWritableAttributes()`; explicit entry fields always win. Failures throw `VelociousError.safe` with derived `<label> <predicate>.` messages built from the translated validation-message layer (`velocious.errors.messages.*` msgIDs through `configuration.getTranslator()`, shared with the model presence/uniqueness validators) and stable codes (`sync-<label>-required`, `sync-<label>-too-long`, `sync-<label>-too-small`, `sync-<label>-too-large`, `sync-<label>-invalid-datetime`, `sync-<label>-invalid-json`, `sync-<label>-invalid`, `sync-<label>-invalid-boolean`, `sync-<label>-invalid-integer`, `sync-<label>-invalid-float`, `sync-<label>-invalid-uuid`); apps pin exact messages per attribute through the legacy `requiredMessage`/`tooLongMessage`/`tooSmallMessage`/`tooLargeMessage`/`invalidMessage`/`invalidJsonMessage` escape hatches and override the error class through `writableAttributeError`. The underlying schema engine is exported standalone as `normalizeAttributesWithSchema` (`velocious/build/src/sync/sync-attribute-normalizer.js`).
 
 ## Implemented slice: local mutation log
 
@@ -438,3 +438,11 @@ If the local sync policy does not list the operation, the write is rejected loca
 ### Current boundaries
 
 This slice does not replay mutations to the backend, resolve conflicts, import peer logs, or persist frontend-model rows into app SQLite tables by itself. Those belong to the later server replay, change feed, conflict, P2P, and app integration tasks. The current contract is the durable local mutation log plus the optimistic frontend-model `save()`/`destroy()` queue path.
+
+## Implemented slice: resource-routed replay
+
+`SyncEnvelopeReplayService` can now route replay mutations through the app's registered frontend-model resource classes instead of per-resourceType `applyHandlers`. The service accepts `configuration` (mutation `resourceType` resolves through the `frontendModels` registry via `resolveFrontendModelResourceClass`, honoring `static modelName` overrides), `resourceTypeOverrides` (resource classes or string registry aliases), plus `ability`/`abilityContext`/`locals` for authorization scoping. `SyncResourceBase#buildReplayService` plumbs all of these in under `replayServiceArgs()` (app args win) and `replayServiceClass()` now defaults to `SyncEnvelopeReplayService`.
+
+Routed resources declare behavior through new `FrontendModelBaseResource` hooks: `authorizeSyncMutation` (mutation-level gate), `findSyncRecord` (ability-scoped `accessibleFor` primary-key lookup through the resource's normalized ability actions), `syncDeleteBehavior`/`syncMissingRecordBehavior` (`"destroy"`/`"create"` defaults with `"ignore"` opt-outs), `shouldApplySync` (staleness override), `applySync` (full escape hatch), `afterSyncApply` (domain tail whose extras reach `persistExtraAttributes` and broadcasts), `syncAuthorizationFailureReason` (per-action denial reasons) and `syncWritableAttributes` (defaults to the resolved `writableAttributes` schema). Creates use the client-generated primary key and verify create-scope membership after saving (save-then-check); denied creates are destroyed again before any sync row is persisted or broadcast.
+
+Client-safe apply failures — schema validation, model validation (surfaced with the translated `ValidationError` message as `reason: "validation-error"`), authorization denials, and unknown resource types — fail only their own sync with `{id, syncState: "failed", reason, message}` while the batch continues; unexpected errors keep failing the request. `applyHandlers` keep precedence over routing for existing apps. See [`sync-envelope-replay-service.md`](sync-envelope-replay-service.md) for the full flow.
