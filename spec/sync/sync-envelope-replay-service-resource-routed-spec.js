@@ -396,6 +396,53 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Handler before")
   })
 
+  it("keeps the envelope resource id authoritative over a payload id on create", async () => {
+    class SnapshotUuidItemResource extends SyncUuidItemResource {
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
+      static writableAttributes = {id: true, title: true}
+    }
+
+    const service = buildService({resourceTypeOverrides: {UuidItem: SnapshotUuidItemResource}})
+    const result = await service.replay({
+      syncs: [buildSync({
+        data: {id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e", title: "Snapshot created"},
+        id: "f0a1b2c3-1111-4222-8333-444455556666",
+        resourceId: "9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"
+      })]
+    })
+
+    expect(result).toEqual({syncs: [{id: "f0a1b2c3-1111-4222-8333-444455556666", syncState: "successful"}]})
+
+    const createdUuidItem = await UuidItem.findByOrFail({id: "9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"})
+
+    expect(createdUuidItem.title()).toEqual("Snapshot created")
+    expect(await UuidItem.findBy({id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e"})).toEqual(null)
+  })
+
+  it("keeps the envelope resource id authoritative over a payload id on update", async () => {
+    class SnapshotUuidItemResource extends SyncUuidItemResource {
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
+      static writableAttributes = {id: true, title: true}
+    }
+
+    const targetUuidItem = await UuidItem.create({id: "8c7d6e5f-4a3b-4c2d-9e1f-0a9b8c7d6e5f", title: "Snapshot before"})
+    const service = buildService({resourceTypeOverrides: {UuidItem: SnapshotUuidItemResource}})
+    const result = await service.replay({
+      syncs: [buildSync({
+        data: {id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", title: "Snapshot after"},
+        id: "e1b2c3d4-1111-4222-8333-444455556666",
+        resourceId: String(targetUuidItem.id())
+      })]
+    })
+
+    expect(result).toEqual({syncs: [{id: "e1b2c3d4-1111-4222-8333-444455556666", syncState: "successful"}]})
+
+    const updatedUuidItem = await UuidItem.findByOrFail({id: targetUuidItem.id()})
+
+    expect(updatedUuidItem.title()).toEqual("Snapshot after")
+    expect(await UuidItem.findBy({id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"})).toEqual(null)
+  })
+
   it("lets applySync fully replace the default routed apply flow", async () => {
     class CustomApplyResource extends SyncUuidItemResource {
       /** @param {import("../../src/frontend-model-resource/base-resource.js").FrontendModelApplySyncArgs} args - Apply args. @returns {import("../../src/frontend-model-resource/base-resource.js").FrontendModelSyncApplyResult} - Apply result. */

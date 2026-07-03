@@ -1,5 +1,6 @@
 // @ts-check
 
+import * as inflection from "inflection"
 import normalizeAttributesWithSchema from "./sync-attribute-normalizer.js"
 import {resolveFrontendModelResourceClass} from "../frontend-models/resource-definition.js"
 import SyncReplayUpsertApplier from "./sync-replay-upsert-applier.js"
@@ -541,6 +542,16 @@ export default class SyncEnvelopeReplayService {
       schema,
       translator: resource.writableAttributeTranslator()
     })
+
+    // The envelope's resourceId is the authoritative record identity. Schemas
+    // including the primary key (e.g. full client snapshots with `id: true`)
+    // must never let a payload id retarget the row: strip the primary key
+    // from the normalized payload so updates cannot reassign it and creates
+    // always use mutation.resourceId.
+    const primaryKey = resource.modelClass().primaryKey()
+
+    delete normalizedAttributes[primaryKey]
+    delete normalizedAttributes[inflection.camelize(primaryKey, true)]
 
     const existingRecord = await resource.findSyncRecord({mutation})
 
