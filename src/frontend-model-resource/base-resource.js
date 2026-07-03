@@ -208,10 +208,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * camelCase attribute name. An entry value of `true` infers the whole entry
    * from the backing model's column metadata; partial entries infer their
    * missing `type`, `maxLength` and `required` fields the same way (explicit
-   * fields always win). See
+   * fields always win). Resolved through the shared resource like the other
+   * static resource config: an undeclared environment schema falls back to
+   * the shared resource's schema, while an explicit declaration (including
+   * `null`) wins. See
    * {@link FrontendModelBaseResource#resolvedWritableAttributes}.
-   * @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
-  static writableAttributes = null
+   * @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null | undefined} */
+  static writableAttributes = undefined
 
   /**
    * Runs constructor.
@@ -247,7 +250,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Reads a static resource config value from the environment resource first,
    * then from the shared resource.
-   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes"} name - Static config property name.
+   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
    * @returns {?} - Resolved config value.
    */
   static sharedResourceStaticValue(name) {
@@ -534,7 +537,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("permittedParams", [arg], () => {
       void arg
 
-      const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
+      const schema = this.declaredWritableAttributes()
 
       if (schema) return Object.keys(schema)
 
@@ -569,6 +572,20 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
+   * Resolves the declared writable-attribute schema from the environment
+   * resource first, then the shared resource — mirroring how the other
+   * static resource config resolves. An explicit environment declaration
+   * (including `null`) wins over the shared resource's schema.
+   * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} Declared schema or null when undeclared.
+   */
+  declaredWritableAttributes() {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    const schema = /** @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null | undefined} */ (ResourceClass.sharedResourceStaticValue("writableAttributes"))
+
+    return schema ?? null
+  }
+
+  /**
    * Resolves the declared {@link FrontendModelBaseResource.writableAttributes}
    * schema into full entries: `true` entries are inferred entirely from the
    * backing model's column metadata and partial entries infer their missing
@@ -577,7 +594,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} Resolved schema or null without a declared schema.
    */
   resolvedWritableAttributes() {
-    const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
+    const schema = this.declaredWritableAttributes()
 
     if (!schema) return null
 
@@ -610,7 +627,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     if (!needsType && !needsRequired && !needsMaxLength) return entry
 
-    const column = this._writableAttributeColumn({attributeName, columnName: entry.column ?? inflection.underscore(attributeName)})
+    const columnName = entry.column ?? inflection.underscore(attributeName)
+    const column = this._writableAttributeColumn({attributeName, columnName})
 
     if (!column) {
       if (needsType) {
@@ -621,25 +639,52 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     }
 
     if (needsType) {
-      const columnType = column.getType()
+      // getColumnTypeByName is cast-aware: a declared attribute cast (e.g.
+      // `Model.attribute("id", "uuid")` for MSSQL uuid columns stored as
+      // varchar(36)) wins over the driver-reported column type, keeping
+      // inference driver-uniform where raw metadata is ambiguous.
+      const columnType = this._writableAttributeModelClass()?.getColumnTypeByName(columnName) ?? column.getType()
       const inferredType = columnType == null ? null : schemaTypeFromColumnType(columnType)
 
       if (!inferredType) {
-        throw new Error(`Cannot infer writable attribute '${attributeName}' on ${this.constructor.name}: column type ${String(columnType)} has no schema type mapping. Declare the entry's type explicitly.`)
+        throw new Error(`Cannot infer writable attribute '${attributeName}' on ${this.constructor.name}: column type ${String(columnType)} has no schema type mapping. Declare the entry's type explicitly or declare an attribute cast on the model.`)
       }
 
       entry.type = inferredType
     }
 
-    if (needsRequired) entry.required = column.getNull() === false && column.getDefault() == null
+    if (needsRequired) {
+      // The primary key is never inferred as required: the framework
+      // guarantees a value on every driver (PG/MSSQL via a database default,
+      // sqlite/mysql via record-level UUID assignment), so driver-divergent
+      // column defaults must not make inference driver-divergent.
+      const isPrimaryKeyColumn = columnName === this._writableAttributeModelClass()?.primaryKey()
+
+      entry.required = !isPrimaryKeyColumn && column.getNull() === false && column.getDefault() == null
+    }
 
     if (entry.type == "string" && entry.maxLength === undefined) {
       const columnMaxLength = column.getMaxLength()
 
-      if (columnMaxLength != null) entry.maxLength = columnMaxLength
+      // Non-positive lengths are unbounded-length sentinels (e.g. MSSQL
+      // reports nvarchar(max) as -1), not real bounds.
+      if (columnMaxLength != null && columnMaxLength > 0) entry.maxLength = columnMaxLength
     }
 
     return entry
+  }
+
+  /**
+   * Resolves the backing model class carrying column metadata for
+   * writable-attribute inference, when one is configured and is a real model.
+   * @returns {typeof import("../database/record/index.js").default | null} Backing model class or null when unavailable.
+   */
+  _writableAttributeModelClass() {
+    const ModelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass
+
+    if (!ModelClass || typeof (/** @type {Record<string, ?>} */ (/** @type {unknown} */ (ModelClass))).getColumnsHash != "function") return null
+
+    return /** @type {typeof import("../database/record/index.js").default} */ (ModelClass)
   }
 
   /**
@@ -653,11 +698,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   _writableAttributeColumn({attributeName, columnName}) {
     void attributeName
 
-    const ModelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass
-
-    if (!ModelClass || typeof (/** @type {Record<string, ?>} */ (/** @type {unknown} */ (ModelClass))).getColumnsHash != "function") return null
-
-    return /** @type {typeof import("../database/record/index.js").default} */ (ModelClass).getColumnsHash()[columnName] ?? null
+    return this._writableAttributeModelClass()?.getColumnsHash()[columnName] ?? null
   }
 
   /**
@@ -851,7 +892,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("normalizeCreateAttributes", [attributes, options], () => {
       void options
 
-      if (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes) {
+      if (this.declaredWritableAttributes()) {
         return this.normalizeWritableAttributes(attributes, {keyCase: "attribute"})
       }
 
@@ -871,7 +912,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       void model
       void options
 
-      if (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes) {
+      if (this.declaredWritableAttributes()) {
         return this.normalizeWritableAttributes(attributes, {keyCase: "attribute"})
       }
 

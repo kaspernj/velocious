@@ -120,6 +120,49 @@ describe("frontend model writable attributes permit bridge", () => {
 
     expect(() => resource.resolvedWritableAttributes()).toThrow(/Cannot infer writable attribute/u)
   })
+
+  it("honors a writableAttributes schema declared on the shared resource", () => {
+    class SharedSchemaResource extends FrontendModelBaseResource {
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {
+        name: {maxLength: 255, required: true, type: "string"},
+        scannedAt: {required: false, type: "date"}
+      }
+    }
+
+    class EnvironmentResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+      static SharedResource = SharedSchemaResource
+    }
+
+    const resource = new EnvironmentResource({modelName: "Task", params: {}})
+
+    expect(resource.permittedParams()).toEqual(["name", "scannedAt"])
+
+    const normalized = resource.normalizeWritableAttributes({name: " Shared ", scannedAt: "2026-07-03T10:00:00.000Z"})
+
+    expect(normalized.name).toEqual("Shared")
+    expect(/** @type {Date} */ (normalized.scanned_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
+  })
+
+  it("lets an environment schema win over the shared resource schema", () => {
+    class SharedSchemaResource extends FrontendModelBaseResource {
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {name: {type: "string"}}
+    }
+
+    class EnvironmentResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+      static SharedResource = SharedSchemaResource
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {title: {type: "string"}}
+    }
+
+    const resource = new EnvironmentResource({modelName: "Task", params: {}})
+
+    expect(resource.permittedParams()).toEqual(["title"])
+  })
 })
 
 describe("frontend model writable attributes column inference", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -164,7 +207,11 @@ describe("frontend model writable attributes column inference", {databaseCleanin
 
     if (!resolvedSchema) throw new Error("Expected a resolved schema")
 
-    expect(resolvedSchema.id).toEqual({required: true, type: "uuid"})
+    // The primary key is never inferred as required: the framework guarantees
+    // a value on every driver (PG/MSSQL via a database default, sqlite/mysql
+    // via record-level UUID assignment), so driver-divergent column defaults
+    // must not make inference driver-divergent.
+    expect(resolvedSchema.id).toEqual({required: false, type: "uuid"})
     expect(resolvedSchema.createdAt).toEqual({required: false, type: "date"})
     expect(resolvedSchema.title).toEqual({maxLength: 255, required: false, type: "string"})
   })
