@@ -75,8 +75,8 @@ describe("sync attribute normalizer", () => {
   })
 
   it("rejects blank required strings after trimming with derived message and code", () => {
-    expect(normalizeError({syncType: ""}).message).toEqual("syncType is required.")
-    expect(normalizeError({syncType: "   "}).message).toEqual("syncType is required.")
+    expect(normalizeError({syncType: ""}).message).toEqual("syncType can't be blank.")
+    expect(normalizeError({syncType: "   "}).message).toEqual("syncType can't be blank.")
     expect(normalizeError({syncType: null}).code).toEqual("sync-syncType-required")
   })
 
@@ -238,7 +238,7 @@ describe("sync attribute normalizer", () => {
       expect(invalidError.message).toEqual("scanned must be a boolean.")
       expect(invalidError.code).toEqual("sync-scanned-invalid-boolean")
 
-      expect(booleanError({published: null}).message).toEqual("published is required.")
+      expect(booleanError({published: null}).message).toEqual("published can't be blank.")
       expect(booleanError({published: null}).code).toEqual("sync-published-required")
       expect(booleanError({published: ""}).code).toEqual("sync-published-required")
     })
@@ -297,17 +297,17 @@ describe("sync attribute normalizer", () => {
       expect(invalidError.code).toEqual("sync-position-invalid-integer")
       expect(integerError({position: 5.5}).code).toEqual("sync-position-invalid-integer")
 
-      expect(integerError({quantity: null}).message).toEqual("quantity is required.")
+      expect(integerError({quantity: null}).message).toEqual("quantity can't be blank.")
       expect(integerError({quantity: null}).code).toEqual("sync-quantity-required")
 
       const tooSmallError = integerError({position: 0})
 
-      expect(tooSmallError.message).toEqual("position must be at least 1.")
+      expect(tooSmallError.message).toEqual("position must be greater than or equal to 1.")
       expect(tooSmallError.code).toEqual("sync-position-too-small")
 
       const tooLargeError = integerError({position: 101})
 
-      expect(tooLargeError.message).toEqual("position must be at most 100.")
+      expect(tooLargeError.message).toEqual("position must be less than or equal to 100.")
       expect(tooLargeError.code).toEqual("sync-position-too-large")
     })
 
@@ -382,10 +382,10 @@ describe("sync attribute normalizer", () => {
 
       const invalidError = floatError({latitude: "abc"})
 
-      expect(invalidError.message).toEqual("latitude must be a number.")
+      expect(invalidError.message).toEqual("latitude is not a number.")
       expect(invalidError.code).toEqual("sync-latitude-invalid-float")
 
-      expect(floatError({price: null}).message).toEqual("price is required.")
+      expect(floatError({price: null}).message).toEqual("price can't be blank.")
       expect(floatError({price: null}).code).toEqual("sync-price-required")
     })
   })
@@ -430,7 +430,7 @@ describe("sync attribute normalizer", () => {
       expect(invalidError.code).toEqual("sync-ticketId-invalid-uuid")
       expect(uuidError({ticketId: 5}).code).toEqual("sync-ticketId-invalid-uuid")
 
-      expect(uuidError({eventId: null}).message).toEqual("eventId is required.")
+      expect(uuidError({eventId: null}).message).toEqual("eventId can't be blank.")
       expect(uuidError({eventId: null}).code).toEqual("sync-eventId-required")
     })
   })
@@ -488,8 +488,70 @@ describe("sync attribute normalizer", () => {
       } catch (error) {
         if (!(error instanceof TestSchemaError)) throw error
 
-        expect(error.message).toEqual("scannedAt is required.")
+        expect(error.message).toEqual("scannedAt can't be blank.")
         expect(error.code).toEqual("sync-scannedAt-required")
+      }
+    })
+  })
+
+  describe("translated default messages", () => {
+    it("routes derived messages through the given translator", () => {
+      /** @type {Array<string>} */
+      const msgIDs = []
+
+      /** @type {import("../../src/database/record/validation-messages.js").ValidationMessageTranslator} */
+      const translator = (msgID, args) => {
+        msgIDs.push(msgID)
+
+        if (msgID == "velocious.errors.messages.blank") return "skal udfyldes"
+
+        let message = args?.defaultValue ?? msgID
+
+        for (const [variableName, variableValue] of Object.entries(args ?? {})) {
+          if (variableName == "defaultValue") continue
+
+          message = message.replaceAll(`%{${variableName}}`, String(variableValue))
+        }
+
+        return message
+      }
+
+      try {
+        normalizeAttributesWithSchema({attributes: {syncType: ""}, errorFactory, schema, translator})
+        throw new Error("Expected normalization to fail")
+      } catch (error) {
+        if (!(error instanceof TestSchemaError)) throw error
+
+        expect(error.message).toEqual("syncType skal udfyldes.")
+        expect(error.code).toEqual("sync-syncType-required")
+      }
+
+      try {
+        normalizeAttributesWithSchema({attributes: {resourceId: "a".repeat(256)}, errorFactory, schema, translator})
+        throw new Error("Expected normalization to fail")
+      } catch (error) {
+        if (!(error instanceof TestSchemaError)) throw error
+
+        expect(error.message).toEqual("resourceId is too long (maximum is 255 characters).")
+      }
+
+      expect(msgIDs).toEqual(["velocious.errors.messages.blank", "velocious.errors.messages.too_long"])
+    })
+
+    it("keeps pinned per-attribute messages winning over the translator", () => {
+      /** @type {import("../../src/database/record/validation-messages.js").ValidationMessageTranslator} */
+      const translator = () => "translated"
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
+      const pinnedSchema = {syncType: {required: true, requiredMessage: "Sync type is required.", type: "string"}}
+
+      try {
+        normalizeAttributesWithSchema({attributes: {syncType: ""}, errorFactory, schema: pinnedSchema, translator})
+        throw new Error("Expected normalization to fail")
+      } catch (error) {
+        if (!(error instanceof TestSchemaError)) throw error
+
+        expect(error.message).toEqual("Sync type is required.")
       }
     })
   })

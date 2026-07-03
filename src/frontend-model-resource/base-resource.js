@@ -531,8 +531,28 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       errorFactory: (message, details) => this.writableAttributeError(message, details),
       keyCase: options.keyCase,
       schema,
+      translator: this.writableAttributeTranslator(),
       unknownAttributes: options.unknownAttributes
     })
+  }
+
+  /**
+   * Resolves the translator used for derived writable-attribute validation
+   * messages: the controller configuration when available, otherwise the
+   * backing model class configuration. Resources without a configured model
+   * class (e.g. plain unit-test resources) get untranslated English defaults.
+   * @returns {import("../database/record/validation-messages.js").ValidationMessageTranslator | null} Message translator.
+   */
+  writableAttributeTranslator() {
+    if (this.controller) return this.controllerInstance().getConfiguration().getTranslator()
+
+    const ModelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass
+
+    if (ModelClass && typeof (/** @type {Record<string, ?>} */ (/** @type {unknown} */ (ModelClass)))._getConfiguration == "function") {
+      return /** @type {typeof import("../database/record/index.js").default} */ (ModelClass)._getConfiguration().getTranslator()
+    }
+
+    return null
   }
 
   /**

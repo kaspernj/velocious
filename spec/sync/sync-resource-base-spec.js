@@ -239,7 +239,7 @@ describe("sync resource base", () => {
     } catch (error) {
       if (!(error instanceof VelociousError)) throw error
 
-      expect(error.message).toEqual("syncType is required.")
+      expect(error.message).toEqual("syncType can't be blank.")
       expect(error.code).toEqual("sync-syncType-required")
       expect(error.safeToExpose).toEqual(true)
     }

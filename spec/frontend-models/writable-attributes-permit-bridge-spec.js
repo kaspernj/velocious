@@ -67,7 +67,7 @@ describe("frontend model writable attributes permit bridge", () => {
 
       expect(error.safeToExpose).toEqual(true)
       expect(error.code).toEqual("sync-name-required")
-      expect(error.message).toEqual("name is required.")
+      expect(error.message).toEqual("name can't be blank.")
     }
   })
 
