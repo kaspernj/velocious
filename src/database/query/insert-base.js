@@ -133,7 +133,7 @@ export default class VelociousDatabaseQueryInsertBase {
       if (this.data && Object.keys(this.data).length > 0) {
         sql += " VALUES "
         sql += this._valuesSql(Object.values(this.data))
-      } else if (driver.getType() == "sqlite" || driver.getType() == "mssql") {
+      } else if (driver.getType() == "sqlite" || driver.getType() == "mssql" || driver.getType() == "pgsql") {
         sql += " DEFAULT VALUES"
       } else if (driver.getType() == "mysql") {
         sql += " () VALUES ()"

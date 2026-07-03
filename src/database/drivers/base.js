@@ -937,6 +937,12 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Whether a transaction is currently open on this connection.
+   * @returns {boolean} - Whether inside a transaction.
+   */
+  insideTransaction() { return this._transactionsCount > 0 }
+
+  /**
    * Runs start transaction.
    * @returns {Promise<void>} - Resolves when complete.
    */

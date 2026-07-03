@@ -114,7 +114,7 @@ class AppSyncReplayService extends SyncEnvelopeReplayService {
 
 - `findExistingReplaySync` looks the row up by actor + resource identity: `{[actorForeignKeyColumn]: actor.id(), resource_id, resource_type}`. `actorForeignKeyColumn` defaults to `"authentication_token_id"` and can be passed to the constructor.
 - `persistReplayMutation` performs a stale-guarded upsert: existing rows newer than the mutation stay untouched, older rows get `assign` + `advanceServerSequence()` + `save`, and missing rows are created.
-- The sync model must expose `findBy`/`create` statics plus instance `assign`/`save`/`clientUpdatedAt` and `advanceServerSequence` (the change-feed sequence contract), and the actor returned from `authenticateReplay` must expose an `id()` method.
+- The sync model must expose `findBy`/`create` statics plus instance `assign`/`save`/`clientUpdatedAt` and `advanceServerSequence` (the change-feed sequence contract), and the actor returned from `authenticateReplay` must expose an `id()` method. `withServerSequence` + `ServerSequenceAllocator` provide `advanceServerSequence` and initial-sequence assignment declaratively — see the server sequence allocation slice in [`offline-sync.md`](offline-sync.md).
 - `replayPersistAttributes({actor, mutation})` builds the persisted attributes hash and can be reused by apps that only enrich it (for example with an `event_id`) before persisting themselves.
 
 ## Declarative configuration

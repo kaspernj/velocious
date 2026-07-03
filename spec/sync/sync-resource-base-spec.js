@@ -4,6 +4,8 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import SyncEnvelopeReplayService from "../../src/sync/sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "../../src/sync/sync-model-change-feed-service.js"
 import SyncResourceBase from "../../src/sync/sync-resource-base.js"
+import SyncEntry from "../dummy/src/models/sync-entry.js"
+import VelociousError from "../../src/velocious-error.js"
 
 class TestSyncModel {}
 
@@ -181,5 +183,220 @@ describe("sync resource base", () => {
     await expect(async () => await bareResource.changes()).toThrow("SyncResourceBase#authorizeChanges must be implemented")
     await expect(() => service.scopeQuery({query: {}})).toThrow("SyncResourceBase#scopeChangesQuery must be implemented")
     await expect(async () => await scopedResource.replay()).toThrow("SyncResourceBase#replayServiceClass must be implemented")
+  })
+
+  it("passes index pagination through to the controller hook by default and lets subclasses override it", () => {
+    /** @type {Array<Record<string, ?>>} */
+    const paginationCalls = []
+    const fakeController = /** @type {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController} */ (/** @type {unknown} */ ({
+      applyFrontendModelPagination: (/** @type {Record<string, ?>} */ args) => paginationCalls.push(args)
+    }))
+    const fakeQuery = /** @type {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} */ (/** @type {unknown} */ ({id: "query-1"}))
+    const pagination = {limit: null, offset: null, page: 2, perPage: 100}
+
+    buildResource(SyncResourceBase, {}).applyFrontendModelIndexPagination({controller: fakeController, pagination, query: fakeQuery})
+
+    expect(paginationCalls).toEqual([{pagination, query: fakeQuery}])
+
+    class CappedResource extends SyncResourceBase {
+      static ModelClass = TestSyncModel
+
+      /** @param {{controller: import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController, pagination: import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourcePagination, query: import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery}} args @returns {void} */
+      applyFrontendModelIndexPagination({controller, pagination: givenPagination, query}) {
+        controller.applyFrontendModelPagination({pagination: {...givenPagination, perPage: Math.min(givenPagination.perPage ?? 20, 50)}, query})
+      }
+    }
+
+    buildResource(CappedResource, {}).applyFrontendModelIndexPagination({controller: fakeController, pagination, query: fakeQuery})
+
+    expect(paginationCalls[1]).toEqual({pagination: {limit: null, offset: null, page: 2, perPage: 50}, query: fakeQuery})
+  })
+
+  it("normalizes writable attributes through the declared schema with client-safe errors", () => {
+    class SchemaResource extends SyncResourceBase {
+      static ModelClass = TestSyncModel
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
+      static writableAttributes = {
+        clientUpdatedAt: {required: true, type: "date"},
+        data: {invalidJsonMessage: "Data must be valid JSON.", invalidMessage: "Data must be an object or JSON string.", type: "json"},
+        resourceId: {maxLength: 255, type: "string"},
+        syncType: {maxLength: 255, required: true, type: "string"}
+      }
+    }
+
+    const resource = buildResource(SchemaResource, {})
+    const normalized = resource.normalizeWritableAttributes({data: `{"name": "Changed"}`, resource_id: "row-1", syncType: " update "})
+
+    expect(normalized.resource_id).toEqual("row-1")
+    expect(normalized.sync_type).toEqual("update")
+    expect(normalized.data).toEqual({name: "Changed"})
+
+    try {
+      resource.normalizeWritableAttributes({syncType: "   "})
+      throw new Error("Expected normalizeWritableAttributes to fail")
+    } catch (error) {
+      if (!(error instanceof VelociousError)) throw error
+
+      expect(error.message).toEqual("syncType is required.")
+      expect(error.code).toEqual("sync-syncType-required")
+      expect(error.safeToExpose).toEqual(true)
+    }
+
+    try {
+      resource.normalizeWritableAttributes({data: "{invalid"})
+      throw new Error("Expected normalizeWritableAttributes to fail")
+    } catch (error) {
+      if (!(error instanceof VelociousError)) throw error
+
+      expect(error.message).toEqual("Data must be valid JSON.")
+      expect(error.code).toEqual("sync-data-invalid-json")
+    }
+
+    expect(() => buildResource(SyncResourceBase, {}).normalizeWritableAttributes({})).toThrow(/must define static writableAttributes/u)
+  })
+})
+
+class QuickSearchSyncResource extends SyncResourceBase {
+  static ModelClass = SyncEntry
+  static quickSearchColumns = ["resource_id", "resource_type", "sync_type"]
+}
+
+/**
+ * Builds a fake frontend-model controller recording delegated searches.
+ * @param {Array<Record<string, ?>>} searchCalls - Recorded search calls.
+ * @returns {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController} Fake controller.
+ */
+function buildSearchController(searchCalls) {
+  return /** @type {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController} */ (/** @type {unknown} */ ({
+    applyFrontendModelSearch: (/** @type {Record<string, ?>} */ args) => searchCalls.push(args)
+  }))
+}
+
+/**
+ * Creates a persisted sync entry for quick-search filtering.
+ * @param {{resourceId: string, syncType: string}} args - Distinctive entry values.
+ * @returns {Promise<SyncEntry>} Persisted entry.
+ */
+async function createQuickSearchEntry({resourceId, syncType}) {
+  const entry = new SyncEntry({
+    authenticationTokenId: "3f1c9f2e-6a52-4a8f-9a63-0f4b6f6c8a01",
+    clientUpdatedAt: new Date("2026-07-03T10:00:00.000Z"),
+    resourceId,
+    resourceType: "Task",
+    syncType
+  })
+
+  await entry.save()
+
+  return entry
+}
+
+describe("sync resource base - quick search", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("expands quickSearch searches to LIKE conditions over the declared columns", async () => {
+    const matchingEntry = await createQuickSearchEntry({resourceId: "11111111-aaaa-4bbb-8ccc-222222222222", syncType: "update"})
+
+    await createQuickSearchEntry({resourceId: "33333333-dddd-4eee-8fff-444444444444", syncType: "update"})
+
+    /** @type {Array<Record<string, ?>>} */
+    const searchCalls = []
+    const resource = buildResource(QuickSearchSyncResource, {})
+    const query = SyncEntry.where({})
+
+    resource.applyFrontendModelIndexSearch({
+      controller: buildSearchController(searchCalls),
+      query,
+      search: {column: "quickSearch", operator: "like", path: [], value: " aaaa "}
+    })
+
+    const foundEntries = await query.toArray()
+
+    expect(searchCalls).toEqual([])
+    expect(foundEntries.map((foundEntry) => foundEntry.id())).toEqual([matchingEntry.id()])
+  })
+
+  it("matches quickSearch values across any declared column", async () => {
+    await createQuickSearchEntry({resourceId: "11111111-aaaa-4bbb-8ccc-222222222222", syncType: "update"})
+
+    const deleteEntry = await createQuickSearchEntry({resourceId: "33333333-dddd-4eee-8fff-444444444444", syncType: "delete"})
+
+    const resource = buildResource(QuickSearchSyncResource, {})
+    const query = SyncEntry.where({})
+
+    resource.applyFrontendModelIndexSearch({
+      controller: buildSearchController([]),
+      query,
+      search: {column: "quickSearch", operator: "like", path: [], value: "delete"}
+    })
+
+    const foundEntries = await query.toArray()
+
+    expect(foundEntries.map((foundEntry) => foundEntry.id())).toEqual([deleteEntry.id()])
+  })
+
+  it("treats blank quickSearch values as handled without filtering", async () => {
+    await createQuickSearchEntry({resourceId: "11111111-aaaa-4bbb-8ccc-222222222222", syncType: "update"})
+    await createQuickSearchEntry({resourceId: "33333333-dddd-4eee-8fff-444444444444", syncType: "delete"})
+
+    /** @type {Array<Record<string, ?>>} */
+    const searchCalls = []
+    const resource = buildResource(QuickSearchSyncResource, {})
+    const query = SyncEntry.where({})
+
+    resource.applyFrontendModelIndexSearch({
+      controller: buildSearchController(searchCalls),
+      query,
+      search: {column: "quickSearch", operator: "like", path: [], value: "   "}
+    })
+
+    expect(searchCalls).toEqual([])
+    expect((await query.toArray()).length).toEqual(2)
+  })
+
+  it("rejects invalid quickSearch operators and values with client-safe errors", () => {
+    const resource = buildResource(QuickSearchSyncResource, {})
+    const query = SyncEntry.where({})
+    const controller = buildSearchController([])
+
+    try {
+      resource.applyFrontendModelIndexSearch({controller, query, search: {column: "quickSearch", operator: "eq", path: [], value: "abc"}})
+      throw new Error("Expected quick search to fail")
+    } catch (error) {
+      if (!(error instanceof VelociousError)) throw error
+
+      expect(error.message).toEqual("Sync quick search must use the like operator.")
+      expect(error.code).toEqual("sync-invalid-quick-search")
+      expect(error.safeToExpose).toEqual(true)
+    }
+
+    try {
+      resource.applyFrontendModelIndexSearch({controller, query, search: {column: "quickSearch", operator: "like", path: [], value: 5}})
+      throw new Error("Expected quick search to fail")
+    } catch (error) {
+      if (!(error instanceof VelociousError)) throw error
+
+      expect(error.message).toEqual("Sync quick search must be a string.")
+      expect(error.code).toEqual("sync-invalid-quick-search")
+    }
+  })
+
+  it("delegates non-quickSearch searches and quickSearch without declared columns to the controller", () => {
+    /** @type {Array<Record<string, ?>>} */
+    const searchCalls = []
+    const controller = buildSearchController(searchCalls)
+    const query = SyncEntry.where({})
+    const columnSearch = {column: "resource_id", operator: /** @type {const} */ ("like"), path: [], value: "abc"}
+
+    buildResource(QuickSearchSyncResource, {}).applyFrontendModelIndexSearch({controller, query, search: columnSearch})
+
+    class UndeclaredResource extends SyncResourceBase {
+      static ModelClass = SyncEntry
+    }
+
+    const quickSearch = {column: "quickSearch", operator: /** @type {const} */ ("like"), path: [], value: "abc"}
+
+    buildResource(UndeclaredResource, {}).applyFrontendModelIndexSearch({controller, query, search: quickSearch})
+
+    expect(searchCalls).toEqual([{query, search: columnSearch}, {query, search: quickSearch}])
   })
 })

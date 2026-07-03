@@ -37,6 +37,13 @@ describe("sync envelope replay service - model-backed defaults", {tags: ["dummy"
     expect(persistedEntry.syncType()).toEqual("update")
     expect(persistedEntry.clientUpdatedAt()?.toISOString()).toEqual("2026-06-25T11:00:00.000Z")
     expect(JSON.parse(String(persistedEntry.data()))).toEqual({name: "Changed"})
+
+    // withServerSequence assigns an initial sequence on create through the shared allocator.
+    const persistedSequence = persistedEntry.serverSequence()
+
+    if (persistedSequence === null) throw new Error("Expected a server sequence to be assigned on create")
+
+    expect(persistedSequence).toBeGreaterThan(0)
   })
 
   it("updates and re-sequences the existing sync row for newer client mutations", async () => {

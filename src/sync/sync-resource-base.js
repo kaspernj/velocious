@@ -3,7 +3,11 @@
 import {forcedNonBlankStringParam} from "typanic"
 
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
+import normalizeAttributesWithSchema from "./sync-attribute-normalizer.js"
 import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
+import VelociousError from "../velocious-error.js"
+
+const QUICK_SEARCH_COLUMN = "quickSearch"
 
 /**
  * Optional client-declared sync scope carried on a changes request.
@@ -22,6 +26,105 @@ import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
  * @augments {FrontendModelBaseResource<TModelClass>}
  */
 export default class SyncResourceBase extends FrontendModelBaseResource {
+  /**
+   * Declarative quick-search text columns. When declared, an index search on
+   * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
+   * these root-table columns instead of hitting the controller default.
+   * @type {string[] | null} */
+  static quickSearchColumns = null
+
+  /**
+   * Declarative writable-attribute schema consumed by
+   * {@link SyncResourceBase#normalizeWritableAttributes}, keyed by camelCase
+   * attribute name.
+   * @type {Record<string, import("./sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} */
+  static writableAttributes = null
+
+  /**
+   * Applies frontend-model index searches, expanding declared quick searches.
+   * @param {object} args - Search args.
+   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} args.query - Query instance.
+   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch} args.search - Search params.
+   * @returns {void}
+   */
+  applyFrontendModelIndexSearch({controller, query, search}) {
+    if (this.applyQuickSearch({query, search})) return
+
+    super.applyFrontendModelIndexSearch({controller, query, search})
+  }
+
+  /**
+   * Expands a `quickSearch` pseudo-column search into an OR of LIKE conditions
+   * over the declared {@link SyncResourceBase.quickSearchColumns}.
+   * @param {object} args - Search args.
+   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} args.query - Query to filter.
+   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch} args.search - Search payload.
+   * @returns {boolean} Whether the search was handled as a quick search.
+   */
+  applyQuickSearch({query, search}) {
+    const quickSearchColumns = /** @type {typeof SyncResourceBase} */ (this.constructor).quickSearchColumns
+
+    if (!quickSearchColumns || quickSearchColumns.length === 0) return false
+    if (search.path.length > 0 || search.column !== QUICK_SEARCH_COLUMN) return false
+
+    if (search.operator !== "like") {
+      throw VelociousError.safe("Sync quick search must use the like operator.", {code: "sync-invalid-quick-search"})
+    }
+
+    if (typeof search.value !== "string") {
+      throw VelociousError.safe("Sync quick search must be a string.", {code: "sync-invalid-quick-search"})
+    }
+
+    const trimmedValue = search.value.trim()
+
+    if (!trimmedValue) return true
+
+    const tableSql = query.driver.quoteTable(query.getTableReferenceForJoin())
+    const likeValue = `%${trimmedValue}%`
+    const conditions = quickSearchColumns.map((columnName) => (
+      `${tableSql}.${query.driver.quoteColumn(columnName)} LIKE ${query.driver.quote(likeValue)}`
+    ))
+
+    query.where(`(${conditions.join(" OR ")})`)
+
+    return true
+  }
+
+  /**
+   * Normalizes incoming writable attributes through the declared
+   * {@link SyncResourceBase.writableAttributes} schema: camelCase and
+   * snake_case input keys are accepted, values are validated per type and the
+   * normalized values are written under snake_case column keys. Validation
+   * failures throw client-safe errors built by
+   * {@link SyncResourceBase#writableAttributeError}.
+   * @param {Record<string, ?>} attributes - Raw incoming attributes.
+   * @param {{unknownAttributes?: "error" | "ignore"}} [options] - Unknown input-key handling. Defaults to "error".
+   * @returns {Record<string, ?>} Normalized attributes keyed by column names.
+   */
+  normalizeWritableAttributes(attributes, options = {}) {
+    const schema = /** @type {typeof SyncResourceBase} */ (this.constructor).writableAttributes
+
+    if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
+
+    return normalizeAttributesWithSchema({
+      attributes,
+      errorFactory: (message, details) => this.writableAttributeError(message, details),
+      schema,
+      unknownAttributes: options.unknownAttributes
+    })
+  }
+
+  /**
+   * Builds the client-safe error thrown for a failed writable-attribute validation.
+   * @param {string} message - Human-readable validation message.
+   * @param {{cause?: Error, code: string}} details - Stable machine-readable code and optional cause.
+   * @returns {Error} Client-safe error.
+   */
+  writableAttributeError(message, {cause, code}) {
+    return VelociousError.safe(message, cause ? {cause, code} : {code})
+  }
+
   /**
    * Returns a stable change-feed page after app authorization.
    * @returns {Promise<Record<string, ?>>} Change-feed page result.

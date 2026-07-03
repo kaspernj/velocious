@@ -301,6 +301,64 @@ class SyncResource extends SyncResourceBase {
 
 Unimplemented hooks fail loudly. Replay services extend `SyncEnvelopeReplayService` — see [`sync-envelope-replay-service.md`](sync-envelope-replay-service.md), including its model-backed `findExistingReplaySync`/`persistReplayMutation` defaults.
 
+## Implemented slice: server sequence allocation
+
+`ServerSequenceAllocator` (`velocious/build/src/sync/server-sequence-allocator.js`) owns monotonically increasing server sync sequences. Every `next()` inserts a row into an AUTO_INCREMENT id table through the driver API and reads the allocated id from the insert statement itself (`OUTPUT INSERTED`/`RETURNING`, like the record create path), so sequences stay unique and increasing across processes sharing the database — MSSQL's `SCOPE_IDENTITY()` only sees inserts from the same batch, so a separate last-insert-id read is not an option there. Drivers without insert-returning support fall back to the connection-scoped last-insert-id read. Parallel `next()` calls are serialized per database+table across all allocator instances in the process.
+
+The backing `velocious_server_sequences` table (`id` auto-increment primary key + `created_at`) is auto-created on first use, like the sync scope store. Because the mixin's beforeCreate allocation runs inside the record save transaction, that DDL can be rolled back with a failed save on transactional-DDL databases; the allocator only caches readiness when the table was not created inside an active transaction and re-verifies (and re-creates) the table on the next allocation otherwise. Without a configured database the allocator falls back to a process-local counter. Apps with an existing sequence table point the allocator at it — for a bare id-only table pass an empty insert payload:
+
+```js
+import ServerSequenceAllocator, {withServerSequence} from "velocious/build/src/sync/server-sequence-allocator.js"
+
+// Framework-owned table (auto-created):
+const allocator = new ServerSequenceAllocator({configuration})
+
+// Existing bare AUTO_INCREMENT table (for example ticket-server's `sync_server_sequences`):
+const appAllocator = new ServerSequenceAllocator({configuration, insertData: {}, tableName: "sync_server_sequences"})
+```
+
+`configuration` is optional and defaults to the current configuration, resolved lazily per allocation, so allocators can be constructed at module load time inside model files.
+
+`withServerSequence(ModelClass, {allocator, column = "serverSequence"})` wires the sequencing contract onto a sync model: it registers a `beforeCreate` lifecycle callback assigning the next sequence when the record has none, and defines `advance<Column>()` (when the model does not already define one) so the model satisfies the replay service's `advanceServerSequence` contract. The sequence is always written through the generated typed setter (`set<Column>`), and the model must expose the generated `set<Column>`/`has<Column>` accessors:
+
+```js
+class Sync extends SyncBase {
+}
+
+withServerSequence(Sync, {allocator: new ServerSequenceAllocator({insertData: {}, tableName: "sync_server_sequences"})})
+```
+
+## Implemented slice: sync resource quick search and writable-attribute schema
+
+`SyncResourceBase` inherits the full frontend-model index assembly (`records()`/`count()` through the controller's `frontendModelIndexQuery`: ability-authorized query, preload, joins, where, distinct, searches, sort and pagination) from `FrontendModelBaseResource`, so sync resources do not override `records`/`count`. Pagination policy plugs into the existing `applyFrontendModelIndexPagination({controller, pagination, query})` hook.
+
+On top of that, `SyncResourceBase` adds two declarative statics:
+
+- `static quickSearchColumns = ["resource_id", "resource_type", "sync_type"]` — an index search on the pseudo-column `quickSearch` (with the `like` operator and a string value; anything else is rejected with the client-safe `sync-invalid-quick-search` error) expands to an OR of LIKE conditions over the declared root-table columns, using driver quoting. Blank values are treated as handled without filtering. Resources without declared columns keep the controller's default search behavior.
+- `static writableAttributes = {...}` — a per-attribute validation schema consumed by `normalizeWritableAttributes(attributes)`, for `normalizeCreateAttributes`/`normalizeUpdateAttributes` implementations:
+
+```js
+class SyncResource extends SyncResourceBase {
+  static quickSearchColumns = ["resource_id", "resource_type", "sync_type"]
+
+  static writableAttributes = {
+    authenticationTokenId: {type: "raw"},
+    clientUpdatedAt: {required: true, type: "date"},
+    data: {invalidJsonMessage: "Data must be valid JSON.", invalidMessage: "Data must be an object or JSON string.", type: "json"},
+    eventId: {maxLength: 255, type: "string"},
+    resourceId: {maxLength: 255, type: "string"},
+    resourceType: {maxLength: 255, type: "string"},
+    syncType: {maxLength: 255, required: true, type: "string"}
+  }
+
+  async normalizeCreateAttributes(attributes) {
+    return this.normalizeWritableAttributes(attributes)
+  }
+}
+```
+
+`normalizeWritableAttributes` accepts both camelCase and snake_case input keys per attribute (camelCase wins when both are present), rejects unknown input keys by default so misspelled or read-only attributes fail loudly instead of being silently dropped (`{unknownAttributes: "ignore"}` opts out), validates only present keys (absent required attributes are left to create defaults) and writes normalized values under snake_case column keys. Types: `string` trims, rejects blank required values after trimming, maps empty and whitespace-only optional values to null and bounds the trimmed length; `date` passes `Date` instances through, parses strings/numbers and rejects invalid values; `json` maps empty values to null, passes objects through, parses JSON strings and rejects other types; `raw` passes through untouched. Failures throw `VelociousError.safe` with derived messages (`<label> is required.`, `<label> is too long (maximum is N characters).`, `<label> must be a valid datetime.`) and codes (`sync-<label>-required`, `sync-<label>-too-long`, `sync-<label>-invalid-datetime`, `sync-<label>-invalid-json`, `sync-<label>-invalid`); apps pin exact messages per attribute through `requiredMessage`/`tooLongMessage`/`invalidMessage`/`invalidJsonMessage` and override the error class through `writableAttributeError`. The underlying schema engine is exported standalone as `normalizeAttributesWithSchema` (`velocious/build/src/sync/sync-attribute-normalizer.js`).
+
 ## Implemented slice: local mutation log
 
 Velocious has a client-side local mutation log for the first local-first/offline write path. It is intentionally small and append-only: frontend code records what the user tried to do, applies the allowed change optimistically to the in-memory model instance, and leaves server replay/conflict resolution to later sync pipeline steps.
