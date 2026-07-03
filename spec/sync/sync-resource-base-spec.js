@@ -183,7 +183,51 @@ describe("sync resource base", () => {
 
     await expect(async () => await bareResource.changes()).toThrow("SyncResourceBase#authorizeChanges must be implemented")
     await expect(() => service.scopeQuery({query: {}})).toThrow("SyncResourceBase#scopeChangesQuery must be implemented")
-    await expect(async () => await scopedResource.replay()).toThrow("SyncResourceBase#replayServiceClass must be implemented")
+    await expect(async () => await scopedResource.replay()).toThrow("SyncEnvelopeReplayService.authenticateReplay must be implemented (or configure authenticationTokenModel)")
+  })
+
+  it("builds the default replay service with plumbed ability, context and locals", () => {
+    class TestResource extends SyncResourceBase {
+      static ModelClass = TestSyncModel
+    }
+
+    /** @type {import("../../src/authorization/ability.js").default} */
+    const fakeAbility = /** @type {?} */ ({fake: "ability"})
+    const resource = new TestResource({
+      ability: fakeAbility,
+      context: {currentUserId: "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"},
+      locals: {locale: "da"},
+      modelName: "TestSyncModel"
+    })
+    const service = /** @type {SyncEnvelopeReplayService} */ (resource.buildReplayService())
+
+    expect(service instanceof SyncEnvelopeReplayService).toEqual(true)
+    expect(service.ability === fakeAbility).toEqual(true)
+    expect(service.abilityContext).toEqual({currentUserId: "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"})
+    expect(service.locals).toEqual({locale: "da"})
+    expect(service.configuration).toEqual(null)
+  })
+
+  it("lets replayServiceArgs win over the plumbed defaults", () => {
+    /** @type {import("../../src/authorization/ability.js").default} */
+    const overrideAbility = /** @type {?} */ ({override: "ability"})
+
+    class TestResource extends SyncResourceBase {
+      static ModelClass = TestSyncModel
+
+      /** @returns {Record<string, ?>} - Replay service args. */
+      replayServiceArgs() {
+        return {ability: overrideAbility, syncModel: SyncEntry}
+      }
+    }
+
+    /** @type {import("../../src/authorization/ability.js").default} */
+    const plumbedAbility = /** @type {?} */ ({plumbed: "ability"})
+    const resource = new TestResource({ability: plumbedAbility, modelName: "TestSyncModel"})
+    const service = /** @type {SyncEnvelopeReplayService} */ (resource.buildReplayService())
+
+    expect(service.ability === overrideAbility).toEqual(true)
+    expect(service.syncModel === SyncEntry).toEqual(true)
   })
 
   it("passes index pagination through to the controller hook by default and lets subclasses override it", () => {

@@ -3,6 +3,7 @@
 import {forcedNonBlankStringParam} from "typanic"
 
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
+import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
 import VelociousError from "../velocious-error.js"
 
@@ -152,13 +153,22 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   }
 
   /**
-   * Builds the app replay service handling this replay request.
+   * Builds the app replay service handling this replay request. The resource
+   * ability, context, configuration, and locals are plumbed in under the
+   * app-declared {@link SyncResourceBase#replayServiceArgs} (app args win) so
+   * the default resource-routed replay works without wiring.
    * @returns {import("./sync-envelope-replay-service.js").default} Replay service instance.
    */
   buildReplayService() {
     const ReplayServiceClass = this.replayServiceClass()
 
-    return new ReplayServiceClass(this.replayServiceArgs())
+    return new ReplayServiceClass({
+      ability: this.ability,
+      abilityContext: this.getContext(),
+      configuration: this.controller ? this.controllerInstance().getConfiguration() : undefined,
+      locals: this.getLocals(),
+      ...this.replayServiceArgs()
+    })
   }
 
   /**
@@ -200,10 +210,12 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   }
 
   /**
-   * Returns the app replay service class handling replay mutations.
+   * Returns the app replay service class handling replay mutations. Defaults
+   * to {@link SyncEnvelopeReplayService}, which resource-routes mutations
+   * through the plumbed configuration registry.
    * @returns {typeof import("./sync-envelope-replay-service.js").default} Replay service class.
    */
   replayServiceClass() {
-    throw new Error("SyncResourceBase#replayServiceClass must be implemented")
+    return SyncEnvelopeReplayService
   }
 }
