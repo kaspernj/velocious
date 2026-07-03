@@ -99,9 +99,10 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
    * failures throw client-safe errors built by
    * {@link SyncResourceBase#writableAttributeError}.
    * @param {Record<string, ?>} attributes - Raw incoming attributes.
+   * @param {{unknownAttributes?: "error" | "ignore"}} [options] - Unknown input-key handling. Defaults to "error".
    * @returns {Record<string, ?>} Normalized attributes keyed by column names.
    */
-  normalizeWritableAttributes(attributes) {
+  normalizeWritableAttributes(attributes, options = {}) {
     const schema = /** @type {typeof SyncResourceBase} */ (this.constructor).writableAttributes
 
     if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
@@ -109,7 +110,8 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     return normalizeAttributesWithSchema({
       attributes,
       errorFactory: (message, details) => this.writableAttributeError(message, details),
-      schema
+      schema,
+      unknownAttributes: options.unknownAttributes
     })
   }
 

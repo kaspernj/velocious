@@ -109,10 +109,10 @@ describe("sync attribute normalizer", () => {
     expect(pinnedError({syncType: "12345678901"}).code).toEqual("sync-syncType-too-long")
   })
 
-  it("maps empty optional strings to null and keeps blank-trimmed optional strings", () => {
+  it("maps empty and whitespace-only optional strings to null", () => {
     expect(normalize({eventId: ""})).toEqual({event_id: null})
     expect(normalize({eventId: null})).toEqual({event_id: null})
-    expect(normalize({eventId: "   "})).toEqual({event_id: ""})
+    expect(normalize({eventId: "   "})).toEqual({event_id: null})
   })
 
   it("validates required dates with derived message and code", () => {
@@ -162,8 +162,7 @@ describe("sync attribute normalizer", () => {
     expect(normalize({authentication_token_id: null})).toEqual({authentication_token_id: null})
   })
 
-  it("ignores unknown keys and does not validate absent required attributes", () => {
-    expect(normalize({unknownColumn: "ignored"})).toEqual({})
+  it("does not validate absent required attributes", () => {
     expect(normalize({})).toEqual({})
   })
 
@@ -180,4 +179,24 @@ describe("sync attribute normalizer", () => {
       schema
     })).toThrow(/errorFactory/u)
   })
+
+  it("rejects unknown attribute keys by default", () => {
+    expect(() => normalizeAttributesWithSchema({
+      attributes: {evil: "y", resourceId: "x"},
+      errorFactory: (message, {code}) => Object.assign(new Error(message), {code}),
+      schema: {resourceId: {type: "string"}}
+    })).toThrow(/Unknown attribute: evil\./u)
+  })
+
+  it("ignores unknown attribute keys when configured", () => {
+    const normalized = normalizeAttributesWithSchema({
+      attributes: {ignored: "y", resourceId: "x"},
+      errorFactory: (message, {code}) => Object.assign(new Error(message), {code}),
+      schema: {resourceId: {type: "string"}},
+      unknownAttributes: "ignore"
+    })
+
+    expect(normalized).toEqual({resource_id: "x"})
+  })
+
 })

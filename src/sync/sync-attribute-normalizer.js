@@ -34,32 +34,50 @@ import {snakeCaseKey} from "typanic"
 /**
  * Normalizes writable sync attributes against a declarative schema.
  *
- * Only schema-known keys are mapped (unknown input keys are ignored) and only
- * present keys are validated, so required attributes may be absent — create
- * defaults own that concern. Validation failures throw through the given
- * error factory so apps control the raised error class.
+ * Only present keys are validated, so required attributes may be absent —
+ * create defaults own that concern. Input keys not declared in the schema are
+ * rejected by default so misspelled or read-only attributes fail loudly
+ * instead of being silently discarded (`unknownAttributes: "ignore"` opts
+ * out). Validation failures throw through the given error factory so apps
+ * control the raised error class.
  * @param {object} args - Options.
  * @param {Record<string, ?>} args.attributes - Raw incoming attributes (camelCase and/or snake_case keys).
  * @param {SyncAttributeErrorFactory} args.errorFactory - Maps validation failures to thrown errors.
  * @param {Record<string, SyncAttributeSchemaEntry>} args.schema - Attribute schema keyed by camelCase attribute name.
+ * @param {"error" | "ignore"} [args.unknownAttributes] - Unknown input-key handling. Defaults to "error".
  * @returns {Record<string, ?>} Normalized values keyed by snake_case column names.
  */
-export default function normalizeAttributesWithSchema({attributes, errorFactory, schema}) {
+export default function normalizeAttributesWithSchema({attributes, errorFactory, schema, unknownAttributes = "error"}) {
   if (!attributes || typeof attributes != "object") throw new Error(`normalizeAttributesWithSchema requires an attributes object, got: ${String(attributes)}`)
   if (typeof errorFactory != "function") throw new Error("normalizeAttributesWithSchema requires an errorFactory function")
   if (!schema || typeof schema != "object") throw new Error(`normalizeAttributesWithSchema requires a schema object, got: ${String(schema)}`)
+  if (unknownAttributes != "error" && unknownAttributes != "ignore") {
+    throw new Error(`normalizeAttributesWithSchema unknownAttributes must be "error" or "ignore", got: ${String(unknownAttributes)}`)
+  }
 
   /** @type {Record<string, ?>} */
   const normalized = {}
+  /** @type {Set<string>} */
+  const knownInputKeys = new Set()
 
   for (const [attributeName, entry] of Object.entries(schema)) {
     const column = entry.column ?? snakeCaseKey(attributeName)
     const inputKeys = column == attributeName ? [attributeName] : [column, attributeName]
 
     for (const inputKey of inputKeys) {
+      knownInputKeys.add(inputKey)
+
       if (!Object.prototype.hasOwnProperty.call(attributes, inputKey)) continue
 
       normalized[column] = normalizeAttributeValue({attributeName, entry, errorFactory, value: attributes[inputKey]})
+    }
+  }
+
+  if (unknownAttributes == "error") {
+    for (const inputKey of Object.keys(attributes)) {
+      if (!knownInputKeys.has(inputKey)) {
+        throw errorFactory(`Unknown attribute: ${inputKey}.`, {code: "sync-unknown-attribute"})
+      }
     }
   }
 
@@ -106,7 +124,11 @@ function normalizeString({entry, errorFactory, label, value}) {
 
   const stringValue = String(value).trim()
 
-  if (entry.required && stringValue === "") throw requiredError()
+  if (stringValue === "") {
+    if (entry.required) throw requiredError()
+
+    return null
+  }
 
   if (entry.maxLength !== undefined && stringValue.length > entry.maxLength) {
     throw errorFactory(entry.tooLongMessage ?? `${label} is too long (maximum is ${entry.maxLength} characters).`, {code: `sync-${label}-too-long`})

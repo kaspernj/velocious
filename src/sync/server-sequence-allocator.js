@@ -4,6 +4,13 @@ import Configuration from "../configuration.js"
 import TableData from "../database/table-data/index.js"
 
 /**
+ * Allocation queues per database+table, serializing insert/last-insert-id
+ * pairs across all allocator instances in this process.
+ * @type {Map<string, Promise<void>>}
+ */
+const allocationQueues = new Map()
+
+/**
  * Allocates monotonically increasing server sync sequences from an
  * AUTO_INCREMENT id table: every allocation inserts a row and returns the
  * driver's last-insert id, so sequences stay unique and increasing across
@@ -33,20 +40,23 @@ export default class ServerSequenceAllocator {
     this._isReady = false
     /** @type {Promise<void> | null} */
     this._readyPromise = null
-    /**
-     * Serializes allocations so parallel `next()` calls cannot interleave their insert and last-insert-id reads on a shared connection.
-     * @type {Promise<void>} */
-    this._queue = Promise.resolve()
   }
 
   /**
    * Allocates the next monotonically increasing sequence.
+   *
+   * Allocations serialize through a module-level queue per database+table so
+   * parallel `next()` calls - including calls from other allocator instances
+   * sharing the same table and connection - cannot interleave their insert
+   * and last-insert-id reads and hand out duplicate sequences.
    * @returns {Promise<number>} Next sequence value.
    */
   async next() {
-    const allocation = this._queue.then(() => this._allocateNext())
+    const queueKey = `${this.databaseIdentifier}::${this.tableName}`
+    const previousAllocation = allocationQueues.get(queueKey) ?? Promise.resolve()
+    const allocation = previousAllocation.then(() => this._allocateNext())
 
-    this._queue = allocation.then(() => undefined, () => undefined)
+    allocationQueues.set(queueKey, allocation.then(() => undefined, () => undefined))
 
     return await allocation
   }

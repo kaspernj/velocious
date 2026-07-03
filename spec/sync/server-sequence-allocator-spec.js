@@ -34,6 +34,19 @@ describe("server sequence allocator", {tags: ["dummy"], databaseCleaning: {trans
     }
   })
 
+  it("serializes allocations across allocator instances sharing a table", async () => {
+    const firstAllocator = new ServerSequenceAllocator()
+    const secondAllocator = new ServerSequenceAllocator()
+    const values = await Promise.all([
+      firstAllocator.next(),
+      secondAllocator.next(),
+      firstAllocator.next(),
+      secondAllocator.next()
+    ])
+
+    expect(new Set(values).size).toEqual(4)
+  })
+
   it("allocates from a custom bare table with an empty insert payload", async () => {
     // Mirrors ticket-server's existing `sync_server_sequences` table, which only has an AUTO_INCREMENT id column.
     await Configuration.current().ensureConnections({name: "Bare sequence table setup"}, async (dbs) => {
