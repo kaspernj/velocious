@@ -1,5 +1,16 @@
 // @ts-check
 
+import SyncReplayUpsertApplier from "./sync-replay-upsert-applier.js"
+
+/**
+ * One declarative broadcast fanned out after a mutation applies.
+ * @typedef {object} SyncReplayBroadcast
+ * @property {string | ((args: Record<string, ?>) => string)} channel - Channel name or resolver.
+ * @property {(args: Record<string, ?>) => Record<string, ?>} broadcastParams - Channel routing params.
+ * @property {(args: Record<string, ?>) => ?} body - Broadcast body.
+ * @property {(args: Record<string, ?>) => boolean} [when] - Optional gate; skipped when it returns false.
+ */
+
 /**
  * Replays client sync envelopes through project supplied authentication,
  * authorization, application, and persistence hooks.
@@ -23,15 +34,49 @@ export default class SyncEnvelopeReplayService {
    * @param {{debug?: (...args: Array<unknown>) => void, warn?: (...args: Array<unknown>) => void}} [args.logger] - Logger used for normalization warnings.
    * @param {?} [args.syncModel] - Sync/change model enabling model-backed default hooks.
    * @param {string} [args.actorForeignKeyColumn] - Sync model column linking rows to the replay actor.
+   * @param {?} [args.authenticationTokenModel] - Token model enabling the default token-lookup authenticateReplay.
+   * @param {string} [args.authenticationTokenColumn] - Token model column holding the token. Defaults to "token".
+   * @param {string} [args.authenticationTokenParam] - Request param carrying the token. Defaults to "authenticationToken".
+   * @param {Record<string, ((args: Record<string, ?>) => Promise<?>) | ConstructorParameters<typeof SyncReplayUpsertApplier>[0]>} [args.applyHandlers] - Per-resourceType apply handlers (functions or declarative upsert-applier specs) enabling the default applyReplayMutation dispatch.
+   * @param {(args: Record<string, ?>) => Record<string, ?>} [args.persistExtraAttributes] - Extra attributes merged into the model-backed persisted row (e.g. an event scope column).
+   * @param {(args: {mutation: ?, applyResult: ?}) => ?} [args.persistSerializedData] - Overrides the persisted data payload (object results are JSON stringified).
+   * @param {(broadcast: {channel: string, params: Record<string, ?>, body: ?}) => Promise<void>} [args.broadcaster] - Delivers declarative broadcasts. Required when broadcasts are configured.
+   * @param {SyncReplayBroadcast[]} [args.broadcasts] - Broadcasts fanned out by the default afterReplayMutation.
    */
   constructor(args = {}) {
     this.logger = args.logger || console
     this.syncModel = args.syncModel || null
     this.actorForeignKeyColumn = args.actorForeignKeyColumn || "authentication_token_id"
+    this.authenticationTokenModel = args.authenticationTokenModel || null
+    this.authenticationTokenColumn = args.authenticationTokenColumn || "token"
+    this.authenticationTokenParam = args.authenticationTokenParam || "authenticationToken"
+    this.persistExtraAttributes = args.persistExtraAttributes || null
+    this.persistSerializedData = args.persistSerializedData || null
+    this.broadcaster = args.broadcaster || null
+    this.broadcasts = args.broadcasts || null
+    this.applyHandlers = args.applyHandlers ? this.builtApplyHandlers(args.applyHandlers) : null
 
     if (args.actorForeignKeyColumn !== undefined && (typeof args.actorForeignKeyColumn !== "string" || args.actorForeignKeyColumn.length < 1)) {
       throw new Error(`actorForeignKeyColumn must be a non-blank string, got: ${String(args.actorForeignKeyColumn)}`)
     }
+    if (this.broadcasts && !this.broadcaster) {
+      throw new Error("SyncEnvelopeReplayService broadcasts require a broadcaster option delivering them")
+    }
+  }
+
+  /**
+   * Wraps declarative apply-handler specs in upsert appliers.
+   * @param {Record<string, ?>} applyHandlers - Raw apply handlers.
+   * @returns {Record<string, (args: Record<string, ?>) => Promise<?>>} Callable handlers by resource type.
+   */
+  builtApplyHandlers(applyHandlers) {
+    return Object.fromEntries(Object.entries(applyHandlers).map(([resourceType, handler]) => {
+      if (typeof handler === "function") return [resourceType, handler]
+
+      const applier = new SyncReplayUpsertApplier(handler)
+
+      return [resourceType, (/** @type {Record<string, ?>} */ applyArgs) => applier.apply(/** @type {?} */ (applyArgs))]
+    }))
   }
 
   /**
@@ -91,11 +136,30 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Authenticates the sync batch actor.
-   * @param {Record<string, ?>} _params - Request params.
+   *
+   * Defaults to a token-model lookup when `authenticationTokenModel` is
+   * configured; otherwise apps override this hook.
+   * @param {Record<string, ?>} params - Request params.
    * @returns {Promise<{authenticated: true, actor: ?} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
    */
-  async authenticateReplay(_params) {
-    throw new Error("SyncEnvelopeReplayService.authenticateReplay must be implemented")
+  async authenticateReplay(params) {
+    if (!this.authenticationTokenModel) {
+      throw new Error("SyncEnvelopeReplayService.authenticateReplay must be implemented (or configure authenticationTokenModel)")
+    }
+
+    const token = params[this.authenticationTokenParam]
+
+    if (!token) {
+      return {authenticated: false, errorCode: "missing-authentication-token", errorMessage: "Missing authentication token"}
+    }
+
+    const actor = await this.authenticationTokenModel.findBy({[this.authenticationTokenColumn]: token})
+
+    if (!actor) {
+      return {authenticated: false, errorCode: "invalid-authentication-token", errorMessage: "Invalid authentication token"}
+    }
+
+    return {actor, authenticated: true}
   }
 
   /**
@@ -257,11 +321,20 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Applies one normalized mutation to domain models.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
+   *
+   * Defaults to dispatching through the configured apply-handler registry;
+   * mutations without a registered handler fail loudly.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<?>} Project-specific apply result.
    */
-  async applyReplayMutation(_args) {
-    return null
+  async applyReplayMutation(args) {
+    if (!this.applyHandlers) return null
+
+    const applyHandler = this.applyHandlers[args.mutation.resourceType]
+
+    if (!applyHandler) throw new Error(`No sync apply handler registered for: ${args.mutation.resourceType}`)
+
+    return await applyHandler(args)
   }
 
   /**
@@ -281,10 +354,24 @@ export default class SyncEnvelopeReplayService {
    * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay persistence arguments.
    * @returns {Promise<void>}
    */
-  async persistReplayMutation({actor, existingSync, mutation}) {
+  async persistReplayMutation({actor, applyResult, context, existingSync, mutation, shouldApply}) {
     if (!this.syncModel) return
 
     const attributes = this.replayPersistAttributes({actor, mutation})
+
+    // Stale replays never applied anything, so the applyResult-driven extension
+    // hooks must not run against the default null skipped result.
+    if (this.persistExtraAttributes && shouldApply) {
+      Object.assign(attributes, this.persistExtraAttributes({actor, applyResult, context, existingSync, mutation, shouldApply}))
+    }
+
+    if (this.persistSerializedData && shouldApply) {
+      const serializedData = this.persistSerializedData({applyResult, mutation})
+
+      if (serializedData !== undefined && serializedData !== null) {
+        attributes.data = typeof serializedData === "string" ? serializedData : JSON.stringify(serializedData)
+      }
+    }
 
     if (existingSync) {
       const existingClientUpdatedAt = this.existingReplaySyncClientUpdatedAt(existingSync)
@@ -317,10 +404,28 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Runs side effects after a successful mutation replay and persistence.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} _args - Replay side-effect arguments.
+   *
+   * Defaults to fanning the applied result out through the configured
+   * declarative broadcasts.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay side-effect arguments.
    * @returns {Promise<void>}
    */
-  async afterReplayMutation(_args) {}
+  async afterReplayMutation(args) {
+    if (!this.broadcasts || !this.broadcaster) return
+    // Stale replays never applied anything - broadcasting their skipped results
+    // would fan out stale side effects (or crash on the default null applyResult).
+    if (!args.shouldApply) return
+
+    for (const broadcast of this.broadcasts) {
+      if (broadcast.when && !broadcast.when(args)) continue
+
+      await this.broadcaster({
+        body: broadcast.body(args),
+        channel: typeof broadcast.channel === "function" ? broadcast.channel(args) : broadcast.channel,
+        params: broadcast.broadcastParams(args)
+      })
+    }
+  }
 }
 
 /**

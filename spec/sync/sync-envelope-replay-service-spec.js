@@ -28,19 +28,19 @@ describe("sync envelope replay service", () => {
       syncs: [{
         clientUpdatedAt: "2026-06-25T11:00:00.000Z",
         data: JSON.stringify({name: "Changed"}),
-        id: 12,
+        id: "018ff6a1-0000-7000-8000-000000000012",
         resourceId: 34,
         resourceType: "Task",
         syncType: "update"
       }]
     })
 
-    expect(result).toEqual({syncs: [{id: 12, syncState: "successful"}]})
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000012", syncState: "successful"}]})
     expect(calls).toEqual([
       ["authenticate", "token-1"],
       ["find-existing", "actor-1", "Task", "34"],
       ["apply", "Changed", JSON.stringify({name: "Changed"})],
-      ["persist", 12, true, true]
+      ["persist", "018ff6a1-0000-7000-8000-000000000012", true, true]
     ])
   })
 
@@ -56,7 +56,7 @@ describe("sync envelope replay service", () => {
       }
     })
 
-    const result = await service.replay({syncs: [{id: 1, resourceId: "1", resourceType: "Task", syncType: "update"}]})
+    const result = await service.replay({syncs: [{id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "1", resourceType: "Task", syncType: "update"}]})
 
     expect(result).toEqual({
       errorCode: "invalid-token",
@@ -74,17 +74,17 @@ describe("sync envelope replay service", () => {
 
     const result = await service.replay({
       syncs: [
-        {id: 1, resourceType: "Task", syncType: "update"},
-        {data: "not-json", id: 2, resourceId: "2", resourceType: "Task", syncType: "update"},
-        {data: {ok: true}, id: 3, resourceId: "3", resourceType: "Task", syncType: "update"}
+        {id: "018ff6a1-0000-7000-8000-000000000001", resourceType: "Task", syncType: "update"},
+        {data: "not-json", id: "018ff6a1-0000-7000-8000-000000000002", resourceId: "2", resourceType: "Task", syncType: "update"},
+        {data: {ok: true}, id: "018ff6a1-0000-7000-8000-000000000003", resourceId: "3", resourceType: "Task", syncType: "update"}
       ]
     })
 
     expect(result).toEqual({
       syncs: [
-        {id: 1, reason: "invalid-resource-id", syncState: "failed"},
-        {id: 2, reason: "invalid-data", syncState: "failed"},
-        {id: 3, syncState: "successful"}
+        {id: "018ff6a1-0000-7000-8000-000000000001", reason: "invalid-resource-id", syncState: "failed"},
+        {id: "018ff6a1-0000-7000-8000-000000000002", reason: "invalid-data", syncState: "failed"},
+        {id: "018ff6a1-0000-7000-8000-000000000003", syncState: "successful"}
       ]
     })
   })
@@ -106,14 +106,14 @@ describe("sync envelope replay service", () => {
     const result = await service.replay({
       syncs: [{
         clientUpdatedAt: "2026-06-25T10:00:00.000Z",
-        id: 1,
+        id: "018ff6a1-0000-7000-8000-000000000001",
         resourceId: "old-1",
         resourceType: "Task",
         syncType: "update"
       }]
     })
 
-    expect(result).toEqual({syncs: [{id: 1, syncState: "successful"}]})
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000001", syncState: "successful"}]})
     expect(calls).toEqual([["persist", false, {skippedResourceId: "old-1"}]])
   })
 
@@ -133,14 +133,14 @@ describe("sync envelope replay service", () => {
     const result = await service.replay({
       syncs: [{
         clientUpdatedAt: "2026-06-25T10:00:00.000Z",
-        id: 9,
+        id: "018ff6a1-0000-7000-8000-000000000009",
         resourceId: "old-9",
         resourceType: "Task",
         syncType: "update"
       }]
     })
 
-    expect(result).toEqual({syncs: [{id: 9, syncState: "successful"}]})
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000009", syncState: "successful"}]})
     expect(calls).toEqual([["persist", false]])
   })
 
@@ -154,10 +154,10 @@ describe("sync envelope replay service", () => {
     })
 
     const result = await service.replay({
-      syncs: [{id: 7, resourceId: "7", resourceType: "Ticket", syncType: "update"}]
+      syncs: [{id: "018ff6a1-0000-7000-8000-000000000007", resourceId: "7", resourceType: "Ticket", syncType: "update"}]
     })
 
-    expect(result).toEqual({syncs: [{id: 7, reason: "mandant-mismatch", syncState: "failed"}]})
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000007", reason: "mandant-mismatch", syncState: "failed"}]})
   })
 
   it("finds existing sync rows through the configured sync model", async () => {
@@ -168,14 +168,14 @@ describe("sync envelope replay service", () => {
       syncs: [{
         clientUpdatedAt: "2026-06-25T11:00:00.000Z",
         data: {name: "Changed"},
-        id: 12,
+        id: "018ff6a1-0000-7000-8000-000000000012",
         resourceId: 34,
         resourceType: "Task",
         syncType: "update"
       }]
     })
 
-    expect(result).toEqual({syncs: [{id: 12, syncState: "successful"}]})
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000012", syncState: "successful"}]})
     expect(syncModel.findByCalls).toEqual([{
       authentication_token_id: "actor-1",
       resource_id: "34",
@@ -192,7 +192,7 @@ describe("sync envelope replay service", () => {
       syncs: [{
         clientUpdatedAt: "2026-06-25T11:00:00.000Z",
         data: {name: "Changed"},
-        id: 12,
+        id: "018ff6a1-0000-7000-8000-000000000012",
         resourceId: 34,
         resourceType: "Task",
         syncType: "update"
@@ -221,7 +221,7 @@ describe("sync envelope replay service", () => {
       syncs: [{
         clientUpdatedAt: "2026-06-25T11:00:00.000Z",
         data: {name: "Changed"},
-        id: 12,
+        id: "018ff6a1-0000-7000-8000-000000000012",
         resourceId: 34,
         resourceType: "Task",
         syncType: "update"
@@ -242,16 +242,230 @@ describe("sync envelope replay service", () => {
       syncs: [{
         clientUpdatedAt: "2026-06-25T11:00:00.000Z",
         data: {name: "Changed"},
-        id: 12,
+        id: "018ff6a1-0000-7000-8000-000000000012",
         resourceId: 34,
         resourceType: "Task",
         syncType: "update"
       }]
     })
 
-    expect(result).toEqual({syncs: [{id: 12, syncState: "successful"}]})
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000012", syncState: "successful"}]})
     expect(syncModel.createCalls).toEqual([])
     expect(existingSync.calls).toEqual([])
+  })
+
+  it("authenticates replay actors through a configured token model", async () => {
+    const tokenRecord = {id: () => "token-row-1"}
+    /** @type {Array<Record<string, ?>>} */
+    const findByCalls = []
+
+    class TokenAuthedReplayService extends SyncEnvelopeReplayService {
+      constructor() {
+        super({
+          authenticationTokenModel: {
+            /** @param {Record<string, ?>} conditions - Lookup conditions. @returns {Promise<?>} Token row. */
+            findBy: async (conditions) => {
+              findByCalls.push(conditions)
+
+              return conditions.token === "valid-token" ? tokenRecord : null
+            }
+          },
+          logger: {warn: () => {}}
+        })
+      }
+    }
+
+    const service = new TokenAuthedReplayService()
+
+    expect(await service.authenticateReplay({authenticationToken: "valid-token"}))
+      .toEqual({actor: tokenRecord, authenticated: true})
+    expect(await service.authenticateReplay({}))
+      .toEqual({authenticated: false, errorCode: "missing-authentication-token", errorMessage: "Missing authentication token"})
+    expect(await service.authenticateReplay({authenticationToken: "wrong"}))
+      .toEqual({authenticated: false, errorCode: "invalid-authentication-token", errorMessage: "Invalid authentication token"})
+    expect(findByCalls).toEqual([{token: "valid-token"}, {token: "wrong"}])
+  })
+
+  it("dispatches replay mutations through the declarative apply-handler registry", async () => {
+    /** @type {Array<string>} */
+    const calls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true})
+    }, {
+      applyHandlers: {
+        Task: async ({mutation}) => {
+          calls.push(`task:${mutation.resourceId}`)
+
+          return {appliedTask: true}
+        }
+      }
+    })
+    /** @type {Array<?>} */
+    const persisted = []
+
+    service.callbacks.persistReplayMutation = async ({applyResult}) => {
+      persisted.push(applyResult)
+    }
+
+    const result = await service.replay({
+      syncs: [{data: {}, id: "018ff6a1-0000-7000-8000-000000000003", resourceId: "t-3", resourceType: "Task", syncType: "update"}]
+    })
+
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000003", syncState: "successful"}]})
+    expect(calls).toEqual(["task:t-3"])
+    expect(persisted).toEqual([{appliedTask: true}])
+  })
+
+  it("fails loudly for mutations without a registered apply handler", async () => {
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true})
+    }, {
+      applyHandlers: {
+        Task: async () => ({})
+      }
+    })
+
+    await expect(async () => await service.replay({
+      syncs: [{data: {}, id: "018ff6a1-0000-7000-8000-000000000004", resourceId: "u-1", resourceType: "Unknown", syncType: "update"}]
+    })).toThrow(/No sync apply handler registered for: Unknown/u)
+  })
+
+  it("persists extra attributes and serialized data through the configured hooks", async () => {
+    const syncModel = buildFakeSyncModel()
+    const service = new ModelBackedReplayService({
+      options: {
+        persistExtraAttributes: ({applyResult}) => ({event_id: applyResult.appliedEventId}),
+        persistSerializedData: ({applyResult}) => applyResult.snapshot
+      },
+      syncModel
+    })
+
+    service.applyReplayMutation = async () => ({appliedEventId: "event-7", snapshot: {embedded: true}})
+
+    await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {name: "x"}, id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "r-1", resourceType: "Task", syncType: "update"}]
+    })
+
+    expect(syncModel.createCalls.length).toEqual(1)
+    expect(syncModel.createCalls[0].event_id).toEqual("event-7")
+    expect(syncModel.createCalls[0].data).toEqual(JSON.stringify({embedded: true}))
+  })
+
+  it("skips persistence extension hooks for stale replays", async () => {
+    const existingSync = buildFakeSyncRecord({clientUpdatedAt: new Date("2026-07-03T12:00:00.000Z")})
+    const syncModel = buildFakeSyncModel({existingSync})
+    const service = new ModelBackedReplayService({
+      options: {
+        persistExtraAttributes: ({applyResult}) => ({event_id: applyResult.appliedEventId}),
+        persistSerializedData: ({applyResult}) => applyResult.snapshot
+      },
+      syncModel
+    })
+
+    service.applyReplayMutation = async () => ({appliedEventId: "event-7", snapshot: {embedded: true}})
+
+    const result = await service.replay({
+      authenticationToken: "token-1",
+      syncs: [{clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {name: "stale"}, id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "r-1", resourceType: "Task", syncType: "update"}]
+    })
+
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000001", syncState: "successful"}]})
+    expect(syncModel.createCalls).toEqual([])
+    expect(existingSync.calls).toEqual([])
+  })
+
+  it("skips declarative broadcasts for stale replays", async () => {
+    /** @type {Array<Record<string, ?>>} */
+    const broadcastCalls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      findExistingReplaySync: async () => ({clientUpdatedAt: () => "2026-07-03T12:00:00.000Z"}),
+      applyReplayMutation: async () => {
+        throw new Error("Should not apply stale sync")
+      },
+      persistReplayMutation: async () => {}
+    }, {
+      broadcaster: async (broadcast) => {
+        broadcastCalls.push(broadcast)
+      },
+      broadcasts: [{
+        body: ({applyResult}) => applyResult.published,
+        broadcastParams: ({applyResult}) => ({eventId: applyResult.eventId}),
+        channel: "ticket-scans"
+      }]
+    })
+
+    const result = await service.replay({
+      syncs: [{clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {}, id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "t-1", resourceType: "Ticket", syncType: "update"}]
+    })
+
+    expect(result).toEqual({syncs: [{id: "018ff6a1-0000-7000-8000-000000000001", syncState: "successful"}]})
+    expect(broadcastCalls).toEqual([])
+  })
+
+  it("fans applied mutations out through declarative broadcasts", async () => {
+    /** @type {Array<Record<string, ?>>} */
+    const broadcastCalls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      applyReplayMutation: async () => ({eventId: "event-1", mandantenNr: 7, published: {id: "t-1"}}),
+      persistReplayMutation: async () => {}
+    }, {
+      broadcaster: async (broadcast) => {
+        broadcastCalls.push(broadcast)
+      },
+      broadcasts: [{
+        body: ({applyResult}) => applyResult.published,
+        broadcastParams: ({applyResult}) => ({eventId: applyResult.eventId, mandantenNr: applyResult.mandantenNr}),
+        channel: "ticket-scans",
+        when: ({applyResult}) => Boolean(applyResult.published)
+      }]
+    })
+
+    await service.replay({
+      syncs: [
+        {data: {}, id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "t-1", resourceType: "Ticket", syncType: "update"},
+        {data: {}, id: "018ff6a1-0000-7000-8000-000000000002", resourceId: "t-2", resourceType: "Ticket", syncType: "update"}
+      ]
+    })
+
+    expect(broadcastCalls).toEqual([
+      {body: {id: "t-1"}, channel: "ticket-scans", params: {eventId: "event-1", mandantenNr: 7}},
+      {body: {id: "t-1"}, channel: "ticket-scans", params: {eventId: "event-1", mandantenNr: 7}}
+    ])
+  })
+
+  it("skips broadcasts whose when-gate declines", async () => {
+    /** @type {Array<Record<string, ?>>} */
+    const broadcastCalls = []
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true}),
+      applyReplayMutation: async () => ({published: null}),
+      persistReplayMutation: async () => {}
+    }, {
+      broadcaster: async (broadcast) => {
+        broadcastCalls.push(broadcast)
+      },
+      broadcasts: [{
+        body: ({applyResult}) => applyResult.published,
+        broadcastParams: () => ({}),
+        channel: "ticket-scans",
+        when: ({applyResult}) => Boolean(applyResult.published)
+      }]
+    })
+
+    await service.replay({syncs: [{data: {}, id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "t-1", resourceType: "Ticket", syncType: "update"}]})
+
+    expect(broadcastCalls).toEqual([])
+  })
+
+  it("rejects broadcasts configuration without a broadcaster", async () => {
+    await expect(() => new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {}, authenticated: true})
+    }, {
+      broadcasts: [{body: () => ({}), broadcastParams: () => ({}), channel: "x"}]
+    })).toThrow(/broadcaster/u)
   })
 
   it("fails loudly when model-backed defaults get an actor without an id", async () => {
@@ -260,7 +474,7 @@ describe("sync envelope replay service", () => {
 
     await expect(async () => await service.replay({
       authenticationToken: "token-1",
-      syncs: [{clientUpdatedAt: "2026-06-25T11:00:00.000Z", id: 1, resourceId: "1", resourceType: "Task", syncType: "update"}]
+      syncs: [{clientUpdatedAt: "2026-06-25T11:00:00.000Z", id: "018ff6a1-0000-7000-8000-000000000001", resourceId: "1", resourceType: "Task", syncType: "update"}]
     })).toThrow(/actor with an id/u)
   })
 })
@@ -312,8 +526,8 @@ function buildFakeSyncModel({existingSync = null} = {}) {
 }
 
 class ModelBackedReplayService extends SyncEnvelopeReplayService {
-  constructor({actor = {id: () => "actor-1"}, syncModel}) {
-    super({logger: {warn: () => {}}, syncModel})
+  constructor({actor = {id: () => "actor-1"}, options = {}, syncModel}) {
+    super({logger: {warn: () => {}}, syncModel, ...options})
     this.actor = actor
   }
 
@@ -323,8 +537,8 @@ class ModelBackedReplayService extends SyncEnvelopeReplayService {
 }
 
 class TestSyncEnvelopeReplayService extends SyncEnvelopeReplayService {
-  constructor(callbacks) {
-    super({logger: {warn: () => {}}})
+  constructor(callbacks, options = {}) {
+    super({logger: {warn: () => {}}, ...options})
     this.callbacks = callbacks
   }
 

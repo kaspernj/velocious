@@ -8,7 +8,7 @@ CREATE TABLE `audits` (`id` UUID PRIMARY KEY NOT NULL, `audit_action_id` UUID NO
 
 CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT, `created_at` DATETIME, `updated_at` DATETIME, CONSTRAINT `authentication_tokens_user_id_0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));
 
-CREATE TABLE `sync_entries` (`id` INTEGER PRIMARY KEY NOT NULL, `authentication_token_id` VARCHAR(255), `resource_id` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `sync_type` VARCHAR(255) NOT NULL, `client_updated_at` DATETIME, `data` TEXT, `server_sequence` INTEGER, `created_at` DATETIME, `updated_at` DATETIME);
+CREATE TABLE `sync_entries` (`id` UUID PRIMARY KEY NOT NULL, `authentication_token_id` VARCHAR(255), `resource_id` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `sync_type` VARCHAR(255) NOT NULL, `client_updated_at` DATETIME, `data` TEXT, `server_sequence` INTEGER, `created_at` DATETIME, `updated_at` DATETIME);
 
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 

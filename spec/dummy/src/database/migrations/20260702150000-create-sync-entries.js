@@ -4,7 +4,7 @@ import Migration from "../../../../../src/database/migration/index.js"
 
 export default class CreateSyncEntries extends Migration {
   async change() {
-    await this.createTable("sync_entries", {id: {type: "bigint"}}, (table) => {
+    await this.createTable("sync_entries", {id: {type: "uuid"}}, (table) => {
       table.string("authentication_token_id", {index: true, null: true})
       table.string("resource_id", {index: true, null: false})
       table.string("resource_type", {index: true, null: false})
