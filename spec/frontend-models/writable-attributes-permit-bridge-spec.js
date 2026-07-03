@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
+import Ability from "../../src/authorization/ability.js"
 import UuidItem from "../dummy/src/models/uuid-item.js"
 import VelociousError from "../../src/velocious-error.js"
 
@@ -327,5 +328,93 @@ describe("frontend model writable attributes permit bridge - resource mutations"
     const task = await resource.create({name: "  Untrimmed  ", projectId: project.id()})
 
     expect(task.name()).toEqual("  Untrimmed  ")
+  })
+})
+
+/** @type {import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation} */
+const hookMutation = {
+  clientUpdatedAt: new Date("2026-07-03T10:00:00.000Z"),
+  data: {title: "Changed"},
+  id: "b39d5be2-58b3-4c8f-9a41-7f3d2e5c8a10",
+  resourceId: "0d9ee786-8524-4536-9d3d-8a0b4b3e5a01",
+  resourceType: "UuidItem",
+  serializedData: `{"title":"Changed"}`,
+  syncType: "update"
+}
+
+describe("frontend model sync hooks", () => {
+  it("provides permissive defaults for the sync replay hooks", async () => {
+    const resource = buildResource(TaskSchemaResource, {})
+
+    expect(await resource.authorizeSyncMutation({context: {}, mutation: hookMutation})).toEqual({allowed: true})
+    expect(resource.syncAuthorizationFailureReason({action: "create", mutation: hookMutation})).toEqual(null)
+    expect(resource.syncDeleteBehavior()).toEqual("destroy")
+    expect(resource.syncMissingRecordBehavior()).toEqual("create")
+    expect(await resource.shouldApplySync({existingSync: null, mutation: hookMutation})).toEqual(null)
+    expect(await resource.applySync({context: {}, existingSync: null, mutation: hookMutation})).toEqual(null)
+    expect(await resource.afterSyncApply({context: {}, created: false, mutation: hookMutation, record: null})).toEqual({})
+  })
+
+  it("returns the resolved writable-attribute schema from syncWritableAttributes", () => {
+    const resource = buildResource(TaskSchemaResource, {})
+
+    expect(resource.syncWritableAttributes()).toEqual(resource.resolvedWritableAttributes())
+    expect(resource.syncWritableAttributes()?.name).toEqual({maxLength: 255, required: true, type: "string"})
+
+    class SchemalessResource extends FrontendModelBaseResource {
+    }
+
+    expect(buildResource(SchemalessResource, {}).syncWritableAttributes()).toEqual(null)
+  })
+})
+
+describe("frontend model sync hooks - findSyncRecord", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
+  class SyncFindUuidItemResource extends FrontendModelBaseResource {
+    static ModelClass = UuidItem
+    static attributes = ["id", "title"]
+
+    /** @returns {void} - Declares abilities. */
+    abilities() {
+      this.can("update", {title: "Accessible"})
+      this.can("destroy", {title: "Deletable"})
+    }
+  }
+
+  it("finds records through the update accessibleFor scope by default", async () => {
+    const accessibleUuidItem = await UuidItem.create({id: "0d9ee786-8524-4536-9d3d-8a0b4b3e5a01", title: "Accessible"})
+    const blockedUuidItem = await UuidItem.create({id: "9d3adf10-63f2-4a08-8f2a-2b4c6d8e0f12", title: "Blocked"})
+    const ability = new Ability({resources: [SyncFindUuidItemResource]})
+    const resource = new SyncFindUuidItemResource({ability})
+    const foundUuidItem = await resource.findSyncRecord({mutation: {...hookMutation, resourceId: String(accessibleUuidItem.id())}})
+
+    if (!foundUuidItem) throw new Error("Expected the accessible record to be found")
+
+    expect(foundUuidItem.id()).toEqual(accessibleUuidItem.id())
+
+    expect(await resource.findSyncRecord({mutation: {...hookMutation, resourceId: String(blockedUuidItem.id())}})).toEqual(null)
+  })
+
+  it("uses the destroy scope for delete lookups", async () => {
+    const deletableUuidItem = await UuidItem.create({id: "417cf6c8-9a3b-4f0e-8a4d-5e6f7a8b9c0d", title: "Deletable"})
+    const updatableUuidItem = await UuidItem.create({id: "88f0a1b2-c3d4-4e5f-9a6b-7c8d9e0f1a2b", title: "Accessible"})
+    const ability = new Ability({resources: [SyncFindUuidItemResource]})
+    const resource = new SyncFindUuidItemResource({ability})
+    const foundUuidItem = await resource.findSyncRecord({forDelete: true, mutation: {...hookMutation, resourceId: String(deletableUuidItem.id())}})
+
+    if (!foundUuidItem) throw new Error("Expected the deletable record to be found")
+
+    expect(foundUuidItem.id()).toEqual(deletableUuidItem.id())
+
+    expect(await resource.findSyncRecord({forDelete: true, mutation: {...hookMutation, resourceId: String(updatableUuidItem.id())}})).toEqual(null)
+  })
+
+  it("falls back to an unscoped lookup without an ability", async () => {
+    const anyUuidItem = await UuidItem.create({id: "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d", title: "Blocked"})
+    const resource = new SyncFindUuidItemResource({})
+    const foundUuidItem = await resource.findSyncRecord({mutation: {...hookMutation, resourceId: String(anyUuidItem.id())}})
+
+    if (!foundUuidItem) throw new Error("Expected the record to be found without an ability")
+
+    expect(foundUuidItem.id()).toEqual(anyUuidItem.id())
   })
 })

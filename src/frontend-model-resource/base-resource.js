@@ -90,6 +90,34 @@ import VelociousError from "../velocious-error.js"
  */
 
 /**
+ * Normalized sync replay mutation passed to the resource sync hooks.
+ * @typedef {import("../sync/sync-envelope-replay-service.js").SyncReplayMutation} FrontendModelSyncMutation
+ */
+
+/**
+ * Sync mutation authorization result.
+ * @typedef {object} FrontendModelSyncAuthorization
+ * @property {boolean} allowed - Whether the mutation may be applied.
+ * @property {string} [reason] - Stable failure reason code when denied.
+ */
+
+/**
+ * Arguments for the applySync full-escape-hatch hook.
+ * @typedef {object} FrontendModelApplySyncArgs
+ * @property {Record<string, ?>} context - Replay context.
+ * @property {import("../database/record/index.js").default | null} existingSync - Existing sync row or null.
+ * @property {FrontendModelSyncMutation} mutation - Normalized replay mutation.
+ */
+
+/**
+ * Apply result produced by routed sync mutation application.
+ * @typedef {object} FrontendModelSyncApplyResult
+ * @property {boolean} created - Whether a record was created.
+ * @property {boolean} [deleted] - Whether a record was deleted.
+ * @property {import("../database/record/index.js").default | null} record - Applied record or null.
+ */
+
+/**
  * Resolved frontend-model resource registration.
  * @typedef {object} FrontendModelResolvedResourceConfiguration
  * @property {import("../configuration-types.js").BackendProjectConfiguration} backendProject - Backend project owning the resource.
@@ -659,6 +687,158 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    */
   writableAttributeError(message, {cause, code}) {
     return VelociousError.safe(message, cause ? {cause, code} : {code})
+  }
+
+  /**
+   * Authorizes one routed sync replay mutation before it is applied.
+   * Defaults to allowing every mutation; record-level authorization still
+   * applies through {@link FrontendModelBaseResource#findSyncRecord} scoping
+   * and the create membership check.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {FrontendModelSyncAuthorization | Promise<FrontendModelSyncAuthorization>} Authorization result.
+   */
+  authorizeSyncMutation({context, mutation}) {
+    void context
+    void mutation
+
+    return {allowed: true}
+  }
+
+  /**
+   * Returns the per-sync failure reason reported when a routed sync mutation
+   * fails record-level authorization. Defaults to null, which reports the
+   * generic "access-denied" reason.
+   * @param {object} args - Options.
+   * @param {"create" | "destroy" | "update"} args.action - Denied action.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {string | null} Stable failure reason code or null for the generic default.
+   */
+  syncAuthorizationFailureReason({action, mutation}) {
+    void action
+    void mutation
+
+    return null
+  }
+
+  /**
+   * Finds the existing record targeted by a routed sync replay mutation.
+   * Defaults to an `accessibleFor` lookup by primary key through the
+   * resource's normalized ability action for update (or destroy for delete
+   * mutations), falling back to an unscoped lookup without an ability.
+   * @param {object} args - Options.
+   * @param {import("../authorization/ability.js").default} [args.ability] - Ability override. Defaults to the resource ability.
+   * @param {boolean} [args.forDelete] - Whether the lookup is for a delete mutation.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {Promise<import("../database/record/index.js").default | null>} Existing record or null.
+   */
+  async findSyncRecord({ability = this.ability, forDelete = false, mutation}) {
+    const ModelClass = this.modelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const query = ability
+      ? ModelClass.accessibleFor(this.syncAbilityAction(forDelete ? "destroy" : "update"), ability)
+      : ModelClass.where({})
+
+    return await query.findBy({[primaryKey]: mutation.resourceId})
+  }
+
+  /**
+   * Maps a raw sync action to the resource's normalized ability action when
+   * the resource configuration declares an abilities mapping, otherwise the
+   * raw action name is used directly.
+   * @param {"create" | "destroy" | "update"} action - Raw sync action.
+   * @returns {string} Ability action.
+   */
+  syncAbilityAction(action) {
+    const abilities = this.resourceConfigurationValue?.abilities
+
+    if (abilities && typeof abilities == "object" && !Array.isArray(abilities)) {
+      const abilityAction = /** @type {Record<string, ?>} */ (abilities)[action]
+
+      if (typeof abilityAction == "string" && abilityAction.length > 0) return abilityAction
+    }
+
+    return action
+  }
+
+  /**
+   * Returns how routed delete mutations treat found records: "destroy"
+   * destroys the record, "ignore" leaves it untouched.
+   * @returns {"destroy" | "ignore"} Delete behavior.
+   */
+  syncDeleteBehavior() {
+    return "destroy"
+  }
+
+  /**
+   * Returns how routed upsert mutations treat missing records: "create"
+   * creates the record with the mutation's resource id, "ignore" skips the
+   * mutation without applying anything.
+   * @returns {"create" | "ignore"} Missing-record behavior.
+   */
+  syncMissingRecordBehavior() {
+    return "create"
+  }
+
+  /**
+   * Decides whether a routed sync mutation should be applied over the
+   * existing sync row. Returning null (the default) keeps the replay
+   * service's timestamp-based staleness default.
+   * @param {object} args - Options.
+   * @param {import("../database/record/index.js").default | null} args.existingSync - Existing sync row or null.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {boolean | null | Promise<boolean | null>} Whether to apply, or null for the service default.
+   */
+  shouldApplySync({existingSync, mutation}) {
+    void existingSync
+    void mutation
+
+    return null
+  }
+
+  /**
+   * Full escape hatch for routed sync mutation application. Returning a
+   * non-null result replaces the whole default apply flow (authorization,
+   * record lookup, normalization and save) with the returned apply result.
+   * @param {FrontendModelApplySyncArgs} args - Apply args.
+   * @returns {FrontendModelSyncApplyResult | null | Promise<FrontendModelSyncApplyResult | null>} Apply result or null for the default flow.
+   */
+  applySync(args) {
+    void args
+
+    return null
+  }
+
+  /**
+   * Runs after a routed sync mutation was applied. Returned entries are
+   * merged into the apply result, reaching persistExtraAttributes and
+   * broadcasts.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {boolean} args.created - Whether the record was created.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../database/record/index.js").default | null} args.record - Applied record or null.
+   * @returns {Record<string, ?> | Promise<Record<string, ?>>} Extra apply-result entries.
+   */
+  afterSyncApply({context, created, mutation, record}) {
+    void context
+    void created
+    void mutation
+    void record
+
+    return {}
+  }
+
+  /**
+   * Returns the writable-attribute schema used to normalize routed sync
+   * mutation data. Defaults to the resolved
+   * {@link FrontendModelBaseResource.writableAttributes} schema; override
+   * when the sync schema legitimately differs from the HTTP one.
+   * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} Sync schema or null when undeclared.
+   */
+  syncWritableAttributes() {
+    return this.resolvedWritableAttributes()
   }
 
   /**
