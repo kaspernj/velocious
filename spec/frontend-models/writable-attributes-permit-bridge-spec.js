@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
+import UuidItem from "../dummy/src/models/uuid-item.js"
 import VelociousError from "../../src/velocious-error.js"
 
 /** Inline resource declaring a writable-attribute schema for the dummy Task model. */
@@ -106,6 +107,129 @@ describe("frontend model writable attributes permit bridge", () => {
     const resource = buildResource(PinnedPermitResource, {})
 
     expect(resource.permittedParams()).toEqual(["name", "projectId"])
+  })
+
+  it("fails loudly when a true entry cannot be inferred without a model class", () => {
+    class NoModelInferenceResource extends FrontendModelBaseResource {
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {name: true}
+    }
+
+    const resource = buildResource(NoModelInferenceResource, {})
+
+    expect(() => resource.resolvedWritableAttributes()).toThrow(/Cannot infer writable attribute/u)
+  })
+})
+
+describe("frontend model writable attributes column inference", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
+  it("infers type, maxLength and required from the model's column metadata for true entries", () => {
+    class InferredTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {
+        description: true,
+        isDone: true,
+        name: true,
+        projectId: true
+      }
+    }
+
+    const resource = new InferredTaskResource({})
+    const resolvedSchema = resource.resolvedWritableAttributes()
+
+    if (!resolvedSchema) throw new Error("Expected a resolved schema")
+
+    expect(resolvedSchema.name).toEqual({maxLength: 255, required: false, type: "string"})
+    expect(resolvedSchema.description).toEqual({required: false, type: "string"})
+    expect(resolvedSchema.isDone).toEqual({required: false, type: "boolean"})
+    expect(resolvedSchema.projectId).toEqual({required: true, type: "integer"})
+  })
+
+  it("infers uuid and date types from uuid and datetime columns", () => {
+    class InferredUuidItemResource extends FrontendModelBaseResource {
+      static ModelClass = UuidItem
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {
+        createdAt: true,
+        id: true,
+        title: true
+      }
+    }
+
+    const resource = new InferredUuidItemResource({})
+    const resolvedSchema = resource.resolvedWritableAttributes()
+
+    if (!resolvedSchema) throw new Error("Expected a resolved schema")
+
+    expect(resolvedSchema.id).toEqual({required: true, type: "uuid"})
+    expect(resolvedSchema.createdAt).toEqual({required: false, type: "date"})
+    expect(resolvedSchema.title).toEqual({maxLength: 255, required: false, type: "string"})
+  })
+
+  it("lets explicit entry fields override inferred ones on partial entries", () => {
+    class PartialEntryTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {
+        description: {type: "raw"},
+        name: {trim: false},
+        projectId: {required: false}
+      }
+    }
+
+    const resource = new PartialEntryTaskResource({})
+    const resolvedSchema = resource.resolvedWritableAttributes()
+
+    if (!resolvedSchema) throw new Error("Expected a resolved schema")
+
+    expect(resolvedSchema.name).toEqual({maxLength: 255, required: false, trim: false, type: "string"})
+    expect(resolvedSchema.description).toEqual({type: "raw"})
+    expect(resolvedSchema.projectId).toEqual({required: false, type: "integer"})
+  })
+
+  it("normalizes writes through the inferred schema", async () => {
+    class InferredTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {
+        isDone: true,
+        name: true,
+        projectId: true
+      }
+    }
+
+    const project = await Project.create({name: "Inference project"})
+    const resource = new InferredTaskResource({})
+    const task = await resource.create({isDone: 1, name: "  Inferred  ", projectId: project.id()})
+
+    expect(task.name()).toEqual("Inferred")
+    expect(task.isDone()).toEqual(true)
+
+    try {
+      await resource.create({name: "a".repeat(256), projectId: project.id()})
+      throw new Error("Expected create to fail")
+    } catch (error) {
+      if (!(error instanceof VelociousError)) throw error
+
+      expect(error.code).toEqual("sync-name-too-long")
+    }
+  })
+
+  it("fails loudly for true entries without a matching column", () => {
+    class MissingColumnTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
+
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
+      static writableAttributes = {nonexistentColumn: true}
+    }
+
+    const resource = new MissingColumnTaskResource({})
+
+    expect(() => resource.resolvedWritableAttributes()).toThrow(/Cannot infer writable attribute/u)
   })
 })
 

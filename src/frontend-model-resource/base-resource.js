@@ -3,7 +3,7 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
-import normalizeAttributesWithSchema from "../sync/sync-attribute-normalizer.js"
+import normalizeAttributesWithSchema, {schemaTypeFromColumnType} from "../sync/sync-attribute-normalizer.js"
 import VelociousError from "../velocious-error.js"
 
 /**
@@ -177,8 +177,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Declarative writable-attribute schema consumed by
    * {@link FrontendModelBaseResource#normalizeWritableAttributes}, keyed by
-   * camelCase attribute name.
-   * @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} */
+   * camelCase attribute name. An entry value of `true` infers the whole entry
+   * from the backing model's column metadata; partial entries infer their
+   * missing `type`, `maxLength` and `required` fields the same way (explicit
+   * fields always win). See
+   * {@link FrontendModelBaseResource#resolvedWritableAttributes}.
+   * @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
   static writableAttributes = null
 
   /**
@@ -522,7 +526,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Record<string, ?>} Normalized attributes keyed per the requested key casing.
    */
   normalizeWritableAttributes(attributes, options = {}) {
-    const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
+    const schema = this.resolvedWritableAttributes()
 
     if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
 
@@ -534,6 +538,98 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       translator: this.writableAttributeTranslator(),
       unknownAttributes: options.unknownAttributes
     })
+  }
+
+  /**
+   * Resolves the declared {@link FrontendModelBaseResource.writableAttributes}
+   * schema into full entries: `true` entries are inferred entirely from the
+   * backing model's column metadata and partial entries infer their missing
+   * `type`, `maxLength` and `required` fields the same way. Explicit entry
+   * fields always win over inferred ones.
+   * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} Resolved schema or null without a declared schema.
+   */
+  resolvedWritableAttributes() {
+    const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
+
+    if (!schema) return null
+
+    /** @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
+    const resolvedSchema = {}
+
+    for (const [attributeName, rawEntry] of Object.entries(schema)) {
+      resolvedSchema[attributeName] = this._resolvedWritableAttributeEntry({attributeName, rawEntry})
+    }
+
+    return resolvedSchema
+  }
+
+  /**
+   * Resolves one writable-attribute schema entry, inferring missing fields
+   * from the backing model's column metadata when needed.
+   * @param {object} args - Options.
+   * @param {string} args.attributeName - camelCase attribute name.
+   * @param {import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true} args.rawEntry - Declared entry or `true` for full inference.
+   * @returns {import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry} Resolved entry.
+   */
+  _resolvedWritableAttributeEntry({attributeName, rawEntry}) {
+    const entry = rawEntry === true ? /** @type {import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry} */ ({}) : {...rawEntry}
+
+    if (entry.type == "ignored" || entry.type == "raw" || entry.type == "rawOrNull" || entry.type == "json") return entry
+
+    const needsType = entry.type === undefined
+    const needsRequired = entry.required === undefined
+    const needsMaxLength = entry.maxLength === undefined && (entry.type === undefined || entry.type == "string")
+
+    if (!needsType && !needsRequired && !needsMaxLength) return entry
+
+    const column = this._writableAttributeColumn({attributeName, columnName: entry.column ?? inflection.underscore(attributeName)})
+
+    if (!column) {
+      if (needsType) {
+        throw new Error(`Cannot infer writable attribute '${attributeName}' on ${this.constructor.name}: no backing model column metadata is available. Declare the entry's type explicitly or fix the column name.`)
+      }
+
+      return entry
+    }
+
+    if (needsType) {
+      const columnType = column.getType()
+      const inferredType = columnType == null ? null : schemaTypeFromColumnType(columnType)
+
+      if (!inferredType) {
+        throw new Error(`Cannot infer writable attribute '${attributeName}' on ${this.constructor.name}: column type ${String(columnType)} has no schema type mapping. Declare the entry's type explicitly.`)
+      }
+
+      entry.type = inferredType
+    }
+
+    if (needsRequired) entry.required = column.getNull() === false && column.getDefault() == null
+
+    if (entry.type == "string" && entry.maxLength === undefined) {
+      const columnMaxLength = column.getMaxLength()
+
+      if (columnMaxLength != null) entry.maxLength = columnMaxLength
+    }
+
+    return entry
+  }
+
+  /**
+   * Looks up the backing model column for a writable attribute, when column
+   * metadata is available on the resolved model class.
+   * @param {object} args - Options.
+   * @param {string} args.attributeName - camelCase attribute name.
+   * @param {string} args.columnName - snake_case column name.
+   * @returns {import("../database/drivers/base-column.js").default | null} Backing column or null when unavailable.
+   */
+  _writableAttributeColumn({attributeName, columnName}) {
+    void attributeName
+
+    const ModelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass
+
+    if (!ModelClass || typeof (/** @type {Record<string, ?>} */ (/** @type {unknown} */ (ModelClass))).getColumnsHash != "function") return null
+
+    return /** @type {typeof import("../database/record/index.js").default} */ (ModelClass).getColumnsHash()[columnName] ?? null
   }
 
   /**

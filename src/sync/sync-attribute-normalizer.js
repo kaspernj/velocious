@@ -7,6 +7,63 @@ import validationMessage from "../database/record/validation-messages.js"
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
+ * Database column types mapped to their schema entry type.
+ * @type {Record<string, "boolean" | "date" | "float" | "integer" | "json" | "string" | "uuid">}
+ */
+const SCHEMA_TYPES_BY_COLUMN_TYPE = {
+  bigint: "integer",
+  bigserial: "integer",
+  bool: "boolean",
+  boolean: "boolean",
+  char: "string",
+  character: "string",
+  "character varying": "string",
+  citext: "string",
+  clob: "string",
+  date: "date",
+  datetime: "date",
+  decimal: "float",
+  double: "float",
+  "double precision": "float",
+  float: "float",
+  int: "integer",
+  integer: "integer",
+  json: "json",
+  jsonb: "json",
+  longtext: "string",
+  mediumint: "integer",
+  mediumtext: "string",
+  numeric: "float",
+  nvarchar: "string",
+  real: "float",
+  serial: "integer",
+  smallint: "integer",
+  string: "string",
+  text: "string",
+  timestamp: "date",
+  "timestamp with time zone": "date",
+  "timestamp without time zone": "date",
+  timestamptz: "date",
+  tinyint: "integer",
+  tinytext: "string",
+  uniqueidentifier: "uuid",
+  uuid: "uuid",
+  varchar: "string"
+}
+
+/**
+ * Maps a database column type to the matching schema entry type, so
+ * writable-attribute schemas can be inferred from column metadata.
+ * @param {string} columnType - Database column type (any casing, optional length suffix).
+ * @returns {"boolean" | "date" | "float" | "integer" | "json" | "string" | "uuid" | null} Matching schema entry type or null when unmappable.
+ */
+export function schemaTypeFromColumnType(columnType) {
+  const normalizedType = columnType.toLowerCase().replace(/\(.*\)$/, "").trim()
+
+  return SCHEMA_TYPES_BY_COLUMN_TYPE[normalizedType] ?? null
+}
+
+/**
  * Builds the error thrown for a failed sync attribute validation.
  * @callback SyncAttributeErrorFactory
  * @param {string} message - Human-readable validation message.
