@@ -490,15 +490,21 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    *     }
    *   }
    *
-   * Default implementation returns `[]` — nothing permitted. Subclasses
-   * must override to enable writes. A resource that does not declare
-   * `permittedParams` cannot accept any write.
+   * Default implementation derives the permit from the declared
+   * {@link FrontendModelBaseResource.writableAttributes} schema (its camelCase
+   * keys, including `ignored` entries) and returns `[]` — nothing permitted —
+   * without a schema. Subclasses override to customize; an explicit override
+   * always wins over schema derivation.
    * @param {{action?: "create" | "update", params?: Record<string, ?>, ability?: import("../authorization/ability.js").default, locals?: Record<string, ?>}} [arg] - Request context.
    * @returns {Array<string | Record<string, ?>>} - Permit spec.
    */
   permittedParams(arg) {
     return this.sharedResourceMethodOr("permittedParams", [arg], () => {
       void arg
+
+      const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
+
+      if (schema) return Object.keys(schema)
 
       return []
     })
@@ -512,8 +518,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * failures throw client-safe errors built by
    * {@link FrontendModelBaseResource#writableAttributeError}.
    * @param {Record<string, ?>} attributes - Raw incoming attributes.
-   * @param {{unknownAttributes?: "error" | "ignore"}} [options] - Unknown input-key handling. Defaults to "error".
-   * @returns {Record<string, ?>} Normalized attributes keyed by column names.
+   * @param {{keyCase?: "attribute" | "column", unknownAttributes?: "error" | "ignore"}} [options] - Output key casing (defaults to "column") and unknown input-key handling (defaults to "error").
+   * @returns {Record<string, ?>} Normalized attributes keyed per the requested key casing.
    */
   normalizeWritableAttributes(attributes, options = {}) {
     const schema = /** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes
@@ -523,6 +529,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return normalizeAttributesWithSchema({
       attributes,
       errorFactory: (message, details) => this.writableAttributeError(message, details),
+      keyCase: options.keyCase,
       schema,
       unknownAttributes: options.unknownAttributes
     })
@@ -548,6 +555,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("normalizeCreateAttributes", [attributes, options], () => {
       void options
 
+      if (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes) {
+        return this.normalizeWritableAttributes(attributes, {keyCase: "attribute"})
+      }
+
       return attributes
     })
   }
@@ -563,6 +574,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("normalizeUpdateAttributes", [model, attributes, options], () => {
       void model
       void options
+
+      if (/** @type {typeof FrontendModelBaseResource} */ (this.constructor).writableAttributes) {
+        return this.normalizeWritableAttributes(attributes, {keyCase: "attribute"})
+      }
 
       return attributes
     })

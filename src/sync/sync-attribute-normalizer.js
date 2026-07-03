@@ -51,16 +51,21 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @param {object} args - Options.
  * @param {Record<string, ?>} args.attributes - Raw incoming attributes (camelCase and/or snake_case keys).
  * @param {SyncAttributeErrorFactory} args.errorFactory - Maps validation failures to thrown errors.
+ * @param {"attribute" | "column"} [args.keyCase] - Output key casing: "column" emits snake_case column keys, "attribute" emits camelCase attribute keys. Defaults to "column".
  * @param {Record<string, SyncAttributeSchemaEntry>} args.schema - Attribute schema keyed by camelCase attribute name.
  * @param {"error" | "ignore"} [args.unknownAttributes] - Unknown input-key handling. Defaults to "error".
- * @returns {Record<string, ?>} Normalized values keyed by snake_case column names.
+ * @returns {Record<string, ?>} Normalized values keyed per the requested key casing.
  */
-export default function normalizeAttributesWithSchema({attributes, errorFactory, schema, unknownAttributes = "error"}) {
+export default function normalizeAttributesWithSchema({attributes, errorFactory, keyCase = "column", schema, unknownAttributes = "error"}) {
   if (!attributes || typeof attributes != "object") throw new Error(`normalizeAttributesWithSchema requires an attributes object, got: ${String(attributes)}`)
   if (typeof errorFactory != "function") throw new Error("normalizeAttributesWithSchema requires an errorFactory function")
   if (!schema || typeof schema != "object") throw new Error(`normalizeAttributesWithSchema requires a schema object, got: ${String(schema)}`)
   if (unknownAttributes != "error" && unknownAttributes != "ignore") {
     throw new Error(`normalizeAttributesWithSchema unknownAttributes must be "error" or "ignore", got: ${String(unknownAttributes)}`)
+  }
+
+  if (keyCase != "attribute" && keyCase != "column") {
+    throw new Error(`normalizeAttributesWithSchema keyCase must be "attribute" or "column", got: ${String(keyCase)}`)
   }
 
   /** @type {Record<string, ?>} */
@@ -70,6 +75,7 @@ export default function normalizeAttributesWithSchema({attributes, errorFactory,
 
   for (const [attributeName, entry] of Object.entries(schema)) {
     const column = entry.column ?? snakeCaseKey(attributeName)
+    const outputKey = keyCase == "attribute" ? attributeName : column
     const inputKeys = column == attributeName ? [attributeName] : [column, attributeName]
 
     for (const inputKey of inputKeys) {
@@ -78,7 +84,7 @@ export default function normalizeAttributesWithSchema({attributes, errorFactory,
       if (entry.type == "ignored") continue
       if (!Object.prototype.hasOwnProperty.call(attributes, inputKey)) continue
 
-      normalized[column] = normalizeAttributeValue({attributeName, entry, errorFactory, value: attributes[inputKey]})
+      normalized[outputKey] = normalizeAttributeValue({attributeName, entry, errorFactory, value: attributes[inputKey]})
     }
   }
 

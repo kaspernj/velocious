@@ -494,6 +494,31 @@ describe("sync attribute normalizer", () => {
     })
   })
 
+  describe("keyCase option", () => {
+    it("emits camelCase attribute keys when keyCase is attribute", () => {
+      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
+      const keyCaseSchema = {
+        resourceId: {maxLength: 255, type: "string"},
+        scannedAt: {type: "date"}
+      }
+
+      const normalized = normalizeAttributesWithSchema({
+        attributes: {resource_id: "row-1", scannedAt: "2026-07-03T10:00:00.000Z"},
+        errorFactory,
+        keyCase: "attribute",
+        schema: keyCaseSchema
+      })
+
+      expect(normalized.resourceId).toEqual("row-1")
+      expect(/** @type {Date} */ (normalized.scannedAt).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
+      expect(Object.keys(normalized).sort()).toEqual(["resourceId", "scannedAt"])
+    })
+
+    it("keeps emitting snake_case column keys by default", () => {
+      expect(normalize({resourceId: "row-1"})).toEqual({resource_id: "row-1"})
+    })
+  })
+
   describe("string trim option", () => {
     it("keeps surrounding whitespace and bounds the untrimmed length when trim is false", () => {
       /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
