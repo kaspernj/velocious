@@ -62,7 +62,7 @@ function buildMutation(overrides = {}) {
   return {
     clientUpdatedAt: new Date("2026-07-03T10:00:00.000Z"),
     data: {},
-    id: 1,
+    id: "018ff6a1-0000-7000-8000-000000000001",
     resourceId: "row-1",
     resourceType: "Task",
     serializedData: "{}",

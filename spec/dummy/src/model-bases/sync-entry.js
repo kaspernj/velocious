@@ -5,7 +5,7 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 /**
  * Attributes accepted when creating or updating SyncEntry records.
  * @typedef {object} SyncEntryWriteAttributes
- * @property {number} [id] - Value for the id attribute.
+ * @property {string} [id] - Value for the id attribute.
  * @property {string | null} [authenticationTokenId] - Value for the authenticationTokenId attribute.
  * @property {string} [resourceId] - Value for the resourceId attribute.
  * @property {string} [resourceType] - Value for the resourceType attribute.
@@ -26,12 +26,12 @@ export default class SyncEntryBase extends DatabaseRecord {
   getModelClass() { return /** @type {typeof import("../models/sync-entry.js").default} */ (this.constructor) }
 
   /**
-   * @returns {number}
+   * @returns {string}
    */
   id() { return this.readAttribute("id") }
 
   /**
-   * @param {number} newValue
+   * @param {string} newValue
    * @returns {void}
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
