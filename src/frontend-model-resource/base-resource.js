@@ -3,7 +3,6 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
-import normalizeAttributesWithSchema, {schemaTypeFromColumnType} from "../sync/sync-attribute-normalizer.js"
 import VelociousError from "../velocious-error.js"
 
 /**
@@ -203,17 +202,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static SharedResource = undefined
 
   /**
-   * Declarative writable-attribute schema consumed by
-   * {@link FrontendModelBaseResource#normalizeWritableAttributes}, keyed by
-   * camelCase attribute name. An entry value of `true` infers the whole entry
-   * from the backing model's column metadata; partial entries infer their
-   * missing `type`, `maxLength` and `required` fields the same way (explicit
-   * fields always win). Resolved through the shared resource like the other
-   * static resource config: an undeclared environment schema falls back to
-   * the shared resource's schema, while an explicit declaration (including
-   * `null`) wins. See
-   * {@link FrontendModelBaseResource#resolvedWritableAttributes}.
-   * @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null | undefined} */
+   * Declarative writable-attribute permit list (camelCase attribute names)
+   * used as the default {@link FrontendModelBaseResource#permittedParams} and
+   * as the routed sync replay permit. Resolved through the shared resource
+   * like the other static resource config: an undeclared environment list
+   * falls back to the shared resource's list, while an explicit declaration
+   * (including `null`) wins.
+   * @type {string[] | null | undefined} */
   static writableAttributes = undefined
 
   /**
@@ -525,11 +520,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    *     }
    *   }
    *
-   * Default implementation derives the permit from the declared
-   * {@link FrontendModelBaseResource.writableAttributes} schema (its camelCase
-   * keys, including `ignored` entries) and returns `[]` — nothing permitted —
-   * without a schema. Subclasses override to customize; an explicit override
-   * always wins over schema derivation.
+   * Default implementation returns the declared
+   * {@link FrontendModelBaseResource.writableAttributes} permit list, or `[]`
+   * — nothing permitted — without a declared list. Subclasses override to
+   * customize; an explicit override always wins.
    * @param {{action?: "create" | "update", params?: Record<string, ?>, ability?: import("../authorization/ability.js").default, locals?: Record<string, ?>}} [arg] - Request context.
    * @returns {Array<string | Record<string, ?>>} - Permit spec.
    */
@@ -537,194 +531,22 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("permittedParams", [arg], () => {
       void arg
 
-      const schema = this.declaredWritableAttributes()
-
-      if (schema) return Object.keys(schema)
-
-      return []
+      return this.declaredWritableAttributes() ?? []
     })
   }
 
   /**
-   * Normalizes incoming writable attributes through the declared
-   * {@link FrontendModelBaseResource.writableAttributes} schema: camelCase
-   * attribute keys are accepted primarily, plus the model's actual column
-   * names; values are validated per type and written under the requested key
-   * casing (actual column names for "column"). Validation failures throw
-   * client-safe errors built by
-   * {@link FrontendModelBaseResource#writableAttributeError}.
-   * @param {Record<string, ?>} attributes - Raw incoming attributes.
-   * @param {{keyCase?: "attribute" | "column", unknownAttributes?: "error" | "ignore"}} [options] - Output key casing (defaults to "column") and unknown input-key handling (defaults to "error").
-   * @returns {Record<string, ?>} Normalized attributes keyed per the requested key casing.
-   */
-  normalizeWritableAttributes(attributes, options = {}) {
-    const schema = this.resolvedWritableAttributes()
-
-    if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
-
-    // Lenient model resolution: column names come from the model's attribute
-    // map when one is known, but a schema with explicit columns (or camelCase
-    // only) must keep working without a bound model instance.
-    const modelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass ?? null
-
-    return normalizeAttributesWithSchema({
-      attributes,
-      errorFactory: (message, details) => this.writableAttributeError(message, details),
-      keyCase: options.keyCase,
-      modelClass,
-      schema,
-      translator: this.writableAttributeTranslator(),
-      unknownAttributes: options.unknownAttributes
-    })
-  }
-
-  /**
-   * Resolves the declared writable-attribute schema from the environment
+   * Resolves the declared writable-attribute permit list from the environment
    * resource first, then the shared resource — mirroring how the other
    * static resource config resolves. An explicit environment declaration
-   * (including `null`) wins over the shared resource's schema.
-   * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} Declared schema or null when undeclared.
+   * (including `null`) wins over the shared resource's list.
+   * @returns {string[] | null} Declared permit list or null when undeclared.
    */
   declaredWritableAttributes() {
     const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
-    const schema = /** @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null | undefined} */ (ResourceClass.sharedResourceStaticValue("writableAttributes"))
+    const permittedAttributes = /** @type {string[] | null | undefined} */ (ResourceClass.sharedResourceStaticValue("writableAttributes"))
 
-    return schema ?? null
-  }
-
-  /**
-   * Resolves the declared {@link FrontendModelBaseResource.writableAttributes}
-   * schema into full entries: `true` entries are inferred entirely from the
-   * backing model's column metadata and partial entries infer their missing
-   * `type`, `maxLength` and `required` fields the same way. Explicit entry
-   * fields always win over inferred ones.
-   * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} Resolved schema or null without a declared schema.
-   */
-  resolvedWritableAttributes() {
-    const schema = this.declaredWritableAttributes()
-
-    if (!schema) return null
-
-    /** @type {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
-    const resolvedSchema = {}
-
-    for (const [attributeName, rawEntry] of Object.entries(schema)) {
-      resolvedSchema[attributeName] = this._resolvedWritableAttributeEntry({attributeName, rawEntry})
-    }
-
-    return resolvedSchema
-  }
-
-  /**
-   * Resolves one writable-attribute schema entry, inferring missing fields
-   * from the backing model's column metadata when needed.
-   * @param {object} args - Options.
-   * @param {string} args.attributeName - camelCase attribute name.
-   * @param {import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true} args.rawEntry - Declared entry or `true` for full inference.
-   * @returns {import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry} Resolved entry.
-   */
-  _resolvedWritableAttributeEntry({attributeName, rawEntry}) {
-    const entry = rawEntry === true ? /** @type {import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry} */ ({}) : {...rawEntry}
-
-    if (entry.type == "ignored" || entry.type == "raw" || entry.type == "rawOrNull" || entry.type == "json") return entry
-
-    const needsType = entry.type === undefined
-    const needsRequired = entry.required === undefined
-    const needsMaxLength = entry.maxLength === undefined && (entry.type === undefined || entry.type == "string")
-
-    if (!needsType && !needsRequired && !needsMaxLength) return entry
-
-    const columnName = entry.column ?? inflection.underscore(attributeName)
-    const column = this._writableAttributeColumn({attributeName, columnName})
-
-    if (!column) {
-      if (needsType) {
-        throw new Error(`Cannot infer writable attribute '${attributeName}' on ${this.constructor.name}: no backing model column metadata is available. Declare the entry's type explicitly or fix the column name.`)
-      }
-
-      return entry
-    }
-
-    if (needsType) {
-      // getColumnTypeByName is cast-aware: a declared attribute cast (e.g.
-      // `Model.attribute("id", "uuid")` for MSSQL uuid columns stored as
-      // varchar(36)) wins over the driver-reported column type, keeping
-      // inference driver-uniform where raw metadata is ambiguous.
-      const columnType = this._writableAttributeModelClass()?.getColumnTypeByName(columnName) ?? column.getType()
-      const inferredType = columnType == null ? null : schemaTypeFromColumnType(columnType)
-
-      if (!inferredType) {
-        throw new Error(`Cannot infer writable attribute '${attributeName}' on ${this.constructor.name}: column type ${String(columnType)} has no schema type mapping. Declare the entry's type explicitly or declare an attribute cast on the model.`)
-      }
-
-      entry.type = inferredType
-    }
-
-    if (needsRequired) {
-      // The primary key is never inferred as required: the framework
-      // guarantees a value on every driver (PG/MSSQL via a database default,
-      // sqlite/mysql via record-level UUID assignment), so driver-divergent
-      // column defaults must not make inference driver-divergent.
-      const isPrimaryKeyColumn = columnName === this._writableAttributeModelClass()?.primaryKey()
-
-      entry.required = !isPrimaryKeyColumn && column.getNull() === false && column.getDefault() == null
-    }
-
-    if (entry.type == "string" && entry.maxLength === undefined) {
-      const columnMaxLength = column.getMaxLength()
-
-      // Non-positive lengths are unbounded-length sentinels (e.g. MSSQL
-      // reports nvarchar(max) as -1), not real bounds.
-      if (columnMaxLength != null && columnMaxLength > 0) entry.maxLength = columnMaxLength
-    }
-
-    return entry
-  }
-
-  /**
-   * Resolves the backing model class carrying column metadata for
-   * writable-attribute inference, when one is configured and is a real model.
-   * @returns {typeof import("../database/record/index.js").default | null} Backing model class or null when unavailable.
-   */
-  _writableAttributeModelClass() {
-    const ModelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass
-
-    if (!ModelClass || typeof (/** @type {Record<string, ?>} */ (/** @type {unknown} */ (ModelClass))).getColumnsHash != "function") return null
-
-    return /** @type {typeof import("../database/record/index.js").default} */ (ModelClass)
-  }
-
-  /**
-   * Looks up the backing model column for a writable attribute, when column
-   * metadata is available on the resolved model class.
-   * @param {object} args - Options.
-   * @param {string} args.attributeName - camelCase attribute name.
-   * @param {string} args.columnName - snake_case column name.
-   * @returns {import("../database/drivers/base-column.js").default | null} Backing column or null when unavailable.
-   */
-  _writableAttributeColumn({attributeName, columnName}) {
-    void attributeName
-
-    return this._writableAttributeModelClass()?.getColumnsHash()[columnName] ?? null
-  }
-
-  /**
-   * Resolves the translator used for derived writable-attribute validation
-   * messages: the controller configuration when available, otherwise the
-   * backing model class configuration. Resources without a configured model
-   * class (e.g. plain unit-test resources) get untranslated English defaults.
-   * @returns {import("../database/record/validation-messages.js").ValidationMessageTranslator | null} Message translator.
-   */
-  writableAttributeTranslator() {
-    if (this.controller) return this.controllerInstance().getConfiguration().getTranslator()
-
-    const ModelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass
-
-    if (ModelClass && typeof (/** @type {Record<string, ?>} */ (/** @type {unknown} */ (ModelClass)))._getConfiguration == "function") {
-      return /** @type {typeof import("../database/record/index.js").default} */ (ModelClass)._getConfiguration().getTranslator()
-    }
-
-    return null
+    return permittedAttributes ?? null
   }
 
   /**
@@ -811,41 +633,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * Returns how routed delete mutations treat found records: "destroy"
-   * destroys the record, "ignore" leaves it untouched.
-   * @returns {"destroy" | "ignore"} Delete behavior.
-   */
-  syncDeleteBehavior() {
-    return "destroy"
-  }
-
-  /**
-   * Returns how routed upsert mutations treat missing records: "create"
-   * creates the record with the mutation's resource id, "ignore" skips the
-   * mutation without applying anything.
-   * @returns {"create" | "ignore"} Missing-record behavior.
-   */
-  syncMissingRecordBehavior() {
-    return "create"
-  }
-
-  /**
-   * Decides whether a routed sync mutation should be applied over the
-   * existing sync row. Returning null (the default) keeps the replay
-   * service's timestamp-based staleness default.
-   * @param {object} args - Options.
-   * @param {import("../database/record/index.js").default | null} args.existingSync - Existing sync row or null.
-   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
-   * @returns {boolean | null | Promise<boolean | null>} Whether to apply, or null for the service default.
-   */
-  shouldApplySync({existingSync, mutation}) {
-    void existingSync
-    void mutation
-
-    return null
-  }
-
-  /**
    * Full escape hatch for routed sync mutation application. Returning a
    * non-null result replaces the whole default apply flow (authorization,
    * record lookup, normalization and save) with the returned apply result.
@@ -879,17 +666,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * Returns the writable-attribute schema used to normalize routed sync
-   * mutation data. Defaults to the resolved
-   * {@link FrontendModelBaseResource.writableAttributes} schema; override
-   * when the sync schema legitimately differs from the HTTP one.
-   * @returns {Record<string, import("../sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} Sync schema or null when undeclared.
-   */
-  syncWritableAttributes() {
-    return this.resolvedWritableAttributes()
-  }
-
-  /**
    * Normalizes create attributes before permission filtering and saving.
    * @param {FrontendModelResourceAttributePayload} attributes - Incoming create attributes.
    * @param {FrontendModelResourceSaveOptions} options - Save options.
@@ -898,10 +674,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   normalizeCreateAttributes(attributes, options) {
     return this.sharedResourceMethodOr("normalizeCreateAttributes", [attributes, options], () => {
       void options
-
-      if (this.declaredWritableAttributes()) {
-        return this.normalizeWritableAttributes(attributes, {keyCase: "attribute"})
-      }
 
       return attributes
     })
@@ -918,10 +690,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("normalizeUpdateAttributes", [model, attributes, options], () => {
       void model
       void options
-
-      if (this.declaredWritableAttributes()) {
-        return this.normalizeWritableAttributes(attributes, {keyCase: "attribute"})
-      }
 
       return attributes
     })

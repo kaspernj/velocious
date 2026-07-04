@@ -48,6 +48,7 @@ import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateVa
 import {formatValue} from "../../utils/format-value.js"
 import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
 import ValidatorsFormat from "./validators/format.js"
+import ValidatorsLength from "./validators/length.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 import registerActsAsListCallbacks from "./acts-as-list.js"
@@ -4403,6 +4404,7 @@ class VelociousDatabaseRecord {
  */
 
 VelociousDatabaseRecord.registerValidatorType("format", ValidatorsFormat)
+VelociousDatabaseRecord.registerValidatorType("length", ValidatorsLength)
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 

@@ -16,18 +16,9 @@
  */
 export const VALIDATION_MESSAGE_DEFAULTS = {
   blank: "can't be blank",
-  greater_than_or_equal_to: "must be greater than or equal to %{count}",
-  invalid_boolean: "must be a boolean",
-  invalid_datetime: "must be a valid datetime",
-  invalid_json: "must be valid JSON",
-  invalid_json_value: "must be an object or JSON string",
-  invalid_uuid: "must be a valid UUID",
-  less_than_or_equal_to: "must be less than or equal to %{count}",
-  not_a_number: "is not a number",
-  not_an_integer: "must be an integer",
   taken: "has already been taken",
   too_long: "is too long (maximum is %{count} characters)",
-  unknown_attribute: "Unknown attribute: %{attribute}."
+  too_short: "is too short (minimum is %{count} characters)"
 }
 
 /**

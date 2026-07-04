@@ -13,8 +13,8 @@ class SyncUuidItemResource extends FrontendModelBaseResource {
 
   static builtInMemberCommands = ["find"]
 
-  /** @type {Record<string, import("../../../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
-  static writableAttributes = {title: true}
+  /** @type {string[]} */
+  static writableAttributes = ["title"]
 }
 
 export default SyncUuidItemResource

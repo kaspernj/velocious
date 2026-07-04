@@ -258,49 +258,6 @@ describe("sync resource base", () => {
     expect(paginationCalls[1]).toEqual({pagination: {limit: null, offset: null, page: 2, perPage: 50}, query: fakeQuery})
   })
 
-  it("normalizes writable attributes through the declared schema with client-safe errors", () => {
-    class SchemaResource extends SyncResourceBase {
-      static ModelClass = TestSyncModel
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
-      static writableAttributes = {
-        clientUpdatedAt: {required: true, type: "date"},
-        data: {invalidJsonMessage: "Data must be valid JSON.", invalidMessage: "Data must be an object or JSON string.", type: "json"},
-        resourceId: {maxLength: 255, type: "string"},
-        syncType: {maxLength: 255, required: true, type: "string"}
-      }
-    }
-
-    const resource = buildResource(SchemaResource, {})
-    const normalized = resource.normalizeWritableAttributes({data: `{"name": "Changed"}`, resource_id: "row-1", syncType: " update "})
-
-    expect(normalized.resource_id).toEqual("row-1")
-    expect(normalized.sync_type).toEqual("update")
-    expect(normalized.data).toEqual({name: "Changed"})
-
-    try {
-      resource.normalizeWritableAttributes({syncType: "   "})
-      throw new Error("Expected normalizeWritableAttributes to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.message).toEqual("syncType can't be blank.")
-      expect(error.code).toEqual("sync-syncType-required")
-      expect(error.safeToExpose).toEqual(true)
-    }
-
-    try {
-      resource.normalizeWritableAttributes({data: "{invalid"})
-      throw new Error("Expected normalizeWritableAttributes to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.message).toEqual("Data must be valid JSON.")
-      expect(error.code).toEqual("sync-data-invalid-json")
-    }
-
-    expect(() => buildResource(SyncResourceBase, {}).normalizeWritableAttributes({})).toThrow(/must define static writableAttributes/u)
-  })
 })
 
 class QuickSearchSyncResource extends SyncResourceBase {

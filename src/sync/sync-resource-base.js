@@ -91,10 +91,9 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     return true
   }
 
-  // The declarative `static writableAttributes` schema plus
-  // `normalizeWritableAttributes`/`writableAttributeError` live on
-  // FrontendModelBaseResource so every frontend-model resource can declare a
-  // writable-attribute schema; sync resources inherit them unchanged.
+  // The declarative `static writableAttributes` permit list lives on
+  // FrontendModelBaseResource so every frontend-model resource can declare
+  // one; sync resources inherit it unchanged.
 
   /**
    * Returns a stable change-feed page after app authorization.

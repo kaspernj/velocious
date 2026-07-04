@@ -30,7 +30,7 @@ function buildService(serviceArgs) {
 }
 
 /**
- * Builds one update sync entry payload.
+ * Builds one sync entry payload.
  * @param {object} args - Options.
  * @param {Record<string, ?>} args.data - Mutation data.
  * @param {string} args.id - Client sync id.
@@ -49,14 +49,11 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     const uuidItem = await UuidItem.create({id: "0d9ee786-8524-4536-9d3d-8a0b4b3e5a01", title: "Before"})
     const service = buildService({resourceTypeOverrides: {UuidItem: SyncUuidItemResource}})
     const result = await service.replay({
-      syncs: [buildSync({data: {title: "  After  "}, id: "aa11f0e2-1111-4222-8333-444455556666", resourceId: String(uuidItem.id())})]
+      syncs: [buildSync({data: {title: "After"}, id: "aa11f0e2-1111-4222-8333-444455556666", resourceId: String(uuidItem.id())})]
     })
 
     expect(result).toEqual({syncs: [{id: "aa11f0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
-
-    const updatedUuidItem = await UuidItem.findByOrFail({id: uuidItem.id()})
-
-    expect(updatedUuidItem.title()).toEqual("After")
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("After")
   })
 
   it("routes mutations through the configuration frontend-model registry", async () => {
@@ -98,46 +95,21 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Continue after")
   })
 
-  it("creates missing records with the client-generated primary key by default", async () => {
+  it("creates missing records with the client-generated primary key", async () => {
     const service = buildService({resourceTypeOverrides: {UuidItem: SyncUuidItemResource}})
     const result = await service.replay({
       syncs: [buildSync({data: {title: "Created"}, id: "ff66f0e2-1111-4222-8333-444455556666", resourceId: "64a5e2f8-0b9c-4d1e-8f3a-5b6c7d8e9f0a"})]
     })
 
     expect(result).toEqual({syncs: [{id: "ff66f0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
-
-    const createdUuidItem = await UuidItem.findByOrFail({id: "64a5e2f8-0b9c-4d1e-8f3a-5b6c7d8e9f0a"})
-
-    expect(createdUuidItem.title()).toEqual("Created")
+    expect((await UuidItem.findByOrFail({id: "64a5e2f8-0b9c-4d1e-8f3a-5b6c7d8e9f0a"})).title()).toEqual("Created")
   })
 
-  it("skips missing records when syncMissingRecordBehavior is ignore", async () => {
-    class IgnoreMissingResource extends SyncUuidItemResource {
-      /** @returns {"create" | "ignore"} - Missing-record behavior. */
-      syncMissingRecordBehavior() {
-        return "ignore"
-      }
-    }
-
-    const service = buildService({resourceTypeOverrides: {UuidItem: IgnoreMissingResource}})
-    const result = await service.replay({
-      syncs: [buildSync({data: {title: "Ignored"}, id: "0177f0e2-1111-4222-8333-444455556666", resourceId: "75b6f3a9-1c0d-4e2f-9a4b-6c7d8e9f0a1b"})]
-    })
-
-    expect(result).toEqual({syncs: [{id: "0177f0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
-    expect(await UuidItem.findBy({id: "75b6f3a9-1c0d-4e2f-9a4b-6c7d8e9f0a1b"})).toEqual(null)
-  })
-
-  it("scopes lookups through the resource ability and treats out-of-scope updates per missing-record behavior", async () => {
+  it("fails out-of-scope updates per sync instead of colliding with the existing record", async () => {
     class ScopedUuidItemResource extends SyncUuidItemResource {
       /** @returns {void} - Declares abilities. */
       abilities() {
-        this.can("update", {title: "Accessible"})
-      }
-
-      /** @returns {"create" | "ignore"} - Missing-record behavior. */
-      syncMissingRecordBehavior() {
-        return "ignore"
+        this.can(["create", "update"], {title: "Accessible"})
       }
     }
 
@@ -148,7 +120,9 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
       syncs: [buildSync({data: {title: "Hacked"}, id: "1288f0e2-1111-4222-8333-444455556666", resourceId: String(blockedUuidItem.id())})]
     })
 
-    expect(result).toEqual({syncs: [{id: "1288f0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
+    expect(result.syncs).toHaveLength(1)
+    expect(result.syncs[0].syncState).toEqual("failed")
+    expect(result.syncs[0].reason).toEqual("access-denied")
     expect((await UuidItem.findByOrFail({id: blockedUuidItem.id()})).title()).toEqual("Blocked")
   })
 
@@ -206,18 +180,18 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect((await UuidItem.findByOrFail({id: "b9f0d7e3-5a4b-4c6d-9e8f-0a1b2c3d4e5f"})).title()).toEqual("Allowed")
   })
 
-  it("fails schema validation errors per sync with their code and message and continues the batch", async () => {
+  it("fails payloads with attributes outside the permit list per sync and continues the batch", async () => {
     const service = buildService({resourceTypeOverrides: {UuidItem: SyncUuidItemResource}})
     const result = await service.replay({
       syncs: [
-        buildSync({data: {title: "a".repeat(256)}, id: "56ccf0e2-1111-4222-8333-444455556666", resourceId: "c0a1e8f4-6b5c-4d7e-8f9a-1b2c3d4e5f6a"}),
+        buildSync({data: {evil: "y", title: "Nope"}, id: "56ccf0e2-1111-4222-8333-444455556666", resourceId: "c0a1e8f4-6b5c-4d7e-8f9a-1b2c3d4e5f6a"}),
         buildSync({data: {title: "Fine"}, id: "67ddf0e2-1111-4222-8333-444455556666", resourceId: "d1b2f9a5-7c6d-4e8f-9a0b-2c3d4e5f6a7b"})
       ]
     })
 
     expect(result.syncs[0].syncState).toEqual("failed")
-    expect(result.syncs[0].reason).toEqual("sync-title-too-long")
-    expect(result.syncs[0].message).toEqual("title is too long (maximum is 255 characters).")
+    expect(result.syncs[0].reason).toEqual("sync-unknown-attribute")
+    expect(result.syncs[0].message).toEqual("Unknown attribute: evil.")
     expect(result.syncs[1]).toEqual({id: "67ddf0e2-1111-4222-8333-444455556666", syncState: "successful"})
     expect(await UuidItem.findBy({id: "c0a1e8f4-6b5c-4d7e-8f9a-1b2c3d4e5f6a"})).toEqual(null)
   })
@@ -226,8 +200,8 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     class SyncTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task
 
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
-      static writableAttributes = {name: true, projectId: true}
+      /** @type {string[]} */
+      static writableAttributes = ["name", "projectId"]
     }
 
     const project = await Project.create({name: "Routed validation project"})
@@ -243,84 +217,87 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect((await Task.findByOrFail({id: task.id()})).name()).toEqual("Valid name")
   })
 
-  it("destroys records on delete mutations by default and ignores them when configured", async () => {
-    const destroyedUuidItem = await UuidItem.create({id: "e2c3a0b6-8d7e-4f9a-8b1c-3d4e5f6a7b8c", title: "Destroyed"})
-    const keptUuidItem = await UuidItem.create({id: "f3d4b1c7-9e8f-4a0b-9c2d-4e5f6a7b8c9d", title: "Kept"})
+  it("applies JSON payload value types through the record layer", async () => {
+    class CastingTaskResource extends FrontendModelBaseResource {
+      static ModelClass = Task
 
-    class IgnoreDeleteResource extends SyncUuidItemResource {
-      /** @returns {"destroy" | "ignore"} - Delete behavior. */
-      syncDeleteBehavior() {
-        return "ignore"
-      }
+      /** @type {string[]} */
+      static writableAttributes = ["createdAt", "isDone", "name", "projectId"]
     }
 
-    const destroyService = buildService({resourceTypeOverrides: {UuidItem: SyncUuidItemResource}})
-    const destroyResult = await destroyService.replay({
+    const project = await Project.create({name: "Routed casting project"})
+    const task = await Task.create({name: "Casting task", projectId: project.id()})
+    const service = buildService({resourceTypeOverrides: {Task: CastingTaskResource}})
+    const result = await service.replay({
+      syncs: [buildSync({
+        data: {createdAt: "2026-07-01T09:30:00.000Z", isDone: true},
+        id: "89aaf0e2-1111-4222-8333-444455556666",
+        resourceId: String(task.id()),
+        resourceType: "Task"
+      })]
+    })
+
+    expect(result).toEqual({syncs: [{id: "89aaf0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
+
+    const persistedTask = await Task.findByOrFail({id: task.id()})
+
+    expect(persistedTask.isDone()).toEqual(true)
+    expect(persistedTask.createdAt()?.toISOString()).toEqual("2026-07-01T09:30:00.000Z")
+  })
+
+  it("destroys records on delete mutations", async () => {
+    const destroyedUuidItem = await UuidItem.create({id: "e2c3a0b6-8d7e-4f9a-8b1c-3d4e5f6a7b8c", title: "Destroyed"})
+    const service = buildService({resourceTypeOverrides: {UuidItem: SyncUuidItemResource}})
+    const result = await service.replay({
       syncs: [buildSync({data: {}, id: "89fff0e2-1111-4222-8333-444455556666", resourceId: String(destroyedUuidItem.id()), syncType: "delete"})]
     })
 
-    expect(destroyResult).toEqual({syncs: [{id: "89fff0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
+    expect(result).toEqual({syncs: [{id: "89fff0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
     expect(await UuidItem.findBy({id: destroyedUuidItem.id()})).toEqual(null)
-
-    const ignoreService = buildService({resourceTypeOverrides: {UuidItem: IgnoreDeleteResource}})
-    const ignoreResult = await ignoreService.replay({
-      syncs: [buildSync({data: {}, id: "9a00f0e2-1111-4222-8333-444455556666", resourceId: String(keptUuidItem.id()), syncType: "delete"})]
-    })
-
-    expect(ignoreResult).toEqual({syncs: [{id: "9a00f0e2-1111-4222-8333-444455556666", syncState: "successful"}]})
-    expect((await UuidItem.findByOrFail({id: keptUuidItem.id()})).title()).toEqual("Kept")
   })
 
-  it("lets shouldApplySync force-skip fresh mutations", async () => {
-    class ForceSkipResource extends SyncUuidItemResource {
-      /** @param {{existingSync: import("../../src/database/record/index.js").default | null, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation}} args - Staleness args. @returns {boolean | null} - Whether to apply. */
-      shouldApplySync({existingSync, mutation}) {
-        void existingSync
-        void mutation
-
-        return false
-      }
+  it("keeps the envelope resource id authoritative over a payload id on create", async () => {
+    class SnapshotUuidItemResource extends SyncUuidItemResource {
+      /** @type {string[]} */
+      static writableAttributes = ["id", "title"]
     }
 
-    const uuidItem = await UuidItem.create({id: "a4e5c2d8-0f9a-4b1c-8d3e-5f6a7b8c9d0e", title: "Untouched"})
-    const service = buildService({resourceTypeOverrides: {UuidItem: ForceSkipResource}})
+    const service = buildService({resourceTypeOverrides: {UuidItem: SnapshotUuidItemResource}})
     const result = await service.replay({
-      syncs: [buildSync({data: {title: "Touched"}, id: "ab11f1e2-1111-4222-8333-444455556666", resourceId: String(uuidItem.id())})]
+      syncs: [buildSync({
+        data: {id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e", title: "Snapshot created"},
+        id: "f0a1b2c3-1111-4222-8333-444455556666",
+        resourceId: "9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"
+      })]
     })
 
-    expect(result).toEqual({syncs: [{id: "ab11f1e2-1111-4222-8333-444455556666", syncState: "successful"}]})
-    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Untouched")
+    expect(result).toEqual({syncs: [{id: "f0a1b2c3-1111-4222-8333-444455556666", syncState: "successful"}]})
+    expect((await UuidItem.findByOrFail({id: "9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"})).title()).toEqual("Snapshot created")
+    expect(await UuidItem.findBy({id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e"})).toEqual(null)
   })
 
-  it("lets shouldApplySync force-apply mutations that are stale by timestamp", async () => {
-    class ForceApplyResource extends SyncUuidItemResource {
-      /** @param {{existingSync: import("../../src/database/record/index.js").default | null, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation}} args - Staleness args. @returns {boolean | null} - Whether to apply. */
-      shouldApplySync({existingSync, mutation}) {
-        void existingSync
-        void mutation
-
-        return true
-      }
+  it("keeps the envelope resource id authoritative over a payload id on update", async () => {
+    class SnapshotUuidItemResource extends SyncUuidItemResource {
+      /** @type {string[]} */
+      static writableAttributes = ["id", "title"]
     }
 
-    const uuidItem = await UuidItem.create({id: "b5f6d3e9-1a0b-4c2d-9e4f-6a7b8c9d0e1f", title: "Stale before"})
-
-    await SyncEntry.create({
-      authenticationTokenId: ACTOR_ID,
-      clientUpdatedAt: new Date("2026-07-03T12:00:00.000Z"),
-      data: `{"title":"Newer"}`,
-      resourceId: String(uuidItem.id()),
-      resourceType: "UuidItem",
-      syncType: "update"
-    })
-
-    const service = buildService({resourceTypeOverrides: {UuidItem: ForceApplyResource}, syncModel: SyncEntry})
+    const targetUuidItem = await UuidItem.create({id: "8c7d6e5f-4a3b-4c2d-9e1f-0a9b8c7d6e5f", title: "Snapshot before"})
+    const service = buildService({resourceTypeOverrides: {UuidItem: SnapshotUuidItemResource}})
     const result = await service.replay({
-      syncs: [buildSync({clientUpdatedAt: "2026-07-03T10:00:00.000Z", data: {title: "Forced"}, id: "bc22f1e2-1111-4222-8333-444455556666", resourceId: String(uuidItem.id())})]
+      syncs: [buildSync({
+        data: {id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", title: "Snapshot after"},
+        id: "e1b2c3d4-1111-4222-8333-444455556666",
+        resourceId: String(targetUuidItem.id())
+      })]
     })
 
-    expect(result).toEqual({syncs: [{id: "bc22f1e2-1111-4222-8333-444455556666", syncState: "successful"}]})
-    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Forced")
+    expect(result).toEqual({syncs: [{id: "e1b2c3d4-1111-4222-8333-444455556666", syncState: "successful"}]})
+
+    const updatedUuidItem = await UuidItem.findByOrFail({id: targetUuidItem.id()})
+
+    expect(updatedUuidItem.title()).toEqual("Snapshot after")
+    expect(await UuidItem.findBy({id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"})).toEqual(null)
   })
 
   it("merges afterSyncApply extras into the apply result for persistence and broadcasts", async () => {
@@ -394,53 +371,6 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect(result).toEqual({syncs: [{id: "de44f1e2-1111-4222-8333-444455556666", syncState: "successful"}]})
     expect(handlerCalls).toEqual([String(uuidItem.id())])
     expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Handler before")
-  })
-
-  it("keeps the envelope resource id authoritative over a payload id on create", async () => {
-    class SnapshotUuidItemResource extends SyncUuidItemResource {
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
-      static writableAttributes = {id: true, title: true}
-    }
-
-    const service = buildService({resourceTypeOverrides: {UuidItem: SnapshotUuidItemResource}})
-    const result = await service.replay({
-      syncs: [buildSync({
-        data: {id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e", title: "Snapshot created"},
-        id: "f0a1b2c3-1111-4222-8333-444455556666",
-        resourceId: "9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"
-      })]
-    })
-
-    expect(result).toEqual({syncs: [{id: "f0a1b2c3-1111-4222-8333-444455556666", syncState: "successful"}]})
-
-    const createdUuidItem = await UuidItem.findByOrFail({id: "9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"})
-
-    expect(createdUuidItem.title()).toEqual("Snapshot created")
-    expect(await UuidItem.findBy({id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e"})).toEqual(null)
-  })
-
-  it("keeps the envelope resource id authoritative over a payload id on update", async () => {
-    class SnapshotUuidItemResource extends SyncUuidItemResource {
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true> | null} */
-      static writableAttributes = {id: true, title: true}
-    }
-
-    const targetUuidItem = await UuidItem.create({id: "8c7d6e5f-4a3b-4c2d-9e1f-0a9b8c7d6e5f", title: "Snapshot before"})
-    const service = buildService({resourceTypeOverrides: {UuidItem: SnapshotUuidItemResource}})
-    const result = await service.replay({
-      syncs: [buildSync({
-        data: {id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e", title: "Snapshot after"},
-        id: "e1b2c3d4-1111-4222-8333-444455556666",
-        resourceId: String(targetUuidItem.id())
-      })]
-    })
-
-    expect(result).toEqual({syncs: [{id: "e1b2c3d4-1111-4222-8333-444455556666", syncState: "successful"}]})
-
-    const updatedUuidItem = await UuidItem.findByOrFail({id: targetUuidItem.id()})
-
-    expect(updatedUuidItem.title()).toEqual("Snapshot after")
-    expect(await UuidItem.findBy({id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"})).toEqual(null)
   })
 
   it("lets applySync fully replace the default routed apply flow", async () => {

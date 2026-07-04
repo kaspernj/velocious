@@ -1,25 +1,18 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import Ability from "../../src/authorization/ability.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
-import Ability from "../../src/authorization/ability.js"
 import UuidItem from "../dummy/src/models/uuid-item.js"
-import VelociousError from "../../src/velocious-error.js"
 
-/** Inline resource declaring a writable-attribute schema for the dummy Task model. */
-class TaskSchemaResource extends FrontendModelBaseResource {
+/** Inline resource declaring a writable-attribute permit list for the dummy Task model. */
+class TaskPermitResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
-  /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
-  static writableAttributes = {
-    description: {type: "string"},
-    isDone: {type: "boolean"},
-    localNote: {type: "ignored"},
-    name: {maxLength: 255, required: true, type: "string"},
-    projectId: {type: "raw"}
-  }
+  /** @type {string[]} */
+  static writableAttributes = ["description", "isDone", "name", "projectId"]
 }
 
 /**
@@ -35,72 +28,23 @@ function buildResource(ResourceClass, params) {
 }
 
 describe("frontend model writable attributes permit bridge", () => {
-  it("normalizes writable attributes through the declared schema on plain frontend-model resources", () => {
-    class SchemaResource extends FrontendModelBaseResource {
-      static ModelClass = /** @type {?} */ ({getAttributeNameToColumnNameMap: () => ({name: "name", scannedAt: "scanned_at"})})
+  it("uses the declared writableAttributes list as the default permit", () => {
+    const resource = buildResource(TaskPermitResource, {})
 
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
-      static writableAttributes = {
-        name: {maxLength: 255, required: true, type: "string"},
-        scannedAt: {type: "date"}
-      }
-    }
-
-    const resource = buildResource(SchemaResource, {})
-    const normalized = resource.normalizeWritableAttributes({name: " Changed ", scanned_at: "2026-07-03T10:00:00.000Z"})
-
-    expect(normalized.name).toEqual("Changed")
-    expect(/** @type {Date} */ (normalized.scanned_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
+    expect(resource.permittedParams()).toEqual(["description", "isDone", "name", "projectId"])
   })
 
-  it("throws client-safe errors for schema validation failures on plain frontend-model resources", () => {
-    class SchemaResource extends FrontendModelBaseResource {
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
-      static writableAttributes = {
-        name: {required: true, type: "string"}
-      }
+  it("keeps the empty permit default without a declared list", () => {
+    class ListlessResource extends FrontendModelBaseResource {
     }
 
-    const resource = buildResource(SchemaResource, {})
-
-    try {
-      resource.normalizeWritableAttributes({name: "   "})
-      throw new Error("Expected normalizeWritableAttributes to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.safeToExpose).toEqual(true)
-      expect(error.code).toEqual("sync-name-required")
-      expect(error.message).toEqual("name can't be blank.")
-    }
-  })
-
-  it("fails loudly when normalizing without a declared schema", () => {
-    class SchemalessResource extends FrontendModelBaseResource {
-    }
-
-    const resource = buildResource(SchemalessResource, {})
-
-    expect(() => resource.normalizeWritableAttributes({name: "x"})).toThrow(/must define static writableAttributes/u)
-  })
-
-  it("derives permittedParams from the declared schema including ignored entries", () => {
-    const resource = buildResource(TaskSchemaResource, {})
-
-    expect(resource.permittedParams()).toEqual(["description", "isDone", "localNote", "name", "projectId"])
-  })
-
-  it("keeps the empty permit default without a declared schema", () => {
-    class SchemalessResource extends FrontendModelBaseResource {
-    }
-
-    const resource = buildResource(SchemalessResource, {})
+    const resource = buildResource(ListlessResource, {})
 
     expect(resource.permittedParams()).toEqual([])
   })
 
-  it("lets an explicit permittedParams override win over schema derivation", () => {
-    class PinnedPermitResource extends TaskSchemaResource {
+  it("lets an explicit permittedParams override win over the declared list", () => {
+    class PinnedPermitResource extends TaskPermitResource {
       /** @returns {string[]} - Permit spec. */
       permittedParams() {
         return ["name", "projectId"]
@@ -112,53 +56,34 @@ describe("frontend model writable attributes permit bridge", () => {
     expect(resource.permittedParams()).toEqual(["name", "projectId"])
   })
 
-  it("fails loudly when a true entry cannot be inferred without a model class", () => {
-    class NoModelInferenceResource extends FrontendModelBaseResource {
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {name: true}
-    }
-
-    const resource = buildResource(NoModelInferenceResource, {})
-
-    expect(() => resource.resolvedWritableAttributes()).toThrow(/Cannot infer writable attribute/u)
-  })
-
-  it("honors a writableAttributes schema declared on the shared resource", () => {
-    class SharedSchemaResource extends FrontendModelBaseResource {
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {
-        createdAt: {column: "created_at", required: false, type: "date"},
-        name: {maxLength: 255, required: true, type: "string"}
-      }
+  it("honors a writableAttributes list declared on the shared resource", () => {
+    class SharedPermitResource extends FrontendModelBaseResource {
+      /** @type {string[]} */
+      static writableAttributes = ["name", "scannedAt"]
     }
 
     class EnvironmentResource extends FrontendModelBaseResource {
       static ModelClass = Task
-      static SharedResource = SharedSchemaResource
+      static SharedResource = SharedPermitResource
     }
 
     const resource = new EnvironmentResource({modelName: "Task", params: {}})
 
-    expect(resource.permittedParams()).toEqual(["createdAt", "name"])
-
-    const normalized = resource.normalizeWritableAttributes({created_at: "2026-07-03T10:00:00.000Z", name: " Shared "})
-
-    expect(normalized.name).toEqual("Shared")
-    expect(/** @type {Date} */ (normalized.created_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
+    expect(resource.permittedParams()).toEqual(["name", "scannedAt"])
   })
 
-  it("lets an environment schema win over the shared resource schema", () => {
-    class SharedSchemaResource extends FrontendModelBaseResource {
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {name: {type: "string"}}
+  it("lets an environment list win over the shared resource list", () => {
+    class SharedPermitResource extends FrontendModelBaseResource {
+      /** @type {string[]} */
+      static writableAttributes = ["name"]
     }
 
     class EnvironmentResource extends FrontendModelBaseResource {
       static ModelClass = Task
-      static SharedResource = SharedSchemaResource
+      static SharedResource = SharedPermitResource
 
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {title: {type: "string"}}
+      /** @type {string[]} */
+      static writableAttributes = ["title"]
     }
 
     const resource = new EnvironmentResource({modelName: "Task", params: {}})
@@ -167,147 +92,20 @@ describe("frontend model writable attributes permit bridge", () => {
   })
 })
 
-describe("frontend model writable attributes column inference", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
-  it("infers type, maxLength and required from the model's column metadata for true entries", () => {
-    class InferredTaskResource extends FrontendModelBaseResource {
-      static ModelClass = Task
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {
-        description: true,
-        isDone: true,
-        name: true,
-        projectId: true
-      }
-    }
-
-    const resource = new InferredTaskResource({})
-    const resolvedSchema = resource.resolvedWritableAttributes()
-
-    if (!resolvedSchema) throw new Error("Expected a resolved schema")
-
-    expect(resolvedSchema.name).toEqual({maxLength: 255, required: false, type: "string"})
-    expect(resolvedSchema.description).toEqual({required: false, type: "string"})
-    expect(resolvedSchema.isDone).toEqual({required: false, type: "boolean"})
-    expect(resolvedSchema.projectId).toEqual({required: true, type: "integer"})
-  })
-
-  it("infers uuid and date types from uuid and datetime columns", () => {
-    class InferredUuidItemResource extends FrontendModelBaseResource {
-      static ModelClass = UuidItem
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {
-        createdAt: true,
-        id: true,
-        title: true
-      }
-    }
-
-    const resource = new InferredUuidItemResource({})
-    const resolvedSchema = resource.resolvedWritableAttributes()
-
-    if (!resolvedSchema) throw new Error("Expected a resolved schema")
-
-    // The primary key is never inferred as required: the framework guarantees
-    // a value on every driver (PG/MSSQL via a database default, sqlite/mysql
-    // via record-level UUID assignment), so driver-divergent column defaults
-    // must not make inference driver-divergent.
-    expect(resolvedSchema.id).toEqual({required: false, type: "uuid"})
-    expect(resolvedSchema.createdAt).toEqual({required: false, type: "date"})
-    expect(resolvedSchema.title).toEqual({maxLength: 255, required: false, type: "string"})
-  })
-
-  it("lets explicit entry fields override inferred ones on partial entries", () => {
-    class PartialEntryTaskResource extends FrontendModelBaseResource {
-      static ModelClass = Task
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {
-        description: {type: "raw"},
-        name: {trim: false},
-        projectId: {required: false}
-      }
-    }
-
-    const resource = new PartialEntryTaskResource({})
-    const resolvedSchema = resource.resolvedWritableAttributes()
-
-    if (!resolvedSchema) throw new Error("Expected a resolved schema")
-
-    expect(resolvedSchema.name).toEqual({maxLength: 255, required: false, trim: false, type: "string"})
-    expect(resolvedSchema.description).toEqual({type: "raw"})
-    expect(resolvedSchema.projectId).toEqual({required: false, type: "integer"})
-  })
-
-  it("normalizes writes through the inferred schema", async () => {
-    class InferredTaskResource extends FrontendModelBaseResource {
-      static ModelClass = Task
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {
-        isDone: true,
-        name: true,
-        projectId: true
-      }
-    }
-
-    const project = await Project.create({name: "Inference project"})
-    const resource = new InferredTaskResource({})
-    const task = await resource.create({isDone: 1, name: "  Inferred  ", projectId: project.id()})
-
-    expect(task.name()).toEqual("Inferred")
-    expect(task.isDone()).toEqual(true)
-
-    try {
-      await resource.create({name: "a".repeat(256), projectId: project.id()})
-      throw new Error("Expected create to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.code).toEqual("sync-name-too-long")
-    }
-  })
-
-  it("fails loudly for true entries without a matching column", () => {
-    class MissingColumnTaskResource extends FrontendModelBaseResource {
-      static ModelClass = Task
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
-      static writableAttributes = {nonexistentColumn: true}
-    }
-
-    const resource = new MissingColumnTaskResource({})
-
-    expect(() => resource.resolvedWritableAttributes()).toThrow(/Cannot infer writable attribute/u)
-  })
-})
-
 describe("frontend model writable attributes permit bridge - resource mutations", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
-  it("normalizes create attributes through the declared schema and drops ignored keys", async () => {
+  it("permits creates and updates through the declared list", async () => {
     const project = await Project.create({name: "Bridge project"})
-    const resource = new TaskSchemaResource({})
+    const resource = new TaskPermitResource({})
     const task = await resource.create({
-      isDone: 1,
-      localNote: "device-only",
-      name: "  Bridge task  ",
+      isDone: true,
+      name: "Bridge task",
       projectId: project.id()
     })
 
     expect(task.name()).toEqual("Bridge task")
     expect(task.isDone()).toEqual(true)
 
-    const persistedTask = await Task.findByOrFail({id: task.id()})
-
-    expect(persistedTask.name()).toEqual("Bridge task")
-  })
-
-  it("normalizes update attributes through the declared schema", async () => {
-    const project = await Project.create({name: "Bridge update project"})
-    const task = await Task.create({name: "Before", projectId: project.id()})
-    const resource = new TaskSchemaResource({})
-
-    await resource.update(task, {description: " Updated description ", name: "  After  "})
+    await resource.update(task, {description: "Updated description", name: "After"})
 
     const persistedTask = await Task.findByOrFail({id: task.id()})
 
@@ -315,68 +113,14 @@ describe("frontend model writable attributes permit bridge - resource mutations"
     expect(persistedTask.description()).toEqual("Updated description")
   })
 
-  it("rejects unknown attributes with a client-safe error before any write", async () => {
+  it("rejects attributes outside the declared list before any write", async () => {
     const project = await Project.create({name: "Bridge unknown project"})
-    const resource = new TaskSchemaResource({})
+    const resource = new TaskPermitResource({})
 
-    try {
-      await resource.create({evil: "y", name: "Nope", projectId: project.id()})
-      throw new Error("Expected create to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.safeToExpose).toEqual(true)
-      expect(error.code).toEqual("sync-unknown-attribute")
-    }
+    await expect(async () => await resource.create({evil: "y", name: "Nope", projectId: project.id()}))
+      .toThrow(/not permitted by permittedParams/u)
 
     expect(await Task.where({name: "Nope"}).toArray()).toHaveLength(0)
-  })
-
-  it("rejects schema validation failures with a client-safe error before any write", async () => {
-    const project = await Project.create({name: "Bridge invalid project"})
-    const resource = new TaskSchemaResource({})
-
-    try {
-      await resource.create({name: "   ", projectId: project.id()})
-      throw new Error("Expected create to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.safeToExpose).toEqual(true)
-      expect(error.code).toEqual("sync-name-required")
-    }
-  })
-
-  it("enforces an explicit permittedParams override over the schema-derived permit", async () => {
-    class PinnedPermitResource extends TaskSchemaResource {
-      /** @returns {string[]} - Permit spec. */
-      permittedParams() {
-        return ["name", "projectId"]
-      }
-    }
-
-    const project = await Project.create({name: "Bridge pinned project"})
-    const resource = new PinnedPermitResource({})
-
-    await expect(async () => await resource.create({description: "Not permitted", name: "Pinned", projectId: project.id()}))
-      .toThrow(/not permitted by permittedParams/u)
-  })
-
-  it("keeps passthrough normalization without a declared schema", async () => {
-    class SchemalessTaskResource extends FrontendModelBaseResource {
-      static ModelClass = Task
-
-      /** @returns {string[]} - Permit spec. */
-      permittedParams() {
-        return ["name", "projectId"]
-      }
-    }
-
-    const project = await Project.create({name: "Bridge passthrough project"})
-    const resource = new SchemalessTaskResource({})
-    const task = await resource.create({name: "  Untrimmed  ", projectId: project.id()})
-
-    expect(task.name()).toEqual("  Untrimmed  ")
   })
 })
 
@@ -393,27 +137,12 @@ const hookMutation = {
 
 describe("frontend model sync hooks", () => {
   it("provides permissive defaults for the sync replay hooks", async () => {
-    const resource = buildResource(TaskSchemaResource, {})
+    const resource = buildResource(TaskPermitResource, {})
 
     expect(await resource.authorizeSyncMutation({context: {}, mutation: hookMutation})).toEqual({allowed: true})
     expect(resource.syncAuthorizationFailureReason({action: "create", mutation: hookMutation})).toEqual(null)
-    expect(resource.syncDeleteBehavior()).toEqual("destroy")
-    expect(resource.syncMissingRecordBehavior()).toEqual("create")
-    expect(await resource.shouldApplySync({existingSync: null, mutation: hookMutation})).toEqual(null)
     expect(await resource.applySync({context: {}, existingSync: null, mutation: hookMutation})).toEqual(null)
     expect(await resource.afterSyncApply({context: {}, created: false, mutation: hookMutation, record: null})).toEqual({})
-  })
-
-  it("returns the resolved writable-attribute schema from syncWritableAttributes", () => {
-    const resource = buildResource(TaskSchemaResource, {})
-
-    expect(resource.syncWritableAttributes()).toEqual(resource.resolvedWritableAttributes())
-    expect(resource.syncWritableAttributes()?.name).toEqual({maxLength: 255, required: true, type: "string"})
-
-    class SchemalessResource extends FrontendModelBaseResource {
-    }
-
-    expect(buildResource(SchemalessResource, {}).syncWritableAttributes()).toEqual(null)
   })
 })
 

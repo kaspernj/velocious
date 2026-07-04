@@ -152,26 +152,17 @@ new AppSyncReplayService({
 
 ## Resource-routed replay
 
-Instead of per-resourceType `applyHandlers`, the service can route mutations through the app's registered frontend-model resource classes. Pass a `configuration` (its `frontendModels` registry resolves `mutation.resourceType`, honoring `static modelName` overrides) and/or `resourceTypeOverrides` (a resource class, or a string alias resolved through the registry). `SyncResourceBase#buildReplayService` plumbs `configuration`, `ability`, `abilityContext` and `locals` in automatically and defaults `replayServiceClass()` to `SyncEnvelopeReplayService`, so a sync resource with registered frontend models needs no replay wiring at all.
+Instead of per-resourceType `applyHandlers`, the service routes mutations through the app's registered frontend-model resource classes. Pass a `configuration` (its `frontendModels` registry resolves `mutation.resourceType`, honoring `static modelName` overrides) and/or `resourceTypeOverrides` (a resource class, or a string alias resolved through the registry). `SyncResourceBase#buildReplayService` plumbs `configuration`, `ability`, `abilityContext` and `locals` in automatically and `replayServiceClass()` defaults to `SyncEnvelopeReplayService`, so a sync resource with registered frontend models needs no replay wiring at all.
+
+Applying a mutation is just applying new data to a model and saving it:
 
 ```js
 class TicketResource extends FrontendModelBaseResource {
   static ModelClass = Ticket
-
-  // Entries can be `true` (fully inferred from column metadata: type,
-  // maxLength, required) or partial objects overriding inferred fields.
-  static writableAttributes = {
-    barcode: true,
-    scannedAt: {invalid: "null", type: "date"},
-    title: true
-  }
+  static writableAttributes = ["barcode", "scannedAt", "title"]
 
   abilities() {
     this.can(["create", "update", "destroy"], {eventId: this.context.currentEventIds})
-  }
-
-  syncAuthorizationFailureReason({action}) {
-    return action == "create" ? "ticket-create-denied" : null
   }
 }
 
@@ -184,19 +175,17 @@ new SyncEnvelopeReplayService({
 })
 ```
 
-The routed default apply flow per mutation:
+The routed apply flow per mutation:
 
-1. `applyHandlers` keep precedence — a matching handler wins over routing (compat).
+1. `applyHandlers` keep precedence — a matching handler wins over routing (deprecated compat path).
 2. Unresolvable resource types fail that single sync with `reason: "unknown-resource-type"`; the batch continues.
-3. `resource.applySync(args)` returning non-null replaces the whole flow (full escape hatch).
+3. `resource.applySync(args)` returning non-null replaces the whole flow (full escape hatch — custom delete semantics, ignore-missing-record flows, and force-apply/skip decisions belong in an `applySync` override).
 4. `resource.authorizeSyncMutation({context, mutation})` returning `{allowed: false, reason}` fails the sync with that reason.
-5. Deletes: `findSyncRecord({forDelete: true, mutation})` (ability-scoped through the resource's normalized `destroy` ability action); missing records no-op; `syncDeleteBehavior() === "ignore"` keeps the record; otherwise it is destroyed.
-6. Upserts: `mutation.data` is normalized through `syncWritableAttributes()` (defaults to the resolved `writableAttributes` schema — declaring neither fails loudly). Found records (via the `update`-scoped `findSyncRecord`) get `assign` + `save`. Missing records follow `syncMissingRecordBehavior()`: `"ignore"` no-ops, the default creates the record with the client-generated primary key (`mutation.resourceId`) and then verifies create-scope membership when an ability is configured — records outside the ability's `create` scope are destroyed again and the sync fails with `syncAuthorizationFailureReason({action: "create", mutation})` (default `"access-denied"`).
+5. Deletes: `findSyncRecord({forDelete: true, mutation})` (ability-scoped through the resource's normalized `destroy` ability action); missing records no-op; found records are destroyed.
+6. Upserts: `mutation.data` is filtered to the `writableAttributes` permit list (accepted keys per attribute: the camelCase attribute name plus the model's actual column name; unknown keys fail the sync with `reason: "sync-unknown-attribute"`), then assigned and saved — the record layer owns value casting (booleans, datetime strings, numbers) and validation. Found records (via the `update`-scoped `findSyncRecord`) get `assign` + `save`. Missing records are created with the client-generated primary key (`mutation.resourceId`) followed by a create-scope membership check when an ability is configured — records outside the ability's `create` scope are destroyed again and the sync fails with `syncAuthorizationFailureReason({action: "create", mutation})` (default `"access-denied"`). A record that already exists outside the resource's lookup scope fails the sync as `"access-denied"` instead of colliding on the primary key. A payload primary key is dropped — the envelope's `resourceId` is the authoritative record identity.
 7. `afterSyncApply({context, created, mutation, record})` extras merge into the apply result, reaching `persistExtraAttributes` and broadcasts.
 
-`shouldApplySync({existingSync, mutation})` on the routed resource can force-apply or force-skip before the timestamp default decides.
-
-Per-sync failure semantics: every client-safe apply failure (`VelociousError` with `safeToExpose`) — schema validation errors, model validation errors (converted with their translated `ValidationError` message and `reason: "validation-error"`), authorization denials, unknown resource types — fails only that sync with `{id, syncState: "failed", reason, message}` and the batch continues. Unexpected errors keep propagating and fail the request.
+Validation is model validation: declare `validates(...)` (presence, length, format, uniqueness) on the model, and save-time `ValidationError`s fail only that sync as `{id, syncState: "failed", reason: "validation-error", message}` with the translated validation message. Every other client-safe apply failure (authorization denials, unknown resource types, unpermitted attributes) works the same way — the batch continues, and unexpected errors keep propagating.
 
 ## Boundary
 
