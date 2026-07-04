@@ -41,18 +41,29 @@
 /** @typedef {boolean | ModelSyncDeclarationConfig} ModelSyncDeclaration */
 
 /**
- * Declarative sync client configuration.
+ * Options for building a sync client. Everything else — resources, transport
+ * POSTers, auth, connectivity, batch size — is derived from the configuration's
+ * registered models (`static sync`) and its `sync.client` block.
+ * @typedef {object} SyncClientOptions
+ * @property {import("../configuration.js").default} [configuration] - Configuration owning the registered models, the `sync.client` block, and the scope-store database. Defaults to the current configuration.
+ * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
+ * @property {import("./sync-scope-store.js").default} [scopeStore] - Scope store override (tests).
+ * @property {?} [syncModel] - Pending-sync model override. Defaults to the registered "Sync" model.
+ */
+
+/**
+ * Internal derived sync client configuration built by the SyncClient
+ * constructor — not an app-facing API.
  * @typedef {object} SyncClientConfig
  * @property {() => string | Promise<string>} authenticationToken - Resolves the auth token sent with sync requests.
  * @property {number} [batchSize] - Max syncs per request.
- * @property {import("../configuration.js").default} [configuration] - Configuration owning the scope-store database. Defaults to the current configuration.
+ * @property {import("../configuration.js").default} configuration - Configuration owning the scope-store database.
  * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
  * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
  * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
  * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ?>>}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
- * @property {Record<string, SyncClientResourceConfig>} resources - Declarative resource policies keyed by resource/model name.
- * @property {import("./sync-scope-store.js").default} [scopeStore] - Scope store override.
+ * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.
  * @property {?} syncModel - Local pending-sync model class.
  */
 

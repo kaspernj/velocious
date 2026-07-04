@@ -1,122 +1,37 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import Configuration from "../../src/configuration.js"
-import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import {buildConfiguration, buildFakeSyncModel, buildMetadataModelClass, buildRecord, fakeQuery, triggerLifecycle} from "./sync-client-fakes.js"
 import SyncClient from "../../src/sync/sync-client.js"
 
-class Ticket {
-  /** @returns {string} Stable model name. */
-  static getModelName() {
-    return "Ticket"
-  }
-}
+const SCAN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
+const TICKET_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 
-class TicketScan {
-  /** @returns {string} Stable model name. */
-  static getModelName() {
-    return "TicketScan"
-  }
-}
+const TICKET_COLUMNS = [
+  {attributeName: "id", name: "id", type: "uuid"},
+  {attributeName: "name", name: "name", type: "varchar"},
+  {attributeName: "createdAt", name: "created_at", type: "datetime"},
+  {attributeName: "updatedAt", name: "updated_at", type: "datetime"}
+]
 
-/** @returns {Configuration} Database-less configuration so the scope store uses memory storage. */
-function buildConfiguration() {
-  return new Configuration({
-    database: {test: {}},
-    directory: "/tmp/velocious-sync-client-spec",
-    environment: "test",
-    environmentHandler: new EnvironmentHandlerNode(),
-    initializeModels: async () => {},
-    locale: "en",
-    locales: ["en"]
-  })
-}
+const SCAN_COLUMNS = [
+  {attributeName: "id", name: "id", type: "uuid"},
+  {attributeName: "accepted", name: "accepted", type: "boolean"},
+  {attributeName: "ticketId", name: "ticket_id", type: "uuid"},
+  {attributeName: "localOnly", name: "local_only", type: "varchar"},
+  {attributeName: "createdAt", name: "created_at", type: "datetime"},
+  {attributeName: "updatedAt", name: "updated_at", type: "datetime"}
+]
 
 /**
- * Builds a fake local pending-sync model compatible with the sync client.
- * @returns {?} Fake sync model with a rows array.
- */
-function buildFakeSyncModel() {
-  /** @type {Array<?>} */
-  const rows = []
-  let nextId = 1
-
-  /**
-   * @param {Record<string, ?>} attributes - Row attributes.
-   * @returns {?} Fake sync row.
-   */
-  const buildRow = (attributes) => {
-    const row = {
-      attributes: {...attributes, id: nextId++},
-      createdAt: () => new Date("2026-07-01T10:00:00.000Z"),
-      data: () => row.attributes.data,
-      id: () => row.attributes.id,
-      resource: () => null,
-      resourceId: () => row.attributes.resourceId,
-      resourceType: () => row.attributes.resourceType,
-      syncType: () => row.attributes.syncType,
-      /** @param {Record<string, ?>} newAttributes - Updated attributes. @returns {Promise<void>} */
-      update: async (newAttributes) => {
-        Object.assign(row.attributes, newAttributes)
-      },
-      updatedAt: () => new Date("2026-07-01T10:00:00.000Z")
-    }
-
-    return row
-  }
-
-  return {
-    /** @param {Record<string, ?>} attributes - Row attributes. @returns {Promise<?>} Created row. */
-    create: async (attributes) => {
-      const row = buildRow(attributes)
-
-      rows.push(row)
-
-      return row
-    },
-    /** @param {Record<string, ?>} conditions - Lookup conditions. @returns {Promise<?>} Existing row. */
-    findBy: async (conditions) => {
-      if ("id" in conditions) return rows.find((row) => row.attributes.id === conditions.id) || null
-
-      return rows.find((row) => row.attributes.resourceId === conditions.resourceId && row.attributes.resourceType === conditions.resourceType) || null
-    },
-    preload: () => ({
-      /** @param {Record<string, ?>} conditions - Where conditions. @returns {?} Chainable query. */
-      where: (conditions) => ({
-        first: async () => rows.find((row) => row.attributes.id === conditions.id) || null,
-        order: () => ({
-          toArray: async () => rows.filter((row) => row.attributes.state === conditions.state)
-        })
-      })
-    }),
-    rows
-  }
-}
-
-/**
- * Builds a fake query for a resource type with plain conditions.
- * @param {string} resourceType - Resource/model name.
- * @param {Record<string, ?>} conditions - Attribute conditions.
- * @returns {?} Fake model query.
- */
-function fakeQuery(resourceType, conditions) {
-  return {
-    getGroups: () => [],
-    getJoins: () => [],
-    getLimit: () => null,
-    getModelClass: () => ({getModelName: () => resourceType}),
-    getOffset: () => null,
-    getOrders: () => [],
-    getWheres: () => [{hash: conditions}]
-  }
-}
-
-/**
- * Builds a sync client harness with recording fakes.
- * @param {Record<string, ?>} [overrides] - Config overrides.
+ * Builds a sync client harness deriving everything from a configuration with
+ * registered fake models and a recording transport.
+ * @param {object} [args] - Harness args.
+ * @param {(args: {scope: Record<string, ?>}) => string | null | Promise<string | null>} [args.legacyCursor] - Legacy cursor seed hook.
+ * @param {Array<?>} [args.modelClasses] - Model classes to register. Defaults to a Ticket (pull-apply) and TicketScan (queueing) pair.
  * @returns {?} Harness with client, fakes, and recorded calls.
  */
-function buildHarness(overrides = {}) {
+function buildHarness({legacyCursor, modelClasses} = {}) {
   /** @type {Array<Record<string, ?>>} */
   const postChangesCalls = []
   /** @type {Array<Record<string, ?>>} */
@@ -131,69 +46,85 @@ function buildHarness(overrides = {}) {
       this.assignedAttributes = attributes
     },
     isChanged: () => true,
-    save: async () => {},
-    saved: false
+    save: async () => {}
   }
   const state = {
     changesResponses: /** @type {Array<Record<string, ?>>} */ ([]),
     online: true,
     replayResponse: /** @type {Record<string, ?> | ((payload: Record<string, ?>) => Record<string, ?>)} */ ({status: "success", syncs: []})
   }
-  const client = new SyncClient({
-    authenticationToken: () => "token-1",
-    configuration: buildConfiguration(),
-    isOnline: () => state.online,
-    onError: (error) => {
-      errors.push(error)
-    },
-    postChanges: async (payload) => {
-      postChangesCalls.push(payload)
+  const transport = {
+    /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+    post: async (path, payload) => {
+      if (path.endsWith("/changes")) {
+        postChangesCalls.push(payload)
 
-      return state.changesResponses.shift() || {nextCursor: null, status: "success", syncs: [], upToCursor: null}
-    },
-    postReplay: async (payload) => {
+        const changesResponse = state.changesResponses.shift() || {nextCursor: null, status: "success", syncs: [], upToCursor: null}
+
+        return {json: () => changesResponse}
+      }
+
       postReplayCalls.push(payload)
 
-      if (typeof state.replayResponse === "function") return state.replayResponse(payload)
+      if (typeof state.replayResponse === "function") {
+        const replayResponse = state.replayResponse(payload)
 
-      return {
+        return {json: () => replayResponse}
+      }
+
+      const replayResponse = {
         ...state.replayResponse,
         syncs: state.replayResponse.syncs.length > 0
           ? state.replayResponse.syncs
-          : payload.syncs.map((sync) => ({id: sync.id, syncState: "successful"}))
+          : payload.syncs.map((/** @type {Record<string, ?>} */ sync) => ({id: sync.id, syncState: "successful"}))
       }
-    },
-    resources: {
-      Ticket: {
-        attributes: ({data}) => ({name: data.name}),
-        findRecord: async () => ticketRecord,
-        modelClass: Ticket
-      },
-      TicketScan: {
-        booleanAttributes: ["accepted"],
-        localOnlyAttributes: ["localOnly"],
-        modelClass: TicketScan,
-        syncType: ({operation}) => operation === "create" ? "scanAttempt" : "update"
-      }
-    },
-    syncModel,
-    ...overrides
-  })
 
-  return {client, errors, postChangesCalls, postReplayCalls, state, syncModel, ticketRecord}
+      return {json: () => replayResponse}
+    }
+  }
+  const resolvedModelClasses = modelClasses || [
+    buildMetadataModelClass({
+      columns: TICKET_COLUMNS,
+      modelName: "Ticket",
+      sync: {
+        attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({name: data.name}),
+        findRecord: async () => ticketRecord
+      }
+    }),
+    buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TicketScan",
+      sync: {
+        localOnlyAttributes: ["localOnly"],
+        syncType: (/** @type {{operation: string}} */ {operation}) => operation === "create" ? "scanAttempt" : "update"
+      }
+    })
+  ]
+  const configuration = buildConfiguration({
+    modelClasses: resolvedModelClasses,
+    sync: {
+      client: {
+        authenticationToken: () => "token-1",
+        isOnline: () => state.online,
+        onError: (/** @type {Error} */ error) => {
+          errors.push(error)
+        },
+        transport
+      }
+    }
+  })
+  const client = new SyncClient({configuration, legacyCursor, syncModel})
+
+  return {client, errors, modelClasses: resolvedModelClasses, postChangesCalls, postReplayCalls, state, syncModel, ticketRecord}
 }
 
 /**
- * Builds a fake scan record for queueing tests.
+ * Builds a fake scan record of a harness TicketScan model class for queueing tests.
+ * @param {?} modelClass - TicketScan model class.
  * @returns {?} Fake TicketScan record.
  */
-function buildScanRecord() {
-  const record = Object.create(TicketScan.prototype)
-
-  record.id = () => "scan-1"
-  record.attributes = () => ({accepted: 1, localOnly: "internal", ticketId: "t-1"})
-
-  return record
+function buildScanRecord(modelClass) {
+  return buildRecord(modelClass, SCAN_ID, {accepted: 1, localOnly: "internal", ticketId: TICKET_ID})
 }
 
 describe("sync client", () => {
@@ -203,7 +134,7 @@ describe("sync client", () => {
     harness.state.changesResponses.push({
       nextCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"},
       status: "success",
-      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: "t-1", resourceType: "Ticket", syncType: "update"}],
+      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
       upToCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"}
     })
 
@@ -222,7 +153,7 @@ describe("sync client", () => {
     harness.state.changesResponses.push({
       nextCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"},
       status: "success",
-      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: "t-1", resourceType: "Ticket", syncType: "update"}],
+      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
       upToCursor: null
     })
 
@@ -286,9 +217,9 @@ describe("sync client", () => {
 
   it("queues local changes declaratively and replays them immediately when online", async () => {
     const harness = buildHarness()
-    const syncRow = await harness.client.queue({resource: buildScanRecord(), syncType: "scanAttempt"})
+    const syncRow = await harness.client.queue({resource: buildScanRecord(harness.modelClasses[1]), syncType: "scanAttempt"})
 
-    expect(syncRow.attributes.data).toEqual({accepted: true, ticketId: "t-1"})
+    expect(syncRow.attributes.data).toEqual({accepted: true, ticketId: TICKET_ID})
     expect(syncRow.attributes.syncType).toEqual("scanAttempt")
 
     await harness.client.waitForScheduledReplay()
@@ -304,7 +235,7 @@ describe("sync client", () => {
 
     harness.state.online = false
 
-    const syncRow = await harness.client.queue({resource: buildScanRecord()})
+    const syncRow = await harness.client.queue({resource: buildScanRecord(harness.modelClasses[1])})
 
     await harness.client.waitForScheduledReplay()
 
@@ -319,7 +250,7 @@ describe("sync client", () => {
       throw new Error("Network down")
     }
 
-    const syncRow = await harness.client.queue({resource: buildScanRecord()})
+    const syncRow = await harness.client.queue({resource: buildScanRecord(harness.modelClasses[1])})
 
     await harness.client.waitForScheduledReplay()
 
@@ -332,10 +263,10 @@ describe("sync client", () => {
 
     harness.state.replayResponse = (payload) => ({
       status: "success",
-      syncs: payload.syncs.map((sync) => ({id: sync.id, syncState: "failed"}))
+      syncs: payload.syncs.map((/** @type {Record<string, ?>} */ sync) => ({id: sync.id, syncState: "failed"}))
     })
 
-    const syncRow = await harness.client.queue({resource: buildScanRecord()})
+    const syncRow = await harness.client.queue({resource: buildScanRecord(harness.modelClasses[1])})
 
     await harness.client.waitForScheduledReplay()
 
@@ -378,15 +309,10 @@ describe("sync client", () => {
       .toThrow(/No sync resource configured for: UnknownModel/u)
   })
 
-  it("fails loudly on invalid configuration", async () => {
-    await expect(() => new SyncClient(/** @type {?} */ ({}))).toThrow(/postChanges/u)
-    await expect(() => new SyncClient(/** @type {?} */ ({
-      authenticationToken: () => "token",
-      postChanges: async () => ({}),
-      postReplay: async () => ({}),
-      resources: {},
-      syncModel: {}
-    }))).toThrow(/resources/u)
+  it("fails loudly when built without a sync.client configuration block", async () => {
+    const configuration = buildConfiguration({modelClasses: [], sync: null})
+
+    await expect(() => new SyncClient({configuration})).toThrow(/sync\.client/u)
   })
 
   it("exposes a current sync client singleton", async () => {
@@ -398,40 +324,38 @@ describe("sync client", () => {
   })
 
   it("automatically queues tracked model mutations and replays them", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {
-          booleanAttributes: ["accepted"],
-          localOnlyAttributes: ["localOnly"],
-          modelClass: TrackedScan,
-          syncType: ({operation}) => operation === "create" ? "scanAttempt" : "update",
-          track: true
-        }
+    const TrackedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TrackedScan",
+      sync: {
+        localOnlyAttributes: ["localOnly"],
+        syncType: (/** @type {{operation: string}} */ {operation}) => operation === "create" ? "scanAttempt" : "update",
+        track: true
       }
     })
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     await harness.client.start()
 
-    const record = buildTrackedRecord(TrackedScan, {accepted: 1, localOnly: "internal", ticketId: "t-1"})
+    const record = buildScanRecord(TrackedScan)
 
     await triggerLifecycle(TrackedScan, "afterCreate", record)
     await harness.client.waitForScheduledReplay()
 
     expect(harness.syncModel.rows.length).toEqual(1)
     expect(harness.syncModel.rows[0].attributes.syncType).toEqual("scanAttempt")
-    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, ticketId: "t-1"})
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, ticketId: TICKET_ID})
     expect(harness.syncModel.rows[0].attributes.state).toEqual("success")
     expect(harness.postReplayCalls.length).toEqual(1)
   })
 
   it("tracks only the configured operations", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {modelClass: TrackedScan, track: {operations: ["update"]}}
-      }
+    const TrackedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TrackedScan",
+      sync: {track: {operations: ["update"]}}
     })
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     await harness.client.start()
 
@@ -439,18 +363,14 @@ describe("sync client", () => {
   })
 
   it("maps tracked destroys to delete sync rows", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {modelClass: TrackedScan, track: true}
-      }
-    })
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     harness.state.online = false
 
     await harness.client.start()
 
-    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+    const record = buildRecord(TrackedScan, SCAN_ID, {ticketId: TICKET_ID})
 
     await triggerLifecycle(TrackedScan, "afterDestroy", record)
 
@@ -458,18 +378,18 @@ describe("sync client", () => {
   })
 
   it("maps the upsert syncType flag to update and delete wire types", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {modelClass: TrackedScan, syncType: "upsert", track: true}
-      }
+    const TrackedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TrackedScan",
+      sync: {syncType: "upsert", track: true}
     })
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     harness.state.online = false
 
     await harness.client.start()
 
-    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+    const record = buildRecord(TrackedScan, SCAN_ID, {ticketId: TICKET_ID})
 
     await triggerLifecycle(TrackedScan, "afterCreate", record)
 
@@ -481,61 +401,59 @@ describe("sync client", () => {
   })
 
   it("rejects syncType strings other than upsert", async () => {
-    await expect(() => buildHarness({
-      resources: {
-        TicketScan: {modelClass: TicketScan, syncType: "update"}
-      }
-    })).toThrow(/upsert/u)
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {syncType: "update"}})
+
+    await expect(() => buildHarness({modelClasses: [TrackedScan]})).toThrow(/upsert/u)
   })
 
   it("uses trackedData to build tracked payloads", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {
-          modelClass: TrackedScan,
-          track: true,
-          trackedData: ({operation, record}) => ({deviceId: "device-1", operation, ticketId: record.attributes().ticketId})
-        }
+    const TrackedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TrackedScan",
+      sync: {
+        track: true,
+        trackedData: (/** @type {{operation: string, record: ?}} */ {operation, record}) => ({deviceId: "device-1", operation, ticketId: record.attributes().ticketId})
       }
     })
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     harness.state.online = false
 
     await harness.client.start()
 
-    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+    const record = buildRecord(TrackedScan, SCAN_ID, {ticketId: TICKET_ID})
 
     await triggerLifecycle(TrackedScan, "afterUpdate", record)
 
-    expect(harness.syncModel.rows[0].attributes.data).toEqual({deviceId: "device-1", operation: "update", ticketId: "t-1"})
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({deviceId: "device-1", operation: "update", ticketId: TICKET_ID})
   })
 
   it("does not queue tracked mutations for records written by pull-apply", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+    /** @type {?} */
+    let record = null
+    const TrackedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TrackedScan",
+      sync: {
+        attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({ticketId: data.ticketId}),
+        findRecord: async () => record,
+        track: true
+      }
+    })
 
+    record = buildRecord(TrackedScan, SCAN_ID, {ticketId: TICKET_ID})
     record.assign = () => {}
     record.isChanged = () => true
     record.save = async () => {
       await triggerLifecycle(TrackedScan, "afterUpdate", record)
     }
 
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {
-          attributes: ({data}) => ({ticketId: data.ticketId}),
-          findRecord: async () => record,
-          modelClass: TrackedScan,
-          track: true
-        }
-      }
-    })
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     harness.state.changesResponses.push({
       nextCursor: {id: "s-1", serverSequence: 1, updatedAt: "2026-07-01T10:00:00.000Z"},
       status: "success",
-      syncs: [{data: {ticketId: "t-2"}, id: "s-1", resourceId: "scan-1", resourceType: "TrackedScan", syncType: "update"}],
+      syncs: [{data: {ticketId: TICKET_ID}, id: "s-1", resourceId: SCAN_ID, resourceType: "TrackedScan", syncType: "update"}],
       upToCursor: null
     })
 
@@ -551,12 +469,8 @@ describe("sync client", () => {
   })
 
   it("unregisters tracking callbacks when stopped", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {modelClass: TrackedScan, track: true}
-      }
-    })
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     await harness.client.start()
 
@@ -570,89 +484,13 @@ describe("sync client", () => {
   })
 
   it("fails loudly on invalid track configuration", async () => {
-    const TrackedScan = buildTrackedModelClass("TrackedScan")
-
-    const harness = buildHarness({
-      resources: {
-        TrackedScan: {modelClass: TrackedScan, track: {operations: ["upsert"]}}
-      }
+    const TrackedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TrackedScan",
+      sync: {track: {operations: ["upsert"]}}
     })
+    const harness = buildHarness({modelClasses: [TrackedScan]})
 
     await expect(async () => await harness.client.start()).toThrow(/track\.operations/u)
   })
 })
-
-/**
- * Builds a fake model class implementing the lifecycle-callback registration contract.
- * @param {string} name - Model class name.
- * @returns {?} Fake trackable model class.
- */
-function buildTrackedModelClass(name) {
-  const klass = class {
-    /** @type {Record<string, Array<Function>>} */
-    static lifecycleCallbacks = {}
-
-    /** @returns {string} Stable model name. */
-    static getModelName() {
-      return name
-    }
-
-    /** @param {Function} callback - Lifecycle callback. @returns {void} */
-    static afterCreate(callback) {
-      (this.lifecycleCallbacks.afterCreate ||= []).push(callback)
-    }
-
-    /** @param {Function} callback - Lifecycle callback. @returns {void} */
-    static afterUpdate(callback) {
-      (this.lifecycleCallbacks.afterUpdate ||= []).push(callback)
-    }
-
-    /** @param {Function} callback - Lifecycle callback. @returns {void} */
-    static afterDestroy(callback) {
-      (this.lifecycleCallbacks.afterDestroy ||= []).push(callback)
-    }
-
-    /** @param {string} callbackName - Callback type. @param {Function} callback - Registered callback. @returns {void} */
-    static unregisterLifecycleCallback(callbackName, callback) {
-      const callbacks = this.lifecycleCallbacks[callbackName]
-
-      if (!callbacks) return
-
-      const index = callbacks.indexOf(callback)
-
-      if (index >= 0) callbacks.splice(index, 1)
-    }
-  }
-
-  Object.defineProperty(klass, "name", {value: name})
-
-  return klass
-}
-
-/**
- * Builds a fake record instance of a tracked model class.
- * @param {?} modelClass - Tracked model class.
- * @param {Record<string, ?>} attributes - Record attributes.
- * @returns {?} Fake record.
- */
-function buildTrackedRecord(modelClass, attributes) {
-  const record = Object.create(modelClass.prototype)
-
-  record.id = () => "scan-1"
-  record.attributes = () => attributes
-
-  return record
-}
-
-/**
- * Invokes the registered lifecycle callbacks like the record layer would.
- * @param {?} modelClass - Tracked model class.
- * @param {string} callbackName - Callback type.
- * @param {?} record - Mutated record.
- * @returns {Promise<void>}
- */
-async function triggerLifecycle(modelClass, callbackName, record) {
-  for (const callback of modelClass.lifecycleCallbacks[callbackName] || []) {
-    await callback(record)
-  }
-}

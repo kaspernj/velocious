@@ -1,7 +1,5 @@
 // @ts-check
 
-import {forcedFunction} from "typanic"
-
 import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
 import restArgsError from "../utils/rest-args-error.js"
@@ -25,45 +23,76 @@ const syncClientsByConfiguration = new WeakMap()
 /**
  * Declarative client-side sync driver.
  *
- * Apps configure resources, transport, auth, and connectivity once; Velocious
- * owns scope persistence, per-scope cursors, pull paging/apply, local queueing,
- * and online-gated replay. Declare sync interest from queries:
+ * Everything is derived from the app's Velocious configuration: models declare
+ * `static sync`, transport/auth/connectivity come from the `sync.client`
+ * configuration block, and Velocious owns scope persistence, per-scope cursors,
+ * pull paging/apply, local queueing, and online-gated replay. Declare sync
+ * interest from queries:
  *
- *     const syncClient = new SyncClient({...})
- *     syncClient.setCurrent()
- *     await syncClient.sync(Event.where({partnerId}))
+ *     await syncClient().start()
+ *     await syncClient().sync(Event.where({partnerId}))
  */
 export default class SyncClient {
   /**
-   * Creates a declarative sync client.
-   * @param {import("./sync-client-types.js").SyncClientConfig} config - Sync client configuration.
+   * Builds the sync client by deriving everything from the app's Velocious
+   * configuration: every registered model declaring `static sync` becomes a
+   * resource with booleanAttributes derived from column types and
+   * localOnlyAttributes derived from the primary key, createdAt/updatedAt, and
+   * sync bookkeeping columns; the pending-sync model is the registered "Sync"
+   * model; transport, auth, connectivity, and error reporting come from the
+   * `sync.client` configuration block, with the framework owning the
+   * `${mountPath}/changes` and `${mountPath}/replay` POSTers.
+   * @param {import("./sync-client-types.js").SyncClientOptions} [options] - Optional overrides.
    */
-  constructor(config) {
-    if (!config || typeof config !== "object") throw new Error("SyncClient requires a configuration object")
+  constructor(options = {}) {
+    const {configuration = Configuration.current(), legacyCursor, scopeStore, syncModel, ...restOptions} = options
 
-    forcedFunction(config.postChanges, "SyncClient config.postChanges")
-    forcedFunction(config.postReplay, "SyncClient config.postReplay")
-    forcedFunction(config.authenticationToken, "SyncClient config.authenticationToken")
+    restArgsError(restOptions)
 
-    if (!config.syncModel) throw new Error("SyncClient requires config.syncModel")
-    if (!config.resources || typeof config.resources !== "object" || Object.keys(config.resources).length === 0) {
-      throw new Error("SyncClient requires at least one entry in config.resources")
+    const clientConfiguration = configuration.getSyncConfiguration().client
+
+    if (!clientConfiguration) {
+      throw new Error("SyncClient requires a sync.client configuration block: new Configuration({sync: {client: {authenticationToken, transport}}})")
     }
 
-    for (const [resourceType, resource] of Object.entries(config.resources)) {
-      if (!resource || typeof resource !== "object" || !resource.modelClass) {
-        throw new Error(`SyncClient resource ${resourceType} must declare a modelClass`)
-      }
+    const modelClasses = configuration.getModelClasses()
+    /** @type {Record<string, import("./sync-client-types.js").SyncClientResourceConfig>} */
+    const resources = {}
 
-      if (resource.syncType !== undefined && typeof resource.syncType !== "function" && resource.syncType !== "upsert") {
-        throw new Error(`SyncClient resource ${resourceType} syncType must be a function or the string "upsert", got: ${String(resource.syncType)}`)
-      }
+    for (const modelClass of Object.values(modelClasses)) {
+      if (!modelClass.sync) continue
+
+      const resourceType = modelClass.getModelName()
+
+      resources[resourceType] = resourceConfigFromSyncDeclaration({declaration: modelClass.sync, modelClass, resourceType})
     }
 
-    this.config = config
+    if (Object.keys(resources).length === 0) {
+      throw new Error("SyncClient found no registered models declaring static sync - declare `static sync = true` (or a sync declaration object) on the models that should sync")
+    }
+
+    const resolvedSyncModel = syncModel || modelClasses.Sync
+
+    if (!resolvedSyncModel) {
+      throw new Error("SyncClient requires a registered \"Sync\" model for pending local sync rows (or pass options.syncModel)")
+    }
+
+    /** @type {import("./sync-client-types.js").SyncClientConfig} */
+    this.config = {
+      authenticationToken: clientConfiguration.authenticationToken,
+      batchSize: clientConfiguration.batchSize,
+      configuration,
+      isOnline: clientConfiguration.isOnline,
+      legacyCursor,
+      onError: clientConfiguration.onError,
+      postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, transport: clientConfiguration.transport}),
+      postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, transport: clientConfiguration.transport}),
+      resources,
+      syncModel: resolvedSyncModel
+    }
     this._clientNumber = ++clientCounter
     /** @type {import("./sync-scope-store.js").default | null} */
-    this._scopeStore = config.scopeStore || null
+    this._scopeStore = scopeStore || null
     /** @type {Promise<void> | null} */
     this._scheduledReplay = null
     /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null} */
@@ -184,64 +213,14 @@ export default class SyncClient {
   }
 
   /**
-   * Builds a sync client from the app's Velocious configuration: every registered
-   * model declaring `static sync` becomes a resource with booleanAttributes derived
-   * from column types and localOnlyAttributes derived from the primary key,
-   * createdAt/updatedAt, and sync bookkeeping columns; the pending-sync model is the
-   * registered "Sync" model; transport, auth, connectivity, and error reporting come
-   * from the `sync.client` configuration block, with the framework owning the
-   * `${mountPath}/changes` and `${mountPath}/replay` POSTers (mountPath defaults to
-   * "/velocious/sync" and must match the server's `sync.api.mountPath`).
+   * Builds a sync client derived from the given configuration. Alias for
+   * `new SyncClient({configuration, ...options})`.
    * @param {Configuration} [configuration] - Configuration owning the registered models and the sync.client block. Defaults to the current configuration.
-   * @param {{legacyCursor?: import("./sync-client-types.js").SyncClientConfig["legacyCursor"], scopeStore?: import("./sync-scope-store.js").default, syncModel?: ?}} [options] - Optional overrides.
+   * @param {Omit<import("./sync-client-types.js").SyncClientOptions, "configuration">} [options] - Optional overrides.
    * @returns {SyncClient} Sync client derived from the configuration.
    */
   static fromConfiguration(configuration = Configuration.current(), options = {}) {
-    const {legacyCursor, scopeStore, syncModel: syncModelOverride, ...restOptions} = options
-
-    restArgsError(restOptions)
-
-    const clientConfiguration = configuration.getSyncConfiguration().client
-
-    if (!clientConfiguration) {
-      throw new Error("SyncClient.fromConfiguration requires a sync.client configuration block: new Configuration({sync: {client: {authenticationToken, transport}}})")
-    }
-
-    const modelClasses = configuration.getModelClasses()
-    /** @type {Record<string, import("./sync-client-types.js").SyncClientResourceConfig>} */
-    const resources = {}
-
-    for (const modelClass of Object.values(modelClasses)) {
-      if (!modelClass.sync) continue
-
-      const resourceType = modelClass.getModelName()
-
-      resources[resourceType] = resourceConfigFromSyncDeclaration({declaration: modelClass.sync, modelClass, resourceType})
-    }
-
-    if (Object.keys(resources).length === 0) {
-      throw new Error("SyncClient.fromConfiguration found no registered models declaring static sync - declare `static sync = true` (or a sync declaration object) on the models that should sync")
-    }
-
-    const syncModel = syncModelOverride || modelClasses.Sync
-
-    if (!syncModel) {
-      throw new Error("SyncClient.fromConfiguration requires a registered \"Sync\" model for pending local sync rows (or pass options.syncModel)")
-    }
-
-    return new SyncClient({
-      authenticationToken: clientConfiguration.authenticationToken,
-      batchSize: clientConfiguration.batchSize,
-      configuration,
-      isOnline: clientConfiguration.isOnline,
-      legacyCursor,
-      onError: clientConfiguration.onError,
-      postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, transport: clientConfiguration.transport}),
-      postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, transport: clientConfiguration.transport}),
-      resources,
-      scopeStore,
-      syncModel
-    })
+    return new SyncClient({...options, configuration})
   }
 
   /**
@@ -437,7 +416,7 @@ export default class SyncClient {
    * @returns {import("./sync-scope-store.js").default} Scope store.
    */
   scopeStore() {
-    this._scopeStore ||= new SyncScopeStore({configuration: this.config.configuration || Configuration.current()})
+    this._scopeStore ||= new SyncScopeStore({configuration: this.config.configuration})
 
     return this._scopeStore
   }
