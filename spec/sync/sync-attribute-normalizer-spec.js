@@ -21,13 +21,13 @@ const errorFactory = (message, details) => new TestSchemaError(message, details)
 
 /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
 const schema = {
-  authenticationTokenId: {type: "raw"},
-  clientUpdatedAt: {required: true, type: "date"},
+  authenticationTokenId: {column: "authentication_token_id", type: "raw"},
+  clientUpdatedAt: {column: "client_updated_at", required: true, type: "date"},
   data: {invalidJsonMessage: "Data must be valid JSON.", invalidMessage: "Data must be an object or JSON string.", type: "json"},
-  eventId: {maxLength: 255, type: "string"},
-  expiresAt: {type: "date"},
-  resourceId: {maxLength: 255, type: "string"},
-  syncType: {maxLength: 255, required: true, type: "string"}
+  eventId: {column: "event_id", maxLength: 255, type: "string"},
+  expiresAt: {column: "expires_at", type: "date"},
+  resourceId: {column: "resource_id", maxLength: 255, type: "string"},
+  syncType: {column: "sync_type", maxLength: 255, required: true, type: "string"}
 }
 
 /**
@@ -57,10 +57,47 @@ function normalizeError(attributes) {
 }
 
 describe("sync attribute normalizer", () => {
-  it("accepts both camelCase and snake_case keys and writes snake_case columns", () => {
+  it("accepts camelCase keys plus the declared column keys and writes the declared columns", () => {
     expect(normalize({resource_id: "row-1"})).toEqual({resource_id: "row-1"})
     expect(normalize({resourceId: "row-2"})).toEqual({resource_id: "row-2"})
-    expect(normalize({resource_id: "snake", resourceId: "camel"})).toEqual({resource_id: "camel"})
+    expect(normalize({resource_id: "column-cased", resourceId: "camel"})).toEqual({resource_id: "camel"})
+  })
+
+  it("accepts non-snake declared columns like legacy MSSQL casing without any snake-case derivation", () => {
+    /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
+    const legacySchema = {email: {column: "EMail", maxLength: 255, type: "string"}}
+
+    expect(normalizeAttributesWithSchema({attributes: {EMail: "a@example.com"}, errorFactory, schema: legacySchema})).toEqual({EMail: "a@example.com"})
+    expect(normalizeAttributesWithSchema({attributes: {email: "b@example.com"}, errorFactory, schema: legacySchema})).toEqual({EMail: "b@example.com"})
+    expect(normalizeAttributesWithSchema({attributes: {EMail: "column-cased", email: "camel"}, errorFactory, schema: legacySchema})).toEqual({EMail: "camel"})
+
+    expect(() => normalizeAttributesWithSchema({attributes: {e_mail: "nope"}, errorFactory, schema: legacySchema})).toThrow(/Unknown attribute: e_mail\./u)
+  })
+
+  it("resolves columns from the given model class attribute map", () => {
+    const modelClass = {getAttributeNameToColumnNameMap: () => ({isDone: "is_done"})}
+
+    expect(normalizeAttributesWithSchema({
+      attributes: {is_done: 1},
+      errorFactory,
+      modelClass,
+      schema: {isDone: {type: "boolean"}}
+    })).toEqual({is_done: true})
+
+    expect(normalizeAttributesWithSchema({
+      attributes: {isDone: false},
+      errorFactory,
+      modelClass,
+      schema: {isDone: {type: "boolean"}}
+    })).toEqual({is_done: false})
+  })
+
+  it("accepts only the camelCase key and emits it unchanged when no column is resolvable", () => {
+    /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
+    const columnlessSchema = {resourceId: {type: "string"}}
+
+    expect(normalizeAttributesWithSchema({attributes: {resourceId: "row-1"}, errorFactory, schema: columnlessSchema})).toEqual({resourceId: "row-1"})
+    expect(() => normalizeAttributesWithSchema({attributes: {resource_id: "row-1"}, errorFactory, schema: columnlessSchema})).toThrow(/Unknown attribute: resource_id\./u)
   })
 
   it("trims strings before bounds checking and coerces non-string values", () => {
@@ -196,7 +233,7 @@ describe("sync attribute normalizer", () => {
       unknownAttributes: "ignore"
     })
 
-    expect(normalized).toEqual({resource_id: "x"})
+    expect(normalized).toEqual({resourceId: "x"})
   })
 
   describe("boolean type", () => {
@@ -416,11 +453,11 @@ describe("sync attribute normalizer", () => {
 
     it("accepts uuid strings in any casing and maps empty optional values to null", () => {
       expect(normalizeAttributesWithSchema({attributes: {ticketId: "0d9ee786-8524-4536-9d3d-8a0b4b3e5a01"}, errorFactory, schema: uuidSchema}))
-        .toEqual({ticket_id: "0d9ee786-8524-4536-9d3d-8a0b4b3e5a01"})
+        .toEqual({ticketId: "0d9ee786-8524-4536-9d3d-8a0b4b3e5a01"})
       expect(normalizeAttributesWithSchema({attributes: {ticketId: "0D9EE786-8524-4536-9D3D-8A0B4B3E5A01"}, errorFactory, schema: uuidSchema}))
-        .toEqual({ticket_id: "0D9EE786-8524-4536-9D3D-8A0B4B3E5A01"})
-      expect(normalizeAttributesWithSchema({attributes: {ticketId: null}, errorFactory, schema: uuidSchema})).toEqual({ticket_id: null})
-      expect(normalizeAttributesWithSchema({attributes: {ticketId: ""}, errorFactory, schema: uuidSchema})).toEqual({ticket_id: null})
+        .toEqual({ticketId: "0D9EE786-8524-4536-9D3D-8A0B4B3E5A01"})
+      expect(normalizeAttributesWithSchema({attributes: {ticketId: null}, errorFactory, schema: uuidSchema})).toEqual({ticketId: null})
+      expect(normalizeAttributesWithSchema({attributes: {ticketId: ""}, errorFactory, schema: uuidSchema})).toEqual({ticketId: null})
     })
 
     it("rejects malformed uuids and empty required uuids with derived messages and codes", () => {
@@ -450,8 +487,8 @@ describe("sync attribute normalizer", () => {
     it("accepts the key without erroring and drops it from the output", () => {
       /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
       const ignoredSchema = {
-        localOnlyFlag: {type: "ignored"},
-        resourceId: {type: "string"}
+        localOnlyFlag: {column: "local_only_flag", type: "ignored"},
+        resourceId: {column: "resource_id", type: "string"}
       }
 
       const normalized = normalizeAttributesWithSchema({
@@ -469,13 +506,13 @@ describe("sync attribute normalizer", () => {
       /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
       const lenientSchema = {scannedAt: {invalid: "null", type: "date"}}
 
-      expect(normalizeAttributesWithSchema({attributes: {scannedAt: "not-a-date"}, errorFactory, schema: lenientSchema})).toEqual({scanned_at: null})
-      expect(normalizeAttributesWithSchema({attributes: {scannedAt: ""}, errorFactory, schema: lenientSchema})).toEqual({scanned_at: null})
+      expect(normalizeAttributesWithSchema({attributes: {scannedAt: "not-a-date"}, errorFactory, schema: lenientSchema})).toEqual({scannedAt: null})
+      expect(normalizeAttributesWithSchema({attributes: {scannedAt: ""}, errorFactory, schema: lenientSchema})).toEqual({scannedAt: null})
       expect(/** @type {Date} */ (normalizeAttributesWithSchema({
         attributes: {scannedAt: "2026-07-03T10:00:00.000Z"},
         errorFactory,
         schema: lenientSchema
-      }).scanned_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
+      }).scannedAt).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
     })
 
     it("still rejects blank required dates via required when invalid is null", () => {
@@ -560,8 +597,8 @@ describe("sync attribute normalizer", () => {
     it("emits camelCase attribute keys when keyCase is attribute", () => {
       /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
       const keyCaseSchema = {
-        resourceId: {maxLength: 255, type: "string"},
-        scannedAt: {type: "date"}
+        resourceId: {column: "resource_id", maxLength: 255, type: "string"},
+        scannedAt: {column: "scanned_at", type: "date"}
       }
 
       const normalized = normalizeAttributesWithSchema({
@@ -576,7 +613,7 @@ describe("sync attribute normalizer", () => {
       expect(Object.keys(normalized).sort()).toEqual(["resourceId", "scannedAt"])
     })
 
-    it("keeps emitting snake_case column keys by default", () => {
+    it("keeps emitting the declared column keys by default", () => {
       expect(normalize({resourceId: "row-1"})).toEqual({resource_id: "row-1"})
     })
   })

@@ -1,6 +1,6 @@
 // @ts-check
 
-import {optionalBoolean, optionalFloat, optionalInteger, snakeCaseKey} from "typanic"
+import {optionalBoolean, optionalFloat, optionalInteger} from "typanic"
 
 import validationMessage from "../database/record/validation-messages.js"
 
@@ -80,8 +80,8 @@ export function schemaTypeFromColumnType(columnType) {
  * Declarative validation schema for one writable sync attribute.
  *
  * Keys are camelCase attribute names; each attribute also accepts its
- * snake_case column key on input (the camelCase key wins when both are given)
- * and is written under the snake_case column key on output. Error messages
+ * actual column key on input (the camelCase key wins when both are given)
+ * and is written under the actual column key on output. Error messages
  * default to `<label> <predicate>.` phrasings with `sync-<label>-...` codes,
  * where the label defaults to the camelCase attribute name and the predicate
  * comes from the framework validation-message layer (translatable through the
@@ -96,7 +96,7 @@ export function schemaTypeFromColumnType(columnType) {
  * @property {boolean} [trim] - Whether string values are trimmed before validation. Defaults to true.
  * @property {"error" | "null"} [invalid] - Invalid-date handling: "error" rejects, "null" maps invalid values to null. Defaults to "error".
  * @property {string} [label] - Label used in derived messages and codes.
- * @property {string} [column] - Output column key. Defaults to the snake_cased attribute name.
+ * @property {string} [column] - Actual column name. Defaults to the model's attribute-to-column mapping when a modelClass is given; otherwise the attribute key is used as-is.
  * @property {string} [requiredMessage] - Pinned message for required rejections (legacy escape hatch over translated defaults).
  * @property {string} [tooLongMessage] - Pinned message for too-long rejections (legacy escape hatch over translated defaults).
  * @property {string} [tooSmallMessage] - Pinned message for below-min integer rejections (legacy escape hatch over translated defaults).
@@ -125,15 +125,16 @@ export function schemaTypeFromColumnType(columnType) {
  * out). Validation failures throw through the given error factory so apps
  * control the raised error class.
  * @param {object} args - Options.
- * @param {Record<string, ?>} args.attributes - Raw incoming attributes (camelCase and/or snake_case keys).
+ * @param {Record<string, ?>} args.attributes - Raw incoming attributes (camelCase attribute keys, plus the actual column names when resolvable).
  * @param {SyncAttributeErrorFactory} args.errorFactory - Maps validation failures to thrown errors.
- * @param {"attribute" | "column"} [args.keyCase] - Output key casing: "column" emits snake_case column keys, "attribute" emits camelCase attribute keys. Defaults to "column".
+ * @param {"attribute" | "column"} [args.keyCase] - Output key casing: "column" emits the model's actual column names, "attribute" emits camelCase attribute keys. Defaults to "column".
+ * @param {{getAttributeNameToColumnNameMap: () => Record<string, string>} | null} [args.modelClass] - Model class whose attribute-to-column map resolves the actual column names; without it (and without explicit entry columns) only camelCase keys are accepted and emitted.
  * @param {Record<string, SyncAttributeSchemaEntry>} args.schema - Attribute schema keyed by camelCase attribute name.
  * @param {import("../database/record/validation-messages.js").ValidationMessageTranslator | null} [args.translator] - Translator used for derived default messages (usually `configuration.getTranslator()`).
  * @param {"error" | "ignore"} [args.unknownAttributes] - Unknown input-key handling. Defaults to "error".
  * @returns {Record<string, ?>} Normalized values keyed per the requested key casing.
  */
-export default function normalizeAttributesWithSchema({attributes, errorFactory, keyCase = "column", schema, translator = null, unknownAttributes = "error"}) {
+export default function normalizeAttributesWithSchema({attributes, errorFactory, keyCase = "column", modelClass = null, schema, translator = null, unknownAttributes = "error"}) {
   if (!attributes || typeof attributes != "object") throw new Error(`normalizeAttributesWithSchema requires an attributes object, got: ${String(attributes)}`)
   if (typeof errorFactory != "function") throw new Error("normalizeAttributesWithSchema requires an errorFactory function")
   if (!schema || typeof schema != "object") throw new Error(`normalizeAttributesWithSchema requires a schema object, got: ${String(schema)}`)
@@ -151,9 +152,11 @@ export default function normalizeAttributesWithSchema({attributes, errorFactory,
   const knownInputKeys = new Set()
 
   for (const [attributeName, entry] of Object.entries(schema)) {
-    const column = entry.column ?? snakeCaseKey(attributeName)
-    const outputKey = keyCase == "attribute" ? attributeName : column
-    const inputKeys = column == attributeName ? [attributeName] : [column, attributeName]
+    // The actual column name comes from an explicit declaration or the model's
+    // attribute-to-column map - never from a static snake_case derivation.
+    const column = entry.column ?? modelClass?.getAttributeNameToColumnNameMap()[attributeName] ?? null
+    const outputKey = keyCase == "attribute" || !column ? attributeName : column
+    const inputKeys = column && column != attributeName ? [column, attributeName] : [attributeName]
 
     for (const inputKey of inputKeys) {
       knownInputKeys.add(inputKey)

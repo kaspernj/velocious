@@ -37,6 +37,8 @@ function buildResource(ResourceClass, params) {
 describe("frontend model writable attributes permit bridge", () => {
   it("normalizes writable attributes through the declared schema on plain frontend-model resources", () => {
     class SchemaResource extends FrontendModelBaseResource {
+      static ModelClass = /** @type {?} */ ({getAttributeNameToColumnNameMap: () => ({name: "name", scannedAt: "scanned_at"})})
+
       /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
       static writableAttributes = {
         name: {maxLength: 255, required: true, type: "string"},
@@ -45,7 +47,7 @@ describe("frontend model writable attributes permit bridge", () => {
     }
 
     const resource = buildResource(SchemaResource, {})
-    const normalized = resource.normalizeWritableAttributes({name: " Changed ", scannedAt: "2026-07-03T10:00:00.000Z"})
+    const normalized = resource.normalizeWritableAttributes({name: " Changed ", scanned_at: "2026-07-03T10:00:00.000Z"})
 
     expect(normalized.name).toEqual("Changed")
     expect(/** @type {Date} */ (normalized.scanned_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
@@ -125,8 +127,8 @@ describe("frontend model writable attributes permit bridge", () => {
     class SharedSchemaResource extends FrontendModelBaseResource {
       /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry | true>} */
       static writableAttributes = {
-        name: {maxLength: 255, required: true, type: "string"},
-        scannedAt: {required: false, type: "date"}
+        createdAt: {column: "created_at", required: false, type: "date"},
+        name: {maxLength: 255, required: true, type: "string"}
       }
     }
 
@@ -137,12 +139,12 @@ describe("frontend model writable attributes permit bridge", () => {
 
     const resource = new EnvironmentResource({modelName: "Task", params: {}})
 
-    expect(resource.permittedParams()).toEqual(["name", "scannedAt"])
+    expect(resource.permittedParams()).toEqual(["createdAt", "name"])
 
-    const normalized = resource.normalizeWritableAttributes({name: " Shared ", scannedAt: "2026-07-03T10:00:00.000Z"})
+    const normalized = resource.normalizeWritableAttributes({created_at: "2026-07-03T10:00:00.000Z", name: " Shared "})
 
     expect(normalized.name).toEqual("Shared")
-    expect(/** @type {Date} */ (normalized.scanned_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
+    expect(/** @type {Date} */ (normalized.created_at).toISOString()).toEqual("2026-07-03T10:00:00.000Z")
   })
 
   it("lets an environment schema win over the shared resource schema", () => {

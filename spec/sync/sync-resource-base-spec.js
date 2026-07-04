@@ -8,7 +8,12 @@ import {frontendModelResourceConfigurationFromDefinition} from "../../src/fronte
 import SyncEntry from "../dummy/src/models/sync-entry.js"
 import VelociousError from "../../src/velocious-error.js"
 
-class TestSyncModel {}
+class TestSyncModel {
+  /** @returns {Record<string, string>} Attribute-to-column map like a real model class. */
+  static getAttributeNameToColumnNameMap() {
+    return {clientUpdatedAt: "client_updated_at", data: "data", resourceId: "resource_id", syncType: "sync_type"}
+  }
+}
 
 /**
  * Builds a sync resource instance without the frontend-model pipeline.

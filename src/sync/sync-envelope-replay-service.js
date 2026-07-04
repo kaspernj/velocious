@@ -539,6 +539,7 @@ export default class SyncEnvelopeReplayService {
     const normalizedAttributes = normalizeAttributesWithSchema({
       attributes: mutation.data,
       errorFactory: (message, details) => resource.writableAttributeError(message, details),
+      modelClass: resource.modelClass(),
       schema,
       translator: resource.writableAttributeTranslator()
     })

@@ -547,10 +547,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Normalizes incoming writable attributes through the declared
-   * {@link FrontendModelBaseResource.writableAttributes} schema: camelCase and
-   * snake_case input keys are accepted, values are validated per type and the
-   * normalized values are written under snake_case column keys. Validation
-   * failures throw client-safe errors built by
+   * {@link FrontendModelBaseResource.writableAttributes} schema: camelCase
+   * attribute keys are accepted primarily, plus the model's actual column
+   * names; values are validated per type and written under the requested key
+   * casing (actual column names for "column"). Validation failures throw
+   * client-safe errors built by
    * {@link FrontendModelBaseResource#writableAttributeError}.
    * @param {Record<string, ?>} attributes - Raw incoming attributes.
    * @param {{keyCase?: "attribute" | "column", unknownAttributes?: "error" | "ignore"}} [options] - Output key casing (defaults to "column") and unknown input-key handling (defaults to "error").
@@ -561,10 +562,16 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
 
+    // Lenient model resolution: column names come from the model's attribute
+    // map when one is known, but a schema with explicit columns (or camelCase
+    // only) must keep working without a bound model instance.
+    const modelClass = this.modelClassValue ?? /** @type {typeof FrontendModelBaseResource} */ (this.constructor).ModelClass ?? null
+
     return normalizeAttributesWithSchema({
       attributes,
       errorFactory: (message, details) => this.writableAttributeError(message, details),
       keyCase: options.keyCase,
+      modelClass,
       schema,
       translator: this.writableAttributeTranslator(),
       unknownAttributes: options.unknownAttributes
