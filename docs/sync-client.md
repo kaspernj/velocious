@@ -1,8 +1,65 @@
 # Declarative sync client
 
-`SyncClient` (`src/sync/sync-client.js`) is the declarative client-side sync driver. Apps configure resources, transport, auth, and connectivity once; Velocious owns scope persistence, per-scope cursors, pull paging and apply, local queueing, and online-gated replay.
+`SyncClient` (`src/sync/sync-client.js`) is the declarative client-side sync driver. Apps declare sync on their models and configure transport, auth, and connectivity once; Velocious derives the resource map and owns scope persistence, per-scope cursors, pull paging and apply, local queueing, and online-gated replay.
 
-## Configuration
+## Deriving the client from configuration (recommended)
+
+Models opt in with `static sync`; `SyncClient.fromConfiguration(...)` (or the lazy `syncClient()` accessor) derives everything else from the app's Velocious configuration:
+
+```js
+class ScannerDevice extends ApplicationRecord {
+  static sync = {syncType: "upsert", track: ["create", "update"]}
+}
+
+class Ticket extends ApplicationRecord {
+  static sync = {findRecord: findTicketByIdOrPytId} // genuine domain logic stays with the model
+}
+
+class TicketScan extends ApplicationRecord {
+  static sync = true // queueable, all defaults
+}
+```
+
+```js
+// configuration.js
+new Configuration({
+  // ...
+  sync: {
+    client: {
+      authenticationToken: () => getUser().getAuthenticationToken(),
+      isOnline: async () => (await Network.getNetworkStateAsync()).isConnected !== false,
+      onError: (error) => reportSyncError(error),
+      transport: websocketClientAdapter // the frontend-model transport: post(path, body) => Promise<{json: () => object}>
+    }
+  }
+})
+```
+
+```js
+import {syncClient} from "velocious/build/src/sync/sync-client.js"
+
+await syncClient().start()
+```
+
+`fromConfiguration` derives per resource:
+
+- **resources**: every registered model (`configuration.getModelClasses()`) declaring `static sync`; the resource key is the model name.
+- **booleanAttributes**: attributes whose columns have boolean types.
+- **localOnlyAttributes**: the primary key, `createdAt`/`updatedAt`, and sync bookkeeping columns (`lastSyncChangeAt`), merged with any `localOnlyAttributes` declared on the model.
+- **tracked payloads**: the default queued data is the record's attributes minus local-only attributes, with booleans coerced and Date values serialized to ISO strings — no per-model payload builders.
+- **syncType**: the `"upsert"` flag queues creates and updates as `"update"` rows (the server upserts by resource id) and destroys as `"delete"`; a function stays available for per-operation mapping.
+- **syncModel**: the registered `Sync` model (override with `options.syncModel`).
+- **transport/auth**: the framework owns the `/velocious/sync/changes` and `/velocious/sync/replay` POSTers over `sync.client.transport`; `authenticationToken`, `isOnline`, `onError`, and `batchSize` come from the same block.
+
+Missing column metadata, a missing `Sync` model, a missing `sync.client` block, unknown declaration keys, and invalid transports all fail loudly with actionable errors.
+
+Before this derivation existed, apps hand-wrote the whole resource map (~160 lines in the scanner app: modelClass wiring, boolean/local-only lists, ISO-date payload builders, syncType mappers, POSTers, auth plumbing). That entire footprint collapses to the `static sync` declarations plus the `sync.client` block above.
+
+`syncClient(configuration = Configuration.current())` memoizes one client per configuration and registers it as the current sync client on first construction.
+
+## Low-level configuration
+
+The explicit resource map stays available as the low-level API when full control is needed:
 
 ```js
 import SyncClient from "velocious/build/src/sync/sync-client.js"
