@@ -371,12 +371,13 @@
 
 /**
  * Client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
- * The framework owns the `/velocious/sync/changes` and `/velocious/sync/replay`
+ * The framework owns the `${mountPath}/changes` and `${mountPath}/replay`
  * POSTers over the given transport.
  * @typedef {object} VelociousSyncClientConfiguration
  * @property {() => string | Promise<string>} authenticationToken - Resolves the auth token sent with sync requests.
  * @property {number} [batchSize] - Max syncs per request.
  * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
+ * @property {string} [mountPath] - Mount path the server serves the sync endpoints under (match the server's `sync.api.mountPath`). Defaults to "/velocious/sync"; normalization strips trailing slashes and always fills in the default.
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
  * @property {VelociousSyncClientTransport} transport - Transport posting to the framework sync endpoints (e.g. the frontend-model websocket client).
  */

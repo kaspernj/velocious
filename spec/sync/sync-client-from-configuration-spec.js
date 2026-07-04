@@ -18,7 +18,7 @@ function buildTransport() {
     post: async (path, payload) => {
       transport.posts.push({path, payload})
 
-      if (path === "/velocious/sync/changes") return {json: () => transport.changesResponse}
+      if (path.endsWith("/changes")) return {json: () => transport.changesResponse}
 
       return {
         json: () => ({
@@ -430,6 +430,24 @@ describe("sync client from configuration", () => {
     expect(errors[0].message).toMatch(/json\(\)/u)
   })
 
+  it("posts to the configured sync.client mountPath with trailing slashes normalized", async () => {
+    const TicketScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TicketScan", sync: true})
+    const transport = buildTransport()
+    const syncModel = buildFakeSyncModel()
+    const configuration = buildConfiguration({
+      modelClasses: [TicketScan],
+      sync: {client: {authenticationToken: () => "token-1", mountPath: "/api/sync/", transport}}
+    })
+    const client = SyncClient.fromConfiguration(configuration, {syncModel})
+    const record = buildRecord(TicketScan, "0f8fad5b-d9cb-469f-a165-70867728950e", {id: "0f8fad5b-d9cb-469f-a165-70867728950e", ticketNr: "T-1"})
+
+    await client.queue({resource: record})
+    await client.waitForScheduledReplay()
+    await client.sync(fakeQuery("TicketScan", {event_id: "a3bb189e-8bf9-3888-9912-ace4e6543002"}))
+
+    expect(transport.posts.map((post) => post.path)).toEqual(["/api/sync/replay", "/api/sync/changes"])
+  })
+
   it("passes findRecord, findRecordForDelete, afterApply, attributes, and trackedData through to the resource config", async () => {
     /** @returns {Promise<?>} Custom record resolver result. */
     const findRecord = async () => null
@@ -575,6 +593,8 @@ describe("sync client from configuration", () => {
       .toThrow(/sync\.client\.batchSize/u)
     await expect(() => buildConfiguration({modelClasses: [], sync: {client: {authenticationToken: () => "token-1", token: "nope", transport: buildTransport()}}}))
       .toThrow(/unknown keys: token/u)
+    await expect(() => buildConfiguration({modelClasses: [], sync: {client: {authenticationToken: () => "token-1", mountPath: "api/sync", transport: buildTransport()}}}))
+      .toThrow(/sync\.client\.mountPath/u)
   })
 })
 

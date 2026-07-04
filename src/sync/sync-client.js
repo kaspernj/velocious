@@ -192,7 +192,8 @@ export default class SyncClient {
    * createdAt/updatedAt, and sync bookkeeping columns; the pending-sync model is the
    * registered "Sync" model; transport, auth, connectivity, and error reporting come
    * from the `sync.client` configuration block, with the framework owning the
-   * `/velocious/sync/changes` and `/velocious/sync/replay` POSTers.
+   * `${mountPath}/changes` and `${mountPath}/replay` POSTers (mountPath defaults to
+   * "/velocious/sync" and must match the server's `sync.api.mountPath`).
    * @param {Configuration} [configuration] - Configuration owning the registered models and the sync.client block. Defaults to the current configuration.
    * @param {{legacyCursor?: import("./sync-client-types.js").SyncClientConfig["legacyCursor"], scopeStore?: import("./sync-scope-store.js").default, syncModel?: ?}} [options] - Optional overrides.
    * @returns {SyncClient} Sync client derived from the configuration.
@@ -237,8 +238,8 @@ export default class SyncClient {
       isOnline: clientConfiguration.isOnline,
       legacyCursor,
       onError: clientConfiguration.onError,
-      postChanges: transportPoster({path: "/velocious/sync/changes", transport: clientConfiguration.transport}),
-      postReplay: transportPoster({path: "/velocious/sync/replay", transport: clientConfiguration.transport}),
+      postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, transport: clientConfiguration.transport}),
+      postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, transport: clientConfiguration.transport}),
       resources,
       scopeStore,
       syncModel

@@ -49,7 +49,7 @@ await syncClient().start()
 - **tracked payloads**: the default queued data is the record's attributes minus local-only attributes, with booleans coerced and Date values serialized to ISO strings — no per-model payload builders.
 - **syncType**: the `"upsert"` flag queues creates and updates as `"update"` rows (the server upserts by resource id) and destroys as `"delete"`; a function stays available for per-operation mapping.
 - **syncModel**: the registered `Sync` model (override with `options.syncModel`).
-- **transport/auth**: the framework owns the `/velocious/sync/changes` and `/velocious/sync/replay` POSTers over `sync.client.transport`; `authenticationToken`, `isOnline`, `onError`, and `batchSize` come from the same block.
+- **transport/auth**: the framework owns the `${mountPath}/changes` and `${mountPath}/replay` POSTers over `sync.client.transport`; `authenticationToken`, `isOnline`, `onError`, and `batchSize` come from the same block. `sync.client.mountPath` defaults to `"/velocious/sync"` and must match the server's `sync.api.mountPath` when the server mounts the sync endpoints elsewhere (trailing slashes are stripped, like the server's mount normalization).
 
 Missing column metadata, a missing `Sync` model, a missing `sync.client` block, unknown declaration keys, and invalid transports all fail loudly with actionable errors.
 
