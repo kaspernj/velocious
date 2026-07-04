@@ -485,7 +485,10 @@ export default class SyncApiClient {
   }
 
   /**
-   * Builds backend-safe queued sync data without mutating caller data.
+   * Builds backend-safe queued sync data without mutating caller data. The default
+   * (no explicit `data`) is the resource's attributes minus local-only attributes,
+   * with booleans coerced and Date values serialized to ISO strings, so apps don't
+   * need per-model tracked-payload builders.
    * @param {{resource: ?, data?: Record<string, unknown>, localOnlyAttributes?: string[], booleanAttributes?: string[], normalizeData?: (data: Record<string, unknown>) => Record<string, unknown>}} args - Data args.
    * @returns {Record<string, unknown>} Queued data.
    */
@@ -497,6 +500,9 @@ export default class SyncApiClient {
     for (const attributeName of args.localOnlyAttributes || []) delete syncData[attributeName]
     for (const attributeName of args.booleanAttributes || []) {
       if (Object.hasOwn(syncData, attributeName)) syncData[attributeName] = this.optionalBooleanSyncValue(syncData[attributeName], attributeName)
+    }
+    for (const [attributeName, value] of Object.entries(syncData)) {
+      if (value instanceof Date) syncData[attributeName] = value.toISOString()
     }
 
     return syncData
