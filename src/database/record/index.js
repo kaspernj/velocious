@@ -240,6 +240,15 @@ class VelociousDatabaseRecord {
   static modelName
 
   /**
+   * Opt-in client sync declaration consumed by `SyncClient.fromConfiguration(...)`.
+   * Declare `static sync = true` (all defaults) or a declaration object like
+   * `static sync = {track: ["create", "update"], syncType: "upsert"}` to have the
+   * sync client auto-discover this model and derive its resource config from
+   * column metadata.
+   * @type {import("../../sync/sync-client-types.js").ModelSyncDeclaration | undefined} */
+  static sync
+
+  /**
    * Narrows the runtime value to the documented type.
    * @type {Promise<void> | null | undefined} */
   static _initializeRecordPromise

@@ -457,6 +457,37 @@ describe("sync client", () => {
     expect(harness.syncModel.rows[0].attributes.syncType).toEqual("delete")
   })
 
+  it("maps the upsert syncType flag to update and delete wire types", async () => {
+    const TrackedScan = buildTrackedModelClass("TrackedScan")
+    const harness = buildHarness({
+      resources: {
+        TrackedScan: {modelClass: TrackedScan, syncType: "upsert", track: true}
+      }
+    })
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildTrackedRecord(TrackedScan, {ticketId: "t-1"})
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("update")
+
+    await triggerLifecycle(TrackedScan, "afterDestroy", record)
+
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("delete")
+  })
+
+  it("rejects syncType strings other than upsert", async () => {
+    await expect(() => buildHarness({
+      resources: {
+        TicketScan: {modelClass: TicketScan, syncType: "update"}
+      }
+    })).toThrow(/upsert/u)
+  })
+
   it("uses trackedData to build tracked payloads", async () => {
     const TrackedScan = buildTrackedModelClass("TrackedScan")
     const harness = buildHarness({
