@@ -20,6 +20,15 @@ class TicketScan extends ApplicationRecord {
 }
 ```
 
+`static sync = true` is the complete declaration for most models. Every key in the declaration object is optional and only exists for genuine per-model policy the framework cannot derive:
+
+- `track` — whether local writes auto-queue to the backend. Off by default on purpose: models that are also written by pull/import/sign-in flows must not echo those writes back to the server as device changes. Turn it on (`true`, an operations array, or `{operations}`) for models whose local mutations *are* device changes (scan rows, device status).
+- `syncType` — only when the server expects a wire type different from the operation name: the `"upsert"` flag for rows the server upserts by resource id (creates replay as `"update"`), or a function for command-style types (e.g. `scanAttempt`).
+- `findRecord` / `findRecordForDelete` — only when pulled changes match local rows by something other than `id` (e.g. a ticket id-or-pytId lookup). The default resolver is find-or-initialize by id.
+- `attributes` / `afterApply` — only for models that receive pulled changes and need to map or react to them.
+- `localOnlyAttributes` / `booleanAttributes` — only to *extend* the derived sets; the primary key, timestamps, bookkeeping columns, and boolean columns are always derived.
+- `trackedData` — only when a tracked payload must carry more than the record's attributes.
+
 ## The sync.client configuration block
 
 The only app-side sync configuration is the `sync.client` block — the hooks the framework genuinely cannot know (how to reach the server, who is signed in, whether the device is online, where to report failures):
