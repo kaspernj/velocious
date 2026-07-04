@@ -444,10 +444,48 @@ export default class VelociousConfiguration {
     return {
       api: this._normalizeSyncApiConfiguration(api),
       changeFeedRetentionSize: changeFeedRetentionSize || 10000,
+      client: this._normalizeSyncClientConfiguration(sync?.client),
       deviceCertificateBackendPublicKey,
       offlineGrantSigningKeys: offlineGrantSigningKeys.map((key) => normalizeOfflineGrantSigningKey(key)),
       offlineGrantTtlMs: offlineGrantTtlMs || 24 * 60 * 60 * 1000
     }
+  }
+
+  /**
+   * Normalizes client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
+   * @param {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} client - Client-side sync configuration.
+   * @returns {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
+   */
+  _normalizeSyncClientConfiguration(client) {
+    if (client === undefined || client === null) return undefined
+
+    if (typeof client !== "object" || Array.isArray(client)) {
+      throw new Error("sync.client must be an object with transport and authenticationToken")
+    }
+
+    const {authenticationToken, batchSize, isOnline, onError, transport, ...restClient} = client
+    const restClientKeys = Object.keys(restClient)
+
+    if (restClientKeys.length > 0) {
+      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, onError, transport)`)
+    }
+    if (!transport || typeof transport !== "object" || typeof transport.post !== "function") {
+      throw new Error("sync.client.transport must be an object with a post(path, body) method (like the frontend-model websocket client)")
+    }
+    if (typeof authenticationToken !== "function") {
+      throw new Error("sync.client.authenticationToken must be a function resolving the auth token sent with sync requests")
+    }
+    if (isOnline !== undefined && typeof isOnline !== "function") {
+      throw new Error("sync.client.isOnline must be a function resolving connectivity")
+    }
+    if (onError !== undefined && typeof onError !== "function") {
+      throw new Error("sync.client.onError must be a function reporting background sync failures")
+    }
+    if (batchSize !== undefined && (!Number.isInteger(batchSize) || batchSize <= 0)) {
+      throw new Error("sync.client.batchSize must be a positive integer")
+    }
+
+    return {authenticationToken, batchSize, isOnline, onError, transport}
   }
 
   /**
