@@ -3,6 +3,7 @@
 import {forcedFunction} from "typanic"
 
 import Configuration from "../configuration.js"
+import {isBooleanColumnType} from "../database/column-types.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
@@ -14,9 +15,6 @@ let clientCounter = 0
 
 /** @type {{create: "afterCreate", update: "afterUpdate", destroy: "afterDestroy"}} */
 const TRACKED_CALLBACK_NAMES = {create: "afterCreate", destroy: "afterDestroy", update: "afterUpdate"}
-
-/** Column types treated as booleans when deriving booleanAttributes from column metadata. */
-const BOOLEAN_COLUMN_TYPES = new Set(["bool", "boolean"])
 
 /** Attribute names treated as client-local sync bookkeeping when deriving localOnlyAttributes. */
 const LOCAL_BOOKKEEPING_ATTRIBUTE_NAMES = ["createdAt", "updatedAt", "lastSyncChangeAt"]
@@ -577,7 +575,7 @@ function derivedSyncAttributes({modelClass, resourceType}) {
     if (LOCAL_BOOKKEEPING_ATTRIBUTE_NAMES.includes(attributeName) && !localOnlyAttributes.includes(attributeName)) {
       localOnlyAttributes.push(attributeName)
     }
-    if (columnType && BOOLEAN_COLUMN_TYPES.has(columnType.toLowerCase())) {
+    if (columnType && isBooleanColumnType(columnType)) {
       booleanAttributes.push(attributeName)
     }
   }

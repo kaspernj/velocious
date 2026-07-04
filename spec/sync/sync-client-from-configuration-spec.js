@@ -258,6 +258,7 @@ const SCAN_COLUMNS = [
   {attributeName: "id", name: "id", type: "uuid"},
   {attributeName: "accepted", name: "accepted", type: "boolean"},
   {attributeName: "rejected", name: "rejected", type: "boolean"},
+  {attributeName: "flagged", name: "flagged", type: "bit"},
   {attributeName: "ticketNr", name: "ticket_nr", type: "varchar"},
   {attributeName: "scannedAt", name: "scanned_at", type: "datetime"},
   {attributeName: "createdAt", name: "created_at", type: "datetime"},
@@ -283,7 +284,7 @@ describe("sync client from configuration", () => {
     const client = SyncClient.fromConfiguration(configuration, {syncModel})
 
     expect(Object.keys(client.config.resources)).toEqual(["TicketScan"])
-    expect(client.config.resources.TicketScan.booleanAttributes).toEqual(["accepted", "rejected"])
+    expect(client.config.resources.TicketScan.booleanAttributes).toEqual(["accepted", "flagged", "rejected"])
     expect(client.config.resources.TicketScan.localOnlyAttributes).toEqual(["createdAt", "id", "lastSyncChangeAt", "updatedAt"])
     expect(client.config.resources.TicketScan.modelClass).toEqual(TicketScan)
   })
@@ -487,7 +488,7 @@ describe("sync client from configuration", () => {
     const configuration = buildConfiguration({modelClasses: [TicketScan], transport})
     const client = SyncClient.fromConfiguration(configuration, {syncModel})
 
-    expect(client.config.resources.TicketScan.booleanAttributes).toEqual(["accepted", "localFlag", "rejected"])
+    expect(client.config.resources.TicketScan.booleanAttributes).toEqual(["accepted", "flagged", "localFlag", "rejected"])
     expect(client.config.resources.TicketScan.localOnlyAttributes).toEqual(["createdAt", "id", "lastSyncChangeAt", "localState", "updatedAt"])
   })
 
