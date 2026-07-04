@@ -38,4 +38,39 @@ describe("TestRunner - async crash reporting", () => {
     expect(runner.getFailedTests()).toEqual(1)
     expect(runner.getFailedTestDetails()[0].error.message.includes("string reason")).toEqual(true)
   })
+
+  it("turns an uncaught exception into a visible failure instead of a silent process death", () => {
+    const runner = buildRunner()
+
+    // Simulates run()'s process.on("uncaughtException") handler firing for a
+    // synchronous throw inside a detached callback (e.g. a driver socket or
+    // timer callback) — the remaining silent-death mode after #847 covered
+    // unhandled rejections.
+    runner.recordAsyncCrash("uncaughtException", new Error("sync boom in callback"))
+
+    expect(runner.getFailedTests()).toEqual(1)
+
+    const details = runner.getFailedTestDetails()
+
+    expect(details[0].error.message).toEqual("sync boom in callback")
+    expect(details[0].fullDescription.includes("uncaughtException")).toEqual(true)
+  })
+
+  it("registers an uncaughtException handler for the duration of the run", async () => {
+    const runner = buildRunner()
+    const listenersBefore = process.listenerCount("uncaughtException")
+
+    /** @type {number | null} */
+    let listenersDuringRun = null
+
+    runner.runTests = async () => {
+      listenersDuringRun = process.listenerCount("uncaughtException")
+    }
+    runner.getConfiguration = () => /** @type {any} */ ({ensureConnections: async (_name, callback) => await callback()})
+
+    await runner.run()
+
+    expect(listenersDuringRun).toEqual(listenersBefore + 1)
+    expect(process.listenerCount("uncaughtException")).toEqual(listenersBefore)
+  })
 })
