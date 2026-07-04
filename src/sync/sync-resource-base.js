@@ -27,6 +27,13 @@ const QUICK_SEARCH_COLUMN = "quickSearch"
  */
 export default class SyncResourceBase extends FrontendModelBaseResource {
   /**
+   * Replay service class handling replay mutations for this resource,
+   * declared instead of overriding {@link SyncResourceBase#replayServiceClass}.
+   * @type {typeof import("./sync-envelope-replay-service.js").default | undefined}
+   */
+  static ReplayServiceClass = undefined
+
+  /**
    * Declarative quick-search text columns. When declared, an index search on
    * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
    * these root-table columns instead of hitting the controller default.
@@ -210,12 +217,18 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   }
 
   /**
-   * Returns the app replay service class handling replay mutations. Defaults
-   * to {@link SyncEnvelopeReplayService}, which resource-routes mutations
-   * through the plumbed configuration registry.
+   * Resolves the replay service class handling replay mutations: the
+   * declarative {@link SyncResourceBase.ReplayServiceClass} static (shared
+   * resources included) when declared, otherwise
+   * {@link SyncEnvelopeReplayService}, which resource-routes mutations through
+   * the plumbed configuration registry. Apps declare the static instead of
+   * overriding this method.
    * @returns {typeof import("./sync-envelope-replay-service.js").default} Replay service class.
    */
   replayServiceClass() {
-    return SyncEnvelopeReplayService
+    const ResourceClass = /** @type {typeof SyncResourceBase} */ (this.constructor)
+    const SharedResource = /** @type {typeof SyncResourceBase | null} */ (ResourceClass.sharedResourceClass() ?? null)
+
+    return ResourceClass.ReplayServiceClass ?? SharedResource?.ReplayServiceClass ?? SyncEnvelopeReplayService
   }
 }

@@ -42,6 +42,7 @@ const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "primaryKey",
   "quickSearchColumns",
   "relationships",
+  "ReplayServiceClass",
   "server",
   "SharedResource",
   "sync",

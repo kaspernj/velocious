@@ -136,11 +136,7 @@ describe("sync resource base", () => {
 
     class TestResource extends SyncResourceBase {
       static ModelClass = TestSyncModel
-
-      /** @returns {typeof SyncEnvelopeReplayService} */
-      replayServiceClass() {
-        return TestReplayService
-      }
+      static ReplayServiceClass = TestReplayService
     }
 
     const params = {authenticationToken: "token-1", syncs: [{id: 1}]}
