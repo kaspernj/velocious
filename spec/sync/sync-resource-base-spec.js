@@ -8,7 +8,12 @@ import {frontendModelResourceConfigurationFromDefinition} from "../../src/fronte
 import SyncEntry from "../dummy/src/models/sync-entry.js"
 import VelociousError from "../../src/velocious-error.js"
 
-class TestSyncModel {}
+class TestSyncModel {
+  /** @returns {Record<string, string>} Attribute-to-column map like a real model class. */
+  static getAttributeNameToColumnNameMap() {
+    return {clientUpdatedAt: "client_updated_at", data: "data", resourceId: "resource_id", syncType: "sync_type"}
+  }
+}
 
 /**
  * Builds a sync resource instance without the frontend-model pipeline.
@@ -131,11 +136,7 @@ describe("sync resource base", () => {
 
     class TestResource extends SyncResourceBase {
       static ModelClass = TestSyncModel
-
-      /** @returns {typeof SyncEnvelopeReplayService} */
-      replayServiceClass() {
-        return TestReplayService
-      }
+      static ReplayServiceClass = TestReplayService
     }
 
     const params = {authenticationToken: "token-1", syncs: [{id: 1}]}
@@ -183,7 +184,51 @@ describe("sync resource base", () => {
 
     await expect(async () => await bareResource.changes()).toThrow("SyncResourceBase#authorizeChanges must be implemented")
     await expect(() => service.scopeQuery({query: {}})).toThrow("SyncResourceBase#scopeChangesQuery must be implemented")
-    await expect(async () => await scopedResource.replay()).toThrow("SyncResourceBase#replayServiceClass must be implemented")
+    await expect(async () => await scopedResource.replay()).toThrow("SyncEnvelopeReplayService.authenticateReplay must be implemented (or configure authenticationTokenModel)")
+  })
+
+  it("builds the default replay service with plumbed ability, context and locals", () => {
+    class TestResource extends SyncResourceBase {
+      static ModelClass = TestSyncModel
+    }
+
+    /** @type {import("../../src/authorization/ability.js").default} */
+    const fakeAbility = /** @type {?} */ ({fake: "ability"})
+    const resource = new TestResource({
+      ability: fakeAbility,
+      context: {currentUserId: "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"},
+      locals: {locale: "da"},
+      modelName: "TestSyncModel"
+    })
+    const service = /** @type {SyncEnvelopeReplayService} */ (resource.buildReplayService())
+
+    expect(service instanceof SyncEnvelopeReplayService).toEqual(true)
+    expect(service.ability === fakeAbility).toEqual(true)
+    expect(service.abilityContext).toEqual({currentUserId: "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"})
+    expect(service.locals).toEqual({locale: "da"})
+    expect(service.configuration).toEqual(null)
+  })
+
+  it("lets replayServiceArgs win over the plumbed defaults", () => {
+    /** @type {import("../../src/authorization/ability.js").default} */
+    const overrideAbility = /** @type {?} */ ({override: "ability"})
+
+    class TestResource extends SyncResourceBase {
+      static ModelClass = TestSyncModel
+
+      /** @returns {Record<string, ?>} - Replay service args. */
+      replayServiceArgs() {
+        return {ability: overrideAbility, syncModel: SyncEntry}
+      }
+    }
+
+    /** @type {import("../../src/authorization/ability.js").default} */
+    const plumbedAbility = /** @type {?} */ ({plumbed: "ability"})
+    const resource = new TestResource({ability: plumbedAbility, modelName: "TestSyncModel"})
+    const service = /** @type {SyncEnvelopeReplayService} */ (resource.buildReplayService())
+
+    expect(service.ability === overrideAbility).toEqual(true)
+    expect(service.syncModel === SyncEntry).toEqual(true)
   })
 
   it("passes index pagination through to the controller hook by default and lets subclasses override it", () => {
@@ -213,49 +258,6 @@ describe("sync resource base", () => {
     expect(paginationCalls[1]).toEqual({pagination: {limit: null, offset: null, page: 2, perPage: 50}, query: fakeQuery})
   })
 
-  it("normalizes writable attributes through the declared schema with client-safe errors", () => {
-    class SchemaResource extends SyncResourceBase {
-      static ModelClass = TestSyncModel
-
-      /** @type {Record<string, import("../../src/sync/sync-attribute-normalizer.js").SyncAttributeSchemaEntry>} */
-      static writableAttributes = {
-        clientUpdatedAt: {required: true, type: "date"},
-        data: {invalidJsonMessage: "Data must be valid JSON.", invalidMessage: "Data must be an object or JSON string.", type: "json"},
-        resourceId: {maxLength: 255, type: "string"},
-        syncType: {maxLength: 255, required: true, type: "string"}
-      }
-    }
-
-    const resource = buildResource(SchemaResource, {})
-    const normalized = resource.normalizeWritableAttributes({data: `{"name": "Changed"}`, resource_id: "row-1", syncType: " update "})
-
-    expect(normalized.resource_id).toEqual("row-1")
-    expect(normalized.sync_type).toEqual("update")
-    expect(normalized.data).toEqual({name: "Changed"})
-
-    try {
-      resource.normalizeWritableAttributes({syncType: "   "})
-      throw new Error("Expected normalizeWritableAttributes to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.message).toEqual("syncType is required.")
-      expect(error.code).toEqual("sync-syncType-required")
-      expect(error.safeToExpose).toEqual(true)
-    }
-
-    try {
-      resource.normalizeWritableAttributes({data: "{invalid"})
-      throw new Error("Expected normalizeWritableAttributes to fail")
-    } catch (error) {
-      if (!(error instanceof VelociousError)) throw error
-
-      expect(error.message).toEqual("Data must be valid JSON.")
-      expect(error.code).toEqual("sync-data-invalid-json")
-    }
-
-    expect(() => buildResource(SyncResourceBase, {}).normalizeWritableAttributes({})).toThrow(/must define static writableAttributes/u)
-  })
 })
 
 class QuickSearchSyncResource extends SyncResourceBase {

@@ -643,15 +643,18 @@ export default class TestRunner {
   /**
    * Records an asynchronous crash (an unhandled promise rejection detached from
    * any await, e.g. a `void connection.afterCommit(async () => broadcast(...))`
-   * frontend-model publish) as a real, visible, attributed test failure.
+   * frontend-model publish — or a synchronous throw inside a detached callback
+   * such as a driver socket or timer callback) as a real, visible, attributed
+   * test failure.
    *
-   * Without this, such a rejection has no handler, so on modern Node the process
-   * is TERMINATED — the run ends with no reported failures and CI just sees a
-   * crashed/retried shard with an empty result (the recurring "silent
-   * test-runner death": invisible and impossible to diagnose). Turning it into a
-   * failure makes the run go red with something debuggable instead of vanishing.
-   * @param {"unhandledRejection"} kind - Async-crash kind.
-   * @param {unknown} reason - Rejection reason.
+   * Without this, such a rejection/exception has no handler, so on modern Node
+   * the process is TERMINATED — the run ends with no reported failures and CI
+   * just sees a crashed/retried shard with an empty result (the recurring
+   * "silent test-runner death": invisible and impossible to diagnose). Turning
+   * it into a failure makes the run go red with something debuggable instead of
+   * vanishing.
+   * @param {"uncaughtException" | "unhandledRejection"} kind - Async-crash kind.
+   * @param {unknown} reason - Rejection reason or thrown error.
    * @returns {void}
    */
   recordAsyncCrash(kind, reason) {
@@ -690,7 +693,25 @@ export default class TestRunner {
       this.recordAsyncCrash("unhandledRejection", reason)
     }
 
+    /**
+     * Handles a process-level uncaught exception during the run — a
+     * synchronous throw inside a detached callback (driver socket, timer,
+     * event emitter) that no test await observes. Same silent-death mode as
+     * unhandled rejections: without a handler the process dies mid-run and CI
+     * sees a crashed shard with zero reported failures.
+     * @param {unknown} error - Thrown error.
+     * @returns {void}
+     */
+    const onUncaughtException = (error) => {
+      // Mirror the unhandledRejection deferral: a test observing/triggering
+      // uncaught exceptions with its own listener owns them.
+      if (process.listenerCount("uncaughtException") > 1) return
+
+      this.recordAsyncCrash("uncaughtException", error)
+    }
+
     process.on("unhandledRejection", onUnhandledRejection)
+    process.on("uncaughtException", onUncaughtException)
 
     try {
       await this.getConfiguration().ensureConnections({name: "Test runner suite"}, async () => {
@@ -713,6 +734,7 @@ export default class TestRunner {
       })
     } finally {
       process.off("unhandledRejection", onUnhandledRejection)
+      process.off("uncaughtException", onUncaughtException)
     }
   }
 

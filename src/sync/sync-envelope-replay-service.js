@@ -1,6 +1,9 @@
 // @ts-check
 
+import {resolveFrontendModelResourceClass} from "../frontend-models/resource-definition.js"
 import SyncReplayUpsertApplier from "./sync-replay-upsert-applier.js"
+import {ValidationError} from "../database/record/index.js"
+import VelociousError from "../velocious-error.js"
 
 /**
  * One declarative broadcast fanned out after a mutation applies.
@@ -37,11 +40,16 @@ export default class SyncEnvelopeReplayService {
    * @param {?} [args.authenticationTokenModel] - Token model enabling the default token-lookup authenticateReplay.
    * @param {string} [args.authenticationTokenColumn] - Token model column holding the token. Defaults to "token".
    * @param {string} [args.authenticationTokenParam] - Request param carrying the token. Defaults to "authenticationToken".
-   * @param {Record<string, ((args: Record<string, ?>) => Promise<?>) | ConstructorParameters<typeof SyncReplayUpsertApplier>[0]>} [args.applyHandlers] - Per-resourceType apply handlers (functions or declarative upsert-applier specs) enabling the default applyReplayMutation dispatch.
+   * @param {Record<string, ((args: Record<string, ?>) => Promise<?>) | ConstructorParameters<typeof SyncReplayUpsertApplier>[0]>} [args.applyHandlers] - Per-resourceType apply handlers (functions or declarative upsert-applier specs) enabling the default applyReplayMutation dispatch. Deprecated: prefer resource routing via `configuration`/`resourceTypeOverrides`; applyHandlers remain for released adopters and will be removed after their migration.
    * @param {(args: Record<string, ?>) => Record<string, ?>} [args.persistExtraAttributes] - Extra attributes merged into the model-backed persisted row (e.g. an event scope column).
    * @param {(args: {mutation: ?, applyResult: ?}) => ?} [args.persistSerializedData] - Overrides the persisted data payload (object results are JSON stringified).
    * @param {(broadcast: {channel: string, params: Record<string, ?>, body: ?}) => Promise<void>} [args.broadcaster] - Delivers declarative broadcasts. Required when broadcasts are configured.
    * @param {SyncReplayBroadcast[]} [args.broadcasts] - Broadcasts fanned out by the default afterReplayMutation.
+   * @param {{getBackendProjects: () => import("../configuration-types.js").BackendProjectConfiguration[]}} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
+   * @param {Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>} [args.resourceTypeOverrides] - Per-resourceType routing overrides: a resource class, or a string alias resolved through the registry.
+   * @param {import("../authorization/ability.js").default} [args.ability] - Ability scoping routed record lookups and create membership checks.
+   * @param {Record<string, ?>} [args.abilityContext] - Ability context passed to routed resources.
+   * @param {Record<string, ?>} [args.locals] - Locals passed to routed resources.
    */
   constructor(args = {}) {
     this.logger = args.logger || console
@@ -55,6 +63,13 @@ export default class SyncEnvelopeReplayService {
     this.broadcaster = args.broadcaster || null
     this.broadcasts = args.broadcasts || null
     this.applyHandlers = args.applyHandlers ? this.builtApplyHandlers(args.applyHandlers) : null
+    this.configuration = args.configuration || null
+    this.resourceTypeOverrides = args.resourceTypeOverrides || null
+    this.ability = args.ability || null
+    this.abilityContext = args.abilityContext || null
+    this.locals = args.locals || null
+    /** @type {Map<string, SyncReplayResourceRegistration | null>} */
+    this._replayResourceRegistrations = new Map()
 
     if (args.actorForeignKeyColumn !== undefined && (typeof args.actorForeignKeyColumn !== "string" || args.actorForeignKeyColumn.length < 1)) {
       throw new Error(`actorForeignKeyColumn must be a non-blank string, got: ${String(args.actorForeignKeyColumn)}`)
@@ -121,9 +136,30 @@ export default class SyncEnvelopeReplayService {
 
       const existingSync = await this.findExistingReplaySync({actor: actorResult.actor, context, mutation})
       const shouldApply = await this.shouldApplyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
-      const applyResult = shouldApply
-        ? await this.applyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
-        : await this.skippedReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
+
+      /** @type {?} */
+      let applyResult
+
+      try {
+        applyResult = shouldApply
+          ? await this.applyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
+          : await this.skippedReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
+      } catch (error) {
+        // Client-safe apply failures (schema validation, model validation,
+        // authorization denials, unknown resource types) fail this sync and
+        // keep the batch going; unexpected errors keep propagating.
+        if (error instanceof VelociousError && error.safeToExpose) {
+          syncResponses.push({
+            id: mutation.id,
+            syncState: "failed",
+            reason: error.code || "apply-failed",
+            message: error.message
+          })
+          continue
+        }
+
+        throw error
+      }
 
       await this.persistReplayMutation({actor: actorResult.actor, context, existingSync, applyResult, mutation, shouldApply})
       await this.afterReplayMutation({actor: actorResult.actor, context, existingSync, applyResult, mutation, shouldApply})
@@ -322,19 +358,315 @@ export default class SyncEnvelopeReplayService {
   /**
    * Applies one normalized mutation to domain models.
    *
-   * Defaults to dispatching through the configured apply-handler registry;
-   * mutations without a registered handler fail loudly.
+   * Dispatches through the configured apply-handler registry first (compat
+   * precedence); mutations without a matching handler fall through to
+   * resource routing when a configuration or resourceTypeOverrides are
+   * configured, and otherwise fail loudly.
    * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<?>} Project-specific apply result.
    */
   async applyReplayMutation(args) {
-    if (!this.applyHandlers) return null
+    if (this.applyHandlers) {
+      const applyHandler = this.applyHandlers[args.mutation.resourceType]
 
-    const applyHandler = this.applyHandlers[args.mutation.resourceType]
+      if (applyHandler) return await applyHandler(args)
+      if (!this.routingConfigured()) throw new Error(`No sync apply handler registered for: ${args.mutation.resourceType}`)
+    }
 
-    if (!applyHandler) throw new Error(`No sync apply handler registered for: ${args.mutation.resourceType}`)
+    if (this.routingConfigured()) return await this.applyRoutedReplayMutation(args)
 
-    return await applyHandler(args)
+    return null
+  }
+
+  /**
+   * Returns whether resource routing is configured on this service.
+   * @returns {boolean} Whether mutations route to frontend-model resources.
+   */
+  routingConfigured() {
+    return Boolean(this.configuration || this.resourceTypeOverrides)
+  }
+
+  /**
+   * Resolves the routed resource registration for a resource type, memoized
+   * per replay service. Overrides win over the configuration registry; string
+   * overrides are aliases resolved through the registry.
+   * @param {string} resourceType - Mutation resource type.
+   * @returns {SyncReplayResourceRegistration | null} Resolved registration or null when unroutable.
+   */
+  replayResourceRegistration(resourceType) {
+    const memoizedRegistration = this._replayResourceRegistrations.get(resourceType)
+
+    if (memoizedRegistration !== undefined) return memoizedRegistration
+
+    const registration = this.resolveReplayResourceRegistration(resourceType)
+
+    this._replayResourceRegistrations.set(resourceType, registration)
+
+    return registration
+  }
+
+  /**
+   * Uncached routed-resource resolution behind {@link SyncEnvelopeReplayService#replayResourceRegistration}.
+   * @param {string} resourceType - Mutation resource type.
+   * @returns {SyncReplayResourceRegistration | null} Resolved registration or null when unroutable.
+   */
+  resolveReplayResourceRegistration(resourceType) {
+    const override = this.resourceTypeOverrides?.[resourceType]
+
+    if (override && typeof override !== "string") {
+      return {modelName: resourceType, resourceClass: override, resourceConfiguration: null}
+    }
+
+    const registryResourceType = typeof override === "string" ? override : resourceType
+
+    if (!this.configuration) return null
+
+    const resolvedRegistration = resolveFrontendModelResourceClass({configuration: this.configuration, resourceType: registryResourceType})
+
+    if (!resolvedRegistration) return null
+
+    return {
+      modelName: resolvedRegistration.modelName,
+      resourceClass: resolvedRegistration.resourceClass,
+      resourceConfiguration: resolvedRegistration.resourceConfiguration
+    }
+  }
+
+  /**
+   * Builds the routed resource instance handling one mutation.
+   * @param {object} args - Options.
+   * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
+   * @param {SyncReplayResourceRegistration} args.registration - Resolved resource registration.
+   * @returns {import("../frontend-model-resource/base-resource.js").default} Routed resource instance.
+   */
+  buildReplayResource({mutation, registration}) {
+    const ResourceClass = registration.resourceClass
+
+    return new ResourceClass({
+      ability: this.ability || undefined,
+      context: this.abilityContext || {},
+      locals: this.locals || {},
+      modelName: registration.modelName,
+      params: mutation.data,
+      ...(registration.resourceConfiguration ? {resourceConfiguration: registration.resourceConfiguration} : {})
+    })
+  }
+
+  /**
+   * Applies one mutation through its routed frontend-model resource:
+   * authorization, ability-scoped record lookup, schema normalization and
+   * assign/save for updates, save-then-check membership creates, destroys for
+   * deletes, and the resource's afterSyncApply tail. Client-safe failures
+   * throw safe errors that fail the single sync.
+   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+   * @returns {Promise<Record<string, ?>>} Apply result with record, created/deleted flags, and afterSyncApply extras.
+   */
+  async applyRoutedReplayMutation({context, existingSync, mutation}) {
+    const registration = this.replayResourceRegistration(mutation.resourceType)
+
+    if (!registration) {
+      throw VelociousError.safe(`Unknown sync resource type: ${mutation.resourceType}.`, {code: "unknown-resource-type"})
+    }
+
+    const resource = this.buildReplayResource({mutation, registration})
+    const customApplyResult = await resource.applySync({context, existingSync, mutation})
+
+    if (customApplyResult !== null) return customApplyResult
+
+    const authorization = await resource.authorizeSyncMutation({context, mutation})
+
+    if (!authorization.allowed) {
+      throw VelociousError.safe(`Sync mutation denied for: ${mutation.resourceType}.`, {code: authorization.reason || "access-denied"})
+    }
+
+    if (mutation.syncType === "delete") return await this.applyRoutedReplayDelete({mutation, resource})
+
+    return await this.applyRoutedReplayUpsert({context, mutation, resource})
+  }
+
+  /**
+   * Applies a routed delete mutation.
+   * @param {object} args - Options.
+   * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
+   * @returns {Promise<Record<string, ?>>} Apply result with the deleted flag.
+   */
+  async applyRoutedReplayDelete({mutation, resource}) {
+    const record = await resource.findSyncRecord({forDelete: true, mutation})
+
+    if (!record) return {created: false, deleted: false, record: null}
+
+    await record.destroy()
+
+    return {created: false, deleted: true, record}
+  }
+
+  /**
+   * Applies a routed upsert mutation: permitted payload attributes are
+   * assigned and saved onto the found record (the record layer owns value
+   * casting and validation), and missing records are created with the
+   * client-generated primary key plus a save-then-check membership check.
+   * Model validation failures become client-safe per-sync failures carrying
+   * the translated validation message.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
+   * @returns {Promise<Record<string, ?>>} Apply result with record, created flag, and afterSyncApply extras.
+   */
+  async applyRoutedReplayUpsert({context, mutation, resource}) {
+    const attributes = this.permittedRoutedAttributes({mutation, resource})
+    const existingRecord = await resource.findSyncRecord({mutation})
+
+    /** @type {import("../database/record/index.js").default | null} */
+    let record = existingRecord
+    let created = false
+
+    if (existingRecord) {
+      existingRecord.assign(attributes)
+      await this.saveRoutedReplayRecord(existingRecord)
+    } else {
+      record = await this.createRoutedReplayRecord({attributes, mutation, resource})
+      created = true
+    }
+
+    const extras = await resource.afterSyncApply({context, created, mutation, record})
+
+    return {created, deleted: false, record, ...extras}
+  }
+
+  /**
+   * Filters a routed mutation payload down to the resource's declared
+   * writable-attribute permit list. Accepted keys per permitted attribute are
+   * the camelCase attribute name plus the model's actual column name; unknown
+   * keys fail the sync loudly. The primary key is dropped when permitted
+   * (snapshot payloads) — the envelope's resourceId is the authoritative
+   * record identity, so a payload id can never retarget the row.
+   * @param {object} args - Options.
+   * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
+   * @returns {Record<string, ?>} Permitted attributes for record.assign.
+   */
+  permittedRoutedAttributes({mutation, resource}) {
+    const permittedAttributes = resource.declaredWritableAttributes()
+
+    if (!permittedAttributes) {
+      throw new Error(`${resource.constructor.name} must declare static writableAttributes to apply routed sync mutations for: ${mutation.resourceType}`)
+    }
+
+    const ModelClass = resource.modelClass()
+    const attributeNameToColumnName = ModelClass.getAttributeNameToColumnNameMap()
+
+    /** @type {Set<string>} */
+    const allowedKeys = new Set()
+
+    for (const attributeName of permittedAttributes) {
+      allowedKeys.add(attributeName)
+
+      const columnName = attributeNameToColumnName[attributeName]
+
+      if (columnName) allowedKeys.add(columnName)
+    }
+
+    const primaryKey = ModelClass.primaryKey()
+    const primaryKeyAttribute = ModelClass.getColumnNameToAttributeNameMap()[primaryKey]
+
+    /** @type {Record<string, ?>} */
+    const attributes = {}
+
+    for (const [key, value] of Object.entries(mutation.data)) {
+      if (!allowedKeys.has(key)) {
+        throw resource.writableAttributeError(`Unknown attribute: ${key}.`, {code: "sync-unknown-attribute"})
+      }
+
+      if (key === primaryKey || key === primaryKeyAttribute) continue
+
+      attributes[key] = value
+    }
+
+    return attributes
+  }
+
+  /**
+   * Creates the routed record with the client-generated primary key, then
+   * verifies create-scope membership when an ability is configured: records
+   * outside the ability's create scope are destroyed again and fail the sync
+   * with the resource-declared reason. A record that already exists outside
+   * the resource's lookup scope fails the sync as an authorization denial
+   * instead of colliding on the primary key.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.attributes - Permitted payload attributes.
+   * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
+   * @returns {Promise<import("../database/record/index.js").default>} Created record.
+   */
+  async createRoutedReplayRecord({attributes, mutation, resource}) {
+    const ModelClass = resource.modelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const conflictingIds = await ModelClass.where({[primaryKey]: mutation.resourceId}).pluck(primaryKey)
+
+    if (conflictingIds.length > 0) {
+      throw VelociousError.safe(`Sync update denied for: ${mutation.resourceType}.`, {
+        code: resource.syncAuthorizationFailureReason({action: "update", mutation}) || "access-denied"
+      })
+    }
+
+    /** @type {import("../database/record/index.js").default} */
+    let record
+
+    try {
+      record = await ModelClass.create({[primaryKey]: mutation.resourceId, ...attributes})
+    } catch (error) {
+      throw this.routedReplaySaveError(error)
+    }
+
+    const ability = resource.ability
+
+    if (ability) {
+      const memberIds = await ModelClass
+        .accessibleFor(resource.syncAbilityAction("create"), ability)
+        .where({[primaryKey]: record.id()})
+        .pluck(primaryKey)
+
+      if (memberIds.length === 0) {
+        await record.destroy()
+
+        throw VelociousError.safe(`Sync create denied for: ${mutation.resourceType}.`, {
+          code: resource.syncAuthorizationFailureReason({action: "create", mutation}) || "access-denied"
+        })
+      }
+    }
+
+    return record
+  }
+
+  /**
+   * Saves a routed record, converting model validation failures into
+   * client-safe per-sync errors carrying the translated validation message.
+   * @param {import("../database/record/index.js").default} record - Record to save.
+   * @returns {Promise<void>} Resolves when saved.
+   */
+  async saveRoutedReplayRecord(record) {
+    try {
+      await record.save()
+    } catch (error) {
+      throw this.routedReplaySaveError(error)
+    }
+  }
+
+  /**
+   * Maps a routed save/create failure: model validation errors become
+   * client-safe errors with their translated messages, everything else
+   * propagates unchanged.
+   * @param {?} error - Thrown save/create error.
+   * @returns {Error} Error to rethrow.
+   */
+  routedReplaySaveError(error) {
+    if (error instanceof ValidationError) {
+      return VelociousError.safe(error.message, {cause: error, code: "validation-error"})
+    }
+
+    return /** @type {Error} */ (error)
   }
 
   /**
@@ -427,6 +759,14 @@ export default class SyncEnvelopeReplayService {
     }
   }
 }
+
+/**
+ * Resolved routed-resource registration for one replay resource type.
+ * @typedef {object} SyncReplayResourceRegistration
+ * @property {string} modelName - Effective frontend model name.
+ * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Routed resource class.
+ * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} resourceConfiguration - Normalized resource configuration when registry-resolved.
+ */
 
 /**
  * @typedef {object} SyncReplayMutation

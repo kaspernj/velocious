@@ -45,6 +45,7 @@ function optionalSyncDate(value, label) {
  * present-key filtering, per-field type coercion, unknown-key rejection, the
  * find-or-create upsert, the delete branch, optional snapshot serialization,
  * and the domain after-apply tail. Apps declare only the field map and hooks.
+ * @deprecated Prefer resource-routed replay (`SyncEnvelopeReplayService` with `configuration`/`resourceTypeOverrides` and resource `writableAttributes` permit lists) — value casting and validation belong to the record layer. This applier remains for released applyHandlers adopters and will be removed after their migration.
  */
 export default class SyncReplayUpsertApplier {
   /**

@@ -1,6 +1,7 @@
 // @ts-check
 
 import Base from "./base.js"
+import validationMessage from "../validation-messages.js"
 
 export default class VelociousDatabaseRecordValidatorsPresence extends Base {
   /**
@@ -16,7 +17,9 @@ export default class VelociousDatabaseRecordValidatorsPresence extends Base {
     if (!attributeValue) {
       if (!(attributeName in model._validationErrors)) model._validationErrors[attributeName] = []
 
-      model._validationErrors[attributeName].push({type: "presence", message: "can't be blank"})
+      const translator = model.getModelClass()._getConfiguration().getTranslator()
+
+      model._validationErrors[attributeName].push({type: "presence", message: validationMessage({translator, type: "blank"})})
     }
   }
 }

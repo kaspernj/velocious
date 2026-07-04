@@ -3,6 +3,7 @@ import FrontendModelBaseResource from "../../../../src/frontend-model-resource/b
 import Comment from "../models/comment.js"
 import Interaction from "../models/interaction.js"
 import Project from "../models/project.js"
+import SyncUuidItemResource from "../resources/sync-uuid-item-resource.js"
 import Task from "../models/task.js"
 import User from "../models/user.js"
 
@@ -289,7 +290,8 @@ const backendProjects = [
       Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,
-      User: UserFrontendResource
+      User: UserFrontendResource,
+      UuidItem: SyncUuidItemResource
     }
   }
 ]

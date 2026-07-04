@@ -3,7 +3,7 @@
 import {forcedNonBlankStringParam} from "typanic"
 
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
-import normalizeAttributesWithSchema from "./sync-attribute-normalizer.js"
+import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
 import VelociousError from "../velocious-error.js"
 
@@ -27,18 +27,18 @@ const QUICK_SEARCH_COLUMN = "quickSearch"
  */
 export default class SyncResourceBase extends FrontendModelBaseResource {
   /**
+   * Replay service class handling replay mutations for this resource,
+   * declared instead of overriding {@link SyncResourceBase#replayServiceClass}.
+   * @type {typeof import("./sync-envelope-replay-service.js").default | undefined}
+   */
+  static ReplayServiceClass = undefined
+
+  /**
    * Declarative quick-search text columns. When declared, an index search on
    * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
    * these root-table columns instead of hitting the controller default.
    * @type {string[] | null} */
   static quickSearchColumns = null
-
-  /**
-   * Declarative writable-attribute schema consumed by
-   * {@link SyncResourceBase#normalizeWritableAttributes}, keyed by camelCase
-   * attribute name.
-   * @type {Record<string, import("./sync-attribute-normalizer.js").SyncAttributeSchemaEntry> | null} */
-  static writableAttributes = null
 
   /**
    * Applies frontend-model index searches, expanding declared quick searches.
@@ -91,39 +91,9 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     return true
   }
 
-  /**
-   * Normalizes incoming writable attributes through the declared
-   * {@link SyncResourceBase.writableAttributes} schema: camelCase and
-   * snake_case input keys are accepted, values are validated per type and the
-   * normalized values are written under snake_case column keys. Validation
-   * failures throw client-safe errors built by
-   * {@link SyncResourceBase#writableAttributeError}.
-   * @param {Record<string, ?>} attributes - Raw incoming attributes.
-   * @param {{unknownAttributes?: "error" | "ignore"}} [options] - Unknown input-key handling. Defaults to "error".
-   * @returns {Record<string, ?>} Normalized attributes keyed by column names.
-   */
-  normalizeWritableAttributes(attributes, options = {}) {
-    const schema = /** @type {typeof SyncResourceBase} */ (this.constructor).writableAttributes
-
-    if (!schema) throw new Error(`${this.constructor.name} must define static writableAttributes to use normalizeWritableAttributes`)
-
-    return normalizeAttributesWithSchema({
-      attributes,
-      errorFactory: (message, details) => this.writableAttributeError(message, details),
-      schema,
-      unknownAttributes: options.unknownAttributes
-    })
-  }
-
-  /**
-   * Builds the client-safe error thrown for a failed writable-attribute validation.
-   * @param {string} message - Human-readable validation message.
-   * @param {{cause?: Error, code: string}} details - Stable machine-readable code and optional cause.
-   * @returns {Error} Client-safe error.
-   */
-  writableAttributeError(message, {cause, code}) {
-    return VelociousError.safe(message, cause ? {cause, code} : {code})
-  }
+  // The declarative `static writableAttributes` permit list lives on
+  // FrontendModelBaseResource so every frontend-model resource can declare
+  // one; sync resources inherit it unchanged.
 
   /**
    * Returns a stable change-feed page after app authorization.
@@ -189,13 +159,22 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   }
 
   /**
-   * Builds the app replay service handling this replay request.
+   * Builds the app replay service handling this replay request. The resource
+   * ability, context, configuration, and locals are plumbed in under the
+   * app-declared {@link SyncResourceBase#replayServiceArgs} (app args win) so
+   * the default resource-routed replay works without wiring.
    * @returns {import("./sync-envelope-replay-service.js").default} Replay service instance.
    */
   buildReplayService() {
     const ReplayServiceClass = this.replayServiceClass()
 
-    return new ReplayServiceClass(this.replayServiceArgs())
+    return new ReplayServiceClass({
+      ability: this.ability,
+      abilityContext: this.getContext(),
+      configuration: this.controller ? this.controllerInstance().getConfiguration() : undefined,
+      locals: this.getLocals(),
+      ...this.replayServiceArgs()
+    })
   }
 
   /**
@@ -237,10 +216,18 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   }
 
   /**
-   * Returns the app replay service class handling replay mutations.
+   * Resolves the replay service class handling replay mutations: the
+   * declarative {@link SyncResourceBase.ReplayServiceClass} static (shared
+   * resources included) when declared, otherwise
+   * {@link SyncEnvelopeReplayService}, which resource-routes mutations through
+   * the plumbed configuration registry. Apps declare the static instead of
+   * overriding this method.
    * @returns {typeof import("./sync-envelope-replay-service.js").default} Replay service class.
    */
   replayServiceClass() {
-    throw new Error("SyncResourceBase#replayServiceClass must be implemented")
+    const ResourceClass = /** @type {typeof SyncResourceBase} */ (this.constructor)
+    const SharedResource = /** @type {typeof SyncResourceBase | null} */ (ResourceClass.sharedResourceClass() ?? null)
+
+    return ResourceClass.ReplayServiceClass ?? SharedResource?.ReplayServiceClass ?? SyncEnvelopeReplayService
   }
 }

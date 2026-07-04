@@ -27,6 +27,12 @@ async function main() {
         return
       }
 
+      // A non-zero exit without the runner's own failure summary is the
+      // "silent test-runner death" mode (e.g. a hard process.exit or native
+      // crash). Always print the exit code so CI logs show that the child
+      // died rather than ending the log mid-run with no explanation.
+      if (code !== 0) console.error(`Test process exited with code: ${code ?? "unknown"}`)
+
       resolve(code ?? 1)
     })
   }).then((code) => {

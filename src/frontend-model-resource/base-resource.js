@@ -3,6 +3,7 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
+import VelociousError from "../velocious-error.js"
 
 /**
  * Built-in frontend-model resource action.
@@ -85,6 +86,34 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {string} [modelName] - Optional model name override.
  * @property {import("../configuration-types.js").VelociousParams} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
+ */
+
+/**
+ * Normalized sync replay mutation passed to the resource sync hooks.
+ * @typedef {import("../sync/sync-envelope-replay-service.js").SyncReplayMutation} FrontendModelSyncMutation
+ */
+
+/**
+ * Sync mutation authorization result.
+ * @typedef {object} FrontendModelSyncAuthorization
+ * @property {boolean} allowed - Whether the mutation may be applied.
+ * @property {string} [reason] - Stable failure reason code when denied.
+ */
+
+/**
+ * Arguments for the applySync full-escape-hatch hook.
+ * @typedef {object} FrontendModelApplySyncArgs
+ * @property {Record<string, ?>} context - Replay context.
+ * @property {import("../database/record/index.js").default | null} existingSync - Existing sync row or null.
+ * @property {FrontendModelSyncMutation} mutation - Normalized replay mutation.
+ */
+
+/**
+ * Apply result produced by routed sync mutation application.
+ * @typedef {object} FrontendModelSyncApplyResult
+ * @property {boolean} created - Whether a record was created.
+ * @property {boolean} [deleted] - Whether a record was deleted.
+ * @property {import("../database/record/index.js").default | null} record - Applied record or null.
  */
 
 /**
@@ -173,6 +202,16 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static SharedResource = undefined
 
   /**
+   * Declarative writable-attribute permit list (camelCase attribute names)
+   * used as the default {@link FrontendModelBaseResource#permittedParams} and
+   * as the routed sync replay permit. Resolved through the shared resource
+   * like the other static resource config: an undeclared environment list
+   * falls back to the shared resource's list, while an explicit declaration
+   * (including `null`) wins.
+   * @type {string[] | null | undefined} */
+  static writableAttributes = undefined
+
+  /**
    * Runs constructor.
    * @param {FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs} args - Resource args.
    */
@@ -206,7 +245,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Reads a static resource config value from the environment resource first,
    * then from the shared resource.
-   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes"} name - Static config property name.
+   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
    * @returns {?} - Resolved config value.
    */
   static sharedResourceStaticValue(name) {
@@ -481,9 +520,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    *     }
    *   }
    *
-   * Default implementation returns `[]` — nothing permitted. Subclasses
-   * must override to enable writes. A resource that does not declare
-   * `permittedParams` cannot accept any write.
+   * Default implementation returns the declared
+   * {@link FrontendModelBaseResource.writableAttributes} permit list, or `[]`
+   * — nothing permitted — without a declared list. Subclasses override to
+   * customize; an explicit override always wins.
    * @param {{action?: "create" | "update", params?: Record<string, ?>, ability?: import("../authorization/ability.js").default, locals?: Record<string, ?>}} [arg] - Request context.
    * @returns {Array<string | Record<string, ?>>} - Permit spec.
    */
@@ -491,8 +531,138 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     return this.sharedResourceMethodOr("permittedParams", [arg], () => {
       void arg
 
-      return []
+      return this.declaredWritableAttributes() ?? []
     })
+  }
+
+  /**
+   * Resolves the declared writable-attribute permit list from the environment
+   * resource first, then the shared resource — mirroring how the other
+   * static resource config resolves. An explicit environment declaration
+   * (including `null`) wins over the shared resource's list.
+   * @returns {string[] | null} Declared permit list or null when undeclared.
+   */
+  declaredWritableAttributes() {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+    const permittedAttributes = /** @type {string[] | null | undefined} */ (ResourceClass.sharedResourceStaticValue("writableAttributes"))
+
+    return permittedAttributes ?? null
+  }
+
+  /**
+   * Builds the client-safe error thrown for a failed writable-attribute validation.
+   * @param {string} message - Human-readable validation message.
+   * @param {{cause?: Error, code: string}} details - Stable machine-readable code and optional cause.
+   * @returns {Error} Client-safe error.
+   */
+  writableAttributeError(message, {cause, code}) {
+    return VelociousError.safe(message, cause ? {cause, code} : {code})
+  }
+
+  /**
+   * Authorizes one routed sync replay mutation before it is applied.
+   * Defaults to allowing every mutation; record-level authorization still
+   * applies through {@link FrontendModelBaseResource#findSyncRecord} scoping
+   * and the create membership check.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {FrontendModelSyncAuthorization | Promise<FrontendModelSyncAuthorization>} Authorization result.
+   */
+  authorizeSyncMutation({context, mutation}) {
+    void context
+    void mutation
+
+    return {allowed: true}
+  }
+
+  /**
+   * Returns the per-sync failure reason reported when a routed sync mutation
+   * fails record-level authorization. Defaults to null, which reports the
+   * generic "access-denied" reason.
+   * @param {object} args - Options.
+   * @param {"create" | "destroy" | "update"} args.action - Denied action.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {string | null} Stable failure reason code or null for the generic default.
+   */
+  syncAuthorizationFailureReason({action, mutation}) {
+    void action
+    void mutation
+
+    return null
+  }
+
+  /**
+   * Finds the existing record targeted by a routed sync replay mutation.
+   * Defaults to an `accessibleFor` lookup by primary key through the
+   * resource's normalized ability action for update (or destroy for delete
+   * mutations), falling back to an unscoped lookup without an ability.
+   * @param {object} args - Options.
+   * @param {import("../authorization/ability.js").default} [args.ability] - Ability override. Defaults to the resource ability.
+   * @param {boolean} [args.forDelete] - Whether the lookup is for a delete mutation.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @returns {Promise<import("../database/record/index.js").default | null>} Existing record or null.
+   */
+  async findSyncRecord({ability = this.ability, forDelete = false, mutation}) {
+    const ModelClass = this.modelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const query = ability
+      ? ModelClass.accessibleFor(this.syncAbilityAction(forDelete ? "destroy" : "update"), ability)
+      : ModelClass.where({})
+
+    return await query.findBy({[primaryKey]: mutation.resourceId})
+  }
+
+  /**
+   * Maps a raw sync action to the resource's normalized ability action when
+   * the resource configuration declares an abilities mapping, otherwise the
+   * raw action name is used directly.
+   * @param {"create" | "destroy" | "update"} action - Raw sync action.
+   * @returns {string} Ability action.
+   */
+  syncAbilityAction(action) {
+    const abilities = this.resourceConfigurationValue?.abilities
+
+    if (abilities && typeof abilities == "object" && !Array.isArray(abilities)) {
+      const abilityAction = /** @type {Record<string, ?>} */ (abilities)[action]
+
+      if (typeof abilityAction == "string" && abilityAction.length > 0) return abilityAction
+    }
+
+    return action
+  }
+
+  /**
+   * Full escape hatch for routed sync mutation application. Returning a
+   * non-null result replaces the whole default apply flow (authorization,
+   * record lookup, normalization and save) with the returned apply result.
+   * @param {FrontendModelApplySyncArgs} args - Apply args.
+   * @returns {FrontendModelSyncApplyResult | null | Promise<FrontendModelSyncApplyResult | null>} Apply result or null for the default flow.
+   */
+  applySync(args) {
+    void args
+
+    return null
+  }
+
+  /**
+   * Runs after a routed sync mutation was applied. Returned entries are
+   * merged into the apply result, reaching persistExtraAttributes and
+   * broadcasts.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {boolean} args.created - Whether the record was created.
+   * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../database/record/index.js").default | null} args.record - Applied record or null.
+   * @returns {Record<string, ?> | Promise<Record<string, ?>>} Extra apply-result entries.
+   */
+  afterSyncApply({context, created, mutation, record}) {
+    void context
+    void created
+    void mutation
+    void record
+
+    return {}
   }
 
   /**

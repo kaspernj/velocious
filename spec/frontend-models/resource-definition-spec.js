@@ -2,7 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
-import {frontendModelResourceConfigurationFromDefinition, frontendModelSyncManifestForBackendProjects} from "../../src/frontend-models/resource-definition.js"
+import {frontendModelResourceConfigurationFromDefinition, frontendModelSyncManifestForBackendProjects, resolveFrontendModelResourceClass} from "../../src/frontend-models/resource-definition.js"
 
 describe("frontendModelResourceConfigurationFromDefinition abilities normalization", {databaseCleaning: {transaction: true}}, () => {
   it("rejects resourceConfig overrides on resource classes", () => {
@@ -168,5 +168,43 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
       policyVersion: "scanner-v1"
     })
     expect(manifest.Ticket.policyHash).toMatch(/^sha256-[a-f0-9]{64}$/)
+  })
+})
+
+describe("resolveFrontendModelResourceClass", {databaseCleaning: {transaction: true}}, () => {
+  class TaskResource extends FrontendModelBaseResource {
+    static attributes = ["id"]
+  }
+
+  class RenamedResource extends FrontendModelBaseResource {
+    static attributes = ["id"]
+    static modelName = "CustomName"
+  }
+
+  const configuration = {getBackendProjects: () => [{frontendModels: {InternalName: RenamedResource, Task: TaskResource}, path: "/tmp/backend"}]}
+
+  it("resolves a registered resource class by its configured model name", () => {
+    const resolved = resolveFrontendModelResourceClass({configuration, resourceType: "Task"})
+
+    if (!resolved) throw new Error("Expected a resolved resource registration")
+
+    expect(resolved.modelName).toEqual("Task")
+    expect(resolved.resourceClass === TaskResource).toEqual(true)
+    expect(resolved.resourceConfiguration.attributes).toEqual(["id"])
+  })
+
+  it("resolves modelName overrides instead of registry keys", () => {
+    const resolved = resolveFrontendModelResourceClass({configuration, resourceType: "CustomName"})
+
+    if (!resolved) throw new Error("Expected a resolved resource registration")
+
+    expect(resolved.modelName).toEqual("CustomName")
+    expect(resolved.resourceClass === RenamedResource).toEqual(true)
+
+    expect(resolveFrontendModelResourceClass({configuration, resourceType: "InternalName"})).toEqual(null)
+  })
+
+  it("returns null for unknown resource types", () => {
+    expect(resolveFrontendModelResourceClass({configuration, resourceType: "Nope"})).toEqual(null)
   })
 })

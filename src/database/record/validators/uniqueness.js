@@ -2,6 +2,7 @@
 
 import Base from "./base.js"
 import * as inflection from "inflection"
+import validationMessage from "../validation-messages.js"
 
 export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   /**
@@ -61,7 +62,9 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
     if (existingRecord) {
       if (!(attributeName in model._validationErrors)) model._validationErrors[attributeName] = []
 
-      model._validationErrors[attributeName].push({type: "uniqueness", message: "has already been taken"})
+      const translator = modelClass._getConfiguration().getTranslator()
+
+      model._validationErrors[attributeName].push({type: "uniqueness", message: validationMessage({translator, type: "taken"})})
     }
   }
 

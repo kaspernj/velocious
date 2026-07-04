@@ -42,6 +42,7 @@ const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "primaryKey",
   "quickSearchColumns",
   "relationships",
+  "ReplayServiceClass",
   "server",
   "SharedResource",
   "sync",
@@ -880,4 +881,49 @@ function normalizeFrontendModelResourcePathForMatch(path) {
   }
 
   return withLeadingSlash
+}
+
+/**
+ * Resolved frontend-model resource registration for a replay resource type.
+ * @typedef {object} FrontendModelResolvedResourceRegistration
+ * @property {string} modelName - Effective frontend model name (modelName override or registry key).
+ * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Registered resource class.
+ * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration.
+ */
+
+/**
+ * Resolves the registered frontend-model resource class for a resource type
+ * across all backend projects. A resource's effective name is its
+ * `modelName` override when declared, otherwise its registry key — matching
+ * {@link frontendModelSyncManifestForBackendProjects}. A registry key shadowed
+ * by a `modelName` override does not resolve.
+ * @param {object} args - Options.
+ * @param {{getBackendProjects: () => import("../configuration-types.js").BackendProjectConfiguration[]}} args.configuration - Configuration exposing the backend projects.
+ * @param {string} args.resourceType - Frontend model name to resolve.
+ * @returns {FrontendModelResolvedResourceRegistration | null} Resolved registration or null when the resource type is not registered.
+ */
+export function resolveFrontendModelResourceClass({configuration, resourceType}) {
+  for (const backendProject of configuration.getBackendProjects()) {
+    const resources = frontendModelResourcesForBackendProject(backendProject)
+
+    for (const configuredModelName of Object.keys(resources)) {
+      const resourceDefinition = resources[configuredModelName]
+      const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
+
+      if (!resourceClass) continue
+
+      // Cheap direct-key mismatch skip: only normalize configurations for the
+      // matching key or when a modelName override could rename the resource.
+      if (configuredModelName !== resourceType && !resourceClass.sharedResourceStaticValue("modelName")) continue
+
+      const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+
+      if (!resourceConfiguration) continue
+      if ((resourceConfiguration.modelName || configuredModelName) !== resourceType) continue
+
+      return {modelName: resourceType, resourceClass, resourceConfiguration}
+    }
+  }
+
+  return null
 }
