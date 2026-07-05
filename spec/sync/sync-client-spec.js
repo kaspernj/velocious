@@ -550,6 +550,127 @@ describe("sync client", () => {
     harness.client.stop()
   })
 
+  it("snapshots tracked payloads at mutation time before deferring to afterCommit", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const attributes = {accepted: 1, localOnly: "internal", ticketId: TICKET_ID}
+    const record = buildRecord(TrackedScan, SCAN_ID, attributes)
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    // Simulates an afterSave hook assigning an unsaved attribute after the tracked callback ran.
+    attributes.ticketId = "0ffbf58a-90b2-4c9c-97b1-14f5f0c68b09"
+
+    for (const callback of afterCommitCallbacks) await callback()
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, localOnly: "internal", ticketId: TICKET_ID})
+
+    harness.client.stop()
+  })
+
+  it("routes post-commit queue failures to onError and keeps later afterCommit callbacks running", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const originalCreate = harness.syncModel.create
+    let failNextCreate = true
+
+    harness.syncModel.create = async (/** @type {Record<string, ?>} */ attributes) => {
+      if (failNextCreate) {
+        failNextCreate = false
+
+        throw new Error("Local sync row write failed")
+      }
+
+      return await originalCreate(attributes)
+    }
+
+    const failingRecord = buildScanRecord(TrackedScan)
+    const laterRecord = buildRecord(TrackedScan, TICKET_ID, {accepted: 0, localOnly: "internal", ticketId: TICKET_ID})
+
+    await triggerLifecycle(TrackedScan, "afterCreate", failingRecord)
+    await triggerLifecycle(TrackedScan, "afterUpdate", laterRecord)
+
+    // Mimics the driver's committed-callback loop: a failure must not break later callbacks.
+    for (const callback of afterCommitCallbacks) await callback()
+
+    expect(harness.errors.map((/** @type {Error} */ error) => error.message)).toEqual(["Local sync row write failed"])
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.resourceId).toEqual(TICKET_ID)
+
+    harness.client.stop()
+  })
+
+  it("logs post-commit queue failures loudly without rethrowing when no onError is configured", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const syncModel = buildFakeSyncModel()
+
+    syncModel.create = async () => {
+      throw new Error("Local sync row write failed")
+    }
+
+    const transport = {
+      /** @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+      post: async () => ({json: () => ({status: "success", syncs: []})})
+    }
+    const configuration = buildConfiguration({
+      modelClasses: [TrackedScan],
+      sync: {client: {authenticationToken: () => "token-1", isOnline: () => false, transport}}
+    })
+    const client = new SyncClient({configuration, syncModel})
+    /** @type {Array<Array<?>>} */
+    const loggedErrors = []
+
+    client._logger = {
+      /** @param {...?} messages - Logged error parts. @returns {Promise<void>} */
+      error: async (...messages) => {
+        loggedErrors.push(messages)
+      }
+    }
+
+    await client.start()
+
+    const record = buildScanRecord(TrackedScan)
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    expect(loggedErrors.length).toEqual(1)
+    expect(/** @type {Error} */ (loggedErrors[0][loggedErrors[0].length - 1]).message).toEqual("Local sync row write failed")
+    expect(syncModel.rows.length).toEqual(0)
+
+    client.stop()
+  })
+
   it("suppresses tracked queueing inside withoutTracking across awaits and returns the callback result", async () => {
     const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
     const harness = buildHarness({modelClasses: [TrackedScan]})

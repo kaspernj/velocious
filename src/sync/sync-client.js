@@ -2,6 +2,7 @@
 
 import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
+import Logger from "../logger.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
@@ -114,6 +115,8 @@ export default class SyncClient {
     /** @type {WeakSet<object>} */
     this._remoteApplyRecords = new WeakSet()
     this._withoutTrackingDepth = 0
+    /** @type {Logger | {error: (...messages: Array<?>) => Promise<void>} | null} */
+    this._logger = null
     this._started = false
   }
 
@@ -185,12 +188,15 @@ export default class SyncClient {
   }
 
   /**
-   * Builds the lifecycle callback queueing one tracked mutation. Queueing is
+   * Builds the lifecycle callback queueing one tracked mutation. The queued
+   * payload and sync type are snapshotted at mutation-callback time, so
+   * afterSave hooks assigning unsaved attributes (or any later drift on the
+   * record) cannot change what gets queued vs what was committed. Queueing is
    * deferred through the model connection's afterCommit hook so it only runs
    * once the mutation's transaction has committed (immediately when no
    * transaction is open) - queued syncs never reference rolled-back rows.
-   * Queue failures go to config.onError (or rethrow when none is configured),
-   * matching the background replay failure policy.
+   * Post-commit queue failures are reported without rethrowing into the
+   * driver's afterCommit chain (see reportAfterCommitError).
    * @param {{operation: "create" | "update" | "destroy", resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Operation and resource config.
    * @returns {(record: ?) => Promise<void>} Lifecycle callback.
    */
@@ -198,18 +204,24 @@ export default class SyncClient {
     return async (record) => {
       if (this.isTrackingSuppressed(record)) return
 
+      const data = SyncApiClient.queuedSyncData({
+        booleanAttributes: resourceConfig.booleanAttributes || [],
+        data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
+        localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+        resource: record
+      })
+      const syncType = this.defaultSyncType({operation, record, resourceConfig})
+
       await resourceConfig.modelClass.connection().afterCommit(async () => {
         try {
           await SyncApiClient.queueLocalSync({
-            booleanAttributes: resourceConfig.booleanAttributes || [],
-            data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
-            localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+            data,
             resource: record,
             syncModel: this.config.syncModel,
-            syncType: this.defaultSyncType({operation, record, resourceConfig})
+            syncType
           })
         } catch (error) {
-          this.reportError(/** @type {Error} */ (error))
+          await this.reportAfterCommitError(/** @type {Error} */ (error))
 
           return
         }
@@ -217,6 +229,35 @@ export default class SyncClient {
         this.scheduleReplay()
       })
     }
+  }
+
+  /**
+   * Reports a post-commit tracked-queueing failure. The transaction has already
+   * committed when afterCommit callbacks run, so rethrowing here would poison
+   * the driver's awaited afterCommit chain (breaking unrelated callbacks) -
+   * instead the failure goes to the configured sync.client.onError hook, or is
+   * logged loudly through the client's logger when none is configured.
+   * @param {Error} error - Post-commit queueing failure.
+   * @returns {Promise<void>}
+   */
+  async reportAfterCommitError(error) {
+    if (this.config.onError) {
+      this.config.onError(error)
+
+      return
+    }
+
+    await this.logger().error("SyncClient failed to queue a tracked mutation after commit", error)
+  }
+
+  /**
+   * Returns the lazily built client logger.
+   * @returns {Logger | {error: (...messages: Array<?>) => Promise<void>}} Client logger.
+   */
+  logger() {
+    this._logger ||= new Logger("SyncClient", {configuration: this.config.configuration})
+
+    return this._logger
   }
 
   /**

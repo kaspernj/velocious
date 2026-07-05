@@ -69,6 +69,30 @@ describe("sync client - commit tracking", {databaseCleaning: {transaction: false
     }
   })
 
+  it("queues the payload committed by the save even when an afterSave hook assigns unsaved drift", async () => {
+    const {client, syncModel} = buildTaskTrackingHarness()
+
+    await client.start()
+
+    const project = await Project.create({name: "Drift project"})
+    /** @param {?} record - Saved task. @returns {Promise<void>} Assigns an unsaved attribute after the tracked callback ran. */
+    const driftAfterSave = async (record) => {
+      record.assign({name: "Drifted name"})
+    }
+
+    Task.afterSave(driftAfterSave)
+
+    try {
+      await Task.create({name: "Committed name", projectId: project.id()})
+
+      expect(syncModel.rows.length).toEqual(1)
+      expect(syncModel.rows[0].attributes.data.name).toEqual("Committed name")
+    } finally {
+      Task.unregisterLifecycleCallback("afterSave", driftAfterSave)
+      client.stop()
+    }
+  })
+
   it("does not queue tracked syncs for real saves inside withoutTracking", async () => {
     const {client, syncModel} = buildTaskTrackingHarness()
 
