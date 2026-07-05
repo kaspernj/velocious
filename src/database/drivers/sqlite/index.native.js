@@ -7,17 +7,18 @@ import query from "./query"
 // @ts-expect-error
 import * as SQLite from "expo-sqlite"
 
+import Mutex from "epic-locks/build/mutex.js"
+
 import Base from "./base.js"
-import SerialAsyncQueue from "../../../utils/serial-async-queue.js"
 
 export default class VelociousDatabaseDriversSqliteNative extends Base {
   /**
    * Serializes native queries so concurrent `getAllAsync` calls never race
    * `expo-sqlite`'s shared `NativeStatement` objects (a single connection
    * prepares/executes/finalizes one statement at a time).
-   * @type {SerialAsyncQueue}
+   * @type {Mutex}
    */
-  _queryQueue = new SerialAsyncQueue()
+  _queryMutex = new Mutex()
 
   async connect() {
     const {isBrowser, isNative, isServer} = envSense()
@@ -74,7 +75,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
    * @returns {Promise<Record<string, ?>[]>} - Query result rows.
    */
   async _queryActual(sql) {
-    return await this._queryQueue.run(() => {
+    return await this._queryMutex.sync(() => {
       if (!this.connection) throw new Error("Not connected yet")
 
       return query(this.connection, sql)
