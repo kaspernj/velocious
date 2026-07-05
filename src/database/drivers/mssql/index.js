@@ -192,26 +192,43 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
-   * Snapshots every user session other than this one that holds an open
-   * transaction or is running a request, with its last statement, wait state,
-   * and blocking session — enough to identify a connection that leaked a lock.
+   * Snapshots the sessions that could be blocking a constraint toggle in THIS
+   * database — every session other than this one that holds a lock in `DB_ID()`
+   * or is running a request against it — with its last statement, wait state,
+   * and blocking session, enough to identify a connection that leaked a lock.
+   * Scoped to the current database so a multi-database server does not leak
+   * unrelated sessions' SQL into the error and bury the real blocker.
    * @returns {Promise<string>} - JSON snapshot, or a "(none)" marker.
    */
   async _captureBlockingSessionsForDebug() {
-    const rows = await this.query(
-      "SELECT s.session_id AS sessionId, s.status AS sessionStatus, s.login_time AS loginTime, " +
-      "s.last_request_start_time AS lastRequestStart, s.last_request_end_time AS lastRequestEnd, " +
-      "s.open_transaction_count AS openTransactionCount, r.status AS requestStatus, r.command AS command, " +
-      "r.wait_type AS waitType, r.wait_time AS waitTimeMs, r.blocking_session_id AS blockingSessionId, " +
-      "CAST(ib.event_info AS NVARCHAR(MAX)) AS lastSql " +
-      "FROM sys.dm_exec_sessions s " +
-      "LEFT JOIN sys.dm_exec_requests r ON r.session_id = s.session_id " +
-      "OUTER APPLY sys.dm_exec_input_buffer(s.session_id, NULL) ib " +
-      "WHERE s.is_user_process = 1 AND s.session_id <> @@SPID " +
-      "AND (s.open_transaction_count > 0 OR r.session_id IS NOT NULL)"
-    )
+    const rows = await this.query(`
+      WITH lock_sessions AS (
+        SELECT DISTINCT request_session_id AS session_id
+        FROM sys.dm_tran_locks
+        WHERE resource_database_id = DB_ID()
+      )
+      SELECT
+        s.session_id AS sessionId,
+        s.status AS sessionStatus,
+        s.login_time AS loginTime,
+        s.last_request_start_time AS lastRequestStart,
+        s.last_request_end_time AS lastRequestEnd,
+        s.open_transaction_count AS openTransactionCount,
+        r.status AS requestStatus,
+        r.command AS command,
+        r.wait_type AS waitType,
+        r.wait_time AS waitTimeMs,
+        r.blocking_session_id AS blockingSessionId,
+        CAST(ib.event_info AS NVARCHAR(MAX)) AS lastSql
+      FROM sys.dm_exec_sessions s
+      LEFT JOIN sys.dm_exec_requests r ON r.session_id = s.session_id
+      OUTER APPLY sys.dm_exec_input_buffer(s.session_id, NULL) ib
+      WHERE s.is_user_process = 1
+        AND s.session_id <> @@SPID
+        AND (s.session_id IN (SELECT session_id FROM lock_sessions) OR r.database_id = DB_ID())
+    `)
 
-    if (rows.length === 0) return "(none — no other user session had an open transaction or active request when queried)"
+    if (rows.length === 0) return "(none — no other session held a lock or ran a request in this database when queried)"
 
     return JSON.stringify(rows, null, 2)
   }
