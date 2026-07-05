@@ -8,8 +8,17 @@ import query from "./query"
 import * as SQLite from "expo-sqlite"
 
 import Base from "./base.js"
+import SerialAsyncQueue from "../../../utils/serial-async-queue.js"
 
 export default class VelociousDatabaseDriversSqliteNative extends Base {
+  /**
+   * Serializes native queries so concurrent `getAllAsync` calls never race
+   * `expo-sqlite`'s shared `NativeStatement` objects (a single connection
+   * prepares/executes/finalizes one statement at a time).
+   * @type {SerialAsyncQueue}
+   */
+  _queryQueue = new SerialAsyncQueue()
+
   async connect() {
     const {isBrowser, isNative, isServer} = envSense()
 
@@ -65,8 +74,10 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
    * @returns {Promise<Record<string, ?>[]>} - Query result rows.
    */
   async _queryActual(sql) {
-    if (!this.connection) throw new Error("Not connected yet")
+    return await this._queryQueue.run(() => {
+      if (!this.connection) throw new Error("Not connected yet")
 
-    return await query(this.connection, sql)
+      return query(this.connection, sql)
+    })
   }
 }
