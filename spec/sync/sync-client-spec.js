@@ -550,6 +550,88 @@ describe("sync client", () => {
     harness.client.stop()
   })
 
+  it("suppresses tracked queueing inside withoutTracking across awaits and returns the callback result", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+    const result = await harness.client.withoutTracking(async () => {
+      await triggerLifecycle(TrackedScan, "afterCreate", record)
+      await Promise.resolve()
+      await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+      return "applied"
+    })
+
+    expect(result).toEqual("applied")
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+
+    harness.client.stop()
+  })
+
+  it("restores tracking when a withoutTracking callback throws and supports nesting", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+
+    await expect(async () => {
+      await harness.client.withoutTracking(async () => {
+        await harness.client.withoutTracking(async () => {
+          await triggerLifecycle(TrackedScan, "afterCreate", record)
+        })
+
+        await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+        throw new Error("Backfill failed")
+      })
+    }).toThrow(/Backfill failed/u)
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+
+    harness.client.stop()
+  })
+
+  it("suppresses tracked queueing for records marked as remote applies until released", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+    const release = harness.client.markRemoteApply(record)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    release()
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+
+    harness.client.stop()
+  })
+
   it("unregisters tracking callbacks when stopped", async () => {
     const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
     const harness = buildHarness({modelClasses: [TrackedScan]})

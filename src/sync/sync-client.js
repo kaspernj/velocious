@@ -113,6 +113,7 @@ export default class SyncClient {
     this._trackedCallbacks = []
     /** @type {WeakSet<object>} */
     this._remoteApplyRecords = new WeakSet()
+    this._withoutTrackingDepth = 0
     this._started = false
   }
 
@@ -193,7 +194,7 @@ export default class SyncClient {
    */
   trackedMutationCallback({operation, resourceConfig}) {
     return async (record) => {
-      if (this.isRemoteApply(record)) return
+      if (this.isTrackingSuppressed(record)) return
 
       await resourceConfig.modelClass.connection().afterCommit(async () => {
         try {
@@ -223,6 +224,54 @@ export default class SyncClient {
    */
   isRemoteApply(record) {
     return this._remoteApplyRecords.has(record)
+  }
+
+  /**
+   * Whether tracked mutation queueing is currently suppressed for a record:
+   * either the record was marked as a remote apply (`markRemoteApply`, used by
+   * pull and realtime applies) or a `withoutTracking` callback is running on
+   * this client.
+   * @param {?} record - Local model record.
+   * @returns {boolean} Whether tracked queueing is suppressed for the record.
+   */
+  isTrackingSuppressed(record) {
+    return this._withoutTrackingDepth > 0 || this.isRemoteApply(record)
+  }
+
+  /**
+   * Runs a callback with tracked mutation queueing suppressed on this client -
+   * for code applying server-originated data outside the derived pull/realtime
+   * appliers (legacy pull paths, importers, sign-in backfills), so their writes
+   * are not echoed back to the server as device changes. Suppression covers the
+   * whole async duration of the callback (nested calls stack) and is
+   * client-wide while it runs: mutations from concurrently running tasks are
+   * also suppressed for that window, so prefer `markRemoteApply(record)` when
+   * writes from other flows can interleave.
+   * @template T
+   * @param {() => Promise<T> | T} callback - Work whose model writes should not queue tracked syncs.
+   * @returns {Promise<T>} The callback result.
+   */
+  async withoutTracking(callback) {
+    this._withoutTrackingDepth++
+
+    try {
+      return await callback()
+    } finally {
+      this._withoutTrackingDepth--
+    }
+  }
+
+  /**
+   * Marks one record as being written from server-originated data so tracked
+   * mutation queueing skips it (record-precise suppression). The derived pull
+   * and realtime appliers use this internally around every applied write.
+   * @param {?} record - Local model record about to be written.
+   * @returns {() => void} Release callback re-enabling tracking for the record.
+   */
+  markRemoteApply(record) {
+    this._remoteApplyRecords.add(record)
+
+    return () => this._remoteApplyRecords.delete(record)
   }
 
   /**
@@ -344,11 +393,7 @@ export default class SyncClient {
    */
   remoteApplySync({source = "pulled change"} = {}) {
     const pullResourceConfigs = this.pullResourceConfigs()
-    const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => {
-      this._remoteApplyRecords.add(record)
-
-      return () => this._remoteApplyRecords.delete(record)
-    })
+    const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => this.markRemoteApply(record))
 
     return async (sync) => {
       const resourceType = sync.resourceType()

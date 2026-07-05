@@ -68,4 +68,27 @@ describe("sync client - commit tracking", {databaseCleaning: {transaction: false
       client.stop()
     }
   })
+
+  it("does not queue tracked syncs for real saves inside withoutTracking", async () => {
+    const {client, syncModel} = buildTaskTrackingHarness()
+
+    await client.start()
+
+    const project = await Project.create({name: "Backfill project"})
+
+    try {
+      await client.withoutTracking(async () => {
+        await Task.create({name: "Backfilled task", projectId: project.id()})
+      })
+
+      expect(syncModel.rows.length).toEqual(0)
+
+      await Task.create({name: "Device task", projectId: project.id()})
+
+      expect(syncModel.rows.length).toEqual(1)
+      expect(syncModel.rows[0].attributes.data.name).toEqual("Device task")
+    } finally {
+      client.stop()
+    }
+  })
 })
