@@ -463,11 +463,11 @@ export default class VelociousConfiguration {
       throw new Error("sync.client must be an object with transport and authenticationToken")
     }
 
-    const {authenticationToken, batchSize, isOnline, mountPath, onError, transport, ...restClient} = client
+    const {authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, ...restClient} = client
     const restClientKeys = Object.keys(restClient)
 
     if (restClientKeys.length > 0) {
-      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, transport)`)
+      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport)`)
     }
     if (!transport || typeof transport !== "object" || typeof transport.post !== "function") {
       throw new Error("sync.client.transport must be an object with a post(path, body) method (like the frontend-model websocket client)")
@@ -494,6 +494,7 @@ export default class VelociousConfiguration {
       isOnline,
       mountPath: (mountPath || "/velocious/sync").replace(/\/+$/u, "") || "/",
       onError,
+      realtime,
       transport
     }
   }
