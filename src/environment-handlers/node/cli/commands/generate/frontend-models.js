@@ -167,11 +167,10 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
 
     for (const [frontendModelsDir, generatedFiles] of generatedFilesByDirectory) {
-      const indexContent = this.buildIndexFileContent(generatedFiles)
-
-      await fs.writeFile(`${frontendModelsDir}/index.js`, indexContent)
-
-      console.log("create src/frontend-models/index.js")
+      // The index.js barrel is no longer generated — nothing imports it (models are
+      // imported by file path, and setup.js performs the registration side-effects).
+      // Remove any stale one left from an older generator.
+      await fs.rm(`${frontendModelsDir}/index.js`, {force: true})
 
       const setupContent = this.buildSetupFileContent(generatedFiles)
 
@@ -630,21 +629,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += `export default ${className}\n`
 
     return fileContent
-  }
-
-  /**
-   * Runs build index file content.
-   * @param {Array<{className: string, fileName: string}>} generatedFiles - Generated model files.
-   * @returns {string} - Index file content that imports and re-exports all models.
-   */
-  buildIndexFileContent(generatedFiles) {
-    let content = generatedFileBanner(FRONTEND_MODELS_REGENERATE_COMMAND)
-
-    for (const {className, fileName} of generatedFiles) {
-      content += `export {default as ${className}} from "./${fileName}"\n`
-    }
-
-    return content
   }
 
   /**
