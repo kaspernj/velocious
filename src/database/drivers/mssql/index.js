@@ -148,12 +148,89 @@ export default class VelociousDatabaseDriversMssql extends Base{
     return digg(rows, 0, "db_name")
   }
 
+  /**
+   * Disables every foreign key constraint (bulk `NOCHECK`).
+   * @returns {Promise<void>} - Resolves when foreign keys are disabled.
+   */
   async disableForeignKeys() {
-    await this.query("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"")
+    await this._execConstraintToggle("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"", "disableForeignKeys")
   }
 
+  /**
+   * Re-enables and re-validates every foreign key constraint (`WITH CHECK`).
+   * @returns {Promise<void>} - Resolves when foreign keys are enabled.
+   */
   async enableForeignKeys() {
-    await this.query("EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\"")
+    await this._execConstraintToggle("EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\"", "enableForeignKeys")
+  }
+
+  /**
+   * Runs a bulk constraint-toggle statement. `ALTER TABLE ... NOCHECK/CHECK
+   * CONSTRAINT` needs a schema-modification lock on every table, so if the
+   * request times out it is almost always blocked by another session that is
+   * still holding a lock (a leaked/uncommitted connection). On a timeout,
+   * capture which sessions were blocking so the real culprit is named instead
+   * of leaving a bare "Request failed to complete in 15000ms".
+   * @param {string} sql - Constraint-toggle SQL.
+   * @param {string} label - Operation label for the error.
+   * @returns {Promise<void>} - Resolves when the toggle completes.
+   */
+  async _execConstraintToggle(sql, label) {
+    try {
+      await this.query(sql)
+    } catch (error) {
+      if (error instanceof Error && /Timeout: Request failed to complete/i.test(error.message)) {
+        const snapshot = await this._captureBlockingSessionsForDebug().catch(
+          (diagError) => `(blocking diagnostics query failed: ${diagError instanceof Error ? diagError.message : diagError})`
+        )
+
+        throw new Error(`${error.message}\n\n[${label} blocked] other user sessions with open transactions or active requests:\n${snapshot}`, {cause: error})
+      }
+
+      throw error
+    }
+  }
+
+  /**
+   * Snapshots the sessions that could be blocking a constraint toggle in THIS
+   * database — every session other than this one that holds a lock in `DB_ID()`
+   * or is running a request against it — with its last statement, wait state,
+   * and blocking session, enough to identify a connection that leaked a lock.
+   * Scoped to the current database so a multi-database server does not leak
+   * unrelated sessions' SQL into the error and bury the real blocker.
+   * @returns {Promise<string>} - JSON snapshot, or a "(none)" marker.
+   */
+  async _captureBlockingSessionsForDebug() {
+    const rows = await this.query(`
+      WITH lock_sessions AS (
+        SELECT DISTINCT request_session_id AS session_id
+        FROM sys.dm_tran_locks
+        WHERE resource_database_id = DB_ID()
+      )
+      SELECT
+        s.session_id AS sessionId,
+        s.status AS sessionStatus,
+        s.login_time AS loginTime,
+        s.last_request_start_time AS lastRequestStart,
+        s.last_request_end_time AS lastRequestEnd,
+        s.open_transaction_count AS openTransactionCount,
+        r.status AS requestStatus,
+        r.command AS command,
+        r.wait_type AS waitType,
+        r.wait_time AS waitTimeMs,
+        r.blocking_session_id AS blockingSessionId,
+        CAST(ib.event_info AS NVARCHAR(MAX)) AS lastSql
+      FROM sys.dm_exec_sessions s
+      LEFT JOIN sys.dm_exec_requests r ON r.session_id = s.session_id
+      OUTER APPLY sys.dm_exec_input_buffer(s.session_id, NULL) ib
+      WHERE s.is_user_process = 1
+        AND s.session_id <> @@SPID
+        AND (s.session_id IN (SELECT session_id FROM lock_sessions) OR r.database_id = DB_ID())
+    `)
+
+    if (rows.length === 0) return "(none — no other session held a lock or ran a request in this database when queried)"
+
+    return JSON.stringify(rows, null, 2)
   }
 
   /**
