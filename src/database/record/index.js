@@ -47,6 +47,8 @@ import {defineModelScope} from "../../utils/model-scope.js"
 import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateValueForWrite } from "../datetime-storage.js"
 import {formatValue} from "../../utils/format-value.js"
 import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
+import {registerMagnitudeCounterCache} from "./counter-cache-magnitude.js"
+import {stateMachine} from "./state-machine.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsLength from "./validators/length.js"
 import ValidatorsPresence from "./validators/presence.js"
@@ -666,6 +668,30 @@ class VelociousDatabaseRecord {
    */
   static audited() {
     registerAuditing(this)
+  }
+
+  /**
+   * Declares an aasm-style state machine on this model: named states, events
+   * (guarded transitions), and enter/exit + before/after transition hooks. See
+   * `state-machine.js`. Generates `event()` / `eventAndSave()` / `canEvent()`
+   * transition methods per declared event.
+   * @param {import("./state-machine.js").StateMachineDefinition} definition - State machine definition.
+   * @returns {void}
+   */
+  static stateMachine(definition) {
+    stateMachine(this, definition)
+  }
+
+  /**
+   * Maintains a counter column on a `belongsTo` parent as the sum of a per-record
+   * magnitude, kept current by atomic increments diffed on every create/update/
+   * destroy (and moved between parents when the foreign key changes). See
+   * `counter-cache-magnitude.js`.
+   * @param {import("./counter-cache-magnitude.js").MagnitudeCounterCacheDefinition} definition - Counter cache definition.
+   * @returns {void}
+   */
+  static magnitudeCounterCache(definition) {
+    registerMagnitudeCounterCache(this, definition)
   }
 
   /**
