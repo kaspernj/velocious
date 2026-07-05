@@ -1,6 +1,8 @@
 import TaskBase from "../model-bases/task.js"
 
 class Task extends TaskBase {
+  static sync = true
+
   /** @returns {string} - Computed frontend-model identifier. */
   identifier() {
     return `task-${this.id()}`

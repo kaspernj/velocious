@@ -35,6 +35,26 @@ describe("sync API client", () => {
     expect(created).toEqual([sync])
   })
 
+  it("serializes Date attributes to ISO strings in the default tracked data", async () => {
+    const syncModel = {
+      findBy: async () => null,
+      create: async (attributes) => attributes
+    }
+    const resource = {
+      id: () => "0f8fad5b-d9cb-469f-a165-70867728950e",
+      constructor: {getModelName: () => "TicketScan", name: "t"},
+      attributes: () => ({
+        id: "0f8fad5b-d9cb-469f-a165-70867728950e",
+        scannedAt: new Date("2026-07-01T10:00:00.000Z"),
+        ticketNr: "T-1"
+      })
+    }
+
+    const sync = await SyncApiClient.queueLocalSync({localOnlyAttributes: ["id"], resource, syncModel})
+
+    expect(sync.data).toEqual({scannedAt: "2026-07-01T10:00:00.000Z", ticketNr: "T-1"})
+  })
+
   it("fails loudly when queueing a resource without a stable model name", async () => {
     const resource = {
       id: () => 12,

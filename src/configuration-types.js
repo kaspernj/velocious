@@ -363,9 +363,30 @@
  */
 
 /**
+ * Client-side sync transport owning HTTP POSTs to the framework sync endpoints,
+ * matching the frontend-model websocket client post contract.
+ * @typedef {object} VelociousSyncClientTransport
+ * @property {(path: string, body?: ?, options?: {headers?: Record<string, string>}) => Promise<{json: () => ?}>} post - Posts one request and resolves a response with a json accessor.
+ */
+
+/**
+ * Client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
+ * The framework owns the `${mountPath}/changes` and `${mountPath}/replay`
+ * POSTers over the given transport.
+ * @typedef {object} VelociousSyncClientConfiguration
+ * @property {() => string | Promise<string>} authenticationToken - Resolves the auth token sent with sync requests.
+ * @property {number} [batchSize] - Max syncs per request.
+ * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
+ * @property {string} [mountPath] - Mount path the server serves the sync endpoints under (match the server's `sync.api.mountPath`). Defaults to "/velocious/sync"; normalization strips trailing slashes and always fills in the default.
+ * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
+ * @property {VelociousSyncClientTransport} transport - Transport posting to the framework sync endpoints (e.g. the frontend-model websocket client).
+ */
+
+/**
  * Velocious sync configuration.
  * @typedef {object} VelociousSyncConfiguration
  * @property {VelociousSyncApiConfiguration} [api] - Auto-mounts the Velocious sync changes/replay endpoints for this resource class.
+ * @property {VelociousSyncClientConfiguration} [client] - Client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
  * @property {import("./sync/device-identity.js").SyncJsonWebKey | null} [deviceCertificateBackendPublicKey] - Public backend key used to verify offline device certificates for sync replay.
  * @property {number} [changeFeedRetentionSize] - Number of accepted server changes retained before clients must refresh from snapshot.
  * @property {Array<import("./sync/offline-grant.js").OfflineGrantSigningKey>} offlineGrantSigningKeys - Signing keys used to issue and verify offline grants. Secrets must never be exposed to clients.
