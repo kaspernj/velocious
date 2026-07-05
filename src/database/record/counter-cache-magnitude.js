@@ -16,7 +16,6 @@
  * captured in `beforeSave` (Velocious clears `changes()` during the post-update
  * reload) and consumed in `afterSave`, so the increment commits atomically with
  * the row it reflects.
- *
  * @typedef {{
  *   belongsTo: string,
  *   counterColumn: string,
@@ -152,7 +151,7 @@ async function applyPendingMagnitudeDelta(record, definition, pending) {
  * @param {import("./index.js").default} record - Record being saved.
  * @param {string} sourceAttribute - Source attribute name.
  * @param {string} sourceColumn - Source column name.
- * @param {Record<string, [?, ?]>} changes - The record's pre-save changes (column-keyed).
+ * @param {Record<string, ?>} changes - The record's pre-save changes (column-keyed).
  * @param {?} currentValue - The current (new) read value, returned when the source did not change.
  * @returns {?} The read-cast pre-save value.
  */
