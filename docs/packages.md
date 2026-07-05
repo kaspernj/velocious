@@ -41,6 +41,6 @@ That is all the app needs. On boot Velocious:
 - **Models** — loads the package's `src/models` right after the app's own `initializeModels` hook. A package model whose name collides with an already-registered (different) model throws a clear error.
 - **Resources** — auto-discovers the package's `src/resources/*-resource.js` (the same discovery used for the app's own resources), so package models get frontend-model HTTP endpoints, authorization, and realtime websocket broadcasting for free.
 - **Migrations** — `db:migrate` / `db:tenants:migrate` / `rollback` run the app's migrations **and** every package's, interleaved by their 14-digit timestamp. Timestamps must be unique across the app and all packages — a cross-source collision throws (the `schema_migrations` ledger keys on the timestamp).
-- **Frontend models** — `velocious generate:frontend-models` writes each package's frontend model into the app's `src/frontend-models`, merged into the app's shared `index.js` / `setup.js` — identical to the app's own models.
+- **Frontend models** — `velocious generate:frontend-models` writes each package's frontend model into the app's `src/frontend-models` and registers it via the app's shared `setup.js` — identical to the app's own models. (Import each model by its file path; no barrel `index.js` is generated.)
 
 Apps that pass no `packages` behave exactly as before.

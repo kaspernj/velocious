@@ -95,6 +95,33 @@ export default class DataCopier {
   }
 
   /**
+   * Deletes one tenant's rows from the target database, children before parents, with
+   * foreign keys disabled inside a single transaction. This is `copy` without the reinsert:
+   * the same plan traversal selects the tenant's current target rows and `deleteTargetRows`
+   * removes them children-first so the ordering never trips a foreign key. Multi-tenant apps
+   * use it to purge a tenant — for example clearing the tenant's master copy in the
+   * global/default database on teardown, so foreign keys stop referencing the tenant's
+   * about-to-be-removed root row.
+   *
+   * Returns the deleted rows keyed by table name so the caller can perform any app-specific
+   * post-delete work (record-location cleanup, auditing) without that policy leaking into the
+   * framework.
+   * @param {string} keyValue - Tenant key whose rows should be removed from the target.
+   * @returns {Promise<Map<string, Record<string, unknown>[]>>} - The deleted rows by table name.
+   */
+  async deleteTenantRows(keyValue) {
+    const rowsByTableName = await this.loadRows(this.targetDb, keyValue)
+
+    await this.targetDb.withDisabledForeignKeys(async () => {
+      await this.targetDb.transaction(async () => {
+        await this.deleteTargetRows(rowsByTableName)
+      })
+    })
+
+    return rowsByTableName
+  }
+
+  /**
    * Loads the rows for `keyValue` for every table in the plan from `db`, resolving
    * parent-scoped tables from the ids already selected for their parent table. Used for
    * both the source rows to copy and the target's current tenant rows to delete.

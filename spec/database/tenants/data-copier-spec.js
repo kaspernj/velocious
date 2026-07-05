@@ -83,6 +83,23 @@ describe("DataCopier", () => {
     })
   })
 
+  it("deleteTenantRows removes only the keyed tenant's rows from the target and returns them", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(targetDb)
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+      const deleted = await copier.deleteTenantRows("acct-a")
+
+      const gizmos = await targetDb.query("SELECT id FROM gizmos ORDER BY id")
+      const gizmoParts = await targetDb.query("SELECT id FROM gizmo_parts ORDER BY id")
+
+      expect(gizmos.map((row) => row.id)).toEqual(["g2"])
+      expect(gizmoParts.map((row) => row.id)).toEqual(["p3"])
+      expect((deleted.get("gizmos") || []).map((row) => row.id)).toEqual(["g1"])
+      expect((deleted.get("gizmo_parts") || []).map((row) => row.id).sort()).toEqual(["p1", "p2"])
+    })
+  })
+
   it("is idempotent — re-copying replaces the target rows instead of duplicating them", async () => {
     await withDatabases(async ({sourceDb, targetDb}) => {
       await seedSource(sourceDb)

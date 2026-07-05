@@ -1,0 +1,4 @@
+# Changelog
+
+- Add `DataCopier.deleteTenantRows(keyValue)` — deletes a tenant's rows from the target database (children-first, under disabled foreign keys, in one transaction) and returns the deleted rows keyed by table name, so apps can purge a tenant's global-DB rows without reimplementing the table-plan traversal.
+- Stop generating the `src/frontend-models/index.js` barrel from `generate:frontend-models`; a pre-existing `index.js` is removed on regeneration, and `setup.js` is unchanged. **Migration:** import each frontend model directly by its file path (e.g. `import User from ".../frontend-models/user.js"`) and import `setup.js` once at app startup to register all models — the same register-all side-effect the barrel provided. Anything that did `import ... from ".../frontend-models/index.js"` or `import ".../frontend-models/index.js"` should switch to the specific model file or `setup.js` respectively.
