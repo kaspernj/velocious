@@ -8,6 +8,15 @@
  */
 
 /**
+ * Static realtime channel declaration on a model's `static sync`, for channels
+ * whose name and params are static. Channels needing runtime params (like
+ * eventId) belong in the `sync.client.realtime.channels` callback instead.
+ * @typedef {object} ModelSyncRealtimeDeclaration
+ * @property {string} channel - Server channel name to subscribe.
+ * @property {Record<string, ?>} [params] - Static subscribe params. The framework injects `authenticationToken` automatically.
+ */
+
+/**
  * Declarative per-resource sync policy.
  * @typedef {object} SyncClientResourceConfig
  * @property {?} modelClass - Local model class for this resource.
@@ -20,6 +29,7 @@
  * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ?}) => string)} [syncType] - Maps a mutation operation to a sync type. The "upsert" flag queues creates and updates as "update" rows (the server upserts by resource id) and destroys as "delete". Defaults to the operation name with destroy mapped to "delete".
  * @property {(args: {operation: "create" | "update" | "destroy", record: ?}) => Record<string, ?>} [trackedData] - Custom queued-payload builder for tracked mutations.
  * @property {boolean | {operations: Array<"create" | "update" | "destroy">}} [track] - Enables automatic mutation tracking through model lifecycle callbacks.
+ * @property {ModelSyncRealtimeDeclaration} [realtime] - Static realtime channel this resource subscribes through `subscribeRealtime(...)`.
  */
 
 /**
@@ -36,6 +46,7 @@
  * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ?}) => string)} [syncType] - Sync type flag or mapper (see SyncClientResourceConfig).
  * @property {boolean | Array<"create" | "update" | "destroy"> | {operations: Array<"create" | "update" | "destroy">}} [track] - Enables automatic mutation tracking; an array is shorthand for {operations}.
  * @property {(args: {operation: "create" | "update" | "destroy", record: ?}) => Record<string, ?>} [trackedData] - Custom queued-payload builder for tracked mutations.
+ * @property {ModelSyncRealtimeDeclaration} [realtime] - Static realtime channel this resource subscribes through `subscribeRealtime(...)`; use the `sync.client.realtime.channels` callback for channels needing runtime params.
  */
 
 /** @typedef {boolean | ModelSyncDeclarationConfig} ModelSyncDeclaration */
@@ -63,6 +74,7 @@
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
  * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
  * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ?>>}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
+ * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.
  * @property {?} syncModel - Local pending-sync model class.
  */

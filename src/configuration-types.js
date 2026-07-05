@@ -370,6 +370,44 @@
  */
 
 /**
+ * Websocket client contract required from `sync.client.realtime.createClient`,
+ * matching `VelociousWebsocketClient` / snapreq's websocket client.
+ * @typedef {object} VelociousSyncRealtimeWebsocketClient
+ * @property {() => Promise<?>} connect - Connects the websocket.
+ * @property {(channelType: string, options?: {params?: Record<string, ?>, onMessage?: (body: ?) => void, onResume?: () => void, onClose?: (reason: string) => void}) => VelociousSyncRealtimeSubscription} subscribeChannel - Opens one channel subscription.
+ * @property {() => Promise<void>} disconnectAndStopReconnect - Closes the socket and stops auto-reconnect.
+ */
+
+/**
+ * Channel subscription handle returned by `subscribeChannel`.
+ * @typedef {object} VelociousSyncRealtimeSubscription
+ * @property {() => void} close - Closes the subscription.
+ * @property {() => boolean} isReady - Whether the subscription is acknowledged and ready.
+ * @property {(params?: {timeoutMs?: number}) => Promise<void>} waitForReady - Resolves once the server acknowledges the subscription.
+ */
+
+/**
+ * One realtime channel subscription descriptor.
+ * @typedef {object} VelociousSyncRealtimeChannelDescriptor
+ * @property {string} channel - Server channel name to subscribe.
+ * @property {Record<string, ?>} [params] - Subscribe params (runtime values like eventId). The framework injects `authenticationToken` automatically.
+ * @property {string} [resourceType] - Default resource/model name for pushed changes that do not carry their own resourceType.
+ */
+
+/**
+ * Realtime push configuration for the sync client. Only the genuinely app-owned
+ * callbacks live here: how to build the websocket client and which channels
+ * (with runtime params) to subscribe. Everything else - subscribing, applying
+ * pushes through the derived resource applier, echo suppression, and
+ * pull-on-reconnect - is derived.
+ * @typedef {object} VelociousSyncClientRealtimeConfiguration
+ * @property {() => VelociousSyncRealtimeWebsocketClient | Promise<VelociousSyncRealtimeWebsocketClient>} createClient - Builds the (unconnected) websocket client; the framework owns connect/disconnect.
+ * @property {(context: ?) => Array<VelociousSyncRealtimeChannelDescriptor> | Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} [channels] - Resolves channel descriptors from the `subscribeRealtime(context)` context (runtime params like eventId). Optional when models declare `static sync = {realtime: {channel}}`.
+ * @property {() => string | Promise<string>} [localOrigin] - Resolves this device's echo origin; pushed messages with a matching `echoOrigin` are dropped.
+ * @property {boolean} [pullOnReconnect] - Fire a coalesced `pull()` when subscriptions become ready or resume after a drop, closing offline gaps. Defaults to true.
+ */
+
+/**
  * Client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
  * The framework owns the `${mountPath}/changes` and `${mountPath}/replay`
  * POSTers over the given transport.
@@ -379,6 +417,7 @@
  * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
  * @property {string} [mountPath] - Mount path the server serves the sync endpoints under (match the server's `sync.api.mountPath`). Defaults to "/velocious/sync"; normalization strips trailing slashes and always fills in the default.
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
+ * @property {VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {VelociousSyncClientTransport} transport - Transport posting to the framework sync endpoints (e.g. the frontend-model websocket client).
  */
 
