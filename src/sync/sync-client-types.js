@@ -28,7 +28,7 @@
  * @property {string[]} [localOnlyAttributes] - Attributes stripped from queued payloads.
  * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ?}) => string)} [syncType] - Maps a mutation operation to a sync type. The "upsert" flag queues creates and updates as "update" rows (the server upserts by resource id) and destroys as "delete". Defaults to the operation name with destroy mapped to "delete".
  * @property {(args: {operation: "create" | "update" | "destroy", record: ?}) => Record<string, ?>} [trackedData] - Custom queued-payload builder for tracked mutations.
- * @property {boolean | {operations: Array<"create" | "update" | "destroy">}} [track] - Enables automatic mutation tracking through model lifecycle callbacks.
+ * @property {boolean | {operations: Array<"create" | "update" | "destroy">}} [track] - Automatic mutation tracking policy. On by default (creates and updates queue automatically); `false` opts the resource out, `true` adds destroys, `{operations}` narrows the tracked operations.
  * @property {ModelSyncRealtimeDeclaration} [realtime] - Static realtime channel this resource subscribes through `subscribeRealtime(...)`.
  */
 
@@ -44,7 +44,7 @@
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"]} [findRecordForDelete] - Custom pull-apply delete resolver.
  * @property {string[]} [localOnlyAttributes] - Extra local-only attributes merged with the derived primary key, createdAt/updatedAt, and sync bookkeeping attributes.
  * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ?}) => string)} [syncType] - Sync type flag or mapper (see SyncClientResourceConfig).
- * @property {boolean | Array<"create" | "update" | "destroy"> | {operations: Array<"create" | "update" | "destroy">}} [track] - Enables automatic mutation tracking; an array is shorthand for {operations}.
+ * @property {boolean | Array<"create" | "update" | "destroy"> | {operations: Array<"create" | "update" | "destroy">}} [track] - Automatic mutation tracking policy; an array is shorthand for {operations}. On by default (creates and updates queue automatically); `false` opts the model out (for models written by non-user flows), `true` adds destroys.
  * @property {(args: {operation: "create" | "update" | "destroy", record: ?}) => Record<string, ?>} [trackedData] - Custom queued-payload builder for tracked mutations.
  * @property {ModelSyncRealtimeDeclaration} [realtime] - Static realtime channel this resource subscribes through `subscribeRealtime(...)`; use the `sync.client.realtime.channels` callback for channels needing runtime params.
  */

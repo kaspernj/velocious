@@ -323,6 +323,55 @@ describe("sync client", () => {
     expect(SyncClient.current()).toEqual(harness.client)
   })
 
+  it("tracks create and update mutations by default for models declaring static sync", async () => {
+    const DefaultTracked = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "DefaultTracked", sync: true})
+    const harness = buildHarness({modelClasses: [DefaultTracked]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    expect(Object.keys(DefaultTracked.lifecycleCallbacks)).toEqual(["afterCreate", "afterUpdate"])
+
+    const record = buildScanRecord(DefaultTracked)
+
+    await triggerLifecycle(DefaultTracked, "afterCreate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("create")
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, localOnly: "internal", ticketId: TICKET_ID})
+
+    harness.client.stop()
+  })
+
+  it("tracks create and update mutations by default for declaration objects without a track key", async () => {
+    const DefaultTracked = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "DefaultTracked",
+      sync: {localOnlyAttributes: ["localOnly"]}
+    })
+    const harness = buildHarness({modelClasses: [DefaultTracked]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    expect(Object.keys(DefaultTracked.lifecycleCallbacks)).toEqual(["afterCreate", "afterUpdate"])
+
+    harness.client.stop()
+  })
+
+  it("does not track models declaring track: false", async () => {
+    const Untracked = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "Untracked", sync: {track: false}})
+    const harness = buildHarness({modelClasses: [Untracked]})
+
+    await harness.client.start()
+
+    expect(Object.keys(Untracked.lifecycleCallbacks)).toEqual([])
+
+    harness.client.stop()
+  })
+
   it("automatically queues tracked model mutations and replays them", async () => {
     const TrackedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
@@ -466,6 +515,242 @@ describe("sync client", () => {
     await triggerLifecycle(TrackedScan, "afterUpdate", record)
 
     expect(harness.syncModel.rows.length).toEqual(1)
+  })
+
+  it("queues tracked mutations through the connection's afterCommit hook", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+    expect(afterCommitCallbacks.length).toEqual(1)
+
+    await afterCommitCallbacks[0]()
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("create")
+
+    harness.client.stop()
+  })
+
+  it("snapshots tracked payloads at mutation time before deferring to afterCommit", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const attributes = {accepted: 1, localOnly: "internal", ticketId: TICKET_ID}
+    const record = buildRecord(TrackedScan, SCAN_ID, attributes)
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    // Simulates an afterSave hook assigning an unsaved attribute after the tracked callback ran.
+    attributes.ticketId = "0ffbf58a-90b2-4c9c-97b1-14f5f0c68b09"
+
+    for (const callback of afterCommitCallbacks) await callback()
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, localOnly: "internal", ticketId: TICKET_ID})
+
+    harness.client.stop()
+  })
+
+  it("routes post-commit queue failures to onError and keeps later afterCommit callbacks running", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const originalCreate = harness.syncModel.create
+    let failNextCreate = true
+
+    harness.syncModel.create = async (/** @type {Record<string, ?>} */ attributes) => {
+      if (failNextCreate) {
+        failNextCreate = false
+
+        throw new Error("Local sync row write failed")
+      }
+
+      return await originalCreate(attributes)
+    }
+
+    const failingRecord = buildScanRecord(TrackedScan)
+    const laterRecord = buildRecord(TrackedScan, TICKET_ID, {accepted: 0, localOnly: "internal", ticketId: TICKET_ID})
+
+    await triggerLifecycle(TrackedScan, "afterCreate", failingRecord)
+    await triggerLifecycle(TrackedScan, "afterUpdate", laterRecord)
+
+    // Mimics the driver's committed-callback loop: a failure must not break later callbacks.
+    for (const callback of afterCommitCallbacks) await callback()
+
+    expect(harness.errors.map((/** @type {Error} */ error) => error.message)).toEqual(["Local sync row write failed"])
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.resourceId).toEqual(TICKET_ID)
+
+    harness.client.stop()
+  })
+
+  it("logs post-commit queue failures loudly without rethrowing when no onError is configured", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const syncModel = buildFakeSyncModel()
+
+    syncModel.create = async () => {
+      throw new Error("Local sync row write failed")
+    }
+
+    const transport = {
+      /** @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+      post: async () => ({json: () => ({status: "success", syncs: []})})
+    }
+    const configuration = buildConfiguration({
+      modelClasses: [TrackedScan],
+      sync: {client: {authenticationToken: () => "token-1", isOnline: () => false, transport}}
+    })
+    const client = new SyncClient({configuration, syncModel})
+    /** @type {Array<Array<?>>} */
+    const loggedErrors = []
+
+    client._logger = {
+      /** @param {...?} messages - Logged error parts. @returns {Promise<void>} */
+      error: async (...messages) => {
+        loggedErrors.push(messages)
+      }
+    }
+
+    await client.start()
+
+    const record = buildScanRecord(TrackedScan)
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    expect(loggedErrors.length).toEqual(1)
+    expect(/** @type {Error} */ (loggedErrors[0][loggedErrors[0].length - 1]).message).toEqual("Local sync row write failed")
+    expect(syncModel.rows.length).toEqual(0)
+
+    client.stop()
+  })
+
+  it("suppresses tracked queueing inside withoutTracking across awaits and returns the callback result", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+    const result = await harness.client.withoutTracking(async () => {
+      await triggerLifecycle(TrackedScan, "afterCreate", record)
+      await Promise.resolve()
+      await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+      return "applied"
+    })
+
+    expect(result).toEqual("applied")
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+
+    harness.client.stop()
+  })
+
+  it("restores tracking when a withoutTracking callback throws and supports nesting", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+
+    await expect(async () => {
+      await harness.client.withoutTracking(async () => {
+        await harness.client.withoutTracking(async () => {
+          await triggerLifecycle(TrackedScan, "afterCreate", record)
+        })
+
+        await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+        throw new Error("Backfill failed")
+      })
+    }).toThrow(/Backfill failed/u)
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+
+    harness.client.stop()
+  })
+
+  it("suppresses tracked queueing for records marked as remote applies until released", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+    const release = harness.client.markRemoteApply(record)
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+
+    release()
+
+    await triggerLifecycle(TrackedScan, "afterUpdate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+
+    harness.client.stop()
   })
 
   it("unregisters tracking callbacks when stopped", async () => {

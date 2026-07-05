@@ -106,6 +106,14 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
       return true
     }
 
+    /** @returns {?} Fake connection running afterCommit callbacks immediately, like a driver with no open transaction. */
+    static connection() {
+      return {
+        /** @param {() => Promise<void>} callback - Commit callback. @returns {Promise<void>} */
+        afterCommit: async (callback) => await callback()
+      }
+    }
+
     /** @param {Function} callback - Lifecycle callback. @returns {void} */
     static afterCreate(callback) {
       (this.lifecycleCallbacks.afterCreate ||= []).push(callback)

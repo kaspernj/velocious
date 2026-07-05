@@ -2,6 +2,7 @@
 
 import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
+import Logger from "../logger.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
@@ -14,6 +15,14 @@ let clientCounter = 0
 
 /** @type {{create: "afterCreate", update: "afterUpdate", destroy: "afterDestroy"}} */
 const TRACKED_CALLBACK_NAMES = {create: "afterCreate", destroy: "afterDestroy", update: "afterUpdate"}
+
+/**
+ * Operations tracked by default for models declaring `static sync` without a
+ * `track` key: local creates and updates queue automatically. Destroys are not
+ * tracked by default because a local destroy is often cache eviction rather
+ * than a server delete; opt in with `track: true` or an operations list.
+ * @type {Array<"create" | "update" | "destroy">} */
+const DEFAULT_TRACKED_OPERATIONS = ["create", "update"]
 
 /** Attribute names treated as client-local sync bookkeeping when deriving localOnlyAttributes. */
 const LOCAL_BOOKKEEPING_ATTRIBUTE_NAMES = ["createdAt", "updatedAt", "lastSyncChangeAt"]
@@ -105,13 +114,18 @@ export default class SyncClient {
     this._trackedCallbacks = []
     /** @type {WeakSet<object>} */
     this._remoteApplyRecords = new WeakSet()
+    this._withoutTrackingDepth = 0
+    /** @type {Logger | {error: (...messages: Array<?>) => Promise<void>} | null} */
+    this._logger = null
     this._started = false
   }
 
   /**
-   * Registers automatic mutation tracking for every resource with `track` enabled:
-   * local model creates/updates/destroys queue pending sync rows and schedule an
-   * immediate replay attempt, without app-side queue calls.
+   * Registers automatic mutation tracking for every declared resource (on by
+   * default: local creates and updates queue pending sync rows once their
+   * transaction commits and schedule an immediate replay attempt, without
+   * app-side queue calls). `track: false` resources are skipped; `track: true`
+   * adds destroys; an operations list narrows the tracked operations.
    * @returns {Promise<void>}
    */
   async start() {
@@ -147,13 +161,17 @@ export default class SyncClient {
 
   /**
    * Resolves and validates the tracked operations for a resource config.
+   * Tracking is on by default: models declaring `static sync` without a `track`
+   * key queue local creates and updates automatically; `track: false` opts a
+   * model out (for models written by non-user flows).
    * @param {{resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig, resourceType: string}} args - Resource config and name.
    * @returns {Array<"create" | "update" | "destroy">} Tracked operations.
    */
   trackedOperations({resourceConfig, resourceType}) {
     const track = resourceConfig.track
 
-    if (track === undefined || track === false) return []
+    if (track === false) return []
+    if (track === undefined) return DEFAULT_TRACKED_OPERATIONS
     if (track === true) return ["create", "update", "destroy"]
 
     if (!track || typeof track !== "object" || !Array.isArray(track.operations) || track.operations.length === 0) {
@@ -170,25 +188,76 @@ export default class SyncClient {
   }
 
   /**
-   * Builds the lifecycle callback queueing one tracked mutation.
+   * Builds the lifecycle callback queueing one tracked mutation. The queued
+   * payload and sync type are snapshotted at mutation-callback time, so
+   * afterSave hooks assigning unsaved attributes (or any later drift on the
+   * record) cannot change what gets queued vs what was committed. Queueing is
+   * deferred through the model connection's afterCommit hook so it only runs
+   * once the mutation's transaction has committed (immediately when no
+   * transaction is open) - queued syncs never reference rolled-back rows.
+   * Post-commit queue failures are reported without rethrowing into the
+   * driver's afterCommit chain (see reportAfterCommitError).
    * @param {{operation: "create" | "update" | "destroy", resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Operation and resource config.
    * @returns {(record: ?) => Promise<void>} Lifecycle callback.
    */
   trackedMutationCallback({operation, resourceConfig}) {
     return async (record) => {
-      if (this.isRemoteApply(record)) return
+      if (this.isTrackingSuppressed(record)) return
 
-      await SyncApiClient.queueLocalSync({
+      const data = SyncApiClient.queuedSyncData({
         booleanAttributes: resourceConfig.booleanAttributes || [],
         data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
         localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
-        resource: record,
-        syncModel: this.config.syncModel,
-        syncType: this.defaultSyncType({operation, record, resourceConfig})
+        resource: record
       })
+      const syncType = this.defaultSyncType({operation, record, resourceConfig})
 
-      this.scheduleReplay()
+      await resourceConfig.modelClass.connection().afterCommit(async () => {
+        try {
+          await SyncApiClient.queueLocalSync({
+            data,
+            resource: record,
+            syncModel: this.config.syncModel,
+            syncType
+          })
+        } catch (error) {
+          await this.reportAfterCommitError(/** @type {Error} */ (error))
+
+          return
+        }
+
+        this.scheduleReplay()
+      })
     }
+  }
+
+  /**
+   * Reports a post-commit tracked-queueing failure. The transaction has already
+   * committed when afterCommit callbacks run, so rethrowing here would poison
+   * the driver's awaited afterCommit chain (breaking unrelated callbacks) -
+   * instead the failure goes to the configured sync.client.onError hook, or is
+   * logged loudly through the client's logger when none is configured.
+   * @param {Error} error - Post-commit queueing failure.
+   * @returns {Promise<void>}
+   */
+  async reportAfterCommitError(error) {
+    if (this.config.onError) {
+      this.config.onError(error)
+
+      return
+    }
+
+    await this.logger().error("SyncClient failed to queue a tracked mutation after commit", error)
+  }
+
+  /**
+   * Returns the lazily built client logger.
+   * @returns {Logger | {error: (...messages: Array<?>) => Promise<void>}} Client logger.
+   */
+  logger() {
+    this._logger ||= new Logger("SyncClient", {configuration: this.config.configuration})
+
+    return this._logger
   }
 
   /**
@@ -198,6 +267,54 @@ export default class SyncClient {
    */
   isRemoteApply(record) {
     return this._remoteApplyRecords.has(record)
+  }
+
+  /**
+   * Whether tracked mutation queueing is currently suppressed for a record:
+   * either the record was marked as a remote apply (`markRemoteApply`, used by
+   * pull and realtime applies) or a `withoutTracking` callback is running on
+   * this client.
+   * @param {?} record - Local model record.
+   * @returns {boolean} Whether tracked queueing is suppressed for the record.
+   */
+  isTrackingSuppressed(record) {
+    return this._withoutTrackingDepth > 0 || this.isRemoteApply(record)
+  }
+
+  /**
+   * Runs a callback with tracked mutation queueing suppressed on this client -
+   * for code applying server-originated data outside the derived pull/realtime
+   * appliers (legacy pull paths, importers, sign-in backfills), so their writes
+   * are not echoed back to the server as device changes. Suppression covers the
+   * whole async duration of the callback (nested calls stack) and is
+   * client-wide while it runs: mutations from concurrently running tasks are
+   * also suppressed for that window, so prefer `markRemoteApply(record)` when
+   * writes from other flows can interleave.
+   * @template T
+   * @param {() => Promise<T> | T} callback - Work whose model writes should not queue tracked syncs.
+   * @returns {Promise<T>} The callback result.
+   */
+  async withoutTracking(callback) {
+    this._withoutTrackingDepth++
+
+    try {
+      return await callback()
+    } finally {
+      this._withoutTrackingDepth--
+    }
+  }
+
+  /**
+   * Marks one record as being written from server-originated data so tracked
+   * mutation queueing skips it (record-precise suppression). The derived pull
+   * and realtime appliers use this internally around every applied write.
+   * @param {?} record - Local model record about to be written.
+   * @returns {() => void} Release callback re-enabling tracking for the record.
+   */
+  markRemoteApply(record) {
+    this._remoteApplyRecords.add(record)
+
+    return () => this._remoteApplyRecords.delete(record)
   }
 
   /**
@@ -319,11 +436,7 @@ export default class SyncClient {
    */
   remoteApplySync({source = "pulled change"} = {}) {
     const pullResourceConfigs = this.pullResourceConfigs()
-    const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => {
-      this._remoteApplyRecords.add(record)
-
-      return () => this._remoteApplyRecords.delete(record)
-    })
+    const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => this.markRemoteApply(record))
 
     return async (sync) => {
       const resourceType = sync.resourceType()
