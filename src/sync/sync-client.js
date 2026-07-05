@@ -15,6 +15,14 @@ let clientCounter = 0
 /** @type {{create: "afterCreate", update: "afterUpdate", destroy: "afterDestroy"}} */
 const TRACKED_CALLBACK_NAMES = {create: "afterCreate", destroy: "afterDestroy", update: "afterUpdate"}
 
+/**
+ * Operations tracked by default for models declaring `static sync` without a
+ * `track` key: local creates and updates queue automatically. Destroys are not
+ * tracked by default because a local destroy is often cache eviction rather
+ * than a server delete; opt in with `track: true` or an operations list.
+ * @type {Array<"create" | "update" | "destroy">} */
+const DEFAULT_TRACKED_OPERATIONS = ["create", "update"]
+
 /** Attribute names treated as client-local sync bookkeeping when deriving localOnlyAttributes. */
 const LOCAL_BOOKKEEPING_ATTRIBUTE_NAMES = ["createdAt", "updatedAt", "lastSyncChangeAt"]
 
@@ -147,13 +155,17 @@ export default class SyncClient {
 
   /**
    * Resolves and validates the tracked operations for a resource config.
+   * Tracking is on by default: models declaring `static sync` without a `track`
+   * key queue local creates and updates automatically; `track: false` opts a
+   * model out (for models written by non-user flows).
    * @param {{resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig, resourceType: string}} args - Resource config and name.
    * @returns {Array<"create" | "update" | "destroy">} Tracked operations.
    */
   trackedOperations({resourceConfig, resourceType}) {
     const track = resourceConfig.track
 
-    if (track === undefined || track === false) return []
+    if (track === false) return []
+    if (track === undefined) return DEFAULT_TRACKED_OPERATIONS
     if (track === true) return ["create", "update", "destroy"]
 
     if (!track || typeof track !== "object" || !Array.isArray(track.operations) || track.operations.length === 0) {

@@ -323,6 +323,55 @@ describe("sync client", () => {
     expect(SyncClient.current()).toEqual(harness.client)
   })
 
+  it("tracks create and update mutations by default for models declaring static sync", async () => {
+    const DefaultTracked = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "DefaultTracked", sync: true})
+    const harness = buildHarness({modelClasses: [DefaultTracked]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    expect(Object.keys(DefaultTracked.lifecycleCallbacks)).toEqual(["afterCreate", "afterUpdate"])
+
+    const record = buildScanRecord(DefaultTracked)
+
+    await triggerLifecycle(DefaultTracked, "afterCreate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("create")
+    expect(harness.syncModel.rows[0].attributes.data).toEqual({accepted: true, localOnly: "internal", ticketId: TICKET_ID})
+
+    harness.client.stop()
+  })
+
+  it("tracks create and update mutations by default for declaration objects without a track key", async () => {
+    const DefaultTracked = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "DefaultTracked",
+      sync: {localOnlyAttributes: ["localOnly"]}
+    })
+    const harness = buildHarness({modelClasses: [DefaultTracked]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    expect(Object.keys(DefaultTracked.lifecycleCallbacks)).toEqual(["afterCreate", "afterUpdate"])
+
+    harness.client.stop()
+  })
+
+  it("does not track models declaring track: false", async () => {
+    const Untracked = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "Untracked", sync: {track: false}})
+    const harness = buildHarness({modelClasses: [Untracked]})
+
+    await harness.client.start()
+
+    expect(Object.keys(Untracked.lifecycleCallbacks)).toEqual([])
+
+    harness.client.stop()
+  })
+
   it("automatically queues tracked model mutations and replays them", async () => {
     const TrackedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
