@@ -469,6 +469,67 @@ describe("stateMachine", {databaseCleaning: {transaction: true}}, () => {
     expect(/** @type {any} */ (TestBuild).getStateMachineStateNames()).toContain("queued")
   })
 
+  it("does not double-register transition hooks when declared twice (idempotent)", () => {
+    class TestBuild extends MockModelBase {
+      /** @param {string} value */
+      setStatus(value) { this._setAttribute("status", value) }
+    }
+
+    TestBuild._registeredCallbacks = []
+
+    const definition = {
+      column: "status",
+      events: {queue: {from: "new", to: "queued"}},
+      initial: "new",
+      states: {new: {}, queued: {}}
+    }
+
+    stateMachine(TestBuild, definition)
+    stateMachine(TestBuild, definition)
+
+    const beforeSaveCount = TestBuild._registeredCallbacks.filter((entry) => entry.name === "beforeSave").length
+    const afterSaveCount = TestBuild._registeredCallbacks.filter((entry) => entry.name === "afterSave").length
+
+    expect(beforeSaveCount).toEqual(1)
+    expect(afterSaveCount).toEqual(1)
+  })
+
+  it("runs beforeExit/afterExit for the state being left, around the entered state's hooks", async () => {
+    /** @type {string[]} */
+    const callOrder = []
+
+    class TestBuild extends MockModelBase {
+      /** @param {string} value */
+      setStatus(value) { this._setAttribute("status", value) }
+    }
+
+    TestBuild._registeredCallbacks = []
+
+    stateMachine(TestBuild, {
+      column: "status",
+      events: {fail: {from: "running", to: "failed"}},
+      initial: "new",
+      states: {
+        failed: {
+          afterEnter: () => { callOrder.push("failed-afterEnter") },
+          beforeEnter: () => { callOrder.push("failed-beforeEnter") }
+        },
+        running: {
+          afterExit: () => { callOrder.push("running-afterExit") },
+          beforeExit: () => { callOrder.push("running-beforeExit") }
+        }
+      }
+    })
+
+    const build = new TestBuild({id: "123", status: "running"})
+
+    build.fail()
+    await build._runBeforeSaveCallbacks()
+    await build._runAfterSaveCallbacks()
+
+    expect(callOrder).toEqual(["running-beforeExit", "failed-beforeEnter", "failed-afterEnter", "running-afterExit"])
+  })
+
   it("defaults to 'state' column when not specified", () => {
     class TestServer extends MockModelBase {
       /** @param {string} value */

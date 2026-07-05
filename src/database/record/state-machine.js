@@ -10,7 +10,9 @@
  * }} StateMachineDefinition
  * @typedef {{
  *   beforeEnter?: (model: import("./index.js").default) => void | Promise<void>,
- *   afterEnter?: (model: import("./index.js").default) => void | Promise<void>
+ *   afterEnter?: (model: import("./index.js").default) => void | Promise<void>,
+ *   beforeExit?: (model: import("./index.js").default) => void | Promise<void>,
+ *   afterExit?: (model: import("./index.js").default) => void | Promise<void>
  * }} StateDefinition
  * @typedef {{
  *   from: string | string[],
@@ -68,6 +70,14 @@ export function stateMachine(ModelClass, definition) {
    * @type {?} */
   const dynamicClass = ModelClass
 
+  // Idempotent: re-declaring on the same class (or a re-evaluated module) must not
+  // register the before/after-save transition hooks twice. Guard on an own property
+  // so a subclass declaring its own machine is unaffected by the parent's flag.
+  if (Object.prototype.hasOwnProperty.call(dynamicClass, "_stateMachineRegistered") && dynamicClass._stateMachineRegistered) {
+    return
+  }
+
+  dynamicClass._stateMachineRegistered = true
   dynamicClass._stateMachineDefinition = definition
   dynamicClass._stateMachineColumn = column
 
@@ -229,7 +239,13 @@ export function stateMachine(ModelClass, definition) {
       await eventDef.before(model)
     }
 
-    // Run state-level beforeEnter callback
+    // Run the exited state's beforeExit, then the entered state's beforeEnter
+    const fromStateDefinition = definition.states[pending.from]
+
+    if (fromStateDefinition?.beforeExit) {
+      await fromStateDefinition.beforeExit(model)
+    }
+
     const stateDefinition = definition.states[pending.to]
 
     if (stateDefinition?.beforeEnter) {
@@ -252,11 +268,17 @@ export function stateMachine(ModelClass, definition) {
     // Clear the pending transition now that save is complete
     dynamicModel[PENDING_TRANSITION_KEY] = null
 
-    // Run state-level afterEnter callback
+    // Run the entered state's afterEnter, then the exited state's afterExit
     const stateDefinition = definition.states[pending.to]
 
     if (stateDefinition?.afterEnter) {
       await stateDefinition.afterEnter(model)
+    }
+
+    const fromStateDefinition = definition.states[pending.from]
+
+    if (fromStateDefinition?.afterExit) {
+      await fromStateDefinition.afterExit(model)
     }
 
     // Run event-level after callback
