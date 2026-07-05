@@ -6,6 +6,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
 import SyncApiClient from "./sync-api-client.js"
+import SyncRealtimeBridge from "./sync-realtime-bridge.js"
 import SyncScopeStore from "./sync-scope-store.js"
 import {currentSyncClient, setCurrentSyncClient} from "./sync-client-registry.js"
 
@@ -87,10 +88,13 @@ export default class SyncClient {
       onError: clientConfiguration.onError,
       postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, transport: clientConfiguration.transport}),
       postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, transport: clientConfiguration.transport}),
+      realtime: clientConfiguration.realtime,
       resources,
       syncModel: resolvedSyncModel
     }
     this._clientNumber = ++clientCounter
+    /** @type {SyncRealtimeBridge | null} */
+    this._realtimeBridge = null
     /** @type {import("./sync-scope-store.js").default | null} */
     this._scopeStore = scopeStore || null
     /** @type {Promise<void> | null} */
@@ -265,26 +269,7 @@ export default class SyncClient {
     await SyncApiClient.singleFlight(`velocious-sync-client-pull-${this._clientNumber}`, async () => {
       const authenticationToken = await this.config.authenticationToken()
       const scopeStore = this.scopeStore()
-      const pullResourceConfigs = this.pullResourceConfigs()
-      const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => {
-        this._remoteApplyRecords.add(record)
-
-        return () => this._remoteApplyRecords.delete(record)
-      })
-      /**
-       * Applies one pulled change, failing loudly instead of silently skipping unconfigured resources.
-       * @param {import("./sync-api-client-types.js").SyncChangeEnvelope} sync - Pulled change.
-       * @returns {Promise<import("./sync-api-client-types.js").SyncChangeApplyResult>} Apply result.
-       */
-      const applySync = async (sync) => {
-        const resourceType = sync.resourceType()
-
-        if (!resourceType || !pullResourceConfigs[resourceType]) {
-          throw new Error(`No sync resource with pull attributes configured for pulled change: ${String(resourceType)}`)
-        }
-
-        return await applier(sync)
-      }
+      const applySync = this.remoteApplySync()
       const result = {
         changed: false,
         pages: 0,
@@ -322,6 +307,78 @@ export default class SyncClient {
     })
 
     return combinedResult
+  }
+
+  /**
+   * Builds the derived remote-change applier shared by pulls and realtime pushes:
+   * applies through the declared resource configs, registers each written record
+   * for echo suppression (tracked resources do not re-queue applied changes), and
+   * fails loudly instead of silently skipping unconfigured resources.
+   * @param {{source?: string}} [args] - Error context describing where the change came from.
+   * @returns {(sync: import("./sync-api-client-types.js").SyncChangeEnvelope) => Promise<import("./sync-api-client-types.js").SyncChangeApplyResult>} Loud remote-change applier.
+   */
+  remoteApplySync({source = "pulled change"} = {}) {
+    const pullResourceConfigs = this.pullResourceConfigs()
+    const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => {
+      this._remoteApplyRecords.add(record)
+
+      return () => this._remoteApplyRecords.delete(record)
+    })
+
+    return async (sync) => {
+      const resourceType = sync.resourceType()
+
+      if (!resourceType || !pullResourceConfigs[resourceType]) {
+        throw new Error(`No sync resource with pull attributes configured for ${source}: ${String(resourceType)}`)
+      }
+
+      return await applier(sync)
+    }
+  }
+
+  /**
+   * Subscribes the derived realtime channels so pushed websocket changes apply
+   * through the same derived applier as pulls (idempotent, single-flighted).
+   * @param {?} [context] - App context passed to the `sync.client.realtime.channels` callback (runtime values like eventId).
+   * @returns {Promise<void>}
+   */
+  async subscribeRealtime(context) {
+    await this.realtimeBridge().subscribe(context)
+  }
+
+  /**
+   * Unsubscribes the realtime channels and disconnects the websocket client (idempotent).
+   * @returns {Promise<void>}
+   */
+  async unsubscribeRealtime() {
+    await this.realtimeBridge().unsubscribe()
+  }
+
+  /**
+   * Reports the realtime subscription state and per-channel readiness.
+   * @returns {ReturnType<SyncRealtimeBridge["status"]>} Realtime status.
+   */
+  realtimeStatus() {
+    return this.realtimeBridge().status()
+  }
+
+  /**
+   * Awaits all pending realtime message applies and any scheduled
+   * pull-on-reconnect (useful in tests and shutdown flows).
+   * @returns {Promise<void>}
+   */
+  async waitForRealtimeApplied() {
+    await this.realtimeBridge().waitForApplied()
+  }
+
+  /**
+   * Returns the lazily built realtime bridge.
+   * @returns {SyncRealtimeBridge} Realtime bridge.
+   */
+  realtimeBridge() {
+    this._realtimeBridge ||= new SyncRealtimeBridge({syncClient: this})
+
+    return this._realtimeBridge
   }
 
   /**
@@ -491,11 +548,11 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
     throw new Error(`${resourceType} static sync must be true or a sync declaration object, got: ${String(declaration)}`)
   }
 
-  const {afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, syncType, track, trackedData, ...restDeclaration} = normalizedDeclaration
+  const {afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, realtime, syncType, track, trackedData, ...restDeclaration} = normalizedDeclaration
   const unknownKeys = Object.keys(restDeclaration)
 
   if (unknownKeys.length > 0) {
-    throw new Error(`${resourceType} static sync received unknown keys: ${unknownKeys.join(", ")} (supported: afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, syncType, track, trackedData)`)
+    throw new Error(`${resourceType} static sync received unknown keys: ${unknownKeys.join(", ")} (supported: afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, realtime, syncType, track, trackedData)`)
   }
   if (syncType !== undefined && typeof syncType !== "function" && syncType !== "upsert") {
     throw new Error(`${resourceType} static sync syncType must be a function or the string "upsert", got: ${String(syncType)}`)
@@ -511,6 +568,7 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
     findRecordForDelete,
     localOnlyAttributes: mergedAttributeNames(derived.localOnlyAttributes, localOnlyAttributes),
     modelClass,
+    realtime,
     syncType,
     track: normalizedTrack(track),
     trackedData
