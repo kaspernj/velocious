@@ -517,6 +517,39 @@ describe("sync client", () => {
     expect(harness.syncModel.rows.length).toEqual(1)
   })
 
+  it("queues tracked mutations through the connection's afterCommit hook", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    harness.state.online = false
+
+    await harness.client.start()
+
+    const record = buildScanRecord(TrackedScan)
+
+    await triggerLifecycle(TrackedScan, "afterCreate", record)
+
+    expect(harness.syncModel.rows.length).toEqual(0)
+    expect(afterCommitCallbacks.length).toEqual(1)
+
+    await afterCommitCallbacks[0]()
+
+    expect(harness.syncModel.rows.length).toEqual(1)
+    expect(harness.syncModel.rows[0].attributes.syncType).toEqual("create")
+
+    harness.client.stop()
+  })
+
   it("unregisters tracking callbacks when stopped", async () => {
     const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
     const harness = buildHarness({modelClasses: [TrackedScan]})

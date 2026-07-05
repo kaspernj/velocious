@@ -182,7 +182,12 @@ export default class SyncClient {
   }
 
   /**
-   * Builds the lifecycle callback queueing one tracked mutation.
+   * Builds the lifecycle callback queueing one tracked mutation. Queueing is
+   * deferred through the model connection's afterCommit hook so it only runs
+   * once the mutation's transaction has committed (immediately when no
+   * transaction is open) - queued syncs never reference rolled-back rows.
+   * Queue failures go to config.onError (or rethrow when none is configured),
+   * matching the background replay failure policy.
    * @param {{operation: "create" | "update" | "destroy", resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Operation and resource config.
    * @returns {(record: ?) => Promise<void>} Lifecycle callback.
    */
@@ -190,16 +195,24 @@ export default class SyncClient {
     return async (record) => {
       if (this.isRemoteApply(record)) return
 
-      await SyncApiClient.queueLocalSync({
-        booleanAttributes: resourceConfig.booleanAttributes || [],
-        data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
-        localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
-        resource: record,
-        syncModel: this.config.syncModel,
-        syncType: this.defaultSyncType({operation, record, resourceConfig})
-      })
+      await resourceConfig.modelClass.connection().afterCommit(async () => {
+        try {
+          await SyncApiClient.queueLocalSync({
+            booleanAttributes: resourceConfig.booleanAttributes || [],
+            data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
+            localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+            resource: record,
+            syncModel: this.config.syncModel,
+            syncType: this.defaultSyncType({operation, record, resourceConfig})
+          })
+        } catch (error) {
+          this.reportError(/** @type {Error} */ (error))
 
-      this.scheduleReplay()
+          return
+        }
+
+        this.scheduleReplay()
+      })
     }
   }
 
