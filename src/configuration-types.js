@@ -383,6 +383,7 @@
  * @typedef {object} VelociousSyncRealtimeSubscription
  * @property {() => void} close - Closes the subscription.
  * @property {() => boolean} isReady - Whether the subscription is acknowledged and ready.
+ * @property {(params?: {timeoutMs?: number}) => Promise<void>} waitForReady - Resolves once the server acknowledges the subscription.
  */
 
 /**

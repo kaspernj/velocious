@@ -27,6 +27,8 @@ export default class SyncRealtimeBridge {
     this._client = null
     /** @type {Promise<void>} */
     this._applyPromise = Promise.resolve()
+    /** @type {number} Subscription generation - bumped by unsubscribe so in-flight subscribes detect they became stale. */
+    this._generation = 0
     /** @type {Promise<void> | null} */
     this._scheduledPull = null
     /** @type {Promise<void> | null} */
@@ -55,49 +57,104 @@ export default class SyncRealtimeBridge {
   }
 
   /**
-   * Connects the websocket client and subscribes every derived channel.
+   * Connects the websocket client, subscribes every derived channel, and waits
+   * for each subscription's server acknowledgement before the gap-closing pull,
+   * so no change can land between the pull and the subscriptions going live.
+   * Locally created resources are only promoted to the bridge once everything
+   * is live; an unsubscribe arriving during any await marks this attempt stale
+   * and it tears its own resources down instead of resubscribing.
    * @param {?} context - App context passed to the channels callback.
    * @returns {Promise<void>}
    */
   async _subscribe(context) {
+    const generation = this._generation
+
     this._state = "subscribing"
+
+    /** @type {Array<{channel: string, resourceType: string | null, subscription: import("../configuration-types.js").VelociousSyncRealtimeSubscription}>} */
+    const channels = []
+    /** @type {VelociousSyncRealtimeWebsocketClient | null} */
+    let client = null
+    /**
+     * Tears down everything this stale/failed subscribe attempt created itself.
+     * @returns {Promise<void>}
+     */
+    const teardown = async () => {
+      for (const {subscription} of channels) {
+        subscription.close()
+      }
+
+      if (client) await client.disconnectAndStopReconnect()
+    }
 
     try {
       const realtime = this.realtimeConfiguration()
       const channelDescriptors = await this.channelDescriptors(context)
-      const client = await realtime.createClient()
 
-      this._client = client
+      if (generation !== this._generation) return
+
+      client = await realtime.createClient()
+
+      if (generation !== this._generation) return
 
       await client.connect()
 
+      if (generation !== this._generation) {
+        await teardown()
+        return
+      }
+
       const authenticationToken = await this.syncClient.config.authenticationToken()
 
+      if (generation !== this._generation) {
+        await teardown()
+        return
+      }
+
       for (const channelDescriptor of channelDescriptors) {
+        if (channelDescriptor.params && "authenticationToken" in channelDescriptor.params) {
+          throw new Error(`Realtime channel "${channelDescriptor.channel}" params must not include authenticationToken - the framework injects the sync.client authenticationToken automatically`)
+        }
+
         const resourceType = channelDescriptor.resourceType ?? null
         const subscription = client.subscribeChannel(channelDescriptor.channel, {
           onMessage: (body) => this.enqueueApply({body, resourceType}),
           onResume: () => this.schedulePull(),
-          params: {authenticationToken, ...channelDescriptor.params}
+          params: {...channelDescriptor.params, authenticationToken}
         })
 
-        this._channels.push({channel: channelDescriptor.channel, resourceType, subscription})
+        channels.push({channel: channelDescriptor.channel, resourceType, subscription})
       }
 
+      await Promise.all(channels.map(({subscription}) => subscription.waitForReady()))
+
+      if (generation !== this._generation) {
+        await teardown()
+        return
+      }
+
+      this._channels = channels
+      this._client = client
       this._state = "subscribed"
       this.schedulePull()
     } catch (error) {
-      await this.unsubscribe()
+      await teardown()
+
+      if (generation === this._generation) this._state = "unsubscribed"
 
       throw error
     }
   }
 
   /**
-   * Closes every channel subscription and disconnects the websocket client (idempotent).
+   * Closes every channel subscription and disconnects the websocket client
+   * (idempotent). Also marks any in-flight subscribe attempt stale so it tears
+   * itself down instead of finishing the subscription afterwards.
    * @returns {Promise<void>}
    */
   async unsubscribe() {
+    this._generation += 1
+
     const channels = this._channels
     const client = this._client
 

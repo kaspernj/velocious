@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import {buildConfiguration, buildFakeSyncModel, buildMetadataModelClass, fakeQuery, triggerLifecycle} from "./sync-client-fakes.js"
+import {buildFakeWebsocketClient} from "./sync-realtime-fakes.js"
 import SyncClient from "../../src/sync/sync-client.js"
 
 const DEVICE_ID = "6fa459ea-ee8a-3ca4-894e-db77e160355e"
@@ -19,56 +20,18 @@ const SCAN_COLUMNS = [
 ]
 
 /**
- * Builds a fake websocket client implementing the createClient contract with
- * recorded connects, disconnects, and subscriptions that can emit messages and resumes.
- * @returns {?} Fake websocket client.
+ * Flushes microtasks until a condition holds, failing loudly when it never does.
+ * @param {() => boolean} condition - Condition to wait for.
+ * @returns {Promise<void>}
  */
-function buildFakeWebsocketClient() {
-  const fakeWebsocketClient = {
-    /** @returns {Promise<void>} */
-    connect: async () => {
-      fakeWebsocketClient.connectCalls += 1
-    },
-    connectCalls: 0,
-    /** @returns {Promise<void>} */
-    disconnectAndStopReconnect: async () => {
-      fakeWebsocketClient.disconnectCalls += 1
-    },
-    disconnectCalls: 0,
-    /**
-     * @param {string} channelType - Channel name.
-     * @param {{params?: Record<string, ?>, onMessage?: (body: ?) => void, onResume?: () => void}} [options] - Subscription options.
-     * @returns {?} Fake subscription.
-     */
-    subscribeChannel: (channelType, {onMessage, onResume, params} = {}) => {
-      const subscription = {
-        channelType,
-        /** @returns {void} */
-        close: () => {
-          subscription.closed = true
-        },
-        closed: false,
-        /** @param {?} body - Message body. @returns {void} */
-        emitMessage: (body) => {
-          if (onMessage) onMessage(body)
-        },
-        /** @returns {void} */
-        emitResume: () => {
-          if (onResume) onResume()
-        },
-        /** @returns {boolean} Whether the subscription is acknowledged. */
-        isReady: () => !subscription.closed,
-        params
-      }
+async function flushUntil(condition) {
+  for (let flushCount = 0; flushCount < 100; flushCount++) {
+    if (condition()) return
 
-      fakeWebsocketClient.subscriptions.push(subscription)
-
-      return subscription
-    },
-    subscriptions: /** @type {Array<?>} */ ([])
+    await Promise.resolve()
   }
 
-  return fakeWebsocketClient
+  throw new Error("Condition never became true while flushing microtasks")
 }
 
 /**
@@ -136,18 +99,20 @@ function buildApplyableModelClass({columns, modelName, sync}) {
  * transport, and an applyable tracked TicketScan model.
  * @param {object} [args] - Harness args.
  * @param {(context: ?) => Array<?> | Promise<Array<?>>} [args.channels] - Realtime channels callback.
+ * @param {boolean} [args.deferConnect] - Defer the fake client's connect().
+ * @param {boolean} [args.deferReady] - Defer each fake subscription's readiness.
  * @param {() => string | Promise<string>} [args.localOrigin] - Realtime local origin callback.
  * @param {Array<?>} [args.modelClasses] - Model classes to register.
  * @param {boolean} [args.pullOnReconnect] - Realtime pull-on-reconnect flag.
  * @param {?} [args.realtime] - Full realtime block override.
  * @returns {?} Harness with client, fakes, and recorded calls.
  */
-function buildRealtimeHarness({channels, localOrigin, modelClasses, pullOnReconnect, realtime} = {}) {
+function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime} = {}) {
   /** @type {Array<Error>} */
   const errors = []
   /** @type {Array<Record<string, ?>>} */
   const postChangesCalls = []
-  const fakeWebsocketClient = buildFakeWebsocketClient()
+  const fakeWebsocketClient = buildFakeWebsocketClient({deferConnect, deferReady})
   const syncModel = buildFakeSyncModel()
   const transport = {
     /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
@@ -384,6 +349,73 @@ describe("sync realtime bridge", () => {
     await harness.client.waitForRealtimeApplied()
 
     expect(harness.postChangesCalls.length).toEqual(2)
+  })
+
+  it("waits for channel readiness before the gap-closing pull and keeps pushes arriving before readiness", async () => {
+    const harness = buildRealtimeHarness({
+      channels: () => [{channel: "ticket-scans", resourceType: "TicketScan"}],
+      deferReady: true
+    })
+    const ticketScanClass = harness.modelClasses[0]
+
+    await harness.client.sync(fakeQuery("TicketScan", {event_id: EVENT_ID}))
+
+    const subscribePromise = harness.client.subscribeRealtime()
+
+    await flushUntil(() => harness.fakeWebsocketClient.subscriptions.length === 1)
+
+    harness.fakeWebsocketClient.subscriptions[0].emitMessage({
+      data: {accepted: true, ticketNr: "T-1"},
+      resourceId: SCAN_ID,
+      syncType: "update"
+    })
+
+    await harness.client.waitForRealtimeApplied()
+
+    expect(harness.client.realtimeStatus().state).toEqual("subscribing")
+    expect(harness.postChangesCalls.length).toEqual(1)
+    expect(ticketScanClass.records.get(SCAN_ID).attributesData.ticketNr).toEqual("T-1")
+
+    harness.fakeWebsocketClient.subscriptions[0].resolveReady()
+
+    await subscribePromise
+    await harness.client.waitForRealtimeApplied()
+
+    expect(harness.client.realtimeStatus().state).toEqual("subscribed")
+    expect(harness.postChangesCalls.length).toEqual(2)
+    expect(harness.errors).toEqual([])
+  })
+
+  it("aborts an in-flight subscribe when unsubscribed while connecting", async () => {
+    const harness = buildRealtimeHarness({
+      channels: () => [{channel: "ticket-scans", resourceType: "TicketScan"}],
+      deferConnect: true
+    })
+
+    const subscribePromise = harness.client.subscribeRealtime()
+
+    await flushUntil(() => harness.fakeWebsocketClient.connectCalls === 1)
+    await harness.client.unsubscribeRealtime()
+
+    harness.fakeWebsocketClient.resolveConnect()
+
+    await subscribePromise
+    await harness.client.waitForRealtimeApplied()
+
+    expect(harness.client.realtimeStatus()).toEqual({channels: [], state: "unsubscribed"})
+    expect(harness.fakeWebsocketClient.subscriptions.length).toEqual(0)
+    expect(harness.fakeWebsocketClient.disconnectCalls).toEqual(1)
+    expect(harness.postChangesCalls.length).toEqual(0)
+  })
+
+  it("fails loudly when channel params try to supply their own authenticationToken", async () => {
+    const harness = buildRealtimeHarness({
+      channels: () => [{channel: "ticket-scans", params: {authenticationToken: "stale-token"}, resourceType: "TicketScan"}]
+    })
+
+    await expect(async () => await harness.client.subscribeRealtime()).toThrow(/authenticationToken/u)
+    expect(harness.fakeWebsocketClient.subscriptions.length).toEqual(0)
+    expect(harness.client.realtimeStatus().state).toEqual("unsubscribed")
   })
 
   it("skips pull-on-reconnect when disabled", async () => {
