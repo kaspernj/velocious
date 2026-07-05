@@ -22,7 +22,7 @@ class TicketScan extends ApplicationRecord {
 
 `static sync = true` is the complete declaration for most models. Every key in the declaration object is optional and only exists for genuine per-model policy the framework cannot derive:
 
-- `track` — whether local writes auto-queue to the backend. Off by default on purpose: models that are also written by pull/import/sign-in flows must not echo those writes back to the server as device changes. Turn it on (`true`, an operations array, or `{operations}`) for models whose local mutations *are* device changes (scan rows, device status).
+- `track` — whether local writes auto-queue to the backend. **On by default**: a model declaring `static sync` queues its local creates and updates automatically once the derived client is started. `track: false` opts a model out (for models written by non-user flows that manage their own sync), `track: true` also tracks destroys (queued as `"delete"`), and an operations array or `{operations}` narrows the tracked operations. Writes applying server-originated data do not echo back: the derived pull/realtime appliers suppress themselves, and other apply paths (legacy pulls, importers, sign-in backfills) use `withoutTracking`/`markRemoteApply` (see "Automatic mutation tracking").
 - `syncType` — only when the server expects a wire type different from the operation name: the `"upsert"` flag for rows the server upserts by resource id (creates replay as `"update"`), or a function for command-style types (e.g. `scanAttempt`).
 - `findRecord` / `findRecordForDelete` — only when pulled changes match local rows by something other than `id` (e.g. a ticket id-or-pytId lookup). The default resolver is find-or-initialize by id.
 - `attributes` / `afterApply` — only for models that receive pulled changes and need to map or react to them.
@@ -84,20 +84,47 @@ Devices migrating from a pre-scope cursor store can seed newly declared scopes t
 
 ## Automatic mutation tracking
 
-Models with `track` in their `static sync` declaration queue sync rows automatically when they change — no app-side queue calls:
+Every model declaring `static sync` queues sync rows automatically when it changes — no app-side queue calls and no `track` key needed:
 
 ```js
 class TicketScan extends ApplicationRecord {
-  static sync = {
-    track: true, // or ["update"] / {operations: ["update"]}
-    syncType: ({operation}) => operation === "create" ? "scanAttempt" : "update"
-  }
+  static sync = true // local creates and updates queue automatically
 }
 
-await syncClient().start() // registers afterCreate/afterUpdate/afterDestroy callbacks
+class Ticket extends ApplicationRecord {
+  static sync = {track: false} // written by non-user flows - never auto-queued
+}
+
+class ScannerDevice extends ApplicationRecord {
+  static sync = {track: true} // also queue destroys (as "delete" sync rows)
+}
+
+await syncClient().start() // registers the lifecycle callbacks
 ```
 
-`start()` registers model lifecycle callbacks for every tracked resource (destroys queue `"delete"` sync rows); `stop()` unregisters them. Records written by pull-apply are excluded (echo suppression), so applying remote changes never queues them back to the server.
+`start()` registers model lifecycle callbacks for every tracked resource; `stop()` unregisters them. Destroys are not tracked by default because a local destroy is often cache eviction rather than a server delete — `track: true` opts in, and an operations array (`track: ["update"]`) or `{operations}` narrows the tracked operations.
+
+Queueing runs through the model connection's `afterCommit` hook, so a tracked mutation only queues once its transaction has committed (immediately when no transaction is open) — queued syncs never reference rolled-back rows, and the immediate replay attempt cannot race an uncommitted transaction.
+
+Records written by the derived pull/realtime appliers are excluded (echo suppression), so applying remote changes never queues them back to the server. Any other code applying server-originated data — legacy pull paths, importers, sign-in backfills — suppresses echo-queueing the same way through the public API:
+
+```js
+await syncClient().withoutTracking(async () => {
+  // every tracked mutation in here is skipped, across awaits; nested calls stack
+  await applyLegacyPull()
+})
+
+// record-precise form (what the derived appliers use internally):
+const release = syncClient().markRemoteApply(record)
+try {
+  record.assign(attributesFromServer)
+  await record.save()
+} finally {
+  release()
+}
+```
+
+`withoutTracking` suppression is client-wide while its callback runs, so mutations from concurrently running tasks are also skipped for that window — prefer `markRemoteApply(record)` when writes from other flows can interleave.
 
 ## Local changes and replay
 
@@ -105,7 +132,7 @@ await syncClient().start() // registers afterCreate/afterUpdate/afterDestroy cal
 await syncClient().queue({resource: ticketScan, syncType: "scanAttempt"})
 ```
 
-Explicit `queue()` stays available for command-style mutations whose payload carries more than the record's attributes.
+Automatic tracking covers ordinary creates/updates, so most models never call `queue()`. Explicit `queue()` stays available for command-style mutations whose payload carries more than the record's attributes (e.g. a `scanAttempt` with device context).
 
 `queue()` persists a pending row on the derived `Sync` model (stripping local-only attributes, coercing booleans) and schedules an immediate background replay. Replays are single-flighted and online-gated; rows are marked successful only after the backend acknowledges them, so offline or rejected changes stay pending for the next attempt. Background failures go to the `sync.client.onError` hook (rethrown when none is configured). `waitForScheduledReplay()` awaits the last scheduled attempt (useful in tests and shutdown flows).
 

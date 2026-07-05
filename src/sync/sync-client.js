@@ -118,9 +118,11 @@ export default class SyncClient {
   }
 
   /**
-   * Registers automatic mutation tracking for every resource with `track` enabled:
-   * local model creates/updates/destroys queue pending sync rows and schedule an
-   * immediate replay attempt, without app-side queue calls.
+   * Registers automatic mutation tracking for every declared resource (on by
+   * default: local creates and updates queue pending sync rows once their
+   * transaction commits and schedule an immediate replay attempt, without
+   * app-side queue calls). `track: false` resources are skipped; `track: true`
+   * adds destroys; an operations list narrows the tracked operations.
    * @returns {Promise<void>}
    */
   async start() {
