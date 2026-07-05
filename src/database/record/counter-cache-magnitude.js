@@ -99,7 +99,7 @@ function computePendingMagnitudeDelta(record, definition) {
   const foreignKeyColumn = record.getModelClass().getRelationshipByName(definition.belongsTo).getForeignKey()
 
   const newSource = record.readAttribute(definition.sourceAttribute)
-  const oldSource = sourceColumn in changes ? changes[sourceColumn][0] : newSource
+  const oldSource = oldSourceValueThroughReadCast(record, definition.sourceAttribute, sourceColumn, changes, newSource)
 
   const newParentId = currentParentId(record, definition)
   const oldParentId = foreignKeyColumn in changes ? changes[foreignKeyColumn][0] : newParentId
@@ -144,6 +144,39 @@ async function applyPendingMagnitudeDelta(record, definition, pending) {
 }
 
 /**
+ * Reads the pre-save value of the source attribute through the normal read/cast
+ * path, so `magnitude` receives the old value in the same shape as the new one
+ * (e.g. a declared boolean as `true`/`false`, not the raw stored `1`/`0`). Drops
+ * the pending change so `readAttribute` falls back to the committed value and
+ * applies the same cast a fresh read would, then restores the pending change.
+ * @param {import("./index.js").default} record - Record being saved.
+ * @param {string} sourceAttribute - Source attribute name.
+ * @param {string} sourceColumn - Source column name.
+ * @param {Record<string, [?, ?]>} changes - The record's pre-save changes (column-keyed).
+ * @param {?} currentValue - The current (new) read value, returned when the source did not change.
+ * @returns {?} The read-cast pre-save value.
+ */
+function oldSourceValueThroughReadCast(record, sourceAttribute, sourceColumn, changes, currentValue) {
+  if (!(sourceColumn in changes)) {
+    return currentValue
+  }
+
+  /**
+   * Dynamic record.
+   * @type {?} */
+  const dynamicRecord = record
+  const pendingChange = dynamicRecord._changes[sourceColumn]
+
+  delete dynamicRecord._changes[sourceColumn]
+
+  try {
+    return record.readAttribute(sourceAttribute)
+  } finally {
+    dynamicRecord._changes[sourceColumn] = pendingChange
+  }
+}
+
+/**
  * Reads the record's current foreign-key value for the counter-cache parent.
  * @param {import("./index.js").default} record - Record whose parent is targeted.
  * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
@@ -172,7 +205,9 @@ async function incrementParentCounter(record, definition, parentId, amount) {
     throw new Error(`magnitudeCounterCache on ${modelClass.getModelName()} could not resolve the "${definition.belongsTo}" parent model class`)
   }
 
-  const db = modelClass.connection()
+  // Update through the PARENT model's connection: the row being modified belongs
+  // to the parent, which may live on a different database/tenant than the child.
+  const db = parentModelClass.connection()
   const counterColumnSql = db.quoteColumn(definition.counterColumn)
   const truncatedAmount = Math.trunc(amount)
 

@@ -2,10 +2,16 @@
 
 import {registerMagnitudeCounterCache} from "../../../src/database/record/counter-cache-magnitude.js"
 
+/** The mock DB the parent counter UPDATEs are recorded against, set per test. */
+let currentMockDb = /** @type {ReturnType<typeof createMockDb> | null} */ (null)
+
 /** Mock parent model (the belongsTo target that holds the counter column). */
 class MockParent {
   /** @returns {string} */
   static tableName() { return "docker_servers" }
+
+  /** @returns {ReturnType<typeof createMockDb>} */
+  static connection() { return /** @type {ReturnType<typeof createMockDb>} */ (currentMockDb) }
 }
 
 /** Mock belongsTo relationship pointing at {@link MockParent}. */
@@ -34,22 +40,23 @@ function createMockDb() {
 }
 
 /**
- * Minimal mock record class wired for the magnitude counter-cache: attribute-keyed
- * `_attributes`, column-keyed `_changes`, plus the relationship/connection metadata
- * the feature reads.
+ * Minimal mock record modelling Velocious's representation: `_attributes` holds
+ * committed (old) column values, `_changes` holds pending (new) column values,
+ * `changes()` derives `[old, new]`, and `readAttribute` reads change-over-committed
+ * and casts declared boolean columns.
  */
 class MockBuildBase {
   /** @type {Record<string, ?>} */
   _attributes = {}
 
-  /** @type {Record<string, [?, ?]>} */
+  /** @type {Record<string, ?>} */
   _changes = {}
 
   /** @type {Array<{callback: Function, name: string}>} */
   static _registeredCallbacks = []
 
-  /** @type {ReturnType<typeof createMockDb>} */
-  static _mockDb
+  /** @type {Set<string>} */
+  static _booleanColumns = new Set()
 
   /** @returns {typeof MockBuildBase} */
   getModelClass() { return /** @type {typeof MockBuildBase} */ (this.constructor) }
@@ -57,20 +64,36 @@ class MockBuildBase {
   /** @returns {string} */
   static getModelName() { return "Build" }
 
-  /** @param {string} name @returns {?} */
-  readAttribute(name) { return this._attributes[name] }
+  /** @param {string} attribute @returns {?} */
+  readAttribute(attribute) {
+    const column = this.getModelClass().getAttributeNameToColumnNameMap()[attribute] || attribute
+    const raw = column in this._changes ? this._changes[column] : this._attributes[column]
+
+    if (this.getModelClass()._booleanColumns.has(column)) {
+      if (raw === 1) return true
+      if (raw === 0) return false
+    }
+
+    return raw
+  }
 
   /** @returns {Record<string, [?, ?]>} */
-  changes() { return this._changes }
+  changes() {
+    /** @type {Record<string, [?, ?]>} */
+    const result = {}
+
+    for (const column in this._changes) {
+      result[column] = [this._attributes[column], this._changes[column]]
+    }
+
+    return result
+  }
 
   /** @returns {Record<string, string>} */
-  static getAttributeNameToColumnNameMap() { return {dockerServerId: "docker_server_id", status: "status"} }
+  static getAttributeNameToColumnNameMap() { return {active: "active", dockerServerId: "docker_server_id", status: "status"} }
 
   /** @returns {typeof mockRelationship} */
   static getRelationshipByName() { return mockRelationship }
-
-  /** @returns {ReturnType<typeof createMockDb>} */
-  static connection() { return this._mockDb }
 
   /** @param {Function} callback */
   static beforeSave(callback) { this._registeredCallbacks.push({callback, name: "beforeSave"}) }
@@ -88,10 +111,10 @@ class MockBuildBase {
     }
   }
 
-  /** Simulates save(): beforeSave (changes visible) → clear changes (reload) → afterSave. */
+  /** Simulates save(): beforeSave (changes visible) → commit (changes folded in) → afterSave. */
   async save() {
     await this._runCallbacks("beforeSave")
-    this._attributes.id = this._attributes.id || "mock-build-id"
+    this._attributes = {...this._attributes, ...this._changes, id: this._attributes.id || "mock-build-id"}
     this._changes = {}
     await this._runCallbacks("afterSave")
   }
@@ -99,7 +122,7 @@ class MockBuildBase {
 
 /**
  * @param {typeof MockBuildBase} ModelClass
- * @param {{attributes: Record<string, ?>, changes?: Record<string, [?, ?]>}} args
+ * @param {{attributes: Record<string, ?>, changes?: Record<string, ?>}} args
  * @returns {MockBuildBase}
  */
 function buildRecord(ModelClass, {attributes, changes = {}}) {
@@ -111,18 +134,22 @@ function buildRecord(ModelClass, {attributes, changes = {}}) {
   return record
 }
 
-/** @returns {typeof MockBuildBase} */
-function registeredModelClass() {
+/**
+ * @param {{booleanColumns?: string[], magnitude?: (value: ?) => number, sourceAttribute?: string}} [options]
+ * @returns {typeof MockBuildBase}
+ */
+function registeredModelClass(options = {}) {
   class TestBuild extends MockBuildBase {}
 
   TestBuild._registeredCallbacks = []
-  TestBuild._mockDb = createMockDb()
+  TestBuild._booleanColumns = new Set(options.booleanColumns || [])
+  currentMockDb = createMockDb()
 
   registerMagnitudeCounterCache(/** @type {?} */ (TestBuild), {
     belongsTo: "dockerServer",
     counterColumn: "running_builds_count",
-    magnitude: (status) => status === "running" ? 1 : 0,
-    sourceAttribute: "status"
+    magnitude: options.magnitude || ((status) => status === "running" ? 1 : 0),
+    sourceAttribute: options.sourceAttribute || "status"
   })
 
   return TestBuild
@@ -132,13 +159,13 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
   it("increments the parent counter by 1 when a build enters running", async () => {
     const TestBuild = registeredModelClass()
     const build = buildRecord(TestBuild, {
-      attributes: {dockerServerId: "srv1", id: "b1", status: "running"},
-      changes: {status: ["queued", "running"]}
+      attributes: {docker_server_id: "srv1", id: "b1", status: "queued"},
+      changes: {status: "running"}
     })
 
     await build.save()
 
-    expect(TestBuild._mockDb.queries).toEqual([
+    expect(currentMockDb?.queries).toEqual([
       "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + 1 WHERE `id` = 'srv1'"
     ])
   })
@@ -147,13 +174,13 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
     for (const terminalStatus of ["passed", "failed", "timed_out", "cancelled", "restarted", "crashed"]) {
       const TestBuild = registeredModelClass()
       const build = buildRecord(TestBuild, {
-        attributes: {dockerServerId: "srv1", id: "b1", status: terminalStatus},
-        changes: {status: ["running", terminalStatus]}
+        attributes: {docker_server_id: "srv1", id: "b1", status: "running"},
+        changes: {status: terminalStatus}
       })
 
       await build.save()
 
-      expect(TestBuild._mockDb.queries).toEqual([
+      expect(currentMockDb?.queries).toEqual([
         "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + -1 WHERE `id` = 'srv1'"
       ])
     }
@@ -162,25 +189,25 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
   it("does not touch the counter when the status did not change", async () => {
     const TestBuild = registeredModelClass()
     const build = buildRecord(TestBuild, {
-      attributes: {dockerServerId: "srv1", id: "b1", status: "running"},
-      changes: {duration_label: ["10s", "11s"]}
+      attributes: {docker_server_id: "srv1", id: "b1", status: "running"},
+      changes: {duration_label: "11s"}
     })
 
     await build.save()
 
-    expect(TestBuild._mockDb.queries).toEqual([])
+    expect(currentMockDb?.queries).toEqual([])
   })
 
   it("moves the count between parents when the foreign key changes while running", async () => {
     const TestBuild = registeredModelClass()
     const build = buildRecord(TestBuild, {
-      attributes: {dockerServerId: "srv2", id: "b1", status: "running"},
-      changes: {docker_server_id: ["srv1", "srv2"]}
+      attributes: {docker_server_id: "srv1", id: "b1", status: "running"},
+      changes: {docker_server_id: "srv2"}
     })
 
     await build.save()
 
-    expect(TestBuild._mockDb.queries).toEqual([
+    expect(currentMockDb?.queries).toEqual([
       "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + -1 WHERE `id` = 'srv1'",
       "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + 1 WHERE `id` = 'srv2'"
     ])
@@ -188,11 +215,31 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
 
   it("decrements the parent counter when a running build is destroyed", async () => {
     const TestBuild = registeredModelClass()
-    const build = buildRecord(TestBuild, {attributes: {dockerServerId: "srv1", id: "b1", status: "running"}})
+    const build = buildRecord(TestBuild, {attributes: {docker_server_id: "srv1", id: "b1", status: "running"}})
 
     await build._runCallbacks("afterDestroy")
 
-    expect(TestBuild._mockDb.queries).toEqual([
+    expect(currentMockDb?.queries).toEqual([
+      "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + -1 WHERE `id` = 'srv1'"
+    ])
+  })
+
+  it("normalizes the old source value through the read cast (declared boolean 1 -> true)", async () => {
+    // magnitude keys off the CAST value; the old value must be cast the same way,
+    // otherwise the raw stored `1` reads as `!== true` and the decrement is missed.
+    const TestBuild = registeredModelClass({
+      booleanColumns: ["active"],
+      magnitude: (active) => active === true ? 1 : 0,
+      sourceAttribute: "active"
+    })
+    const build = buildRecord(TestBuild, {
+      attributes: {active: 1, docker_server_id: "srv1", id: "b1"},
+      changes: {active: 0}
+    })
+
+    await build.save()
+
+    expect(currentMockDb?.queries).toEqual([
       "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + -1 WHERE `id` = 'srv1'"
     ])
   })
