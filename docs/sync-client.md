@@ -109,6 +109,38 @@ Explicit `queue()` stays available for command-style mutations whose payload car
 
 `queue()` persists a pending row on the derived `Sync` model (stripping local-only attributes, coercing booleans) and schedules an immediate background replay. Replays are single-flighted and online-gated; rows are marked successful only after the backend acknowledges them, so offline or rejected changes stay pending for the next attempt. Background failures go to the `sync.client.onError` hook (rethrown when none is configured). `waitForScheduledReplay()` awaits the last scheduled attempt (useful in tests and shutdown flows).
 
+## Realtime
+
+`subscribeRealtime()` bridges server websocket pushes into the same derived apply path as pulls — no hand-written websocket apply code in apps. The app footprint is the realtime callbacks the framework genuinely cannot know (how to build the websocket client, which channels with which runtime params, what this device's echo origin is):
+
+```js
+// configuration.js
+new Configuration({
+  sync: {
+    client: {
+      // ...transport, authenticationToken, isOnline, onError
+      realtime: {
+        createClient: () => new VelociousWebsocketClient({autoReconnect: true, networkMonitor, url}),
+        channels: ({eventId}) => [{channel: "ticket-scans", params: {eventID: eventId}, resourceType: "TicketScan"}],
+        localOrigin: () => getScannerDeviceId()
+      }
+    }
+  }
+})
+```
+
+```js
+await syncClient().subscribeRealtime({eventId})
+// ...
+await syncClient().unsubscribeRealtime()
+```
+
+- **createClient** builds the (unconnected) websocket client; the framework owns connect, subscribe, and disconnect. **channels(context)** resolves the subscriptions from the `subscribeRealtime(context)` context because channel params are runtime values (an eventId, a mandantenNr). A model whose channel name and params are genuinely static can declare it on the model instead — `static sync = {realtime: {channel: "scanner-devices"}}` — and skip the callback entirely. The framework injects `authenticationToken` into every subscription's params.
+- **Pushed messages are sync envelopes** — `{syncType, resourceId, data, resourceType?, echoOrigin?}` or `{syncs: [...]}` batches — and apply through the same derived resource applier as pulls: the model's `attributes`/`findRecord`/`findRecordForDelete`/`afterApply` policy, echo suppression so tracked models never re-queue applied pushes, and loud failure on unconfigured resource types. Envelopes without a `resourceType` default to the channel's declared `resourceType`. Messages apply serially in arrival order; failures go to `sync.client.onError` (rethrown when none is configured).
+- **localOrigin** drops own-device messages: a pushed `echoOrigin` matching the resolved local origin is ignored.
+- **pullOnReconnect** (default true): when subscriptions become ready or resume after a connection drop, a coalesced single `pull()` closes the offline gap. Low-level reconnect/backoff stays in the websocket client.
+- `subscribeRealtime(context)` is idempotent and single-flighted — call `unsubscribeRealtime()` first to change the context. `realtimeStatus()` reports `{state, channels: [{channel, resourceType, ready}]}`. `waitForRealtimeApplied()` awaits pending applies and any scheduled pull (tests, shutdown flows).
+
 ## Server side
 
 The server counterpart is `SyncResourceBase` (`src/sync/sync-resource-base.js`) plus the auto-mounted sync endpoints (`sync.api` configuration option) — see `docs/offline-sync.md`.
