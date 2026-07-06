@@ -2502,8 +2502,8 @@ export default class VelociousConfiguration {
    * Runs resolve ability.
    * @param {object} args - Ability resolver args.
    * @param {Record<string, ?>} args.params - Request params.
-   * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} args.request - Request object.
-   * @param {import("./http-server/client/response.js").default} args.response - Response object.
+   * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} [args.request] - Request object. Absent for websocket channel subscriptions resolved from subscribe params.
+   * @param {import("./http-server/client/response.js").default} [args.response] - Response object. Absent outside HTTP request handling.
    * @returns {Promise<import("./authorization/ability.js").default | undefined>} - Resolved ability.
    */
   async resolveAbility({params, request, response}) {

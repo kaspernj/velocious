@@ -85,6 +85,20 @@ describe("Cli - Commands - db:rollback", () => {
     return {databaseIdentifiers, defaultSchemaMigrations, tablesResult}
   }
 
+  const syncEntriesColumnNames = async (configuration) => {
+    let columnNames = []
+
+    await configuration.ensureConnections(async (dbs) => {
+      const syncEntriesTable = await dbs.default.getTableByName("sync_entries")
+
+      if (!syncEntriesTable) throw new Error("sync_entries table not found")
+
+      columnNames = (await syncEntriesTable.getColumns()).map((column) => column.getName())
+    })
+
+    return columnNames
+  }
+
   it("runs migrations", {databaseCleaning: {transaction: false}}, async () => {
     const directory = dummyDirectory()
 
@@ -121,6 +135,7 @@ describe("Cli - Commands - db:rollback", () => {
       "schema_migrations",
       "string_subject_interactions",
       "string_subjects",
+      "sync_entries",
       "tasks",
       "users",
       "uuid_interactions",
@@ -144,22 +159,28 @@ describe("Cli - Commands - db:rollback", () => {
       "20251228090010",
       "20260418090000",
       "20260601052206",
-      "20260629160000"
+      "20260629160000",
+      "20260702150000"
     ]
 
     expect(uniqunize(filteredTables.sort())).toEqual(expectedRolledBackTables)
 
     expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(expectedRolledBackMigrations)
 
+    // Rolling back one step reverts 20260706120000-add-project-id-to-sync-entries: the table stays, the column goes.
+    expect(await syncEntriesColumnNames(cliRollback.configuration)).not.toContain("project_id")
+
     await runMigrations()
 
     const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
     const filteredNewTablesResult = newTablesResult.filter((tableName) => !internalTables.has(tableName))
-    const expectedMigratedTables = [...expectedRolledBackTables, "sync_entries"].sort()
-    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260702150000"].sort()
+    const expectedMigratedTables = [...expectedRolledBackTables].sort()
+    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260706120000"].sort()
 
     expect(uniqunize(filteredNewTablesResult.sort())).toEqual(expectedMigratedTables)
 
     expect(uniqunize(newDefaultSchemaMigrations.sort())).toEqual(expectedMigratedMigrations)
+
+    expect(await syncEntriesColumnNames(cliRollback.configuration)).toContain("project_id")
   })
 })

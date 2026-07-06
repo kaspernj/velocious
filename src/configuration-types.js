@@ -390,19 +390,19 @@
  * One realtime channel subscription descriptor.
  * @typedef {object} VelociousSyncRealtimeChannelDescriptor
  * @property {string} channel - Server channel name to subscribe.
- * @property {Record<string, ?>} [params] - Subscribe params (runtime values like eventId). The framework injects `authenticationToken` automatically.
+ * @property {Record<string, ?>} [params] - Subscribe params (runtime scope values). The framework injects `authenticationToken` automatically.
  * @property {string} [resourceType] - Default resource/model name for pushed changes that do not carry their own resourceType.
  */
 
 /**
- * Realtime push configuration for the sync client. Only the genuinely app-owned
- * callbacks live here: how to build the websocket client and which channels
- * (with runtime params) to subscribe. Everything else - subscribing, applying
- * pushes through the derived resource applier, echo suppression, and
- * pull-on-reconnect - is derived.
+ * Realtime push configuration for the sync client. Only the genuinely
+ * app-owned callback lives here: how to build the websocket client.
+ * Everything else - deriving the framework sync channel subscriptions from
+ * the declared pull scopes, subscribing, applying pushes through the derived
+ * resource applier, echo suppression, and pull-on-reconnect - is derived.
  * @typedef {object} VelociousSyncClientRealtimeConfiguration
  * @property {() => VelociousSyncRealtimeWebsocketClient | Promise<VelociousSyncRealtimeWebsocketClient>} createClient - Builds the (unconnected) websocket client; the framework owns connect/disconnect.
- * @property {(context: ?) => Array<VelociousSyncRealtimeChannelDescriptor> | Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} [channels] - Resolves channel descriptors from the `subscribeRealtime(context)` context (runtime params like eventId). Optional when models declare `static sync = {realtime: {channel}}`.
+ * @property {(context: ?) => Array<VelociousSyncRealtimeChannelDescriptor> | Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} [channels] - Deprecated legacy escape hatch: resolves extra app-channel descriptors from the `subscribeRealtime(context)` context. Declared pull scopes subscribe the framework sync channel automatically.
  * @property {() => string | Promise<string>} [localOrigin] - Resolves this device's echo origin; pushed messages with a matching `echoOrigin` are dropped.
  * @property {boolean} [pullOnReconnect] - Fire a coalesced `pull()` when subscriptions become ready or resume after a drop, closing offline gaps. Defaults to true.
  */
@@ -541,7 +541,7 @@
  */
 
 /**
- * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, ?>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default}) : import("./authorization/ability.js").default | void | Promise<import("./authorization/ability.js").default | void>} AbilityResolverType
+ * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, ?>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined}) : import("./authorization/ability.js").default | void | Promise<import("./authorization/ability.js").default | void>} AbilityResolverType
  */
 
 /**

@@ -1,17 +1,22 @@
 // @ts-check
 
 import SyncApiClient from "./sync-api-client.js"
+import {VELOCIOUS_SYNC_CHANNEL} from "./sync-channel-name.js"
 
 /** @typedef {import("../configuration-types.js").VelociousSyncRealtimeChannelDescriptor} VelociousSyncRealtimeChannelDescriptor */
 /** @typedef {import("../configuration-types.js").VelociousSyncRealtimeWebsocketClient} VelociousSyncRealtimeWebsocketClient */
 
 /**
- * Derived realtime push bridge for the sync client. Subscribes the declared
- * websocket channels (config `sync.client.realtime.channels` callback plus
- * model-level `static sync = {realtime: {channel}}` declarations), applies
- * pushed changes through the same derived resource applier as pulls (with echo
- * suppression against tracked re-queueing), drops own-device messages by echo
- * origin, and fires a coalesced `pull()` when subscriptions become ready or
+ * Derived realtime push bridge for the sync client. Subscribes every declared
+ * pull scope to the framework sync channel ({@link VELOCIOUS_SYNC_CHANNEL})
+ * automatically — the subscribe params mirror the scope's
+ * `{resourceType, conditions}` so the server authorizes them through the same
+ * sync resource authorization as pulls — plus any deprecated legacy channels
+ * (config `sync.client.realtime.channels` callback and model-level
+ * `static sync = {realtime: {channel}}` declarations). Pushed changes apply
+ * through the same derived resource applier as pulls (with echo suppression
+ * against tracked re-queueing), own-device messages are dropped by echo
+ * origin, and a coalesced `pull()` fires when subscriptions become ready or
  * resume so offline gaps close.
  */
 export default class SyncRealtimeBridge {
@@ -41,7 +46,7 @@ export default class SyncRealtimeBridge {
    * Subscribes the derived realtime channels (idempotent and single-flighted):
    * an active subscription is kept as-is and a concurrent subscribe awaits the
    * in-flight attempt. Call `unsubscribe()` first to change the context.
-   * @param {?} [context] - App context passed to the `sync.client.realtime.channels` callback (runtime values like eventId).
+   * @param {?} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
    * @returns {Promise<void>}
    */
   async subscribe(context) {
@@ -204,15 +209,25 @@ export default class SyncRealtimeBridge {
   }
 
   /**
-   * Derives the channel descriptors to subscribe: model-level static realtime
-   * declarations plus the config channels callback, failing loudly when none exist.
-   * @param {?} context - App context passed to the channels callback.
+   * Derives the channel descriptors to subscribe: one framework sync channel
+   * subscription per declared pull scope (the params mirror the scope's
+   * `{resourceType, conditions}`), plus the deprecated legacy paths —
+   * model-level static realtime declarations and the config channels callback.
+   * Fails loudly when nothing is subscribable.
+   * @param {?} context - App context passed to the deprecated channels callback.
    * @returns {Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} Channel descriptors.
    */
   async channelDescriptors(context) {
     const realtime = this.realtimeConfiguration()
     /** @type {Array<VelociousSyncRealtimeChannelDescriptor>} */
     const channelDescriptors = []
+
+    for (const scopeRow of await this.syncClient.scopeStore().activeScopes()) {
+      channelDescriptors.push({
+        channel: VELOCIOUS_SYNC_CHANNEL,
+        params: {conditions: this.attributeNamedConditions(scopeRow), resourceType: scopeRow.resourceType}
+      })
+    }
 
     for (const [resourceType, resourceConfig] of Object.entries(this.syncClient.config.resources)) {
       if (!resourceConfig.realtime) continue
@@ -225,10 +240,40 @@ export default class SyncRealtimeBridge {
     }
 
     if (channelDescriptors.length === 0) {
-      throw new Error("subscribeRealtime found no realtime channels - declare sync.client.realtime.channels or static sync = {realtime: {channel}} on a model")
+      throw new Error("subscribeRealtime found no channels to subscribe - declare a sync scope (syncClient().sync(query)) so its framework sync channel subscription can be derived, or the deprecated sync.client.realtime.channels callback")
     }
 
     return channelDescriptors
+  }
+
+  /**
+   * Translates a persisted scope's condition keys to the model's attribute
+   * names so the framework channel subscription matches the publisher's
+   * attribute-named scoping params: `serializedScopeFromQuery` persists the
+   * query's model-normalized column names (for example `project_id`), while
+   * scope-partition broadcasts carry attribute names (`projectId`). Keys
+   * without a column mapping are already attribute names and pass through;
+   * scopes on models without a declared sync resource fail loudly because no
+   * attribute mapping exists for them.
+   * @param {{conditions: Record<string, ?>, resourceType: string}} scopeRow - Active scope row.
+   * @returns {Record<string, ?>} Attribute-named scope conditions.
+   */
+  attributeNamedConditions(scopeRow) {
+    const resourceConfig = this.syncClient.config.resources[scopeRow.resourceType]
+
+    if (!resourceConfig) {
+      throw new Error(`subscribeRealtime can't derive attribute names for the sync scope declared on ${scopeRow.resourceType} - declare static sync on that model so its resource is registered`)
+    }
+
+    const columnNameToAttributeName = resourceConfig.modelClass.getColumnNameToAttributeNameMap()
+    /** @type {Record<string, ?>} */
+    const conditions = {}
+
+    for (const [conditionName, conditionValue] of Object.entries(scopeRow.conditions)) {
+      conditions[columnNameToAttributeName[conditionName] || conditionName] = conditionValue
+    }
+
+    return conditions
   }
 
   /**

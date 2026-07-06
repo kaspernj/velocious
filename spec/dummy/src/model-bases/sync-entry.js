@@ -15,6 +15,7 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
  * @property {number | null} [serverSequence] - Value for the serverSequence attribute.
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
+ * @property {string | null} [projectId] - Value for the projectId attribute.
  */
 
 /** @augments {DatabaseRecord<SyncEntryWriteAttributes>} */
@@ -184,4 +185,20 @@ export default class SyncEntryBase extends DatabaseRecord {
    * @returns {boolean}
    */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
+
+  /**
+   * @returns {string | null}
+   */
+  projectId() { return this.readAttribute("projectId") }
+
+  /**
+   * @param {string | null} newValue
+   * @returns {void}
+   */
+  setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
+
+  /**
+   * @returns {boolean}
+   */
+  hasProjectId() { return this._hasAttribute(this.projectId()) }
 }

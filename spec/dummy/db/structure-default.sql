@@ -8,7 +8,7 @@ CREATE TABLE `audits` (`id` UUID PRIMARY KEY NOT NULL, `audit_action_id` UUID NO
 
 CREATE TABLE "authentication_tokens" (`id` INTEGER PRIMARY KEY NOT NULL, `user_token` VARCHAR(255) DEFAULT '''UUID()''', `user_id` BIGINT, `created_at` DATETIME, `updated_at` DATETIME, CONSTRAINT `authentication_tokens_user_id_0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));
 
-CREATE TABLE `sync_entries` (`id` UUID PRIMARY KEY NOT NULL, `authentication_token_id` VARCHAR(255), `resource_id` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `sync_type` VARCHAR(255) NOT NULL, `client_updated_at` DATETIME, `data` TEXT, `server_sequence` INTEGER, `created_at` DATETIME, `updated_at` DATETIME);
+CREATE TABLE "sync_entries" (`id` UUID PRIMARY KEY NOT NULL, `authentication_token_id` VARCHAR(255), `resource_id` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `sync_type` VARCHAR(255) NOT NULL, `client_updated_at` DATETIME, `data` TEXT, `server_sequence` INTEGER, `created_at` DATETIME, `updated_at` DATETIME, `project_id` VARCHAR(255));
 
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
@@ -65,6 +65,8 @@ CREATE INDEX `index_on_project_translations_project_id` ON `project_translations
 CREATE INDEX `index_on_string_subject_interactions_subject_id` ON `string_subject_interactions` (`subject_id`);
 
 CREATE INDEX `index_on_sync_entries_authentication_token_id` ON `sync_entries` (`authentication_token_id`);
+
+CREATE INDEX `index_on_sync_entries_project_id` ON `sync_entries` (`project_id`);
 
 CREATE INDEX `index_on_sync_entries_resource_id` ON `sync_entries` (`resource_id`);
 
