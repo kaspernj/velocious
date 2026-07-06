@@ -1,0 +1,3 @@
+# Changelog
+
+- SQLite table rebuilds (addColumn/addForeignKey/renameColumn and friends) no longer leak the temporary rebuild table name into indexes created for `index: true` columns: those indexes are now created after the rename, named after the final table (`index_on_<table>_<column>` instead of `index_on_<table>_velocious_rebuild_<column>`). ALTER TABLE ... RENAME does not rename indexes, so the temp-derived names used to stick permanently. Also adds regression coverage that a rebuild keeps existing foreign keys pointing at their original tables, including the addReference-then-addColumn history where the corrupted `REFERENCES <rebuilt table>` shape was reported.
