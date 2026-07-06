@@ -216,6 +216,59 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
     })
   })
 
+  it("keeps the original table fully intact when a unique column index fails during the rebuild", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+
+      if (driver.getType() !== "sqlite") return
+
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      await driver.query("DROP TABLE IF EXISTS uniq_fail_posts_velocious_rebuild")
+      await driver.query("DROP TABLE IF EXISTS uniq_fail_posts")
+      await driver.query("DROP TABLE IF EXISTS uniq_fail_authors")
+
+      await migration.createTable("uniq_fail_authors", {id: {type: "bigint"}}, (table) => {
+        table.string("name", {null: false})
+      })
+
+      await migration.createTable("uniq_fail_posts", {id: {type: "bigint"}}, (table) => {
+        table.string("title", {null: false})
+        table.integer("uniq_fail_author_id", {foreignKey: true, null: true})
+      })
+
+      await driver.query("INSERT INTO uniq_fail_authors (name) VALUES ('Ada')")
+      await driver.query("INSERT INTO uniq_fail_posts (title, uniq_fail_author_id) VALUES ('first', 1)")
+      await driver.query("INSERT INTO uniq_fail_posts (title, uniq_fail_author_id) VALUES ('second', 1)")
+
+      // Both copied rows receive the same default, so the unique index cannot be satisfied. The
+      // migration must fail BEFORE the original table is swapped away: rows, columns, and foreign
+      // keys stay fully intact no matter where in the rebuild the violation surfaces.
+      await expect(async () => {
+        await migration.addColumn("uniq_fail_posts", "slug", "string", {default: "x", index: {unique: true}})
+      }).toThrow(/unique/ui)
+
+      const rows = await driver.query("SELECT title FROM uniq_fail_posts ORDER BY title")
+
+      expect(rows.map((row) => row.title)).toEqual(["first", "second"])
+
+      const table = await driver.getTableByNameOrFail("uniq_fail_posts")
+      const columnNames = (await table.getColumns()).map((column) => column.getName())
+
+      expect(columnNames).not.toContain("slug")
+
+      const foreignKeys = await table.getForeignKeys()
+
+      expect(foreignKeys.map((foreignKey) => foreignKey.getReferencedTableName())).toContain("uniq_fail_authors")
+
+      await driver.query("DROP TABLE IF EXISTS uniq_fail_posts_velocious_rebuild")
+      await migration.dropTable("uniq_fail_posts")
+      await migration.dropTable("uniq_fail_authors")
+    })
+  })
+
   it("names column indexes added through a rebuild after the final table, not the temp table", async () => {
     const configuration = Configuration.current()
 

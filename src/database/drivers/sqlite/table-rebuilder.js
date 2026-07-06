@@ -53,9 +53,12 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
     const previousTargetName = targetTableData.getName()
 
     // Column-level `index: true` indexes are named after the table they are created with, and
-    // ALTER TABLE ... RENAME does not rename indexes - creating them while the table carries its
-    // temp rebuild name would leak that name permanently. Strip the flags for the temp CREATE and
-    // emit those indexes after the rename, named after the final table.
+    // ALTER TABLE ... RENAME does not rename indexes - creating them inside the temp table's
+    // CREATE would leak the temp rebuild name permanently. Strip the flags for the temp CREATE
+    // and create those indexes explicitly on the temp table with their FINAL names BEFORE the
+    // copy: index names are database-global and survive the rename, and a violation (e.g. a new
+    // unique index over rows that all receive the same default) fails during INSERT...SELECT,
+    // while the original table still exists - never after the swap.
     /** @type {Array<{column: import("../../table-data/table-column.js").default, index: ?, indexArgs: ?}>} */
     const strippedColumnIndexes = []
 
@@ -85,6 +88,22 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
 
     for (const sql of createTableSQLs) sqls.push(sql)
 
+    for (const {column, indexArgs} of strippedColumnIndexes) {
+      const {unique, ...restIndexArgs} = indexArgs || {}
+
+      restArgsError(restIndexArgs)
+
+      const createIndexSQLs = await new CreateIndexBase({
+        columns: [column.getName()],
+        driver,
+        name: `index_on_${originalTableName}_${column.getName()}`,
+        tableName: tempTableName,
+        unique
+      }).toSQLs()
+
+      for (const sql of createIndexSQLs) sqls.push(sql)
+    }
+
     if (this.columnPairs.length > 0) {
       sqls.push(
         `INSERT INTO ${options.quoteTableName(tempTableName)} (${newColumnsSQL}) ` +
@@ -102,22 +121,6 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
         name: tableDataIndex.getName(),
         tableName: originalTableName,
         unique: tableDataIndex.getUnique()
-      }).toSQLs()
-
-      for (const sql of createIndexSQLs) sqls.push(sql)
-    }
-
-    for (const {column, indexArgs} of strippedColumnIndexes) {
-      const {unique, ...restIndexArgs} = indexArgs || {}
-
-      restArgsError(restIndexArgs)
-
-      const createIndexSQLs = await new CreateIndexBase({
-        columns: [column.getName()],
-        driver,
-        name: `index_on_${originalTableName}_${column.getName()}`,
-        tableName: originalTableName,
-        unique
       }).toSQLs()
 
       for (const sql of createIndexSQLs) sqls.push(sql)
