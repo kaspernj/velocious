@@ -214,7 +214,7 @@ export default class SyncPublisher {
               syncs: [{data, resourceId, resourceType: resourceConfig.resourceType, syncType}]
             },
             channel: VELOCIOUS_SYNC_CHANNEL,
-            params: scopeValues.params
+            params: {...scopeValues.params, resourceType: resourceConfig.resourceType}
           })
 
           if (resourceConfig.broadcasts) {

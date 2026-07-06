@@ -100,13 +100,14 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
   }
 
   /**
-   * Routes a publisher broadcast to this subscription when its scoping params
-   * satisfy every scope condition the subscription was authorized for:
-   * each condition key must be present in the broadcast params and match by
-   * string comparison (array conditions match by membership). Conditions the
-   * publisher's scoping params do not carry never match, so a subscription
-   * cannot receive changes outside its authorized scope.
-   * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} broadcastParams - Publisher scoping params (the published change's scope-partition values).
+   * Routes a publisher broadcast to this subscription when the published
+   * resource type equals the type the subscription was authorized for and the
+   * scoping params satisfy every scope condition: each condition key must be
+   * present in the broadcast params and match by string comparison (array
+   * conditions match by membership). Broadcasts without a resource type and
+   * conditions the publisher's scoping params do not carry never match, so a
+   * subscription cannot receive changes outside its authorized scope.
+   * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} broadcastParams - Publisher scoping params (the published resourceType plus the change's scope-partition values).
    * @returns {boolean} Whether the broadcast belongs to this subscription's scope.
    */
   matches(broadcastParams) {
@@ -117,6 +118,8 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
     const scopingParams = broadcastParams && typeof broadcastParams === "object" && !Array.isArray(broadcastParams)
       ? /** @type {Record<string, ?>} */ (broadcastParams)
       : {}
+
+    if (!Object.hasOwn(scopingParams, "resourceType") || String(scopingParams.resourceType) !== String(scope.resourceType)) return false
 
     for (const [conditionName, conditionValue] of Object.entries(scope.conditions)) {
       if (!Object.hasOwn(scopingParams, conditionName)) return false

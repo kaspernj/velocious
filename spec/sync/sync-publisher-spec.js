@@ -137,7 +137,7 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
       expect(syncRows[0].projectId()).toEqual(uuidItem.id())
       expect(frameworkBroadcasts).toHaveLength(1)
       expect(frameworkBroadcasts[0].channel).toEqual(VELOCIOUS_SYNC_CHANNEL)
-      expect(frameworkBroadcasts[0].params).toEqual({projectId: uuidItem.id()})
+      expect(frameworkBroadcasts[0].params).toEqual({projectId: uuidItem.id(), resourceType: "UuidItem"})
       expect(frameworkBroadcasts[0].body).toEqual({
         echoOrigin: null,
         syncs: [{

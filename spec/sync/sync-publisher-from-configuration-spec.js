@@ -165,7 +165,7 @@ describe("sync publisher from configuration", () => {
     expect(syncModel.rows[0].attributes.account_id).toEqual(ACCOUNT_ID)
     expect(broadcasts).toHaveLength(1)
     expect(broadcasts[0].channel).toEqual(VELOCIOUS_SYNC_CHANNEL)
-    expect(broadcasts[0].params).toEqual({accountId: ACCOUNT_ID})
+    expect(broadcasts[0].params).toEqual({accountId: ACCOUNT_ID, resourceType: "PublishedScan"})
     expect(broadcasts[0].body).toEqual({
       echoOrigin: null,
       syncs: [{
@@ -191,7 +191,7 @@ describe("sync publisher from configuration", () => {
     expect(syncModel.rows[0].attributes.account_id).toEqual(ACCOUNT_ID)
     expect(broadcasts).toHaveLength(1)
     expect(broadcasts[0].channel).toEqual(VELOCIOUS_SYNC_CHANNEL)
-    expect(broadcasts[0].params).toEqual({accountId: ACCOUNT_ID})
+    expect(broadcasts[0].params).toEqual({accountId: ACCOUNT_ID, resourceType: "PublishedAccount"})
   })
 
   it("scopes through declared per-model scopeAttributes record-attribute overrides", async () => {
@@ -206,7 +206,7 @@ describe("sync publisher from configuration", () => {
     await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-9"}))
 
     expect(syncModel.rows[0].attributes.account_id).toEqual("T-9")
-    expect(broadcasts[0].params).toEqual({accountId: "T-9"})
+    expect(broadcasts[0].params).toEqual({accountId: "T-9", resourceType: "PublishedScan"})
   })
 
   it("persists no scope partition and broadcasts empty scoping params when the sync model declares no scope attributes", async () => {
@@ -223,7 +223,7 @@ describe("sync publisher from configuration", () => {
     expect("event_id" in syncModel.rows[0].attributes).toEqual(false)
     expect("account_id" in syncModel.rows[0].attributes).toEqual(false)
     expect(broadcasts[0].channel).toEqual(VELOCIOUS_SYNC_CHANNEL)
-    expect(broadcasts[0].params).toEqual({})
+    expect(broadcasts[0].params).toEqual({resourceType: "PublishedScan"})
   })
 
   it("keeps the deprecated eventId declaration forms on the 1.0.503 event_id column and eventId scoping param", async () => {
@@ -238,7 +238,7 @@ describe("sync publisher from configuration", () => {
     await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-9"}))
 
     expect(syncModel.rows[0].attributes.event_id).toEqual("T-9")
-    expect(broadcasts[0].params).toEqual({eventId: "T-9"})
+    expect(broadcasts[0].params).toEqual({eventId: "T-9", resourceType: "PublishedScan"})
   })
 
   it("publishes record attributes with ISO dates through the default serializer when declared publish: true", async () => {

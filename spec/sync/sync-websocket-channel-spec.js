@@ -140,10 +140,10 @@ describe("sync websocket channel", () => {
 
     await channel.canSubscribe()
 
-    expect(channel.matches({eventId: ALLOWED_EVENT_ID})).toEqual(true)
-    expect(channel.matches({eventId: DENIED_EVENT_ID})).toEqual(false)
-    expect(channel.matches({})).toEqual(false)
-    expect(channel.matches({somethingElse: ALLOWED_EVENT_ID})).toEqual(false)
+    expect(channel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "Ticket"})).toEqual(true)
+    expect(channel.matches({eventId: DENIED_EVENT_ID, resourceType: "Ticket"})).toEqual(false)
+    expect(channel.matches({resourceType: "Ticket"})).toEqual(false)
+    expect(channel.matches({resourceType: "Ticket", somethingElse: ALLOWED_EVENT_ID})).toEqual(false)
   })
 
   it("matches numeric scope conditions by value and array conditions by membership for any app-named scope attribute", async () => {
@@ -161,10 +161,44 @@ describe("sync websocket channel", () => {
     await numberChannel.canSubscribe()
     await arrayChannel.canSubscribe()
 
-    expect(numberChannel.matches({accountId: "5"})).toEqual(true)
-    expect(numberChannel.matches({accountId: "6"})).toEqual(false)
-    expect(arrayChannel.matches({accountId: DENIED_EVENT_ID})).toEqual(true)
-    expect(arrayChannel.matches({accountId: "not-subscribed"})).toEqual(false)
+    expect(numberChannel.matches({accountId: "5", resourceType: "Ticket"})).toEqual(true)
+    expect(numberChannel.matches({accountId: "6", resourceType: "Ticket"})).toEqual(false)
+    expect(arrayChannel.matches({accountId: DENIED_EVENT_ID, resourceType: "Ticket"})).toEqual(true)
+    expect(arrayChannel.matches({accountId: "not-subscribed", resourceType: "Ticket"})).toEqual(false)
+  })
+
+  it("routes broadcasts only to subscriptions authorized for the published resource type", async () => {
+    const {TestSyncResource} = buildTestSyncResource()
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const ticketChannel = buildChannel({
+      configuration,
+      params: {conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: "Ticket"}
+    })
+    const ticketScanChannel = buildChannel({
+      configuration,
+      params: {conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: "TicketScan"}
+    })
+
+    await ticketChannel.canSubscribe()
+    await ticketScanChannel.canSubscribe()
+
+    expect(ticketChannel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "Ticket"})).toEqual(true)
+    expect(ticketScanChannel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "Ticket"})).toEqual(false)
+    expect(ticketChannel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "TicketScan"})).toEqual(false)
+    expect(ticketScanChannel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "TicketScan"})).toEqual(true)
+  })
+
+  it("fails closed on broadcasts without a resource type", async () => {
+    const {TestSyncResource} = buildTestSyncResource()
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const channel = buildChannel({
+      configuration,
+      params: {conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: "Ticket"}
+    })
+
+    await channel.canSubscribe()
+
+    expect(channel.matches({eventId: ALLOWED_EVENT_ID})).toEqual(false)
   })
 
   it("does not match broadcasts before an authorized subscription established its scope", () => {
@@ -175,6 +209,6 @@ describe("sync websocket channel", () => {
       params: {conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: "Ticket"}
     })
 
-    expect(channel.matches({eventId: ALLOWED_EVENT_ID})).toEqual(false)
+    expect(channel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "Ticket"})).toEqual(false)
   })
 })
