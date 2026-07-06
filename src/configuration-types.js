@@ -419,6 +419,8 @@
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
  * @property {VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {VelociousSyncClientTransport} transport - Transport posting to the framework sync endpoints (e.g. the frontend-model websocket client).
+ * @property {VelociousSyncRealtimeWebsocketClient} [websocketClient] - Shared app-lifetime websocket client (the low-level form) that all sync traffic rides. Provide the same instance the frontend-model transport uses so one connection carries everything. When set, the realtime bridge subscribes channels on it and never owns its lifecycle: unsubscribing closes only channel subscriptions, leaving the socket connected.
+ * @property {string | (() => string | null | undefined)} [websocketUrl] - Shared app-lifetime websocket URL. When set (and no `websocketClient` is given), the framework builds and owns one reconnecting `VelociousWebsocketClient` for all sync traffic, connected on first use.
  */
 
 /**

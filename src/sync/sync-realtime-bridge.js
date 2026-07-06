@@ -30,6 +30,8 @@ export default class SyncRealtimeBridge {
     this._channels = []
     /** @type {VelociousSyncRealtimeWebsocketClient | null} */
     this._client = null
+    /** @type {boolean} Whether the bridge created its own client (deprecated per-cycle path) and must disconnect it on unsubscribe. A shared connection is never owned. */
+    this._ownsClient = false
     /** @type {Promise<void>} */
     this._applyPromise = Promise.resolve()
     /** @type {number} Subscription generation - bumped by unsubscribe so in-flight subscribes detect they became stale. */
@@ -80,8 +82,13 @@ export default class SyncRealtimeBridge {
     const channels = []
     /** @type {VelociousSyncRealtimeWebsocketClient | null} */
     let client = null
+    /** @type {boolean} Whether this attempt created its own client and must disconnect it on teardown. */
+    let ownsClient = false
     /**
-     * Tears down everything this stale/failed subscribe attempt created itself.
+     * Tears down everything this stale/failed subscribe attempt created itself:
+     * always closes its channel subscriptions, and disconnects the websocket
+     * only when the bridge owns it (deprecated per-cycle path); a shared
+     * connection stays open.
      * @returns {Promise<void>}
      */
     const teardown = async () => {
@@ -89,18 +96,28 @@ export default class SyncRealtimeBridge {
         subscription.close()
       }
 
-      if (client) await client.disconnectAndStopReconnect()
+      if (client && ownsClient) await client.disconnectAndStopReconnect()
     }
 
     try {
-      const realtime = this.realtimeConfiguration()
+      const sharedClient = this.syncClient.syncConnection()
+      const realtime = this.requireClientSource(sharedClient)
       const channelDescriptors = await this.channelDescriptors(context)
 
       if (generation !== this._generation) return
 
-      client = await realtime.createClient()
+      if (sharedClient) {
+        client = sharedClient
+      } else {
+        // requireClientSource guaranteed realtime.createClient when there is no shared connection.
+        client = await /** @type {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} */ (realtime).createClient()
+        ownsClient = true
+      }
 
-      if (generation !== this._generation) return
+      if (generation !== this._generation) {
+        await teardown()
+        return
+      }
 
       await client.connect()
 
@@ -140,6 +157,7 @@ export default class SyncRealtimeBridge {
 
       this._channels = channels
       this._client = client
+      this._ownsClient = ownsClient
       this._state = "subscribed"
       this.schedulePull()
     } catch (error) {
@@ -152,9 +170,12 @@ export default class SyncRealtimeBridge {
   }
 
   /**
-   * Closes every channel subscription and disconnects the websocket client
-   * (idempotent). Also marks any in-flight subscribe attempt stale so it tears
-   * itself down instead of finishing the subscription afterwards.
+   * Closes every channel subscription (idempotent). The websocket is
+   * disconnected only when the bridge owns it (deprecated per-cycle
+   * `realtime.createClient` path); a shared app-lifetime connection stays open
+   * so unsubscribing drops subscriptions without tearing down the socket. Also
+   * marks any in-flight subscribe attempt stale so it tears itself down instead
+   * of finishing the subscription afterwards.
    * @returns {Promise<void>}
    */
   async unsubscribe() {
@@ -162,16 +183,18 @@ export default class SyncRealtimeBridge {
 
     const channels = this._channels
     const client = this._client
+    const ownsClient = this._ownsClient
 
     this._channels = []
     this._client = null
+    this._ownsClient = false
     this._state = "unsubscribed"
 
     for (const {subscription} of channels) {
       subscription.close()
     }
 
-    if (client) await client.disconnectAndStopReconnect()
+    if (client && ownsClient) await client.disconnectAndStopReconnect()
   }
 
   /**
@@ -195,14 +218,26 @@ export default class SyncRealtimeBridge {
   }
 
   /**
-   * Resolves the realtime configuration, failing loudly when it is missing.
-   * @returns {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} Realtime configuration.
+   * Resolves the realtime configuration block, or null when the app declared
+   * none (valid when a shared connection is configured).
+   * @returns {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration | null} Realtime configuration, or null.
    */
   realtimeConfiguration() {
-    const realtime = this.syncClient.config.realtime
+    return this.syncClient.config.realtime || null
+  }
 
-    if (!realtime) {
-      throw new Error("subscribeRealtime requires a sync.client.realtime configuration block with a createClient callback")
+  /**
+   * Resolves the realtime configuration and asserts a websocket client source
+   * exists: a shared connection rides its own lifecycle, otherwise the
+   * deprecated per-cycle `realtime.createClient` must be configured.
+   * @param {import("../configuration-types.js").VelociousSyncRealtimeWebsocketClient | null} sharedClient - Shared connection, or null.
+   * @returns {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration | null} Realtime configuration, or null.
+   */
+  requireClientSource(sharedClient) {
+    const realtime = this.realtimeConfiguration()
+
+    if (!sharedClient && typeof realtime?.createClient !== "function") {
+      throw new Error("subscribeRealtime requires a shared connection (sync.client.websocketUrl or sync.client.websocketClient) or the deprecated sync.client.realtime.createClient callback")
     }
 
     return realtime
@@ -235,7 +270,7 @@ export default class SyncRealtimeBridge {
       channelDescriptors.push({channel: resourceConfig.realtime.channel, params: resourceConfig.realtime.params, resourceType})
     }
 
-    if (realtime.channels) {
+    if (realtime?.channels) {
       channelDescriptors.push(...await realtime.channels(context))
     }
 
@@ -306,7 +341,7 @@ export default class SyncRealtimeBridge {
 
     const realtime = this.realtimeConfiguration()
 
-    if (realtime.localOrigin && body.echoOrigin !== undefined && body.echoOrigin !== null) {
+    if (realtime?.localOrigin && body.echoOrigin !== undefined && body.echoOrigin !== null) {
       const localOrigin = String(await realtime.localOrigin())
 
       if (String(body.echoOrigin) === localOrigin) return
@@ -329,7 +364,7 @@ export default class SyncRealtimeBridge {
    * @returns {void}
    */
   schedulePull() {
-    if (this.realtimeConfiguration().pullOnReconnect === false) return
+    if (this.realtimeConfiguration()?.pullOnReconnect === false) return
 
     this._scheduledPull ||= (async () => {
       try {

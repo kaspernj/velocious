@@ -346,6 +346,44 @@ describe("sync client from configuration", () => {
       .toThrow(/unknown keys: token/u)
     await expect(() => buildConfiguration({modelClasses: [], sync: {client: {authenticationToken: () => "token-1", mountPath: "api/sync", transport: buildTransport()}}}))
       .toThrow(/sync\.client\.mountPath/u)
+    await expect(() => buildConfiguration({modelClasses: [], sync: {client: {authenticationToken: () => "token-1", transport: buildTransport(), websocketClient: {}}}}))
+      .toThrow(/sync\.client\.websocketClient/u)
+    await expect(() => buildConfiguration({modelClasses: [], sync: {client: {authenticationToken: () => "token-1", transport: buildTransport(), websocketUrl: 5}}}))
+      .toThrow(/sync\.client\.websocketUrl/u)
+  })
+
+  it("resolves the provided shared websocket client instance and memoizes it", async () => {
+    const TicketScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TicketScan", sync: true})
+    const syncModel = buildFakeSyncModel()
+    const websocketClient = /** @type {?} */ ({connect: async () => {}, disconnectAndStopReconnect: async () => {}, subscribeChannel: () => ({})})
+    const configuration = buildConfiguration({
+      modelClasses: [TicketScan],
+      sync: {client: {authenticationToken: () => "token-1", transport: buildTransport(), websocketClient}}
+    })
+    const client = SyncClient.fromConfiguration(configuration, {syncModel})
+
+    expect(client.syncConnection()).toBe(websocketClient)
+    expect(client.syncConnection()).toBe(websocketClient)
+  })
+
+  it("builds a shared websocket connection from websocketUrl and returns null without a shared connection", async () => {
+    const TicketScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TicketScan", sync: true})
+    const syncModel = buildFakeSyncModel()
+    const urlConfiguration = buildConfiguration({
+      modelClasses: [TicketScan],
+      sync: {client: {authenticationToken: () => "token-1", transport: buildTransport(), websocketUrl: "ws://127.0.0.1:9/websocket"}}
+    })
+    const urlClient = SyncClient.fromConfiguration(urlConfiguration, {syncModel})
+    const connection = urlClient.syncConnection()
+
+    expect(connection).not.toBeNull()
+    expect(typeof connection.subscribeChannel).toEqual("function")
+    expect(urlClient.syncConnection()).toBe(connection)
+
+    const plainConfiguration = buildConfiguration({modelClasses: [buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TicketScan", sync: true})], transport: buildTransport()})
+    const plainClient = SyncClient.fromConfiguration(plainConfiguration, {syncModel})
+
+    expect(plainClient.syncConnection()).toBeNull()
   })
 })
 

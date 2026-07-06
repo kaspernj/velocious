@@ -463,11 +463,11 @@ export default class VelociousConfiguration {
       throw new Error("sync.client must be an object with transport and authenticationToken")
     }
 
-    const {authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, ...restClient} = client
+    const {authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, websocketClient, websocketUrl, ...restClient} = client
     const restClientKeys = Object.keys(restClient)
 
     if (restClientKeys.length > 0) {
-      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport)`)
+      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, websocketClient, websocketUrl)`)
     }
     if (!transport || typeof transport !== "object" || typeof transport.post !== "function") {
       throw new Error("sync.client.transport must be an object with a post(path, body) method (like the frontend-model websocket client)")
@@ -487,6 +487,12 @@ export default class VelociousConfiguration {
     if (mountPath !== undefined && (typeof mountPath !== "string" || !mountPath.startsWith("/"))) {
       throw new Error(`sync.client.mountPath must start with '/', got: ${String(mountPath)}`)
     }
+    if (websocketClient !== undefined && (typeof websocketClient !== "object" || websocketClient === null || typeof websocketClient.subscribeChannel !== "function")) {
+      throw new Error("sync.client.websocketClient must be a websocket client with a subscribeChannel method (like VelociousWebsocketClient)")
+    }
+    if (websocketUrl !== undefined && typeof websocketUrl !== "string" && typeof websocketUrl !== "function") {
+      throw new Error(`sync.client.websocketUrl must be a URL string or a function resolving one, got: ${String(websocketUrl)}`)
+    }
 
     return {
       authenticationToken,
@@ -495,7 +501,9 @@ export default class VelociousConfiguration {
       mountPath: (mountPath || "/velocious/sync").replace(/\/+$/u, "") || "/",
       onError,
       realtime,
-      transport
+      transport,
+      websocketClient,
+      websocketUrl
     }
   }
 

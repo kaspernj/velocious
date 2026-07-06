@@ -44,12 +44,19 @@ export function serializedScopeFromQuery(query) {
 }
 
 /**
- * Returns a stable canonical key identifying a sync scope.
+ * Returns a stable canonical key identifying a sync scope. When an `owner` is
+ * present (the authenticated identity that declared the scope locally), it
+ * participates in the key so the same wire scope owned by a different user gets
+ * its own local identity and cursor — a user scope's empty-conditions cursor
+ * never leaks across accounts on a shared device, while the same user
+ * reconnecting keeps continuity. Owner-less scopes keep their pre-owner key.
  * @param {import("./sync-client-types.js").SerializedSyncScope} scope - Serialized sync scope.
  * @returns {string} Stable scope key.
  */
 export function scopeKey(scope) {
-  return `${scope.resourceType}:${stableJsonStringify(scope.conditions)}`
+  const ownerPrefix = scope.owner === undefined || scope.owner === null ? "" : `owner=${stableJsonStringify(scope.owner)}|`
+
+  return `${ownerPrefix}${scope.resourceType}:${stableJsonStringify(scope.conditions)}`
 }
 
 /**

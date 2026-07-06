@@ -169,6 +169,44 @@ await syncClient().unsubscribeRealtime()
 - **pullOnReconnect** (default true): when subscriptions become ready or resume after a connection drop, a coalesced single `pull()` closes the offline gap. The gap-closing pull only fires after every subscription is server-acknowledged (`waitForReady`), so no change can land between the pull and the subscriptions going live; pushes arriving before acknowledgement still apply. Low-level reconnect/backoff stays in the websocket client.
 - `subscribeRealtime(context)` is idempotent and single-flighted, and resolves once every channel subscription is acknowledged — call `unsubscribeRealtime()` first to change the context. Unsubscribing while a subscribe is still in flight cancels that attempt: the bridge tears down anything it created and stays unsubscribed. `realtimeStatus()` reports `{state, channels: [{channel, resourceType, ready}]}`. `waitForRealtimeApplied()` awaits pending applies and any scheduled pull (tests, shutdown flows).
 
+### Shared connection (one socket for everything)
+
+A client should open one websocket for everything — events, sync, subscriptions. Configure a shared app-lifetime connection on `sync.client` and all sync traffic rides it:
+
+```js
+new Configuration({
+  sync: {
+    client: {
+      // ...transport, authenticationToken
+      websocketUrl: "ws://localhost:3006/websocket" // framework builds and owns one reconnecting VelociousWebsocketClient
+    }
+  }
+})
+```
+
+- **`websocketUrl`** (string or `() => string`): the framework builds one reconnecting `VelociousWebsocketClient`, connected on first use and memoized for the app's lifetime.
+- **`websocketClient`** (the low-level form): pass an already-built websocket client instance instead. Give it the **same** instance your frontend-model transport uses (`configureTransport({websocketClient})`) so a single socket carries frontend-model traffic *and* sync — the frontend-model client can *be* the shared connection.
+- `syncClient().syncConnection()` returns the shared connection (or null when none is configured), building it once.
+- With a shared connection, the realtime bridge **rides it without owning its lifecycle**: `unsubscribeRealtime()` closes only its channel subscriptions and leaves the socket open (a subsequent subscribe resubscribes over the same socket). Low-level reconnect/backoff stays in the websocket client.
+- The deprecated per-cycle `realtime.createClient` still works when no shared connection is configured: the bridge builds its own client per subscribe cycle and disconnects it on unsubscribe (unchanged).
+
+## User scope: subscribe to everything the user can see
+
+Instead of declaring a scope per event when a screen opens, sign-in can subscribe to *everything the signed-in user's ability can see* — the server enumerates membership. The client subscribes once with just its token; the server decides.
+
+```js
+// on sign-in
+await syncClient().subscribeUserScope()
+
+// on sign-out
+await syncClient().unsubscribeUserScope()
+```
+
+- `subscribeUserScope()` declares a **user scope** — a scope with **empty conditions** — for every pullable synced resource type, subscribes realtime so their framework `velocious-sync` subscriptions go live, and pulls so the device catches up. Idempotent and single-flighted like `subscribeRealtime()`.
+- The server authorizes each empty-conditions scope through the app sync resource's existing `authorizeChanges({params, scope})` (the app decides whether user scopes are allowed), and re-checks record access **per delivery** at broadcast fan-out: a user-scope subscription matches every broadcast of its resource type, and each published change is filtered through the sync resource's `changeDeliverable`, which reuses the app's `scopeChangesQuery` ability scoping. Two users with disjoint access each receive only their own changes over the one connection.
+- Pulls for the user scope post empty conditions, so the app's `scopeChangesQuery` falls back to ability scoping; the per-scope cursor still applies, so a sign-out/sign-in cycle resumes from the cursor instead of re-pulling everything.
+- `unsubscribeUserScope()` deactivates the user scopes and closes the realtime channel subscriptions **without disconnecting** the shared connection, so sign-out drops subscriptions but keeps the socket for the next sign-in.
+
 ### Deprecated legacy channels
 
 Before the framework sync channel, apps declared their own channels; both forms keep working as escape hatches for legacy app channels but are deprecated: the `sync.client.realtime.channels(context)` callback (runtime params come from the `subscribeRealtime(context)` context) and the model-level `static sync = {realtime: {channel, params}}` declaration. Legacy channels subscribe in addition to the scope-derived framework subscriptions.
