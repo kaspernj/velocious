@@ -608,4 +608,71 @@ export default class VelociousDatabaseMigration {
 
     return exists
   }
+
+  /**
+   * Helper: creates the shared audit tables (`audit_actions`,
+   * `audit_auditable_types`, `audits`). Call from `up()` in a migration.
+   * @param {{id?: {type?: string}}} [options] - ID column options.
+   * @returns {Promise<void>}
+   */
+  async createSharedAuditTables(options = {}) {
+    const id = options.id || {}
+
+    await this.createTable("audit_actions", {id}, (table) => {
+      table.string("action", {index: {unique: true}, null: false})
+      table.timestamps()
+    })
+
+    await this.createTable("audit_auditable_types", {id}, (table) => {
+      table.string("name", {index: {unique: true}, null: false})
+      table.timestamps()
+    })
+
+    await this.createTable("audits", {id}, (table) => {
+      table.references("audit_action", {foreignKey: true, null: false})
+      table.references("audit_auditable_type", {foreignKey: true, null: false})
+      table.references("auditable", {null: false, polymorphic: true})
+      table.json("audited_changes")
+      table.json("params")
+      table.timestamps()
+    })
+  }
+
+  /**
+   * Helper: creates a dedicated audit table for a model (e.g.
+   * `project_audits` for the `projects` table). Call from `up()`
+   * in a migration.
+   * @param {string} modelTableName - Model table name (e.g. "projects").
+   * @param {{id?: {type?: string}}} [options] - ID column options.
+   * @returns {Promise<string>} The created audit table name.
+   */
+  async createDedicatedAuditTable(modelTableName, options = {}) {
+    const auditTable = dedicatedAuditTableName(modelTableName)
+    const id = options.id || {}
+
+    await this.createTable(auditTable, {id}, (table) => {
+      const refKey = inflection.singularize(modelTableName)
+
+      table.references(refKey, {foreignKey: true, null: false})
+      table.references("audit_action", {foreignKey: true, null: false})
+      table.json("audited_changes")
+      table.json("params")
+      table.timestamps()
+    })
+
+    return auditTable
+  }
+}
+
+/**
+ * Returns the dedicated audit table name for a model table.
+ * @param {string} modelTableName - Model table name (e.g. "projects").
+ * @returns {string} Dedicated audit table name (e.g. "project_audits").
+ */
+export function dedicatedAuditTableName(modelTableName) {
+  if (modelTableName.endsWith("s")) {
+    return `${modelTableName.slice(0, -1)}_audits`
+  }
+
+  return `${modelTableName}_audits`
 }

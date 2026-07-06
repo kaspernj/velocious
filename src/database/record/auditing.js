@@ -154,7 +154,7 @@ async function resolveAuditTableData(modelClass) {
 
   // Register relationships now that we know the table type.
   if (!modelClass._relationshipExists("audits")) {
-    modelClass.hasMany("audits", (query) => query.order({column: "created_at", direction: "DESC"}), {foreignKey: tableData.foreignKey, klass: tableData.auditClass, polymorphic: !tableData.dedicated})
+    modelClass.hasMany("audits", (query) => query.order({column: "created_at", direction: "DESC"}), {className: tableData.auditClass.getModelName(), foreignKey: tableData.foreignKey, polymorphic: !tableData.dedicated})
   }
 
   return tableData
