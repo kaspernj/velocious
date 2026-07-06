@@ -1,5 +1,7 @@
 // @ts-check
 
+import {deliverDeclaredBroadcasts, upsertSyncRow} from "./sync-change-fanout.js"
+import {markServerApply} from "./sync-publish-suppression.js"
 import {resolveFrontendModelResourceClass} from "../frontend-models/resource-definition.js"
 import SyncReplayUpsertApplier from "./sync-replay-upsert-applier.js"
 import {ValidationError} from "../database/record/index.js"
@@ -485,7 +487,9 @@ export default class SyncEnvelopeReplayService {
   }
 
   /**
-   * Applies a routed delete mutation.
+   * Applies a routed delete mutation. The destroyed record is marked as a
+   * server apply so an active SyncPublisher never publishes the replayed
+   * delete a second time (the replay owns its own persist and broadcasts).
    * @param {object} args - Options.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
@@ -496,6 +500,7 @@ export default class SyncEnvelopeReplayService {
 
     if (!record) return {created: false, deleted: false, record: null}
 
+    markServerApply(record)
     await record.destroy()
 
     return {created: false, deleted: true, record}
@@ -506,8 +511,10 @@ export default class SyncEnvelopeReplayService {
    * assigned and saved onto the found record (the record layer owns value
    * casting and validation), and missing records are created with the
    * client-generated primary key plus a save-then-check membership check.
-   * Model validation failures become client-safe per-sync failures carrying
-   * the translated validation message.
+   * Written records are marked as server applies so an active SyncPublisher
+   * never publishes the replayed mutation a second time (the replay owns its
+   * own persist and broadcasts). Model validation failures become client-safe
+   * per-sync failures carrying the translated validation message.
    * @param {object} args - Options.
    * @param {Record<string, ?>} args.context - Replay context.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
@@ -523,6 +530,7 @@ export default class SyncEnvelopeReplayService {
     let created = false
 
     if (existingRecord) {
+      markServerApply(existingRecord)
       existingRecord.assign(attributes)
       await this.saveRoutedReplayRecord(existingRecord)
     } else {
@@ -588,7 +596,9 @@ export default class SyncEnvelopeReplayService {
   }
 
   /**
-   * Creates the routed record with the client-generated primary key, then
+   * Creates the routed record with the client-generated primary key (marked
+   * as a server apply so an active SyncPublisher never publishes the replayed
+   * create a second time), then
    * verifies create-scope membership when an ability is configured: records
    * outside the ability's create scope are destroyed again and fail the sync
    * with the resource-declared reason. A record that already exists outside
@@ -615,7 +625,11 @@ export default class SyncEnvelopeReplayService {
     let record
 
     try {
-      record = await ModelClass.create({[primaryKey]: mutation.resourceId, ...attributes})
+      await ModelClass.ensureInitialized()
+
+      record = new ModelClass({[primaryKey]: mutation.resourceId, ...attributes})
+      markServerApply(record)
+      await record.save()
     } catch (error) {
       throw this.routedReplaySaveError(error)
     }
@@ -709,13 +723,9 @@ export default class SyncEnvelopeReplayService {
       const existingClientUpdatedAt = this.existingReplaySyncClientUpdatedAt(existingSync)
 
       if (existingClientUpdatedAt && mutation.clientUpdatedAt <= existingClientUpdatedAt) return
-
-      existingSync.assign(attributes)
-      await existingSync.advanceServerSequence()
-      await existingSync.save()
-    } else {
-      await this.syncModel.create(attributes)
     }
+
+    await upsertSyncRow({attributes, existingSync, syncModel: this.syncModel})
   }
 
   /**
@@ -748,15 +758,7 @@ export default class SyncEnvelopeReplayService {
     // would fan out stale side effects (or crash on the default null applyResult).
     if (!args.shouldApply) return
 
-    for (const broadcast of this.broadcasts) {
-      if (broadcast.when && !broadcast.when(args)) continue
-
-      await this.broadcaster({
-        body: broadcast.body(args),
-        channel: typeof broadcast.channel === "function" ? broadcast.channel(args) : broadcast.channel,
-        params: broadcast.broadcastParams(args)
-      })
-    }
+    await deliverDeclaredBroadcasts({args, broadcaster: this.broadcaster, broadcasts: this.broadcasts})
   }
 }
 

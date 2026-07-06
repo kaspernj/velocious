@@ -43,6 +43,7 @@
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecord"]} [findRecord] - Custom pull-apply record resolver.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"]} [findRecordForDelete] - Custom pull-apply delete resolver.
  * @property {string[]} [localOnlyAttributes] - Extra local-only attributes merged with the derived primary key, createdAt/updatedAt, and sync bookkeeping attributes.
+ * @property {import("./sync-publisher-types.js").SyncPublishDeclaration} [publish] - Server-side publish declaration consumed by `SyncPublisher.fromConfiguration(...)` on the backend; ignored by the client.
  * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ?}) => string)} [syncType] - Sync type flag or mapper (see SyncClientResourceConfig).
  * @property {boolean | Array<"create" | "update" | "destroy"> | {operations: Array<"create" | "update" | "destroy">}} [track] - Automatic mutation tracking policy; an array is shorthand for {operations}. On by default (creates and updates queue automatically); `false` opts the model out (for models written by non-user flows), `true` adds destroys.
  * @property {(args: {operation: "create" | "update" | "destroy", record: ?}) => Record<string, ?>} [trackedData] - Custom queued-payload builder for tracked mutations.

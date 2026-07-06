@@ -21,6 +21,24 @@ describe("sync client from configuration", () => {
     expect(client.config.resources.TicketScan.modelClass).toEqual(TicketScan)
   })
 
+  it("ignores server-side publish declarations in static sync", async () => {
+    const TicketScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TicketScan",
+      sync: {
+        publish: {serialize: (/** @type {?} */ ticketScan) => ({id: ticketScan.id()})},
+        track: true
+      }
+    })
+    const transport = buildTransport()
+    const syncModel = buildFakeSyncModel()
+    const configuration = buildConfiguration({modelClasses: [TicketScan], transport})
+    const client = SyncClient.fromConfiguration(configuration, {syncModel})
+
+    expect(Object.keys(client.config.resources)).toEqual(["TicketScan"])
+    expect(client.config.resources.TicketScan.track).toEqual(true)
+  })
+
   it("queues records with derived stripping, boolean coercion, and ISO dates, replaying over the transport", async () => {
     const TicketScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TicketScan", sync: true})
     const transport = buildTransport()
