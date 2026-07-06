@@ -661,11 +661,16 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
     throw new Error(`${resourceType} static sync must be true or a sync declaration object, got: ${String(declaration)}`)
   }
 
-  const {afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, realtime, syncType, track, trackedData, ...restDeclaration} = normalizedDeclaration
+  const {afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, publish, realtime, syncType, track, trackedData, ...restDeclaration} = normalizedDeclaration
   const unknownKeys = Object.keys(restDeclaration)
 
+  // `publish` is the server-side half of the shared `static sync` declaration
+  // (consumed by SyncPublisher on the backend) - the client derives nothing
+  // from it, but models declared once for both sides must stay valid here.
+  void publish
+
   if (unknownKeys.length > 0) {
-    throw new Error(`${resourceType} static sync received unknown keys: ${unknownKeys.join(", ")} (supported: afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, realtime, syncType, track, trackedData)`)
+    throw new Error(`${resourceType} static sync received unknown keys: ${unknownKeys.join(", ")} (supported: afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, publish, realtime, syncType, track, trackedData)`)
   }
   if (syncType !== undefined && typeof syncType !== "function" && syncType !== "upsert") {
     throw new Error(`${resourceType} static sync syncType must be a function or the string "upsert", got: ${String(syncType)}`)

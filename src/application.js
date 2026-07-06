@@ -5,6 +5,7 @@ import Logger from "./logger.js"
 import HttpServer from "./http-server/index.js"
 import HttpServerLock from "./http-server/server-lock.js"
 import SyncApiController from "./sync/sync-api-controller.js"
+import SyncPublisher from "./sync/sync-publisher.js"
 import websocketEventsHost from "./http-server/websocket-events-host.js"
 import restArgsError from "./utils/rest-args-error.js"
 
@@ -56,6 +57,7 @@ export default class VelociousApplication {
     await this.configuration.initialize({type: this.getType()})
 
     SyncApiController.mountFromConfiguration(this.configuration)
+    await SyncPublisher.startFromConfiguration(this.configuration)
 
     this.configuration.setRoutes(routes)
 

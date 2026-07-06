@@ -171,3 +171,5 @@ await syncClient().unsubscribeRealtime()
 ## Server side
 
 The server counterpart is `SyncResourceBase` (`src/sync/sync-resource-base.js`) plus the auto-mounted sync endpoints (`sync.api` configuration option) — see `docs/offline-sync.md`.
+
+The server mirror of automatic mutation tracking is `SyncPublisher` (`src/sync/sync-publisher.js`): server models declare a `publish` config in the same `static sync` declaration (the client ignores the key), and server-side writes publish to the sync change feed and broadcast automatically once their transaction commits — see the server publish-by-default slice in `docs/offline-sync.md`.

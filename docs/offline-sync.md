@@ -424,3 +424,51 @@ This slice does not replay mutations to the backend, resolve conflicts, import p
 Routed resources declare behavior through four hooks on `FrontendModelBaseResource`: `authorizeSyncMutation` (mutation-level gate), `findSyncRecord` (ability-scoped `accessibleFor` primary-key lookup through the resource's normalized ability actions), `applySync` (full escape hatch replacing the default flow — custom delete semantics, ignore-missing-record flows and staleness overrides live here) and `afterSyncApply` (domain tail whose extras reach `persistExtraAttributes` and broadcasts), plus `syncAuthorizationFailureReason` for pinned per-action denial reasons. Upsert payloads are filtered to the resource's `writableAttributes` permit list and applied with `assign` + `save`; creates use the client-generated primary key with a save-then-check membership check (denied creates are destroyed again before any sync row is persisted or broadcast), and a record existing outside the resource's lookup scope fails as an authorization denial instead of colliding on the primary key.
 
 Client-safe apply failures — model validation (surfaced with the translated `ValidationError` message as `reason: "validation-error"`), authorization denials, unpermitted attributes and unknown resource types — fail only their own sync with `{id, syncState: "failed", reason, message}` while the batch continues; unexpected errors keep failing the request. The `applyHandlers`/`SyncReplayUpsertApplier` path is deprecated but keeps precedence over routing for released adopters. See [`sync-envelope-replay-service.md`](sync-envelope-replay-service.md) for the full flow.
+
+## Implemented slice: server publish-by-default
+
+`SyncPublisher` (`src/sync/sync-publisher.js`) is the server mirror of the client's track-by-default mutation tracking: server-side writes to synced models publish to the sync change feed and broadcast automatically, so a change made on the server (an importer, a partner saving an event setting through frontend models) reaches every device without app code calling manual upsert/broadcast helpers.
+
+Server models declare what to publish through the `publish` key of the shared `static sync` declaration (the client ignores the key):
+
+```js
+class Event extends ApplicationRecord {
+  static sync = {
+    publish: {
+      serialize: (event) => ({id: event.id(), eventPin: event.eventPin()}),
+      eventId: (event) => event.id(), // persisted to the sync row's event_id scope column
+      broadcasts: [{
+        channel: "ticket-scans",
+        broadcastParams: (args) => ({eventId: args.resourceId}),
+        body: (args) => ({syncs: [{data: args.data, resourceId: args.resourceId, resourceType: args.resourceType, syncType: args.syncType}]})
+      }]
+    }
+  }
+}
+```
+
+`SyncPublisher.startFromConfiguration(configuration)` runs at server boot (`application.js`, beside the auto-mounted sync endpoints) and no-ops when no registered model declares publish. Publishing is on for models declaring it — creates and updates publish by default, destroys publish as `"delete"` rows when opted in with `operations: ["create", "update", "destroy"]`, and `publish: false` opts a model out explicitly. The sync/change model defaults to the registered `"Sync"` model.
+
+Mechanics mirror the client tracker: the payload is snapshotted through `serialize(record)` at mutation-callback time (later drift on the record cannot change what was committed), persisting and broadcasting defer through the model connection's `afterCommit` hook (rolled-back mutations never publish), and post-commit failures are reported loudly (`options.onError` or the publisher logger) without poisoning the driver's afterCommit chain. The sync row is upserted through the same shared primitive as the replay service's model-backed persistence (`src/sync/sync-change-fanout.js`): one server-origin row per resource identity, keyed by a null actor column (`authentication_token_id` by default — a server-origin change has no device to echo back to), reassigned and re-sequenced through `advanceServerSequence()` so feed cursors pick the change up again. Declared broadcasts deliver through the same injected broadcaster shape the replay service uses (defaulting to the configuration's channel broadcast).
+
+Replayed device mutations never double-publish: the framework's routed replay apply marks every record it writes through `markServerApply(record)` for the duration of the replay-owned write — the replay keeps owning its own persistence, stale-guard, and broadcasts, while later server-side writes to the same record instance publish normally again. Code applying already-synced data outside the replay suppresses publishing the same way through the public API (`src/sync/sync-publish-suppression.js`):
+
+```js
+import {markServerApply, withoutPublishing} from "velocious/build/src/sync/sync-publish-suppression.js"
+
+await withoutPublishing(async () => {
+  // every publish callback in here is skipped, across awaits; nested calls stack
+  await importDeviceOriginRows()
+})
+
+// record-precise form (what the routed replay apply uses internally):
+const release = markServerApply(record)
+try {
+  record.assign(attributesFromDevice)
+  await record.save()
+} finally {
+  release()
+}
+```
+
+`withoutPublishing` suppression is process-wide while its callback runs, so mutations from concurrently running requests are also skipped for that window — prefer `markServerApply(record)` when writes from other flows can interleave.
