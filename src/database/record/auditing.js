@@ -167,6 +167,21 @@ async function buildAuditTableData(modelClass) {
     }
   }
 
+  const configuration = modelClass._getConfiguration()
+
+  // Prefer the consumer's registered Audit model, e.g. an app that extends
+  // AuditBase with belongsTo("auditAction") + action() accessor.
+  const consumerAuditClass = configuration.getModelClasses().Audit
+
+  if (consumerAuditClass) {
+    return {
+      auditClass: consumerAuditClass,
+      dedicated: false,
+      foreignKey: "auditable_id",
+      tableName: "audits"
+    }
+  }
+
   const cacheKey = `shared:${modelClass.getConfiguredDatabaseIdentifier()}`
   let auditClass = auditClassCache.get(cacheKey)
 
