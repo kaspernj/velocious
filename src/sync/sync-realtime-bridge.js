@@ -225,7 +225,7 @@ export default class SyncRealtimeBridge {
     for (const scopeRow of await this.syncClient.scopeStore().activeScopes()) {
       channelDescriptors.push({
         channel: VELOCIOUS_SYNC_CHANNEL,
-        params: {conditions: scopeRow.conditions, resourceType: scopeRow.resourceType}
+        params: {conditions: this.attributeNamedConditions(scopeRow), resourceType: scopeRow.resourceType}
       })
     }
 
@@ -244,6 +244,36 @@ export default class SyncRealtimeBridge {
     }
 
     return channelDescriptors
+  }
+
+  /**
+   * Translates a persisted scope's condition keys to the model's attribute
+   * names so the framework channel subscription matches the publisher's
+   * attribute-named scoping params: `serializedScopeFromQuery` persists the
+   * query's model-normalized column names (for example `project_id`), while
+   * scope-partition broadcasts carry attribute names (`projectId`). Keys
+   * without a column mapping are already attribute names and pass through;
+   * scopes on models without a declared sync resource fail loudly because no
+   * attribute mapping exists for them.
+   * @param {{conditions: Record<string, ?>, resourceType: string}} scopeRow - Active scope row.
+   * @returns {Record<string, ?>} Attribute-named scope conditions.
+   */
+  attributeNamedConditions(scopeRow) {
+    const resourceConfig = this.syncClient.config.resources[scopeRow.resourceType]
+
+    if (!resourceConfig) {
+      throw new Error(`subscribeRealtime can't derive attribute names for the sync scope declared on ${scopeRow.resourceType} - declare static sync on that model so its resource is registered`)
+    }
+
+    const columnNameToAttributeName = resourceConfig.modelClass.getColumnNameToAttributeNameMap()
+    /** @type {Record<string, ?>} */
+    const conditions = {}
+
+    for (const [conditionName, conditionValue] of Object.entries(scopeRow.conditions)) {
+      conditions[columnNameToAttributeName[conditionName] || conditionName] = conditionValue
+    }
+
+    return conditions
   }
 
   /**

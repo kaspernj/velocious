@@ -480,9 +480,20 @@ describe("sync realtime bridge", () => {
 
   it("auto-subscribes every declared pull scope to the framework sync channel with only createClient configured", async () => {
     const harness = buildRealtimeHarness({
+      modelClasses: [
+        buildApplyableModelClass({
+          columns: SCAN_COLUMNS,
+          modelName: "TicketScan",
+          sync: {
+            attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted, ticketNr: data.ticketNr}),
+            track: true
+          }
+        }),
+        buildApplyableModelClass({columns: SCAN_COLUMNS, modelName: "Device", sync: true})
+      ],
       scopes: [
-        {conditions: {eventId: EVENT_ID}, resourceType: "Ticket"},
-        {conditions: {partnerId: 7}, resourceType: "Event"}
+        {conditions: {eventId: EVENT_ID}, resourceType: "TicketScan"},
+        {conditions: {partnerId: 7}, resourceType: "Device"}
       ]
     })
 
@@ -493,20 +504,20 @@ describe("sync realtime bridge", () => {
     expect(harness.fakeWebsocketClient.subscriptions[0].params).toEqual({
       authenticationToken: "token-1",
       conditions: {eventId: EVENT_ID},
-      resourceType: "Ticket"
+      resourceType: "TicketScan"
     })
     expect(harness.fakeWebsocketClient.subscriptions[1].channelType).toEqual("velocious-sync")
     expect(harness.fakeWebsocketClient.subscriptions[1].params).toEqual({
       authenticationToken: "token-1",
       conditions: {partnerId: 7},
-      resourceType: "Event"
+      resourceType: "Device"
     })
     expect(harness.errors).toEqual([])
   })
 
   it("applies framework sync channel envelopes through the derived resource applier", async () => {
     const harness = buildRealtimeHarness({
-      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "Ticket"}]
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "TicketScan"}]
     })
     const ticketScanClass = harness.modelClasses[0]
 
@@ -528,10 +539,35 @@ describe("sync realtime bridge", () => {
     expect(harness.errors).toEqual([])
   })
 
+  it("subscribes persisted column-named scope conditions under attribute names so they match the publisher's scoping params", async () => {
+    // serializedScopeFromQuery persists model-normalized column names (ticket_nr),
+    // while the publisher broadcasts attribute-named scoping params (ticketNr).
+    const harness = buildRealtimeHarness({
+      scopes: [{conditions: {ticket_nr: "T-1"}, resourceType: "TicketScan"}]
+    })
+
+    await harness.client.subscribeRealtime()
+
+    expect(harness.fakeWebsocketClient.subscriptions[0].params).toEqual({
+      authenticationToken: "token-1",
+      conditions: {ticketNr: "T-1"},
+      resourceType: "TicketScan"
+    })
+    expect(harness.errors).toEqual([])
+  })
+
+  it("fails loudly when a declared scope's resourceType has no declared sync resource", async () => {
+    const harness = buildRealtimeHarness({
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "UndeclaredThing"}]
+    })
+
+    await expect(async () => await harness.client.subscribeRealtime()).toThrow(/UndeclaredThing/u)
+  })
+
   it("subscribes deprecated channels callbacks alongside the scope-derived framework subscriptions", async () => {
     const harness = buildRealtimeHarness({
       channels: () => [{channel: "ticket-scans", params: {eventId: EVENT_ID}, resourceType: "TicketScan"}],
-      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "Ticket"}]
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "TicketScan"}]
     })
 
     await harness.client.subscribeRealtime()
