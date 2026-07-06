@@ -14,7 +14,19 @@ import {pathToFileURL} from "url"
 import {clearDeliveries} from "../mailer.js"
 
 /**
+ * Marks the error thrown by {@link runWithTimeout} so the caller can tell a
+ * lifecycle timeout (the promise is still running detached) apart from an
+ * ordinary test failure (the promise already settled).
+ * @typedef {Error & {velociousTestTimeout?: true}} TestTimeoutError
+ */
+
+/**
  * Runs run with timeout.
+ *
+ * On timeout the wrapped `promise` is NOT cancelled — it keeps running detached.
+ * The rejected error is tagged with `velociousTestTimeout` so the runner knows
+ * the lifecycle (and its afterEach database cleanup) is still in flight and can
+ * wait for it to settle before the next test reuses the shared connection.
  * @param {Promise<?> | ?} promise - Promise or value.
  * @param {number} timeoutMs - Timeout in milliseconds.
  * @param {string} testDescription - Test description.
@@ -22,7 +34,9 @@ import {clearDeliveries} from "../mailer.js"
  */
 function runWithTimeout(promise, timeoutMs, testDescription) {
   const timeoutSeconds = (timeoutMs / 1000).toFixed(3).replace(/\.?0+$/, "")
+  /** @type {TestTimeoutError} */
   const timeoutError = new Error(`Timed out after ${timeoutSeconds}s: ${testDescription}`)
+  timeoutError.velociousTestTimeout = true
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(timeoutError), timeoutMs)
@@ -33,6 +47,38 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
     }).catch((error) => {
       clearTimeout(timeout)
       reject(error)
+    })
+  })
+}
+
+/**
+ * Waits for an abandoned (timed-out) test lifecycle to settle, bounded by a
+ * grace period, so its afterEach database cleanup runs on the shared connection
+ * before the next test reuses it. Resolves early the moment the lifecycle
+ * settles; otherwise resolves once the grace elapses (never rejects, and never
+ * keeps the process alive on its own).
+ * @param {Promise<?>} lifecycle - The abandoned per-test lifecycle promise.
+ * @param {number} graceMs - Maximum time to wait for the lifecycle to settle.
+ * @returns {Promise<boolean>} - Whether the lifecycle settled within the grace period.
+ */
+function awaitSettledOrGrace(lifecycle, graceMs) {
+  return new Promise((resolve) => {
+    let settled = false
+    const graceTimer = setTimeout(() => {
+      if (settled) return
+
+      settled = true
+      resolve(false)
+    }, graceMs)
+
+    if (typeof graceTimer.unref === "function") graceTimer.unref()
+
+    Promise.resolve(lifecycle).then(() => {}, () => {}).then(() => {
+      if (settled) return
+
+      settled = true
+      clearTimeout(graceTimer)
+      resolve(true)
     })
   })
 }
@@ -862,6 +908,11 @@ export default class TestRunner {
            * @type {?} */
           let lastError
           let willRetry = false
+          /**
+           * The per-test lifecycle promise, hoisted so the timeout branch can
+           * still wait for it to settle after runWithTimeout has abandoned it.
+           * @type {Promise<?> | undefined} */
+          let testLifecycle
           const stopConsoleCapture = this.startConsoleCapture({
             passthrough: testConfig.consoleOutput === "live"
           })
@@ -870,7 +921,7 @@ export default class TestRunner {
             // Run the whole per-test lifecycle (dummy/server startup, connection
             // acquisition, beforeEach hooks, the test body and afterEach hooks) as
             // one promise so the timeout below can cover all of it.
-            const testLifecycle = this.runWithDummyIfNeeded(testArgs, async () => {
+            testLifecycle = this.runWithDummyIfNeeded(testArgs, async () => {
               // Pin one connection per test so beforeEach, the test body and afterEach
               // all run on the SAME connection. This is required for transaction-based
               // database cleaning (beforeEach starts a transaction, afterEach rolls it
@@ -917,6 +968,23 @@ export default class TestRunner {
           } catch (error) {
             caughtError = error
             lastError = error
+
+            // A timeout REJECTS while the lifecycle keeps running detached on the
+            // shared per-suite connection — including its afterEach database
+            // cleanup (e.g. transaction rollback). If the next test starts before
+            // that rollback runs, its own startTransaction() implicitly COMMITS
+            // the timed-out test's rows on the shared connection, poisoning every
+            // later test in the shard (duplicate-key / foreign-key cascades from
+            // leaked fixtures). Wait — bounded — for the abandoned lifecycle to
+            // settle so its cleanup lands first. Bounded so a genuinely hung test
+            // still can't stall the whole run: if it will not settle within the
+            // grace, we proceed exactly as before (no worse than today).
+            const timedOut = Boolean(/** @type {TestTimeoutError} */ (error)?.velociousTestTimeout)
+
+            if (timedOut && testLifecycle) {
+              await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
+            }
+
             willRetry = retriesUsed < retryCount
 
             if (willRetry) {
