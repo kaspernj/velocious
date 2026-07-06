@@ -218,6 +218,12 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     whereArgs[foreignKey] = primaryModelID
 
+    if (this.getRelationship().getPolymorphic()) {
+      const typeColumn = this.getRelationship().getPolymorphicTypeColumn()
+
+      whereArgs[typeColumn] = this.getModel().getModelClass().getModelName()
+    }
+
     const query = TargetModelClass.where(whereArgs)
 
     return this.applyScope(query)

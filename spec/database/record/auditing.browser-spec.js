@@ -3,6 +3,7 @@
 import Configuration from "../../../src/configuration.js"
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
+import {AuditEvents} from "../../../src/database/record/auditing.js"
 
 /**
  * AuditJson type.
@@ -74,6 +75,28 @@ async function auditRows() {
   })
 }
 
+/**
+ * @param {number} projectId
+ * @returns {Promise<Array<Record<string, unknown>>>}
+ */
+async function projectAuditRows(projectId) {
+  return await Configuration.current().ensureConnections(async (dbs) => {
+    const db = dbs.default
+    const rows = /** @type {Array<Record<string, unknown>>} */ (await db.query(`
+      SELECT
+        audit_actions.action AS action,
+        project_audits.audited_changes AS audited_changes,
+        project_audits.project_id AS project_id,
+        project_audits.params AS params
+      FROM ${db.quoteTable("project_audits")}
+      INNER JOIN ${db.quoteTable("audit_actions")} ON ${db.quoteTable("audit_actions")}.${db.quoteColumn("id")} = ${db.quoteTable("project_audits")}.${db.quoteColumn("audit_action_id")}
+      WHERE project_audits.project_id = ${db.quote(projectId)}
+    `))
+
+    return rows
+  })
+}
+
 describe("Record - auditing", {tags: ["dummy"]}, () => {
   it("records automatic and manual audits for audited models", async () => {
     /** @type {Array<{action: string, recordId: number}>} */
@@ -128,6 +151,54 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
         .toArray()
 
       expect(withoutCustomAudit.map((task) => task.id())).toEqual([taskWithoutCustomAudit.id()])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it("records audits in a dedicated project_audits table", async () => {
+    const project = await Project.create({name: "Dedicated audit project"})
+
+    const projectRows = await projectAuditRows(project.id())
+
+    expect(projectRows.length).toBeGreaterThanOrEqual(1)
+
+    const createRow = projectRows.find((row) => /** @type {string} */ (row.action) === "create")
+
+    expect(createRow).toBeDefined()
+    expect(createRow).toMatchObject({
+      action: "create",
+      project_id: project.id()
+    })
+  })
+
+  it("auto-registers audits relationship on dedicated-table model", async () => {
+    const project = await Project.create({name: "Relationship project"})
+
+    const audits = await project.audits().toArray()
+
+    expect(audits.length).toBeGreaterThanOrEqual(1)
+    expect(/** @type {string} */ (audits[0]?.readAttribute?.("project_id"))).toEqual(project.id())
+  })
+
+  it("calls global audit events on audit creation", async () => {
+    let called = false
+    /** @type {import("../../../src/database/record/auditing.js").AuditEventPayload | null} */
+    let receivedPayload = null
+    const unsubscribe = AuditEvents.connect("Task", "test_event", (args) => {
+      called = true
+      receivedPayload = args
+    })
+
+    try {
+      const project = await Project.create({name: "Events project"})
+      const task = await Task.create({name: "Events task", project})
+
+      await task.createAudit({action: "test_event", params: {key: "value"}})
+
+      expect(called).toEqual(true)
+      expect(receivedPayload).not.toEqual(null)
+      expect(/** @type {Record<string, unknown>} */ (receivedPayload)?.params).toEqual({key: "value"})
     } finally {
       unsubscribe()
     }
