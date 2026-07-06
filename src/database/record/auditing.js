@@ -41,6 +41,7 @@ import UUID from "pure-uuid"
  */
 
 /**
+ * AuditTableData type.
  * @typedef {object} AuditTableData
  * @property {boolean} dedicated - Whether a dedicated audit table exists.
  * @property {string} tableName - Name of the audit table.
@@ -61,8 +62,17 @@ const auditClassCache = new Map()
 /** @type {Record<string, Record<string, Array<(args: AuditEventPayload) => void>>>} */
 let globalEventConnections = {}
 
+/**
+ * Global audit event bus matching ActiveRecordAuditable::Events.
+ * @typedef {object} AuditEventsType
+ * @property {(type: string, action: string, args: AuditEventPayload) => void} call - Fire all callbacks for a model type + action.
+ * @property {(type: string, action: string, callback: (args: AuditEventPayload) => void) => () => void} connect - Register a callback for a model type + action. Returns an unsubscribe function.
+ * @property {() => void} reset - Clear all registered callbacks.
+ */
+
+/** @type {AuditEventsType} */
 const AuditEvents = {
-  /** @param {string} type @param {string} action @param {AuditEventPayload} args */
+  /** Fire all registered callbacks for a model type + action. @param {string} type @param {string} action @param {AuditEventPayload} args */
   call(type, action, args) {
     const actions = globalEventConnections[type] || {}
     const callbacks = actions[action] || []
@@ -72,7 +82,7 @@ const AuditEvents = {
     }
   },
 
-  /** @param {string} type @param {string} action @param {(args: AuditEventPayload) => void} callback @returns {() => void} */
+  /** Register a callback for a model type + action. Returns an unsubscribe function. @param {string} type @param {string} action @param {(args: AuditEventPayload) => void} callback @returns {() => void} */
   connect(type, action, callback) {
     if (!globalEventConnections[type]) {
       globalEventConnections[type] = {}
@@ -97,6 +107,7 @@ const AuditEvents = {
     }
   },
 
+  /** Clear all registered callbacks. @returns {void} */
   reset() {
     globalEventConnections = {}
   }
@@ -107,8 +118,9 @@ const AuditEvents = {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {AuditedModelClass} modelClass
- * @returns {string}
+ * Returns the dedicated audit table name for a model class.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {string} e.g. "project_audits" for a "projects" table.
  */
 function dedicatedAuditTableName(modelClass) {
   const table = modelClass.tableName()
@@ -122,8 +134,9 @@ function dedicatedAuditTableName(modelClass) {
 
 /**
  * Resolves audit table data for a model class. Cached per model.
+ * Called lazily on first createAudit / withoutAudit / relationship usage.
  * @param {AuditedModelClass} modelClass - Audited model class.
- * @returns {Promise<AuditTableData>}
+ * @returns {Promise<AuditTableData>} Resolved audit table metadata.
  */
 async function resolveAuditTableData(modelClass) {
   if (modelClass._auditTableResolved && modelClass._auditTableData) {
@@ -148,8 +161,11 @@ async function resolveAuditTableData(modelClass) {
 }
 
 /**
- * @param {AuditedModelClass} modelClass
- * @returns {Promise<AuditTableData>}
+ * Builds audit table metadata for a model class. Prefers the consumer's
+ * registered Audit model for shared tables; falls back to a framework-owned
+ * dynamic class.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {Promise<AuditTableData>} Audit table metadata.
  */
 async function buildAuditTableData(modelClass) {
   const dedicatedTable = dedicatedAuditTableName(modelClass)
@@ -169,8 +185,6 @@ async function buildAuditTableData(modelClass) {
 
   const configuration = modelClass._getConfiguration()
 
-  // Prefer the consumer's registered Audit model, e.g. an app that extends
-  // AuditBase with belongsTo("auditAction") + action() accessor.
   const consumerAuditClass = configuration.getModelClasses().Audit
 
   if (consumerAuditClass) {
@@ -199,9 +213,10 @@ async function buildAuditTableData(modelClass) {
 }
 
 /**
- * @param {AuditedModelClass} modelClass
- * @param {string} tableName
- * @returns {Promise<boolean>}
+ * Checks whether a dedicated audit table exists for a model's connection.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {string} tableName - Dedicated audit table name to check.
+ * @returns {Promise<boolean>} Whether the table exists.
  */
 async function dedicatedTableExistsForConnection(modelClass, tableName) {
   const cacheKey = `${modelClass.getConfiguredDatabaseIdentifier()}:${tableName}`
@@ -213,7 +228,8 @@ async function dedicatedTableExistsForConnection(modelClass, tableName) {
 
   try {
     const connection = modelClass.connection()
-    const table = await connection.getTableByName(tableName)
+
+    await connection.getTableByName(tableName)
 
     dedicatedTableCache.set(cacheKey, true)
 
@@ -230,14 +246,19 @@ async function dedicatedTableExistsForConnection(modelClass, tableName) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {AuditedModelClass} modelClass
- * @returns {typeof import("./index.js").default}
+ * Returns a framework-owned shared Audit class for the `audits` table.
+ * This is only used when no consumer-registered Audit model exists.
+ * @param {AuditedModelClass} modelClass - Any audited model class (used to locate DatabaseRecord).
+ * @returns {typeof import("./index.js").default} Shared Audit model class.
  */
 function sharedAuditClass(modelClass) {
   const dbRecordClass = findDatabaseRecordClass(modelClass)
 
+  /**
+   * Framework-owned Audit model for the shared `audits` table.
+   */
   class Audit extends dbRecordClass {
-    /** @returns {string} */
+    /** Returns the backing table name. @returns {string} */
     static tableName() {
       return "audits"
     }
@@ -249,33 +270,36 @@ function sharedAuditClass(modelClass) {
 }
 
 /**
- * @param {AuditedModelClass} modelClass
- * @param {string} tableName
- * @returns {typeof import("./index.js").default}
+ * Returns a dynamic per-model audit class for a dedicated table.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {string} tableName - Dedicated audit table name (e.g. "project_audits").
+ * @returns {typeof import("./index.js").default} Dedicated audit model class.
  */
 function dedicatedAuditClass(modelClass, tableName) {
   const dbRecordClass = findDatabaseRecordClass(modelClass)
   const modelName = modelClass.getModelName()
   const modelKey = modelParamKey(modelClass)
 
+  /**
+   * Framework-owned per-model Audit class.
+   */
   class ModelAudit extends dbRecordClass {
-    /** @returns {string} */
+    /** Returns the backing table name. @returns {string} */
     static tableName() {
       return tableName
     }
   }
 
   Object.defineProperty(ModelAudit, "modelName", {value: `${modelName}Audit`, writable: false})
-
   ModelAudit.belongsTo(modelKey, {className: modelName})
 
   return /** @type {typeof import("./index.js").default} */ (ModelAudit)
 }
 
 /**
- * Walks the prototype chain of modelClass to find the root DatabaseRecord.
- * @param {AuditedModelClass} modelClass
- * @returns {typeof import("./index.js").default}
+ * Walks the prototype chain to find the root DatabaseRecord class.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {typeof import("./index.js").default} Root DatabaseRecord class.
  */
 function findDatabaseRecordClass(modelClass) {
   let recordClass = Object.getPrototypeOf(modelClass)
@@ -288,8 +312,9 @@ function findDatabaseRecordClass(modelClass) {
 }
 
 /**
- * @param {AuditedModelClass} modelClass
- * @returns {string}
+ * Returns the parameter-key name for a model class.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {string} e.g. "project" for "Project".
  */
 function modelParamKey(modelClass) {
   const name = modelClass.getModelName()
@@ -302,10 +327,10 @@ function modelParamKey(modelClass) {
 // ---------------------------------------------------------------------------
 
 /**
- * Registers lifecycle callbacks and schedules deferred relationship
- * registration on first audit access. Called synchronously from
- * Model.audited() at module-load time.
- * @param {AuditedModelClass} modelClass
+ * Registers lifecycle callbacks for automatic create/update/destroy auditing.
+ * Table detection and relationship registration happen lazily on first usage.
+ * Called synchronously from Model.audited() at module-load time.
+ * @param {AuditedModelClass} modelClass - Model class to audit.
  * @returns {void}
  */
 function registerAuditing(modelClass) {
@@ -326,9 +351,10 @@ function registerAuditing(modelClass) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {import("./index.js").default} record
- * @param {CreateAuditArgs} args
- * @returns {Promise<number | string>}
+ * Creates an audit row for a record.
+ * @param {import("./index.js").default} record - Record to audit.
+ * @param {CreateAuditArgs} args - Audit row options (action, auditedChanges, params).
+ * @returns {Promise<number | string>} Created audit row id.
  */
 async function createAudit(record, args) {
   const modelClass = /** @type {AuditedModelClass} */ (record.getModelClass())
@@ -339,10 +365,12 @@ async function createAudit(record, args) {
 }
 
 /**
- * @param {import("./index.js").default} record
- * @param {CreateAuditArgs} args
- * @param {AuditedModelClass} modelClass
- * @returns {Promise<number | string>}
+ * Creates an audit row using the current model database connection.
+ * Routes to shared table or dedicated table based on resolved audit table data.
+ * @param {import("./index.js").default} record - Record to audit.
+ * @param {CreateAuditArgs} args - Audit row options (action, auditedChanges, params).
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {Promise<number | string>} Created audit row id.
  */
 async function createAuditWithCurrentConnection(record, args, modelClass) {
   if (!record.isPersisted()) throw new Error(`Cannot audit unpersisted ${modelClass.getModelName()} record`)
@@ -430,7 +458,8 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {import("./index.js").default & {_pendingCreateAuditChanges?: AuditChanges}} record
+ * Captures create changes before persistence clears the change set.
+ * @param {import("./index.js").default & {_pendingCreateAuditChanges?: AuditChanges}} record - Record whose pending changes should be captured.
  * @returns {void}
  */
 function captureCreateAuditChanges(record) {
@@ -438,7 +467,8 @@ function captureCreateAuditChanges(record) {
 }
 
 /**
- * @param {import("./index.js").default & {_pendingCreateAuditChanges?: AuditChanges}} record
+ * Writes the create audit row for a model instance.
+ * @param {import("./index.js").default & {_pendingCreateAuditChanges?: AuditChanges}} record - Record to audit.
  * @returns {Promise<void>}
  */
 async function createCreateAudit(record) {
@@ -451,7 +481,8 @@ async function createCreateAudit(record) {
 }
 
 /**
- * @param {import("./index.js").default & {_pendingUpdateAuditChanges?: AuditChanges}} record
+ * Captures update changes before persistence clears the change set.
+ * @param {import("./index.js").default & {_pendingUpdateAuditChanges?: AuditChanges}} record - Record whose pending changes should be captured.
  * @returns {void}
  */
 function captureUpdateAuditChanges(record) {
@@ -459,7 +490,8 @@ function captureUpdateAuditChanges(record) {
 }
 
 /**
- * @param {import("./index.js").default & {_pendingUpdateAuditChanges?: AuditChanges}} record
+ * Writes the update audit row for a model instance.
+ * @param {import("./index.js").default & {_pendingUpdateAuditChanges?: AuditChanges}} record - Record to audit.
  * @returns {Promise<void>}
  */
 async function createUpdateAudit(record) {
@@ -476,7 +508,8 @@ async function createUpdateAudit(record) {
 }
 
 /**
- * @param {import("./index.js").default} record
+ * Writes the destroy audit row for a model instance.
+ * @param {import("./index.js").default} record - Record to audit.
  * @returns {Promise<void>}
  */
 async function createDestroyAudit(record) {
@@ -491,8 +524,9 @@ async function createDestroyAudit(record) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {import("./index.js").default} record
- * @returns {AuditChanges}
+ * Captures the new values for fields changed on a record.
+ * @param {import("./index.js").default} record - Record whose pending changes should be captured.
+ * @returns {AuditChanges} New values keyed by attribute name.
  */
 function auditChangesForCurrentChanges(record) {
   const changes = record.changes()
@@ -508,8 +542,9 @@ function auditChangesForCurrentChanges(record) {
 }
 
 /**
- * @param {import("./index.js").default} record
- * @returns {AuditChanges}
+ * Captures the current attributes for a destroy audit.
+ * @param {import("./index.js").default} record - Record being destroyed.
+ * @returns {AuditChanges} Current attributes keyed by attribute name.
  */
 function auditChangesForDestroy(record) {
   return {...record.attributes()}
@@ -520,10 +555,13 @@ function auditChangesForDestroy(record) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Returns records without an audit row for the given action.
+ * Uses shared-table defaults when table data is not yet resolved;
+ * switches to the dedicated table path once resolved.
  * @template {AuditedModelClass} MC
- * @param {MC} modelClass
- * @param {string} action
- * @returns {import("../query/model-class-query.js").default<MC>}
+ * @param {MC} modelClass - Model class to scope.
+ * @param {string} action - Audit action to exclude.
+ * @returns {import("../query/model-class-query.js").default<MC>} Query scoped to records without that audit action.
  */
 function withoutAudit(modelClass, action) {
   const db = modelClass.connection()
@@ -533,7 +571,6 @@ function withoutAudit(modelClass, action) {
   const auditActionsIdSql = `${auditActionsTableSql}.${db.quoteColumn("id")}`
   const auditActionsActionSql = `${auditActionsTableSql}.${db.quoteColumn("action")}`
 
-  // When table data is already resolved and a dedicated table exists, use it.
   if (modelClass._auditTableResolved && modelClass._auditTableData?.dedicated) {
     const tableData = modelClass._auditTableData
     const modelKey = modelParamKey(modelClass)
@@ -555,7 +592,6 @@ function withoutAudit(modelClass, action) {
       `)
   }
 
-  // Default: shared audits table.
   const auditsTableSql = db.quoteTable("audits")
   const auditAuditableIdSql = `${auditsTableSql}.${db.quoteColumn("auditable_id")}`
   const auditAuditableTypeSql = `${auditsTableSql}.${db.quoteColumn("auditable_type")}`
@@ -581,10 +617,11 @@ function withoutAudit(modelClass, action) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {AuditedModelClass} modelClass
- * @param {string} action
- * @param {AuditCallback} callback
- * @returns {() => void}
+ * Registers a per-model callback fired after an audit row is created.
+ * @param {AuditedModelClass} modelClass - Model class to observe.
+ * @param {string} action - Audit action name (e.g. "create").
+ * @param {AuditCallback} callback - Callback invoked after matching audit rows are created.
+ * @returns {() => void} Unsubscribe function.
  */
 function registerAuditCallback(modelClass, action, callback) {
   const normalizedAction = normalizeAction(action)
@@ -607,9 +644,10 @@ function registerAuditCallback(modelClass, action, callback) {
 }
 
 /**
- * @param {AuditedModelClass} modelClass
- * @param {string} action
- * @param {AuditEventPayload} payload
+ * Emits per-model audit callbacks for a model/action pair.
+ * @param {AuditedModelClass} modelClass - Model class.
+ * @param {string} action - Audit action.
+ * @param {AuditEventPayload} payload - Event payload.
  * @returns {Promise<void>}
  */
 async function emitAuditEvent(modelClass, action, payload) {
@@ -621,8 +659,9 @@ async function emitAuditEvent(modelClass, action, payload) {
 }
 
 /**
- * @param {AuditedModelClass} modelClass
- * @returns {Record<string, AuditCallback[]>}
+ * Returns the per-model callback map.
+ * @param {AuditedModelClass} modelClass - Model class.
+ * @returns {Record<string, AuditCallback[]>} Callback map keyed by action.
  */
 function auditCallbacksForModelClass(modelClass) {
   if (!Object.prototype.hasOwnProperty.call(modelClass, "_auditCallbacks")) {
@@ -641,8 +680,14 @@ function auditCallbacksForModelClass(modelClass) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {{columnName: string, currentDate: Date, db: import("../drivers/base.js").default, tableName: string, value: string}} args
- * @returns {Promise<number | string>}
+ * Finds or creates a lookup row and returns its id.
+ * @param {object} args - Options object.
+ * @param {string} args.columnName - Lookup value column name.
+ * @param {Date} args.currentDate - Timestamp to write when inserting.
+ * @param {import("../drivers/base.js").default} args.db - Database driver.
+ * @param {string} args.tableName - Lookup table name.
+ * @param {string} args.value - Lookup value.
+ * @returns {Promise<number | string>} Lookup row id.
  */
 async function findOrCreateLookupId({columnName, currentDate, db, tableName, value}) {
   await db.upsert({
@@ -665,8 +710,13 @@ async function findOrCreateLookupId({columnName, currentDate, db, tableName, val
 }
 
 /**
- * @param {{columnName: string, db: import("../drivers/base.js").default, tableName: string, value: string}} args
- * @returns {Promise<number | string | null>}
+ * Finds a lookup id by value.
+ * @param {object} args - Options object.
+ * @param {string} args.columnName - Lookup value column name.
+ * @param {import("../drivers/base.js").default} args.db - Database driver.
+ * @param {string} args.tableName - Lookup table name.
+ * @param {string} args.value - Lookup value.
+ * @returns {Promise<number | string | null>} Lookup row id or null.
  */
 async function findLookupId({columnName, db, tableName, value}) {
   const rows = /** @type {Array<{id: number | string}>} */ (await db.query(`
@@ -681,8 +731,9 @@ async function findLookupId({columnName, db, tableName, value}) {
 }
 
 /**
- * @param {string} action
- * @returns {string}
+ * Normalizes an audit action string.
+ * @param {string} action - Action name.
+ * @returns {string} Trimmed, non-empty action name.
  */
 function normalizeAction(action) {
   const normalizedAction = action.trim()
@@ -697,7 +748,10 @@ function normalizeAction(action) {
 // ---------------------------------------------------------------------------
 
 /**
- * @returns {{down: (table: any) => Promise<void>, up: (table: any) => Promise<void>}}
+ * Creates the shared audit tables migration up/down callbacks for use inside
+ * a Migration class. The `table` parameter is a Migration instance.
+ * @param {{id?: {type: string}}} [options] - ID column options.
+ * @returns {{down: (table: import("../migration/index.js").default) => Promise<void>, up: (table: import("../migration/index.js").default) => Promise<void>}}
  */
 function createSharedAuditTablesMigration(options = {}) {
   const opts = /** @type {{id?: {type: string}}} */ (options)
@@ -706,17 +760,17 @@ function createSharedAuditTablesMigration(options = {}) {
 
   return {
     async up(table) {
-      await table.createTable("audit_actions", {id: idOptions}, (/** @type {*} */ t) => {
+      await table.createTable("audit_actions", {id: /** @type {{type?: string}} */ (opts.id || {})}, (/** @type {{string(name: string, options: Record<string, unknown>): void, timestamps(): void}} */ t) => {
         t.string("action", {index: {unique: true}, null: false})
         t.timestamps()
       })
 
-      await table.createTable("audit_auditable_types", {id: idOptions}, (/** @type {*} */ t) => {
+      await table.createTable("audit_auditable_types", {id: /** @type {{type?: string}} */ (opts.id || {})}, (/** @type {{string(name: string, options: Record<string, unknown>): void, timestamps(): void}} */ t) => {
         t.string("name", {index: {unique: true}, null: false})
         t.timestamps()
       })
 
-      await table.createTable("audits", {id: idOptions}, (/** @type {*} */ t) => {
+      await table.createTable("audits", {id: /** @type {{type?: string}} */ (opts.id || {})}, (/** @type {{json(name: string): void, references(name: string, options: Record<string, unknown>): void, timestamps(): void}} */ t) => {
         t.references("audit_action", {foreignKey: true, null: false, type})
         t.references("audit_auditable_type", {foreignKey: true, null: false, type})
         t.references("auditable", {null: false, polymorphic: true, type})
@@ -735,8 +789,9 @@ function createSharedAuditTablesMigration(options = {}) {
 }
 
 /**
- * @param {string} modelTableName
- * @returns {string}
+ * Returns the dedicated audit table name for a given model table name.
+ * @param {string} modelTableName - Model table name (e.g. "projects").
+ * @returns {string} Dedicated audit table name (e.g. "project_audits").
  */
 function dedicatedAuditTableNameForTable(modelTableName) {
   if (modelTableName.endsWith("s")) {
