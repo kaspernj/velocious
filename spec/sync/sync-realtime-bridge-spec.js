@@ -98,6 +98,7 @@ function buildApplyableModelClass({columns, modelName, sync}) {
  * Builds a realtime sync client harness with a fake websocket client, a recording
  * transport, and an applyable tracked TicketScan model.
  * @param {object} [args] - Harness args.
+ * @param {{value: string}} [args.authTokenHolder] - Mutable auth-token holder so specs can switch the signed-in identity.
  * @param {(context: ?) => Array<?> | Promise<Array<?>>} [args.channels] - Realtime channels callback.
  * @param {boolean} [args.deferConnect] - Defer the fake client's connect().
  * @param {boolean} [args.deferReady] - Defer each fake subscription's readiness.
@@ -109,19 +110,21 @@ function buildApplyableModelClass({columns, modelName, sync}) {
  * @param {?} [args.websocketClient] - Shared app-lifetime websocket client instance (sync.client.websocketClient); when set, no realtime.createClient is configured so the bridge rides the shared connection.
  * @returns {?} Harness with client, fakes, and recorded calls.
  */
-function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime, scopes, websocketClient} = {}) {
+function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime, scopes, websocketClient} = {}) {
   /** @type {Array<Error>} */
   const errors = []
   /** @type {Array<Record<string, ?>>} */
   const postChangesCalls = []
   const fakeWebsocketClient = buildFakeWebsocketClient({deferConnect, deferReady})
   const syncModel = buildFakeSyncModel()
+  const resolvedAuthTokenHolder = authTokenHolder || {value: "token-1"}
+  const changesResponseHolder = {value: /** @type {Record<string, ?>} */ ({nextCursor: null, status: "success", syncs: [], upToCursor: null})}
   const transport = {
     /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
     post: async (path, payload) => {
       if (path.endsWith("/changes")) postChangesCalls.push(payload)
 
-      return {json: () => ({nextCursor: null, status: "success", syncs: [], upToCursor: null})}
+      return {json: () => changesResponseHolder.value}
     }
   }
   const resolvedModelClasses = modelClasses || [
@@ -144,7 +147,7 @@ function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, 
     modelClasses: resolvedModelClasses,
     sync: {
       client: {
-        authenticationToken: () => "token-1",
+        authenticationToken: async () => resolvedAuthTokenHolder.value,
         onError: (/** @type {Error} */ error) => {
           errors.push(error)
         },
@@ -161,7 +164,7 @@ function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, 
   }) : undefined
   const client = new SyncClient({configuration, scopeStore, syncModel})
 
-  return {client, errors, fakeWebsocketClient, modelClasses: resolvedModelClasses, postChangesCalls, syncModel}
+  return {authTokenHolder: resolvedAuthTokenHolder, changesResponseHolder, client, errors, fakeWebsocketClient, modelClasses: resolvedModelClasses, postChangesCalls, syncModel}
 }
 
 describe("sync realtime bridge", () => {
@@ -684,6 +687,47 @@ describe("sync client user scope", () => {
 
     expect(harness.postChangesCalls.length).toEqual(2)
     expect(harness.postChangesCalls[1].scope).toEqual({conditions: {}, resourceType: "TicketScan"})
+    expect(harness.errors).toEqual([])
+  })
+
+  it("partitions the user-scope cursor by authenticated user so a different account gets a fresh cursor while the same account keeps continuity", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildRealtimeHarness({authTokenHolder, pullOnReconnect: false, websocketClient: sharedClient})
+
+    harness.changesResponseHolder.value = {
+      nextCursor: {id: SCAN_ID, serverSequence: 42, updatedAt: "2026-07-06T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {ticketNr: "T-1"}, resourceId: SCAN_ID, resourceType: "TicketScan", syncType: "update"}],
+      upToCursor: {id: SCAN_ID, serverSequence: 42, updatedAt: "2026-07-06T10:00:00.000Z"}
+    }
+
+    // Account A signs in and pulls: its empty-conditions user-scope cursor advances to 42.
+    await harness.client.subscribeUserScope()
+
+    expect(harness.postChangesCalls[0].afterServerSequence).toBeUndefined()
+
+    await harness.client.unsubscribeUserScope()
+
+    // Account B signs in on the same device.
+    authTokenHolder.value = "token-b"
+    harness.postChangesCalls.length = 0
+
+    await harness.client.subscribeUserScope()
+
+    // B's first pull must start fresh, not resume from account A's cursor (42).
+    expect(harness.postChangesCalls.length).toEqual(1)
+    expect(harness.postChangesCalls[0].afterServerSequence).toBeUndefined()
+
+    await harness.client.unsubscribeUserScope()
+
+    // Account A reconnects: the same account keeps its cursor continuity (resumes from 42).
+    authTokenHolder.value = "token-a"
+    harness.postChangesCalls.length = 0
+
+    await harness.client.subscribeUserScope()
+
+    expect(harness.postChangesCalls[0].afterServerSequence).toEqual(42)
     expect(harness.errors).toEqual([])
   })
 

@@ -527,9 +527,10 @@ export default class SyncClient {
     this._userScopeState = "subscribing"
 
     const scopeStore = this.scopeStore()
+    const owner = await this.userScopeOwner()
 
     for (const resourceType of this.userScopeResourceTypes()) {
-      await scopeStore.findOrCreateScope({conditions: {}, resourceType})
+      await scopeStore.findOrCreateScope({conditions: {}, owner, resourceType})
     }
 
     await this.subscribeRealtime()
@@ -547,9 +548,10 @@ export default class SyncClient {
    */
   async unsubscribeUserScope() {
     const scopeStore = this.scopeStore()
+    const owner = await this.userScopeOwner()
 
     for (const resourceType of this.userScopeResourceTypes()) {
-      await scopeStore.deactivate({conditions: {}, resourceType})
+      await scopeStore.deactivate({conditions: {}, owner, resourceType})
     }
 
     await this.unsubscribeRealtime()
@@ -565,6 +567,20 @@ export default class SyncClient {
    */
   userScopeResourceTypes() {
     return Object.keys(this.pullResourceConfigs())
+  }
+
+  /**
+   * Resolves the local partition key for the user scope: the currently
+   * configured authenticated identity (the sync auth token). Partitioning the
+   * user scope's local scope/cursor rows by this owner keeps the
+   * empty-conditions cursor from leaking across accounts on a shared device
+   * (account B signing in after account A gets a fresh cursor) while the same
+   * account reconnecting keeps its cursor continuity. The owner is a local
+   * partition key only — pulls still post empty conditions to the server.
+   * @returns {Promise<string>} User-scope owner partition key.
+   */
+  async userScopeOwner() {
+    return String(await this.config.authenticationToken())
   }
 
   /**
