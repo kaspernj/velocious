@@ -216,6 +216,27 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   }
 
   /**
+   * Decides whether one published change is deliverable to a user-scope
+   * subscription (the framework sync channel's per-delivery access re-check).
+   * The default reuses the app's ability scoping: it applies
+   * {@link SyncResourceBase#scopeChangesQuery} to the change-feed model — which
+   * for an empty-conditions user scope falls back to ability scoping — and
+   * checks whether the published change's feed row is visible within that
+   * scope. Apps get this for free from the scoping they already declared;
+   * override only for custom per-delivery rules.
+   * @param {{params: Record<string, ?>, scope: SerializedChangesScope | null, sync: {resourceId: string, resourceType: string}}} args - Request params, subscription scope, and the published change's identity.
+   * @returns {Promise<boolean>} Whether the change may be delivered to this subscription.
+   */
+  async changeDeliverable({params, scope, sync}) {
+    const query = this.syncModelClass().where({})
+
+    this.scopeChangesQuery({params, query, scope})
+    query.where({resource_id: String(sync.resourceId), resource_type: String(sync.resourceType)})
+
+    return Boolean(await query.first())
+  }
+
+  /**
    * Resolves the replay service class handling replay mutations: the
    * declarative {@link SyncResourceBase.ReplayServiceClass} static (shared
    * resources included) when declared, otherwise

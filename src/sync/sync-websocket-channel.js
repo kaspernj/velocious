@@ -137,10 +137,80 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
   }
 
   /**
+   * Delivers a matched broadcast. Scoped subscriptions (with explicit
+   * conditions) already routed through {@link SyncWebsocketChannel#matches}, so
+   * the change is in scope and delivers unchanged. User-scope subscriptions
+   * (empty conditions, "everything my ability can see") match every broadcast
+   * of the resource type, so each published change is re-checked against the
+   * subscriber's ability at fan-out through the app sync resource's
+   * `changeDeliverable`; only accessible changes are delivered, and a broadcast
+   * with no accessible change is dropped.
+   * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body (sync envelope).
+   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @returns {Promise<void>}
+   */
+  async deliverBroadcast(body, meta) {
+    if (!this._isUserScope()) {
+      this.sendMessage(body, meta)
+
+      return
+    }
+
+    const deliverableBody = await this._userScopeDeliverableBody(body)
+
+    if (deliverableBody !== null) this.sendMessage(deliverableBody, meta)
+  }
+
+  /**
+   * Whether this subscription is a user scope: authorized with empty conditions
+   * ("everything my ability can see").
+   * @returns {boolean} Whether the subscription is a user scope.
+   */
+  _isUserScope() {
+    return Boolean(this._scope) && Object.keys(/** @type {import("./sync-resource-base.js").SerializedChangesScope} */ (this._scope).conditions).length === 0
+  }
+
+  /**
+   * Filters a user-scope broadcast to the sync entries the subscriber's ability
+   * can access, re-checking each through the app sync resource's
+   * `changeDeliverable`. Returns the broadcast narrowed to accessible entries,
+   * or null when none are accessible. Non-envelope bodies and entries without a
+   * resource id are dropped (fail closed).
+   * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
+   * @returns {Promise<import("../http-server/websocket-channel.js").WebsocketJsonValue | null>} Deliverable body, or null.
+   */
+  async _userScopeDeliverableBody(body) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return null
+
+    const envelope = /** @type {Record<string, ?>} */ (body)
+    const scope = /** @type {import("./sync-resource-base.js").SerializedChangesScope} */ (this._scope)
+    const syncs = Array.isArray(envelope.syncs) ? envelope.syncs : [envelope]
+    const resource = await this.buildSyncResource()
+    /** @type {Array<Record<string, ?>>} */
+    const deliverableSyncs = []
+
+    for (const sync of syncs) {
+      const resourceId = sync?.resourceId
+      const resourceType = sync?.resourceType ?? scope.resourceType
+
+      if (resourceId === undefined || resourceId === null) continue
+
+      if (await resource.changeDeliverable({params: this.params, scope, sync: {resourceId: String(resourceId), resourceType: String(resourceType)}})) {
+        deliverableSyncs.push(sync)
+      }
+    }
+
+    if (deliverableSyncs.length === 0) return null
+    if (Array.isArray(envelope.syncs)) return {...envelope, syncs: deliverableSyncs}
+
+    return deliverableSyncs[0]
+  }
+
+  /**
    * Returns the authorized scope for debug snapshots.
    * @returns {Record<string, ?>} Debug-safe subscription details.
    */
   debugSnapshot() {
-    return {scope: this._scope}
+    return {scope: this._scope, userScope: this._isUserScope()}
   }
 }
