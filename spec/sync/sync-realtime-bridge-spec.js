@@ -106,9 +106,10 @@ function buildApplyableModelClass({columns, modelName, sync}) {
  * @param {boolean} [args.pullOnReconnect] - Realtime pull-on-reconnect flag.
  * @param {?} [args.realtime] - Full realtime block override.
  * @param {Array<{conditions: Record<string, ?>, resourceType: string}>} [args.scopes] - Active pull scopes served by a fake scope store.
+ * @param {?} [args.websocketClient] - Shared app-lifetime websocket client instance (sync.client.websocketClient); when set, no realtime.createClient is configured so the bridge rides the shared connection.
  * @returns {?} Harness with client, fakes, and recorded calls.
  */
-function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime, scopes} = {}) {
+function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime, scopes, websocketClient} = {}) {
   /** @type {Array<Error>} */
   const errors = []
   /** @type {Array<Record<string, ?>>} */
@@ -133,7 +134,7 @@ function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, 
       }
     })
   ]
-  const resolvedRealtime = realtime !== undefined ? realtime : {
+  const resolvedRealtime = realtime !== undefined ? realtime : websocketClient ? {channels, localOrigin, pullOnReconnect} : {
     channels,
     createClient: () => fakeWebsocketClient,
     localOrigin,
@@ -148,7 +149,8 @@ function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, 
           errors.push(error)
         },
         realtime: resolvedRealtime,
-        transport
+        transport,
+        websocketClient: websocketClient || undefined
       }
     }
   })
@@ -587,5 +589,122 @@ describe("sync realtime bridge", () => {
     const harness = buildRealtimeHarness()
 
     await expect(async () => await harness.client.subscribeRealtime()).toThrow(/declare a sync scope/u)
+  })
+
+  it("rides a shared connection across subscribe/unsubscribe cycles without disconnecting the socket", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "TicketScan"}],
+      websocketClient: sharedClient
+    })
+
+    await harness.client.subscribeRealtime()
+
+    const firstSubscription = sharedClient.subscriptions[0]
+
+    expect(firstSubscription.channelType).toEqual("velocious-sync")
+
+    await harness.client.unsubscribeRealtime()
+
+    expect(firstSubscription.closed).toEqual(true)
+    expect(sharedClient.disconnectCalls).toEqual(0)
+
+    await harness.client.subscribeRealtime()
+
+    expect(sharedClient.disconnectCalls).toEqual(0)
+    expect(sharedClient.subscriptions.length).toEqual(2)
+    expect(harness.client.syncConnection()).toBe(sharedClient)
+    expect(harness.client.realtimeStatus().state).toEqual("subscribed")
+    expect(harness.errors).toEqual([])
+  })
+
+  it("applies pushes arriving over the shared connection through the derived applier", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "TicketScan"}],
+      websocketClient: sharedClient
+    })
+    const ticketScanClass = harness.modelClasses[0]
+
+    await harness.client.subscribeRealtime()
+
+    sharedClient.subscriptions[0].emitMessage({
+      echoOrigin: null,
+      syncs: [{data: {accepted: true, ticketNr: "T-1"}, resourceId: SCAN_ID, resourceType: "TicketScan", syncType: "update"}]
+    })
+
+    await harness.client.waitForRealtimeApplied()
+
+    expect(ticketScanClass.records.get(SCAN_ID).attributesData.ticketNr).toEqual("T-1")
+    expect(sharedClient.connectCalls).toBeGreaterThanOrEqual(1)
+    expect(harness.errors).toEqual([])
+  })
+})
+
+describe("sync client user scope", () => {
+  it("subscribes the server-enumerated user scope over the shared connection and pulls it with empty conditions", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({pullOnReconnect: false, websocketClient: sharedClient})
+
+    await harness.client.subscribeUserScope()
+
+    expect(sharedClient.subscriptions.length).toEqual(1)
+    expect(sharedClient.subscriptions[0].channelType).toEqual("velocious-sync")
+    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: "TicketScan"})
+    expect(harness.postChangesCalls.length).toEqual(1)
+    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: "TicketScan"})
+    expect(harness.errors).toEqual([])
+  })
+
+  it("is idempotent and single-flighted", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({pullOnReconnect: false, websocketClient: sharedClient})
+
+    await Promise.all([harness.client.subscribeUserScope(), harness.client.subscribeUserScope()])
+    await harness.client.subscribeUserScope()
+
+    expect(sharedClient.subscriptions.length).toEqual(1)
+    expect(harness.postChangesCalls.length).toEqual(1)
+    expect(harness.errors).toEqual([])
+  })
+
+  it("continues the per-scope cursor across a resubscribe (sign-out then sign-in) so it does not re-pull everything", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({pullOnReconnect: false, websocketClient: sharedClient})
+
+    harness.postChangesCalls.length = 0
+
+    await harness.client.subscribeUserScope()
+
+    expect(harness.postChangesCalls[0].afterServerSequence).toBeUndefined()
+
+    // The changes response advances the scope cursor; the next pull must resume from it.
+    await harness.client.unsubscribeUserScope()
+    await harness.client.subscribeUserScope()
+
+    expect(harness.postChangesCalls.length).toEqual(2)
+    expect(harness.postChangesCalls[1].scope).toEqual({conditions: {}, resourceType: "TicketScan"})
+    expect(harness.errors).toEqual([])
+  })
+
+  it("unsubscribes on sign-out by closing subscriptions without disconnecting, then resubscribes over the same socket", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({pullOnReconnect: false, websocketClient: sharedClient})
+
+    await harness.client.subscribeUserScope()
+
+    const subscription = sharedClient.subscriptions[0]
+
+    await harness.client.unsubscribeUserScope()
+
+    expect(subscription.closed).toEqual(true)
+    expect(sharedClient.disconnectCalls).toEqual(0)
+
+    await harness.client.subscribeUserScope()
+
+    expect(sharedClient.disconnectCalls).toEqual(0)
+    expect(sharedClient.subscriptions.length).toEqual(2)
+    expect(harness.client.syncConnection()).toBe(sharedClient)
+    expect(harness.errors).toEqual([])
   })
 })

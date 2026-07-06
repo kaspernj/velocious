@@ -4,6 +4,7 @@ import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
 import Logger from "../logger.js"
 import restArgsError from "../utils/rest-args-error.js"
+import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
 import SyncApiClient from "./sync-api-client.js"
@@ -99,11 +100,19 @@ export default class SyncClient {
       postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, transport: clientConfiguration.transport}),
       realtime: clientConfiguration.realtime,
       resources,
-      syncModel: resolvedSyncModel
+      syncModel: resolvedSyncModel,
+      websocketClient: clientConfiguration.websocketClient,
+      websocketUrl: clientConfiguration.websocketUrl
     }
     this._clientNumber = ++clientCounter
     /** @type {SyncRealtimeBridge | null} */
     this._realtimeBridge = null
+    /** @type {import("./sync-client-types.js").SyncClientSharedConnection | null | undefined} Shared app-lifetime websocket connection (undefined until first resolved, null when none is configured). */
+    this._syncConnection = undefined
+    /** @type {Promise<void> | null} */
+    this._subscribeUserScopePromise = null
+    /** @type {"subscribed" | "subscribing" | "unsubscribed"} */
+    this._userScopeState = "unsubscribed"
     /** @type {import("./sync-scope-store.js").default | null} */
     this._scopeStore = scopeStore || null
     /** @type {Promise<void> | null} */
@@ -450,6 +459,33 @@ export default class SyncClient {
   }
 
   /**
+   * Resolves the shared app-lifetime websocket connection all sync traffic
+   * rides, or null when none is configured. Built once and memoized (per
+   * client): an app-provided `sync.client.websocketClient` instance wins (the
+   * frontend-model transport can pass its own client so one socket carries
+   * everything), else a framework-owned reconnecting {@link VelociousWebsocketClient}
+   * built from `sync.client.websocketUrl`. The realtime bridge rides this
+   * connection without owning its lifecycle; when neither is configured the
+   * bridge falls back to the deprecated per-cycle `realtime.createClient`.
+   * @returns {import("./sync-client-types.js").SyncClientSharedConnection | null} Shared websocket connection, or null.
+   */
+  syncConnection() {
+    if (this._syncConnection !== undefined) return this._syncConnection
+
+    if (this.config.websocketClient) {
+      this._syncConnection = this.config.websocketClient
+    } else if (this.config.websocketUrl) {
+      const url = typeof this.config.websocketUrl === "function" ? this.config.websocketUrl() : this.config.websocketUrl
+
+      this._syncConnection = url ? new VelociousWebsocketClient({url}) : null
+    } else {
+      this._syncConnection = null
+    }
+
+    return this._syncConnection
+  }
+
+  /**
    * Subscribes the derived realtime channels so pushed websocket changes apply
    * through the same derived applier as pulls (idempotent, single-flighted).
    * @param {?} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
@@ -457,6 +493,78 @@ export default class SyncClient {
    */
   async subscribeRealtime(context) {
     await this.realtimeBridge().subscribe(context)
+  }
+
+  /**
+   * Subscribes the server-enumerated user scope: "everything my ability can
+   * see". Declares a user scope (empty conditions) for every pullable synced
+   * resource type, subscribes realtime so their framework sync channel
+   * subscriptions go live, and pulls so the device catches up. The server
+   * authorizes each empty-conditions scope through the app sync resource's
+   * `authorizeChanges` and re-checks record access per delivery, so the client
+   * subscribes with just its token and the server decides membership.
+   * Idempotent and single-flighted like {@link SyncClient#subscribeRealtime}.
+   * @returns {Promise<void>}
+   */
+  async subscribeUserScope() {
+    if (this._userScopeState === "subscribed") return
+
+    if (!this._subscribeUserScopePromise) {
+      this._subscribeUserScopePromise = this._subscribeUserScope().finally(() => {
+        this._subscribeUserScopePromise = null
+      })
+    }
+
+    await this._subscribeUserScopePromise
+  }
+
+  /**
+   * Declares and activates the user scope for every pullable resource, then
+   * subscribes realtime and pulls.
+   * @returns {Promise<void>}
+   */
+  async _subscribeUserScope() {
+    this._userScopeState = "subscribing"
+
+    const scopeStore = this.scopeStore()
+
+    for (const resourceType of this.userScopeResourceTypes()) {
+      await scopeStore.findOrCreateScope({conditions: {}, resourceType})
+    }
+
+    await this.subscribeRealtime()
+    await this.pull()
+
+    this._userScopeState = "subscribed"
+  }
+
+  /**
+   * Unsubscribes the user scope: deactivates the per-resource user scopes and
+   * closes the realtime channel subscriptions. The shared websocket connection
+   * stays open when one is configured (sign-out drops subscriptions without
+   * disconnecting), so a subsequent sign-in resubscribes over the same socket.
+   * @returns {Promise<void>}
+   */
+  async unsubscribeUserScope() {
+    const scopeStore = this.scopeStore()
+
+    for (const resourceType of this.userScopeResourceTypes()) {
+      await scopeStore.deactivate({conditions: {}, resourceType})
+    }
+
+    await this.unsubscribeRealtime()
+
+    this._userScopeState = "unsubscribed"
+    this._subscribeUserScopePromise = null
+  }
+
+  /**
+   * The resource types a user scope covers: every declared resource that
+   * receives pulled changes (has pull `attributes`).
+   * @returns {string[]} Pullable resource type names.
+   */
+  userScopeResourceTypes() {
+    return Object.keys(this.pullResourceConfigs())
   }
 
   /**

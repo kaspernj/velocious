@@ -59,6 +59,13 @@
  */
 
 /**
+ * Shared app-lifetime websocket connection all sync traffic rides. Matches the
+ * realtime websocket client contract; the sync client rides it without owning
+ * its connect/disconnect lifecycle.
+ * @typedef {import("../configuration-types.js").VelociousSyncRealtimeWebsocketClient} SyncClientSharedConnection
+ */
+
+/**
  * Options for building a sync client. Everything else — resources, transport
  * POSTers, auth, connectivity, batch size — is derived from the configuration's
  * registered models (`static sync`) and its `sync.client` block.
@@ -84,6 +91,8 @@
  * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.
  * @property {?} syncModel - Local pending-sync model class.
+ * @property {SyncClientSharedConnection} [websocketClient] - Shared app-lifetime websocket client instance (the low-level shared-connection form).
+ * @property {string | (() => string | null | undefined)} [websocketUrl] - Shared app-lifetime websocket URL the framework builds a client from.
  */
 
 export {}
