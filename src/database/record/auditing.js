@@ -54,6 +54,10 @@ function registerAuditing(modelClass) {
   modelClass.beforeUpdate("captureUpdateAuditChanges")
   modelClass.afterUpdate("createUpdateAudit")
   modelClass.afterDestroy("createDestroyAudit")
+
+  if (!modelClass._relationshipExists("audits")) {
+    modelClass.hasMany("audits", (query) => query.order({column: "created_at", direction: "DESC"}), {className: "Audit", foreignKey: "auditableId", polymorphic: true})
+  }
 }
 
 /**
