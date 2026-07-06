@@ -167,6 +167,83 @@ describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]},
     })
   })
 
+  it("keeps existing foreign-key targets when addColumn rebuilds the table", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+
+      if (driver.getType() !== "sqlite") return
+
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      await driver.query("DROP TABLE IF EXISTS fk_keep_tickets")
+      await driver.query("DROP TABLE IF EXISTS fk_keep_customers")
+      await driver.query("DROP TABLE IF EXISTS fk_keep_events")
+
+      await migration.createTable("fk_keep_events", {id: {type: "uuid"}}, (table) => {
+        table.string("name", {null: false})
+      })
+
+      await migration.createTable("fk_keep_customers", {id: {type: "uuid"}}, (table) => {
+        table.string("name", {null: false})
+      })
+
+      await migration.createTable("fk_keep_tickets", {id: {type: "uuid"}}, (table) => {
+        table.uuid("fk_keep_event_id", {foreignKey: true, null: false})
+      })
+
+      // Mirror the real-world history: the customer reference joins later through its own
+      // rebuild (addReference = addColumn + addIndex + addForeignKey), and a subsequent
+      // addColumn rebuild must keep both introspected foreign keys pointing at their
+      // original tables.
+      await migration.addReference("fk_keep_tickets", "fk_keep_customer", {foreignKey: true, type: "uuid"})
+
+      await migration.addColumn("fk_keep_tickets", "last_sync_change_at", "datetime")
+
+      const table = await driver.getTableByNameOrFail("fk_keep_tickets")
+      const foreignKeys = await table.getForeignKeys()
+      const targetsByColumn = Object.fromEntries(foreignKeys.map((foreignKey) => [foreignKey.getColumnName(), foreignKey.getReferencedTableName()]))
+
+      expect(targetsByColumn).toEqual({
+        fk_keep_customer_id: "fk_keep_customers",
+        fk_keep_event_id: "fk_keep_events"
+      })
+
+      await migration.dropTable("fk_keep_tickets")
+      await migration.dropTable("fk_keep_customers")
+      await migration.dropTable("fk_keep_events")
+    })
+  })
+
+  it("names column indexes added through a rebuild after the final table, not the temp table", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+
+      if (driver.getType() !== "sqlite") return
+
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      await driver.query("DROP TABLE IF EXISTS idx_name_tickets")
+
+      await migration.createTable("idx_name_tickets", {id: {type: "uuid"}}, (table) => {
+        table.string("name", {null: false})
+      })
+
+      await migration.addColumn("idx_name_tickets", "last_sync_change_at", "datetime", {index: true})
+
+      const indexRows = await driver.query("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'idx_name_tickets' AND sql IS NOT NULL")
+      const indexNames = indexRows.map((row) => String(row.name))
+
+      expect(indexNames).toContain("index_on_idx_name_tickets_last_sync_change_at")
+      expect(indexNames.filter((name) => name.includes("velocious_rebuild"))).toEqual([])
+
+      await migration.dropTable("idx_name_tickets")
+    })
+  })
+
   it("preserves cross-table foreign keys pointing at the rebuilt table", async () => {
     const configuration = Configuration.current()
 

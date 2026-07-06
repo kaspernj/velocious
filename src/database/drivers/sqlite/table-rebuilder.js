@@ -52,6 +52,20 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
     const targetTableData = this.targetTableData
     const previousTargetName = targetTableData.getName()
 
+    // Column-level `index: true` indexes are named after the table they are created with, and
+    // ALTER TABLE ... RENAME does not rename indexes - creating them while the table carries its
+    // temp rebuild name would leak that name permanently. Strip the flags for the temp CREATE and
+    // emit those indexes after the rename, named after the final table.
+    /** @type {Array<{column: import("../../table-data/table-column.js").default, index: ?, indexArgs: ?}>} */
+    const strippedColumnIndexes = []
+
+    for (const column of targetTableData.getColumns()) {
+      if (!column.getIndex()) continue
+
+      strippedColumnIndexes.push({column, index: column.getIndex(), indexArgs: column.getIndexArgs()})
+      column.setIndex(false)
+    }
+
     targetTableData.setName(tempTableName)
 
     let createTableSQLs
@@ -60,6 +74,8 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
       createTableSQLs = await driver.createTableSql(targetTableData)
     } finally {
       targetTableData.setName(previousTargetName)
+
+      for (const {column, index} of strippedColumnIndexes) column.setIndex(index)
     }
 
     const newColumnsSQL = this.columnPairs.map(([, newName]) => options.quoteColumnName(newName)).join(", ")
@@ -86,6 +102,22 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
         name: tableDataIndex.getName(),
         tableName: originalTableName,
         unique: tableDataIndex.getUnique()
+      }).toSQLs()
+
+      for (const sql of createIndexSQLs) sqls.push(sql)
+    }
+
+    for (const {column, indexArgs} of strippedColumnIndexes) {
+      const {unique, ...restIndexArgs} = indexArgs || {}
+
+      restArgsError(restIndexArgs)
+
+      const createIndexSQLs = await new CreateIndexBase({
+        columns: [column.getName()],
+        driver,
+        name: `index_on_${originalTableName}_${column.getName()}`,
+        tableName: originalTableName,
+        unique
       }).toSQLs()
 
       for (const sql of createIndexSQLs) sqls.push(sql)
