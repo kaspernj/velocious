@@ -159,6 +159,8 @@ export function buildRecord(modelClass, id, attributes) {
 
   record.id = () => id
   record.attributes = () => attributes
+  /** @param {string} attributeName - Attribute name. @returns {?} Attribute value. */
+  record.readAttribute = (attributeName) => attributes[attributeName]
 
   return record
 }

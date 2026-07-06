@@ -105,9 +105,10 @@ function buildApplyableModelClass({columns, modelName, sync}) {
  * @param {Array<?>} [args.modelClasses] - Model classes to register.
  * @param {boolean} [args.pullOnReconnect] - Realtime pull-on-reconnect flag.
  * @param {?} [args.realtime] - Full realtime block override.
+ * @param {Array<{conditions: Record<string, ?>, resourceType: string}>} [args.scopes] - Active pull scopes served by a fake scope store.
  * @returns {?} Harness with client, fakes, and recorded calls.
  */
-function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime} = {}) {
+function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime, scopes} = {}) {
   /** @type {Array<Error>} */
   const errors = []
   /** @type {Array<Record<string, ?>>} */
@@ -151,7 +152,12 @@ function buildRealtimeHarness({channels, deferConnect, deferReady, localOrigin, 
       }
     }
   })
-  const client = new SyncClient({configuration, syncModel})
+  const scopeStore = scopes ? /** @type {?} */ ({
+    activeScopes: async () => scopes.map((scope) => ({...scope})),
+    loadCursor: async () => null,
+    saveCursor: async () => {}
+  }) : undefined
+  const client = new SyncClient({configuration, scopeStore, syncModel})
 
   return {client, errors, fakeWebsocketClient, modelClasses: resolvedModelClasses, postChangesCalls, syncModel}
 }
@@ -362,9 +368,12 @@ describe("sync realtime bridge", () => {
 
     const subscribePromise = harness.client.subscribeRealtime()
 
-    await flushUntil(() => harness.fakeWebsocketClient.subscriptions.length === 1)
+    // The declared scope derives a framework sync channel subscription beside the legacy ticket-scans channel.
+    await flushUntil(() => harness.fakeWebsocketClient.subscriptions.length === 2)
 
-    harness.fakeWebsocketClient.subscriptions[0].emitMessage({
+    const ticketScansSubscription = harness.fakeWebsocketClient.subscriptions.find((/** @type {{channelType: string}} */ subscription) => subscription.channelType === "ticket-scans")
+
+    ticketScansSubscription.emitMessage({
       data: {accepted: true, ticketNr: "T-1"},
       resourceId: SCAN_ID,
       syncType: "update"
@@ -376,7 +385,9 @@ describe("sync realtime bridge", () => {
     expect(harness.postChangesCalls.length).toEqual(1)
     expect(ticketScanClass.records.get(SCAN_ID).attributesData.ticketNr).toEqual("T-1")
 
-    harness.fakeWebsocketClient.subscriptions[0].resolveReady()
+    for (const subscription of harness.fakeWebsocketClient.subscriptions) {
+      subscription.resolveReady()
+    }
 
     await subscribePromise
     await harness.client.waitForRealtimeApplied()
@@ -467,15 +478,78 @@ describe("sync realtime bridge", () => {
     expect(harness.errors).toEqual([])
   })
 
+  it("auto-subscribes every declared pull scope to the framework sync channel with only createClient configured", async () => {
+    const harness = buildRealtimeHarness({
+      scopes: [
+        {conditions: {eventId: EVENT_ID}, resourceType: "Ticket"},
+        {conditions: {partnerId: 7}, resourceType: "Event"}
+      ]
+    })
+
+    await harness.client.subscribeRealtime()
+
+    expect(harness.fakeWebsocketClient.subscriptions.length).toEqual(2)
+    expect(harness.fakeWebsocketClient.subscriptions[0].channelType).toEqual("velocious-sync")
+    expect(harness.fakeWebsocketClient.subscriptions[0].params).toEqual({
+      authenticationToken: "token-1",
+      conditions: {eventId: EVENT_ID},
+      resourceType: "Ticket"
+    })
+    expect(harness.fakeWebsocketClient.subscriptions[1].channelType).toEqual("velocious-sync")
+    expect(harness.fakeWebsocketClient.subscriptions[1].params).toEqual({
+      authenticationToken: "token-1",
+      conditions: {partnerId: 7},
+      resourceType: "Event"
+    })
+    expect(harness.errors).toEqual([])
+  })
+
+  it("applies framework sync channel envelopes through the derived resource applier", async () => {
+    const harness = buildRealtimeHarness({
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "Ticket"}]
+    })
+    const ticketScanClass = harness.modelClasses[0]
+
+    await harness.client.subscribeRealtime()
+
+    harness.fakeWebsocketClient.subscriptions[0].emitMessage({
+      echoOrigin: null,
+      syncs: [{
+        data: {accepted: true, ticketNr: "T-1"},
+        resourceId: SCAN_ID,
+        resourceType: "TicketScan",
+        syncType: "update"
+      }]
+    })
+
+    await harness.client.waitForRealtimeApplied()
+
+    expect(ticketScanClass.records.get(SCAN_ID).attributesData.ticketNr).toEqual("T-1")
+    expect(harness.errors).toEqual([])
+  })
+
+  it("subscribes deprecated channels callbacks alongside the scope-derived framework subscriptions", async () => {
+    const harness = buildRealtimeHarness({
+      channels: () => [{channel: "ticket-scans", params: {eventId: EVENT_ID}, resourceType: "TicketScan"}],
+      scopes: [{conditions: {eventId: EVENT_ID}, resourceType: "Ticket"}]
+    })
+
+    await harness.client.subscribeRealtime()
+
+    expect(harness.fakeWebsocketClient.subscriptions.length).toEqual(2)
+    expect(harness.fakeWebsocketClient.subscriptions[0].channelType).toEqual("velocious-sync")
+    expect(harness.fakeWebsocketClient.subscriptions[1].channelType).toEqual("ticket-scans")
+  })
+
   it("fails loudly when subscribeRealtime is called without a realtime configuration block", async () => {
     const harness = buildRealtimeHarness({realtime: null})
 
     await expect(async () => await harness.client.subscribeRealtime()).toThrow(/sync\.client\.realtime.*createClient/u)
   })
 
-  it("fails loudly when no realtime channels are declared or derivable", async () => {
+  it("fails loudly when no scopes are declared and no legacy channels are configured", async () => {
     const harness = buildRealtimeHarness()
 
-    await expect(async () => await harness.client.subscribeRealtime()).toThrow(/realtime channels/u)
+    await expect(async () => await harness.client.subscribeRealtime()).toThrow(/declare a sync scope/u)
   })
 })

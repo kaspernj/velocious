@@ -452,7 +452,7 @@ export default class SyncClient {
   /**
    * Subscribes the derived realtime channels so pushed websocket changes apply
    * through the same derived applier as pulls (idempotent, single-flighted).
-   * @param {?} [context] - App context passed to the `sync.client.realtime.channels` callback (runtime values like eventId).
+   * @param {?} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
    * @returns {Promise<void>}
    */
   async subscribeRealtime(context) {

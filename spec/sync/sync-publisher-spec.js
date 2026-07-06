@@ -8,6 +8,7 @@ import SyncEnvelopeReplayService from "../../src/sync/sync-envelope-replay-servi
 import SyncPublisher from "../../src/sync/sync-publisher.js"
 import SyncUuidItemResource from "../dummy/src/resources/sync-uuid-item-resource.js"
 import UuidItem from "../dummy/src/models/uuid-item.js"
+import {VELOCIOUS_SYNC_CHANNEL} from "../../src/sync/sync-channel-name.js"
 
 const REPLAY_ACTOR_ID = "0b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
 
@@ -34,11 +35,13 @@ function buildRoutedReplayService({resourceClass = SyncUuidItemResource} = {}) {
  * declaration is assigned onto UuidItem's static sync for the duration of the
  * test and restored by the returned restore callback.
  * @param {{broadcaster?: (broadcast: {body: ?, channel: string, params: Record<string, ?>}) => Promise<void>, onError?: null, publish?: Record<string, ?>}} [args] - Broadcaster/publish declaration overrides; `onError: null` builds the publisher without an onError hook.
- * @returns {{broadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, errors: Error[], publisher: SyncPublisher, restore: () => void}} Publish harness.
+ * @returns {{broadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, errors: Error[], frameworkBroadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, publisher: SyncPublisher, restore: () => void}} Publish harness. `broadcasts` records the declared app-channel broadcasts, `frameworkBroadcasts` the framework sync channel broadcasts.
  */
 function buildUuidItemPublishHarness({broadcaster, onError, publish} = {}) {
   /** @type {Array<{body: ?, channel: string, params: Record<string, ?>}>} */
   const broadcasts = []
+  /** @type {Array<{body: ?, channel: string, params: Record<string, ?>}>} */
+  const frameworkBroadcasts = []
   /** @type {Error[]} */
   const errors = []
   const originalSync = UuidItem.sync
@@ -57,7 +60,11 @@ function buildUuidItemPublishHarness({broadcaster, onError, publish} = {}) {
 
   const publisher = new SyncPublisher({
     broadcaster: broadcaster || (async (broadcast) => {
-      broadcasts.push(broadcast)
+      if (broadcast.channel === VELOCIOUS_SYNC_CHANNEL) {
+        frameworkBroadcasts.push(broadcast)
+      } else {
+        broadcasts.push(broadcast)
+      }
     }),
     configuration: dummyConfiguration,
     onError: onError === null ? undefined : (error) => {
@@ -69,6 +76,7 @@ function buildUuidItemPublishHarness({broadcaster, onError, publish} = {}) {
   return {
     broadcasts,
     errors,
+    frameworkBroadcasts,
     publisher,
     restore: () => {
       publisher.stop()
@@ -107,6 +115,38 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
       expect(broadcasts[0].params).toEqual({resourceId: uuidItem.id()})
       expect(broadcasts[0].body.syncType).toEqual("update")
       expect(broadcasts[1].body.data.title).toEqual("Pin 222222")
+    } finally {
+      restore()
+    }
+  })
+
+  it("broadcasts the standard sync envelope on the framework sync channel and persists the declared scope partition", async () => {
+    const {frameworkBroadcasts, publisher, restore} = buildUuidItemPublishHarness({
+      publish: {serialize: (/** @type {UuidItem} */ uuidItem) => ({id: uuidItem.id(), title: uuidItem.title()})}
+    })
+
+    await publisher.start()
+
+    try {
+      const uuidItem = await UuidItem.create({id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", title: "Pin 111111"})
+      const syncRows = await SyncEntry.where({resource_id: uuidItem.id(), resource_type: "UuidItem"}).toArray()
+
+      // SyncEntry declares syncScopeAttributes = ["projectId"]; UuidItem has no
+      // projectId attribute, so it publishes as a scope root: its own id.
+      expect(syncRows).toHaveLength(1)
+      expect(syncRows[0].projectId()).toEqual(uuidItem.id())
+      expect(frameworkBroadcasts).toHaveLength(1)
+      expect(frameworkBroadcasts[0].channel).toEqual(VELOCIOUS_SYNC_CHANNEL)
+      expect(frameworkBroadcasts[0].params).toEqual({projectId: uuidItem.id()})
+      expect(frameworkBroadcasts[0].body).toEqual({
+        echoOrigin: null,
+        syncs: [{
+          data: {id: uuidItem.id(), title: "Pin 111111"},
+          resourceId: uuidItem.id(),
+          resourceType: "UuidItem",
+          syncType: "update"
+        }]
+      })
     } finally {
       restore()
     }

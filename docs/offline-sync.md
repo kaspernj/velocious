@@ -425,31 +425,49 @@ Routed resources declare behavior through four hooks on `FrontendModelBaseResour
 
 Client-safe apply failures — model validation (surfaced with the translated `ValidationError` message as `reason: "validation-error"`), authorization denials, unpermitted attributes and unknown resource types — fail only their own sync with `{id, syncState: "failed", reason, message}` while the batch continues; unexpected errors keep failing the request. The `applyHandlers`/`SyncReplayUpsertApplier` path is deprecated but keeps precedence over routing for released adopters. See [`sync-envelope-replay-service.md`](sync-envelope-replay-service.md) for the full flow.
 
-## Implemented slice: server publish-by-default
+## Implemented slice: server publish-by-default and the framework sync channel
 
-`SyncPublisher` (`src/sync/sync-publisher.js`) is the server mirror of the client's track-by-default mutation tracking: server-side writes to synced models publish to the sync change feed and broadcast automatically, so a change made on the server (an importer, a partner saving an event setting through frontend models) reaches every device without app code calling manual upsert/broadcast helpers.
+`SyncPublisher` (`src/sync/sync-publisher.js`) is the server mirror of the client's track-by-default mutation tracking: server-side writes to synced models publish to the sync change feed and broadcast the standard sync envelope on the framework sync channel automatically, so a change made on the server (an importer, a partner saving a setting through frontend models) reaches every device without app code declaring channels or calling manual upsert/broadcast helpers.
 
 Server models declare what to publish through the `publish` key of the shared `static sync` declaration (the client ignores the key):
 
 ```js
-class Event extends ApplicationRecord {
-  static sync = {
-    publish: {
-      serialize: (event) => ({id: event.id(), eventPin: event.eventPin()}),
-      eventId: (event) => event.id(), // persisted to the sync row's event_id scope column
-      broadcasts: [{
-        channel: "ticket-scans",
-        broadcastParams: (args) => ({eventId: args.resourceId}),
-        body: (args) => ({syncs: [{data: args.data, resourceId: args.resourceId, resourceType: args.resourceType, syncType: args.syncType}]})
-      }]
-    }
-  }
+class Ticket extends ApplicationRecord {
+  static sync = {publish: true} // default payload: the record's attributes (Dates as ISO strings)
+}
+
+class Setting extends ApplicationRecord {
+  static sync = {publish: {serialize: (setting) => ({id: setting.id(), pin: setting.pin()})}}
 }
 ```
 
 `SyncPublisher.startFromConfiguration(configuration)` runs at server boot (`application.js`, beside the auto-mounted sync endpoints) and no-ops when no registered model declares publish. Publishing is on for models declaring it — creates and updates publish by default, destroys publish as `"delete"` rows when opted in with `operations: ["create", "update", "destroy"]`, and `publish: false` opts a model out explicitly. The sync/change model defaults to the registered `"Sync"` model.
 
-Mechanics mirror the client tracker: the payload is snapshotted through `serialize(record)` at mutation-callback time (later drift on the record cannot change what was committed), persisting and broadcasting defer through the model connection's `afterCommit` hook (rolled-back mutations never publish), and post-commit failures are reported loudly (`options.onError` or the publisher logger) without poisoning the driver's afterCommit chain. The sync row is upserted through the same shared primitive as the replay service's model-backed persistence (`src/sync/sync-change-fanout.js`): one server-origin row per resource identity, keyed by a null actor column (`authentication_token_id` by default — a server-origin change has no device to echo back to), reassigned and re-sequenced through `advanceServerSequence()` so feed cursors pick the change up again. Declared broadcasts deliver through the same injected broadcaster shape the replay service uses (defaulting to the configuration's channel broadcast).
+### Scope partition
+
+The sync model declares which attribute(s) partition the app's sync feed — Velocious has no built-in partition name:
+
+```js
+class Sync extends ApplicationRecord {
+  static syncScopeAttributes = ["eventId"] // or ["accountId"], ["projectId"], ...
+}
+```
+
+For every published change, each declared scope attribute reads the record's attribute of the same name when the model has one, else the record's own id (scope-root models — e.g. the record a scope condition points at). `publish: {scopeAttributes: {accountId: "ownerId"}}` overrides the record attribute per model by name. The resolved values are persisted onto the sync row's matching columns (so the app's `scopeChangesQuery` can serve them) and broadcast as the framework sync channel's scoping params. The change feed's default row serialization emits every declared scope attribute under its own name; a sync model declaring no scope attributes keeps the deprecated pre-declaration wire, which emits `eventId`.
+
+### The framework sync channel
+
+After the sync row is upserted post-commit, the publisher broadcasts the standard sync envelope on the framework-owned `velocious-sync` channel (`src/sync/sync-channel-name.js`) with the resolved scope values as broadcast params:
+
+```js
+{echoOrigin: null, syncs: [{data, resourceId, resourceType, syncType}]}
+```
+
+The channel itself (`src/sync/sync-websocket-channel.js`) is registered automatically at server boot when `sync.api` is configured. Subscribe params mirror a declared pull scope — `{resourceType, conditions}` plus the client-injected `authenticationToken` — and subscribe-time authorization delegates to the app sync resource's existing `authorizeChanges({params, scope})`, so the app hooks in through the authorization it already declared; there is no channel class, resolver, or broadcast wiring to write. Broadcast routing delivers to a subscription when the broadcast's scoping params satisfy every scope condition it was authorized for (string comparison; array conditions match by membership; conditions the scoping params do not carry never match, so a subscription cannot receive changes outside its authorized scope).
+
+The pre-framework-channel declaration forms keep working but are deprecated: `eventId` (attribute-name string or resolver function, pinned to a fixed `event_id` column and `eventId` scoping param) and `broadcasts` (declarative app-channel broadcasts, delivered after the framework broadcast — keep them only for legacy channels old app versions still subscribe).
+
+Mechanics mirror the client tracker: the payload is snapshotted through `serialize(record)` at mutation-callback time (later drift on the record cannot change what was committed), persisting and broadcasting defer through the model connection's `afterCommit` hook (rolled-back mutations never publish), and post-commit failures are reported loudly (`options.onError` or the publisher logger) without poisoning the driver's afterCommit chain. The sync row is upserted through the same shared primitive as the replay service's model-backed persistence (`src/sync/sync-change-fanout.js`): one server-origin row per resource identity, keyed by a null actor column (`authentication_token_id` by default — a server-origin change has no device to echo back to), reassigned and re-sequenced through `advanceServerSequence()` so feed cursors pick the change up again. Framework and declared broadcasts deliver through the same injected broadcaster shape the replay service uses (defaulting to the configuration's channel broadcast).
 
 Replayed device mutations never double-publish: the framework's routed replay apply marks every record it writes through `markServerApply(record)` for the duration of the replay-owned write — the replay keeps owning its own persistence, stale-guard, and broadcasts, while later server-side writes to the same record instance publish normally again. Code applying already-synced data outside the replay suppresses publishing the same way through the public API (`src/sync/sync-publish-suppression.js`):
 

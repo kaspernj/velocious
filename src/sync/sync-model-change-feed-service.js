@@ -2,6 +2,8 @@
 
 import VelociousError from "../velocious-error.js"
 
+import {declaredSyncScopeAttributes} from "./sync-scope-attributes.js"
+
 /**
  * Generic cursor-paginated change feed over an app-owned sync/change model.
  *
@@ -173,14 +175,20 @@ export default class SyncModelChangeFeedService {
   }
 
   /**
-   * Serializes a record using the standard sync envelope shape.
+   * Serializes a record using the standard sync envelope shape plus the sync
+   * model's declared scope-partition attributes (`static syncScopeAttributes`),
+   * each emitted under its own attribute name. Models declaring no scope
+   * attributes keep the deprecated 1.0.503 wire and emit `eventId`. Keys are
+   * sorted so a declared `["eventId"]` partition stays byte-identical with the
+   * 1.0.503 wire.
    * @param {?} record - Sync/change record.
    * @returns {Record<string, unknown>} Default serialized row.
    */
   defaultSerializeRecord(record) {
-    return {
+    const scopeAttributes = declaredSyncScopeAttributes(this.modelClass)
+    /** @type {Record<string, unknown>} */
+    const serialized = {
       data: this.recordData(record),
-      eventId: this.recordValue(record, "eventId"),
       id: this.recordValue(record, "id"),
       resourceId: this.recordValue(record, "resourceId"),
       resourceType: this.recordValue(record, "resourceType"),
@@ -188,6 +196,12 @@ export default class SyncModelChangeFeedService {
       syncType: this.recordValue(record, "syncType"),
       updatedAt: this.isoDate(this.recordValue(record, "updatedAt"))
     }
+
+    for (const scopeAttribute of scopeAttributes || ["eventId"]) {
+      serialized[scopeAttribute] = this.recordValue(record, scopeAttribute)
+    }
+
+    return Object.fromEntries(Object.entries(serialized).sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey)))
   }
 
   /**

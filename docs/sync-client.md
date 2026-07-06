@@ -138,7 +138,7 @@ Automatic tracking covers ordinary creates/updates, so most models never call `q
 
 ## Realtime
 
-`subscribeRealtime()` bridges server websocket pushes into the same derived apply path as pulls — no hand-written websocket apply code in apps. The app footprint is the realtime callbacks the framework genuinely cannot know (how to build the websocket client, which channels with which runtime params, what this device's echo origin is):
+`subscribeRealtime()` bridges server websocket pushes into the same derived apply path as pulls — no hand-written websocket apply code and no channel wiring in apps. Every declared pull scope subscribes the framework-owned `velocious-sync` channel automatically: the subscribe params mirror the scope's `{resourceType, conditions}`, and the server authorizes the subscription through the app sync resource's existing `authorizeChanges({params, scope})` — the same authorization pulls already go through. The app footprint shrinks to the callbacks the framework genuinely cannot know (how to build the websocket client, what this device's echo origin is):
 
 ```js
 // configuration.js
@@ -148,8 +148,7 @@ new Configuration({
       // ...transport, authenticationToken, isOnline, onError
       realtime: {
         createClient: () => new VelociousWebsocketClient({autoReconnect: true, networkMonitor, url}),
-        channels: ({eventId}) => [{channel: "ticket-scans", params: {eventID: eventId}, resourceType: "TicketScan"}],
-        localOrigin: () => getScannerDeviceId()
+        localOrigin: () => getDeviceId()
       }
     }
   }
@@ -157,19 +156,25 @@ new Configuration({
 ```
 
 ```js
-await syncClient().subscribeRealtime({eventId})
+await syncClient().sync(Ticket.where({eventId}))
+await syncClient().subscribeRealtime()
 // ...
 await syncClient().unsubscribeRealtime()
 ```
 
-- **createClient** builds the (unconnected) websocket client; the framework owns connect, subscribe, and disconnect. **channels(context)** resolves the subscriptions from the `subscribeRealtime(context)` context because channel params are runtime values (an eventId, a mandantenNr). A model whose channel name and params are genuinely static can declare it on the model instead — `static sync = {realtime: {channel: "scanner-devices"}}` — and skip the callback entirely. The framework injects `authenticationToken` into every subscription's params; declaring your own `authenticationToken` param is an error, so a stale app-supplied token can never silently replace the freshly resolved one.
-- **Pushed messages are sync envelopes** — `{syncType, resourceId, data, resourceType?, echoOrigin?}` or `{syncs: [...]}` batches — and apply through the same derived resource applier as pulls: the model's `attributes`/`findRecord`/`findRecordForDelete`/`afterApply` policy, echo suppression so tracked models never re-queue applied pushes, and loud failure on unconfigured resource types. Envelopes without a `resourceType` default to the channel's declared `resourceType`. Messages apply serially in arrival order; failures go to `sync.client.onError` (rethrown when none is configured).
+- **createClient** builds the (unconnected) websocket client; the framework owns connect, subscribe, and disconnect.
+- **Scope subscriptions are derived**: at subscribe time, every active scope from `sync(query)` becomes one `velocious-sync` subscription. Declare scopes before subscribing (or resubscribe after declaring new ones). The framework injects `authenticationToken` into every subscription's params; declaring your own `authenticationToken` param is an error, so a stale app-supplied token can never silently replace the freshly resolved one.
+- **Pushed messages are sync envelopes** — `{syncType, resourceId, data, resourceType?, echoOrigin?}` or `{echoOrigin, syncs: [...]}` batches (the shape the server publisher broadcasts) — and apply through the same derived resource applier as pulls: the model's `attributes`/`findRecord`/`findRecordForDelete`/`afterApply` policy, echo suppression so tracked models never re-queue applied pushes, and loud failure on unconfigured resource types. Envelopes without a `resourceType` default to the channel's declared `resourceType`. Messages apply serially in arrival order; failures go to `sync.client.onError` (rethrown when none is configured).
 - **localOrigin** drops own-device messages: a pushed `echoOrigin` matching the resolved local origin is ignored.
 - **pullOnReconnect** (default true): when subscriptions become ready or resume after a connection drop, a coalesced single `pull()` closes the offline gap. The gap-closing pull only fires after every subscription is server-acknowledged (`waitForReady`), so no change can land between the pull and the subscriptions going live; pushes arriving before acknowledgement still apply. Low-level reconnect/backoff stays in the websocket client.
 - `subscribeRealtime(context)` is idempotent and single-flighted, and resolves once every channel subscription is acknowledged — call `unsubscribeRealtime()` first to change the context. Unsubscribing while a subscribe is still in flight cancels that attempt: the bridge tears down anything it created and stays unsubscribed. `realtimeStatus()` reports `{state, channels: [{channel, resourceType, ready}]}`. `waitForRealtimeApplied()` awaits pending applies and any scheduled pull (tests, shutdown flows).
+
+### Deprecated legacy channels
+
+Before the framework sync channel, apps declared their own channels; both forms keep working as escape hatches for legacy app channels but are deprecated: the `sync.client.realtime.channels(context)` callback (runtime params come from the `subscribeRealtime(context)` context) and the model-level `static sync = {realtime: {channel, params}}` declaration. Legacy channels subscribe in addition to the scope-derived framework subscriptions.
 
 ## Server side
 
 The server counterpart is `SyncResourceBase` (`src/sync/sync-resource-base.js`) plus the auto-mounted sync endpoints (`sync.api` configuration option) — see `docs/offline-sync.md`.
 
-The server mirror of automatic mutation tracking is `SyncPublisher` (`src/sync/sync-publisher.js`): server models declare a `publish` config in the same `static sync` declaration (the client ignores the key), and server-side writes publish to the sync change feed and broadcast automatically once their transaction commits — see the server publish-by-default slice in `docs/offline-sync.md`.
+The server mirror of automatic mutation tracking is `SyncPublisher` (`src/sync/sync-publisher.js`): server models declare a `publish` config in the same `static sync` declaration (the client ignores the key), and server-side writes publish to the sync change feed and broadcast the standard sync envelope on the framework `velocious-sync` channel automatically once their transaction commits — see the server publish-by-default and framework sync channel slice in `docs/offline-sync.md`.
