@@ -256,8 +256,11 @@ export default class SyncPublisher {
    * Reports a post-commit publish failure. The transaction has already
    * committed when afterCommit callbacks run, so rethrowing here would poison
    * the driver's awaited afterCommit chain (breaking unrelated callbacks) -
-   * instead the failure goes to the configured onError hook, or is logged
-   * loudly through the publisher's logger when none is configured.
+   * instead the failure goes to the configured onError hook, or is emitted on
+   * the configuration's framework-error/all-error channels (so production bug
+   * reporting via `configuration.getErrorEvents()` sees a broken publish
+   * path) and logged loudly through the publisher's logger when none is
+   * configured.
    * @param {Error} error - Post-commit publish failure.
    * @returns {Promise<void>}
    */
@@ -267,6 +270,12 @@ export default class SyncPublisher {
 
       return
     }
+
+    const errorEvents = this.config.configuration.getErrorEvents()
+    const payload = {context: {stage: "sync-publish-after-commit"}, error}
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
 
     await this.logger().error("SyncPublisher failed to publish a server-side sync change after commit", error)
   }

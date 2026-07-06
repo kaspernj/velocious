@@ -487,9 +487,11 @@ export default class SyncEnvelopeReplayService {
   }
 
   /**
-   * Applies a routed delete mutation. The destroyed record is marked as a
-   * server apply so an active SyncPublisher never publishes the replayed
-   * delete a second time (the replay owns its own persist and broadcasts).
+   * Applies a routed delete mutation. The record is marked as a server apply
+   * for the duration of the replay-owned destroy - an active SyncPublisher
+   * never publishes the replayed delete a second time (the replay owns its
+   * own persist and broadcasts), while later server-side writes to the same
+   * instance publish normally again.
    * @param {object} args - Options.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
@@ -500,8 +502,13 @@ export default class SyncEnvelopeReplayService {
 
     if (!record) return {created: false, deleted: false, record: null}
 
-    markServerApply(record)
-    await record.destroy()
+    const releaseServerApply = markServerApply(record)
+
+    try {
+      await record.destroy()
+    } finally {
+      releaseServerApply()
+    }
 
     return {created: false, deleted: true, record}
   }
@@ -511,10 +518,12 @@ export default class SyncEnvelopeReplayService {
    * assigned and saved onto the found record (the record layer owns value
    * casting and validation), and missing records are created with the
    * client-generated primary key plus a save-then-check membership check.
-   * Written records are marked as server applies so an active SyncPublisher
-   * never publishes the replayed mutation a second time (the replay owns its
-   * own persist and broadcasts). Model validation failures become client-safe
-   * per-sync failures carrying the translated validation message.
+   * Written records are marked as server applies for the duration of the
+   * replay-owned write - an active SyncPublisher never publishes the replayed
+   * mutation a second time (the replay owns its own persist and broadcasts),
+   * while later server-side writes to the same instance publish normally
+   * again. Model validation failures become client-safe per-sync failures
+   * carrying the translated validation message.
    * @param {object} args - Options.
    * @param {Record<string, ?>} args.context - Replay context.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
@@ -530,9 +539,14 @@ export default class SyncEnvelopeReplayService {
     let created = false
 
     if (existingRecord) {
-      markServerApply(existingRecord)
-      existingRecord.assign(attributes)
-      await this.saveRoutedReplayRecord(existingRecord)
+      const releaseServerApply = markServerApply(existingRecord)
+
+      try {
+        existingRecord.assign(attributes)
+        await this.saveRoutedReplayRecord(existingRecord)
+      } finally {
+        releaseServerApply()
+      }
     } else {
       record = await this.createRoutedReplayRecord({attributes, mutation, resource})
       created = true
@@ -597,8 +611,9 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Creates the routed record with the client-generated primary key (marked
-   * as a server apply so an active SyncPublisher never publishes the replayed
-   * create a second time), then
+   * as a server apply for the duration of the create - including the
+   * membership-check compensation destroy - so an active SyncPublisher never
+   * publishes the replayed create a second time), then
    * verifies create-scope membership when an ability is configured: records
    * outside the ability's create scope are destroyed again and fail the sync
    * with the resource-declared reason. A record that already exists outside
@@ -621,37 +636,39 @@ export default class SyncEnvelopeReplayService {
       })
     }
 
-    /** @type {import("../database/record/index.js").default} */
-    let record
+    await ModelClass.ensureInitialized()
+
+    const record = new ModelClass({[primaryKey]: mutation.resourceId, ...attributes})
+    const releaseServerApply = markServerApply(record)
 
     try {
-      await ModelClass.ensureInitialized()
-
-      record = new ModelClass({[primaryKey]: mutation.resourceId, ...attributes})
-      markServerApply(record)
-      await record.save()
-    } catch (error) {
-      throw this.routedReplaySaveError(error)
-    }
-
-    const ability = resource.ability
-
-    if (ability) {
-      const memberIds = await ModelClass
-        .accessibleFor(resource.syncAbilityAction("create"), ability)
-        .where({[primaryKey]: record.id()})
-        .pluck(primaryKey)
-
-      if (memberIds.length === 0) {
-        await record.destroy()
-
-        throw VelociousError.safe(`Sync create denied for: ${mutation.resourceType}.`, {
-          code: resource.syncAuthorizationFailureReason({action: "create", mutation}) || "access-denied"
-        })
+      try {
+        await record.save()
+      } catch (error) {
+        throw this.routedReplaySaveError(error)
       }
-    }
 
-    return record
+      const ability = resource.ability
+
+      if (ability) {
+        const memberIds = await ModelClass
+          .accessibleFor(resource.syncAbilityAction("create"), ability)
+          .where({[primaryKey]: record.id()})
+          .pluck(primaryKey)
+
+        if (memberIds.length === 0) {
+          await record.destroy()
+
+          throw VelociousError.safe(`Sync create denied for: ${mutation.resourceType}.`, {
+            code: resource.syncAuthorizationFailureReason({action: "create", mutation}) || "access-denied"
+          })
+        }
+      }
+
+      return record
+    } finally {
+      releaseServerApply()
+    }
   }
 
   /**

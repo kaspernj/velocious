@@ -14,9 +14,10 @@ const REPLAY_ACTOR_ID = "0b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
 /**
  * Builds a routed replay service persisting through the real SyncEntry model
  * with a stubbed authenticated actor.
+ * @param {{resourceClass?: typeof SyncUuidItemResource}} [args] - Routed resource class override.
  * @returns {SyncEnvelopeReplayService} Routed replay service.
  */
-function buildRoutedReplayService() {
+function buildRoutedReplayService({resourceClass = SyncUuidItemResource} = {}) {
   class RoutedReplayService extends SyncEnvelopeReplayService {
     /** @returns {Promise<{authenticated: true, actor: {id: () => string}}>} Authenticated fake actor. */
     async authenticateReplay() {
@@ -24,7 +25,7 @@ function buildRoutedReplayService() {
     }
   }
 
-  return new RoutedReplayService({resourceTypeOverrides: {UuidItem: SyncUuidItemResource}, syncModel: SyncEntry})
+  return new RoutedReplayService({resourceTypeOverrides: {UuidItem: resourceClass}, syncModel: SyncEntry})
 }
 
 /**
@@ -32,10 +33,10 @@ function buildRoutedReplayService() {
  * the real SyncEntry sync model and a recording broadcaster. The publish
  * declaration is assigned onto UuidItem's static sync for the duration of the
  * test and restored by the returned restore callback.
- * @param {{broadcaster?: (broadcast: {body: ?, channel: string, params: Record<string, ?>}) => Promise<void>, publish?: Record<string, ?>}} [args] - Broadcaster and publish declaration overrides.
+ * @param {{broadcaster?: (broadcast: {body: ?, channel: string, params: Record<string, ?>}) => Promise<void>, onError?: null, publish?: Record<string, ?>}} [args] - Broadcaster/publish declaration overrides; `onError: null` builds the publisher without an onError hook.
  * @returns {{broadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, errors: Error[], publisher: SyncPublisher, restore: () => void}} Publish harness.
  */
-function buildUuidItemPublishHarness({broadcaster, publish} = {}) {
+function buildUuidItemPublishHarness({broadcaster, onError, publish} = {}) {
   /** @type {Array<{body: ?, channel: string, params: Record<string, ?>}>} */
   const broadcasts = []
   /** @type {Error[]} */
@@ -59,7 +60,7 @@ function buildUuidItemPublishHarness({broadcaster, publish} = {}) {
       broadcasts.push(broadcast)
     }),
     configuration: dummyConfiguration,
-    onError: (error) => {
+    onError: onError === null ? undefined : (error) => {
       errors.push(error)
     },
     syncModel: SyncEntry
@@ -370,6 +371,132 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
 
       expect(broadcasts).toHaveLength(0)
     } finally {
+      restore()
+    }
+  })
+
+  it("publishes later server-side saves of records the routed replay previously wrote", async () => {
+    const {broadcasts, publisher, restore} = buildUuidItemPublishHarness()
+
+    await publisher.start()
+
+    try {
+      /** @type {?} */
+      let appliedRecord = null
+
+      class CapturingUuidItemResource extends SyncUuidItemResource {
+        /** @param {{context: Record<string, ?>, created: boolean, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation, record: ?}} args - After-apply args. @returns {Record<string, ?>} - Extra apply-result entries. */
+        afterSyncApply({record}) {
+          appliedRecord = record
+
+          return {}
+        }
+      }
+
+      const existingUuidItem = await withoutPublishing(async () => await UuidItem.create({id: "fa5d6e7f-8a9b-4c0d-8e1f-4a5b6c7d8e9f", title: "Replayed before"}))
+      const replayService = buildRoutedReplayService({resourceClass: CapturingUuidItemResource})
+      const updateResult = await replayService.replay({
+        syncs: [{
+          clientUpdatedAt: "2026-07-06T11:00:00.000Z",
+          data: {title: "Replayed after"},
+          id: "0a6e7f8a-9b0c-4d1e-8f2a-5b6c7d8e9f0a",
+          resourceId: String(existingUuidItem.id()),
+          resourceType: "UuidItem",
+          syncType: "update"
+        }]
+      })
+
+      expect(updateResult).toEqual({syncs: [{id: "0a6e7f8a-9b0c-4d1e-8f2a-5b6c7d8e9f0a", syncState: "successful"}]})
+      expect(broadcasts).toHaveLength(0)
+
+      await appliedRecord.update({title: "Server follow-up"})
+
+      expect(broadcasts).toHaveLength(1)
+      expect(broadcasts[0].body.data.title).toEqual("Server follow-up")
+
+      const followUpRows = await SyncEntry.where({authentication_token_id: null, resource_id: existingUuidItem.id(), resource_type: "UuidItem"}).toArray()
+
+      expect(followUpRows).toHaveLength(1)
+      expect(JSON.parse(followUpRows[0].data()).title).toEqual("Server follow-up")
+
+      const createResult = await replayService.replay({
+        syncs: [{
+          clientUpdatedAt: "2026-07-06T11:01:00.000Z",
+          data: {title: "Replay created"},
+          id: "1b7f8a9b-0c1d-4e2f-8a3b-6c7d8e9f0a1b",
+          resourceId: "2c8a9b0c-1d2e-4f3a-8b4c-7d8e9f0a1b2c",
+          resourceType: "UuidItem",
+          syncType: "update"
+        }]
+      })
+
+      expect(createResult).toEqual({syncs: [{id: "1b7f8a9b-0c1d-4e2f-8a3b-6c7d8e9f0a1b", syncState: "successful"}]})
+      expect(broadcasts).toHaveLength(1)
+
+      await appliedRecord.update({title: "Created follow-up"})
+
+      expect(broadcasts).toHaveLength(2)
+      expect(broadcasts[1].body.data.title).toEqual("Created follow-up")
+      expect(await SyncEntry.where({authentication_token_id: null, resource_id: "2c8a9b0c-1d2e-4f3a-8b4c-7d8e9f0a1b2c", resource_type: "UuidItem"}).toArray()).toHaveLength(1)
+    } finally {
+      restore()
+    }
+  })
+
+  it("emits framework-error events and logs post-commit publish failures when no onError is configured", async () => {
+    const {publisher, restore} = buildUuidItemPublishHarness({
+      broadcaster: async () => {
+        throw new Error("Broadcast delivery blew up")
+      },
+      onError: null
+    })
+
+    await publisher.start()
+
+    /** @type {Array<?>} */
+    const frameworkErrorPayloads = []
+    /** @type {Array<?>} */
+    const allErrorPayloads = []
+    /** @type {Array<?>} */
+    const loggedErrors = []
+    const errorEvents = dummyConfiguration.getErrorEvents()
+    /** @param {?} payload - Emitted framework-error payload. @returns {void} */
+    const onFrameworkError = (payload) => {
+      frameworkErrorPayloads.push(payload)
+    }
+    /** @param {?} payload - Emitted all-error payload. @returns {void} */
+    const onAllError = (payload) => {
+      allErrorPayloads.push(payload)
+    }
+
+    errorEvents.on("framework-error", onFrameworkError)
+    errorEvents.on("all-error", onAllError)
+    publisher._logger = /** @type {?} */ ({
+      /** @param {...?} messages - Logged messages. @returns {Promise<void>} */
+      error: async (...messages) => {
+        loggedErrors.push(messages)
+      }
+    })
+
+    try {
+      const uuidItem = await UuidItem.create({id: "3d9b0c1d-2e3f-4a4b-8c5d-8e9f0a1b2c3d", title: "Still saved"})
+
+      expect(frameworkErrorPayloads).toHaveLength(1)
+      expect(frameworkErrorPayloads[0].error.message).toEqual("Broadcast delivery blew up")
+      expect(frameworkErrorPayloads[0].context.stage).toEqual("sync-publish-after-commit")
+      expect(allErrorPayloads).toHaveLength(1)
+      expect(allErrorPayloads[0].errorType).toEqual("framework-error")
+      expect(loggedErrors).toHaveLength(1)
+      expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Still saved")
+      expect(await SyncEntry.where({resource_id: uuidItem.id(), resource_type: "UuidItem"}).toArray()).toHaveLength(1)
+
+      await UuidItem.create({id: "4e0c1d2e-3f4a-4b5c-8d6e-9f0a1b2c3d4e", title: "Second still saved"})
+
+      expect(frameworkErrorPayloads).toHaveLength(2)
+      expect(await SyncEntry.where({resource_id: "4e0c1d2e-3f4a-4b5c-8d6e-9f0a1b2c3d4e", resource_type: "UuidItem"}).toArray()).toHaveLength(1)
+    } finally {
+      errorEvents.off("framework-error", onFrameworkError)
+      errorEvents.off("all-error", onAllError)
       restore()
     }
   })
