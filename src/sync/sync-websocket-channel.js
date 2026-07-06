@@ -185,20 +185,29 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
     const envelope = /** @type {Record<string, ?>} */ (body)
     const scope = /** @type {import("./sync-resource-base.js").SerializedChangesScope} */ (this._scope)
     const syncs = Array.isArray(envelope.syncs) ? envelope.syncs : [envelope]
-    const resource = await this.buildSyncResource()
+    const configuration = this.session.configuration
     /** @type {Array<Record<string, ?>>} */
     const deliverableSyncs = []
 
-    for (const sync of syncs) {
-      const resourceId = sync?.resourceId
-      const resourceType = sync?.resourceType ?? scope.resourceType
+    // Broadcast fan-out runs through `withoutCurrentConnectionContexts` (see
+    // Configuration#_broadcastToChannelLocal), so there is no ambient database
+    // connection here. Resolve the resource's ability and run the per-delivery
+    // access query inside a checked-out connection context, mirroring how other
+    // broadcast-time DB work (the frontend-model channel) obtains connections.
+    await configuration.ensureConnections({name: `${VELOCIOUS_SYNC_CHANNEL} user-scope delivery access check`}, async () => {
+      const resource = await this.buildSyncResource()
 
-      if (resourceId === undefined || resourceId === null) continue
+      for (const sync of syncs) {
+        const resourceId = sync?.resourceId
+        const resourceType = sync?.resourceType ?? scope.resourceType
 
-      if (await resource.changeDeliverable({params: this.params, scope, sync: {resourceId: String(resourceId), resourceType: String(resourceType)}})) {
-        deliverableSyncs.push(sync)
+        if (resourceId === undefined || resourceId === null) continue
+
+        if (await resource.changeDeliverable({params: this.params, scope, sync: {resourceId: String(resourceId), resourceType: String(resourceType)}})) {
+          deliverableSyncs.push(sync)
+        }
       }
-    }
+    })
 
     if (deliverableSyncs.length === 0) return null
     if (Array.isArray(envelope.syncs)) return {...envelope, syncs: deliverableSyncs}
