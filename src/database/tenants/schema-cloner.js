@@ -186,6 +186,15 @@ export default class SchemaCloner {
 
       if (targetIndex) {
         if (!this.indexesMatch(sourceIndex, targetIndex)) {
+          // Replacing a non-unique index with a unique one is unsafe because
+          // the target may have duplicate values that will reject the new
+          // unique constraint, and the old index was already dropped by this
+          // point. The opposite direction (unique → non-unique) is always
+          // safe — non-unique indexes never fail on duplicate values.
+          if (sourceIndex.isUnique() && !targetIndex.isUnique()) {
+            throw new Error(`Schema clone index drift for ${tableName}.${sourceIndex.getName()}: cannot safely replace a non-unique index with a unique one.`)
+          }
+
           await this.dropTargetIndex({tableName, targetIndex})
           targetIndexesByName.delete(targetIndex.getName())
           targetIndexSignatures.delete(this.indexSignature(targetIndex))
