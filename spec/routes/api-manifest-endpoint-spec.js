@@ -35,6 +35,14 @@ class TestResourceResource extends FrontendModelBaseResource {
   static attributes = ["id", "name"]
 }
 
+class TestRenamedResource extends FrontendModelBaseResource {
+  static attributes = ["id", "title"]
+
+  static modelName = "PublicName"
+
+  static memberCommands = ["archive"]
+}
+
 /**
  * @param {object} args - Configuration arguments.
  * @param {import("../../src/configuration-types.js").AbilityResolverType} [args.abilityResolver] - Optional ability resolver.
@@ -48,8 +56,9 @@ function buildConfiguration({abilityResolver, apiManifest = false, tenantResolve
     apiManifest,
     backendProjects: [{
       frontendModels: {
-        User: TestUserResource,
-        Resource: TestResourceResource
+        InternalName: TestRenamedResource,
+        Resource: TestResourceResource,
+        User: TestUserResource
       },
       path: "/tmp/backend"
     }],
@@ -138,7 +147,14 @@ describe("routes - api manifest endpoint", () => {
 
     const resources = /** @type {Record<string, unknown>} */ (payload.resources)
 
-    expect(Object.keys(resources).sort()).toEqual(["Resource", "User"])
+    expect(Object.keys(resources).sort()).toEqual(["InternalName", "Resource", "User"])
+
+    // A resource registered under "InternalName" with static modelName "PublicName"
+    // reports its modelName override but uses the registry key for the path.
+    const renamed = /** @type {Record<string, unknown>} */ (resources.InternalName)
+
+    expect(renamed.modelName).toEqual("PublicName")
+    expect(renamed.path).toEqual("/internal-names")
 
     const user = /** @type {Record<string, unknown>} */ (resources.User)
 

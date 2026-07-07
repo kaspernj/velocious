@@ -30,6 +30,7 @@
 * Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
 * Named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
+* Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
 
 # Setup
 

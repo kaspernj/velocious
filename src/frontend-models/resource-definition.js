@@ -304,7 +304,7 @@ export function frontendModelApiManifest(backendProjects) {
       if (!resourceConfiguration) continue
 
       const modelName = resourceConfiguration.modelName || configuredModelName
-      const resourcePath = `/${inflection.dasherize(inflection.pluralize(inflection.underscore(modelName)))}`
+      const resourcePath = `/${inflection.dasherize(inflection.pluralize(inflection.underscore(configuredModelName)))}`
 
       /** @type {Record<string, unknown>} */
       const entry = {
@@ -359,7 +359,7 @@ export function frontendModelApiManifest(backendProjects) {
         entry.sync = resourceConfiguration.sync
       }
 
-      resources[modelName] = entry
+      resources[configuredModelName] = entry
     }
   }
 
