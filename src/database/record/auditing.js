@@ -385,7 +385,7 @@ async function initializeAuditing(modelClass, args = {}) {
 
   registerAuditRelationship(auditedModelClass)
 
-  if (resolveTableData && auditedModelClass._initialized && canResolveAuditTableData(auditedModelClass)) {
+  if (resolveTableData && shouldResolveAuditTableData(auditedModelClass)) {
     await resolveAuditTableData(auditedModelClass)
   }
 }
@@ -396,9 +396,37 @@ async function initializeAuditing(modelClass, args = {}) {
  * @returns {Promise<void>}
  */
 async function initializeAuditedModelRelationships(configuration) {
-  for (const modelClass of Object.values(configuration.getModelClasses())) {
-    await initializeAuditing(modelClass, {resolveTableData: true})
+  const modelClasses = Object.values(configuration.getModelClasses())
+  const shouldResolveTableData = modelClasses.some((modelClass) => shouldResolveAuditTableData(modelClass))
+
+  if (!shouldResolveTableData) {
+    for (const modelClass of modelClasses) {
+      await initializeAuditing(modelClass)
+    }
+
+    return
   }
+
+  await configuration.ensureConnections({name: "Initialize audited model relationships"}, async () => {
+    for (const modelClass of modelClasses) {
+      await initializeAuditing(modelClass, {resolveTableData: true})
+    }
+  })
+}
+
+/**
+ * Checks whether audit table metadata should be resolved for a model class.
+ * @param {typeof import("./index.js").default} modelClass - Model class to inspect.
+ * @returns {boolean} Whether table metadata resolution should run now.
+ */
+function shouldResolveAuditTableData(modelClass) {
+  const auditedModelClass = /** @type {AuditedModelClass} */ (modelClass)
+
+  if (!auditedModelClass._auditLifecycleCallbacksRegistered) {
+    return false
+  }
+
+  return Boolean(auditedModelClass._initialized) && canResolveAuditTableData(auditedModelClass)
 }
 
 /**
