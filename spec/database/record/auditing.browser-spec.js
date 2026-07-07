@@ -3,9 +3,15 @@
 import Configuration from "../../../src/configuration.js"
 import Current from "../../../src/current.js"
 import {AuditEvents} from "../../../src/database/record/auditing.js"
+import AsyncTrackedMultiConnection from "../../../src/database/pool/async-tracked-multi-connection.js"
+import SqliteDriver from "../../../src/database/drivers/sqlite/index.js"
 import DatabaseRecord from "../../../src/database/record/index.js"
+import EnvironmentHandlerNode from "../../../src/environment-handlers/node.js"
 import Migration from "../../../src/database/migration/index.js"
 import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -222,6 +228,58 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
       expect("audits" in SharedAuditWidget.getRelationshipsMap()).toEqual(true)
       expect("audits" in Widget.getRelationshipsMap()).toEqual(true)
     })
+  })
+
+  it("finalizes initialized audited models after hook-owned connection scopes close", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-audit-finalization-"))
+
+    class ScopedAuditWidget extends DatabaseRecord {
+      /** @returns {string} - Table name. */
+      static tableName() { return "scoped_audit_widgets" }
+    }
+
+    ScopedAuditWidget.audited()
+
+    const configuration = new Configuration({
+      database: {
+        test: {
+          default: {
+            driver: SqliteDriver,
+            migrations: false,
+            name: "velocious-audit-finalization",
+            poolType: AsyncTrackedMultiConnection,
+            type: "sqlite"
+          }
+        }
+      },
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async ({configuration: hookConfiguration}) => {
+        await hookConfiguration.ensureConnections(async (dbs) => {
+          const migration = new Migration({configuration: hookConfiguration, databaseIdentifier: "default", db: dbs.default})
+
+          await migration.createSharedAuditTables()
+          await migration.createTable("scoped_audit_widgets", (table) => {
+            table.string("name")
+            table.timestamps()
+          })
+          await ScopedAuditWidget.initializeRecord({configuration: hookConfiguration})
+        })
+      },
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    try {
+      await configuration.initializeModels()
+
+      expect("audits" in ScopedAuditWidget.getRelationshipsMap()).toEqual(true)
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    }
   })
 
   it("uses a consumer Audit model registered after an audited model initializes", async () => {
