@@ -46,7 +46,7 @@ import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
 import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateValueForWrite } from "../datetime-storage.js"
 import {formatValue} from "../../utils/format-value.js"
-import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
+import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, initializeAuditing, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
 import {registerMagnitudeCounterCache} from "./counter-cache-magnitude.js"
 import {stateMachine} from "./state-machine.js"
 import ValidatorsFormat from "./validators/format.js"
@@ -1533,6 +1533,7 @@ class VelociousDatabaseRecord {
     }
 
     await this._defineTranslationMethods()
+    await initializeAuditing(this)
     this._initialized = true
   }
 

@@ -14,3 +14,4 @@ log
 spec/dummy/log
 tmp/
 examples/expo/.expo/
+/db/

@@ -55,8 +55,12 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
  * Waits for an abandoned (timed-out) test lifecycle to settle, bounded by a
  * grace period, so its afterEach database cleanup runs on the shared connection
  * before the next test reuses it. Resolves early the moment the lifecycle
- * settles; otherwise resolves once the grace elapses (never rejects, and never
- * keeps the process alive on its own).
+ * settles; otherwise resolves once the grace elapses (never rejects).
+ *
+ * The grace timer is kept ref'd so it cannot let Node exit with an unsettled
+ * top-level await when the timed-out lifecycle has no ref'd handles of its own
+ * (for example a stalled mocked async API). Once the caller continues past this
+ * await, the timer has already resolved and no longer anchors the event loop.
  * @param {Promise<?>} lifecycle - The abandoned per-test lifecycle promise.
  * @param {number} graceMs - Maximum time to wait for the lifecycle to settle.
  * @returns {Promise<boolean>} - Whether the lifecycle settled within the grace period.
@@ -70,8 +74,6 @@ function awaitSettledOrGrace(lifecycle, graceMs) {
       settled = true
       resolve(false)
     }, graceMs)
-
-    if (typeof graceTimer.unref === "function") graceTimer.unref()
 
     Promise.resolve(lifecycle).then(() => {}, () => {}).then(() => {
       if (settled) return
@@ -913,6 +915,14 @@ export default class TestRunner {
            * still wait for it to settle after runWithTimeout has abandoned it.
            * @type {Promise<?> | undefined} */
           let testLifecycle
+          /**
+           * Shared mutable flag so the catch block can suppress the
+           * `_successfulTests` increment inside the still-detached lifecycle:
+           * when the lifecycle eventually resolves after a timeout rejection,
+           * the success increment must not count a test that was already
+           * recorded as failed.
+           * @type {{timedOut: boolean}} */
+          const timeoutState = {timedOut: false}
           const stopConsoleCapture = this.startConsoleCapture({
             passthrough: testConfig.consoleOutput === "live"
           })
@@ -946,7 +956,9 @@ export default class TestRunner {
                     line: testData.line ?? 0
                   }
                   await testData.function(testArgs)
-                  this._successfulTests++
+                  if (!timeoutState.timedOut) {
+                    this._successfulTests++
+                  }
                 } finally {
                   for (const afterEachData of newAfterEaches) {
                     await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
@@ -982,6 +994,7 @@ export default class TestRunner {
             const timedOut = Boolean(/** @type {TestTimeoutError} */ (error)?.velociousTestTimeout)
 
             if (timedOut && testLifecycle) {
+              timeoutState.timedOut = true
               await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
             }
 
