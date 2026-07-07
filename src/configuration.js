@@ -15,6 +15,7 @@ import {digg} from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
+import {initializeAuditedModelRelationships} from "./database/record/auditing.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
@@ -1807,6 +1808,7 @@ export default class VelociousConfiguration {
       }
 
       await this.getEnvironmentHandler().initializePackageModels(this)
+      await initializeAuditedModelRelationships(this)
 
       await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
     }

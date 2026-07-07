@@ -1,9 +1,11 @@
 // @ts-check
 
 import Configuration from "../../../src/configuration.js"
+import Current from "../../../src/current.js"
 import {AuditEvents} from "../../../src/database/record/auditing.js"
 import DatabaseRecord from "../../../src/database/record/index.js"
 import Migration from "../../../src/database/migration/index.js"
+import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -215,6 +217,124 @@ async function expectUuidColumn(driver, tableName, columnName) {
 }
 
 describe("Record - auditing", {tags: ["dummy"]}, () => {
+  it("registers audit relationships during model initialization", async () => {
+    await withAuditScratchTables(async ({SharedAuditWidget, Widget}) => {
+      expect("audits" in SharedAuditWidget.getRelationshipsMap()).toEqual(true)
+      expect("audits" in Widget.getRelationshipsMap()).toEqual(true)
+    })
+  })
+
+  it("uses a consumer Audit model registered after an audited model initializes", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const configuration = Configuration.current()
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+      const modelClasses = configuration.getModelClasses()
+      const previousAudit = modelClasses.Audit
+      const previousSharedAuditWidget = modelClasses.SharedAuditWidget
+
+      class SharedAuditWidget extends DatabaseRecord {
+        /** @returns {string} - Table name. */
+        static tableName() { return "shared_audit_widgets" }
+      }
+
+      class Audit extends DatabaseRecord {
+        /** @returns {string} - Table name. */
+        static tableName() { return "audits" }
+      }
+
+      try {
+        await dropAuditScratchTables(driver)
+        await migration.createTable("shared_audit_widgets", (table) => {
+          table.string("name")
+          table.timestamps()
+        })
+
+        SharedAuditWidget.audited()
+        await SharedAuditWidget.initializeRecord({configuration})
+        await Audit.initializeRecord({configuration})
+
+        const widget = await SharedAuditWidget.create({name: "Late audit model widget"})
+        const audits = await widget.audits().toArray()
+
+        expect(audits.length).toBeGreaterThanOrEqual(1)
+        expect(audits[0]).toBeInstanceOf(Audit)
+      } finally {
+        restoreModelClass(modelClasses, "Audit", previousAudit)
+        restoreModelClass(modelClasses, "SharedAuditWidget", previousSharedAuditWidget)
+        await dropAuditScratchTables(driver)
+      }
+    })
+  })
+
+  it("does not cache shared audits for tenant-switched models initialized outside tenant scope", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-audit-tenant")
+    const tenant = {slug: "alpha"}
+    const modelClasses = configuration.getModelClasses()
+    let previousConfiguration
+    const previousGadget = modelClasses.Gadget
+
+    class Gadget extends DatabaseRecord {
+      /** @returns {string} - Table name. */
+      static tableName() { return "gadgets" }
+    }
+
+    Gadget.switchesTenantDatabase(({tenant: currentTenant}) => currentTenant ? "projectTenant" : undefined)
+    Gadget.audited()
+
+    try {
+      try {
+        previousConfiguration = Current.configuration()
+      } catch {
+        // Ignore missing current configuration.
+      }
+
+      configuration.setCurrent()
+
+      await configuration.ensureConnections(async (dbs) => {
+        const migration = new Migration({configuration, databaseIdentifier: "default", db: dbs.default})
+
+        await migration.createSharedAuditTables()
+        await migration.createTable("gadgets", (table) => {
+          table.string("name")
+          table.timestamps()
+        })
+        await Gadget.initializeRecord({configuration})
+      })
+
+      await configuration.runWithTenant(tenant, async () => {
+        await configuration.ensureConnections(async (dbs) => {
+          const migration = new Migration({configuration, databaseIdentifier: "projectTenant", db: dbs.projectTenant})
+
+          await migration.createSharedAuditTables()
+          await migration.createTable("gadgets", (table) => {
+            table.string("name")
+            table.timestamps()
+          })
+          await migration.createDedicatedAuditTable("gadgets")
+
+          const gadget = await Gadget.create({name: "Tenant gadget"})
+          const dedicatedRows = /** @type {Array<{action: string, gadget_id: number | string}>} */ (await dbs.projectTenant.query(`
+            SELECT
+              audit_actions.action AS action,
+              gadget_audits.gadget_id AS gadget_id
+            FROM ${dbs.projectTenant.quoteTable("gadget_audits")}
+            INNER JOIN ${dbs.projectTenant.quoteTable("audit_actions")} ON ${dbs.projectTenant.quoteTable("audit_actions")}.${dbs.projectTenant.quoteColumn("id")} = ${dbs.projectTenant.quoteTable("gadget_audits")}.${dbs.projectTenant.quoteColumn("audit_action_id")}
+            WHERE gadget_audits.gadget_id = ${dbs.projectTenant.quote(gadget.id())}
+          `))
+          const sharedRows = (await auditRows(dbs.projectTenant)).filter((row) => row.auditableType === "Gadget")
+
+          expect(dedicatedRows.map((row) => [row.action, row.gadget_id])).toContainEqual(["create", gadget.id()])
+          expect(sharedRows).toEqual([])
+        })
+      })
+    } finally {
+      previousConfiguration?.setCurrent()
+      restoreModelClass(modelClasses, "Gadget", previousGadget)
+      await cleanup()
+    }
+  })
+
   it("records automatic and manual audits for audited models", async () => {
     await withAuditScratchTables(async ({driver, SharedAuditWidget}) => {
       /** @type {Array<{action: string, recordId: number | string}>} */

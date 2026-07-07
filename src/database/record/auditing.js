@@ -55,6 +55,8 @@ const dedicatedTableCache = new Map()
 /** @type {Map<string, typeof import("./index.js").default>} */
 const auditClassCache = new Map()
 
+const generatedAuditRelationships = new WeakSet()
+
 // ---------------------------------------------------------------------------
 // Global event bus (like ActiveRecordAuditable::Events)
 // ---------------------------------------------------------------------------
@@ -152,10 +154,7 @@ async function resolveAuditTableData(modelClass) {
   modelClass._auditTableData = tableData
   modelClass._auditTableResolved = true
 
-  // Register relationships now that we know the table type.
-  if (!modelClass._relationshipExists("audits")) {
-    modelClass.hasMany("audits", (query) => query.order({column: "created_at", direction: "DESC"}), {klass: tableData.auditClass, foreignKey: tableData.foreignKey, polymorphic: !tableData.dedicated})
-  }
+  registerAuditRelationship(modelClass, tableData)
 
   return tableData
 }
@@ -196,16 +195,8 @@ async function buildAuditTableData(modelClass) {
     }
   }
 
-  const cacheKey = `shared:${modelClass.getConfiguredDatabaseIdentifier()}`
-  let auditClass = auditClassCache.get(cacheKey)
-
-  if (!auditClass) {
-    auditClass = sharedAuditClass(modelClass)
-    auditClassCache.set(cacheKey, auditClass)
-  }
-
   return {
-    auditClass,
+    auditClass: cachedSharedAuditClass(modelClass),
     dedicated: false,
     foreignKey: "auditable_id",
     tableName: "audits"
@@ -219,26 +210,21 @@ async function buildAuditTableData(modelClass) {
  * @returns {Promise<boolean>} Whether the table exists.
  */
 async function dedicatedTableExistsForConnection(modelClass, tableName) {
-  const cacheKey = `${modelClass.getConfiguredDatabaseIdentifier()}:${tableName}`
+  const databaseIdentifier = modelClass.getDatabaseIdentifier()
+  const cacheKey = `${databaseIdentifier}:${tableName}`
   const cached = dedicatedTableCache.get(cacheKey)
 
   if (typeof cached === "boolean") {
     return cached
   }
 
-  try {
-    const connection = modelClass.connection()
+  const connection = modelClass.connection()
+  const table = await connection.getTableByName(tableName, {throwError: false})
+  const exists = Boolean(table)
 
-    await connection.getTableByName(tableName)
+  dedicatedTableCache.set(cacheKey, exists)
 
-    dedicatedTableCache.set(cacheKey, true)
-
-    return true
-  } catch {
-    dedicatedTableCache.set(cacheKey, false)
-
-    return false
-  }
+  return exists
 }
 
 // ---------------------------------------------------------------------------
@@ -265,8 +251,29 @@ function sharedAuditClass(modelClass) {
   }
 
   Object.defineProperty(Audit, "modelName", {value: "Audit", writable: false})
+  applyAuditClassDatabaseRouting(modelClass, Audit)
 
   return /** @type {typeof import("./index.js").default} */ (Audit)
+}
+
+/**
+ * Returns the cached framework-owned shared Audit class for a database.
+ * @param {AuditedModelClass} modelClass - Any audited model class.
+ * @returns {typeof import("./index.js").default} Shared Audit model class.
+ */
+function cachedSharedAuditClass(modelClass) {
+  const routingKey = modelClass.hasTenantDatabaseIdentifierResolver()
+    ? `tenant:${modelClass.getModelName()}`
+    : `database:${modelClass.getConfiguredDatabaseIdentifier()}`
+  const cacheKey = `shared:${routingKey}`
+  let auditClass = auditClassCache.get(cacheKey)
+
+  if (!auditClass) {
+    auditClass = sharedAuditClass(modelClass)
+    auditClassCache.set(cacheKey, auditClass)
+  }
+
+  return auditClass
 }
 
 /**
@@ -291,9 +298,24 @@ function dedicatedAuditClass(modelClass, tableName) {
   }
 
   Object.defineProperty(ModelAudit, "modelName", {value: `${modelName}Audit`, writable: false})
+  applyAuditClassDatabaseRouting(modelClass, ModelAudit)
   ModelAudit.belongsTo(modelKey, {className: modelName})
 
   return /** @type {typeof import("./index.js").default} */ (ModelAudit)
+}
+
+/**
+ * Makes framework-owned audit classes read the same database as the audited model.
+ * @param {AuditedModelClass} modelClass - Audited source model class.
+ * @param {typeof import("./index.js").default} auditClass - Generated audit class.
+ * @returns {void}
+ */
+function applyAuditClassDatabaseRouting(modelClass, auditClass) {
+  auditClass.setDatabaseIdentifier(modelClass.getConfiguredDatabaseIdentifier())
+
+  if (modelClass.hasTenantDatabaseIdentifierResolver()) {
+    auditClass.switchesTenantDatabase(({tenant}) => modelClass.getTenantDatabaseIdentifier(tenant))
+  }
 }
 
 /**
@@ -339,11 +361,116 @@ function registerAuditing(modelClass) {
   }
 
   modelClass._auditLifecycleCallbacksRegistered = true
+  registerAuditRelationship(modelClass)
   modelClass.beforeCreate("captureCreateAuditChanges")
   modelClass.afterCreate("createCreateAudit")
   modelClass.beforeUpdate("captureUpdateAuditChanges")
   modelClass.afterUpdate("createUpdateAudit")
   modelClass.afterDestroy("createDestroyAudit")
+}
+
+/**
+ * Initializes audit metadata for audited model classes.
+ * @param {typeof import("./index.js").default} modelClass - Model class to initialize.
+ * @param {{resolveTableData?: boolean}} [args] - Initialization options.
+ * @returns {Promise<void>}
+ */
+async function initializeAuditing(modelClass, args = {}) {
+  const {resolveTableData = false} = args
+  const auditedModelClass = /** @type {AuditedModelClass} */ (modelClass)
+
+  if (!auditedModelClass._auditLifecycleCallbacksRegistered) {
+    return
+  }
+
+  registerAuditRelationship(auditedModelClass)
+
+  if (resolveTableData && auditedModelClass._initialized && canResolveAuditTableData(auditedModelClass)) {
+    await resolveAuditTableData(auditedModelClass)
+  }
+}
+
+/**
+ * Resolves audit metadata after application and package model classes are registered.
+ * @param {import("../../configuration.js").default} configuration - Configuration whose models should be finalized.
+ * @returns {Promise<void>}
+ */
+async function initializeAuditedModelRelationships(configuration) {
+  for (const modelClass of Object.values(configuration.getModelClasses())) {
+    await initializeAuditing(modelClass, {resolveTableData: true})
+  }
+}
+
+/**
+ * Registers the audits relationship without forcing audit table detection.
+ * @param {AuditedModelClass} modelClass - Model class to audit.
+ * @param {AuditTableData} [tableData] - Resolved audit table data when available.
+ * @returns {void}
+ */
+function registerAuditRelationship(modelClass, tableData = defaultAuditRelationshipTableData(modelClass)) {
+  if (modelClass._relationshipExists("audits")) {
+    const relationship = modelClass.getRelationshipByName("audits")
+
+    if (generatedAuditRelationships.has(relationship)) {
+      relationship.className = undefined
+      relationship.klass = tableData.auditClass
+      relationship.foreignKey = tableData.foreignKey
+      relationship._explicitForeignKey = tableData.foreignKey
+      relationship._polymorphic = !tableData.dedicated
+      relationship._polymorphicTypeColumn = undefined
+    }
+
+    return
+  }
+
+  modelClass.hasMany("audits", auditRelationshipScope, {
+    foreignKey: tableData.foreignKey,
+    klass: tableData.auditClass,
+    polymorphic: !tableData.dedicated
+  })
+  generatedAuditRelationships.add(modelClass.getRelationshipByName("audits"))
+}
+
+/**
+ * Returns unresolved shared-audit defaults for early relationship registration.
+ * @param {AuditedModelClass} modelClass - Model class to audit.
+ * @returns {AuditTableData} Shared audit relationship defaults.
+ */
+function defaultAuditRelationshipTableData(modelClass) {
+  return {
+    auditClass: cachedSharedAuditClass(modelClass),
+    dedicated: false,
+    foreignKey: "auditable_id",
+    tableName: "audits"
+  }
+}
+
+/**
+ * Applies default audit ordering to generated audit relationships.
+ * @param {import("../query/model-class-query.js").default<typeof import("./index.js").default>} query - Audit query.
+ * @returns {import("../query/model-class-query.js").default<typeof import("./index.js").default>} Ordered audit query.
+ */
+function auditRelationshipScope(query) {
+  return query.order({column: "created_at", direction: "DESC"})
+}
+
+/**
+ * Checks whether the current tenant context can resolve audit table data.
+ * @param {AuditedModelClass} modelClass - Model class to inspect.
+ * @returns {boolean} Whether audit table data can be resolved in the current scope.
+ */
+function canResolveAuditTableData(modelClass) {
+  if (!modelClass.hasTenantDatabaseIdentifierResolver()) {
+    return true
+  }
+
+  const tenantDatabaseIdentifier = modelClass.getTenantDatabaseIdentifier()
+
+  if (!tenantDatabaseIdentifier) {
+    return false
+  }
+
+  return modelClass._getConfiguration().isDatabaseIdentifierActive(tenantDatabaseIdentifier)
 }
 
 // ---------------------------------------------------------------------------
@@ -811,6 +938,8 @@ export {
   createUpdateAudit,
   createSharedAuditTablesMigration,
   dedicatedAuditTableNameForTable,
+  initializeAuditedModelRelationships,
+  initializeAuditing,
   registerAuditCallback,
   registerAuditing,
   withoutAudit
