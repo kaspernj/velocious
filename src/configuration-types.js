@@ -514,6 +514,12 @@
  */
 
 /**
+ * @typedef {object} ApiManifestConfiguration
+ * @property {string} [path] - HTTP path for the built-in API manifest endpoint. Defaults to `/api/manifest`.
+ * @property {string} [token] - Bearer token required in the `Authorization: Bearer <token>` header. When set, requests without a matching token are not routed (404), so the endpoint stays hidden.
+ */
+
+/**
  * @typedef {object} DebugEndpointConfiguration
  * @property {string} [path] - HTTP path for the built-in debug endpoint. Defaults to `/velocious/debug`.
  * @property {string} [token] - Bearer token required in the `Authorization: Bearer <token>` header. When set, requests without a matching token are not routed (404), so the endpoint stays hidden.
@@ -542,6 +548,7 @@
  * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
  * @property {boolean} [debug] - Enable debug logging.
  * @property {boolean | DebugEndpointConfiguration} [debugEndpoint] - Enable the built-in debug endpoint. Defaults to false.
+ * @property {boolean | ApiManifestConfiguration} [apiManifest] - Enable the built-in API manifest endpoint. Defaults to false.
  * @property {string} [directory] - Base directory for the project.
  * @property {boolean} [enforceTenantDatabaseScopes] - Require tenant-switched model queries to resolve a tenant database identifier. Defaults to true.
  * @property {string} [environment] - Current environment name.

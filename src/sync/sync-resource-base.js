@@ -1,6 +1,6 @@
 // @ts-check
 
-import {forcedNonBlankStringParam} from "typanic"
+import {forcedNonBlankString} from "typanic"
 
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
@@ -135,7 +135,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     }
 
     const scopeParams = /** @type {Record<string, ?>} */ (scope)
-    const resourceType = forcedNonBlankStringParam(scopeParams, "resourceType")
+    const resourceType = forcedNonBlankString(scopeParams.resourceType, "resourceType")
     const conditions = scopeParams.conditions
 
     if (!conditions || typeof conditions !== "object" || Array.isArray(conditions)) {
