@@ -52,6 +52,7 @@ After `setProject(project)`, `task.projectId()`, `task.changes().project_id`, li
 | `counterCache` | Auto-sync parent count column on child create/update/destroy (belongsTo only) |
 | `dependent` | Action on parent destroy: `"destroy"` or `"restrict"` (hasMany/hasOne only) |
 | `foreignKey` | Explicit foreign key column (inferred by default) |
+| `klass` | Target model class (mutually exclusive with `className`; use when the class is not discoverable by model name) |
 | `primaryKey` | Primary key on the parent model (defaults to `"id"`) |
 | `polymorphic` | Enable polymorphic lookup via type+id columns |
 | `through` | Name of an intermediate `hasMany` relationship for many-to-many |
