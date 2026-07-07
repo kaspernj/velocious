@@ -17,7 +17,6 @@ Project.hasMany("commentsThroughTasks", {className: "Comment", through: "tasks"}
 Project.translates("name")
 Project.acceptsNestedAttributesFor("tasks", {allowDestroy: true})
 Project.acceptsNestedAttributesFor("interactions", {allowDestroy: true})
-Project.audited()
 
 Project.beforeValidation((record) => {
   if (record.readAttribute("tasksCount") == null) {

@@ -653,8 +653,8 @@ export default class VelociousDatabaseMigration {
     await this.createTable(auditTable, {id}, (table) => {
       const refKey = inflection.singularize(modelTableName)
 
-      table.references(refKey, {foreignKey: true, null: false, type: "integer"})
-      table.references("audit_action", {foreignKey: true, null: false, type: "integer"})
+      table.references(refKey, {foreignKey: true, null: false})
+      table.references("audit_action", {foreignKey: true, null: false})
       table.json("audited_changes")
       table.json("params")
       table.timestamps()

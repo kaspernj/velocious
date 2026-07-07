@@ -18,34 +18,17 @@ export default Task
 
 ## Schema
 
-Applications must create the shared audit tables in their own migrations. The
-audit tables use the database default UUID primary key. Match the `auditable`
-reference type to the primary-key type used by the audited models only when an
-audited model uses a non-default primary-key type:
+Applications must create audit tables in their own migrations. The built-in
+helpers use Velocious' default UUID primary keys and UUID reference columns.
+Only pass explicit types when an audited model deliberately uses a non-default
+primary-key type:
 
 ```js
 import Migration from "velocious/build/src/database/migration/index.js"
 
 export default class CreateAuditTables extends Migration {
   async up() {
-    await this.createTable("audit_actions", (table) => {
-      table.string("action", {index: {unique: true}, null: false})
-      table.timestamps()
-    })
-
-    await this.createTable("audit_auditable_types", (table) => {
-      table.string("name", {index: {unique: true}, null: false})
-      table.timestamps()
-    })
-
-    await this.createTable("audits", (table) => {
-      table.references("audit_action", {foreignKey: true, null: false})
-      table.references("audit_auditable_type", {foreignKey: true, null: false})
-      table.references("auditable", {null: false, polymorphic: true})
-      table.json("audited_changes")
-      table.json("params")
-      table.timestamps()
-    })
+    await this.createSharedAuditTables()
   }
 }
 ```
@@ -53,6 +36,23 @@ export default class CreateAuditTables extends Migration {
 The shared lookup tables keep repeated action names and audited model types out
 of the `audits` rows while still storing `auditable_type` directly for simple
 polymorphic queries.
+
+Use a dedicated audit table when one model should keep its audit rows separate:
+
+```js
+import Migration from "velocious/build/src/database/migration/index.js"
+
+export default class CreateProjectAudits extends Migration {
+  async up() {
+    await this.createDedicatedAuditTable("projects")
+  }
+}
+```
+
+For a UUID-backed `projects` table, this creates `project_audits` with UUID
+`id`, `project_id`, and `audit_action_id` columns. If `projects.id` is a
+non-default integer/bigint key, pass the matching reference type explicitly
+instead of relying on the UUID default.
 
 ## Automatic Audits
 
