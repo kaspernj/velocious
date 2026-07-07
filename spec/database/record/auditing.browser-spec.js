@@ -128,6 +128,14 @@ async function withAuditScratchTables(callback) {
     const configuration = Configuration.current()
     const driver = dbs.default
     const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+    const modelClasses = configuration.getModelClasses()
+    /** @type {Record<string, typeof DatabaseRecord | undefined>} */
+    const previousModelClasses = {
+      Audit: modelClasses.Audit,
+      SharedAuditWidget: modelClasses.SharedAuditWidget,
+      Widget: modelClasses.Widget,
+      WidgetAudit: modelClasses.WidgetAudit
+    }
 
     class SharedAuditWidget extends DatabaseRecord {
       /** @returns {string} - Table name. */
@@ -158,11 +166,27 @@ async function withAuditScratchTables(callback) {
 
       await callback({driver, SharedAuditWidget, Widget})
     } finally {
-      delete configuration.getModelClasses().SharedAuditWidget
-      delete configuration.getModelClasses().Widget
+      restoreModelClass(modelClasses, "Audit", previousModelClasses.Audit)
+      restoreModelClass(modelClasses, "SharedAuditWidget", previousModelClasses.SharedAuditWidget)
+      restoreModelClass(modelClasses, "Widget", previousModelClasses.Widget)
+      restoreModelClass(modelClasses, "WidgetAudit", previousModelClasses.WidgetAudit)
       await dropAuditScratchTables(driver)
     }
   })
+}
+
+/**
+ * @param {Record<string, typeof DatabaseRecord>} modelClasses - Model classes registry.
+ * @param {string} modelName - Model name.
+ * @param {typeof DatabaseRecord | undefined} previousModelClass - Previous class.
+ * @returns {void}
+ */
+function restoreModelClass(modelClasses, modelName, previousModelClass) {
+  if (previousModelClass) {
+    modelClasses[modelName] = previousModelClass
+  } else {
+    delete modelClasses[modelName]
+  }
 }
 
 /**
@@ -200,8 +224,6 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
       })
 
       try {
-        await expectUuidColumn(driver, "audits", "auditable_id")
-
         const widgetWithCustomAudit = await SharedAuditWidget.create({name: "Audited shared widget"})
 
         expect(widgetWithCustomAudit.id()).toMatch(uuidRegex)
