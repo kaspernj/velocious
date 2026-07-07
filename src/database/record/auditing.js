@@ -346,6 +346,21 @@ function registerAuditing(modelClass) {
   modelClass.afterDestroy("createDestroyAudit")
 }
 
+/**
+ * Initializes audit metadata for audited model classes.
+ * @param {typeof import("./index.js").default} modelClass - Model class to initialize.
+ * @returns {Promise<void>}
+ */
+async function initializeAuditing(modelClass) {
+  const auditedModelClass = /** @type {AuditedModelClass} */ (modelClass)
+
+  if (!auditedModelClass._auditLifecycleCallbacksRegistered) {
+    return
+  }
+
+  await resolveAuditTableData(auditedModelClass)
+}
+
 // ---------------------------------------------------------------------------
 // Creating audits
 // ---------------------------------------------------------------------------
@@ -811,6 +826,7 @@ export {
   createUpdateAudit,
   createSharedAuditTablesMigration,
   dedicatedAuditTableNameForTable,
+  initializeAuditing,
   registerAuditCallback,
   registerAuditing,
   withoutAudit

@@ -215,6 +215,13 @@ async function expectUuidColumn(driver, tableName, columnName) {
 }
 
 describe("Record - auditing", {tags: ["dummy"]}, () => {
+  it("registers audit relationships during model initialization", async () => {
+    await withAuditScratchTables(async ({SharedAuditWidget, Widget}) => {
+      expect("audits" in SharedAuditWidget.getRelationshipsMap()).toEqual(true)
+      expect("audits" in Widget.getRelationshipsMap()).toEqual(true)
+    })
+  })
+
   it("records automatic and manual audits for audited models", async () => {
     await withAuditScratchTables(async ({driver, SharedAuditWidget}) => {
       /** @type {Array<{action: string, recordId: number | string}>} */
