@@ -152,7 +152,8 @@ export default class SchemaCloner {
 
   /**
    * Creates non-primary-key indexes present on the source but missing from the target,
-   * and throws if an existing target index diverges from the source.
+   * and replaces target indexes whose definition (columns or uniqueness) drifted from
+   * the source.
    * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args
    * @returns {Promise<void>}
    */
@@ -161,7 +162,7 @@ export default class SchemaCloner {
     /** @type {Map<string, import("../drivers/base-columns-index.js").default>} */
     const targetIndexesByName = new Map()
     const targetIndexSignatures = new Set()
-    let createdIndex = false
+    let dirty = false
 
     for (const targetIndex of await targetTable.getIndexes()) {
       targetIndexesByName.set(targetIndex.getName(), targetIndex)
@@ -183,25 +184,60 @@ export default class SchemaCloner {
 
       const targetIndex = this.targetDb.getType() === "sqlite" ? undefined : targetIndexesByName.get(sourceIndex.getName())
 
-      if (!targetIndex) {
-        const createIndexSqls = await this.targetDb.createIndexSQLs(this.createIndexArgsFromSourceIndex({sourceIndex, tableName}))
+      if (targetIndex) {
+        if (!this.indexesMatch(sourceIndex, targetIndex)) {
+          // Replacing a non-unique index with a unique one is unsafe because
+          // the target may have duplicate values that will reject the new
+          // unique constraint, and the old index was already dropped by this
+          // point. The opposite direction (unique → non-unique) is always
+          // safe — non-unique indexes never fail on duplicate values.
+          if (sourceIndex.isUnique() && !targetIndex.isUnique()) {
+            throw new Error(`Schema clone index drift for ${tableName}.${sourceIndex.getName()}: cannot safely replace a non-unique index with a unique one.`)
+          }
 
-        for (const createIndexSql of createIndexSqls) {
-          await this.targetDb.query(createIndexSql)
+          await this.dropTargetIndex({tableName, targetIndex})
+          targetIndexesByName.delete(targetIndex.getName())
+          targetIndexSignatures.delete(this.indexSignature(targetIndex))
+        } else {
+          continue
         }
-
-        createdIndex = true
-        targetIndexSignatures.add(sourceIndexSignature)
-        continue
       }
 
-      if (!this.indexesMatch(sourceIndex, targetIndex)) {
-        throw new Error(`Schema clone index drift for ${tableName}.${sourceIndex.getName()}`)
+      // Drop any target index that shares the source name but survived the
+      // drift check above because the driver was skipped (SQLite).
+      const sameNameTargetIndex = targetIndexesByName.get(sourceIndex.getName())
+
+      if (sameNameTargetIndex) {
+        await this.dropTargetIndex({tableName, targetIndex: sameNameTargetIndex})
+        targetIndexesByName.delete(sameNameTargetIndex.getName())
+        targetIndexSignatures.delete(this.indexSignature(sameNameTargetIndex))
       }
+
+      const createIndexSqls = await this.targetDb.createIndexSQLs(this.createIndexArgsFromSourceIndex({sourceIndex, tableName}))
+
+      for (const createIndexSql of createIndexSqls) {
+        await this.targetDb.query(createIndexSql)
+      }
+
+      dirty = true
+      targetIndexSignatures.add(sourceIndexSignature)
     }
 
-    if (createdIndex) {
+    if (dirty) {
       this.targetDb.clearSchemaCache()
+    }
+  }
+
+  /**
+   * Drops an index on the target database.
+   * @param {{tableName: string, targetIndex: import("../drivers/base-columns-index.js").default}} args
+   * @returns {Promise<void>}
+   */
+  async dropTargetIndex({tableName, targetIndex}) {
+    const dropSqls = await this.targetDb.removeIndexSQLs({name: targetIndex.getName(), tableName})
+
+    for (const sql of dropSqls) {
+      await this.targetDb.query(sql)
     }
   }
 

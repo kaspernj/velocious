@@ -124,6 +124,54 @@ describe("SchemaCloner", () => {
       expect((await MigrationsLedger.appliedVersions(targetDb)).includes("20260103000000")).toEqual(true)
     })
   })
+
+  it("replaces a same-name index whose uniqueness drifts from the source", async () => {
+    await withCloner(async ({cloner, sourceDb, targetDb}) => {
+      // First pass: clone with unique index.
+      await cloner.syncTables(["widgets"])
+
+      const targetTableAfterClone = await targetDb.getTableByNameOrFail("widgets")
+      const targetIndexAfterClone = (await targetTableAfterClone.getIndexes())
+        .find((index) => index.getColumnNames().join(",") === "name")
+
+      expect(!!targetIndexAfterClone).toEqual(true)
+      expect(targetIndexAfterClone?.isUnique()).toEqual(true)
+
+      // Simulate a migration that changed the source index from unique to
+      // non-unique with the same name.
+      const sourceTable = await sourceDb.getTableByNameOrFail("widgets")
+      const sourceIndex = (await sourceTable.getIndexes())
+        .find((index) => index.getColumnNames().join(",") === "name")
+
+      if (!sourceIndex) {
+        throw new Error("Expected source unique index on name column.")
+      }
+
+      const dropSqls = await sourceDb.removeIndexSQLs({name: sourceIndex.getName(), tableName: "widgets"})
+
+      for (const sql of dropSqls) {
+        await sourceDb.query(sql)
+      }
+
+      const createSqls = await sourceDb.createIndexSQLs({columns: ["name"], name: sourceIndex.getName(), tableName: "widgets", unique: false})
+
+      for (const sql of createSqls) {
+        await sourceDb.query(sql)
+      }
+
+      sourceDb.clearSchemaCache()
+
+      // Second pass: cloner should drop the old unique and recreate non-unique.
+      await cloner.syncTables(["widgets"])
+
+      const targetTable = await targetDb.getTableByNameOrFail("widgets")
+      const targetIndex = (await targetTable.getIndexes())
+        .find((index) => index.getColumnNames().join(",") === "name")
+
+      expect(!!targetIndex).toEqual(true)
+      expect(targetIndex?.isUnique()).toEqual(false)
+    })
+  })
 })
 
 /**
