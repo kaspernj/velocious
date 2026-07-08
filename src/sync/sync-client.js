@@ -3,7 +3,6 @@
 import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
 import Logger from "../logger.js"
-import recordChanges from "../database/record-changes.js"
 import restArgsError from "../utils/rest-args-error.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
@@ -394,46 +393,43 @@ export default class SyncClient {
     let combinedResult = null
 
     await SyncApiClient.singleFlight(`velocious-sync-client-pull-${this._clientNumber}`, async () => {
-      // Coalesce record-change events across all applied rows so a whole pull triggers one live-query re-run.
-      await recordChanges.batch(async () => {
-        const authenticationToken = await this.config.authenticationToken()
-        const scopeStore = this.scopeStore()
-        const applySync = this.remoteApplySync()
-        const result = {
-          changed: false,
-          pages: 0,
-          resourceChanged: /** @type {Record<string, boolean>} */ ({}),
-          resourceCounts: /** @type {Record<string, number>} */ ({}),
-          syncedCount: 0
+      const authenticationToken = await this.config.authenticationToken()
+      const scopeStore = this.scopeStore()
+      const applySync = this.remoteApplySync()
+      const result = {
+        changed: false,
+        pages: 0,
+        resourceChanged: /** @type {Record<string, boolean>} */ ({}),
+        resourceCounts: /** @type {Record<string, number>} */ ({}),
+        syncedCount: 0
+      }
+
+      for (const scopeRow of await scopeStore.activeScopes()) {
+        const scopeResult = await SyncApiClient.pullChanges({
+          applySync,
+          authenticationToken,
+          batchSize: this.config.batchSize,
+          loadCursor: async () => await scopeStore.loadCursor(scopeRow),
+          postChanges: async (payload) => await this.config.postChanges({
+            ...payload,
+            scope: {conditions: scopeRow.conditions, resourceType: scopeRow.resourceType}
+          }),
+          saveCursor: async (cursor) => await scopeStore.saveCursor(scopeRow, cursor)
+        })
+
+        result.changed ||= scopeResult.changed
+        result.pages += scopeResult.pages
+        result.syncedCount += scopeResult.syncedCount
+
+        for (const [resourceType, count] of Object.entries(scopeResult.resourceCounts)) {
+          result.resourceCounts[resourceType] = (result.resourceCounts[resourceType] || 0) + count
         }
-
-        for (const scopeRow of await scopeStore.activeScopes()) {
-          const scopeResult = await SyncApiClient.pullChanges({
-            applySync,
-            authenticationToken,
-            batchSize: this.config.batchSize,
-            loadCursor: async () => await scopeStore.loadCursor(scopeRow),
-            postChanges: async (payload) => await this.config.postChanges({
-              ...payload,
-              scope: {conditions: scopeRow.conditions, resourceType: scopeRow.resourceType}
-            }),
-            saveCursor: async (cursor) => await scopeStore.saveCursor(scopeRow, cursor)
-          })
-
-          result.changed ||= scopeResult.changed
-          result.pages += scopeResult.pages
-          result.syncedCount += scopeResult.syncedCount
-
-          for (const [resourceType, count] of Object.entries(scopeResult.resourceCounts)) {
-            result.resourceCounts[resourceType] = (result.resourceCounts[resourceType] || 0) + count
-          }
-          for (const [resourceType, changed] of Object.entries(scopeResult.resourceChanged)) {
-            result.resourceChanged[resourceType] ||= changed
-          }
+        for (const [resourceType, changed] of Object.entries(scopeResult.resourceChanged)) {
+          result.resourceChanged[resourceType] ||= changed
         }
+      }
 
-        combinedResult = result
-      })
+      combinedResult = result
     })
 
     return combinedResult

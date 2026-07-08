@@ -2,6 +2,8 @@
 
 import {optionalBoolean, optionalInteger} from "typanic"
 
+import recordChanges from "../database/record-changes.js"
+
 const syncTaskPromises = new Map()
 
 /** @typedef {import("./sync-api-client-types.js").SyncChangeApplyResult} SyncChangeApplyResult */
@@ -128,18 +130,24 @@ export default class SyncApiClient {
 
       pages += 1
 
-      for (const sync of syncs) {
-        const applyResult = await args.applySync(sync)
-        const resourceType = applyResult.resourceType ?? sync.resourceType()
+      // Coalesce record-change events across this page's applies so N applied rows trigger one
+      // live-query re-run. Only the apply loop is batched: the network page fetch above and the
+      // cursor save below stay outside, so live queries flush right after the applies instead of
+      // waiting for the rest of the pull.
+      await recordChanges.batch(async () => {
+        for (const sync of syncs) {
+          const applyResult = await args.applySync(sync)
+          const resourceType = applyResult.resourceType ?? sync.resourceType()
 
-        changed ||= applyResult.changed === true
-        syncedCount += 1
+          changed ||= applyResult.changed === true
+          syncedCount += 1
 
-        if (resourceType) {
-          resourceCounts[resourceType] = (resourceCounts[resourceType] || 0) + 1
-          resourceChanged[resourceType] ||= applyResult.changed === true
+          if (resourceType) {
+            resourceCounts[resourceType] = (resourceCounts[resourceType] || 0) + 1
+            resourceChanged[resourceType] ||= applyResult.changed === true
+          }
         }
-      }
+      })
 
       afterCursor = changesResponse.nextCursor
 
