@@ -1,6 +1,6 @@
 # Advisory locks
 
-Velocious exposes cooperative, connection-scoped **advisory locks** as static helpers on every record class. They are the preferred way to serialize a specific piece of functionality (a counter decrement, an external API refresh, a background job scheduler) without touching row or table locks, and without blocking any reader or writer that is not participating in the same named lock.
+Velocious exposes cooperative, session-scoped **advisory locks** as static helpers on every record class. They are the preferred way to serialize a specific piece of functionality (a counter decrement, an external API refresh, a background job scheduler) without touching row or table locks, and without blocking any reader or writer that is not participating in the same named lock.
 
 ## Why not row locks?
 
@@ -40,9 +40,9 @@ await Account.withAdvisoryLock("daily-report", async () => {
 }, {timeoutMs: 5_000})
 
 // Optional hold timeout. Throws `AdvisoryLockHoldTimeoutError` if the callback
-// runs longer than `holdTimeoutMs`. Session-scoped drivers close the
-// lock-owning database session on this path so a blocked release query cannot
-// leave the named lock stuck behind a hung callback.
+// runs longer than `holdTimeoutMs`. The advisory lock is held on a dedicated
+// lock connection, so Velocious can release it even while the callback's own
+// database work is still hung.
 await Account.withAdvisoryLockOrFail("queue-planner", async () => {
   await runQueuePlanner()
 }, {holdTimeoutMs: 600_000})
@@ -52,15 +52,16 @@ await Account.withAdvisoryLockOrFail("queue-planner", async () => {
 const isBusy = await Account.hasAdvisoryLock("sync-account-42")
 ```
 
-Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. When `holdTimeoutMs` fires, Velocious asks the driver to clean up the timed-out advisory lock instead of issuing a normal release on that same potentially wedged session; session-scoped drivers close the lock-owning database session, while SQLite releases its emulated lock state directly.
+Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. Velocious acquires and releases the advisory lock through a dedicated lock connection; the callback keeps using the caller's existing database connection/context. When `holdTimeoutMs` fires, the dedicated lock connection releases the advisory lock before `AdvisoryLockHoldTimeoutError` is thrown.
 
 ## Scope
 
-Advisory locks are **per connection**. That is the whole point — it is what lets them coexist with row locks on unrelated functionality — but it also means:
+Database advisory locks are **per session/connection**. Velocious hides that sharp edge by owning a separate lock connection for each helper call:
 
-- The callback must run on the same Velocious connection that acquired the lock. `Record.withAdvisoryLock(...)` handles this automatically because it reads `this.connection()` from the current async context and uses it for the acquire and normal release calls. If `holdTimeoutMs` fires, session-scoped drivers close that connection to force the lock to drop.
-- Opening a **new** connection inside the callback (for example by spawning a child `withConnections` block) will not inherit the lock. That is rarely what you want.
-- Nested `Record.withAdvisoryLock(...)` calls with the **same** name behave differently per driver. MySQL/MariaDB `GET_LOCK` is re-entrant within a session; PostgreSQL `pg_advisory_lock` is re-entrant too but you must release as many times as you acquired; SQL Server `sp_getapplock` is configurable; the SQLite emulation is not re-entrant. Prefer to avoid nested same-name locks instead of relying on driver-specific behavior.
+- The lock connection acquires and releases the named advisory lock.
+- The callback runs in the caller's existing database context and does not inherit the lock connection.
+- Opening a **new** connection inside the callback (for example by spawning a child `withConnections` block) does not affect the lock ownership; the lock remains owned by the dedicated lock connection until the helper releases it.
+- Nested `Record.withAdvisoryLock(...)` calls with the **same** name contend with the outer helper call because each helper owns its own lock connection. Prefer to avoid nested same-name locks; use `withAdvisoryLockOrFail` if contention should skip instead of waiting.
 
 ## Driver support
 

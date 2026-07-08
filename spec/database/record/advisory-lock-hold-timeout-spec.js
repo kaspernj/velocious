@@ -30,42 +30,234 @@ describe("Record - advisory lock hold timeout", () => {
     expect(thrown).toBeInstanceOf(AdvisoryLockHoldTimeoutError)
   })
 
-  it("does not wait for a blocked release query after the hold timeout fires", async () => {
-    const neverSettles = () => new Promise(() => {})
-    let timeoutCleanupLockName
+  it("uses a dedicated advisory-lock connection without replacing the callback connection", async () => {
+    const events = []
+    const appConnection = {
+      async releaseAdvisoryLock() {
+        events.push("app release")
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock() {
+        events.push("app acquire")
+
+        return true
+      }
+    }
     const lockConnection = {
+      async close() {
+        events.push("lock close")
+      },
+
+      getArgs() {
+        return {}
+      },
+
+      async releaseAdvisoryLock(name) {
+        events.push(`lock release ${name}`)
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock(name) {
+        events.push(`lock acquire ${name}`)
+
+        return true
+      }
+    }
+    const lockPool = {
+      async spawnConnection() {
+        events.push("spawn lock connection")
+
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (lockConnection)
+      }
+    }
+    const configuration = {
+      getDatabasePool(identifier) {
+        events.push(`pool ${identifier}`)
+
+        return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
+      }
+    }
+    class DedicatedConnectionRecord extends VelociousDatabaseRecord {
+      static async ensureInitialized() {}
+
+      static _getConfiguration() {
+        return /** @type {import("../../../src/configuration.js").default} */ (configuration)
+      }
+
+      static connection() {
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (appConnection)
+      }
+
+      static getDatabaseIdentifier() {
+        return "default"
+      }
+    }
+
+    const result = await DedicatedConnectionRecord.withAdvisoryLockOrFail("dedicated-lock", async () => {
+      events.push(DedicatedConnectionRecord.connection() === appConnection ? "callback app connection" : "callback lock connection")
+
+      return "done"
+    })
+
+    expect(result).toEqual("done")
+    expect(events).toEqual([
+      "pool default",
+      "spawn lock connection",
+      "lock acquire dedicated-lock",
+      "callback app connection",
+      "lock release dedicated-lock",
+      "lock close"
+    ])
+  })
+
+  it("does not close externally-owned advisory-lock connections", async () => {
+    const events = []
+    const externalConnection = {}
+    const lockConnection = {
+      async close() {
+        events.push("lock close")
+      },
+
+      getArgs() {
+        return {
+          getConnection: () => externalConnection
+        }
+      },
+
+      async releaseAdvisoryLock(name) {
+        events.push(`lock release ${name}`)
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock(name) {
+        events.push(`lock acquire ${name}`)
+
+        return true
+      }
+    }
+    const lockPool = {
+      async spawnConnection() {
+        events.push("spawn lock connection")
+
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (lockConnection)
+      }
+    }
+    const configuration = {
+      getDatabasePool(identifier) {
+        events.push(`pool ${identifier}`)
+
+        return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
+      }
+    }
+    class ExternallyOwnedConnectionRecord extends VelociousDatabaseRecord {
+      static async ensureInitialized() {}
+
+      static _getConfiguration() {
+        return /** @type {import("../../../src/configuration.js").default} */ (configuration)
+      }
+
+      static getDatabaseIdentifier() {
+        return "default"
+      }
+    }
+
+    const result = await ExternallyOwnedConnectionRecord.withAdvisoryLockOrFail("shared-lock", async () => "done")
+
+    expect(result).toEqual("done")
+    expect(events).toEqual([
+      "pool default",
+      "spawn lock connection",
+      "lock acquire shared-lock",
+      "lock release shared-lock"
+    ])
+  })
+
+  it("releases a hold-timed-out lock through the dedicated advisory-lock connection", async () => {
+    const neverSettles = () => new Promise(() => {})
+    const events = []
+    const appConnection = {
       async releaseAdvisoryLock() {
         await neverSettles()
 
         return true
       },
 
-      async releaseAdvisoryLockAfterHoldTimeout(name) {
-        timeoutCleanupLockName = name
+      async tryAcquireAdvisoryLock() {
+        throw new Error("App connection must not acquire advisory locks")
+      }
+    }
+    const lockConnection = {
+      async close() {
+        events.push("lock close")
       },
 
-      async tryAcquireAdvisoryLock() {
+      getArgs() {
+        return {}
+      },
+
+      async releaseAdvisoryLock(name) {
+        events.push(`lock release ${name}`)
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock(name) {
+        events.push(`lock acquire ${name}`)
+
         return true
       }
     }
-    class BlockingReleaseRecord extends VelociousDatabaseRecord {
+    const lockPool = {
+      async spawnConnection() {
+        events.push("spawn lock connection")
+
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (lockConnection)
+      }
+    }
+    const configuration = {
+      getDatabasePool(identifier) {
+        events.push(`pool ${identifier}`)
+
+        return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
+      }
+    }
+    class DedicatedConnectionRecord extends VelociousDatabaseRecord {
       static async ensureInitialized() {}
 
+      static _getConfiguration() {
+        return /** @type {import("../../../src/configuration.js").default} */ (configuration)
+      }
+
       static connection() {
-        return /** @type {import("../../../src/database/drivers/base.js").default} */ (lockConnection)
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (appConnection)
+      }
+
+      static getDatabaseIdentifier() {
+        return "default"
       }
     }
     let thrown
 
     try {
       await timeout({timeout: 1000}, async () => {
-        await BlockingReleaseRecord.withAdvisoryLockOrFail("blocked-release-lock", neverSettles, {holdTimeoutMs: 50})
+        await DedicatedConnectionRecord.withAdvisoryLockOrFail("timed-out-lock", neverSettles, {holdTimeoutMs: 50})
       })
     } catch (error) {
       thrown = error
     }
 
     expect(thrown).toBeInstanceOf(AdvisoryLockHoldTimeoutError)
-    expect(timeoutCleanupLockName).toBe("blocked-release-lock")
+    expect(events).toEqual([
+      "pool default",
+      "spawn lock connection",
+      "lock acquire timed-out-lock",
+      "lock release timed-out-lock",
+      "lock close"
+    ])
   })
+
 })

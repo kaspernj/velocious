@@ -216,32 +216,4 @@ describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, (
       expect(lockDirStillThere).toBe(false)
     })
   })
-
-  it("releases the emulated lock on hold-timeout cleanup", async () => {
-    await Configuration.current().ensureConnections(async (dbs) => {
-      if (!isNodeSqliteDriver(dbs.default)) return
-
-      const driver = /** @type {VelociousDatabaseDriversSqliteNode} */ (dbs.default)
-      const lockName = "velocious-node-file-lock-hold-timeout-cleanup"
-      const lockPath = lockPathFor(driver, lockName)
-      const acquired = await driver.tryAcquireAdvisoryLock(lockName)
-
-      expect(acquired).toBe(true)
-
-      try {
-        expect(await driver.isAdvisoryLockHeld(lockName)).toBe(true)
-
-        const stat = await fs.stat(lockPath)
-
-        expect(stat.isDirectory()).toBe(true)
-
-        await driver.releaseAdvisoryLockAfterHoldTimeout(lockName)
-
-        expect(await driver.isAdvisoryLockHeld(lockName)).toBe(false)
-      } finally {
-        await driver.releaseAdvisoryLock(lockName)
-        await fs.rm(lockPath, {recursive: true, force: true})
-      }
-    })
-  })
 })

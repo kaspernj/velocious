@@ -30,12 +30,6 @@ import Update from "./sql/update.js"
  */
 const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
 
-/**
- * @typedef {object} DestroyableMysqlPoolConnection
- * @property {() => void} destroy - Forcefully destroys the physical connection.
- */
-/** @typedef {import("mysql").Pool & {_allConnections?: DestroyableMysqlPoolConnection[]}} DestroyableMysqlPool */
-
 export default class VelociousDatabaseDriversMysql extends Base{
   /** @type {import("mysql").Pool | undefined} */
   pool = undefined
@@ -72,26 +66,6 @@ export default class VelociousDatabaseDriversMysql extends Base{
     await this.pool?.end()
     this.pool = undefined
     this.resetCurrentSessionTimeZone()
-  }
-
-  /**
-   * Drops the MySQL/MariaDB session that owns a timed-out advisory lock.
-   * `pool.end()` is intentionally avoided here because it is graceful and can
-   * wait behind the same stuck query that made the hold timeout fire.
-   * @param {string} name - Lock name.
-   * @returns {Promise<void>} - Resolves after the physical pool connections have been destroyed.
-   */
-  async releaseAdvisoryLockAfterHoldTimeout(name) {
-    void name
-
-    const pool = /** @type {DestroyableMysqlPool | undefined} */ (this.pool)
-
-    this.pool = undefined
-    this.resetCurrentSessionTimeZone()
-
-    for (const connection of pool?._allConnections || []) {
-      connection.destroy()
-    }
   }
 
   /**
