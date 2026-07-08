@@ -31,6 +31,9 @@ import Update from "./sql/update.js"
 const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
 
 export default class VelociousDatabaseDriversMysql extends Base{
+  /** @type {import("mysql").Pool | undefined} */
+  pool = undefined
+
   /** @type {string | null} */
   _desiredSessionTimeZone = "+00:00"
 

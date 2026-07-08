@@ -24,7 +24,7 @@
 
 /** @typedef {import("../../configuration-types.js").TenantDatabaseProviderType} TenantDatabaseProviderType */
 
-import timeout from "awaitery/build/timeout.js"
+import AdvisoryLockRunner, {AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError} from "../advisory-lock-runner.js"
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
@@ -162,60 +162,6 @@ function buildRelatedRecordWithInverse(parent, relationshipName, attributes, all
   })
 
   return record
-}
-
-/**
- * Thrown by `Record.withAdvisoryLock` when the caller supplied a
- * `timeoutMs` and the lock was not granted before it elapsed.
- */
-class AdvisoryLockTimeoutError extends Error {
-  /**
-   * Runs constructor.
-   * @param {string} message - Error message.
-   * @param {{name: string}} args - The advisory lock name that timed out.
-   */
-  constructor(message, {name}) {
-    super(message)
-    this.name = "AdvisoryLockTimeoutError"
-    this.lockName = name
-  }
-}
-
-/**
- * Thrown by `Record.withAdvisoryLockOrFail` when the lock is already held
- * by another session at the moment of the call.
- */
-class AdvisoryLockBusyError extends Error {
-  /**
-   * Runs constructor.
-   * @param {string} message - Error message.
-   * @param {{name: string}} args - The advisory lock name that was already held.
-   */
-  constructor(message, {name}) {
-    super(message)
-    this.name = "AdvisoryLockBusyError"
-    this.lockName = name
-  }
-}
-
-/**
- * Thrown by `Record.withAdvisoryLock` / `withAdvisoryLockOrFail` when the
- * caller supplied a `holdTimeoutMs` and the callback ran longer than it. The
- * lock is released before this is thrown, so a hung holder can't block other
- * sessions indefinitely. Note: the callback itself is not cancelled — pass an
- * AbortSignal to the work if it needs to stop.
- */
-class AdvisoryLockHoldTimeoutError extends Error {
-  /**
-   * Runs constructor.
-   * @param {string} message - Error message.
-   * @param {{name: string}} args - The advisory lock name whose hold timed out.
-   */
-  constructor(message, {name}) {
-    super(message)
-    this.name = "AdvisoryLockHoldTimeoutError"
-    this.lockName = name
-  }
 }
 
 class TenantDatabaseScopeError extends Error {
@@ -2675,10 +2621,13 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * Runs the callback while holding a named advisory lock on the current
-   * connection. Advisory locks are cooperative and connection-scoped: they
-   * serialize callers that opt into the same `name`, without touching row
-   * or table locks, so unrelated traffic is free to proceed.
+   * Runs the callback while holding a named advisory lock. Calls without
+   * a positive `holdTimeoutMs` use the caller connection; calls with a positive
+   * `holdTimeoutMs` use a dedicated lock connection so timeout cleanup can
+   * release the lock even when callback database work is stuck. Advisory locks
+   * are cooperative and session-scoped: they serialize callers that opt into
+   * the same `name`, without touching row or table locks, so unrelated traffic
+   * is free to proceed.
    *
    * The lock is acquired before the callback runs and released in a
    * `finally` block afterwards, so the callback's return value is
@@ -2694,18 +2643,13 @@ class VelociousDatabaseRecord {
   static async withAdvisoryLock(name, callback, args = {}) {
     await this.ensureInitialized()
 
-    const connection = this.connection()
-    const acquired = await connection.acquireAdvisoryLock(name, args)
+    const runner = new AdvisoryLockRunner({
+      configuration: this._getConfiguration(),
+      connectionProvider: () => this.connection(),
+      databaseIdentifier: this.getDatabaseIdentifier()
+    })
 
-    if (!acquired) {
-      throw new AdvisoryLockTimeoutError(`Timed out waiting for advisory lock ${JSON.stringify(name)}`, {name})
-    }
-
-    try {
-      return await this.runWithAdvisoryLockHoldTimeout(name, callback, args.holdTimeoutMs)
-    } finally {
-      await connection.releaseAdvisoryLock(name)
-    }
+    return await runner.withAdvisoryLock(name, callback, args)
   }
 
   /**
@@ -2725,31 +2669,19 @@ class VelociousDatabaseRecord {
   static async withAdvisoryLockOrFail(name, callback, args = {}) {
     await this.ensureInitialized()
 
-    const connection = this.connection()
-    const acquired = await connection.tryAcquireAdvisoryLock(name)
+    const runner = new AdvisoryLockRunner({
+      configuration: this._getConfiguration(),
+      connectionProvider: () => this.connection(),
+      databaseIdentifier: this.getDatabaseIdentifier()
+    })
 
-    if (!acquired) {
-      throw new AdvisoryLockBusyError(`Advisory lock ${JSON.stringify(name)} is already held`, {name})
-    }
-
-    try {
-      return await this.runWithAdvisoryLockHoldTimeout(name, callback, args.holdTimeoutMs)
-    } finally {
-      await connection.releaseAdvisoryLock(name)
-    }
+    return await runner.withAdvisoryLockOrFail(name, callback, args)
   }
 
   /**
    * Runs `callback`, rejecting with `AdvisoryLockHoldTimeoutError` if it has
-   * not settled within `holdTimeoutMs`. The caller's `finally` then releases
-   * the lock, so a hung holder can't block other sessions forever. The
-   * callback is not cancelled — this is a safety net, not cancellation.
-   *
-   * Uses `awaitery`'s shared `timeout` helper for the hard timeout, then
-   * translates its timeout into the typed `AdvisoryLockHoldTimeoutError` so
-   * callers can catch it like the other advisory-lock errors. A `callbackSettled`
-   * flag distinguishes the timeout from a rejection thrown by the callback
-   * itself, which is rethrown unchanged.
+   * not settled within `holdTimeoutMs`. The callback is not cancelled — this is
+   * a safety net, not cancellation.
    * @template T
    * @param {string} name - Lock name (for the error message).
    * @param {() => Promise<T>} callback - Callback holding the lock.
@@ -2757,27 +2689,7 @@ class VelociousDatabaseRecord {
    * @returns {Promise<T>}
    */
   static async runWithAdvisoryLockHoldTimeout(name, callback, holdTimeoutMs) {
-    if (!holdTimeoutMs || holdTimeoutMs <= 0) {
-      return await callback()
-    }
-
-    let callbackSettled = false
-
-    try {
-      return await timeout({timeout: holdTimeoutMs}, async () => {
-        try {
-          return await callback()
-        } finally {
-          callbackSettled = true
-        }
-      })
-    } catch (error) {
-      if (!callbackSettled) {
-        throw new AdvisoryLockHoldTimeoutError(`Advisory lock ${JSON.stringify(name)} held longer than ${holdTimeoutMs}ms`, {name})
-      }
-
-      throw error
-    }
+    return await AdvisoryLockRunner.runWithAdvisoryLockHoldTimeout(name, callback, holdTimeoutMs)
   }
 
   /**
