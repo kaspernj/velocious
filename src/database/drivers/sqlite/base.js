@@ -485,6 +485,17 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Cleans up SQLite's emulated advisory lock after `holdTimeoutMs` fires.
+   * Closing the SQL connection does not release the process-wide owner table
+   * or on-disk lock directory, so this uses the normal emulated release path.
+   * @param {string} name - Lock name.
+   * @returns {Promise<void>} - Resolves when the emulated lock state has been released.
+   */
+  async releaseAdvisoryLockAfterHoldTimeout(name) {
+    await this.releaseAdvisoryLock(name)
+  }
+
+  /**
    * Runs is advisory lock held.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any driver instance currently holds the lock.

@@ -201,9 +201,9 @@ class AdvisoryLockBusyError extends Error {
 /**
  * Thrown by `Record.withAdvisoryLock` / `withAdvisoryLockOrFail` when the
  * caller supplied a `holdTimeoutMs` and the callback ran longer than it. The
- * lock is released before this is thrown, so a hung holder can't block other
- * sessions indefinitely. Note: the callback itself is not cancelled — pass an
- * AbortSignal to the work if it needs to stop.
+ * driver's timeout cleanup runs before this is thrown, so a hung holder can't
+ * block other sessions indefinitely. Note: the callback itself is not cancelled
+ * — pass an AbortSignal to the work if it needs to stop.
  */
 class AdvisoryLockHoldTimeoutError extends Error {
   /**
@@ -2701,10 +2701,15 @@ class VelociousDatabaseRecord {
       throw new AdvisoryLockTimeoutError(`Timed out waiting for advisory lock ${JSON.stringify(name)}`, {name})
     }
 
+    let holdTimedOut = false
+
     try {
       return await this.runWithAdvisoryLockHoldTimeout(name, callback, args.holdTimeoutMs)
+    } catch (error) {
+      holdTimedOut = error instanceof AdvisoryLockHoldTimeoutError
+      throw error
     } finally {
-      await connection.releaseAdvisoryLock(name)
+      await this.releaseAdvisoryLockAfterCallback({connection, holdTimedOut, name})
     }
   }
 
@@ -2732,18 +2737,39 @@ class VelociousDatabaseRecord {
       throw new AdvisoryLockBusyError(`Advisory lock ${JSON.stringify(name)} is already held`, {name})
     }
 
+    let holdTimedOut = false
+
     try {
       return await this.runWithAdvisoryLockHoldTimeout(name, callback, args.holdTimeoutMs)
+    } catch (error) {
+      holdTimedOut = error instanceof AdvisoryLockHoldTimeoutError
+      throw error
     } finally {
-      await connection.releaseAdvisoryLock(name)
+      await this.releaseAdvisoryLockAfterCallback({connection, holdTimedOut, name})
     }
   }
 
   /**
+   * Releases a normal advisory-lock callback with the driver release primitive,
+   * but delegates to driver timeout cleanup after a hold timeout so the lock
+   * cannot stay stuck behind a blocked release query.
+   * @param {{connection: import("../drivers/base.js").default, holdTimedOut: boolean, name: string}} args - Release arguments.
+   * @returns {Promise<void>} - Resolves when the lock has been released or timeout cleanup has completed.
+   */
+  static async releaseAdvisoryLockAfterCallback({connection, holdTimedOut, name}) {
+    if (holdTimedOut) {
+      await connection.releaseAdvisoryLockAfterHoldTimeout(name)
+      return
+    }
+
+    await connection.releaseAdvisoryLock(name)
+  }
+
+  /**
    * Runs `callback`, rejecting with `AdvisoryLockHoldTimeoutError` if it has
-   * not settled within `holdTimeoutMs`. The caller's `finally` then releases
-   * the lock, so a hung holder can't block other sessions forever. The
-   * callback is not cancelled — this is a safety net, not cancellation.
+   * not settled within `holdTimeoutMs`. The caller's `finally` then performs
+   * driver timeout cleanup, so a hung holder can't block other sessions forever.
+   * The callback is not cancelled — this is a safety net, not cancellation.
    *
    * Uses `awaitery`'s shared `timeout` helper for the hard timeout, then
    * translates its timeout into the typed `AdvisoryLockHoldTimeoutError` so

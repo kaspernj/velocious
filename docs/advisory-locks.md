@@ -39,18 +39,26 @@ await Account.withAdvisoryLock("daily-report", async () => {
   await generateDailyReport()
 }, {timeoutMs: 5_000})
 
+// Optional hold timeout. Throws `AdvisoryLockHoldTimeoutError` if the callback
+// runs longer than `holdTimeoutMs`. Session-scoped drivers close the
+// lock-owning database session on this path so a blocked release query cannot
+// leave the named lock stuck behind a hung callback.
+await Account.withAdvisoryLockOrFail("queue-planner", async () => {
+  await runQueuePlanner()
+}, {holdTimeoutMs: 600_000})
+
 // Introspection. Useful in diagnostics; callers that want to act on the
 // result should prefer `withAdvisoryLockOrFail` to avoid a TOCTOU window.
 const isBusy = await Account.hasAdvisoryLock("sync-account-42")
 ```
 
-Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return.
+Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. When `holdTimeoutMs` fires, Velocious asks the driver to clean up the timed-out advisory lock instead of issuing a normal release on that same potentially wedged session; session-scoped drivers close the lock-owning database session, while SQLite releases its emulated lock state directly.
 
 ## Scope
 
 Advisory locks are **per connection**. That is the whole point — it is what lets them coexist with row locks on unrelated functionality — but it also means:
 
-- The callback must run on the same Velocious connection that acquired the lock. `Record.withAdvisoryLock(...)` handles this automatically because it reads `this.connection()` from the current async context and uses it for both the acquire and release call.
+- The callback must run on the same Velocious connection that acquired the lock. `Record.withAdvisoryLock(...)` handles this automatically because it reads `this.connection()` from the current async context and uses it for the acquire and normal release calls. If `holdTimeoutMs` fires, session-scoped drivers close that connection to force the lock to drop.
 - Opening a **new** connection inside the callback (for example by spawning a child `withConnections` block) will not inherit the lock. That is rarely what you want.
 - Nested `Record.withAdvisoryLock(...)` calls with the **same** name behave differently per driver. MySQL/MariaDB `GET_LOCK` is re-entrant within a session; PostgreSQL `pg_advisory_lock` is re-entrant too but you must release as many times as you acquired; SQL Server `sp_getapplock` is configurable; the SQLite emulation is not re-entrant. Prefer to avoid nested same-name locks instead of relying on driver-specific behavior.
 
@@ -81,5 +89,6 @@ Web (sql.js) and Expo native inherit the shared in-process implementation unchan
 
 - `AdvisoryLockTimeoutError` — thrown by `withAdvisoryLock` when a `timeoutMs` elapses before the lock is granted. Exposes `error.lockName`.
 - `AdvisoryLockBusyError` — thrown by `withAdvisoryLockOrFail` when the lock is already held. Exposes `error.lockName`.
+- `AdvisoryLockHoldTimeoutError` — thrown by either helper when a `holdTimeoutMs` elapses while the callback is still running. Exposes `error.lockName`.
 
-Both are exported from `velocious/build/src/database/record/index.js` (and the matching source path under `src/`).
+All three are exported from `velocious/build/src/database/record/index.js` (and the matching source path under `src/`).

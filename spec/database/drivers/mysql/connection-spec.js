@@ -185,4 +185,29 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
       "SELECT retry_me"
     ])
   })
+
+  it("destroys pool connections during advisory-lock hold-timeout cleanup", async () => {
+    const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+    const destroyedConnections = []
+    let endCalled = false
+
+    mysql.setDesiredSessionTimeZone("+01:00")
+    mysql.pool = {
+      _allConnections: [
+        {destroy: () => destroyedConnections.push("first")},
+        {destroy: () => destroyedConnections.push("second")}
+      ],
+
+      end: () => {
+        endCalled = true
+      }
+    }
+
+    await mysql.releaseAdvisoryLockAfterHoldTimeout("mysql-advisory-lock-timeout")
+
+    expect(destroyedConnections).toEqual(["first", "second"])
+    expect(endCalled).toBe(false)
+    expect(mysql.pool).toBe(undefined)
+    expect(mysql.getCurrentSessionTimeZone()).toBe(null)
+  })
 })

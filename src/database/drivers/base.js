@@ -1677,6 +1677,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Cleans up a named advisory lock after `holdTimeoutMs` fires. Drivers with
+   * session-scoped advisory locks drop the owning session by default because a
+   * normal release query can be blocked behind the timed-out callback.
+   * @param {string} name - Lock name.
+   * @returns {Promise<void>} - Resolves when the session or lock state has been cleaned up.
+   */
+  async releaseAdvisoryLockAfterHoldTimeout(name) {
+    void name
+    await this.close()
+  }
+
+  /**
    * Checks whether a named advisory lock is currently held by any session.
    * Intended as an introspection helper; callers who need to act on the
    * result should prefer `tryAcquireAdvisoryLock` to avoid a TOCTOU race.
