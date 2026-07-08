@@ -30,7 +30,90 @@ describe("Record - advisory lock hold timeout", () => {
     expect(thrown).toBeInstanceOf(AdvisoryLockHoldTimeoutError)
   })
 
-  it("uses a dedicated advisory-lock connection without replacing the callback connection", async () => {
+  it("uses the caller connection when no hold timeout is configured", async () => {
+    const events = []
+    const appConnection = {
+      async acquireAdvisoryLock(name) {
+        events.push(`app acquire ${name}`)
+
+        return true
+      },
+
+      async releaseAdvisoryLock(name) {
+        events.push(`app release ${name}`)
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock(name) {
+        events.push(`app try acquire ${name}`)
+
+        return true
+      }
+    }
+    const configuration = {
+      getDatabasePool() {
+        throw new Error("Should not spawn an advisory-lock connection without holdTimeoutMs")
+      }
+    }
+    class CallerConnectionRecord extends VelociousDatabaseRecord {
+      static async ensureInitialized() {}
+
+      static _getConfiguration() {
+        return /** @type {import("../../../src/configuration.js").default} */ (configuration)
+      }
+
+      static connection() {
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (appConnection)
+      }
+
+      static getDatabaseIdentifier() {
+        return "default"
+      }
+    }
+
+    const withLockResult = await CallerConnectionRecord.withAdvisoryLock("caller-lock", async () => {
+      events.push(CallerConnectionRecord.connection() === appConnection ? "with lock callback app connection" : "with lock callback other connection")
+
+      return "with-lock-done"
+    })
+    const orFailResult = await CallerConnectionRecord.withAdvisoryLockOrFail("caller-or-fail-lock", async () => {
+      events.push(CallerConnectionRecord.connection() === appConnection ? "or fail callback app connection" : "or fail callback other connection")
+
+      return "or-fail-done"
+    })
+    const disabledHoldTimeoutResult = await CallerConnectionRecord.withAdvisoryLockOrFail("disabled-hold-timeout-lock", async () => {
+      events.push(CallerConnectionRecord.connection() === appConnection ? "disabled callback app connection" : "disabled callback other connection")
+
+      return "disabled-done"
+    }, {holdTimeoutMs: 0})
+    const negativeHoldTimeoutResult = await CallerConnectionRecord.withAdvisoryLock("negative-hold-timeout-lock", async () => {
+      events.push(CallerConnectionRecord.connection() === appConnection ? "negative callback app connection" : "negative callback other connection")
+
+      return "negative-done"
+    }, {holdTimeoutMs: -1})
+
+    expect(withLockResult).toEqual("with-lock-done")
+    expect(orFailResult).toEqual("or-fail-done")
+    expect(disabledHoldTimeoutResult).toEqual("disabled-done")
+    expect(negativeHoldTimeoutResult).toEqual("negative-done")
+    expect(events).toEqual([
+      "app acquire caller-lock",
+      "with lock callback app connection",
+      "app release caller-lock",
+      "app try acquire caller-or-fail-lock",
+      "or fail callback app connection",
+      "app release caller-or-fail-lock",
+      "app try acquire disabled-hold-timeout-lock",
+      "disabled callback app connection",
+      "app release disabled-hold-timeout-lock",
+      "app acquire negative-hold-timeout-lock",
+      "negative callback app connection",
+      "app release negative-hold-timeout-lock"
+    ])
+  })
+
+  it("uses a dedicated advisory-lock connection with a hold timeout without replacing the callback connection", async () => {
     const events = []
     const appConnection = {
       async releaseAdvisoryLock() {
@@ -100,7 +183,7 @@ describe("Record - advisory lock hold timeout", () => {
       events.push(DedicatedConnectionRecord.connection() === appConnection ? "callback app connection" : "callback lock connection")
 
       return "done"
-    })
+    }, {holdTimeoutMs: 1000})
 
     expect(result).toEqual("done")
     expect(events).toEqual([
@@ -165,7 +248,7 @@ describe("Record - advisory lock hold timeout", () => {
       }
     }
 
-    const result = await ExternallyOwnedConnectionRecord.withAdvisoryLockOrFail("shared-lock", async () => "done")
+    const result = await ExternallyOwnedConnectionRecord.withAdvisoryLockOrFail("shared-lock", async () => "done", {holdTimeoutMs: 1000})
 
     expect(result).toEqual("done")
     expect(events).toEqual([

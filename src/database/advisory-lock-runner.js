@@ -51,16 +51,17 @@ class AdvisoryLockHoldTimeoutError extends Error {
 }
 
 /**
- * Runs advisory locks on a lock-owned database connection so a timed-out
- * callback cannot block the release query behind its own work.
+ * Runs advisory locks on the caller connection by default, using a dedicated
+ * lock connection only when a positive hold timeout needs separate ownership.
  */
 export default class AdvisoryLockRunner {
   /**
    * Creates an advisory-lock runner for one model database identifier.
-   * @param {{configuration: import("../configuration.js").default, databaseIdentifier: string}} args - Runner dependencies.
+   * @param {{configuration: import("../configuration.js").default, connectionProvider: () => import("./drivers/base.js").default, databaseIdentifier: string}} args - Runner dependencies.
    */
-  constructor({configuration, databaseIdentifier}) {
+  constructor({configuration, connectionProvider, databaseIdentifier}) {
     this.configuration = configuration
+    this.connectionProvider = connectionProvider
     this.databaseIdentifier = databaseIdentifier
   }
 
@@ -73,7 +74,7 @@ export default class AdvisoryLockRunner {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withAdvisoryLock(name, callback, args = {}) {
-    return await this.withDedicatedConnection(async (connection) => {
+    return await this.withLockConnection(args.holdTimeoutMs, async (connection) => {
       const acquired = await connection.acquireAdvisoryLock(name, args)
 
       if (!acquired) {
@@ -93,7 +94,7 @@ export default class AdvisoryLockRunner {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withAdvisoryLockOrFail(name, callback, args = {}) {
-    return await this.withDedicatedConnection(async (connection) => {
+    return await this.withLockConnection(args.holdTimeoutMs, async (connection) => {
       const acquired = await connection.tryAcquireAdvisoryLock(name)
 
       if (!acquired) {
@@ -105,7 +106,7 @@ export default class AdvisoryLockRunner {
   }
 
   /**
-   * Runs the lock holder callback and releases the lock from the dedicated lock connection.
+   * Runs the lock holder callback and releases the lock from its owning connection.
    * @template T
    * @param {{callback: () => Promise<T>, connection: import("./drivers/base.js").default, holdTimeoutMs?: number | null, name: string}} args - Locked callback args.
    * @returns {Promise<T>} - Resolves with the callback result.
@@ -119,7 +120,23 @@ export default class AdvisoryLockRunner {
   }
 
   /**
-   * Spawns a lock-owned connection and closes it after lock work completes when
+   * Runs lock work on the caller connection unless a positive hold timeout needs
+   * its own lock connection.
+   * @template T
+   * @param {number | null | undefined} holdTimeoutMs - Max hold time; positive values use a dedicated lock connection.
+   * @param {(connection: import("./drivers/base.js").default) => Promise<T>} callback - Callback receiving the connection that owns the advisory lock.
+   * @returns {Promise<T>} - Resolves with the callback result.
+   */
+  async withLockConnection(holdTimeoutMs, callback) {
+    if (holdTimeoutMs && holdTimeoutMs > 0) {
+      return await this.withDedicatedConnection(callback)
+    }
+
+    return await callback(this.connectionProvider())
+  }
+
+  /**
+   * Spawns a hold-timeout lock connection and closes it after lock work completes when
    * the spawned driver owns the underlying physical connection.
    * @template T
    * @param {(connection: import("./drivers/base.js").default) => Promise<T>} callback - Callback that receives the dedicated lock connection.

@@ -2621,10 +2621,13 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * Runs the callback while holding a named advisory lock on a dedicated lock
-   * connection. Advisory locks are cooperative and session-scoped: they
-   * serialize callers that opt into the same `name`, without touching row
-   * or table locks, so unrelated traffic is free to proceed.
+   * Runs the callback while holding a named advisory lock. Calls without
+   * a positive `holdTimeoutMs` use the caller connection; calls with a positive
+   * `holdTimeoutMs` use a dedicated lock connection so timeout cleanup can
+   * release the lock even when callback database work is stuck. Advisory locks
+   * are cooperative and session-scoped: they serialize callers that opt into
+   * the same `name`, without touching row or table locks, so unrelated traffic
+   * is free to proceed.
    *
    * The lock is acquired before the callback runs and released in a
    * `finally` block afterwards, so the callback's return value is
@@ -2642,6 +2645,7 @@ class VelociousDatabaseRecord {
 
     const runner = new AdvisoryLockRunner({
       configuration: this._getConfiguration(),
+      connectionProvider: () => this.connection(),
       databaseIdentifier: this.getDatabaseIdentifier()
     })
 
@@ -2667,6 +2671,7 @@ class VelociousDatabaseRecord {
 
     const runner = new AdvisoryLockRunner({
       configuration: this._getConfiguration(),
+      connectionProvider: () => this.connection(),
       databaseIdentifier: this.getDatabaseIdentifier()
     })
 

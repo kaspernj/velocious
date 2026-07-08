@@ -52,16 +52,16 @@ await Account.withAdvisoryLockOrFail("queue-planner", async () => {
 const isBusy = await Account.hasAdvisoryLock("sync-account-42")
 ```
 
-Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. Velocious acquires and releases the advisory lock through a dedicated lock connection; the callback keeps using the caller's existing database connection/context. When `holdTimeoutMs` fires, the dedicated lock connection releases the advisory lock before `AdvisoryLockHoldTimeoutError` is thrown.
+Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. Calls without a positive `holdTimeoutMs` acquire and release the advisory lock on the caller's existing database connection/context to avoid extra connection overhead. Calls with a positive `holdTimeoutMs` acquire and release the advisory lock through a dedicated lock connection; the callback keeps using the caller's existing database connection/context. When `holdTimeoutMs` fires, the dedicated lock connection releases the advisory lock before `AdvisoryLockHoldTimeoutError` is thrown.
 
 ## Scope
 
-Database advisory locks are **per session/connection**. Velocious hides that sharp edge by owning a separate lock connection for each helper call:
+Database advisory locks are **per session/connection**. Velocious uses the caller connection for ordinary advisory-lock calls and owns a separate lock connection for calls with a positive `holdTimeoutMs`:
 
-- The lock connection acquires and releases the named advisory lock.
-- The callback runs in the caller's existing database context and does not inherit the lock connection.
-- Opening a **new** connection inside the callback (for example by spawning a child `withConnections` block) does not affect the lock ownership; the lock remains owned by the dedicated lock connection until the helper releases it.
-- Nested `Record.withAdvisoryLock(...)` calls with the **same** name contend with the outer helper call because each helper owns its own lock connection. Prefer to avoid nested same-name locks; use `withAdvisoryLockOrFail` if contention should skip instead of waiting.
+- Without a positive `holdTimeoutMs`, the caller connection acquires and releases the named advisory lock.
+- With a positive `holdTimeoutMs`, a dedicated lock connection acquires and releases the named advisory lock while the callback runs in the caller's existing database context.
+- Opening a **new** connection inside the callback (for example by spawning a child `withConnections` block) does not inherit an ordinary caller-connection lock. It also does not affect a hold-timeout lock's ownership; that lock remains owned by the dedicated lock connection until the helper releases it.
+- Nested `Record.withAdvisoryLock(...)` calls with the **same** name can behave differently depending on whether the outer call uses `holdTimeoutMs`. Prefer to avoid nested same-name locks; use `withAdvisoryLockOrFail` if contention should skip instead of waiting.
 
 ## Driver support
 
