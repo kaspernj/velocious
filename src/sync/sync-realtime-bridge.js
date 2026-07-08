@@ -1,5 +1,7 @@
 // @ts-check
 
+import recordChanges from "../database/record-changes.js"
+
 import SyncApiClient from "./sync-api-client.js"
 import {VELOCIOUS_SYNC_CHANNEL} from "./sync-channel-name.js"
 
@@ -350,11 +352,14 @@ export default class SyncRealtimeBridge {
     const syncPayloads = Array.isArray(body.syncs) ? body.syncs : [body]
     const applySync = this.syncClient.remoteApplySync({source: "remote change"})
 
-    for (const syncPayload of syncPayloads) {
-      const sync = SyncApiClient.syncEnvelopeFromPayload({resourceType, ...syncPayload})
+    // Coalesce record-change events across the pushed batch so it triggers one live-query re-run.
+    await recordChanges.batch(async () => {
+      for (const syncPayload of syncPayloads) {
+        const sync = SyncApiClient.syncEnvelopeFromPayload({resourceType, ...syncPayload})
 
-      await applySync(sync)
-    }
+        await applySync(sync)
+      }
+    })
   }
 
   /**
