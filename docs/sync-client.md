@@ -211,6 +211,10 @@ await syncClient().unsubscribeUserScope()
 
 Before the framework sync channel, apps declared their own channels; both forms keep working as escape hatches for legacy app channels but are deprecated: the `sync.client.realtime.channels(context)` callback (runtime params come from the `subscribeRealtime(context)` context) and the model-level `static sync = {realtime: {channel, params}}` declaration. Legacy channels subscribe in addition to the scope-derived framework subscriptions.
 
+## Live queries
+
+Screens do not subscribe to the sync client to stay current. Because pulls and realtime pushes both apply as local model saves, the client-side `useLiveQuery(Model.where({...}))` hook reacts to committed local model changes uniformly — the sync client wraps its pull and realtime apply loops in the record-change batch window so a whole pull or push triggers one re-run per live query. See `docs/live-queries.md`.
+
 ## Server side
 
 The server counterpart is `SyncResourceBase` (`src/sync/sync-resource-base.js`) plus the auto-mounted sync endpoints (`sync.api` configuration option) — see `docs/offline-sync.md`.

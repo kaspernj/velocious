@@ -41,6 +41,7 @@ import deburrColumnName from "../../utils/deburr-column-name.js"
 import ModelClassQuery from "../query/model-class-query.js"
 import Preloader from "../query/preloader.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../../record-payload-values.js"
+import recordChanges from "../record-changes.js"
 import restArgsError from "../../utils/rest-args-error.js"
 import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
@@ -2417,6 +2418,7 @@ class VelociousDatabaseRecord {
         await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
         await this._autoSaveAttachments()
         await this._runLifecycleCallbacks("afterSave")
+        await this._emitRecordChangeAfterCommit(isNewRecord ? "create" : "update")
       })
     })
 
@@ -3612,6 +3614,29 @@ class VelociousDatabaseRecord {
 
     await this._connection().query(sql, {logName: `${this.getModelClass().name} Destroy`})
     await this._runLifecycleCallbacks("afterDestroy")
+    await this._emitRecordChangeAfterCommit("destroy")
+  }
+
+  /**
+   * Emits a committed record-change event after the surrounding transaction
+   * commits, so live queries re-run uniformly for local writes, pull applies, and
+   * realtime applies (which all end as local saves/destroys). Registered through
+   * the connection's afterCommit hook so a rolled-back save emits nothing, and
+   * skipped entirely when nothing observes this model class so server-side saves
+   * stay free of live-query overhead.
+   * @param {import("../record-changes.js").RecordChangeOperation} operation - The committed operation.
+   * @returns {Promise<void>}
+   */
+  async _emitRecordChangeAfterCommit(operation) {
+    const modelClass = this.getModelClass()
+
+    if (!recordChanges.hasListeners(modelClass)) return
+
+    const record = this
+
+    await this._connection().afterCommit(() => {
+      recordChanges.emit({modelClass, operation, record})
+    })
   }
 
   /**
