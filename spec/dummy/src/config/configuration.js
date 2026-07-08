@@ -24,6 +24,7 @@ import CounterChannel from "../channels/counter-channel.js"
 import EchoConnection from "../connections/echo-connection.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
 
+
 async function websocketMessageHandlerResolver({request}) {
   if (!request) return
 
@@ -49,14 +50,6 @@ async function websocketMessageHandlerResolver({request}) {
       },
       onMessage: ({message, session}) => {
         session.sendJson({type: "echo", payload: message})
-      }
-    }
-  }
-
-  if (pathValue === "/lifecycle-only-socket") {
-    return {
-      onOpen: ({session}) => {
-        session.sendJson({type: "welcome"})
       }
     }
   }
@@ -168,12 +161,15 @@ const configuration = new Configuration({
   },
   locales: ["de", "en"],
   testing: `${dummyDirectory()}/src/config/testing.js`,
-  websocketMessageHandlerResolver
+  websocketMessageHandlerResolver,
 })
 
 installSqlJsWasmRoute({configuration})
 
+// Register test websocket connections (Phase 1A).
 configuration.registerWebsocketConnection("Echo", EchoConnection)
+
+// Register test websocket channels (Phase 1B).
 configuration.registerWebsocketChannel("Counter", CounterChannel)
 configuration.registerWebsocketChannel("test", TestWebsocketChannel)
 

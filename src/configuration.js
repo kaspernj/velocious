@@ -20,7 +20,7 @@ import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
 import {requestDetails} from "./error-reporting/request-details.js"
-import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
+import {frontendModelApiManifest, frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
 import {currentOfflineGrantSigningKey, normalizeOfflineGrantSigningKey} from "./sync/offline-grant.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
@@ -129,7 +129,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -172,6 +172,7 @@ export default class VelociousConfiguration {
     this.database = database
     this.debug = debug
     this._debugEndpoint = this._normalizeDebugEndpoint(debugEndpoint)
+    this._apiManifest = this._normalizeApiManifest(apiManifest)
     this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
@@ -273,6 +274,7 @@ export default class VelociousConfiguration {
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
     this._addDebugEndpointRouteHook()
+    this._addApiManifestRouteHook()
 
     /**
      * Stores the applied route mounts value.
@@ -349,6 +351,59 @@ export default class VelociousConfiguration {
     }
 
     return {enabled: true, path, token: token === null ? null : token.trim()}
+  }
+
+  /**
+   * Runs normalize api manifest.
+   * @param {boolean | {path?: string, token?: string}} value - API manifest configuration.
+   * @returns {{enabled: boolean, path: string, token: string | null}} - Normalized API manifest configuration.
+   */
+  _normalizeApiManifest(value) {
+    if (value === false || value === undefined) return {enabled: false, path: "/api/manifest", token: null}
+    if (value === true) return {enabled: true, path: "/api/manifest", token: null}
+
+    if (typeof value !== "object" || value === null) {
+      throw new Error(`Expected apiManifest to be a boolean or object, got: ${String(value)}`)
+    }
+
+    const path = value.path || "/api/manifest"
+
+    if (typeof path !== "string" || !path.startsWith("/")) {
+      throw new Error(`Expected apiManifest.path to be a string starting with '/', got: ${String(path)}`)
+    }
+
+    const token = value.token === undefined || value.token === null ? null : value.token
+
+    if (token !== null && (typeof token !== "string" || !token.trim())) {
+      throw new Error(`Expected apiManifest.token to be a non-empty string, got: ${String(token)}`)
+    }
+
+    return {enabled: true, path, token: token === null ? null : token.trim()}
+  }
+
+  /**
+   * Runs add api manifest route hook.
+   * @returns {void} - No return value.
+   */
+  _addApiManifestRouteHook() {
+    if (!this._apiManifest.enabled) return
+
+    this.addRouteResolverHook(({currentPath, request}) => {
+      if (request.httpMethod() !== "GET") return null
+      if (currentPath !== this._apiManifest.path) return null
+
+      if (this._apiManifest.token && !this.debugEndpointRequestAuthorized(request, this._apiManifest.token)) return null
+
+      return {
+        action: "show",
+        controller: "velociousApiManifest",
+        controllerPath: "./built-in/api-manifest/controller.js",
+        skipControllerConnections: true,
+        skipAbilityResolution: true,
+        skipTenantResolution: true,
+        viewPath: "./built-in/api-manifest"
+      }
+    })
   }
 
   /**
@@ -701,6 +756,7 @@ export default class VelociousConfiguration {
    */
   _debugConfigurationSnapshot() {
     return {
+      apiManifest: this._apiManifestEnabled() ? {enabled: true, path: this._apiManifest.path, tokenConfigured: Boolean(this._apiManifest.token)} : {enabled: false},
       autoload: this.getAutoload(),
       debug: this.debug === true,
       debugEndpoint: this._debugEndpointSnapshot(),
@@ -2874,5 +2930,21 @@ export default class VelociousConfiguration {
     if (!match) return false
 
     return this.getEnvironmentHandler().debugEndpointTokenMatches(match[1], expectedToken)
+  }
+
+  /**
+   * Runs get api manifest.
+   * @returns {Promise<Record<string, unknown>>} - API manifest for all registered frontend-model resources.
+   */
+  async getApiManifest() {
+    return frontendModelApiManifest(this._backendProjects)
+  }
+
+  /**
+   * Runs whether API manifest is enabled.
+   * @returns {boolean} - Whether the API manifest endpoint is enabled.
+   */
+  _apiManifestEnabled() {
+    return this._apiManifest.enabled
   }
 }

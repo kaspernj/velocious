@@ -283,6 +283,150 @@ export function frontendModelSyncManifestForBackendProjects(backendProjects) {
 }
 
 /**
+ * Builds a frontend-safe API manifest for all registered frontend-model
+ * resources. The manifest is deterministic (sorted model names, sorted
+ * attributes, sorted commands) and includes only public-safe metadata: no
+ * secrets, no server callbacks, no backend file paths.
+ * @param {import("../configuration-types.js").BackendProjectConfiguration[]} backendProjects - Backend projects to scan.
+ * @returns {Record<string, unknown>} - Frontend-safe API manifest.
+ */
+export function frontendModelApiManifest(backendProjects) {
+  /** @type {Record<string, unknown>} */
+  const resources = {}
+
+  for (const backendProject of backendProjects) {
+    const projectResources = frontendModelResourcesForBackendProject(backendProject)
+
+    for (const configuredModelName of Object.keys(projectResources).sort()) {
+      const resourceDefinition = projectResources[configuredModelName]
+      const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+
+      if (!resourceConfiguration) continue
+
+      const modelName = resourceConfiguration.modelName || configuredModelName
+      const resourcePath = `/${inflection.dasherize(inflection.pluralize(inflection.underscore(configuredModelName)))}`
+
+      /** @type {Record<string, unknown>} */
+      const entry = {
+        modelName,
+        path: resourcePath,
+        primaryKey: resourceConfiguration.primaryKey || "id",
+        attributes: manifestAttributes(resourceConfiguration.attributes),
+        abilities: resourceConfiguration.abilities,
+        builtInCommands: {
+          collection: resourceConfiguration.builtInCollectionCommands,
+          member: resourceConfiguration.builtInMemberCommands
+        }
+      }
+
+      const relationships = resourceConfiguration.relationships
+      if (relationships && relationships.length > 0) {
+        /** @type {Record<string, unknown>} */
+        const rels = {}
+        for (const relName of relationships) {
+          rels[relName] = {}
+        }
+        entry.relationships = rels
+      }
+
+      const attachments = resourceConfiguration.attachments
+      if (attachments && Object.keys(attachments).length > 0) {
+        entry.attachments = attachments
+      }
+
+      const collectionCommands = manifestCommandEntries({
+        commandMetadata: resourceConfiguration.commandMetadata || {},
+        commands: resourceConfiguration.collectionCommands,
+        resourcePath,
+        scope: "collection"
+      })
+      const memberCommands = manifestCommandEntries({
+        commandMetadata: resourceConfiguration.commandMetadata || {},
+        commands: resourceConfiguration.memberCommands,
+        resourcePath,
+        scope: "member"
+      })
+
+      if (collectionCommands.length > 0 || memberCommands.length > 0) {
+        /** @type {Record<string, unknown>} */
+        const cmds = {}
+        if (collectionCommands.length > 0) cmds["collection"] = collectionCommands
+        if (memberCommands.length > 0) cmds["member"] = memberCommands
+        entry.commands = cmds
+      }
+
+      if (resourceConfiguration.sync?.enabled) {
+        entry.sync = resourceConfiguration.sync
+      }
+
+      resources[configuredModelName] = entry
+    }
+  }
+
+  return {
+    formatVersion: 1,
+    resources: Object.keys(resources).sort().reduce((sorted, key) => {
+      /** @type {Record<string, unknown>} */ (sorted)[key] = resources[key]
+      return sorted
+    }, /** @type {Record<string, unknown>} */ ({}))
+  }
+}
+
+/**
+ * Normalizes resource attribute definitions into a sorted array of strings.
+ * @param {?} attributes - Raw attributes config (array or object).
+ * @returns {string[]} - Sorted attribute names.
+ */
+function manifestAttributes(attributes) {
+  if (!attributes) return []
+
+  let names
+
+  if (Array.isArray(attributes)) {
+    names = attributes.map((entry) => typeof entry === "string" ? entry : entry.name).filter(Boolean)
+  } else if (attributes && typeof attributes === "object") {
+    names = Object.keys(attributes)
+  } else {
+    return []
+  }
+
+  return names.sort()
+}
+
+/**
+ * Builds manifest-safe command entry list.
+ * @param {object} args - Arguments.
+ * @param {Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>} args.commandMetadata - Per-command metadata.
+ * @param {Record<string, string>} args.commands - Method name → kebab slug map.
+ * @param {string} args.resourcePath - Resource path.
+ * @param {"collection" | "member"} args.scope - Command scope.
+ * @returns {Record<string, unknown>[]} - Manifest command entries.
+ */
+function manifestCommandEntries({commandMetadata, commands, resourcePath, scope}) {
+  return Object.keys(commands).sort().map((methodName) => {
+    const slug = commands[methodName]
+    const metadata = commandMetadata[methodName] || {args: [], returnType: null}
+    const path = scope === "member"
+      ? `${resourcePath}/<id>/${slug}`
+      : `${resourcePath}/${slug}`
+
+    /** @type {Record<string, unknown>} */
+    const entry = {
+      methodName,
+      scope,
+      path,
+      args: metadata.args
+    }
+
+    if (metadata.returnType) {
+      entry.returnType = metadata.returnType
+    }
+
+    return entry
+  })
+}
+
+/**
  * Normalizes sync policy metadata and computes a deterministic hash from safe policy inputs.
  * @param {import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Raw resource configuration.
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration | undefined} - Frontend-safe sync metadata.

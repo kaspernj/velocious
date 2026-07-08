@@ -127,3 +127,7 @@ async refresh(age) { /* ... */ }
 - Include attachment names in the permit when nested entries should attach files, for example `{tasksAttributes: ["name", "descriptionFile"]}`.
 - `belongsTo` nested attributes are saved before the parent so the parent foreign key can be assigned. `hasOne` and `hasMany` nested attributes are saved after the parent.
 - Nested children are authorized against their own resource's abilities, not the parent's. Full doc: [nested-attributes.md](nested-attributes.md).
+
+## API manifest
+
+Resources declared here are discoverable through the built-in [API manifest endpoint](api-manifest-endpoint.md) — a human- and machine-readable JSON description of every resource, its attributes, commands, and types. Enable it with `apiManifest: true` in the configuration.
