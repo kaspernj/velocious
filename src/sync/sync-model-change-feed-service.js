@@ -32,15 +32,19 @@ export default class SyncModelChangeFeedService {
   }
 
   /**
-   * Builds a stable change-feed page.
-   * @returns {Promise<{status: string, nextCursor: {id: string, serverSequence: number, updatedAt: string} | null, syncs: Array<Record<string, unknown>>, upToCursor: {id: string, serverSequence: number, updatedAt: string} | null}>} Change-feed page result.
+   * Builds a stable change-feed page. The additive `total` is the scope's pending
+   * change count from the request cursor to the snapshot bound (a COUNT, not a
+   * materialized read), so a client can render a "synced of total" progress bar;
+   * older clients ignore it.
+   * @returns {Promise<{status: string, nextCursor: {id: string, serverSequence: number, updatedAt: string} | null, syncs: Array<Record<string, unknown>>, total: number, upToCursor: {id: string, serverSequence: number, updatedAt: string} | null}>} Change-feed page result.
    */
   async changes() {
     const limit = this.normalizedLimit(this.params.limit)
     const upToCursor = await this.resolveUpToCursor()
 
-    if (!upToCursor) return {status: "success", nextCursor: null, syncs: [], upToCursor: null}
+    if (!upToCursor) return {status: "success", nextCursor: null, syncs: [], total: 0, upToCursor: null}
 
+    const total = await this.totalPendingChanges({upToCursor})
     const query = this.pageQuery({limit, upToCursor})
     const records = await query.toArray()
     const nextCursor = records.length > 0 ? this.cursorForRecord(records[records.length - 1]) : upToCursor
@@ -49,6 +53,7 @@ export default class SyncModelChangeFeedService {
       status: "success",
       nextCursor,
       syncs: records.map((record) => this.serializeRecord(record)),
+      total,
       upToCursor
     }
   }
@@ -124,6 +129,34 @@ export default class SyncModelChangeFeedService {
    * @returns {import("../database/query/model-class-query.js").default} Page query.
    */
   pageQuery({limit, upToCursor}) {
+    const query = this.cursorFilteredQuery({upToCursor})
+    const driver = query.driver
+    const serverSequenceColumn = `${driver.quoteTable(this.modelClass.tableName())}.${driver.quoteColumn("server_sequence")}`
+
+    return query
+      .order(`${serverSequenceColumn} ASC`)
+      .limit(limit)
+  }
+
+  /**
+   * Counts the scope's pending change rows from the request cursor to the snapshot
+   * bound without materializing them, so the client can render a stable "of Y"
+   * progress denominator.
+   * @param {{upToCursor: {id: string, serverSequence: number, updatedAt: string}}} args - Count args.
+   * @returns {Promise<number>} Pending change count from the request cursor.
+   */
+  async totalPendingChanges({upToCursor}) {
+    return await this.cursorFilteredQuery({upToCursor}).count()
+  }
+
+  /**
+   * Builds a scoped query with the snapshot upper bound and after-cursor filters
+   * applied, but without ordering or a page limit. Shared by the page read and the
+   * total-count so both count the same set of rows.
+   * @param {{upToCursor: {id: string, serverSequence: number, updatedAt: string}}} args - Filter args.
+   * @returns {import("../database/query/model-class-query.js").default} Cursor-filtered query.
+   */
+  cursorFilteredQuery({upToCursor}) {
     const query = this.scopedQuery()
     const driver = query.driver
     const table = driver.quoteTable(this.modelClass.tableName())
@@ -131,10 +164,7 @@ export default class SyncModelChangeFeedService {
     const updatedAtColumn = `${table}.${driver.quoteColumn("updated_at")}`
     const idColumn = `${table}.${driver.quoteColumn("id")}`
 
-    query
-      .where(`${serverSequenceColumn} <= ${driver.quote(upToCursor.serverSequence)}`)
-      .order(`${serverSequenceColumn} ASC`)
-      .limit(limit)
+    query.where(`${serverSequenceColumn} <= ${driver.quote(upToCursor.serverSequence)}`)
 
     const afterServerSequence = this.optionalPositiveIntegerParam(this.params.afterServerSequence, "afterServerSequence")
 

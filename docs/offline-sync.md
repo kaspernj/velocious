@@ -301,6 +301,8 @@ class SyncResource extends SyncResourceBase {
 
 Unimplemented hooks fail loudly. Replay services extend `SyncEnvelopeReplayService` — see [`sync-envelope-replay-service.md`](sync-envelope-replay-service.md), including its model-backed `findExistingReplaySync`/`persistReplayMutation` defaults.
 
+Each `/changes` page additively carries `total` — the scope's pending change count from the request cursor to the resolved snapshot bound. `SyncModelChangeFeedService` computes it with a COUNT over the same cursor-filtered query the page read uses (no extra materialized rows), so a client can render a "synced of total" progress bar; older clients ignore the field and older servers that omit it fall back to `0`. See the pull-progress section of [`sync-client.md`](sync-client.md).
+
 ## Implemented slice: server sequence allocation
 
 `ServerSequenceAllocator` (`velocious/build/src/sync/server-sequence-allocator.js`) owns monotonically increasing server sync sequences. Every `next()` inserts a row into an AUTO_INCREMENT id table through the driver API and reads the allocated id from the insert statement itself (`OUTPUT INSERTED`/`RETURNING`, like the record create path), so sequences stay unique and increasing across processes sharing the database — MSSQL's `SCOPE_IDENTITY()` only sees inserts from the same batch, so a separate last-insert-id read is not an option there. Drivers without insert-returning support fall back to the connection-scoped last-insert-id read. Parallel `next()` calls are serialized per database+table across all allocator instances in the process.

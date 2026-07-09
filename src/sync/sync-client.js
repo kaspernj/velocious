@@ -384,9 +384,11 @@ export default class SyncClient {
 
   /**
    * Pulls changes for every active scope with per-scope cursors (single-flighted, online-gated).
+   * @param {object} [options] - Pull options.
+   * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [options.onProgress] - Called per applied page with cumulative `{pages, syncedCount, total}` across the pulled scopes, for rendering a "syncedCount of total" progress bar (e.g. a full-import screen). Optional; omitting it keeps the existing behavior.
    * @returns {Promise<import("./sync-api-client-types.js").SyncChangesResult | null>} Combined pull result, or null while offline.
    */
-  async pull() {
+  async pull({onProgress} = {}) {
     if (!(await this.isOnline())) return null
 
     /** @type {import("./sync-api-client-types.js").SyncChangesResult | null} */
@@ -401,15 +403,27 @@ export default class SyncClient {
         pages: 0,
         resourceChanged: /** @type {Record<string, boolean>} */ ({}),
         resourceCounts: /** @type {Record<string, number>} */ ({}),
-        syncedCount: 0
+        syncedCount: 0,
+        total: 0
       }
 
       for (const scopeRow of await scopeStore.activeScopes()) {
+        // Cumulate scope progress onto the counts of the scopes already pulled so a single
+        // scope's per-page progress reads exactly its own counts (base 0), and multi-scope
+        // pulls report a running cumulative total across every scope.
+        const basePages = result.pages
+        const baseSyncedCount = result.syncedCount
+        const baseTotal = result.total
         const scopeResult = await SyncApiClient.pullChanges({
           applySync,
           authenticationToken,
           batchSize: this.config.batchSize,
           loadCursor: async () => await scopeStore.loadCursor(scopeRow),
+          onProgress: onProgress ? (progress) => onProgress({
+            pages: basePages + progress.pages,
+            syncedCount: baseSyncedCount + progress.syncedCount,
+            total: baseTotal + progress.total
+          }) : undefined,
           postChanges: async (payload) => await this.config.postChanges({
             ...payload,
             scope: {conditions: scopeRow.conditions, resourceType: scopeRow.resourceType}
@@ -420,6 +434,7 @@ export default class SyncClient {
         result.changed ||= scopeResult.changed
         result.pages += scopeResult.pages
         result.syncedCount += scopeResult.syncedCount
+        result.total += scopeResult.total
 
         for (const [resourceType, count] of Object.entries(scopeResult.resourceCounts)) {
           result.resourceCounts[resourceType] = (result.resourceCounts[resourceType] || 0) + count

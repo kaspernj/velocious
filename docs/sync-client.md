@@ -82,6 +82,27 @@ The query is serialized into a `{resourceType, conditions}` scope (only plain at
 
 Devices migrating from a pre-scope cursor store can seed newly declared scopes through the `legacyCursor({scope})` option, avoiding a full re-pull.
 
+### Pull progress ("X of Y")
+
+`pull({onProgress})` reports progress while it applies changes, so a full-import screen can render a "synced of total" bar without a bespoke progress channel:
+
+```js
+await syncClient().sync(Ticket.where({eventId}))
+await syncClient().pull({
+  onProgress: ({pages, syncedCount, total}) => {
+    setProgress(`${syncedCount} of ${total}`) // e.g. "800 of 2043"
+  }
+})
+```
+
+- `onProgress` is optional — `pull()` with no arguments behaves exactly as before.
+- The callback fires once per applied page with cumulative `{pages, syncedCount, total}` across the pulled scopes (base 0 for a single-scope pull, so a lone scope reads exactly its own counts).
+- `total` is the pending change count from the device's cursor to the server snapshot, reported by the change-feed endpoint as a COUNT (it is not materialized). It stays **stable across pages** even as the cursor advances — the denominator does not shrink — because the server counts from each request's cursor and the client adds the rows it already applied.
+- A pull with nothing to sync fires `onProgress` once with `{pages: 0, syncedCount: 0, total: 0}`.
+- The resolved `pull()` result (`SyncChangesResult`) also carries `total` alongside `syncedCount`/`pages`.
+
+This is the framework path for a full-ticket-import-with-progress screen: declare the scope, then drive the bar straight off `pull({onProgress})` instead of a hand-rolled full-sync endpoint and progress websocket.
+
 ## Automatic mutation tracking
 
 Every model declaring `static sync` queues sync rows automatically when it changes — no app-side queue calls and no `track` key needed:

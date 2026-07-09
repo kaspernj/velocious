@@ -57,7 +57,7 @@ export default class SyncApiClient {
    * @param {string} args.cursorKey - Cursor option key.
    * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
    * @param {Record<string, SyncResourceConfig>} args.resources - Resource policies.
-   * @param {(progress: {pages: number, syncedCount: number}) => void} [args.onProgress] - Progress callback.
+   * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [args.onProgress] - Progress callback.
    * @returns {Promise<SyncChangesResult>} Pull result.
    */
   static async pullChangesWithCursor(args) {
@@ -108,7 +108,7 @@ export default class SyncApiClient {
    * @param {(cursor: SyncCursor) => Promise<void>} args.saveCursor - Persists the final acknowledged cursor.
    * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
    * @param {(sync: SyncChangeEnvelope) => Promise<SyncChangeApplyResult>} args.applySync - Applies one normalized sync row locally.
-   * @param {(progress: {pages: number, syncedCount: number}) => void} [args.onProgress] - Progress callback.
+   * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [args.onProgress] - Progress callback invoked per applied page (and once for an empty pull) with the applied counts and the stable server total.
    * @returns {Promise<SyncChangesResult>} Pull result.
    */
   static async pullChanges(args) {
@@ -116,6 +116,8 @@ export default class SyncApiClient {
     let upToCursor = null
     let pages = 0
     let syncedCount = 0
+    /** @type {number} */
+    let total
     let changed = false
     const resourceCounts = /** @type {Record<string, number>} */ ({})
     const resourceChanged = /** @type {Record<string, boolean>} */ ({})
@@ -126,7 +128,19 @@ export default class SyncApiClient {
       const syncs = changesResponse.syncs
 
       if (!upToCursor) upToCursor = changesResponse.upToCursor
-      if (syncs.length === 0) break
+
+      // The server counts pending rows from this request's cursor, so already-applied
+      // pages plus this request's count stays the same total across every page: a stable
+      // "of Y" denominator even as the cursor advances. Absent on older servers (0).
+      total = syncedCount + (changesResponse.total ?? 0)
+
+      if (syncs.length === 0) {
+        // Report the terminal progress once for an entirely empty pull so consumers observe
+        // total 0; a pull that already applied pages reported its final counts on its last page.
+        if (pages === 0 && args.onProgress) args.onProgress({pages, syncedCount, total})
+
+        break
+      }
 
       pages += 1
 
@@ -151,13 +165,13 @@ export default class SyncApiClient {
 
       afterCursor = changesResponse.nextCursor
 
-      if (args.onProgress) args.onProgress({pages, syncedCount})
+      if (args.onProgress) args.onProgress({pages, syncedCount, total})
       if (syncs.length < batchSize) break
     }
 
     if (afterCursor) await args.saveCursor(afterCursor)
 
-    return {changed, pages, resourceChanged, resourceCounts, syncedCount}
+    return {changed, pages, resourceChanged, resourceCounts, syncedCount, total}
   }
 
   /**
@@ -168,7 +182,7 @@ export default class SyncApiClient {
    * @param {number} args.batchSize - Page size.
    * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Changes poster.
    * @param {SyncCursor} args.upToCursor - Snapshot upper-bound cursor.
-   * @returns {Promise<{nextCursor: SyncCursor, syncs: SyncChangeEnvelope[], upToCursor: SyncCursor}>} Normalized changes page.
+   * @returns {Promise<{nextCursor: SyncCursor, syncs: SyncChangeEnvelope[], total: number | null, upToCursor: SyncCursor}>} Normalized changes page.
    */
   static async changesPage({afterCursor, authenticationToken, batchSize, postChanges, upToCursor}) {
     const response = await postChanges({
@@ -185,6 +199,7 @@ export default class SyncApiClient {
     return {
       nextCursor: this.syncCursorFromPayload(response.nextCursor ?? null),
       syncs: syncs.map((syncPayload) => this.syncEnvelopeFromPayload(syncPayload)),
+      total: optionalInteger(response.total),
       upToCursor: this.syncCursorFromPayload(response.upToCursor ?? null)
     }
   }

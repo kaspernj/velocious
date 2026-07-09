@@ -1,4 +1,5 @@
 import {describe, expect, it} from "../../src/testing/test.js"
+import SyncEntry from "../dummy/src/models/sync-entry.js"
 import SyncModelChangeFeedService from "../../src/sync/sync-model-change-feed-service.js"
 
 class TestSyncModel {}
@@ -98,5 +99,64 @@ describe("sync model change-feed service - scope-partition serialization", () =>
     const service = new SyncModelChangeFeedService({modelClass: /** @type {?} */ (ProjectScopedSyncModel), params: {}})
 
     expect(() => service.defaultSerializeRecord(buildFakeRow(ROW_VALUES))).toThrow("Sync changes row is missing projectId.")
+  })
+})
+
+const SYNC_ENTRY_RESOURCE_IDS = [
+  "b7a1cbb2-4a0f-45c5-9d0a-2fd3a1f0b902",
+  "c9d2dcc3-5b10-46d6-8e1b-30e4b201ca13",
+  "d1e3edd4-6c21-47e7-9f2c-41f5c312db24"
+]
+
+/**
+ * Creates ordered dummy sync entries with strictly increasing server sequences.
+ * @param {number} count - Number of rows to create.
+ * @returns {Promise<Array<SyncEntry>>} Created rows in creation order.
+ */
+async function createSyncEntries(count) {
+  /** @type {Array<SyncEntry>} */
+  const entries = []
+
+  for (let index = 0; index < count; index++) {
+    entries.push(await SyncEntry.create({
+      resourceId: SYNC_ENTRY_RESOURCE_IDS[index],
+      resourceType: "Task",
+      syncType: "update"
+    }))
+  }
+
+  return entries
+}
+
+describe("sync model change-feed service - total pending count", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
+  it("returns the scope's total pending change count from the cursor alongside the page", async () => {
+    await createSyncEntries(3)
+
+    const service = new SyncModelChangeFeedService({modelClass: SyncEntry, params: {}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(3)
+    expect(result.syncs.length).toEqual(3)
+  })
+
+  it("counts only the rows after the request cursor without materializing them", async () => {
+    const entries = await createSyncEntries(3)
+    const firstSequence = entries[0].serverSequence()
+
+    if (firstSequence === null) throw new Error("Expected a server sequence to be assigned on create")
+
+    const service = new SyncModelChangeFeedService({modelClass: SyncEntry, params: {afterServerSequence: firstSequence}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(2)
+    expect(result.syncs.length).toEqual(2)
+  })
+
+  it("reports a total of 0 when there is nothing to sync", async () => {
+    const service = new SyncModelChangeFeedService({modelClass: SyncEntry, params: {}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(0)
+    expect(result.upToCursor).toEqual(null)
   })
 })
