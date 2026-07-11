@@ -14,6 +14,7 @@ const QUICK_SEARCH_COLUMN = "quickSearch"
  * @typedef {object} SerializedChangesScope
  * @property {Record<string, ?>} conditions - Plain attribute conditions from the client query.
  * @property {string | null} resourceType - Client resource/model name the scope was declared for, or null for the all-types (user) scope: one scope covering every resource type this resource authorizes for the caller, so a sync authorizes once however many types it serves.
+ * @property {string[] | null} resourceTypes - For the all-types scope, the resource types the client can apply. A cheap delivery/type filter only - it narrows, never widens, what the app's authorization already allows. Null for a type-declared scope.
  */
 
 /**
@@ -138,13 +139,27 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     const resourceType = scopeParams.resourceType === null || scopeParams.resourceType === undefined
       ? null
       : forcedNonBlankString(scopeParams.resourceType, "resourceType")
+    const resourceTypes = this.changesScopeResourceTypes(scopeParams.resourceTypes)
     const conditions = scopeParams.conditions
 
     if (!conditions || typeof conditions !== "object" || Array.isArray(conditions)) {
       throw new Error(`Sync changes scope.conditions must be an object, got: ${String(conditions)}`)
     }
 
-    return {conditions: /** @type {Record<string, ?>} */ (conditions), resourceType}
+    return {conditions: /** @type {Record<string, ?>} */ (conditions), resourceType, resourceTypes}
+  }
+
+  /**
+   * Parses the optional resource-type list an all-types scope declares.
+   * @param {?} value - Raw `scope.resourceTypes` param.
+   * @returns {string[] | null} Declared resource types, or null when the client sent none.
+   */
+  changesScopeResourceTypes(value) {
+    if (value === undefined || value === null) return null
+
+    if (!Array.isArray(value)) throw new Error(`Sync changes scope.resourceTypes must be an array, got: ${String(value)}`)
+
+    return value.map((resourceType) => forcedNonBlankString(resourceType, "resourceTypes"))
   }
 
   /**

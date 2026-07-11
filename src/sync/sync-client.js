@@ -428,7 +428,12 @@ export default class SyncClient {
           }) : undefined,
           postChanges: async (payload) => await this.config.postChanges({
             ...payload,
-            scope: {conditions: scopeRow.conditions, resourceType: scopeRow.resourceType}
+            // Only the all-types scope carries the type list; a type-declared scope needs none.
+            scope: {
+              conditions: scopeRow.conditions,
+              resourceType: scopeRow.resourceType,
+              ...(scopeRow.resourceType === null ? {resourceTypes: this.userScopeResourceTypes()} : {})
+            }
           }),
           saveCursor: async (cursor) => await scopeStore.saveCursor(scopeRow, cursor)
         })
@@ -578,6 +583,20 @@ export default class SyncClient {
    */
   async userScope() {
     return {conditions: {}, owner: await this.userScopeOwner(), resourceType: null}
+  }
+
+  /**
+   * The resource types the user scope covers: every declared resource that
+   * receives pulled changes (has pull `attributes`), so the client can apply
+   * them. Sent with the scope as a delivery/type filter - it narrows, never
+   * widens, what the server's authorization already allows, and it keeps a
+   * broadcast of a type this client cannot apply from reaching the server's
+   * per-delivery access re-check (a database query per matched broadcast, per
+   * subscribed device).
+   * @returns {string[]} Pullable resource type names.
+   */
+  userScopeResourceTypes() {
+    return Object.keys(this.pullResourceConfigs())
   }
 
   /**

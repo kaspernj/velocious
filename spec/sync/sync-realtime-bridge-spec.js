@@ -666,9 +666,9 @@ describe("sync client user scope", () => {
 
     expect(sharedClient.subscriptions.length).toEqual(1)
     expect(sharedClient.subscriptions[0].channelType).toEqual("velocious-sync")
-    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: null})
+    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: null, resourceTypes: ["TicketScan"]})
     expect(harness.postChangesCalls.length).toEqual(1)
-    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: null})
+    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: null, resourceTypes: ["TicketScan"]})
     expect(harness.errors).toEqual([])
   })
 
@@ -699,7 +699,7 @@ describe("sync client user scope", () => {
     await harness.client.subscribeUserScope()
 
     expect(harness.postChangesCalls.length).toEqual(2)
-    expect(harness.postChangesCalls[1].scope).toEqual({conditions: {}, resourceType: null})
+    expect(harness.postChangesCalls[1].scope).toEqual({conditions: {}, resourceType: null, resourceTypes: ["TicketScan"]})
     expect(harness.errors).toEqual([])
   })
 
@@ -790,9 +790,9 @@ describe("sync client user scope", () => {
     // Each extra user-scope resource type would otherwise cost another subscribe authorization
     // and another /changes request, each re-running the app's authorizeChanges.
     expect(sharedClient.subscriptions.length).toEqual(1)
-    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: null})
+    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: null, resourceTypes: ["TicketScan", "Ticket"]})
     expect(harness.postChangesCalls.length).toEqual(1)
-    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: null})
+    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: null, resourceTypes: ["TicketScan", "Ticket"]})
     expect(harness.errors).toEqual([])
   })
 

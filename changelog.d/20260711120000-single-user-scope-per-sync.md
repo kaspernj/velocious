@@ -4,7 +4,7 @@ This removes an authorization amplification: the server re-runs the app's `autho
 
 `SerializedSyncScope.resourceType` and the changes-request `scope.resourceType` are now `string | null`; `null` means "every type this resource authorizes for the caller", and apps identify the user scope by it. A blank resource type still fails loudly. Scope rows persist the all-types scope with an empty `resource_type` (the column is non-null) and normalize it back to `null` on read. The client applies each pulled row by the resource type on its own envelope, so one scope serves them all.
 
-On the realtime side, a subscription with a null `resourceType` matches a broadcast of any resource type (one that carries no type still never matches); what bounds a user scope is the per-delivery `changeDeliverable` access re-check, not the type.
+On the realtime side, the all-types scope carries `resourceTypes` — the types the client can apply — and its subscription matches a broadcast of any of those (one carrying no type still never matches). This is a delivery filter, not an authorization: it only narrows what the app already allows. It is load-bearing because a user-scope subscription is access-re-checked per delivery, and that check costs a database query per matched broadcast per subscribed device; a broadcast of a type the client cannot apply must be dropped by the cheap type check rather than reaching it. Within the declared types, the per-delivery `changeDeliverable` re-check is what bounds a user scope.
 
 Also covered by spec: a background pull (the catch-up pull a realtime resume schedules and nobody awaits) reports a transient server failure through the sync client's error reporter rather than escaping as an unhandled rejection.
 

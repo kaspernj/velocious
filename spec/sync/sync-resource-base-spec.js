@@ -33,7 +33,7 @@ describe("sync resource base", () => {
 
     expect(resource.changesScope({})).toEqual(null)
     expect(resource.changesScope({scope: {conditions: {partnerId: 5}, resourceType: "Event"}}))
-      .toEqual({conditions: {partnerId: 5}, resourceType: "Event"})
+      .toEqual({conditions: {partnerId: 5}, resourceType: "Event", resourceTypes: null})
   })
 
   it("parses an absent resource type as the all-types (user) scope", async () => {
@@ -41,8 +41,8 @@ describe("sync resource base", () => {
 
     // The user scope is one scope covering every type the resource authorizes for the caller,
     // so it declares no resource type - and a sync authorizes once however many types it serves.
-    expect(resource.changesScope({scope: {conditions: {}}})).toEqual({conditions: {}, resourceType: null})
-    expect(resource.changesScope({scope: {conditions: {}, resourceType: null}})).toEqual({conditions: {}, resourceType: null})
+    expect(resource.changesScope({scope: {conditions: {}}})).toEqual({conditions: {}, resourceType: null, resourceTypes: null})
+    expect(resource.changesScope({scope: {conditions: {}, resourceType: null, resourceTypes: ["Ticket", "TicketScan"]}})).toEqual({conditions: {}, resourceType: null, resourceTypes: ["Ticket", "TicketScan"]})
   })
 
   it("fails loudly on malformed scope params", async () => {
@@ -128,7 +128,7 @@ describe("sync resource base", () => {
 
     service.scopeQuery({query: fakeQuery})
 
-    expect(scopeCalls).toEqual([{query: fakeQuery, scope: {conditions: {partnerId: 5}, resourceType: "Event"}}])
+    expect(scopeCalls).toEqual([{query: fakeQuery, scope: {conditions: {partnerId: 5}, resourceType: "Event", resourceTypes: null}}])
   })
 
   it("delegates replay to the app replay service and reshapes successful results", async () => {

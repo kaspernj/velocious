@@ -262,7 +262,12 @@ export default class SyncRealtimeBridge {
     for (const scopeRow of await this.syncClient.scopeStore().activeScopes()) {
       channelDescriptors.push({
         channel: VELOCIOUS_SYNC_CHANNEL,
-        params: {conditions: this.attributeNamedConditions(scopeRow), resourceType: scopeRow.resourceType}
+        params: {
+          conditions: this.attributeNamedConditions(scopeRow),
+          resourceType: scopeRow.resourceType,
+          // Only the all-types scope carries the type list; a type-declared scope needs none.
+          ...(scopeRow.resourceType === null ? {resourceTypes: this.syncClient.userScopeResourceTypes()} : {})
+        }
       })
     }
 
