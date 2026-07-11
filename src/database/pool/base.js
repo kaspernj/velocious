@@ -145,6 +145,21 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Pins a connection to be returned to callers that run without a connection-context
+   * pin (used by the test runner to share one connection with in-process HTTP handlers).
+   * Base pools that do not track async context ignore it; async-context pools override.
+   * @param {import("../drivers/base.js").default} _connection - Shared connection.
+   * @returns {void}
+   */
+  setTestSharedConnection(_connection) {}
+
+  /**
+   * Clears the shared connection set by {@link setTestSharedConnection}. No-op by default.
+   * @returns {void}
+   */
+  clearTestSharedConnection() {}
+
+  /**
    * Returns whether the current connection is pinned to an execution context.
    * @returns {boolean} - Whether the current connection can be reused by nested code.
    */

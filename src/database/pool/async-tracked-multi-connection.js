@@ -701,6 +701,19 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!actualCallback) throw new Error("withConnection requires a callback")
 
+    // In test mode every checkout resolves to the shared connection so in-process
+    // request handlers run on the same connection — and inside the same open
+    // transaction — as the test body, instead of a fresh pooled connection that
+    // cannot see the test's uncommitted rows. Pin its existing (already in-use) id
+    // and skip checkin so the test keeps owning it. Tenant pools never get a shared
+    // connection set (they resolve per request tenant), so this only affects
+    // non-tenant pools such as `default`.
+    if (this._testSharedConnection) {
+      const sharedConnection = this._testSharedConnection
+
+      return await this.asyncLocalStorage.run(sharedConnection.getIdSeq(), async () => await actualCallback(sharedConnection))
+    }
+
     const connection = await this.checkout(options)
     const id = connection.getIdSeq()
 
