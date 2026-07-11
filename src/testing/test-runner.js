@@ -986,10 +986,13 @@ export default class TestRunner {
               // stale async-context pin and force every later test onto a fresh checkout,
               // breaking isolation).
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
-                // Share the pinned connection with in-process HTTP handlers for the whole
-                // lifecycle so request writes join the test's transaction; cleared after
-                // afterEach so a later test never inherits this test's connection.
-                this.activateTestSharedConnections()
+                // Only request-type tests dispatch through the in-process HTTP handler,
+                // so only they need the pinned connection shared with it. Sharing it for
+                // every test would let unrelated specs observe a test shared connection on
+                // pools they inspect directly. Cleared after afterEach either way.
+                if (testArgs.type == "request") {
+                  this.activateTestSharedConnections()
+                }
 
                 try {
                   try {
