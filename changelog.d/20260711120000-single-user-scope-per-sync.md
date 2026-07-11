@@ -4,6 +4,8 @@ This removes an authorization amplification: the server re-runs the app's `autho
 
 `SerializedSyncScope.resourceType` and the changes-request `scope.resourceType` are now `string | null`; `null` means "every type this resource authorizes for the caller", and apps identify the user scope by it. A blank resource type still fails loudly. Scope rows persist the all-types scope with an empty `resource_type` (the column is non-null) and normalize it back to `null` on read. The client applies each pulled row by the resource type on its own envelope, so one scope serves them all.
 
+On the realtime side, a subscription with a null `resourceType` matches a broadcast of any resource type (one that carries no type still never matches); what bounds a user scope is the per-delivery `changeDeliverable` access re-check, not the type.
+
 Also covered by spec: a background pull (the catch-up pull a realtime resume schedules and nobody awaits) reports a transient server failure through the sync client's error reporter rather than escaping as an unhandled rejection.
 
 See `docs/sync-client.md`.

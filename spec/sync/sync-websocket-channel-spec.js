@@ -235,6 +235,25 @@ describe("sync websocket channel", () => {
     expect(channel.matches({resourceType: "Ticket", somethingElse: ALLOWED_EVENT_ID})).toEqual(false)
   })
 
+  it("matches broadcasts of every resource type for the all-types (user) scope", async () => {
+    const {TestSyncResource} = buildTestSyncResource()
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const channel = buildChannel({
+      configuration,
+      params: {authenticationToken: "token-1", conditions: {}, resourceType: null}
+    })
+
+    await channel.canSubscribe()
+
+    // The user scope subscribes once for every type the server serves it, so it must match a
+    // broadcast of any concrete type - the per-delivery access re-check is what bounds it.
+    expect(channel.matches({resourceType: "Ticket"})).toEqual(true)
+    expect(channel.matches({resourceType: "TicketScan"})).toEqual(true)
+
+    // A broadcast carrying no resource type still never matches (fail closed).
+    expect(channel.matches({eventId: ALLOWED_EVENT_ID})).toEqual(false)
+  })
+
   it("matches numeric scope conditions by value and array conditions by membership for any app-named scope attribute", async () => {
     const {TestSyncResource} = buildTestSyncResource()
     const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})

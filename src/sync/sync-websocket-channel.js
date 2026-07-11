@@ -107,6 +107,13 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
    * conditions match by membership). Broadcasts without a resource type and
    * conditions the publisher's scoping params do not carry never match, so a
    * subscription cannot receive changes outside its authorized scope.
+   *
+   * The all-types (user) scope declares no resource type, so it matches a
+   * broadcast of any type - it subscribes once for every type the server serves
+   * it. What bounds it is not the type but the per-delivery access re-check in
+   * {@link SyncWebsocketChannel#_userScopeDeliverableBody}, which filters every
+   * entry through the app's `changeDeliverable`. A broadcast carrying no
+   * resource type at all still never matches.
    * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} broadcastParams - Publisher scoping params (the published resourceType plus the change's scope-partition values).
    * @returns {boolean} Whether the broadcast belongs to this subscription's scope.
    */
@@ -119,7 +126,8 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
       ? /** @type {Record<string, ?>} */ (broadcastParams)
       : {}
 
-    if (!Object.hasOwn(scopingParams, "resourceType") || String(scopingParams.resourceType) !== String(scope.resourceType)) return false
+    if (!Object.hasOwn(scopingParams, "resourceType")) return false
+    if (scope.resourceType !== null && String(scopingParams.resourceType) !== String(scope.resourceType)) return false
 
     for (const [conditionName, conditionValue] of Object.entries(scope.conditions)) {
       if (!Object.hasOwn(scopingParams, conditionName)) return false
