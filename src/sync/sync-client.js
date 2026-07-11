@@ -356,9 +356,11 @@ export default class SyncClient {
   /**
    * Declares (or re-activates) a sync scope from a model query and pulls it when online.
    * @param {import("../database/query/model-class-query.js").default<?>} query - Query declaring the sync scope.
+   * @param {object} [options] - Sync options.
+   * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [options.onProgress] - Called per applied page of the pull this declaration triggers, so the initial import of a newly declared scope can drive a "syncedCount of total" progress bar. See `pull()`.
    * @returns {Promise<{scope: import("./sync-client-types.js").SerializedSyncScope, pulled: import("./sync-api-client-types.js").SyncChangesResult | null}>} Declared scope and pull result (null while offline).
    */
-  async sync(query) {
+  async sync(query, {onProgress} = {}) {
     const scope = serializedScopeFromQuery(query)
     const scopeStore = this.scopeStore()
     const scopeRow = await scopeStore.findOrCreateScope(scope)
@@ -370,7 +372,7 @@ export default class SyncClient {
       if (legacyCursor) await scopeStore.saveCursor(scopeRow, legacyCursor)
     }
 
-    return {pulled: await this.pull(), scope}
+    return {pulled: await this.pull({onProgress}), scope}
   }
 
   /**

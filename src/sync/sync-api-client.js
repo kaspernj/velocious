@@ -116,8 +116,7 @@ export default class SyncApiClient {
     let upToCursor = null
     let pages = 0
     let syncedCount = 0
-    /** @type {number} */
-    let total
+    let total = 0
     let changed = false
     const resourceCounts = /** @type {Record<string, number>} */ ({})
     const resourceChanged = /** @type {Record<string, boolean>} */ ({})
@@ -131,8 +130,10 @@ export default class SyncApiClient {
 
       // The server counts pending rows from this request's cursor, so already-applied
       // pages plus this request's count stays the same total across every page: a stable
-      // "of Y" denominator even as the cursor advances. Absent on older servers (0).
-      total = syncedCount + (changesResponse.total ?? 0)
+      // "of Y" denominator even as the cursor advances. A server that doesn't report the
+      // count at all leaves the total at 0 for every page rather than drifting upwards
+      // with the applied rows.
+      if (changesResponse.total !== null) total = syncedCount + changesResponse.total
 
       if (syncs.length === 0) {
         // Report the terminal progress once for an entirely empty pull so consumers observe

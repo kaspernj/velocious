@@ -84,24 +84,30 @@ Devices migrating from a pre-scope cursor store can seed newly declared scopes t
 
 ### Pull progress ("X of Y")
 
-`pull({onProgress})` reports progress while it applies changes, so a full-import screen can render a "synced of total" bar without a bespoke progress channel:
+`onProgress` reports progress while changes are applied, so a full-import screen can render a "synced of total" bar without a bespoke progress channel. Declaring a scope pulls it immediately, so the initial import of a brand-new scope is reported by `sync()` — pass the callback there:
 
 ```js
-await syncClient().sync(Ticket.where({eventId}))
-await syncClient().pull({
+await syncClient().sync(Ticket.where({eventId}), {
   onProgress: ({pages, syncedCount, total}) => {
     setProgress(`${syncedCount} of ${total}`) // e.g. "800 of 2043"
   }
 })
 ```
 
-- `onProgress` is optional — `pull()` with no arguments behaves exactly as before.
+`pull({onProgress})` takes the same callback for a later refresh of the already-declared scopes:
+
+```js
+await syncClient().pull({onProgress: ({syncedCount, total}) => setProgress(`${syncedCount} of ${total}`)})
+```
+
+- `onProgress` is optional — `sync(query)` and `pull()` without it behave exactly as before.
 - The callback fires once per applied page with cumulative `{pages, syncedCount, total}` across the pulled scopes (base 0 for a single-scope pull, so a lone scope reads exactly its own counts).
 - `total` is the pending change count from the device's cursor to the server snapshot, reported by the change-feed endpoint as a COUNT (it is not materialized). It stays **stable across pages** even as the cursor advances — the denominator does not shrink — because the server counts from each request's cursor and the client adds the rows it already applied.
 - A pull with nothing to sync fires `onProgress` once with `{pages: 0, syncedCount: 0, total: 0}`.
-- The resolved `pull()` result (`SyncChangesResult`) also carries `total` alongside `syncedCount`/`pages`.
+- A server that does not report the count leaves `total` at `0` on every page.
+- The resolved `pull()` result (and `sync()`'s `pulled`, a `SyncChangesResult`) also carries `total` alongside `syncedCount`/`pages`.
 
-This is the framework path for a full-ticket-import-with-progress screen: declare the scope, then drive the bar straight off `pull({onProgress})` instead of a hand-rolled full-sync endpoint and progress websocket.
+This is the framework path for a full-ticket-import-with-progress screen: declare the scope with `onProgress` and drive the bar straight off it, instead of a hand-rolled full-sync endpoint and progress websocket.
 
 ## Automatic mutation tracking
 

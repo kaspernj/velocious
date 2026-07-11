@@ -84,6 +84,50 @@ describe("sync API client - pull progress", () => {
     expect(result.total).toEqual(0)
   })
 
+  it("keeps the total at 0 across every page when the server omits it", async () => {
+    /** @type {Array<{pages: number, syncedCount: number, total: number}>} */
+    const progress = []
+    /** @type {Array<Array<Record<string, unknown>>>} */
+    const pages = [
+      [
+        {data: {}, id: "s1", resourceId: "r1", resourceType: "Task", syncType: "update"},
+        {data: {}, id: "s2", resourceId: "r2", resourceType: "Task", syncType: "update"}
+      ],
+      [{data: {}, id: "s3", resourceId: "r3", resourceType: "Task", syncType: "update"}]
+    ]
+    let index = 0
+    // An older server that does not know the `total` field at all.
+    const postChanges = async () => {
+      const syncs = pages[index] || []
+
+      index += 1
+
+      return {
+        nextCursor: {id: `s${index}`, serverSequence: index, updatedAt: "2026-07-09T10:00:00.000Z"},
+        status: "success",
+        syncs,
+        upToCursor: {id: "up-to", serverSequence: 999, updatedAt: "2026-07-09T10:00:00.000Z"}
+      }
+    }
+
+    const result = await SyncApiClient.pullChanges({
+      applySync: async (sync) => ({changed: true, resourceType: sync.resourceType()}),
+      authenticationToken: "token",
+      batchSize: 2,
+      loadCursor: async () => null,
+      onProgress: (update) => progress.push(update),
+      postChanges,
+      saveCursor: async () => {}
+    })
+
+    expect(progress).toEqual([
+      {pages: 1, syncedCount: 2, total: 0},
+      {pages: 2, syncedCount: 3, total: 0}
+    ])
+    expect(result.syncedCount).toEqual(3)
+    expect(result.total).toEqual(0)
+  })
+
   it("still pulls without an onProgress callback", async () => {
     const postChanges = pagedPostChanges([
       {
