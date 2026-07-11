@@ -3,6 +3,7 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
+import VelociousError from "../velocious-error.js"
 
 /**
  * Built-in frontend-model resource action.
@@ -958,10 +959,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     }
 
     if (notPermittedAttachments.length > 0) {
-      throw new Error(`Frontend model attachment names not permitted by permittedParams(): ${notPermittedAttachments.join(", ")}`)
+      throw VelociousError.safe(`Frontend model attachment names not permitted by permittedParams(): ${notPermittedAttachments.join(", ")}`, {code: "frontend-model-attribute-error"})
     }
     if (invalidAttachments.length > 0) {
-      throw new Error(`Invalid frontend model attachment names: ${invalidAttachments.join(", ")}`)
+      throw VelociousError.safe(`Invalid frontend model attachment names: ${invalidAttachments.join(", ")}`, {code: "frontend-model-attribute-error"})
     }
   }
 
@@ -1808,11 +1809,11 @@ function filterWritableFrontendModelAttributes(
   }
 
   if (notPermittedAttributes.length > 0) {
-    throw new Error(`Frontend model write attributes not permitted by permittedParams(): ${notPermittedAttributes.join(", ")}`)
+    throw VelociousError.safe(`Frontend model write attributes not permitted by permittedParams(): ${notPermittedAttributes.join(", ")}`, {code: "frontend-model-attribute-error"})
   }
 
   if (invalidAttributes.length > 0) {
-    throw new Error(`Invalid frontend model write attributes: ${invalidAttributes.join(", ")}`)
+    throw VelociousError.safe(`Invalid frontend model write attributes: ${invalidAttributes.join(", ")}`, {code: "frontend-model-attribute-error"})
   }
 
   return writableAttributes
