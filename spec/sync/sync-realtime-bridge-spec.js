@@ -10,6 +10,14 @@ const EVENT_ID = "a3bb189e-8bf9-3888-9912-ace4e6543002"
 const OTHER_DEVICE_ID = "886313e1-3b8a-5372-9b90-0c9aee199e5d"
 const SCAN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 const SECOND_SCAN_ID = "16fd2706-8baf-433b-82eb-8c7fada847da"
+const TICKET_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
+const TICKET_COLUMNS = [
+  {attributeName: "id", name: "id", type: "uuid"},
+  {attributeName: "name", name: "name", type: "varchar"},
+  {attributeName: "createdAt", name: "created_at", type: "datetime"},
+  {attributeName: "updatedAt", name: "updated_at", type: "datetime"}
+]
 
 const SCAN_COLUMNS = [
   {attributeName: "id", name: "id", type: "uuid"},
@@ -119,10 +127,15 @@ function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferRea
   const syncModel = buildFakeSyncModel()
   const resolvedAuthTokenHolder = authTokenHolder || {value: "token-1"}
   const changesResponseHolder = {value: /** @type {Record<string, ?>} */ ({nextCursor: null, status: "success", syncs: [], upToCursor: null})}
+  const transportErrorHolder = {value: /** @type {Error | null} */ (null)}
   const transport = {
     /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
     post: async (path, payload) => {
-      if (path.endsWith("/changes")) postChangesCalls.push(payload)
+      if (path.endsWith("/changes")) {
+        postChangesCalls.push(payload)
+
+        if (transportErrorHolder.value) throw transportErrorHolder.value
+      }
 
       return {json: () => changesResponseHolder.value}
     }
@@ -164,7 +177,7 @@ function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferRea
   }) : undefined
   const client = new SyncClient({configuration, scopeStore, syncModel})
 
-  return {authTokenHolder: resolvedAuthTokenHolder, changesResponseHolder, client, errors, fakeWebsocketClient, modelClasses: resolvedModelClasses, postChangesCalls, syncModel}
+  return {authTokenHolder: resolvedAuthTokenHolder, changesResponseHolder, client, errors, fakeWebsocketClient, modelClasses: resolvedModelClasses, postChangesCalls, syncModel, transportErrorHolder}
 }
 
 describe("sync realtime bridge", () => {
@@ -653,9 +666,9 @@ describe("sync client user scope", () => {
 
     expect(sharedClient.subscriptions.length).toEqual(1)
     expect(sharedClient.subscriptions[0].channelType).toEqual("velocious-sync")
-    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: "TicketScan"})
+    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: null})
     expect(harness.postChangesCalls.length).toEqual(1)
-    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: "TicketScan"})
+    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: null})
     expect(harness.errors).toEqual([])
   })
 
@@ -686,7 +699,7 @@ describe("sync client user scope", () => {
     await harness.client.subscribeUserScope()
 
     expect(harness.postChangesCalls.length).toEqual(2)
-    expect(harness.postChangesCalls[1].scope).toEqual({conditions: {}, resourceType: "TicketScan"})
+    expect(harness.postChangesCalls[1].scope).toEqual({conditions: {}, resourceType: null})
     expect(harness.errors).toEqual([])
   })
 
@@ -750,5 +763,88 @@ describe("sync client user scope", () => {
     expect(sharedClient.subscriptions.length).toEqual(2)
     expect(harness.client.syncConnection()).toBe(sharedClient)
     expect(harness.errors).toEqual([])
+  })
+
+  it("subscribes and pulls the user scope once for every pullable resource type, so the server authorizes it once per sync", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({
+      modelClasses: [
+        buildApplyableModelClass({
+          columns: SCAN_COLUMNS,
+          modelName: "TicketScan",
+          sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted}), track: true}
+        }),
+        buildApplyableModelClass({
+          columns: TICKET_COLUMNS,
+          modelName: "Ticket",
+          sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({name: data.name}), track: true}
+        })
+      ],
+      pullOnReconnect: false,
+      websocketClient: sharedClient
+    })
+
+    await harness.client.subscribeUserScope()
+
+    // One type-less scope covering everything the caller may see - not one scope per type.
+    // Each extra user-scope resource type would otherwise cost another subscribe authorization
+    // and another /changes request, each re-running the app's authorizeChanges.
+    expect(sharedClient.subscriptions.length).toEqual(1)
+    expect(sharedClient.subscriptions[0].params).toEqual({authenticationToken: "token-1", conditions: {}, resourceType: null})
+    expect(harness.postChangesCalls.length).toEqual(1)
+    expect(harness.postChangesCalls[0].scope).toEqual({conditions: {}, resourceType: null})
+    expect(harness.errors).toEqual([])
+  })
+
+  it("applies pulled rows of every resource type served to the single user scope", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const ticketScanClass = buildApplyableModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TicketScan",
+      sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted}), track: true}
+    })
+    const ticketClass = buildApplyableModelClass({
+      columns: TICKET_COLUMNS,
+      modelName: "Ticket",
+      sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({name: data.name}), track: true}
+    })
+    const harness = buildRealtimeHarness({
+      modelClasses: [ticketScanClass, ticketClass],
+      pullOnReconnect: false,
+      websocketClient: sharedClient
+    })
+
+    harness.changesResponseHolder.value = {
+      nextCursor: null,
+      status: "success",
+      syncs: [
+        {data: {accepted: true}, resourceId: SCAN_ID, resourceType: "TicketScan", syncType: "update"},
+        {data: {name: "Ticket name"}, resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}
+      ],
+      upToCursor: null
+    }
+
+    await harness.client.subscribeUserScope()
+
+    expect(ticketScanClass.records.get(SCAN_ID).attributesData.accepted).toEqual(true)
+    expect(ticketClass.records.get(TICKET_ID).attributesData.name).toEqual("Ticket name")
+    expect(harness.errors).toEqual([])
+  })
+
+  it("reports a failing background pull instead of letting it escape as an unhandled rejection", async () => {
+    const sharedClient = buildFakeWebsocketClient()
+    const harness = buildRealtimeHarness({websocketClient: sharedClient})
+
+    await harness.client.subscribeUserScope()
+
+    harness.transportErrorHolder.value = new Error("Server error: 500")
+
+    // A reconnect schedules a catch-up pull nobody awaits; a transient server error there must
+    // reach the error reporter, never the process as an unhandled rejection.
+    sharedClient.subscriptions[0].emitResume()
+
+    await harness.client.waitForRealtimeApplied()
+
+    expect(harness.errors.map((error) => error.message)).toEqual(["Server error: 500"])
   })
 })

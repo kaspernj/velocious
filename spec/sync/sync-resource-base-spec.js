@@ -36,11 +36,20 @@ describe("sync resource base", () => {
       .toEqual({conditions: {partnerId: 5}, resourceType: "Event"})
   })
 
+  it("parses an absent resource type as the all-types (user) scope", async () => {
+    const resource = buildResource(SyncResourceBase, {})
+
+    // The user scope is one scope covering every type the resource authorizes for the caller,
+    // so it declares no resource type - and a sync authorizes once however many types it serves.
+    expect(resource.changesScope({scope: {conditions: {}}})).toEqual({conditions: {}, resourceType: null})
+    expect(resource.changesScope({scope: {conditions: {}, resourceType: null}})).toEqual({conditions: {}, resourceType: null})
+  })
+
   it("fails loudly on malformed scope params", async () => {
     const resource = buildResource(SyncResourceBase, {})
 
     await expect(() => resource.changesScope({scope: "Event"})).toThrow(/scope must be an object/u)
-    await expect(() => resource.changesScope({scope: {conditions: {a: 1}}})).toThrow(/resourceType/u)
+    await expect(() => resource.changesScope({scope: {conditions: {a: 1}, resourceType: ""}})).toThrow(/resourceType/u)
     await expect(() => resource.changesScope({scope: {conditions: [], resourceType: "Event"}})).toThrow(/conditions must be an object/u)
   })
 

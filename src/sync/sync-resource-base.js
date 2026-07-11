@@ -13,7 +13,7 @@ const QUICK_SEARCH_COLUMN = "quickSearch"
  * Optional client-declared sync scope carried on a changes request.
  * @typedef {object} SerializedChangesScope
  * @property {Record<string, ?>} conditions - Plain attribute conditions from the client query.
- * @property {string} resourceType - Client resource/model name the scope was declared for.
+ * @property {string | null} resourceType - Client resource/model name the scope was declared for, or null for the all-types (user) scope: one scope covering every resource type this resource authorizes for the caller, so a sync authorizes once however many types it serves.
  */
 
 /**
@@ -135,7 +135,9 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     }
 
     const scopeParams = /** @type {Record<string, ?>} */ (scope)
-    const resourceType = forcedNonBlankString(scopeParams.resourceType, "resourceType")
+    const resourceType = scopeParams.resourceType === null || scopeParams.resourceType === undefined
+      ? null
+      : forcedNonBlankString(scopeParams.resourceType, "resourceType")
     const conditions = scopeParams.conditions
 
     if (!conditions || typeof conditions !== "object" || Array.isArray(conditions)) {

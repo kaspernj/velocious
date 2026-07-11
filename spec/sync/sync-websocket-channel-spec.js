@@ -211,7 +211,7 @@ describe("sync websocket channel", () => {
     const {TestSyncResource} = buildTestSyncResource()
     const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
 
-    await expect(async () => await buildChannel({configuration, params: {conditions: {eventId: ALLOWED_EVENT_ID}}}).canSubscribe())
+    await expect(async () => await buildChannel({configuration, params: {conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: ""}}).canSubscribe())
       .toThrow(/resourceType/u)
     await expect(async () => await buildChannel({configuration, params: {resourceType: "Ticket"}}).canSubscribe())
       .toThrow(/conditions must be an object/u)

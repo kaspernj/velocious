@@ -292,10 +292,16 @@ export default class SyncRealtimeBridge {
    * without a column mapping are already attribute names and pass through;
    * scopes on models without a declared sync resource fail loudly because no
    * attribute mapping exists for them.
-   * @param {{conditions: Record<string, ?>, resourceType: string}} scopeRow - Active scope row.
+   *
+   * The all-types (user) scope has no resource type and no conditions - it
+   * covers everything the server authorizes for the caller - so there is
+   * nothing to map.
+   * @param {{conditions: Record<string, ?>, resourceType: string | null}} scopeRow - Active scope row.
    * @returns {Record<string, ?>} Attribute-named scope conditions.
    */
   attributeNamedConditions(scopeRow) {
+    if (scopeRow.resourceType === null) return {}
+
     const resourceConfig = this.syncClient.config.resources[scopeRow.resourceType]
 
     if (!resourceConfig) {

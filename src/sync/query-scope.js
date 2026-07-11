@@ -50,13 +50,18 @@ export function serializedScopeFromQuery(query) {
  * its own local identity and cursor — a user scope's empty-conditions cursor
  * never leaks across accounts on a shared device, while the same user
  * reconnecting keeps continuity. Owner-less scopes keep their pre-owner key.
+ *
+ * A null `resourceType` is the all-types scope (the user scope): one scope
+ * covering every resource type the server authorizes for the caller, rather
+ * than one scope per type. It keys as an empty resource type, so it never
+ * collides with a type-declared scope.
  * @param {import("./sync-client-types.js").SerializedSyncScope} scope - Serialized sync scope.
  * @returns {string} Stable scope key.
  */
 export function scopeKey(scope) {
   const ownerPrefix = scope.owner === undefined || scope.owner === null ? "" : `owner=${stableJsonStringify(scope.owner)}|`
 
-  return `${ownerPrefix}${scope.resourceType}:${stableJsonStringify(scope.conditions)}`
+  return `${ownerPrefix}${scope.resourceType ?? ""}:${stableJsonStringify(scope.conditions)}`
 }
 
 /**

@@ -543,12 +543,7 @@ export default class SyncClient {
   async _subscribeUserScope() {
     this._userScopeState = "subscribing"
 
-    const scopeStore = this.scopeStore()
-    const owner = await this.userScopeOwner()
-
-    for (const resourceType of this.userScopeResourceTypes()) {
-      await scopeStore.findOrCreateScope({conditions: {}, owner, resourceType})
-    }
+    await this.scopeStore().findOrCreateScope(await this.userScope())
 
     await this.subscribeRealtime()
     await this.pull()
@@ -564,12 +559,7 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async unsubscribeUserScope() {
-    const scopeStore = this.scopeStore()
-    const owner = await this.userScopeOwner()
-
-    for (const resourceType of this.userScopeResourceTypes()) {
-      await scopeStore.deactivate({conditions: {}, owner, resourceType})
-    }
+    await this.scopeStore().deactivate(await this.userScope())
 
     await this.unsubscribeRealtime()
 
@@ -578,12 +568,16 @@ export default class SyncClient {
   }
 
   /**
-   * The resource types a user scope covers: every declared resource that
-   * receives pulled changes (has pull `attributes`).
-   * @returns {string[]} Pullable resource type names.
+   * The user scope: a single all-types scope (null resourceType) with empty
+   * conditions, partitioned locally by owner. One scope - not one per resource
+   * type - so the server authorizes the caller once per sync and per subscribe,
+   * however many resource types it serves. The server decides which types the
+   * caller may see; the client applies each pulled row by the resource type on
+   * its own envelope.
+   * @returns {Promise<import("./sync-client-types.js").SerializedSyncScope>} The user scope.
    */
-  userScopeResourceTypes() {
-    return Object.keys(this.pullResourceConfigs())
+  async userScope() {
+    return {conditions: {}, owner: await this.userScopeOwner(), resourceType: null}
   }
 
   /**
