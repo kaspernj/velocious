@@ -49,7 +49,15 @@
  * @property {SyncCursor | Record<string, ?>} [nextCursor] - Next cursor.
  * @property {string} [status] - Response status.
  * @property {Array<unknown>} [syncs] - Sync rows.
+ * @property {number} [total] - Total pending change count for the scope from the request cursor (additive; absent on older servers).
  * @property {SyncCursor | Record<string, ?>} [upToCursor] - Snapshot upper-bound cursor.
+ */
+
+/**
+ * @typedef {object} SyncPullProgress
+ * @property {number} pages - Applied page count so far.
+ * @property {number} syncedCount - Applied row count so far.
+ * @property {number} total - Total pending change count for the pull, stable across pages (0 when nothing to sync, null-free once the server reports it).
  */
 
 /**
@@ -59,6 +67,7 @@
  * @property {Record<string, boolean>} resourceChanged - Changed flags by resource type.
  * @property {Record<string, number>} resourceCounts - Applied counts by resource type.
  * @property {number} syncedCount - Applied row count.
+ * @property {number} total - Total pending change count across the pulled scopes (the "of Y" denominator for a syncedCount-of-total progress bar).
  */
 
 /**

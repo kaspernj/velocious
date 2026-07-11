@@ -215,6 +215,92 @@ describe("sync client", () => {
     expect(harness.postChangesCalls[2].scope.conditions.partner_id).toEqual(6)
   })
 
+  it("reports pull progress with the server total to an onProgress callback", async () => {
+    const harness = buildHarness()
+
+    harness.state.changesResponses.push({
+      nextCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
+      total: 1,
+      upToCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"}
+    })
+
+    await harness.client.sync(fakeQuery("Ticket", {partner_id: 5}))
+
+    /** @type {Array<{pages: number, syncedCount: number, total: number}>} */
+    const progress = []
+
+    harness.state.changesResponses.push({nextCursor: null, status: "success", syncs: [], total: 0, upToCursor: null})
+
+    const pulled = await harness.client.pull({onProgress: (update) => progress.push(update)})
+
+    expect(progress).toEqual([{pages: 0, syncedCount: 0, total: 0}])
+    expect(pulled?.total).toEqual(0)
+  })
+
+  it("threads onProgress across the initial scope pull with the server total", async () => {
+    const harness = buildHarness()
+
+    harness.state.changesResponses.push({
+      nextCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
+      total: 1,
+      upToCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"}
+    })
+
+    /** @type {Array<{pages: number, syncedCount: number, total: number}>} */
+    const progress = []
+    const scope = harness.client.scopeStore()
+
+    await scope.findOrCreateScope({conditions: {partner_id: 5}, resourceType: "Ticket"})
+
+    const pulled = await harness.client.pull({onProgress: (update) => progress.push(update)})
+
+    expect(progress).toEqual([{pages: 1, syncedCount: 1, total: 1}])
+    expect(pulled?.syncedCount).toEqual(1)
+    expect(pulled?.total).toEqual(1)
+  })
+
+  it("reports the initial import progress of a newly declared scope through sync({onProgress})", async () => {
+    const harness = buildHarness()
+
+    harness.state.changesResponses.push({
+      nextCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
+      total: 1,
+      upToCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"}
+    })
+
+    /** @type {Array<{pages: number, syncedCount: number, total: number}>} */
+    const progress = []
+    const {pulled} = await harness.client.sync(fakeQuery("Ticket", {partner_id: 5}), {onProgress: (update) => progress.push(update)})
+
+    expect(progress).toEqual([{pages: 1, syncedCount: 1, total: 1}])
+    expect(pulled?.syncedCount).toEqual(1)
+    expect(pulled?.total).toEqual(1)
+  })
+
+  it("still pulls when called without arguments", async () => {
+    const harness = buildHarness()
+
+    harness.state.changesResponses.push({
+      nextCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "New name"}, id: "s-1", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
+      total: 1,
+      upToCursor: {id: "s-1", serverSequence: 3, updatedAt: "2026-07-01T10:00:00.000Z"}
+    })
+
+    await harness.client.scopeStore().findOrCreateScope({conditions: {partner_id: 5}, resourceType: "Ticket"})
+
+    const pulled = await harness.client.pull()
+
+    expect(pulled?.syncedCount).toEqual(1)
+  })
+
   it("queues local changes declaratively and replays them immediately when online", async () => {
     const harness = buildHarness()
     const syncRow = await harness.client.queue({resource: buildScanRecord(harness.modelClasses[1]), syncType: "scanAttempt"})
