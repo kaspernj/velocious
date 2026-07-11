@@ -1141,7 +1141,7 @@ If you need to regenerate missing structure files without rerunning migrations, 
 npx velocious db:schema:dump
 ```
 
-`db:schema:dump` only writes `db/structure-<identifier>.sql` files when one or more expected files are missing.
+`db:schema:dump` generates a structure SQL file for each configured database identifier under `db/structure-<identifier>.sql`. It only writes files when one or more expected files are missing. The generated file includes the full DDL (tables, indexes, views, triggers, etc.) followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every currently applied migration version. This preserves the migration ledger in the checked-in snapshot so fresh databases loaded from it do not re-run migrations that already shaped the schemas in the file.
 
 If you need to load the checked-in structure files for each configured database, use:
 
@@ -1149,7 +1149,7 @@ If you need to load the checked-in structure files for each configured database,
 npx velocious db:schema:load
 ```
 
-`db:schema:load` reads `db/structure-<identifier>.sql` for each configured database identifier and executes those statements against the current connections.
+`db:schema:load` reads `db/structure-<identifier>.sql` for each configured database identifier and executes those statements against the current connections. Because the structure file includes the migration ledger rows, a load marks every listed version as already applied. The next `db:migrate` sees those versions and skips them, so migrations whose schema changes are already part of the loaded structure do not run again.
 
 ## Schema metadata cache
 

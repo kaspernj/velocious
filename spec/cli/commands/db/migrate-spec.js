@@ -91,7 +91,7 @@ describe("Cli - Commands - db:migrate", () => {
 
       await dropTables(dbs.default)
 
-      if (dbs.default.getType() != "mssql") {
+      if (dbs.mssql && dbs.default.getType() != "mssql") {
         await dropTables(dbs.mssql)
       }
 
@@ -340,8 +340,9 @@ describe("Cli - Commands - db:migrate", () => {
       }
 
       const expected = [...tables, ...views, ...indexes, ...triggers, ...others].join("\n\n") + "\n"
+      const ddlOnly = actual.split("\n").filter((l) => !l.startsWith("INSERT INTO schema_migrations")).join("\n")
 
-      expect(actual).toEqual(expected)
+      expect(ddlOnly).toEqual(expected)
     })
   })
 

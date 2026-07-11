@@ -78,3 +78,13 @@ await this.migrateLegacyLocalDateTimesToUtcStorage({
 ```
 
 `legacyLocalOffsetMinutes` uses JavaScript's `Date#getTimezoneOffset()` sign convention: minutes to add to local wall-clock time to get UTC. Omit it to parse legacy values in the runtime's current local timezone, including that timezone's daylight-saving rules for each date.
+
+## Structure Snapshots and the Migration Ledger
+
+`db:schema:dump` generates `db/structure-<identifier>.sql` files from the current database state. Each file contains the full DDL for tables, indexes, views, and triggers, followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every applied migration version. This embeds the migration ledger directly in the checked-in snapshot.
+
+When a fresh database is created from a structure file via `db:schema:load`, those insert rows repopulate the `schema_migrations` table so the loaded database knows exactly which migrations have already been applied. Subsequent `db:migrate` calls see those versions and skip them.
+
+Without the embedded ledger rows, loading a structure dump would produce a database with all the post-migration tables but an empty `schema_migrations` table. The next `db:migrate` would then attempt to re-run every migration, causing duplicate-table errors or migration-version conflicts against the already-present schema.
+
+For this reason checked-in structure files are expected to contain `schema_migrations` row data as part of their normal output. The migration ledger rows serve as the authoritative record of which migrations the snapshot represents, and should be committed to version control alongside the DDL.
