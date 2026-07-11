@@ -1050,6 +1050,15 @@ export default class TestRunner {
             if (timedOut && testLifecycle) {
               timeoutState.timedOut = true
               await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
+
+              // If the abandoned lifecycle never settled within the grace, its
+              // `finally` (which clears the shared connections) has not run, so
+              // this test's shared connection — sitting on a still-open, timed-out
+              // transaction — would otherwise be reused by the next test's outer
+              // ensureConnections before activateTestSharedConnections() replaces
+              // it. Clear it here so the next test checks out a fresh connection.
+              // Idempotent when the lifecycle did settle and already cleared.
+              this.clearTestSharedConnections()
             }
 
             willRetry = retriesUsed < retryCount
