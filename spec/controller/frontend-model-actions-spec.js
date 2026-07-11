@@ -1497,7 +1497,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const persisted = await Task.find(task.id())
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(payload.errorMessage).toEqual("Frontend model write attributes not permitted by permittedParams(): identifier")
+      expect(payload.velocious).toEqual({code: "frontend-model-attribute-error"})
       expect(persisted.name()).toEqual("Update computed attr")
       expect(persisted.identifier()).toEqual(`task-${task.id()}`)
     })
