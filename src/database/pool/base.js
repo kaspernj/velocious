@@ -160,6 +160,17 @@ class VelociousDatabasePoolBase {
   clearTestSharedConnection() {}
 
   /**
+   * Runs a callback inside the test shared connection's context. Base pools that do not
+   * track async context just run the callback as-is; async-context pools override.
+   * @template T
+   * @param {() => T} callback - Callback to run.
+   * @returns {T} - Callback result.
+   */
+  runWithTestSharedConnection(callback) {
+    return callback()
+  }
+
+  /**
    * Returns whether the current connection is pinned to an execution context.
    * @returns {boolean} - Whether the current connection can be reused by nested code.
    */
