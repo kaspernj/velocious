@@ -1034,11 +1034,34 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       const structureSql = await db.structureSql()
 
       if (structureSql) {
-        sqlByIdentifier[identifier] = structureSql
+        const migrationInserts = await this._schemaMigrationsInsertSql({db})
+
+        sqlByIdentifier[identifier] = structureSql + migrationInserts
       }
     }
 
     return sqlByIdentifier
+  }
+
+  /**
+   * Generates INSERT statements for every row in `schema_migrations` so the
+   * structure snapshot carries the migration ledger along with the DDL.  Without
+   * these rows a fresh DB loaded from the snapshot will re-run every migration,
+   * which fails when the snapshot already contains the post-migration schema.
+   * @param {object} args - Options object.
+   * @param {import("../database/drivers/base.js").default} args.db - Database connection.
+   * @returns {Promise<string>} - INSERT statements (empty string when none).
+   */
+  async _schemaMigrationsInsertSql({db}) {
+    const {default: MigrationsLedger} = await import("../database/migrations-ledger.js")
+
+    if (!await MigrationsLedger.tableExists(db)) return ""
+
+    const versions = await MigrationsLedger.appliedVersions(db)
+
+    if (versions.length == 0) return ""
+
+    return versions.map((version) => `INSERT INTO schema_migrations (version) VALUES (${db.quote(version)});`).join("\n") + "\n"
   }
 
   /**
