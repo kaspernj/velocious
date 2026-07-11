@@ -1,0 +1,1 @@
+- Frontend-model writes now return client-safe, actionable errors with `velocious.code: "frontend-model-attribute-error"` when `permittedParams()` rejects an attribute or attachment name, or when an unknown write attribute or attachment name is supplied. Unexpected endpoint errors remain sanitized as `"Request failed."`.
