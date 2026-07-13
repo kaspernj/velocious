@@ -168,7 +168,12 @@ describe("HttpServer - server client", {databaseCleaning: {transaction: true}}, 
       socket.emit("close")
 
       expect(await transfer).toEqual("aborted")
-      expect(await client.sendFile(path.join(directory, "missing.bin"))).toEqual("aborted")
+
+      const missingFileSocket = new FakeSocket()
+      const missingFileClient = new ServerClient({clientCount: 6, configuration: buildConfiguration(), socket: missingFileSocket})
+
+      expect(await missingFileClient.sendFile(path.join(directory, "missing.bin"))).toEqual("aborted")
+      expect(missingFileSocket.destroyCalls).toEqual(1)
     } finally {
       await fs.rm(directory, {force: true, recursive: true})
     }

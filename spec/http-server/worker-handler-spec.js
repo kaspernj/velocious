@@ -6,6 +6,7 @@ import WorkerHandler from "../../src/http-server/worker-handler/index.js"
 import HttpServer from "../../src/http-server/index.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import websocketEventsHost from "../../src/http-server/websocket-events-host.js"
+import InProcessHandler from "../../src/http-server/worker-handler/in-process.js"
 import WorkerThreadHandler from "../../src/http-server/worker-handler/worker-thread.js"
 
 class FakeWorkerHandler {
@@ -163,6 +164,107 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
 
     await handler.stop()
     expect(true).toBeTrue()
+  })
+
+  it("awaits in-process file cleanup before removing clients during shutdown", async () => {
+    let releaseCleanup
+    const cleanupReleased = new Promise((resolve) => {
+      releaseCleanup = resolve
+    })
+    const shutdownEvents = []
+    const handler = Object.create(InProcessHandler.prototype)
+
+    handler.pendingClientCloseCleanups = new Set()
+    handler.clients = {
+      11: {
+        httpClient: {
+          abortPendingFileResponses: async () => {
+            shutdownEvents.push("cleanup-started")
+            await cleanupReleased
+            shutdownEvents.push("cleanup-finished")
+          }
+        },
+        serverClient: {
+          clientCount: 11,
+          end: async () => {
+            shutdownEvents.push("client-ended")
+          }
+        }
+      }
+    }
+    handler.unregisterFromEventsHost = () => {
+      shutdownEvents.push("unregistered")
+    }
+
+    let stopSettled = false
+    const stopping = handler.stop().then(() => {
+      stopSettled = true
+    })
+
+    await waitFor(() => expect(shutdownEvents).toContain("cleanup-started"))
+    expect(shutdownEvents).toContain("client-ended")
+    expect(stopSettled).toEqual(false)
+    expect(handler.clients[11]).not.toEqual(undefined)
+
+    releaseCleanup()
+    await stopping
+
+    expect(shutdownEvents).toEqual(["cleanup-started", "client-ended", "cleanup-finished", "unregistered"])
+    expect(handler.clients[11]).toEqual(undefined)
+  })
+
+  it("awaits close-triggered in-process file cleanup during normal shutdown order", async () => {
+    let releaseCleanup
+    const cleanupReleased = new Promise((resolve) => {
+      releaseCleanup = resolve
+    })
+    const shutdownEvents = []
+    const handler = new InProcessHandler({configuration: {logging: {console: false, file: false}}, workerCount: 0})
+    const serverClientEvents = new EventEmitter()
+    let socketClosed = false
+    const serverClient = /** @type {import("../../src/http-server/server-client.js").default} */ (/** @type {?} */ ({
+      clientCount: 12,
+      end: async () => {
+        if (socketClosed) return
+
+        socketClosed = true
+        shutdownEvents.push("socket-closed")
+        serverClientEvents.emit("close")
+      },
+      events: serverClientEvents,
+      listen: () => {},
+      remoteAddress: "127.0.0.1",
+      send: async () => {},
+      sendFile: async () => await new Promise(() => {}),
+      setWorker: () => {}
+    }))
+
+    handler.addSocketConnection(serverClient)
+
+    const transfer = handler.clients[12].httpClient.sendFileOutput("/tmp/shutdown-order.bin", true, async (result) => {
+      shutdownEvents.push(`cleanup-${result}-started`)
+      await cleanupReleased
+      shutdownEvents.push(`cleanup-${result}-finished`)
+    })
+
+    await serverClient.end()
+    await waitFor(() => expect(shutdownEvents).toContain("cleanup-aborted-started"))
+
+    let stopSettled = false
+    const stopping = handler.stop().then(() => {
+      stopSettled = true
+    })
+
+    await new Promise((resolve) => setImmediate(resolve))
+    const stopSettledBeforeCleanup = stopSettled
+
+    releaseCleanup()
+    await stopping
+    await transfer
+
+    expect(stopSettledBeforeCleanup).toEqual(false)
+    expect(shutdownEvents).toEqual(["socket-closed", "cleanup-aborted-started", "cleanup-aborted-finished"])
+    expect(handler.clients[12]).toEqual(undefined)
   })
 
   it("sends descriptor-only file messages and acknowledges completion once", async () => {

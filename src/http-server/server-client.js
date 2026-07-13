@@ -234,6 +234,8 @@ export default class ServerClient {
       return aborted ? "aborted" : "completed"
     } catch (error) {
       this.logger.error(() => [`Socket ${this.clientCount} file response failed`, filePath, error])
+      if (!this.socket.destroyed) this.socket.destroy()
+
       return "aborted"
     } finally {
       this.socket.off("close", abort)

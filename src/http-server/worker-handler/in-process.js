@@ -26,6 +26,9 @@ export default class VelociousHttpServerInProcessHandler {
      * @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
     this.clients = {}
 
+    /** @type {Set<Promise<void>>} */
+    this.pendingClientCloseCleanups = new Set()
+
     this.logger = new Logger(this)
     this.workerCount = workerCount
     this.unregisterFromEventsHost = websocketEventsHost.register(/** @type {?} */ (this))
@@ -85,8 +88,16 @@ export default class VelociousHttpServerInProcessHandler {
     })
 
     serverClient.events.on("close", () => {
-      void httpClient.abortPendingFileResponses()
-      delete this.clients[clientCount]
+      const cleanup = httpClient.abortPendingFileResponses()
+        .catch((error) => {
+          this.logger.warn("Failed to abort file responses after client close", error)
+        })
+        .finally(() => {
+          this.pendingClientCloseCleanups.delete(cleanup)
+          delete this.clients[clientCount]
+        })
+
+      this.pendingClientCloseCleanups.add(cleanup)
     })
 
     this.clients[clientCount] = {httpClient, serverClient}
@@ -113,14 +124,18 @@ export default class VelociousHttpServerInProcessHandler {
   async stop() {
     this._stopping = true
 
-    for (const {serverClient} of Object.values(this.clients)) {
-      try {
-        void this.clients[serverClient.clientCount]?.httpClient.abortPendingFileResponses()
-        void serverClient.end()
-      } catch (error) {
-        this.logger.warn("Failed to close client during shutdown", error)
-      }
+    for (const {httpClient, serverClient} of Object.values(this.clients)) {
+      await Promise.all([
+        httpClient.abortPendingFileResponses().catch((error) => {
+          this.logger.warn("Failed to abort file responses during shutdown", error)
+        }),
+        serverClient.end().catch((error) => {
+          this.logger.warn("Failed to close client during shutdown", error)
+        })
+      ])
     }
+
+    await Promise.all(this.pendingClientCloseCleanups)
 
     this.clients = {}
     this.unregisterFromEventsHost?.()
