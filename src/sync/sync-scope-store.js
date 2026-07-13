@@ -24,7 +24,7 @@ function scopeDigestForScope(scope) {
  * @property {Record<string, ?>} conditions - Scope attribute conditions.
  * @property {string | null} cursorPayload - Persisted cursor JSON payload.
  * @property {string} id - Scope row id.
- * @property {string} resourceType - Scope resource/model name.
+ * @property {string | null} resourceType - Scope resource/model name, or null for the all-types (user) scope.
  * @property {string} scopeDigest - Fixed-size deterministic digest of the canonical scope key.
  * @property {string} state - Scope state ("active" or "removed").
  */
@@ -102,7 +102,7 @@ export default class SyncScopeStore {
         conditions: scope.conditions,
         cursorPayload: null,
         id: new UUID(4).format(),
-        resourceType: scope.resourceType,
+        resourceType: scope.resourceType ?? null,
         scopeDigest: digest,
         state: "active"
       }
@@ -131,7 +131,9 @@ export default class SyncScopeStore {
           created_at: new Date(),
           cursor_json: null,
           id: new UUID(4).format(),
-          resource_type: scope.resourceType,
+          // The all-types (user) scope has no resource type; the column is non-null, so it
+          // stores as an empty string and normalizes back to null on read.
+          resource_type: scope.resourceType ?? "",
           scope_digest: digest,
           state: "active",
           updated_at: new Date()
@@ -319,7 +321,7 @@ export default class SyncScopeStore {
       conditions: /** @type {Record<string, ?>} */ (JSON.parse(String(row.conditions_json))),
       cursorPayload: row.cursor_json === null || row.cursor_json === undefined ? null : String(row.cursor_json),
       id: String(row.id),
-      resourceType: String(row.resource_type),
+      resourceType: String(row.resource_type) === "" ? null : String(row.resource_type),
       scopeDigest: String(row.scope_digest),
       state: String(row.state)
     }

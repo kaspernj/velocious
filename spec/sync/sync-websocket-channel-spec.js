@@ -190,7 +190,7 @@ describe("sync websocket channel", () => {
 
     expect(await channel.canSubscribe()).toEqual(true)
     expect(calls).toHaveLength(1)
-    expect(calls[0].scope).toEqual({conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: "Ticket"})
+    expect(calls[0].scope).toEqual({conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: "Ticket", resourceTypes: null})
     expect(calls[0].params.authenticationToken).toEqual("token-1")
     expect(calls[0].context.authenticatedToken).toEqual("token-1")
     expect(calls[0].context.partnerEventPytIds).toEqual([123])
@@ -211,7 +211,7 @@ describe("sync websocket channel", () => {
     const {TestSyncResource} = buildTestSyncResource()
     const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
 
-    await expect(async () => await buildChannel({configuration, params: {conditions: {eventId: ALLOWED_EVENT_ID}}}).canSubscribe())
+    await expect(async () => await buildChannel({configuration, params: {conditions: {eventId: ALLOWED_EVENT_ID}, resourceType: ""}}).canSubscribe())
       .toThrow(/resourceType/u)
     await expect(async () => await buildChannel({configuration, params: {resourceType: "Ticket"}}).canSubscribe())
       .toThrow(/conditions must be an object/u)
@@ -233,6 +233,30 @@ describe("sync websocket channel", () => {
     expect(channel.matches({eventId: DENIED_EVENT_ID, resourceType: "Ticket"})).toEqual(false)
     expect(channel.matches({resourceType: "Ticket"})).toEqual(false)
     expect(channel.matches({resourceType: "Ticket", somethingElse: ALLOWED_EVENT_ID})).toEqual(false)
+  })
+
+  it("matches broadcasts of every resource type the all-types (user) scope declares, and no others", async () => {
+    const {TestSyncResource} = buildTestSyncResource()
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const channel = buildChannel({
+      configuration,
+      params: {authenticationToken: "token-1", conditions: {}, resourceType: null, resourceTypes: ["Ticket", "TicketScan"]}
+    })
+
+    await channel.canSubscribe()
+
+    // One subscription covering every type the client can apply.
+    expect(channel.matches({resourceType: "Ticket"})).toEqual(true)
+    expect(channel.matches({resourceType: "TicketScan"})).toEqual(true)
+
+    // A type the subscriber never applies must be filtered here, by the cheap type check - NOT
+    // carried into the per-delivery access re-check, which checks out a database connection and
+    // runs a query per matched broadcast. Matching everything would put that DB work on every
+    // broadcast for every subscribed device.
+    expect(channel.matches({resourceType: "Project"})).toEqual(false)
+
+    // A broadcast carrying no resource type still never matches (fail closed).
+    expect(channel.matches({eventId: ALLOWED_EVENT_ID})).toEqual(false)
   })
 
   it("matches numeric scope conditions by value and array conditions by membership for any app-named scope attribute", async () => {
@@ -310,7 +334,7 @@ describe("sync websocket channel", () => {
     })
 
     expect(await channel.canSubscribe()).toEqual(true)
-    expect(calls[0].scope).toEqual({conditions: {}, resourceType: "Ticket"})
+    expect(calls[0].scope).toEqual({conditions: {}, resourceType: "Ticket", resourceTypes: null})
     expect(channel.matches({eventId: ALLOWED_EVENT_ID, resourceType: "Ticket"})).toEqual(true)
     expect(channel.matches({eventId: DENIED_EVENT_ID, resourceType: "Ticket"})).toEqual(true)
     expect(channel.matches({resourceType: "Ticket"})).toEqual(true)

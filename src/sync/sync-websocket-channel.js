@@ -49,7 +49,7 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
    */
   async canSubscribe() {
     const resource = await this.buildSyncResource()
-    const scope = resource.changesScope({scope: {conditions: this.params.conditions, resourceType: this.params.resourceType}})
+    const scope = resource.changesScope({scope: {conditions: this.params.conditions, resourceType: this.params.resourceType, resourceTypes: this.params.resourceTypes}})
 
     await resource.authorizeChanges({params: this.params, scope})
 
@@ -107,6 +107,16 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
    * conditions match by membership). Broadcasts without a resource type and
    * conditions the publisher's scoping params do not carry never match, so a
    * subscription cannot receive changes outside its authorized scope.
+   *
+   * The all-types (user) scope declares no single resource type - it subscribes
+   * once for every type it can apply, listed in `scope.resourceTypes` - so it
+   * matches a broadcast of any of those types. Types outside that list are
+   * dropped here, by this cheap check, and never reach the per-delivery access
+   * re-check in {@link SyncWebsocketChannel#_userScopeDeliverableBody}: that
+   * re-check checks out a database connection and runs a query per matched
+   * broadcast, so matching every type would put DB work on every broadcast for
+   * every subscribed device. A broadcast carrying no resource type at all still
+   * never matches.
    * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} broadcastParams - Publisher scoping params (the published resourceType plus the change's scope-partition values).
    * @returns {boolean} Whether the broadcast belongs to this subscription's scope.
    */
@@ -119,7 +129,13 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
       ? /** @type {Record<string, ?>} */ (broadcastParams)
       : {}
 
-    if (!Object.hasOwn(scopingParams, "resourceType") || String(scopingParams.resourceType) !== String(scope.resourceType)) return false
+    if (!Object.hasOwn(scopingParams, "resourceType")) return false
+
+    if (scope.resourceType === null) {
+      if (scope.resourceTypes && !scope.resourceTypes.some((resourceType) => resourceType === String(scopingParams.resourceType))) return false
+    } else if (String(scopingParams.resourceType) !== String(scope.resourceType)) {
+      return false
+    }
 
     for (const [conditionName, conditionValue] of Object.entries(scope.conditions)) {
       if (!Object.hasOwn(scopingParams, conditionName)) return false

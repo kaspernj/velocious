@@ -4,7 +4,7 @@
  * Client-declared sync scope serialized from a model query.
  * @typedef {object} SerializedSyncScope
  * @property {Record<string, ?>} conditions - Plain attribute conditions from the query.
- * @property {string} resourceType - Resource/model name the scope was declared for.
+ * @property {string | null} resourceType - Resource/model name the scope was declared for, or null for the all-types (user) scope covering every type the server authorizes for the caller.
  * @property {string} [owner] - Local partition key: the authenticated identity that declared the scope. Used only to partition the local scope/cursor store (never sent to the server as scope conditions), so a user scope's empty-conditions cursor does not leak across accounts on a shared device.
  */
 
