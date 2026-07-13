@@ -339,16 +339,21 @@ export default class VelociousController {
    * @param {object} [args] - Options object.
    * @param {string} [args.contentType] - Content type.
    * @param {number | string} [args.status] - Status.
+   * @param {(result: "completed" | "aborted") => void | Promise<void>} [args.onFinished] - Called once after file delivery completes or aborts.
    * @returns {void} - No return value.
    */
   sendFile(filePath, args = {}) {
     this._measureViewRender(() => {
-      const {contentType, status, ...restArgs} = args
+      const {contentType, onFinished, status, ...restArgs} = args
 
       restArgsError(restArgs)
 
       if (typeof filePath !== "string" || filePath.length < 1) {
         throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
+      }
+
+      if (onFinished !== undefined && typeof onFinished !== "function") {
+        throw new Error(`Expected onFinished to be a function, got: ${typeof onFinished}`)
       }
 
       const detectedContentType = contentType || this.sendFileContentType(filePath)
@@ -361,7 +366,7 @@ export default class VelociousController {
         this._response.setStatus(status)
       }
 
-      this._response.setFilePath(filePath)
+      this._response.setFilePath(filePath, onFinished || null)
     })
   }
 

@@ -53,16 +53,39 @@ export default class VelociousHttpServerInProcessHandler {
       remoteAddress: serverClient.remoteAddress
     })
 
+    let deliveryQueue = Promise.resolve()
+    const enqueueDelivery = (/** @type {() => Promise<void>} */ delivery) => {
+      deliveryQueue = deliveryQueue
+        .catch(() => {})
+        .then(delivery)
+
+      return deliveryQueue
+    }
+
     httpClient.events.on("output", (output) => {
       if (output !== null && output !== undefined) {
-        void serverClient.send(output).catch((error) => {
+        void enqueueDelivery(() => serverClient.send(output)).catch((error) => {
           this.logger.error(() => ["Failed to deliver client output", {clientCount}, error])
         })
       }
     })
 
+    httpClient.events.on("file", ({filePath, sendBody, settle}) => {
+      void enqueueDelivery(async () => {
+        await settle(await serverClient.sendFile(filePath, sendBody))
+      }).catch((error) => {
+        this.logger.error(() => ["Failed to deliver file response", {clientCount, filePath}, error])
+        void settle("aborted")
+      })
+    })
+
     httpClient.events.on("close", () => {
-      void serverClient.end()
+      void enqueueDelivery(() => serverClient.end())
+        .finally(() => delete this.clients[clientCount])
+    })
+
+    serverClient.events.on("close", () => {
+      void httpClient.abortPendingFileResponses()
       delete this.clients[clientCount]
     })
 
@@ -92,6 +115,7 @@ export default class VelociousHttpServerInProcessHandler {
 
     for (const {serverClient} of Object.values(this.clients)) {
       try {
+        void this.clients[serverClient.clientCount]?.httpClient.abortPendingFileResponses()
         void serverClient.end()
       } catch (error) {
         this.logger.warn("Failed to close client during shutdown", error)

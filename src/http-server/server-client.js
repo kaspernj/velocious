@@ -1,6 +1,7 @@
 // @ts-check
 
 import EventEmitter from "../utils/event-emitter.js"
+import {createReadStream} from "node:fs"
 import Logger from "../logger.js"
 
 /**
@@ -202,6 +203,99 @@ export default class ServerClient {
 
         finish()
       })
+    })
+  }
+
+  /**
+   * Streams a file to the socket while respecting socket write backpressure.
+   * @param {string} filePath - File path.
+   * @param {boolean} [sendBody] - Whether to read and send the file body.
+   * @returns {Promise<"completed" | "aborted">} - Transfer result.
+   */
+  async sendFile(filePath, sendBody = true) {
+    if (this.socket.destroyed || this.socket.writableEnded || this.socket.writable === false) return "aborted"
+    if (!sendBody) return "completed"
+
+    const readStream = createReadStream(filePath)
+    let aborted = false
+    const abort = () => {
+      aborted = true
+      readStream.destroy()
+    }
+
+    this.socket.once("close", abort)
+    this.socket.once("error", abort)
+
+    try {
+      for await (const chunk of readStream) {
+        if (aborted || !await this.writeFileChunk(chunk)) return "aborted"
+      }
+
+      return aborted ? "aborted" : "completed"
+    } catch (error) {
+      this.logger.error(() => [`Socket ${this.clientCount} file response failed`, filePath, error])
+      return "aborted"
+    } finally {
+      this.socket.off("close", abort)
+      this.socket.off("error", abort)
+      readStream.destroy()
+    }
+  }
+
+  /**
+   * Writes one file chunk and waits for both write acceptance and drain when required.
+   * @param {Buffer | Uint8Array} chunk - File chunk.
+   * @returns {Promise<boolean>} - Whether the chunk was accepted before the socket aborted.
+   */
+  writeFileChunk(chunk) {
+    return new Promise((resolve) => {
+      let callbackCompleted = false
+      let drained = false
+      let settled = false
+
+      const cleanup = () => {
+        this.socket.off("close", onAbort)
+        this.socket.off("error", onAbort)
+        this.socket.off("drain", onDrain)
+      }
+      const finish = (/** @type {boolean} */ result) => {
+        if (settled) return
+
+        settled = true
+        cleanup()
+        resolve(result)
+      }
+      const finishIfReady = () => {
+        if (callbackCompleted && drained) finish(true)
+      }
+      const onAbort = () => finish(false)
+      const onDrain = () => {
+        drained = true
+        finishIfReady()
+      }
+
+      this.socket.once("close", onAbort)
+      this.socket.once("error", onAbort)
+      this.socket.once("drain", onDrain)
+
+      try {
+        const accepted = this.socket.write(chunk, (error) => {
+          if (error) {
+            finish(false)
+            return
+          }
+
+          callbackCompleted = true
+          finishIfReady()
+        })
+
+        drained = accepted
+        if (accepted) this.socket.off("drain", onDrain)
+        finishIfReady()
+      } catch (error) {
+        this.logger.error(() => [`Socket ${this.clientCount} file write failed`, error])
+        finish(false)
+      }
     })
   }
 

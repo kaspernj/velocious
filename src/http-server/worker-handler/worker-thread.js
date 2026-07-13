@@ -42,6 +42,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     this.parentPort = parentPort
     this.workerData = workerData
     this.workerCount = workerCount
+    this.fileTransferCount = 0
+
+    /** @type {Map<number, {clientCount: number, settle: (result: "completed" | "aborted") => Promise<void>}>} */
+    this.fileTransfers = new Map()
 
     parentPort.on("message", errorLogger(this.onCommand))
 
@@ -98,6 +102,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.createdAt] - Event creation time.
    * @param {string} [data.eventId] - Event identifier.
    * @param {number} [data.requestId] - Debug request id.
+   * @param {number} [data.transferId] - File transfer id.
+   * @param {"completed" | "aborted"} [data.result] - File transfer result.
    * @param {?} [data.payload] - Payload data.
    * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
    * @param {?} [data.body] - V2 broadcast body.
@@ -111,6 +117,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       this.handleNewClient(data)
     } else if (command == "clientWrite") {
       await this.handleClientWrite(data)
+    } else if (command == "clientFileResult") {
+      await this.handleClientFileResult(data)
+    } else if (command == "clientAbort") {
+      await this.handleClientAbort(data)
     } else if (command == "websocketEvent") {
       await this.handleWebsocketEvent(data)
     } else if (command == "websocketV2Broadcast") {
@@ -148,12 +158,67 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       this.parentPort.postMessage({command: "clientOutput", clientCount, output})
     })
 
+    client.events.on("file", ({filePath, sendBody, settle}) => {
+      const transferId = ++this.fileTransferCount
+
+      this.fileTransfers.set(transferId, {clientCount, settle})
+      this.parentPort.postMessage({command: "clientFile", clientCount, filePath, sendBody, transferId})
+    })
+
     client.events.on("close", (output) => {
       this.logger.debugLowLevel(() => "Close received from client in worker - forwarding to worker parent")
       this.parentPort.postMessage({command: "clientClose", clientCount, output})
     })
 
     this.clients[clientCount] = client
+  }
+
+  /**
+   * Settles a file response after the parent finishes socket delivery.
+   * @param {object} data - File result message.
+   * @param {number} [data.transferId] - File transfer id.
+   * @param {"completed" | "aborted"} [data.result] - File transfer result.
+   * @returns {Promise<void>} - Resolves after the worker-side completion callback settles.
+   */
+  async handleClientFileResult(data) {
+    const {result, transferId} = data
+
+    if (typeof transferId !== "number") throw new Error("transferId must be a number")
+    if (result !== "completed" && result !== "aborted") throw new Error(`Unknown file transfer result: ${result}`)
+
+    const transfer = this.fileTransfers.get(transferId)
+
+    if (!transfer) return
+
+    this.fileTransfers.delete(transferId)
+    await transfer.settle(result)
+  }
+
+  /**
+   * Aborts file responses belonging to a closed parent-side socket.
+   * @param {object} data - Client abort message.
+   * @param {number} [data.clientCount] - Client count.
+   * @returns {Promise<void>} - Resolves after pending completion callbacks settle.
+   */
+  async handleClientAbort(data) {
+    const {clientCount} = data
+
+    if (typeof clientCount !== "number") throw new Error("clientCount must be a number")
+
+    const settlements = []
+    const client = this.clients[clientCount]
+
+    if (client) settlements.push(client.abortPendingFileResponses())
+
+    for (const [transferId, transfer] of this.fileTransfers) {
+      if (transfer.clientCount !== clientCount) continue
+
+      this.fileTransfers.delete(transferId)
+      settlements.push(transfer.settle("aborted"))
+    }
+
+    delete this.clients[clientCount]
+    await Promise.all(settlements)
   }
 
   /**
@@ -238,6 +303,9 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @returns {Promise<void>} Resolves after worker shutdown has been requested.
    */
   async handleShutdown() {
+    await Promise.all(Object.values(this.clients).map((client) => client.abortPendingFileResponses()))
+    this.fileTransfers.clear()
+
     if (this.configuration?.closeDatabaseConnections) {
       await this.configuration.closeDatabaseConnections()
     }

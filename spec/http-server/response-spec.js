@@ -79,3 +79,20 @@ describe("VelociousHttpServerClientResponse#setStatus", {databaseCleaning: {tran
     expect(response.getStatusMessage()).toEqual("Use Proxy")
   })
 })
+
+describe("VelociousHttpServerClientResponse file completion", {databaseCleaning: {transaction: true}}, () => {
+  it("clears file callbacks when the body or file is replaced", () => {
+    const response = new VelociousHttpServerClientResponse({configuration: stubConfiguration})
+    const onFinished = () => {}
+
+    response.setFilePath("first.txt", onFinished)
+    expect(response.getFileOnFinished()).toBe(onFinished)
+
+    response.setBody("replacement")
+    expect(response.getFileOnFinished()).toEqual(null)
+
+    response.setFilePath("second.txt", onFinished)
+    response.setFilePath("third.txt")
+    expect(response.getFileOnFinished()).toEqual(null)
+  })
+})
