@@ -239,7 +239,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Removes a closed connection from the session registry. Called by
    * `VelociousWebsocketConnection.close()` after it sends the final
    * `connection-closed` frame.
-   * @param {string} connectionId
+   * @param {string} connectionId - Connection identifier.
    * @returns {void}
    */
   _removeConnection(connectionId) {
@@ -450,7 +450,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * The actual message dispatch, extracted so
    * `configuration.getWebsocketAroundRequest()` can wrap it in any
    * per-request context (AsyncLocalStorage, tracing, etc.).
-   * @param {WebsocketSessionMessage} message
+   * @param {WebsocketSessionMessage} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleMessageInner(message) {
@@ -731,8 +731,8 @@ export default class VelociousHttpServerClientWebsocketSession {
    * fragmented message. Returns true when the fragment was accepted
    * and false when the per-message cap was hit and the socket has
    * been closed.
-   * @param {Buffer} payload
-   * @returns {boolean}
+   * @param {Buffer} payload - Message payload.
+   * @returns {boolean} - Whether the fragment was accepted.
    */
   _appendFragment(payload) {
     // Guard pushing first so `_enforceFragmentLimits` sees the final
@@ -750,7 +750,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * close frame, and tears the session down. Returns true when the
    * caller can continue processing, false when the session is being
    * closed.
-   * @returns {boolean}
+   * @returns {boolean} - Whether fragment processing may continue.
    */
   _enforceFragmentLimits() {
     if (this._fragmentedPayloads === null) return true
@@ -1024,7 +1024,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * The returned promise is stored at pause time and awaited at
    * resume time so we can reject resume attempts from a different
    * authenticated caller (signed out, swapped user, expired cookie).
-   * @returns {Promise<?>}
+   * @returns {Promise<?>} - Captured authenticated identity for resume validation.
    */
   async _captureResumeIdentity() {
     const resolver = this.configuration.getWebsocketSessionIdentityResolver?.()
@@ -1087,7 +1087,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * created one whose socket just connected) transfers state from
    * the paused session and instructs the client via
    * `session-resumed` or `session-gone`.
-   * @param {Record<string, ?>} message
+   * @param {Record<string, ?>} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleSessionResume(message) {
@@ -1168,7 +1168,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Fires `onClose(reason)` on every live app-defined connection, then
    * drops them from the registry. No network frame is sent — the
    * socket is already going away.
-   * @param {"session_destroyed" | "grace_expired" | "error"} reason
+   * @param {"session_destroyed" | "grace_expired" | "error"} reason - Close reason.
    * @returns {Promise<void>}
    */
   async _teardownConnections(reason) {
@@ -1194,7 +1194,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * registered connection class, stores it on `_connections`, and
    * fires `onConnect()`. Sends `connection-opened` on success or
    * `connection-error` on failure.
-   * @param {Record<string, ?>} message
+   * @param {Record<string, ?>} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleConnectionOpen(message) {
@@ -1242,7 +1242,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * Handles a `{type: "connection-message"}` from the client.
-   * @param {Record<string, ?>} message
+   * @param {Record<string, ?>} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleConnectionMessage(message) {
@@ -1267,7 +1267,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Handles a `{type: "connection-close"}` from the client — fires
    * `onClose("client_close")` and confirms with `connection-closed`.
-   * @param {Record<string, ?>} message
+   * @param {Record<string, ?>} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleConnectionClose(message) {
@@ -1296,7 +1296,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Handles `{type: "channel-subscribe"}` — runs `canSubscribe()`,
    * registers with the Configuration's global routing registry on
    * success, and sends `channel-subscribed` or `channel-error`.
-   * @param {Record<string, ?>} message
+   * @param {Record<string, ?>} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleChannelSubscribe(message) {
@@ -1421,7 +1421,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Handles `{type: "channel-unsubscribe"}` from the client — calls
    * `unsubscribed()` and sends `channel-unsubscribed`.
-   * @param {Record<string, ?>} message
+   * @param {Record<string, ?>} message - Message to process.
    * @returns {Promise<void>}
    */
   async _handleChannelUnsubscribe(message) {

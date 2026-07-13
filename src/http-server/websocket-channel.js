@@ -20,7 +20,7 @@
 export default class VelociousWebsocketChannel {
   /**
    * Runs constructor.
-   * @param {object} args
+   * @param {object} args - Options.
    * @param {string} args.subscriptionId - Client-assigned id, unique within the session.
    * @param {WebsocketParams} args.params - Subscribe params.
    * @param {import("./client/websocket-session.js").default} args.session - Owning session.
@@ -36,7 +36,7 @@ export default class VelociousWebsocketChannel {
    * Subscribe-time auth. Default is `false` (deny). Channel authors
    * MUST override to allow subscriptions. Returning a Promise defers
    * the `channel-subscribed` confirmation until it resolves.
-   * @returns {boolean | Promise<boolean>}
+   * @returns {boolean | Promise<boolean>} - Whether the subscription is authorized.
    */
   canSubscribe() { return false }
 
@@ -44,14 +44,14 @@ export default class VelociousWebsocketChannel {
    * Optional — called once after `canSubscribe` resolves truthy and
    * before `channel-subscribed` is sent to the client. Use for
    * initial snapshot delivery.
-   * @returns {void | Promise<void>}
+   * @returns {void | Promise<void>} - Completes after subscription setup.
    */
   subscribed() {}
 
   /**
    * Optional — called once when the subscription ends. Fires on
    * client-initiated `channel-unsubscribe` or on session teardown.
-   * @returns {void | Promise<void>}
+   * @returns {void | Promise<void>} - Completes after subscription teardown.
    */
   unsubscribed() {}
 
@@ -60,14 +60,14 @@ export default class VelociousWebsocketChannel {
    * moved into the paused/grace registry. Either `onResume` fires
    * on successful client reconnect, or `unsubscribed()` fires when
    * the grace window expires.
-   * @returns {void | Promise<void>}
+   * @returns {void | Promise<void>} - Completes after disconnect handling.
    */
   onDisconnect() {}
 
   /**
    * Called after a client reconnect + `session-resume` rebinds this
    * subscription to a new socket.
-   * @returns {void | Promise<void>}
+   * @returns {void | Promise<void>} - Completes after resume handling.
    */
   onResume() {}
 
@@ -76,7 +76,7 @@ export default class VelociousWebsocketChannel {
    * sign-in / locale change). Override to react to session-level
    * metadata updates.
    * @param {WebsocketParams} _metadata - Updated metadata.
-   * @returns {void | Promise<void>}
+   * @returns {void | Promise<void>} - Completes after metadata-change handling.
    */
   onMetadataChanged(_metadata) {}
 
@@ -101,9 +101,9 @@ export default class VelociousWebsocketChannel {
    * Delivers a matched broadcast to this subscriber. Subclasses can
    * override when the outbound body must be tailored to subscription
    * params before sending.
-   * @param {WebsocketJsonValue} body
+   * @param {WebsocketJsonValue} body - Message body.
    * @param {{eventId?: string}} [meta] - Optional event metadata.
-   * @returns {void | Promise<void>}
+   * @returns {void | Promise<void>} - Completes after broadcast delivery.
    */
   deliverBroadcast(body, meta) {
     this.sendMessage(body, meta)
@@ -113,7 +113,7 @@ export default class VelociousWebsocketChannel {
    * Sends a `channel-message` frame to THIS subscriber only.
    * When `meta.eventId` is provided, the client receives it so it
    * can track its checkpoint for `lastEventId` replay on reconnect.
-   * @param {WebsocketJsonValue} body
+   * @param {WebsocketJsonValue} body - Message body.
    * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void}
    */
@@ -132,6 +132,7 @@ export default class VelociousWebsocketChannel {
 
   /**
    * Runs is closed.
-   * @returns {boolean} */
+   * @returns {boolean} - Whether the channel is closed.
+   */
   isClosed() { return this._closed }
 }

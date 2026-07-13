@@ -21,7 +21,7 @@ function setShiftingFlag(record, value) {
 /**
  * Runs is shifting.
  * @param {import("./index.js").default} record - Model instance.
- * @returns {boolean}
+ * @returns {boolean} - Whether list positions are currently shifting.
  */
 function isShifting(record) {
   // @ts-ignore - Symbol indexing on Record instances
@@ -341,7 +341,7 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
  * _belongsToChanges.
  * @param {import("./index.js").default} record - Model instance.
  * @param {string} scope - camelCase scope attribute name (e.g. "projectId").
- * @returns {string | number | null}
+ * @returns {string | number | null} - Current list position value.
  */
 function resolveScopeValue(record, scope) {
   const attrValue = record.readAttribute(scope)

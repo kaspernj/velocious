@@ -7,12 +7,12 @@
  * against the wrong connection. When iterating in parallel the per-tenant failures are
  * collected and rethrown together as an `AggregateError` so one bad tenant does not hide the
  * others. This is the iteration engine shared by the `db:tenants:*` CLI commands and the
- * runtime {@link Tenant} façade; the caller is responsible for producing the tenant list.
+ * runtime tenant façade; the caller is responsible for producing the tenant list.
  */
 export default class TenantIterator {
   /**
    * Creates an iterator bound to a configuration and tenant database identifier.
-   * @param {{configuration: import("../configuration.js").default, identifier: string, parallelCount?: number}} args
+   * @param {{configuration: import("../configuration.js").default, identifier: string, parallelCount?: number}} args - Options.
    */
   constructor({configuration, identifier, parallelCount = 1}) {
     this.configuration = configuration
@@ -22,9 +22,9 @@ export default class TenantIterator {
 
   /**
    * Runs `callback` within each tenant's context and returns how many tenants were processed.
-   * @param {Array<?>} tenants
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback
-   * @returns {Promise<number>}
+   * @param {Array<?>} tenants - Tenant instances.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Callback to invoke.
+   * @returns {Promise<number>} - Number of processed tenants.
    */
   async run(tenants, callback) {
     if (this.parallelCount <= 1) {
@@ -76,7 +76,7 @@ export default class TenantIterator {
 
   /**
    * Enters one tenant's context and runs the callback, asserting the database is active first.
-   * @param {{callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, tenant: ?}} args
+   * @param {{callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, tenant: ?}} args - Options.
    * @returns {Promise<void>}
    */
   async runTenantCallback({callback, tenant}) {
@@ -94,8 +94,8 @@ export default class TenantIterator {
 
   /**
    * Builds a human-readable label for a tenant for use in error messages.
-   * @param {?} tenant
-   * @returns {string}
+   * @param {?} tenant - Tenant instance.
+   * @returns {string} - Human-readable tenant label.
    */
   static tenantLabel(tenant) {
     if (tenant && typeof tenant === "object") {

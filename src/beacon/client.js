@@ -66,7 +66,7 @@ export default class BeaconClient extends EventEmitter {
     this._closed = false
     /**
      * Narrows the runtime value to the documented type.
-     * @type {NodeJS.Timeout | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this._reconnectTimer = undefined
     /**
      * Narrows the runtime value to the documented type.

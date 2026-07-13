@@ -534,7 +534,7 @@ export default class VeoliciousHttpServerClient {
  * cannot carry a message body: every 1xx informational, 204 No
  * Content, and 304 Not Modified.
  * @param {number} statusCode - HTTP status code.
- * @returns {boolean}
+ * @returns {boolean} - Whether the status code forbids a response body.
  */
 function isNoBodyStatusCode(statusCode) {
   return (statusCode >= 100 && statusCode < 200) || statusCode === 204 || statusCode === 304

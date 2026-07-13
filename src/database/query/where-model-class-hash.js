@@ -316,6 +316,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     /**
      * Normalize.
      * @param {?} entry - Value to normalize.
+     * @returns {?} - Normalized value.
      */
     const normalize = (entry) => {
       if (entry === true) return 1
@@ -353,6 +354,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     /**
      * Normalize.
      * @param {?} entry - Value to normalize.
+     * @returns {?} - Normalized value.
      */
     const normalize = (entry) => {
       if (isUuidType && typeof entry === "number") return NO_MATCH

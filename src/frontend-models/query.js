@@ -166,8 +166,8 @@ export function normalizePreload(preload) {
  * query API into the strict internal entries used in the transport
  * payload. Shares the shape semantics with the backend normalizer in
  * `database/query/with-count.js`.
- * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} spec
- * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>}
+ * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} spec - Query specification.
+ * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} - Normalized association-count requests.
  */
 function normalizeWithCountFrontend(spec) {
   if (spec == null) return []
@@ -222,9 +222,9 @@ function normalizeWithCountFrontend(spec) {
  * shorthand (applies to the query's own model class) and the keyed
  * `{ModelName: [action, ...]}` form (applies to records of that model
  * class, useful for preloaded children).
- * @param {string[] | Record<string, string[]>} spec
- * @param {{getModelName: () => string}} rootModelClass
- * @returns {Array<{modelName: string, actions: string[]}>}
+ * @param {string[] | Record<string, string[]>} spec - Query specification.
+ * @param {{getModelName: () => string}} rootModelClass - Root model class.
+ * @returns {Array<{modelName: string, actions: string[]}>} - Normalized model ability requests.
  */
 function normalizeAbilitiesSpec(spec, rootModelClass) {
   if (spec == null) return []
@@ -1181,8 +1181,8 @@ export default class FrontendModelQuery {
    * strings — typically `"update"` / `"destroy"` / `"create"` /
    * `"read"`, but any custom action registered on the resource's
    * authorization ability is accepted.
-   * @param {string[] | Record<string, string[]>} spec
-   * @returns {this}
+   * @param {string[] | Record<string, string[]>} spec - Query specification.
+   * @returns {this} - This query for chaining.
    */
   abilities(spec) {
     for (const entry of normalizeAbilitiesSpec(spec, this.modelClass)) {
@@ -1194,7 +1194,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs merge ability entry.
-   * @param {{modelName: string, actions: string[]}} entry
+   * @param {{modelName: string, actions: string[]}} entry - Query entry.
    * @returns {void}
    */
   _mergeAbilityEntry(entry) {
@@ -1215,8 +1215,8 @@ export default class FrontendModelQuery {
    * counts to each returned record. Parses the same shapes as the
    * backend `ModelClassQuery#withCount`, then ships the normalized
    * entries as part of the `index` command payload.
-   * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} spec
-   * @returns {this}
+   * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} spec - Query specification.
+   * @returns {this} - This query for chaining.
    */
   withCount(spec) {
     for (const entry of normalizeWithCountFrontend(spec)) {
@@ -1233,8 +1233,8 @@ export default class FrontendModelQuery {
    * frontend ships only these names; the SQL fragments stay server-
    * side. All resulting aliases are attached to the root record and
    * read back with `record.queryData(aliasName)`.
-   * @param {string | Array<string | Record<string, ?>> | Record<string, ?>} spec
-   * @returns {this}
+   * @param {string | Array<string | Record<string, ?>> | Record<string, ?>} spec - Query specification.
+   * @returns {this} - This query for chaining.
    */
   queryData(spec) {
     if (spec == null) return this

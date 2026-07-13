@@ -120,7 +120,7 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @param {object} args - Options.
    * @param {?} args.body - Event body.
    * @param {string} args.channel - Channel name.
-   * @returns {Promise<{createdAt: string, id: string} | null>}
+   * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata when storage is enabled.
    */
   async _persistV2EventIfNeeded({body, channel}) {
     return await this._persistChannelEventIfNeeded({channel, payload: body})

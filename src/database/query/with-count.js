@@ -85,7 +85,7 @@ export function normalizeWithCount(spec) {
 /**
  * Runs entry from name.
  * @param {string} name - Relationship name (attribute name is derived by appending "Count").
- * @returns {WithCountEntry}
+ * @returns {WithCountEntry} - Normalized association-count entry.
  */
 function entryFromName(name) {
   return {

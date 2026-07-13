@@ -104,7 +104,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * frontend models passed model classes into relationship helpers, while newer
  * generated models pass instance types.
  * @template {FrontendModelBase<any, any, any> | typeof FrontendModelBase} T
- * @typedef {T extends new (...args: any[]) => infer Instance ? Instance : T} FrontendModelRelationshipModel
+ * @typedef {T extends typeof FrontendModelBase ? InstanceType<T> : T} FrontendModelRelationshipModel
  */
 /**
  * FrontendModelTransportConfig type.
@@ -1799,7 +1799,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
 /**
  * Throws a frontend-model HTTP error with backend-provided envelope details when available.
  * @param {{commandLabel: string, response: Response, responseText: string}} args - Error response details.
- * @returns {never}
+ * @returns {never} - Always throws an unknown-attribute error.
  */
 function throwFrontendModelHttpError({commandLabel, response, responseText}) {
   // Surface the backend's friendly errorMessage envelope (the
@@ -2612,7 +2612,7 @@ export default class FrontendModelBase {
    * column of the same name. Returns the attached value, or 0 when
    * `.withCount(...)` wasn't requested for this attribute.
    * @param {string} attributeName - Attribute name, e.g. `"tasksCount"` or a custom name from `.withCount({customName: {...}})`.
-   * @returns {number}
+   * @returns {number} - Attached association count, or zero when absent.
    */
   readCount(attributeName) {
     return readPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName)
@@ -2638,7 +2638,7 @@ export default class FrontendModelBase {
    * on `record.can("update")` without first checking whether the
    * ability was loaded.
    * @param {string} action - Ability action name, e.g. `"update"`.
-   * @returns {boolean}
+   * @returns {boolean} - Whether the requested ability is allowed.
    */
   can(action) {
     return readPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action)
@@ -2663,7 +2663,7 @@ export default class FrontendModelBase {
    * name. Returns `null` when no registered fn produced that alias for
    * this record (e.g. no child rows matched the aggregate).
    * @param {string} name - queryData alias name.
-   * @returns {?}
+   * @returns {?} - Attached query-data value.
    */
   queryData(name) {
     return readPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name)

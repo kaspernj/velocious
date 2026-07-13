@@ -20,7 +20,6 @@ const STORAGE_KEY_LOCKS = new Map()
  * Implementations should store each mutation log record as its own row/entry.
  * Native apps should back this with SQLite and indexes on storage key, status,
  * and sequence. Avoid storing the whole log as one JSON blob.
- *
  * @typedef {object} LocalMutationLogStorage
  * @property {(storageKey: string, record: LocalMutationLogRecord) => Promise<void> | void} appendRecord - Appends one log record.
  * @property {(storageKey: string, ids: string[]) => Promise<void> | void} deleteRecords - Deletes log records by id.

@@ -169,7 +169,7 @@ export default class VelociousController {
       const beforeActions = currentControllerClass._beforeActions
 
       if (beforeActions) {
-        const controllerPrototype = /** @type {Record<string, Function | undefined>} */ (/** @type {?} */ (currentControllerClass.prototype))
+        const controllerPrototype = /** @type {Record<string, ((...args: Array<?>) => ?) | undefined>} */ (/** @type {?} */ (currentControllerClass.prototype))
 
         for (const beforeActionName of beforeActions) {
           const beforeAction = controllerPrototype[beforeActionName]
@@ -266,6 +266,7 @@ export default class VelociousController {
   /**
    * Runs render json arg.
    * @param {object} json - JSON payload.
+   * @returns {void} - No return value.
    */
   renderJsonArg(json) {
     return this._measureViewRender(() => {

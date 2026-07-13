@@ -860,7 +860,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         files.push({file, fullPath, date, migrationClassName})
       }
     } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "ENOENT") {
+      if (/** @type {Error & {code?: string}} */ (error)?.code !== "ENOENT") {
         throw error
       }
     }

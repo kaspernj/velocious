@@ -26,8 +26,8 @@ export default class Tenant {
    * connections keyed by identifier, the same as `ensureConnections`.
    * @template T
    * @param {object} tenant Descriptor understood by the app's tenantDatabaseResolver.
-   * @param {(connections: Record<string, import("../database/drivers/base.js").default>) => Promise<T>} callback
-   * @returns {Promise<T>}
+   * @param {(connections: Record<string, import("../database/drivers/base.js").default>) => Promise<T>} callback - Callback to invoke.
+   * @returns {Promise<T>} - Callback result from within the tenant context.
    */
   static async with(tenant, callback) {
     const configuration = Current.configuration()
@@ -37,7 +37,7 @@ export default class Tenant {
 
   /**
    * The current tenant descriptor, or undefined when running outside any tenant context.
-   * @returns {Record<string, unknown> | undefined}
+   * @returns {Record<string, unknown> | undefined} - Tenant metadata when configured.
    */
   static current() {
     return Current.tenant()
@@ -49,8 +49,8 @@ export default class Tenant {
    * {@link Tenant.with}, the callback runs inside `ensureConnections` so each tenant's
    * database is queryable without the caller wiring up connections. Returns how many tenants
    * the callback ran for (after filtering).
-   * @param {{identifier: string, callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, parallel?: number, filter?: (tenant: ?) => boolean, configuration?: import("../configuration.js").default}} args
-   * @returns {Promise<number>}
+   * @param {{identifier: string, callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, parallel?: number, filter?: (tenant: ?) => boolean, configuration?: import("../configuration.js").default}} args - Options.
+   * @returns {Promise<number>} - Number of processed tenants.
    */
   static async each({identifier, callback, parallel = 1, filter, configuration = Current.configuration()}) {
     const provider = configuration.getTenantDatabaseProvider(identifier)
@@ -76,7 +76,7 @@ export default class Tenant {
 
   /**
    * Drops one tenant's database/schema through the provider's `dropDatabase` hook.
-   * @param {{identifier: string, tenant: object, configuration?: import("../configuration.js").default}} args
+   * @param {{identifier: string, tenant: object, configuration?: import("../configuration.js").default}} args - Options.
    * @returns {Promise<void>}
    */
   static async drop({identifier, tenant, configuration = Current.configuration()}) {

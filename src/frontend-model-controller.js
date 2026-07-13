@@ -20,6 +20,8 @@ import isDate from "./utils/is-date.js"
 import isPlainObject from "./utils/plain-object.js"
 import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./utils/ransack.js"
 
+/** @typedef {import("./database/query/model-class-query.js").default & Record<symbol, Set<string> | undefined>} FrontendModelQueryMetadata */
+
 /**
  * Runs normalize frontend model preload.
  * @param {import("./database/query/index.js").NestedPreloadRecord | string | string[] | boolean | undefined | null} preload - Preload shorthand.
@@ -31,7 +33,7 @@ function normalizeFrontendModelPreload(preload) {
   try {
     return normalizeQueryPreload(preload)
   } catch (error) {
-    throwFrontendModelQueryErrorForParserError(error)
+    return throwFrontendModelQueryErrorForParserError(error)
   }
 }
 
@@ -46,7 +48,7 @@ function normalizeFrontendModelJoins(joins) {
   try {
     return normalizeQueryJoins(joins)
   } catch (error) {
-    throwFrontendModelQueryErrorForParserError(error)
+    return throwFrontendModelQueryErrorForParserError(error)
   }
 }
 
@@ -190,10 +192,10 @@ function frontendSyncReplaySafeError(message, cause) {
 /**
  * Runs frontend model query metadata.
  * @param {import("./database/query/model-class-query.js").default} query - Query instance.
- * @returns {import("./database/query/model-class-query.js").default & {[frontendModelJoinedPathsSymbol]?: Set<string>, [frontendModelGroupedColumnsSymbol]?: Set<string>}} - Query metadata access helper.
+ * @returns {FrontendModelQueryMetadata} - Query metadata access helper.
  */
 function frontendModelQueryMetadata(query) {
-  return /** @type {import("./database/query/model-class-query.js").default & {[frontendModelJoinedPathsSymbol]?: Set<string>, [frontendModelGroupedColumnsSymbol]?: Set<string>}} */ (query)
+  return /** @type {FrontendModelQueryMetadata} */ (query)
 }
 
 /**
@@ -1253,7 +1255,7 @@ export default class FrontendModelController extends Controller {
     try {
       return normalizeQuerySort(this.frontendModelParams().sort)
     } catch (error) {
-      throwFrontendModelQueryErrorForParserError(error)
+      return throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1265,7 +1267,7 @@ export default class FrontendModelController extends Controller {
     try {
       return normalizeQueryGroup(this.frontendModelParams().group)
     } catch (error) {
-      throwFrontendModelQueryErrorForParserError(error)
+      return throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1304,7 +1306,7 @@ export default class FrontendModelController extends Controller {
 
       return pluck
     } catch (error) {
-      throwFrontendModelQueryErrorForParserError(error)
+      return throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1351,8 +1353,8 @@ export default class FrontendModelController extends Controller {
    * its backend model class by looking up the resource by modelName
    * across all configured backend projects. Returns null when no
    * resource matches the user-provided ability entry.
-   * @param {string} modelName
-   * @returns {typeof import("./database/record/index.js").default | null}
+   * @param {string} modelName - Model name.
+   * @returns {typeof import("./database/record/index.js").default | null} - Matching root model when present.
    */
   _frontendModelClassForAbilities(modelName) {
     if (typeof modelName !== "string" || modelName.length === 0) return null
@@ -1383,9 +1385,9 @@ export default class FrontendModelController extends Controller {
    * preloaded relationships at any depth. Used to evaluate per-record
    * abilities against nested preloaded children with a single batched
    * query per (modelClass, action) pair.
-   * @param {import("./database/record/index.js").default[]} rootModels
-   * @param {string} modelName
-   * @returns {import("./database/record/index.js").default[]}
+   * @param {import("./database/record/index.js").default[]} rootModels - Root model collection.
+   * @param {string} modelName - Model name.
+   * @returns {import("./database/record/index.js").default[]} - Root models reachable from the record.
    */
   _frontendModelCollectRecordsForName(rootModels, modelName) {
     /**
@@ -1399,7 +1401,8 @@ export default class FrontendModelController extends Controller {
 
     /**
      * Walk.
-     * @param {import("./database/record/index.js").default | null | undefined} record */
+     * @param {import("./database/record/index.js").default | null | undefined} record - Record to process.
+     */
     const walk = (record) => {
       if (!record || typeof record !== "object") return
       if (seen.has(record)) return
@@ -1437,7 +1440,7 @@ export default class FrontendModelController extends Controller {
    * `_setComputedAbility`. Runs one batched `authorized query + pluck`
    * per (modelClass, action) pair, regardless of how many records
    * were loaded.
-   * @param {import("./database/record/index.js").default[]} rootModels
+   * @param {import("./database/record/index.js").default[]} rootModels - Root model collection.
    * @returns {Promise<void>}
    */
   async frontendModelComputeAbilities(rootModels) {
@@ -1491,7 +1494,7 @@ export default class FrontendModelController extends Controller {
    * Unknown entries are silently skipped — downstream code resolves
    * model names to classes when applying the check, so unresolved
    * names naturally become no-ops.
-   * @returns {Array<{modelName: string, actions: string[]}>}
+   * @returns {Array<{modelName: string, actions: string[]}>} - Normalized model ability requests.
    */
   frontendModelAbilities() {
     const raw = this.frontendModelParams().abilities
@@ -1529,7 +1532,7 @@ export default class FrontendModelController extends Controller {
    *
    * Returns the raw nested-record spec (shape validated by the
    * normalizer inside `Query.queryData`) or `null` when not requested.
-   * @returns {import("./database/query/query-data.js").QueryDataSpec | null}
+   * @returns {import("./database/query/query-data.js").QueryDataSpec | null} - Normalized query-data specification.
    */
   frontendModelQueryData() {
     const raw = this.frontendModelParams().queryData
@@ -1853,7 +1856,7 @@ export default class FrontendModelController extends Controller {
     try {
       return normalizeRansackGroup(this.frontendModelClass(), filterParams)
     } catch (error) {
-      throwFrontendModelQueryErrorForParserError(error)
+      return throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -1866,7 +1869,7 @@ export default class FrontendModelController extends Controller {
     try {
       return parseRansackSort(this.frontendModelClass(), sortString)
     } catch (error) {
-      throwFrontendModelQueryErrorForParserError(error)
+      return throwFrontendModelQueryErrorForParserError(error)
     }
   }
 
@@ -2698,12 +2701,14 @@ export default class FrontendModelController extends Controller {
     /**
      * Resource attribute method name.
      * @param {string} attributeName - Attribute name.
+     * @returns {string} - Resource attribute method name.
      */
     const resourceAttributeMethodName = (attributeName) => `${attributeName}Attribute`
 
     /**
      * Resource has attribute.
      * @param {string} attributeName - Attribute name.
+     * @returns {ReturnType<FrontendModelBaseResource["resourceMethod"]>} - Resource attribute method details.
      */
     const resourceAttributeMethod = (attributeName) => {
       const methodName = resourceAttributeMethodName(attributeName)
@@ -2714,6 +2719,7 @@ export default class FrontendModelController extends Controller {
     /**
      * Prototype attribute method.
      * @param {string} attributeName - Attribute name.
+     * @returns {{method: (...args: Array<?>) => ?, ownerName: string} | undefined} - Prototype method details when present.
      */
     const prototypeAttributeMethod = (attributeName) => {
       let currentPrototype = Object.getPrototypeOf(model)
@@ -2735,6 +2741,7 @@ export default class FrontendModelController extends Controller {
     /**
      * Serialized attribute value.
      * @param {string} attributeName - Attribute name.
+     * @returns {Promise<?>} - Serialized attribute value.
      */
     const serializedAttributeValue = async (attributeName) => {
       // Check resource instance first (virtual/computed attributes via ${name}Attribute convention)
@@ -2758,6 +2765,7 @@ export default class FrontendModelController extends Controller {
     /**
      * Attribute exists.
      * @param {string} attributeName - Attribute name.
+     * @returns {boolean} - Whether the attribute exists.
      */
     const attributeExists = (attributeName) => {
       return (attributeName in modelAttributes) || (attributeName in /** @type {Record<string, ?>} */ (model)) || Boolean(resourceAttributeMethod(attributeName))
