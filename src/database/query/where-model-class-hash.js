@@ -316,7 +316,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     /**
      * Normalize.
      * @param {?} entry - Value to normalize.
-     * @returns {?} - Normalized value.
+     * @returns {?} - SQLite predicate value with booleans encoded as 1 or 0.
      */
     const normalize = (entry) => {
       if (entry === true) return 1
@@ -354,7 +354,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     /**
      * Normalize.
      * @param {?} entry - Value to normalize.
-     * @returns {?} - Normalized value.
+     * @returns {?} - Column-compatible predicate value, or the no-match sentinel for numeric UUIDs.
      */
     const normalize = (entry) => {
       if (isUuidType && typeof entry === "number") return NO_MATCH

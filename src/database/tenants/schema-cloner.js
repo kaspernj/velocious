@@ -31,7 +31,7 @@ const TEXT_TYPE_RANKS = {
 export default class SchemaCloner {
   /**
    * Creates a cloner that copies table structure from `sourceDb` into `targetDb`.
-   * @param {{sourceDb: import("../drivers/base.js").default, targetDb: import("../drivers/base.js").default}} args - Options.
+   * @param {{sourceDb: import("../drivers/base.js").default, targetDb: import("../drivers/base.js").default}} args - Databases to clone structure from and into.
    */
   constructor({sourceDb, targetDb}) {
     this.sourceDb = sourceDb
@@ -41,7 +41,7 @@ export default class SchemaCloner {
   /**
    * Clones every given table from the source into the target, then baselines the
    * target's ledger so the cloned schema is recorded as already-migrated.
-   * @param {string[]} tableNames - Table names.
+   * @param {string[]} tableNames - Source tables whose structure should be cloned.
    * @returns {Promise<void>}
    */
   async syncTables(tableNames) {
@@ -55,7 +55,7 @@ export default class SchemaCloner {
   /**
    * Clones a single table from the source into the target, creating it or adding and
    * widening columns and indexes as needed.
-   * @param {string} tableName - Table name.
+   * @param {string} tableName - Source table to synchronize with the target.
    * @returns {Promise<void>}
    */
   async syncTable(tableName) {
@@ -82,7 +82,7 @@ export default class SchemaCloner {
   /**
    * Creates the table in the target from the source table's columns and its
    * non-primary-key indexes.
-   * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args - Options.
+   * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args - Source table metadata and target table name.
    * @returns {Promise<void>}
    */
   async createTargetTable({sourceTable, tableName}) {
@@ -105,7 +105,7 @@ export default class SchemaCloner {
   /**
    * Adds columns present on the source but missing from the target, and widens
    * too-narrow target text columns.
-   * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args - Options.
+   * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args - Source table metadata and target table name.
    * @returns {Promise<boolean>} Whether any column was added or widened.
    */
   async ensureTargetColumns({sourceTable, tableName}) {
@@ -154,7 +154,7 @@ export default class SchemaCloner {
    * Creates non-primary-key indexes present on the source but missing from the target,
    * and replaces target indexes whose definition (columns or uniqueness) drifted from
    * the source.
-   * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args - Options.
+   * @param {{sourceTable: import("../drivers/base-table.js").default, tableName: string}} args - Source table metadata and target table name.
    * @returns {Promise<void>}
    */
   async ensureTargetIndexes({sourceTable, tableName}) {
@@ -230,7 +230,7 @@ export default class SchemaCloner {
 
   /**
    * Drops an index on the target database.
-   * @param {{tableName: string, targetIndex: import("../drivers/base-columns-index.js").default}} args - Options.
+   * @param {{tableName: string, targetIndex: import("../drivers/base-columns-index.js").default}} args - Target table and index to remove.
    * @returns {Promise<void>}
    */
   async dropTargetIndex({tableName, targetIndex}) {
@@ -289,7 +289,7 @@ export default class SchemaCloner {
   /**
    * Builds driver create-index args from a source index (the index name is omitted on
    * SQLite, where index names are unique per-database rather than per-table).
-   * @param {{sourceIndex: import("../drivers/base-columns-index.js").default, tableName: string}} args - Options.
+   * @param {{sourceIndex: import("../drivers/base-columns-index.js").default, tableName: string}} args - Source index and target table receiving it.
    * @returns {{columns: string[], name?: string, tableName: string, unique: boolean}} - Arguments for creating the target index.
    */
   createIndexArgsFromSourceIndex({sourceIndex, tableName}) {
@@ -384,7 +384,7 @@ export default class SchemaCloner {
    * Builds TableData column args from a source column, copying type, nullability,
    * length, notes, simple defaults and (for full clones) primary-key flag.
    * @param {import("../drivers/base-column.js").default} sourceColumn - Source column definition.
-   * @param {{isNewColumn: boolean}} args - Options.
+   * @param {{isNewColumn: boolean}} args - Whether the column is being added instead of cloned with its table.
    * @returns {Record<string, unknown>} - Arguments for altering the target column.
    */
   columnArgsFromSourceColumn(sourceColumn, {isNewColumn}) {

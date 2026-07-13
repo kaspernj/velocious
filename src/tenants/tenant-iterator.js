@@ -12,7 +12,7 @@
 export default class TenantIterator {
   /**
    * Creates an iterator bound to a configuration and tenant database identifier.
-   * @param {{configuration: import("../configuration.js").default, identifier: string, parallelCount?: number}} args - Options.
+   * @param {{configuration: import("../configuration.js").default, identifier: string, parallelCount?: number}} args - Tenant configuration, database identifier, and concurrency limit.
    */
   constructor({configuration, identifier, parallelCount = 1}) {
     this.configuration = configuration
@@ -22,8 +22,8 @@ export default class TenantIterator {
 
   /**
    * Runs `callback` within each tenant's context and returns how many tenants were processed.
-   * @param {Array<?>} tenants - Tenant instances.
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Callback to invoke.
+   * @param {Array<?>} tenants - Tenant descriptors to enter and process.
+   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Per-tenant operation receiving the active database configuration.
    * @returns {Promise<number>} - Number of processed tenants.
    */
   async run(tenants, callback) {
@@ -76,7 +76,7 @@ export default class TenantIterator {
 
   /**
    * Enters one tenant's context and runs the callback, asserting the database is active first.
-   * @param {{callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, tenant: ?}} args - Options.
+   * @param {{callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, tenant: ?}} args - Tenant descriptor and operation to run in its context.
    * @returns {Promise<void>}
    */
   async runTenantCallback({callback, tenant}) {
@@ -94,7 +94,7 @@ export default class TenantIterator {
 
   /**
    * Builds a human-readable label for a tenant for use in error messages.
-   * @param {?} tenant - Tenant instance.
+   * @param {?} tenant - Tenant descriptor to identify in an error.
    * @returns {string} - Human-readable tenant label.
    */
   static tenantLabel(tenant) {

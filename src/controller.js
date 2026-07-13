@@ -266,7 +266,7 @@ export default class VelociousController {
   /**
    * Runs render json arg.
    * @param {object} json - JSON payload.
-   * @returns {void} - No return value.
+   * @returns {void} - Sets the response JSON payload.
    */
   renderJsonArg(json) {
     return this._measureViewRender(() => {

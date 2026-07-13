@@ -26,7 +26,7 @@ export default class MigrationsLedger {
 
   /**
    * Whether the ledger table exists on the given database.
-   * @param {import("./drivers/base.js").default} db - Database connection.
+   * @param {import("./drivers/base.js").default} db - Database whose migration ledger is inspected.
    * @returns {Promise<boolean>} - Whether the ledger table exists.
    */
   static async tableExists(db) {
@@ -38,7 +38,7 @@ export default class MigrationsLedger {
   /**
    * Creates the ledger table if it does not exist. This is the single definition of
    * the `schema_migrations` table shape.
-   * @param {import("./drivers/base.js").default} db - Database connection.
+   * @param {import("./drivers/base.js").default} db - Database that should contain the ledger table.
    * @returns {Promise<void>}
    */
   static async ensureTable(db) {
@@ -57,7 +57,7 @@ export default class MigrationsLedger {
 
   /**
    * Every applied migration version recorded in the ledger.
-   * @param {import("./drivers/base.js").default} db - Database connection.
+   * @param {import("./drivers/base.js").default} db - Database whose applied versions are loaded.
    * @returns {Promise<string[]>} - Applied migration versions.
    */
   static async appliedVersions(db) {
@@ -68,8 +68,8 @@ export default class MigrationsLedger {
 
   /**
    * Whether the given version is recorded as applied.
-   * @param {import("./drivers/base.js").default} db - Database connection.
-   * @param {string} version - Migration version.
+   * @param {import("./drivers/base.js").default} db - Database whose ledger is queried.
+   * @param {string} version - Migration version to look up.
    * @returns {Promise<boolean>} - Whether the migration version is applied.
    */
   static async hasVersion(db, version) {
@@ -84,8 +84,8 @@ export default class MigrationsLedger {
   /**
    * Records a single version as applied. The targeted existence check keeps the
    * migrator's per-migration hot path cheap (no full-table load per migration).
-   * @param {import("./drivers/base.js").default} db - Database connection.
-   * @param {string} version - Migration version.
+   * @param {import("./drivers/base.js").default} db - Database whose ledger receives the version.
+   * @param {string} version - Migration version to record as applied.
    * @returns {Promise<void>}
    */
   static async recordVersion(db, version) {
@@ -96,8 +96,8 @@ export default class MigrationsLedger {
 
   /**
    * Removes a version from the ledger (used when migrating down).
-   * @param {import("./drivers/base.js").default} db - Database connection.
-   * @param {string} version - Migration version.
+   * @param {import("./drivers/base.js").default} db - Database whose ledger loses the version.
+   * @param {string} version - Migration version to mark as unapplied.
    * @returns {Promise<void>}
    */
   static async removeVersion(db, version) {
@@ -108,8 +108,8 @@ export default class MigrationsLedger {
    * Baselines a database's ledger: records each version as applied without running
    * its migration. Idempotent — already-recorded versions are skipped. Ensures the
    * ledger table exists first, then loads the existing set once for the whole batch.
-   * @param {import("./drivers/base.js").default} db - Database connection.
-   * @param {string[]} versions - Migration versions.
+   * @param {import("./drivers/base.js").default} db - Database whose ledger should be baselined.
+   * @param {string[]} versions - Migration versions to record without running them.
    * @returns {Promise<string[]>} The versions that were newly recorded.
    */
   static async markApplied(db, versions) {
@@ -136,7 +136,7 @@ export default class MigrationsLedger {
    * provisioning path advanced `targetDb`'s schema to match `sourceDb` out of band
    * (e.g. cloning table structure between databases): the migrations are, by
    * construction, already applied on the target, so record them without re-running.
-   * @param {{sourceDb: import("./drivers/base.js").default, targetDb: import("./drivers/base.js").default}} args - Options.
+   * @param {{sourceDb: import("./drivers/base.js").default, targetDb: import("./drivers/base.js").default}} args - Source ledger and target database to baseline.
    * @returns {Promise<string[]>} The versions that were newly recorded on the target.
    */
   static async baselineFromDatabase({sourceDb, targetDb}) {

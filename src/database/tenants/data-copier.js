@@ -6,9 +6,9 @@ const DEFAULT_QUERY_CHUNK_SIZE = 500
 /**
  * Splits an array into chunks of at most `chunkSize` items.
  * @template T
- * @param {T[]} values - Values to process.
- * @param {number} chunkSize - Maximum chunk size.
- * @returns {T[][]} - Values divided into bounded chunks.
+ * @param {T[]} values - Ordered items to partition.
+ * @param {number} chunkSize - Maximum items per chunk.
+ * @returns {T[][]} - Consecutive chunks preserving input order.
  */
 function chunks(values, chunkSize) {
   const chunkedValues = []
@@ -22,8 +22,8 @@ function chunks(values, chunkSize) {
 
 /**
  * Stringifies values and returns the distinct, non-blank ones, preserving first-seen order.
- * @param {unknown[]} values - Values to process.
- * @returns {string[]} - Deduplicated string values.
+ * @param {unknown[]} values - Candidate database identifiers to stringify and deduplicate.
+ * @returns {string[]} - Distinct non-blank identifiers in first-seen order.
  */
 function uniqueStrings(values) {
   return Array.from(new Set(values.map((value) => String(value)).filter((value) => value.trim())))
@@ -60,7 +60,7 @@ export default class DataCopier {
    *   insertChunkSize?: number,
    *   queryChunkSize?: number,
    *   onProgress?: (message: string) => void
-   * }} args - Options.
+   * }} args - Source, target, traversal plan, chunk limits, and progress handler.
    */
   constructor({sourceDb, targetDb, tablePlan, idColumn = "id", insertChunkSize = DEFAULT_INSERT_CHUNK_SIZE, queryChunkSize = DEFAULT_QUERY_CHUNK_SIZE, onProgress}) {
     this.sourceDb = sourceDb
@@ -77,7 +77,7 @@ export default class DataCopier {
    * returns the copied source rows keyed by table name. The target's current tenant rows
    * are deleted (children first) and the source rows inserted (parents first) in a single
    * target transaction with foreign keys disabled.
-   * @param {string} keyValue - Key value.
+   * @param {string} keyValue - Tenant key selecting the rows to copy.
    * @returns {Promise<Map<string, Record<string, unknown>[]>>} - Copied source rows grouped by table name.
    */
   async copy(keyValue) {
@@ -125,8 +125,8 @@ export default class DataCopier {
    * Loads the rows for `keyValue` for every table in the plan from `db`, resolving
    * parent-scoped tables from the ids already selected for their parent table. Used for
    * both the source rows to copy and the target's current tenant rows to delete.
-   * @param {import("../drivers/base.js").default} db - Database connection.
-   * @param {string} keyValue - Key value.
+   * @param {import("../drivers/base.js").default} db - Source or target database to traverse.
+   * @param {string} keyValue - Tenant key selecting the root plan rows.
    * @returns {Promise<Map<string, Record<string, unknown>[]>>} - Loaded rows grouped by table name.
    */
   async loadRows(db, keyValue) {
@@ -175,7 +175,7 @@ export default class DataCopier {
 
   /**
    * Selects all rows of `tableName` in `db` whose `columnName` is in `values`, chunked.
-   * @param {{columnName: string, db: import("../drivers/base.js").default, tableName: string, values: string[]}} args - Options.
+   * @param {{columnName: string, db: import("../drivers/base.js").default, tableName: string, values: string[]}} args - Table, column, database, and values for the chunked lookup.
    * @returns {Promise<Record<string, unknown>[]>} - Rows matching the supplied column values.
    */
   async queryRowsByColumn({columnName, db, tableName, values}) {
@@ -256,8 +256,8 @@ export default class DataCopier {
 
   /**
    * Quotes and comma-joins values for an SQL `IN (...)` list against the given database.
-   * @param {import("../drivers/base.js").default} db - Database connection.
-   * @param {string[]} values - Values to process.
+   * @param {import("../drivers/base.js").default} db - Database whose quoting rules format the values.
+   * @param {string[]} values - Values to quote for the `IN` list.
    * @returns {string} - Quoted SQL value list.
    */
   quotedValuesSql(db, values) {
@@ -266,8 +266,8 @@ export default class DataCopier {
 
   /**
    * Runs a query without per-query logging, used for the high-volume copy statements.
-   * @param {import("../drivers/base.js").default} db - Database connection.
-   * @param {string} sql - SQL statement.
+   * @param {import("../drivers/base.js").default} db - Database on which to execute the copy query.
+   * @param {string} sql - Copy-related SQL statement to execute quietly.
    * @returns {Promise<Record<string, unknown>[]>} - Query result rows.
    */
   async executeQuietQuery(db, sql) {
@@ -276,7 +276,7 @@ export default class DataCopier {
 
   /**
    * Inserts column-aligned row tuples into a table without per-query logging.
-   * @param {{columns: string[], db: import("../drivers/base.js").default, rows: Array<Array<unknown>>, tableName: string}} args - Options.
+   * @param {{columns: string[], db: import("../drivers/base.js").default, rows: Array<Array<unknown>>, tableName: string}} args - Destination table and column-aligned row values to insert.
    * @returns {Promise<void>}
    */
   async insertRowsQuietly({columns, db, rows, tableName}) {
@@ -285,7 +285,7 @@ export default class DataCopier {
 
   /**
    * Forwards a progress message to the optional `onProgress` callback when one was given.
-   * @param {string} message - Message to process.
+   * @param {string} message - Copy progress message to forward when reporting is enabled.
    * @returns {void}
    */
   reportProgress(message) {

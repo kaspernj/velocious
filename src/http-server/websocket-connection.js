@@ -12,7 +12,7 @@
 export default class VelociousWebsocketConnection {
   /**
    * Runs constructor.
-   * @param {object} args - Options.
+   * @param {object} args - Owning session, connection parameters, and client identifier.
    * @param {string} args.connectionId - Client-assigned id, unique within the session.
    * @param {Record<string, ?>} args.params - Opaque params from the `connection-open` message.
    * @param {import("./client/websocket-session.js").default} args.session - Owning session.
@@ -36,7 +36,7 @@ export default class VelociousWebsocketConnection {
    * Called for each `connection-message` the client sends to this
    * specific connection. Messages arriving before `onConnect` has
    * resolved are queued and delivered in order once it finishes.
-   * @param {?} body - Message body.
+   * @param {?} body - Client-sent payload for this connection.
    * @returns {void | Promise<void>} - Completes after message handling.
    */
   onMessage(body) { void body }
@@ -64,7 +64,7 @@ export default class VelociousWebsocketConnection {
    * (server-initiated `close()`), `session_destroyed` (socket dropped
    * and nothing to resume; grace path did not apply), `grace_expired`
    * (paused session's grace window ran out without resume), `error`.
-   * @param {"client_close" | "server_close" | "session_destroyed" | "grace_expired" | "error"} reason - Close reason.
+   * @param {"client_close" | "server_close" | "session_destroyed" | "grace_expired" | "error"} reason - Lifecycle reason for permanent connection teardown.
    * @returns {void | Promise<void>} - Completes after close handling.
    */
   onClose(reason) { void reason }
@@ -72,7 +72,7 @@ export default class VelociousWebsocketConnection {
   /**
    * Sends a `connection-message` frame to the client side of this
    * connection. Throws if the connection has already been closed.
-   * @param {?} body - Message body.
+   * @param {?} body - Connection payload to send to the client.
    * @returns {void}
    */
   sendMessage(body) {
@@ -90,7 +90,7 @@ export default class VelociousWebsocketConnection {
   /**
    * Closes this connection from the server side. Fires `onClose`
    * locally and notifies the client with `{type: "connection-closed"}`.
-   * @param {"server_close" | "error"} [reason] - Close reason.
+   * @param {"server_close" | "error"} [reason] - Reason reported to the close hook and client.
    * @returns {Promise<void>}
    */
   async close(reason = "server_close") {

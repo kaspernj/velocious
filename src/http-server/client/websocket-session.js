@@ -239,7 +239,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Removes a closed connection from the session registry. Called by
    * `VelociousWebsocketConnection.close()` after it sends the final
    * `connection-closed` frame.
-   * @param {string} connectionId - Connection identifier.
+   * @param {string} connectionId - Closed connection identifier to remove.
    * @returns {void}
    */
   _removeConnection(connectionId) {
@@ -450,7 +450,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * The actual message dispatch, extracted so
    * `configuration.getWebsocketAroundRequest()` can wrap it in any
    * per-request context (AsyncLocalStorage, tracing, etc.).
-   * @param {WebsocketSessionMessage} message - Message to process.
+   * @param {WebsocketSessionMessage} message - Decoded client frame to dispatch by message type.
    * @returns {Promise<void>}
    */
   async _handleMessageInner(message) {
@@ -731,7 +731,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * fragmented message. Returns true when the fragment was accepted
    * and false when the per-message cap was hit and the socket has
    * been closed.
-   * @param {Buffer} payload - Message payload.
+   * @param {Buffer} payload - Continuation-frame bytes to append.
    * @returns {boolean} - Whether the fragment was accepted.
    */
   _appendFragment(payload) {
@@ -1087,7 +1087,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * created one whose socket just connected) transfers state from
    * the paused session and instructs the client via
    * `session-resumed` or `session-gone`.
-   * @param {Record<string, ?>} message - Message to process.
+   * @param {Record<string, ?>} message - Session-resume frame containing the paused session identifier.
    * @returns {Promise<void>}
    */
   async _handleSessionResume(message) {
@@ -1168,7 +1168,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Fires `onClose(reason)` on every live app-defined connection, then
    * drops them from the registry. No network frame is sent — the
    * socket is already going away.
-   * @param {"session_destroyed" | "grace_expired" | "error"} reason - Close reason.
+   * @param {"session_destroyed" | "grace_expired" | "error"} reason - Permanent teardown reason passed to each connection.
    * @returns {Promise<void>}
    */
   async _teardownConnections(reason) {
@@ -1194,7 +1194,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * registered connection class, stores it on `_connections`, and
    * fires `onConnect()`. Sends `connection-opened` on success or
    * `connection-error` on failure.
-   * @param {Record<string, ?>} message - Message to process.
+   * @param {Record<string, ?>} message - Connection-open frame naming the connection type and identifier.
    * @returns {Promise<void>}
    */
   async _handleConnectionOpen(message) {
@@ -1242,7 +1242,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * Handles a `{type: "connection-message"}` from the client.
-   * @param {Record<string, ?>} message - Message to process.
+   * @param {Record<string, ?>} message - Connection-message frame containing the target identifier and body.
    * @returns {Promise<void>}
    */
   async _handleConnectionMessage(message) {
@@ -1267,7 +1267,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Handles a `{type: "connection-close"}` from the client — fires
    * `onClose("client_close")` and confirms with `connection-closed`.
-   * @param {Record<string, ?>} message - Message to process.
+   * @param {Record<string, ?>} message - Connection-close frame containing the target identifier.
    * @returns {Promise<void>}
    */
   async _handleConnectionClose(message) {
@@ -1296,7 +1296,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Handles `{type: "channel-subscribe"}` — runs `canSubscribe()`,
    * registers with the Configuration's global routing registry on
    * success, and sends `channel-subscribed` or `channel-error`.
-   * @param {Record<string, ?>} message - Message to process.
+   * @param {Record<string, ?>} message - Channel-subscribe frame describing the requested subscription.
    * @returns {Promise<void>}
    */
   async _handleChannelSubscribe(message) {
@@ -1421,7 +1421,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Handles `{type: "channel-unsubscribe"}` from the client — calls
    * `unsubscribed()` and sends `channel-unsubscribed`.
-   * @param {Record<string, ?>} message - Message to process.
+   * @param {Record<string, ?>} message - Channel-unsubscribe frame containing the subscription identifier.
    * @returns {Promise<void>}
    */
   async _handleChannelUnsubscribe(message) {

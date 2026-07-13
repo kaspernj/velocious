@@ -74,7 +74,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * `new Task({project})`, the FK (`projectId`) is only flushed onto
    * the attribute store during save — but the relationship object is
    * already loaded and carries the id we need for the WHERE clause.
-   * @param {import("../index.js").default} model - Model instance.
+   * @param {import("../index.js").default} model - Record whose loaded relationship may supply the scope value.
    * @param {string} scopeColumn - camelCase attribute name (e.g. `"projectId"`).
    * @returns {string | number | null} - Value normalized for comparison.
    */

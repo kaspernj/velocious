@@ -20,7 +20,7 @@
 export default class VelociousWebsocketChannel {
   /**
    * Runs constructor.
-   * @param {object} args - Options.
+   * @param {object} args - Session, channel parameters, and client subscription identifier.
    * @param {string} args.subscriptionId - Client-assigned id, unique within the session.
    * @param {WebsocketParams} args.params - Subscribe params.
    * @param {import("./client/websocket-session.js").default} args.session - Owning session.
@@ -101,7 +101,7 @@ export default class VelociousWebsocketChannel {
    * Delivers a matched broadcast to this subscriber. Subclasses can
    * override when the outbound body must be tailored to subscription
    * params before sending.
-   * @param {WebsocketJsonValue} body - Message body.
+   * @param {WebsocketJsonValue} body - Broadcast payload offered to this subscription.
    * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void | Promise<void>} - Completes after broadcast delivery.
    */
@@ -113,7 +113,7 @@ export default class VelociousWebsocketChannel {
    * Sends a `channel-message` frame to THIS subscriber only.
    * When `meta.eventId` is provided, the client receives it so it
    * can track its checkpoint for `lastEventId` replay on reconnect.
-   * @param {WebsocketJsonValue} body - Message body.
+   * @param {WebsocketJsonValue} body - Channel payload to send to the subscribed client.
    * @param {{eventId?: string}} [meta] - Optional event metadata.
    * @returns {void}
    */

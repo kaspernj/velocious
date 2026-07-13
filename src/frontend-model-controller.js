@@ -1353,8 +1353,8 @@ export default class FrontendModelController extends Controller {
    * its backend model class by looking up the resource by modelName
    * across all configured backend projects. Returns null when no
    * resource matches the user-provided ability entry.
-   * @param {string} modelName - Model name.
-   * @returns {typeof import("./database/record/index.js").default | null} - Matching root model when present.
+   * @param {string} modelName - Frontend model name from an ability request.
+   * @returns {typeof import("./database/record/index.js").default | null} - Backend model class exposed under that frontend name, if present.
    */
   _frontendModelClassForAbilities(modelName) {
     if (typeof modelName !== "string" || modelName.length === 0) return null
@@ -1385,9 +1385,9 @@ export default class FrontendModelController extends Controller {
    * preloaded relationships at any depth. Used to evaluate per-record
    * abilities against nested preloaded children with a single batched
    * query per (modelClass, action) pair.
-   * @param {import("./database/record/index.js").default[]} rootModels - Root model collection.
-   * @param {string} modelName - Model name.
-   * @returns {import("./database/record/index.js").default[]} - Root models reachable from the record.
+   * @param {import("./database/record/index.js").default[]} rootModels - Loaded roots whose relationship graphs should be traversed.
+   * @param {string} modelName - Model name records must match.
+   * @returns {import("./database/record/index.js").default[]} - Matching records reachable from the loaded roots.
    */
   _frontendModelCollectRecordsForName(rootModels, modelName) {
     /**
@@ -1401,7 +1401,7 @@ export default class FrontendModelController extends Controller {
 
     /**
      * Walk.
-     * @param {import("./database/record/index.js").default | null | undefined} record - Record to process.
+     * @param {import("./database/record/index.js").default | null | undefined} record - Loaded record whose relationship graph should be visited.
      */
     const walk = (record) => {
       if (!record || typeof record !== "object") return
@@ -1440,7 +1440,7 @@ export default class FrontendModelController extends Controller {
    * `_setComputedAbility`. Runs one batched `authorized query + pluck`
    * per (modelClass, action) pair, regardless of how many records
    * were loaded.
-   * @param {import("./database/record/index.js").default[]} rootModels - Root model collection.
+   * @param {import("./database/record/index.js").default[]} rootModels - Loaded roots that receive computed ability results.
    * @returns {Promise<void>}
    */
   async frontendModelComputeAbilities(rootModels) {
