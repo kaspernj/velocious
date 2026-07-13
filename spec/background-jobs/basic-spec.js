@@ -3,13 +3,165 @@
 import net from "net"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
+import JsonSocket from "../../src/background-jobs/json-socket.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import {outputPathFor, startBackgroundJobs, waitForJobCompleted, waitForOutputJson} from "../helpers/background-jobs-helper.js"
+import BackgroundJobsStatusReporter from "../../src/background-jobs/status-reporter.js"
+import { outputPathFor, startBackgroundJobs, startBackgroundJobsMain, waitForJobCompleted, waitForOutputJson } from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
+/**
+ * @param {object} args - Options.
+ * @param {number} args.port - Background jobs main port.
+ * @param {boolean} [args.supportsHandoffIdReporting] - Whether the worker advertises handoff-id reporting.
+ * @param {string} args.workerId - Worker id.
+ * @returns {Promise<{jsonSocket: JsonSocket, nextJob: () => Promise<import("../../src/background-jobs/types.js").BackgroundJobPayload>, receivedJobs: import("../../src/background-jobs/types.js").BackgroundJobPayload[]}>} - Connected controllable worker.
+ */
+async function connectControllableWorker({port, supportsHandoffIdReporting = true, workerId}) {
+  const socket = net.createConnection({host: "127.0.0.1", port})
+  const jsonSocket = new JsonSocket(socket)
+  /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
+  const jobs = []
+
+  jsonSocket.on("message", (message) => {
+    if (message?.type === "job") jobs.push(message.payload)
+  })
+
+  await new Promise((resolve, reject) => {
+    socket.once("error", reject)
+    socket.once("connect", resolve)
+  })
+
+  if (supportsHandoffIdReporting) {
+    jsonSocket.send({type: "hello", role: "worker", supportsHandoffIdReporting: true, workerId})
+  } else {
+    jsonSocket.send({type: "hello", role: "worker", workerId})
+  }
+  jsonSocket.send({type: "ready", acceptsForked: true, acceptsInline: true, acceptsSpawned: true})
+
+  return {
+    jsonSocket,
+    nextJob: async () => await timeout({timeout: 2000}, async () => {
+      while (jobs.length === 0) await wait(0.01)
+
+      const payload = jobs.shift()
+
+      if (!payload) throw new Error("Expected a background job payload")
+
+      return payload
+    }),
+    receivedJobs: jobs
+  }
+}
+
 describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
+  it("dispatches fenced handoffs only to workers that advertise handoff-id reporting", async () => {
+    const {main, store} = await startBackgroundJobsMain()
+    const legacyWorker = await connectControllableWorker({
+      port: main.getPort(),
+      supportsHandoffIdReporting: false,
+      workerId: "legacy-worker"
+    })
+    const capableWorker = await connectControllableWorker({port: main.getPort(), workerId: "capable-worker"})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+
+    await main._drain()
+
+    const payload = await capableWorker.nextJob()
+
+    expect(payload.id).toEqual(jobId)
+    expect(payload.handoffId).toBeTruthy()
+    expect(legacyWorker.receivedJobs).toEqual([])
+
+    const reporter = new BackgroundJobsStatusReporter({
+      configuration: dummyConfiguration,
+      host: "127.0.0.1",
+      port: main.getPort()
+    })
+
+    await reporter.report({
+      jobId,
+      status: "completed",
+      handoffId: payload.handoffId,
+      handedOffAtMs: payload.handedOffAtMs,
+      workerId: payload.workerId
+    })
+
+    const job = await store.getJob(jobId)
+
+    expect(job?.status).toEqual("completed")
+
+    legacyWorker.jsonSocket.close()
+    capableWorker.jsonSocket.close()
+    await main.stop()
+  })
+
+  it("immediately requeues a disconnected worker's exact handoff to another socket", async () => {
+    const {main, store} = await startBackgroundJobsMain()
+    const firstWorker = await connectControllableWorker({port: main.getPort(), workerId: "shared-worker-id"})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+
+    await main._drain()
+
+    const firstPayload = await firstWorker.nextJob()
+
+    expect(firstPayload.id).toEqual(jobId)
+    expect(firstPayload.handoffId).toBeTruthy()
+
+    const secondWorker = await connectControllableWorker({port: main.getPort(), workerId: "shared-worker-id"})
+
+    firstWorker.jsonSocket.close()
+
+    const secondPayload = await secondWorker.nextJob()
+
+    expect(secondPayload.id).toEqual(jobId)
+    expect(secondPayload.handoffId).toBeTruthy()
+    expect(secondPayload.handoffId).not.toEqual(firstPayload.handoffId)
+
+    const reporter = new BackgroundJobsStatusReporter({
+      configuration: dummyConfiguration,
+      host: "127.0.0.1",
+      port: main.getPort()
+    })
+
+    await reporter.report({
+      jobId,
+      status: "completed",
+      handoffId: firstPayload.handoffId,
+      handedOffAtMs: firstPayload.handedOffAtMs,
+      workerId: firstPayload.workerId
+    })
+    await reporter.report({
+      jobId,
+      status: "failed",
+      error: "late failure",
+      handoffId: firstPayload.handoffId,
+      handedOffAtMs: firstPayload.handedOffAtMs,
+      workerId: firstPayload.workerId
+    })
+
+    let job = await store.getJob(jobId)
+
+    expect(job?.status).toEqual("handed_off")
+    expect(job?.handoffId).toEqual(secondPayload.handoffId)
+    expect(job?.attempts).toEqual(0)
+
+    await reporter.report({
+      jobId,
+      status: "completed",
+      handoffId: secondPayload.handoffId,
+      handedOffAtMs: secondPayload.handedOffAtMs,
+      workerId: secondPayload.workerId
+    })
+
+    job = await store.getJob(jobId)
+    expect(job?.status).toEqual("completed")
+
+    secondWorker.jsonSocket.close()
+    await main.stop()
+  })
+
   it("enqueues and runs a job in a worker", async () => {
     const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("job")

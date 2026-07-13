@@ -261,7 +261,7 @@ export default class BackgroundJobsWorker {
     })
 
     socket.on("connect", () => {
-      jsonSocket.send({type: "hello", role: "worker", workerId: this.workerId})
+      jsonSocket.send({type: "hello", role: "worker", supportsHandoffIdReporting: true, workerId: this.workerId})
       this._sendReadyIfRunning()
     })
   }
@@ -399,6 +399,7 @@ export default class BackgroundJobsWorker {
       await this._reportJobResult({
         jobId: payload.id,
         status: "completed",
+        handoffId: payload.handoffId,
         handedOffAtMs: payload.handedOffAtMs,
         workerId: payload.workerId || this.workerId
       })
@@ -407,6 +408,7 @@ export default class BackgroundJobsWorker {
         jobId: payload.id,
         status: "failed",
         error,
+        handoffId: payload.handoffId,
         handedOffAtMs: payload.handedOffAtMs,
         workerId: payload.workerId || this.workerId
       })
@@ -609,6 +611,7 @@ export default class BackgroundJobsWorker {
       jobId: payload.id,
       status: "failed",
       error,
+      handoffId: payload.handoffId,
       handedOffAtMs: payload.handedOffAtMs,
       workerId: payload.workerId || this.workerId
     })
@@ -665,15 +668,16 @@ export default class BackgroundJobsWorker {
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
    * @param {?} [args.error] - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async _reportJobResult({jobId, status, error, handedOffAtMs, workerId}) {
+  async _reportJobResult({jobId, status, error, handoffId, handedOffAtMs, workerId}) {
     if (!this.statusReporter) return
 
     try {
-      await this.statusReporter.reportWithRetry({jobId, status, error, handedOffAtMs, workerId})
+      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }

@@ -30,9 +30,10 @@ async function seedJobs() {
   await store.enqueue({jobName: "TestJob", args: ["beta"], options: {forked: false}})
 
   const failedId = await store.enqueue({jobName: "FailingJob", args: ["b"], options: {forked: false, maxRetries: 0}})
-  const handedOffAtMs = await store.markHandedOff({jobId: failedId, workerId: "worker-1"})
+  const handoff = await store.markHandedOff({jobId: failedId, workerId: "worker-1"})
+  if (!handoff) throw new Error("Expected the failed job to be handed off")
 
-  await store.markFailed({error: "boom", handedOffAtMs, jobId: failedId, workerId: "worker-1"})
+  await store.markFailed({error: "boom", jobId: failedId, workerId: "worker-1", ...handoff})
 
   return {failedId}
 }

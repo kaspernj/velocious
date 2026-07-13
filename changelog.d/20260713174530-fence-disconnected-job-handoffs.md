@@ -1,0 +1,1 @@
+Immediately requeue durable background jobs when their worker socket disconnects, fence late completion or failure reports with a unique handoff lease id, and dispatch fenced jobs only to workers that advertise lease-reporting support.

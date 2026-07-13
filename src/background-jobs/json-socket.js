@@ -17,6 +17,10 @@ export default class JsonSocket extends EventEmitter {
     /**
      * Narrows the runtime value to the documented type.
      * @type {boolean} */
+    this.supportsHandoffIdReporting = false
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {boolean} */
     this.acceptsSpawnedJobs = true
     /**
      * Narrows the runtime value to the documented type.

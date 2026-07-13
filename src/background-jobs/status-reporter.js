@@ -27,11 +27,12 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
    * @param {?} [args.error] - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async report({jobId, status, error, handedOffAtMs, workerId}) {
+  async report({jobId, status, error, handoffId, handedOffAtMs, workerId}) {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
@@ -44,6 +45,7 @@ export default class BackgroundJobsStatusReporter {
           jsonSocket.send({
             type: status === "completed" ? "job-complete" : "job-failed",
             jobId,
+            handoffId,
             workerId,
             handedOffAtMs,
             error: error ? normalizeBackgroundJobError(error) : undefined
@@ -69,18 +71,19 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
    * @param {?} [args.error] - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.maxDurationMs] - Max duration for retries.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async reportWithRetry({jobId, status, error, handedOffAtMs, workerId, maxDurationMs}) {
+  async reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId, maxDurationMs}) {
     let attempt = 0
     const startTime = Date.now()
 
     while (true) {
       try {
-        await this.report({jobId, status, error, handedOffAtMs, workerId})
+        await this.report({jobId, status, error, handoffId, handedOffAtMs, workerId})
         return
       } catch (error) {
         attempt += 1
