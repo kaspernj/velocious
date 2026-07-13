@@ -135,7 +135,13 @@ export default class VelociousHttpServerClientRequestRunner {
     this.requestTiming.startedAtMs = Date.now()
 
     return await this.configuration.runWithRequestTiming(this.requestTiming, async () => {
-      await this._run()
+      // Run the whole request inside any per-test shared connection context so an
+      // in-process handler executes on the test's connection (and open transaction).
+      // No shared connection is set outside tests / in worker threads, so this is a
+      // no-op there.
+      await this.configuration.runWithTestSharedConnectionContexts(async () => {
+        await this._run()
+      })
     })
   }
 

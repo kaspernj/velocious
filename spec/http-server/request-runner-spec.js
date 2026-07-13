@@ -29,7 +29,8 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
         getErrorEvents: () => ({
           emit: () => {}
         }),
-        runWithRequestTiming: async (_requestTiming, callback) => await callback()
+        runWithRequestTiming: async (_requestTiming, callback) => await callback(),
+        runWithTestSharedConnectionContexts: (callback) => callback()
       })
       const request = /** @type {any} */ ({
         header: () => undefined,
@@ -75,7 +76,8 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
         getErrorEvents: () => ({
           emit: () => {}
         }),
-        runWithRequestTiming: async (_requestTiming, callback) => await callback()
+        runWithRequestTiming: async (_requestTiming, callback) => await callback(),
+        runWithTestSharedConnectionContexts: (callback) => callback()
       })
       const request = /** @type {any} */ ({
         header: () => undefined,
@@ -120,7 +122,8 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
         getErrorEvents: () => ({
           emit: () => {}
         }),
-        runWithRequestTiming: async (_requestTiming, callback) => await callback()
+        runWithRequestTiming: async (_requestTiming, callback) => await callback(),
+        runWithTestSharedConnectionContexts: (callback) => callback()
       })
       const request = /** @type {any} */ ({
         header: () => undefined,

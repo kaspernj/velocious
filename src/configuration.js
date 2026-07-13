@@ -2831,6 +2831,29 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Runs a callback inside every pool's test shared connection context (a no-op for
+   * pools without one). In-process request handling is wrapped in this so a request
+   * runs on the same connection — and open transaction — as the test that issued it,
+   * letting request specs clean up by rolling back instead of truncating. Outside
+   * tests no shared connection is set, so this just runs the callback.
+   * @template T
+   * @param {() => T} callback - Callback to run inside the shared connection contexts.
+   * @returns {T} - Callback result.
+   */
+  runWithTestSharedConnectionContexts(callback) {
+    let runCallback = callback
+
+    for (const pool of Object.values(this.databasePools)) {
+      if (!pool) continue
+      const previousRunCallback = runCallback
+
+      runCallback = () => pool.runWithTestSharedConnection(previousRunCallback)
+    }
+
+    return runCallback()
+  }
+
+  /**
    * Runs is missing current connection error.
    * @param {?} error - Error thrown while looking up the current connection.
    * @returns {boolean} - Whether the error means no current connection is available.

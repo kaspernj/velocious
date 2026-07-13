@@ -520,7 +520,12 @@ export default class TestRunner {
     if (!this._application) {
       this._application = new Application({
         configuration: this.getConfiguration(),
-        httpServer: {port: 31006},
+        // Run request handlers in the main thread (not worker threads) so they
+        // resolve DB work to the per-test shared connection set by
+        // {@link activateTestSharedConnections}. This lets request-type specs use
+        // transaction-based cleaning (their writes land inside the test's
+        // transaction and roll back) instead of truncating every table.
+        httpServer: {inProcess: true, port: 31006},
         type: "test-runner"
       })
 
@@ -529,6 +534,46 @@ export default class TestRunner {
     }
 
     return this._application
+  }
+
+  /**
+   * Pins each per-test connection as its pool's in-process test shared connection so
+   * HTTP request handlers dispatched during the test (which run in the main thread but
+   * in a fresh async context without the connection pin) resolve to the SAME connection
+   * — and therefore the same open transaction — as the test body. Pools that predate the
+   * shared-connection hook are skipped. Pair with {@link clearTestSharedConnections} in a
+   * finally.
+   * @returns {void}
+   */
+  activateTestSharedConnections() {
+    const configuration = this.getConfiguration()
+    const currentConnections = configuration.getCurrentConnections()
+
+    for (const identifier of Object.keys(currentConnections)) {
+      const pool = configuration.getDatabasePool(identifier)
+
+      // Tenant-scoped pools resolve a different connection per request tenant
+      // (via runWithTenant), so forcing a single shared connection would break
+      // per-request tenant resolution. Only share non-tenant pools; the tenant
+      // pool keeps resolving its own connection per request.
+      if (pool.getConfiguration().tenantOnly) {
+        continue
+      }
+      pool.setTestSharedConnection(currentConnections[identifier])
+    }
+  }
+
+  /**
+   * Clears the in-process test shared connection on every configured pool. Idempotent and
+   * safe to call when none was set.
+   * @returns {void}
+   */
+  clearTestSharedConnections() {
+    const configuration = this.getConfiguration()
+
+    for (const identifier of configuration.getDatabaseIdentifiers()) {
+      configuration.getDatabasePool(identifier).clearTestSharedConnection()
+    }
   }
 
   /**
@@ -941,28 +986,40 @@ export default class TestRunner {
               // stale async-context pin and force every later test onto a fresh checkout,
               // breaking isolation).
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
-                try {
-                  clearDeliveries()
-                  for (const beforeEachData of newBeforeEaches) {
-                    await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                  }
+                // Only request-type tests dispatch through the in-process HTTP handler,
+                // so only they need the pinned connection shared with it. Sharing it for
+                // every test would let unrelated specs observe a test shared connection on
+                // pools they inspect directly. Cleared after afterEach either way.
+                if (testArgs.type == "request") {
+                  this.activateTestSharedConnections()
+                }
 
-                  // Record which test is running so an async crash (an unhandled
-                  // rejection detached from any await) that fires during or shortly
-                  // after this test can be attributed to it in run()'s handler.
-                  this._lastTestContext = {
-                    fullDescription: this.buildFullDescription(descriptions, testDescription),
-                    filePath: testData.filePath ?? "<unknown>",
-                    line: testData.line ?? 0
-                  }
-                  await testData.function(testArgs)
-                  if (!timeoutState.timedOut) {
-                    this._successfulTests++
+                try {
+                  try {
+                    clearDeliveries()
+                    for (const beforeEachData of newBeforeEaches) {
+                      await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                    }
+
+                    // Record which test is running so an async crash (an unhandled
+                    // rejection detached from any await) that fires during or shortly
+                    // after this test can be attributed to it in run()'s handler.
+                    this._lastTestContext = {
+                      fullDescription: this.buildFullDescription(descriptions, testDescription),
+                      filePath: testData.filePath ?? "<unknown>",
+                      line: testData.line ?? 0
+                    }
+                    await testData.function(testArgs)
+                    if (!timeoutState.timedOut) {
+                      this._successfulTests++
+                    }
+                  } finally {
+                    for (const afterEachData of newAfterEaches) {
+                      await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                    }
                   }
                 } finally {
-                  for (const afterEachData of newAfterEaches) {
-                    await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                  }
+                  this.clearTestSharedConnections()
                 }
               })
             })
@@ -996,6 +1053,15 @@ export default class TestRunner {
             if (timedOut && testLifecycle) {
               timeoutState.timedOut = true
               await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
+
+              // If the abandoned lifecycle never settled within the grace, its
+              // `finally` (which clears the shared connections) has not run, so
+              // this test's shared connection — sitting on a still-open, timed-out
+              // transaction — would otherwise be reused by the next test's outer
+              // ensureConnections before activateTestSharedConnections() replaces
+              // it. Clear it here so the next test checks out a fresh connection.
+              // Idempotent when the lifecycle did settle and already cleared.
+              this.clearTestSharedConnections()
             }
 
             willRetry = retriesUsed < retryCount

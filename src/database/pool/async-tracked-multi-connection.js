@@ -810,6 +810,22 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Runs a callback inside the test shared connection's async context, so nested
+   * `getCurrentConnection`/`ensureConnections` reuse it (with a real context) rather
+   * than checking out a fresh pooled connection. Used to run an in-process request
+   * handler on the same connection — and open transaction — as the test body. No-op
+   * (runs the callback as-is) when no shared connection is set.
+   * @template T
+   * @param {() => T} callback - Callback to run in the shared connection's context.
+   * @returns {T} - Callback result.
+   */
+  runWithTestSharedConnection(callback) {
+    if (!this._testSharedConnection) return callback()
+
+    return this.asyncLocalStorage.run(this._testSharedConnection.getIdSeq(), callback)
+  }
+
+  /**
    * Returns the connection tied to the current async context, if any.
    * Falls back to the test shared connection when no async context exists.
    * @returns {import("../drivers/base.js").default | undefined} - The current context connection.
