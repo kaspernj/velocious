@@ -59,8 +59,9 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
     // Pre-create a future-scheduled job so the dispatcher's initial drain
     // calls `_armScheduledTimer` against a real future timestamp.
     const futureJobId = await store.enqueue({jobName: "TestJob", args: ["future"], options: {forked: false, maxRetries: 5}})
-    const handedOffAtMs = await store.markHandedOff({jobId: futureJobId, workerId: "worker-z"})
-    await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-z", handedOffAtMs})
+    const handoff = await store.markHandedOff({jobId: futureJobId, workerId: "worker-z"})
+    if (!handoff) throw new Error("Expected the future job to be handed off")
+    await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-z", ...handoff})
 
     const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
     await main.start()
@@ -90,7 +91,11 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
       // Make the store look like it has a ready worker so the drain
       // actually calls `nextAvailableJob()` — the loop is gated on
       // `readyWorkers.size > 0`.
-      const fakeWorker = /** @type {any} */ ({workerId: "fake", send: () => {}})
+      const fakeWorker = /** @type {any} */ ({
+        workerId: "fake",
+        send: () => {},
+        supportsHandoffIdReporting: true
+      })
       main.readyWorkers.add(fakeWorker)
 
       await main._drain()

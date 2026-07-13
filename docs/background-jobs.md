@@ -2,6 +2,16 @@
 
 Velocious background jobs are documented in the main README. This page covers behavior that applications usually need when operating background jobs in production.
 
+## Worker Disconnect Recovery
+
+Each durable worker handoff has a unique lease id. If a worker socket disconnects unexpectedly, `background-jobs-main` immediately returns only the jobs handed to that exact socket to the queue and makes them available to another connected worker. Two connections that advertise the same worker id remain isolated from each other.
+
+Disconnect recovery provides at-least-once delivery: a disconnected worker may already have started external side effects before the replacement attempt begins. Completion and failure reports carry the lease id and update the database only while that exact handoff is still active, so a late report from the disconnected attempt cannot complete or fail a newer attempt.
+
+Graceful draining is unchanged. A worker that announces `draining` keeps its socket open while its in-flight jobs finish, and those jobs are not reclaimed unless that socket is subsequently lost before their reports are accepted.
+
+The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
+
 ## Failure Events
 
 `background-jobs-main` emits a `background-job-failed` error event after it accepts a worker failure report and records the updated job state. Duplicate or stale worker reports do not emit this event because they are rejected before the job row changes.
@@ -34,6 +44,7 @@ The `background-job-failed` payload has:
 
 - `error`: the job failure as an `Error`. String failure reports are normalized to an `Error`, with the original string preserved as `error.stack` when available.
 - `context.attempts`: the updated failed-attempt count after this report.
+- `context.handoffId`: the unique handoff lease id included in the accepted report.
 - `context.handedOffAtMs`: the worker handoff timestamp included in the accepted report.
 - `context.jobArgs`: the serialized arguments for the job.
 - `context.jobId`: the background job id.

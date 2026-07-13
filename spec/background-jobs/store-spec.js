@@ -132,6 +132,41 @@ async function createStoreWithLegacyJobsSchema() {
 }
 
 describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => {
+  it("fences stale completion and failure reports after a handoff is requeued", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const firstHandoff = await store.markHandedOff({jobId, workerId: "shared-worker-id"})
+
+    if (!firstHandoff) throw new Error("Expected the first handoff to be claimed")
+
+    await store.markReturnedToQueue({jobId, handoffId: firstHandoff.handoffId})
+
+    const secondHandoff = await store.markHandedOff({jobId, workerId: "shared-worker-id"})
+
+    if (!secondHandoff) throw new Error("Expected the second handoff to be claimed")
+
+    await store.markCompleted({
+      jobId,
+      handoffId: firstHandoff.handoffId,
+      workerId: "shared-worker-id",
+      handedOffAtMs: firstHandoff.handedOffAtMs
+    })
+    await store.markFailed({
+      jobId,
+      error: "late failure",
+      handoffId: firstHandoff.handoffId,
+      workerId: "shared-worker-id",
+      handedOffAtMs: firstHandoff.handedOffAtMs
+    })
+
+    const job = await getJobOrFail({jobId, store})
+
+    expect(job.status).toEqual("handed_off")
+    expect(job.handoffId).toEqual(secondHandoff.handoffId)
+    expect(job.attempts).toEqual(0)
+    expect(job.lastError).toBeNull()
+  })
+
   it("requeues failed jobs and honors max retries", async () => {
     const store = await createClearedStore()
 
@@ -144,10 +179,12 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       }
     })
 
-    let handedOffAtMs = await store.markHandedOff({jobId, workerId: "worker-1"})
+    let handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
 
     const before = Date.now()
-    await store.markFailed({jobId, error: "boom", workerId: "worker-1", handedOffAtMs})
+    await store.markFailed({jobId, error: "boom", workerId: "worker-1", ...handoff})
 
     let job = await store.getJob(jobId)
 
@@ -155,8 +192,9 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job?.attempts).toEqual(1)
     expect(job?.scheduledAtMs).toBeGreaterThan(before + 9000)
 
-    handedOffAtMs = await store.markHandedOff({jobId, workerId: "worker-1"})
-    await store.markFailed({jobId, error: "boom again", workerId: "worker-1", handedOffAtMs})
+    handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+    if (!handoff) throw new Error("Expected the retried job to be handed off")
+    await store.markFailed({jobId, error: "boom again", workerId: "worker-1", ...handoff})
 
     job = await store.getJob(jobId)
 
@@ -192,8 +230,9 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
     // Job 2: build a future-scheduled job by re-queueing a failed job with backoff.
     const futureJobId = await store.enqueue({jobName: "TestJob", args: ["later"], options: {forked: false, maxRetries: 5}})
-    const handedOffAtMs = await store.markHandedOff({jobId: futureJobId, workerId: "worker-x"})
-    await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-x", handedOffAtMs})
+    const handoff = await store.markHandedOff({jobId: futureJobId, workerId: "worker-x"})
+    if (!handoff) throw new Error("Expected the future job to be handed off")
+    await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-x", ...handoff})
 
     const next = await store.nextScheduledJob()
 

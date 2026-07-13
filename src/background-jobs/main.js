@@ -65,6 +65,10 @@ export default class BackgroundJobsMain {
      * @type {Set<JsonSocket>} */
     this.readyWorkers = new Set()
     /**
+     * Active durable handoffs keyed by the exact worker socket that received them.
+     * @type {Map<JsonSocket, Map<string, string>>} */
+    this.workerHandoffs = new Map()
+    /**
      * Narrows the runtime value to the documented type.
      * @type {net.Server | undefined} */
     this.server = undefined
@@ -270,7 +274,7 @@ export default class BackgroundJobsMain {
   _setupDispatchTriggers() {
     if (this.dispatchStrategy === "polling") {
       this._pollTimer = setInterval(() => {
-        void this._drain()
+        void this._retryAfterError()
       }, this.pollIntervalMs)
       return
     }
@@ -330,11 +334,12 @@ export default class BackgroundJobsMain {
      * @type {import("./types.js").BackgroundJobSocketRole | null} */
     let role = null
 
+    let cleanedUp = false
     const cleanup = () => {
-      if (role === "worker") {
-        this.workers.delete(jsonSocket)
-        this.readyWorkers.delete(jsonSocket)
-      }
+      if (cleanedUp) return
+      cleanedUp = true
+
+      if (role === "worker") void this._handleWorkerSocketClosed(jsonSocket)
     }
 
     jsonSocket.on("close", cleanup)
@@ -377,7 +382,9 @@ export default class BackgroundJobsMain {
 
     if (message.role === "worker") {
       jsonSocket.workerId = message.workerId
+      jsonSocket.supportsHandoffIdReporting = message.supportsHandoffIdReporting === true
       this.workers.add(jsonSocket)
+      this.workerHandoffs.set(jsonSocket, new Map())
     }
 
     return message.role
@@ -446,7 +453,11 @@ export default class BackgroundJobsMain {
     jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
     jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
     jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
-    this.readyWorkers.add(jsonSocket)
+    if (jsonSocket.supportsHandoffIdReporting) {
+      this.readyWorkers.add(jsonSocket)
+    } else {
+      this.readyWorkers.delete(jsonSocket)
+    }
     void this._drain()
   }
 
@@ -461,6 +472,98 @@ export default class BackgroundJobsMain {
     // to it but keep the connection in `workers` so any in-flight job
     // it's still draining can report its result.
     this.readyWorkers.delete(jsonSocket)
+  }
+
+  /**
+   * Removes a lost worker socket and releases only leases dispatched through it.
+   * @param {JsonSocket} worker - Disconnected worker socket.
+   * @returns {Promise<void>} - Resolves after its active leases are released.
+   */
+  async _handleWorkerSocketClosed(worker) {
+    this.workers.delete(worker)
+    this.readyWorkers.delete(worker)
+
+    if (this._stopped) {
+      this.workerHandoffs.delete(worker)
+      return
+    }
+
+    try {
+      await this._releaseWorkerHandoffs(worker)
+    } catch (error) {
+      this._reportHandoffReleaseError(error)
+      this._scheduleErrorRetry()
+    }
+  }
+
+  /**
+   * Releases all leases still owned by one exact worker socket.
+   * @param {JsonSocket} worker - Worker socket.
+   * @returns {Promise<void>} - Resolves after fenced releases and dispatch wake-up.
+   */
+  async _releaseWorkerHandoffs(worker) {
+    const handoffs = this.workerHandoffs.get(worker)
+
+    if (!handoffs || handoffs.size === 0) {
+      this.workerHandoffs.delete(worker)
+      return
+    }
+
+    for (const [jobId, handoffId] of handoffs) {
+      await this._releaseHandoff({handoffId, jobId, worker})
+    }
+
+    this.workerHandoffs.delete(worker)
+    this._notifyEnqueued()
+    await this._drain()
+  }
+
+  /**
+   * Runs one idempotent conditional lease release.
+   * @param {object} args - Options.
+   * @param {string} args.handoffId - Handoff lease id.
+   * @param {string} args.jobId - Job id.
+   * @param {JsonSocket} args.worker - Socket that received the lease.
+   * @returns {Promise<void>} - Resolves after the fenced transition.
+   */
+  async _releaseHandoff({handoffId, jobId, worker}) {
+    await this.store.markReturnedToQueue({handoffId, jobId})
+
+    const handoffs = this.workerHandoffs.get(worker)
+
+    if (handoffs?.get(jobId) === handoffId) handoffs.delete(jobId)
+  }
+
+  /**
+   * Forgets a successfully reported lease without relying on worker ids.
+   * @param {object} args - Options.
+   * @param {string} args.handoffId - Handoff lease id.
+   * @param {string} args.jobId - Job id.
+   * @returns {void}
+   */
+  _forgetHandoff({handoffId, jobId}) {
+    for (const [worker, handoffs] of this.workerHandoffs) {
+      if (handoffs.get(jobId) !== handoffId) continue
+
+      handoffs.delete(jobId)
+      if (handoffs.size === 0 && !this.workers.has(worker)) this.workerHandoffs.delete(worker)
+      return
+    }
+  }
+
+  /**
+   * Reports an unexpected lease-release failure on framework error channels.
+   * @param {?} error - Release failure.
+   * @returns {void}
+   */
+  _reportHandoffReleaseError(error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {stage: "background-job-handoff-release"}, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Failed to release disconnected worker handoffs:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -496,11 +599,15 @@ export default class BackgroundJobsMain {
    */
   async _handleJobComplete({jsonSocket, message}) {
     try {
-      await this.store.markCompleted({
+      const accepted = await this.store.markCompleted({
         jobId: message.jobId,
+        handoffId: message.handoffId,
         workerId: message.workerId,
         handedOffAtMs: message.handedOffAtMs
       })
+      if (accepted && message.handoffId) {
+        this._forgetHandoff({handoffId: message.handoffId, jobId: message.jobId})
+      }
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
     } catch (error) {
       this.logger.error(() => ["Failed to update job completion:", error])
@@ -520,13 +627,18 @@ export default class BackgroundJobsMain {
       const failedJob = await this.store.markFailed({
         jobId: message.jobId,
         error: message.error,
+        handoffId: message.handoffId,
         workerId: message.workerId,
         handedOffAtMs: message.handedOffAtMs
       })
 
       if (failedJob) {
+        if (message.handoffId) {
+          this._forgetHandoff({handoffId: message.handoffId, jobId: message.jobId})
+        }
         this._emitBackgroundJobFailed({
           error: message.error,
+          handoffId: message.handoffId,
           handedOffAtMs: message.handedOffAtMs,
           job: failedJob,
           workerId: message.workerId
@@ -546,14 +658,15 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs emit background job failed.
-   * @param {{error: ?, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
+   * @param {{error: ?, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
    * @returns {void}
    */
-  _emitBackgroundJobFailed({error, handedOffAtMs, job, workerId}) {
+  _emitBackgroundJobFailed({error, handoffId, handedOffAtMs, job, workerId}) {
     const normalizedError = this._normalizeFailureError(error)
     const payload = {
       context: {
         attempts: job.attempts,
+        handoffId,
         handedOffAtMs,
         jobArgs: job.args,
         jobId: job.id,
@@ -699,6 +812,10 @@ export default class BackgroundJobsMain {
    * Runs clear error retry timer.
    * @returns {void} */
   _clearErrorRetryTimer() {
+    for (const worker of this.workerHandoffs.keys()) {
+      if (!this.workers.has(worker)) return
+    }
+
     if (this._errorRetryTimer) {
       clearTimeout(this._errorRetryTimer)
       this._errorRetryTimer = undefined
@@ -771,8 +888,28 @@ export default class BackgroundJobsMain {
 
     this._errorRetryTimer = setTimeout(() => {
       this._errorRetryTimer = undefined
-      void this._drain()
+      void this._retryAfterError()
     }, this.pollIntervalMs)
+  }
+
+  /**
+   * Retries failed disconnected-socket releases before draining queued work.
+   * @returns {Promise<void>} - Resolves after retry work.
+   */
+  async _retryAfterError() {
+    if (this._stopped) return
+
+    try {
+      for (const worker of this.workerHandoffs.keys()) {
+        if (!this.workers.has(worker)) await this._releaseWorkerHandoffs(worker)
+      }
+    } catch (error) {
+      this._reportHandoffReleaseError(error)
+      this._scheduleErrorRetry()
+      return
+    }
+
+    await this._drain()
   }
 
   /**
@@ -790,7 +927,23 @@ export default class BackgroundJobsMain {
 
       this.readyWorkers.delete(worker)
 
-      const handedOffAtMs = await this.store.markHandedOff({jobId: job.id, workerId: worker.workerId})
+      const handoff = await this.store.markHandedOff({jobId: job.id, workerId: worker.workerId})
+
+      if (!handoff) {
+        if (this.workers.has(worker)) this.readyWorkers.add(worker)
+        continue
+      }
+
+      const handoffs = this.workerHandoffs.get(worker)
+
+      if (!handoffs || !this.workers.has(worker)) {
+        await this.store.markReturnedToQueue({handoffId: handoff.handoffId, jobId: job.id})
+        this._notifyEnqueued()
+        await this._drain()
+        continue
+      }
+
+      handoffs.set(job.id, handoff.handoffId)
 
       try {
         worker.send({
@@ -799,8 +952,9 @@ export default class BackgroundJobsMain {
             id: job.id,
             jobName: job.jobName,
             args: job.args,
+            handoffId: handoff.handoffId,
             workerId: worker.workerId,
-            handedOffAtMs,
+            handedOffAtMs: handoff.handedOffAtMs,
             options: {
               executionMode: job.executionMode,
               forked: job.forked
@@ -809,8 +963,12 @@ export default class BackgroundJobsMain {
         })
       } catch (error) {
         this.logger.warn(() => ["Failed to send job to worker, re-queueing:", error])
-        await this.store.markReturnedToQueue({jobId: job.id})
-        this.readyWorkers.add(worker)
+        try {
+          worker.close()
+        } catch (closeError) {
+          this.logger.warn(() => ["Failed to close worker after job send failure:", closeError])
+        }
+        await this._handleWorkerSocketClosed(worker)
       }
     }
   }
@@ -850,6 +1008,8 @@ export default class BackgroundJobsMain {
    * @returns {void}
    */
   _addAcceptedExecutionModes({executionModes, worker}) {
+    if (!worker.supportsHandoffIdReporting) return
+
     for (const capability of WORKER_EXECUTION_MODE_CAPABILITIES) {
       if (capability.accepts(worker)) executionModes.add(capability.executionMode)
     }
@@ -874,6 +1034,8 @@ export default class BackgroundJobsMain {
    * @returns {boolean} - Whether the worker accepts the job mode.
    */
   _workerAcceptsJob({job, worker}) {
+    if (!worker.supportsHandoffIdReporting) return false
+
     const capability = WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE.get(job.executionMode)
 
     if (!capability) return false

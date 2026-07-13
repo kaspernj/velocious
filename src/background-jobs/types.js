@@ -4,6 +4,11 @@
  * @typedef {"inline" | "forked" | "spawned"} BackgroundJobExecutionMode
  */
 /**
+ * @typedef {object} BackgroundJobHandoff
+ * @property {string} handoffId - Unique handoff lease id.
+ * @property {number} handedOffAtMs - Time handed to a worker in ms.
+ */
+/**
  * @typedef {object} BackgroundJobOptions
  * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"forked"`.
  * @property {boolean} [forked] - Compatibility alias: `false` maps to `"inline"` and `true` maps to `"forked"`.
@@ -14,6 +19,7 @@
  * @property {string} [id] - Job id.
  * @property {string} jobName - Job class name.
  * @property {Array<?>} [args] - Serialized job arguments.
+ * @property {string} [handoffId] - Unique handoff lease id.
  * @property {string} [workerId] - Worker id handling the job.
  * @property {number} [handedOffAtMs] - Time handed to a worker in ms.
  * @property {BackgroundJobOptions} [options] - Runtime options.
@@ -31,6 +37,7 @@
  * @property {number | null} scheduledAtMs - Next scheduled time in ms.
  * @property {number | null} createdAtMs - Creation time in ms.
  * @property {number | null} handedOffAtMs - Time handed to worker in ms.
+ * @property {string | null} handoffId - Unique latest handoff lease id.
  * @property {number | null} completedAtMs - Completion time in ms.
  * @property {number | null} failedAtMs - Failure time in ms.
  * @property {number | null} orphanedAtMs - Orphaned time in ms.
@@ -44,6 +51,7 @@
  * @property {number | null} attempts - Updated failure attempts count.
  * @property {boolean} terminal - Whether this failure ended the job.
  * @property {boolean} willRetry - Whether the job was returned to the queue.
+ * @property {string | undefined} handoffId - Handoff lease id from the worker report.
  * @property {number | undefined} handedOffAtMs - Handoff timestamp from the worker report.
  * @property {string | undefined} workerId - Worker id from the worker report.
  */
@@ -51,15 +59,15 @@
  * @typedef {"worker" | "client" | "reporter"} BackgroundJobSocketRole
  */
 /**
- * @typedef {{type: "hello", role: BackgroundJobSocketRole, workerId?: string}} BackgroundJobHelloMessage
+ * @typedef {{type: "hello", role: BackgroundJobSocketRole, supportsHandoffIdReporting?: boolean, workerId?: string}} BackgroundJobHelloMessage
  * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
  * @typedef {{type: "enqueue", jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
  * @typedef {{type: "enqueued", jobId: string}} BackgroundJobEnqueuedMessage
  * @typedef {{type: "enqueue-error", error?: string}} BackgroundJobEnqueueErrorMessage
  * @typedef {{type: "job", payload: BackgroundJobPayload}} BackgroundJobJobMessage
- * @typedef {{type: "job-complete", jobId: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobCompleteMessage
- * @typedef {{type: "job-failed", jobId: string, error?: ?, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
+ * @typedef {{type: "job-complete", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobCompleteMessage
+ * @typedef {{type: "job-failed", jobId: string, error?: ?, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
  * @typedef {{type: "job-updated", jobId: string}} BackgroundJobUpdatedMessage
  * @typedef {{type: "job-update-error", jobId: string, error?: string}} BackgroundJobUpdateErrorMessage
  */

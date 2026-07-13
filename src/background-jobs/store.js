@@ -306,44 +306,51 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {string} [args.workerId] - Worker id.
-   * @returns {Promise<number>} - Resolves with handed off timestamp.
+   * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Claimed handoff lease, or null when no longer queued.
    */
   async markHandedOff({jobId, workerId}) {
     await this.ensureReady()
 
     const handedOffAtMs = Date.now()
+    const handoffId = randomUUID()
 
-    await this._withDb(async (db) => {
+    return await this._withDb(async (db) => {
       await db.update({
         tableName: JOBS_TABLE,
         data: {
           status: "handed_off",
           handed_off_at_ms: handedOffAtMs,
+          handoff_id: handoffId,
           worker_id: workerId || null
         },
-        conditions: {id: jobId}
+        conditions: {id: jobId, status: "queued"}
       })
-    })
 
-    return handedOffAtMs
+      const job = await this._getJobRowById(db, jobId)
+
+      if (job?.status !== "handed_off" || job.handoffId !== handoffId) return null
+
+      return {handedOffAtMs, handoffId}
+    })
   }
 
   /**
    * Runs mark completed.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
+   * @param {string} [args.handoffId] - Handoff lease id.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
-   * @returns {Promise<void>} - Resolves when updated.
+   * @returns {Promise<boolean>} - Whether the fenced report was accepted.
    */
-  async markCompleted({jobId, workerId, handedOffAtMs}) {
+  async markCompleted({jobId, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    await this._withDb(async (db) => {
+    return await this._withDb(async (db) => await this._withHandoffLock({db, jobId}, async () => {
       const job = await this._getJobRowById(db, jobId)
 
-      if (!job) return
-      if (!this._shouldAcceptReport({job, workerId, handedOffAtMs})) return
+      if (!job) return false
+      if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
 
       await db.update({
         tableName: JOBS_TABLE,
@@ -351,18 +358,23 @@ export default class BackgroundJobsStore {
           status: "completed",
           completed_at_ms: Date.now()
         },
-        conditions: {id: jobId}
+        conditions: this._activeHandoffConditions(job)
       })
-    })
+
+      const updatedJob = await this._getJobRowById(db, jobId)
+
+      return updatedJob?.status === "completed" && updatedJob.handoffId === job.handoffId
+    }))
   }
 
   /**
    * Runs mark returned to queue.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
+   * @param {string} args.handoffId - Handoff lease id.
    * @returns {Promise<void>} - Resolves when updated.
    */
-  async markReturnedToQueue({jobId}) {
+  async markReturnedToQueue({jobId, handoffId}) {
     await this.ensureReady()
 
     await this._withDb(async (db) => {
@@ -372,9 +384,10 @@ export default class BackgroundJobsStore {
           status: "queued",
           scheduled_at_ms: Date.now(),
           handed_off_at_ms: null,
+          handoff_id: null,
           worker_id: null
         },
-        conditions: {id: jobId}
+        conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
       })
     })
   }
@@ -384,21 +397,22 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {?} args.error - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the report was accepted.
    */
-  async markFailed({jobId, error, workerId, handedOffAtMs}) {
+  async markFailed({jobId, error, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => {
+    return await this._withDb(async (db) => await this._withHandoffLock({db, jobId}, async () => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return null
-      if (!this._shouldAcceptReport({job, workerId, handedOffAtMs})) return null
+      if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return null
 
       return await this._applyFailure({db, job, error, markOrphaned: false})
-    })
+    }))
   }
 
   /**
@@ -420,18 +434,22 @@ export default class BackgroundJobsStore {
 
       const rows = await query.results()
 
+      let orphanedCount = 0
+
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
 
-        await this._applyFailure({
+        const orphanedJob = await this._applyFailure({
           db,
           job,
           error: "Job orphaned after timeout",
           markOrphaned: true
         })
+
+        if (orphanedJob) orphanedCount += 1
       }
 
-      return rows.length
+      return orphanedCount
     })
   }
 
@@ -562,6 +580,7 @@ export default class BackgroundJobsStore {
     table.bigint("scheduled_at_ms", {null: false, index: true})
     table.bigint("created_at_ms", {null: false, index: true})
     table.bigint("handed_off_at_ms", {null: true, index: true})
+    table.string("handoff_id", {null: true})
     table.bigint("completed_at_ms", {null: true})
     table.bigint("failed_at_ms", {null: true})
     table.bigint("orphaned_at_ms", {null: true, index: true})
@@ -592,6 +611,35 @@ export default class BackgroundJobsStore {
       }
 
       db.clearSchemaCache()
+    }
+
+    const refreshedTable = await db.getTableByNameOrFail(JOBS_TABLE)
+    const handoffIdColumn = await refreshedTable.getColumnByName("handoff_id")
+
+    if (!handoffIdColumn) {
+      const lockName = `${MIGRATION_SCOPE}:handoff_id_column`
+      const acquired = await db.acquireAdvisoryLock(lockName)
+
+      if (!acquired) throw new Error("Failed to acquire background jobs handoff schema lock")
+
+      try {
+        db.clearSchemaCache()
+        const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
+
+        if (!(await lockedTable.getColumnByName("handoff_id"))) {
+          const tableData = new TableData(JOBS_TABLE)
+          tableData.string("handoff_id", {null: true})
+          const sqls = await db.alterTableSQLs(tableData)
+
+          for (const sql of sqls) {
+            await db.query(sql)
+          }
+
+          db.clearSchemaCache()
+        }
+      } finally {
+        await db.releaseAdvisoryLock(lockName)
+      }
     }
 
     await this._backfillExecutionModesOnce(db)
@@ -639,14 +687,16 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _recordMigration(db, version) {
-    await db.insert({
+    await db.upsert({
       tableName: MIGRATIONS_TABLE,
       data: {
         key: this._migrationKey(version),
         scope: MIGRATION_SCOPE,
         version,
         applied_at_ms: Date.now()
-      }
+      },
+      conflictColumns: ["key"],
+      updateColumns: ["scope", "version", "applied_at_ms"]
     })
   }
 
@@ -689,7 +739,7 @@ export default class BackgroundJobsStore {
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {?} args.error - Error.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
-   * @returns {Promise<import("./types.js").BackgroundJobRow>} - Updated job row.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the lease transition won.
    */
   async _applyFailure({db, job, error, markOrphaned}) {
     const now = Date.now()
@@ -710,10 +760,17 @@ export default class BackgroundJobsStore {
     await db.update({
       tableName: JOBS_TABLE,
       data: update,
-      conditions: {id: job.id}
+      conditions: this._activeHandoffConditions(job)
     })
 
-    return this._jobWithFailureUpdate({failureMessage, job, nextAttempt, update})
+    const updatedJob = await this._getJobRowById(db, job.id)
+
+    if (!updatedJob) return null
+    if (updatedJob.handoffId !== job.handoffId) return null
+    if (updatedJob.attempts !== nextAttempt) return null
+    if (updatedJob.status !== update.status) return null
+
+    return updatedJob
   }
 
   /**
@@ -783,29 +840,6 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * Runs job with failure update.
-   * @param {object} args - Options.
-   * @param {string} args.failureMessage - Last failure message.
-   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
-   * @param {number} args.nextAttempt - Next attempt count.
-   * @param {Record<string, ?>} args.update - Database update data.
-   * @returns {import("./types.js").BackgroundJobRow} - Updated job row.
-   */
-  _jobWithFailureUpdate({failureMessage, job, nextAttempt, update}) {
-    return {
-      ...job,
-      attempts: nextAttempt,
-      failedAtMs: update.failed_at_ms ?? job.failedAtMs,
-      handedOffAtMs: null,
-      lastError: failureMessage,
-      orphanedAtMs: update.orphaned_at_ms ?? job.orphanedAtMs,
-      scheduledAtMs: update.scheduled_at_ms ?? job.scheduledAtMs,
-      status: update.status,
-      workerId: null
-    }
-  }
-
-  /**
    * Runs normalize job row.
    * @param {Record<string, ?>} row - Raw database row.
    * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
@@ -827,6 +861,7 @@ export default class BackgroundJobsStore {
       scheduledAtMs: this._normalizeNumber(row.scheduled_at_ms),
       createdAtMs: this._normalizeNumber(row.created_at_ms),
       handedOffAtMs: this._normalizeNumber(row.handed_off_at_ms),
+      handoffId: row.handoff_id ? String(row.handoff_id) : null,
       completedAtMs: this._normalizeNumber(row.completed_at_ms),
       failedAtMs: this._normalizeNumber(row.failed_at_ms),
       orphanedAtMs: this._normalizeNumber(row.orphaned_at_ms),
@@ -938,17 +973,64 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Serializes reports for one job so duplicate reports cannot both appear accepted.
+   * @template T
+   * @param {object} args - Options.
+   * @param {import("../database/drivers/base.js").default} args.db - Database connection.
+   * @param {string} args.jobId - Job id.
+   * @param {() => Promise<T>} callback - Locked callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _withHandoffLock({db, jobId}, callback) {
+    const lockName = `background-job:${jobId}`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error(`Failed to acquire background job handoff lock: ${jobId}`)
+
+    try {
+      return await callback()
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
+  }
+
+  /**
    * Runs should accept report.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
+   * @param {string | null | undefined} args.handoffId - Handoff lease id from report.
    * @param {string | null | undefined} args.workerId - Worker id from report.
    * @param {number | null | undefined} args.handedOffAtMs - Handed off timestamp from report.
    * @returns {boolean} - Whether to accept the report.
    */
-  _shouldAcceptReport({job, workerId, handedOffAtMs}) {
+  _shouldAcceptReport({job, handoffId, workerId, handedOffAtMs}) {
     if (job.status !== "handed_off") return false
 
-    return this._workerReportMatches({job, workerId}) && this._handoffReportMatches({handedOffAtMs, job})
+    return this._handoffIdReportMatches({handoffId, job})
+      && this._workerReportMatches({job, workerId})
+      && this._handoffReportMatches({handedOffAtMs, job})
+  }
+
+  /**
+   * Runs active handoff conditions.
+   * @param {import("./types.js").BackgroundJobRow} job - Job row.
+   * @returns {Record<string, string | null>} - Conditional transition fence.
+   */
+  _activeHandoffConditions(job) {
+    return {handoff_id: job.handoffId, id: job.id, status: "handed_off"}
+  }
+
+  /**
+   * Runs handoff id report matches.
+   * @param {object} args - Options.
+   * @param {string | null | undefined} args.handoffId - Handoff lease id from report.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
+   * @returns {boolean} - Whether the handoff lease matches.
+   */
+  _handoffIdReportMatches({handoffId, job}) {
+    if (!job.handoffId) return true
+
+    return handoffId === job.handoffId
   }
 
   /**

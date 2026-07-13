@@ -78,6 +78,7 @@ export default async function runJobPayload(payload) {
         await reporter.reportWithRetry({
           jobId: payload.id,
           status: "completed",
+          handoffId: payload.handoffId,
           workerId: payload.workerId,
           handedOffAtMs: payload.handedOffAtMs,
           maxDurationMs: 30000
@@ -89,6 +90,7 @@ export default async function runJobPayload(payload) {
           jobId: payload.id,
           status: "failed",
           error,
+          handoffId: payload.handoffId,
           workerId: payload.workerId,
           handedOffAtMs: payload.handedOffAtMs,
           maxDurationMs: 30000
