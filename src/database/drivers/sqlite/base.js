@@ -401,7 +401,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
         const waiters = state.waitersByName.get(name) || []
         /**
          * Timeout handle.
-         * @type {NodeJS.Timeout | null} */
+         * @type {ReturnType<typeof setTimeout> | null} */
         let timeoutHandle = null
         /**
          * Remove and resolve.

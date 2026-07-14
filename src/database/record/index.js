@@ -2688,7 +2688,7 @@ class VelociousDatabaseRecord {
    * @param {string} name - Lock name (for the error message).
    * @param {() => Promise<T>} callback - Callback holding the lock.
    * @param {number | null} [holdTimeoutMs] - Max hold time; falsy disables the timeout.
-   * @returns {Promise<T>}
+   * @returns {Promise<T>} - Callback result after the lock-protected operation.
    */
   static async runWithAdvisoryLockHoldTimeout(name, callback, holdTimeoutMs) {
     return await AdvisoryLockRunner.runWithAdvisoryLockHoldTimeout(name, callback, holdTimeoutMs)
@@ -3816,7 +3816,7 @@ class VelociousDatabaseRecord {
    * column of the same name. Returns the attached number, or 0 when
    * `.withCount(...)` wasn't requested for this attribute.
    * @param {string} attributeName - Attribute name, e.g. `"tasksCount"` or a custom `"activeMembersCount"` from `.withCount({activeMembersCount: {...}})`.
-   * @returns {number}
+   * @returns {number} - Attached association count, or zero when absent.
    */
   readCount(attributeName) {
     return readPayloadAssociationCount(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName)
@@ -3837,7 +3837,7 @@ class VelociousDatabaseRecord {
    * All attached association counts as a plain object. Used by the
    * frontend-model serializer to ship counts alongside the record
    * attributes on the wire.
-   * @returns {Record<string, number>}
+   * @returns {Record<string, number>} - Association counts keyed by attribute name.
    */
   associationCounts() {
     /**
@@ -3864,7 +3864,7 @@ class VelociousDatabaseRecord {
    * registered fn for this record (e.g. no child rows matched the
    * aggregate).
    * @param {string} name - queryData attribute name (matches a SELECT alias from the registered fn).
-   * @returns {?}
+   * @returns {?} - Attached query-data value.
    */
   queryData(name) {
     return readPayloadQueryData(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name)
@@ -3886,7 +3886,7 @@ class VelociousDatabaseRecord {
    * All attached queryData values as a plain object. Used by the
    * frontend-model serializer to ship queryData alongside the record
    * attributes on the wire.
-   * @returns {Record<string, ?>}
+   * @returns {Record<string, ?>} - Query-data values keyed by name.
    */
   queryDataValues() {
     /**
@@ -3914,7 +3914,7 @@ class VelociousDatabaseRecord {
    * `record.can("update")` without first checking whether the ability
    * was loaded.
    * @param {string} action - Ability action name, e.g. `"update"`.
-   * @returns {boolean}
+   * @returns {boolean} - Whether the requested ability is allowed.
    */
   can(action) {
     return readPayloadComputedAbility(/** @type {import("../../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action)
@@ -3936,7 +3936,7 @@ class VelociousDatabaseRecord {
    * All attached per-record ability results as a plain object. Used
    * by the frontend-model serializer to ship results alongside the
    * record attributes on the wire.
-   * @returns {Record<string, boolean>}
+   * @returns {Record<string, boolean>} - Ability results keyed by action.
    */
   computedAbilities() {
     /**

@@ -535,7 +535,7 @@ export default class BackgroundJobsWorker {
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
    * @param {number | null} args.code - Exit code.
-   * @param {NodeJS.Signals | null} args.signal - Exit signal.
+   * @param {keyof typeof import("node:os").constants.signals | null} args.signal - Exit signal.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
    * @param {(value: void) => void} args.resolve - Promise resolver.
    * @returns {Promise<void>} - Resolves after failure is reported.
@@ -560,7 +560,7 @@ export default class BackgroundJobsWorker {
    * Runs forked child exited cleanly.
    * @param {object} args - Options.
    * @param {number | null} args.code - Exit code.
-   * @param {NodeJS.Signals | null} args.signal - Exit signal.
+   * @param {keyof typeof import("node:os").constants.signals | null} args.signal - Exit signal.
    * @returns {boolean} - Whether the child exited cleanly.
    */
   _forkedChildExitedCleanly({code, signal}) {

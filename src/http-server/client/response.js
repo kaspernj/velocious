@@ -89,6 +89,11 @@ export default class VelociousHttpServerClientResponse {
   filePath = null
 
   /**
+   * File response completion callback.
+   * @type {((result: "completed" | "aborted") => void | Promise<void>) | null} */
+  fileOnFinished = null
+
+  /**
    * Headers.
    * @type {Record<string, string[]>} */
   headers = {}
@@ -163,6 +168,7 @@ export default class VelociousHttpServerClientResponse {
    */
   setBody(value) {
     this.filePath = null
+    this.fileOnFinished = null
     this.body = value
   }
 
@@ -175,12 +181,22 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
+   * Gets the file response completion callback.
+   * @returns {((result: "completed" | "aborted") => void | Promise<void>) | null} - File response completion callback.
+   */
+  getFileOnFinished() {
+    return this.fileOnFinished
+  }
+
+  /**
    * Runs set file path.
    * @param {string} path - File path.
+   * @param {((result: "completed" | "aborted") => void | Promise<void>) | null} [onFinished] - Completion callback.
    * @returns {void} - No return value.
    */
-  setFilePath(path) {
+  setFilePath(path, onFinished = null) {
     this.filePath = path
+    this.fileOnFinished = onFinished
     this.body = null
   }
 

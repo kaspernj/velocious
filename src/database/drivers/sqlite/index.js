@@ -93,7 +93,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * (create and remove) per critical section.
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory lock was acquired.
    */
   async acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const deadline = typeof timeoutMs === "number" && timeoutMs >= 0 ? Date.now() + timeoutMs : null
@@ -121,7 +121,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Runs try acquire advisory lock.
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory lock was acquired immediately.
    */
   async tryAcquireAdvisoryLock(name) {
     const inProcessAcquired = await super.tryAcquireAdvisoryLock(name)
@@ -151,7 +151,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * and the filesystem state is left alone so we never delete somebody
    * else's lock directory.
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory lock was released.
    */
   async releaseAdvisoryLock(name) {
     const inProcessReleased = await super.releaseAdvisoryLock(name)
@@ -166,7 +166,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Runs is advisory lock held.
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory lock is held.
    */
   async isAdvisoryLockHeld(name) {
     if (await super.isAdvisoryLockHeld(name)) return true
@@ -176,7 +176,8 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
   /**
    * Runs resolve advisory lock directory.
-   * @returns {string} */
+   * @returns {string} - The advisory-lock directory.
+   */
   _resolveAdvisoryLockDirectory() {
     if (!this._advisoryLockDirectory) {
       // Fall back to deriving the directory for callers that invoked
@@ -192,7 +193,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Runs advisory lock path.
    * @param {string} name - Lock name.
-   * @returns {string}
+   * @returns {string} - Filesystem path for the advisory lock.
    */
   _advisoryLockPath(name) {
     const hash = createHash("sha256").update(name).digest("hex").slice(0, 16)
@@ -228,7 +229,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * Runs acquire advisory lock file.
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} args - Timeout args.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory-lock file was acquired.
    */
   async _acquireAdvisoryLockFile(name, {timeoutMs}) {
     await this._ensureAdvisoryLockDirectory()
@@ -247,7 +248,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
         return true
       } catch (error) {
-        if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
+        if (/** @type {Error & {code?: string}} */ (error)?.code !== "EEXIST") throw error
 
         if (await this._isAdvisoryLockStale(lockPath)) {
           await fs.rm(lockPath, {recursive: true, force: true})
@@ -270,7 +271,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Runs try acquire advisory lock file.
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory-lock file was acquired immediately.
    */
   async _tryAcquireAdvisoryLockFile(name) {
     await this._ensureAdvisoryLockDirectory()
@@ -283,7 +284,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
       return true
     } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error)?.code !== "EEXIST") throw error
+      if (/** @type {Error & {code?: string}} */ (error)?.code !== "EEXIST") throw error
 
       if (await this._isAdvisoryLockStale(lockPath)) {
         await fs.rm(lockPath, {recursive: true, force: true})
@@ -294,7 +295,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
           return true
         } catch (retryError) {
-          if (/** @type {NodeJS.ErrnoException} */ (retryError)?.code === "EEXIST") return false
+          if (/** @type {Error & {code?: string}} */ (retryError)?.code === "EEXIST") return false
 
           throw retryError
         }
@@ -324,7 +325,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Runs is advisory lock file held.
    * @param {string} name - Lock name.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory-lock file exists and is active.
    */
   async _isAdvisoryLockFileHeld(name) {
     const lockPath = this._advisoryLockPath(name)
@@ -345,7 +346,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * probe a PID on another machine; operators in that situation should
    * remove stale lock directories by hand if they linger.
    * @param {string} lockPath - Absolute path of the lock directory.
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean>} - Whether the advisory-lock file is stale.
    */
   async _isAdvisoryLockStale(lockPath) {
     /**
@@ -382,7 +383,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
       return false
     } catch (error) {
-      return /** @type {NodeJS.ErrnoException} */ (error)?.code === "ESRCH"
+      return /** @type {Error & {code?: string}} */ (error)?.code === "ESRCH"
     }
   }
 }

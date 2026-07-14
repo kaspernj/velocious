@@ -4,6 +4,38 @@ Velocious serves HTTP requests through worker handlers. The default is one
 worker, which keeps development and small deployments predictable. Applications
 that need more request or websocket throughput can opt into multiple workers.
 
+## File Responses
+
+Controllers can stream a file without loading it into memory:
+
+```js
+this.sendFile(reportPath, {
+  contentType: "application/pdf",
+  status: 200,
+  onFinished: async (result) => {
+    if (result === "completed") await removeTemporaryReport(reportPath)
+  }
+})
+```
+
+`onFinished` is optional and receives `"completed"` after the local socket
+pipeline has accepted every file byte, or `"aborted"` when the socket closes,
+the socket reports an error, the file cannot be read, or the server shuts down.
+It runs once in the same worker or in-process context as the controller and may
+return a promise. The response queue waits for that promise before advancing to
+the next response. Callback exceptions and rejections are logged and reported
+as framework errors, but cannot replace the response that was already committed
+to the socket. Setting a response body or replacing the file response clears the
+previous callback.
+
+Worker-mode file responses cross the worker boundary as path descriptors only.
+The main thread opens and streams the file with socket write/drain backpressure;
+file contents are neither buffered in full nor sent as IPC byte chunks. Response
+headers, file data, and later pipelined responses retain their original queue
+order. Bodyless status responses preserve their existing no-body and
+no-`Content-Length` behavior while still settling `onFinished` after the parent
+acknowledges the response.
+
 ## CLI Workers
 
 Start a server with a fixed worker count:

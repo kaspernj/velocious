@@ -197,7 +197,7 @@ describe("plugins - sqljs wasm route", {databaseCleaning: {transaction: true}}, 
     expect(sqlWasmUrl).toEqual("http://127.0.0.1:4501/velocious/sqljs/sql-wasm.wasm")
   })
 
-  it("streams wasm bytes through the HTTP client send pipeline", async () => {
+  it("emits a wasm file descriptor through the HTTP client send pipeline", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: dummyDirectory(),
@@ -217,6 +217,7 @@ describe("plugins - sqljs wasm route", {databaseCleaning: {transaction: true}}, 
 
     /** @type {Array<string | Uint8Array>} */
     const outputs = []
+    const fileDescriptors = []
     const closePromise = new Promise((resolve) => {
       const client = new Client({
         clientCount: 11,
@@ -224,6 +225,10 @@ describe("plugins - sqljs wasm route", {databaseCleaning: {transaction: true}}, 
       })
 
       client.events.on("output", (output) => outputs.push(output))
+      client.events.on("file", (descriptor) => {
+        fileDescriptors.push(descriptor)
+        descriptor.settle("completed")
+      })
       client.events.on("close", resolve)
       client.onWrite(Buffer.from([
         "GET /velocious/sqljs/sql-wasm.wasm HTTP/1.1",
@@ -238,16 +243,18 @@ describe("plugins - sqljs wasm route", {databaseCleaning: {transaction: true}}, 
 
     const headerOutput = outputs.find((output) => typeof output === "string")
     const binaryChunks = outputs.filter((output) => output instanceof Uint8Array)
-    const wasmPrefixChunk = binaryChunks.find((chunk) => chunk.length >= 4)
+    const fileDescriptor = fileDescriptors[0]
+    const wasmBytes = await fs.readFile(fileDescriptor.filePath)
 
     expect(typeof headerOutput).toEqual("string")
     expect(headerOutput.includes("200 OK")).toEqual(true)
     expect(headerOutput.includes("Content-Type: application/wasm")).toEqual(true)
-    expect(Boolean(wasmPrefixChunk)).toEqual(true)
-    expect(wasmPrefixChunk[0]).toEqual(0)
-    expect(wasmPrefixChunk[1]).toEqual(97)
-    expect(wasmPrefixChunk[2]).toEqual(115)
-    expect(wasmPrefixChunk[3]).toEqual(109)
+    expect(binaryChunks).toEqual([])
+    expect(fileDescriptor.sendBody).toEqual(true)
+    expect(wasmBytes[0]).toEqual(0)
+    expect(wasmBytes[1]).toEqual(97)
+    expect(wasmBytes[2]).toEqual(115)
+    expect(wasmBytes[3]).toEqual(109)
   })
 
   it("serves identical wasm bytes over dummy app HTTP", async () => {

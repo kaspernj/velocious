@@ -52,7 +52,7 @@ const FIELDS = [
 /**
  * Runs the parseCronExpression helper.
  * @param {string} expression - Cron expression or shortcut.
- * @returns {ParsedCron}
+ * @returns {ParsedCron} - Parsed cron schedule fields.
  */
 export function parseCronExpression(expression) {
   if (typeof expression !== "string" || !expression.trim()) {
@@ -87,8 +87,8 @@ export function parseCronExpression(expression) {
 
 /**
  * Runs normalize day of week.
- * @param {Set<number>} dayOfWeek
- * @returns {Set<number>}
+ * @param {Set<number>} dayOfWeek - Day-of-week values.
+ * @returns {Set<number>} - Normalized day-of-week values.
  */
 function normalizeDayOfWeek(dayOfWeek) {
   if (dayOfWeek.has(7)) {
@@ -104,7 +104,7 @@ function normalizeDayOfWeek(dayOfWeek) {
  * @param {string} field - Field expression.
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Whole cron expression for error messages.
- * @returns {Set<number>}
+ * @returns {Set<number>} - Parsed allowed field values.
  */
 function parseField(field, fieldSpec, expression) {
   const result = new Set()
@@ -147,7 +147,7 @@ function addPartValues(part, fieldSpec, expression, result) {
  * @param {string} value - Step value.
  * @param {{name: string, min: number, max: number}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
- * @returns {number}
+ * @returns {number} - Parsed positive step size.
  */
 function parseStep(value, fieldSpec, expression) {
   const step = Number(value)
@@ -165,7 +165,7 @@ function parseStep(value, fieldSpec, expression) {
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
  * @param {boolean} hasStep - Whether the part had a `/step` suffix.
- * @returns {[number, number]}
+ * @returns {[number, number]} - Inclusive field range.
  */
 function parseRange(rangePart, fieldSpec, expression, hasStep) {
   if (rangePart === "*") {
@@ -196,7 +196,7 @@ function parseRange(rangePart, fieldSpec, expression, hasStep) {
  * @param {string} rawValue - Raw value (may be a name).
  * @param {{name: string, min: number, max: number, names?: string[]}} fieldSpec - Field spec.
  * @param {string} expression - Original expression for errors.
- * @returns {number}
+ * @returns {number} - Parsed numeric field value.
  */
 function parseValue(rawValue, fieldSpec, expression) {
   if (!rawValue) {
@@ -230,7 +230,7 @@ const MAX_NEXT_FIRE_ITERATIONS = 5 * 366 * 24 * 60
  * real time (e.g., `0 0 31 2 *` — Feb 31st).
  * @param {ParsedCron} parsed - Parsed cron expression.
  * @param {Date} from - Reference Date — the next match is strictly after this.
- * @returns {Date}
+ * @returns {Date} - Next date matching the expression.
  */
 export function nextCronFireDate(parsed, from) {
   const candidate = new Date(from.getTime())
@@ -251,7 +251,7 @@ export function nextCronFireDate(parsed, from) {
  * Runs candidate matches.
  * @param {Date} candidate - Candidate Date (in local time).
  * @param {ParsedCron} parsed - Parsed expression.
- * @returns {boolean}
+ * @returns {boolean} - Whether the candidate matches the parsed schedule.
  */
 function candidateMatches(candidate, parsed) {
   if (!parsed.minute.has(candidate.getMinutes())) return false

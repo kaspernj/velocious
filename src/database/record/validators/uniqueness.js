@@ -74,9 +74,9 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * `new Task({project})`, the FK (`projectId`) is only flushed onto
    * the attribute store during save — but the relationship object is
    * already loaded and carries the id we need for the WHERE clause.
-   * @param {import("../index.js").default} model
+   * @param {import("../index.js").default} model - Record whose loaded relationship may supply the scope value.
    * @param {string} scopeColumn - camelCase attribute name (e.g. `"projectId"`).
-   * @returns {string | number | null}
+   * @returns {string | number | null} - Value normalized for comparison.
    */
   _resolveScopeValueFromRelationship(model, scopeColumn) {
     const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
@@ -106,7 +106,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
    * Normalize the `scope` option into an array of attribute names.
    * Supports string (`"userId"`), array of strings (`["userId", "projectId"]`),
    * or absent (empty array — no scope, original single-column behavior).
-   * @returns {string[]}
+   * @returns {string[]} - Columns participating in the uniqueness check.
    */
   _normalizeScopeColumns() {
     const scope = this.args?.scope

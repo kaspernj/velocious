@@ -74,19 +74,19 @@ export default class BackgroundJobsMain {
     this.server = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {NodeJS.Timeout | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this._pollTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {NodeJS.Timeout | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this._scheduledTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {NodeJS.Timeout | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this._errorRetryTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {NodeJS.Timeout | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this._orphanTimer = undefined
     /**
      * Narrows the runtime value to the documented type.

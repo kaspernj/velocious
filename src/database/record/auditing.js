@@ -74,7 +74,12 @@ let globalEventConnections = {}
 
 /** @type {AuditEventsType} */
 const AuditEvents = {
-  /** Fire all registered callbacks for a model type + action. @param {string} type @param {string} action @param {AuditEventPayload} args */
+  /**
+   * Fire all registered callbacks for a model type and action.
+   * @param {string} type - Audited model type whose listeners should fire.
+   * @param {string} action - Audit action whose listeners should fire.
+   * @param {AuditEventPayload} args - Audit event delivered to matching listeners.
+   */
   call(type, action, args) {
     const actions = globalEventConnections[type] || {}
     const callbacks = actions[action] || []
@@ -84,7 +89,13 @@ const AuditEvents = {
     }
   },
 
-  /** Register a callback for a model type + action. Returns an unsubscribe function. @param {string} type @param {string} action @param {(args: AuditEventPayload) => void} callback @returns {() => void} */
+  /**
+   * Register a callback for a model type and action.
+   * @param {string} type - Audited model type to observe.
+   * @param {string} action - Audit action to observe.
+   * @param {(args: AuditEventPayload) => void} callback - Listener invoked for matching audit events.
+   * @returns {() => void} - Callback that removes the registration.
+   */
   connect(type, action, callback) {
     if (!globalEventConnections[type]) {
       globalEventConnections[type] = {}
@@ -109,7 +120,7 @@ const AuditEvents = {
     }
   },
 
-  /** Clear all registered callbacks. @returns {void} */
+  /** Clear all registered callbacks. */
   reset() {
     globalEventConnections = {}
   }
@@ -244,7 +255,10 @@ function sharedAuditClass(modelClass) {
    * Framework-owned Audit model for the shared `audits` table.
    */
   class Audit extends dbRecordClass {
-    /** Returns the backing table name. @returns {string} */
+    /**
+     * Returns the backing table name.
+     * @returns {string} - Shared `audits` table name.
+     */
     static tableName() {
       return "audits"
     }
@@ -291,7 +305,10 @@ function dedicatedAuditClass(modelClass, tableName) {
    * Framework-owned per-model Audit class.
    */
   class ModelAudit extends dbRecordClass {
-    /** Returns the backing table name. @returns {string} */
+    /**
+     * Returns the backing table name.
+     * @returns {string} - Dedicated audit table supplied for this model class.
+     */
     static tableName() {
       return tableName
     }
@@ -906,7 +923,7 @@ function normalizeAction(action) {
  * Creates the shared audit tables migration up/down callbacks for use inside
  * a Migration class. The `table` parameter is a Migration instance.
  * @param {{id?: {type: string}}} [options] - ID column options.
- * @returns {{down: (table: import("../migration/index.js").default) => Promise<void>, up: (table: import("../migration/index.js").default) => Promise<void>}}
+ * @returns {{down: (table: import("../migration/index.js").default) => Promise<void>, up: (table: import("../migration/index.js").default) => Promise<void>}} - Up/down callbacks for the shared audit tables.
  */
 function createSharedAuditTablesMigration(options = {}) {
   const opts = /** @type {{id?: {type: string}}} */ (options)

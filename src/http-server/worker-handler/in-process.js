@@ -26,6 +26,9 @@ export default class VelociousHttpServerInProcessHandler {
      * @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
     this.clients = {}
 
+    /** @type {Set<Promise<void>>} */
+    this.pendingClientCloseCleanups = new Set()
+
     this.logger = new Logger(this)
     this.workerCount = workerCount
     this.unregisterFromEventsHost = websocketEventsHost.register(/** @type {?} */ (this))
@@ -53,17 +56,48 @@ export default class VelociousHttpServerInProcessHandler {
       remoteAddress: serverClient.remoteAddress
     })
 
+    let deliveryQueue = Promise.resolve()
+    const enqueueDelivery = (/** @type {() => Promise<void>} */ delivery) => {
+      deliveryQueue = deliveryQueue
+        .catch(() => {})
+        .then(delivery)
+
+      return deliveryQueue
+    }
+
     httpClient.events.on("output", (output) => {
       if (output !== null && output !== undefined) {
-        void serverClient.send(output).catch((error) => {
+        void enqueueDelivery(() => serverClient.send(output)).catch((error) => {
           this.logger.error(() => ["Failed to deliver client output", {clientCount}, error])
         })
       }
     })
 
+    httpClient.events.on("file", ({filePath, sendBody, settle}) => {
+      void enqueueDelivery(async () => {
+        await settle(await serverClient.sendFile(filePath, sendBody))
+      }).catch((error) => {
+        this.logger.error(() => ["Failed to deliver file response", {clientCount, filePath}, error])
+        void settle("aborted")
+      })
+    })
+
     httpClient.events.on("close", () => {
-      void serverClient.end()
-      delete this.clients[clientCount]
+      void enqueueDelivery(() => serverClient.end())
+        .finally(() => delete this.clients[clientCount])
+    })
+
+    serverClient.events.on("close", () => {
+      const cleanup = httpClient.abortPendingFileResponses()
+        .catch((error) => {
+          this.logger.warn("Failed to abort file responses after client close", error)
+        })
+        .finally(() => {
+          this.pendingClientCloseCleanups.delete(cleanup)
+          delete this.clients[clientCount]
+        })
+
+      this.pendingClientCloseCleanups.add(cleanup)
     })
 
     this.clients[clientCount] = {httpClient, serverClient}
@@ -90,13 +124,18 @@ export default class VelociousHttpServerInProcessHandler {
   async stop() {
     this._stopping = true
 
-    for (const {serverClient} of Object.values(this.clients)) {
-      try {
-        void serverClient.end()
-      } catch (error) {
-        this.logger.warn("Failed to close client during shutdown", error)
-      }
+    for (const {httpClient, serverClient} of Object.values(this.clients)) {
+      await Promise.all([
+        httpClient.abortPendingFileResponses().catch((error) => {
+          this.logger.warn("Failed to abort file responses during shutdown", error)
+        }),
+        serverClient.end().catch((error) => {
+          this.logger.warn("Failed to close client during shutdown", error)
+        })
+      ])
     }
+
+    await Promise.all(this.pendingClientCloseCleanups)
 
     this.clients = {}
     this.unregisterFromEventsHost?.()

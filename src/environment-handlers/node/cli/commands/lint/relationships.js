@@ -124,7 +124,7 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
 
       if (!stats.isDirectory()) return false
     } catch (error) {
-      if (/** @type {NodeJS.ErrnoException} */ (error).code == "ENOENT") return false
+      if (/** @type {Error & {code?: string}} */ (error).code == "ENOENT") return false
 
       throw error
     }
@@ -213,7 +213,7 @@ export default class VelociousCliCommandsLintRelationships extends BaseCommand {
     try {
       configContent = await fs.readFile(configPath, "utf8")
     } catch (error) {
-      if (!explicitConfigPath && /** @type {NodeJS.ErrnoException} */ (error).code == "ENOENT") {
+      if (!explicitConfigPath && /** @type {Error & {code?: string}} */ (error).code == "ENOENT") {
         return new Set()
       }
 

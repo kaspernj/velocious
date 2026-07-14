@@ -58,6 +58,9 @@ export default class VelociousHttpServerWorker {
      * Narrows the runtime value to the documented type.
      * @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
     this._debugSnapshotRequests = new Map()
+
+    /** @type {Map<number, Promise<void>>} */
+    this._clientDeliveryQueues = new Map()
   }
 
   start() {
@@ -99,7 +102,23 @@ export default class VelociousHttpServerWorker {
     client.listen()
 
     this.clients[clientCount] = client
+    client.events.on("close", () => {
+      this.handleClientAbort(clientCount)
+    })
     this.worker.postMessage({command: "newClient", clientCount, remoteAddress: client.remoteAddress})
+  }
+
+  /**
+   * Propagates a parent-side socket close and clears all parent state for the client.
+   * @param {number} clientCount - Client count.
+   * @returns {void}
+   */
+  handleClientAbort(clientCount) {
+    if (!this.clients[clientCount] && !this._clientDeliveryQueues.has(clientCount)) return
+
+    delete this.clients[clientCount]
+    this._clientDeliveryQueues.delete(clientCount)
+    this.worker?.postMessage({command: "clientAbort", clientCount})
   }
 
   /**
@@ -121,10 +140,10 @@ export default class VelociousHttpServerWorker {
   onWorkerExit = (code) => {
     this._hasExited = true
     this.workerStarted = false
+    this._closeAllClients()
 
     if (code !== 0 && !this._stopping) {
       this.logger.error(`Velocious worker ${this.workerCount} exited unexpectedly with code ${code}`)
-      void this._closeAllClients()
       throw new Error(`Client worker stopped with exit code ${code}`)
     } else {
       this.logger.debug(() => `Client worker stopped with exit code ${code}`)
@@ -160,6 +179,9 @@ export default class VelociousHttpServerWorker {
    * @param {string} data.command - Command.
    * @param {number} [data.clientCount] - Client count.
    * @param {string | Uint8Array} [data.output] - Output.
+   * @param {string} [data.filePath] - File path.
+   * @param {boolean} [data.sendBody] - Whether to send the file body.
+   * @param {number} [data.transferId] - File transfer id.
    * @param {string} [data.channel] - Channel name.
    * @param {number} [data.requestId] - Debug request id.
    * @param {Record<string, ?>} [data.snapshot] - Worker debug snapshot.
@@ -197,7 +219,7 @@ export default class VelociousHttpServerWorker {
       if (output !== null && output !== undefined) {
         const outputLength = typeof output === "string" ? output.length : output.byteLength
 
-        void client.send(output).then(() => {
+        void this.enqueueClientDelivery(client.clientCount, () => client.send(output)).then(() => {
           this.logger.debug(() => ["Client output delivered", {
             clientCount,
             outputLength,
@@ -210,6 +232,25 @@ export default class VelociousHttpServerWorker {
           }, error])
         })
       }
+    } else if (command == "clientFile") {
+      const {clientCount, filePath, sendBody, transferId} = data
+      const client = typeof clientCount === "number" ? this.clients[clientCount] : undefined
+
+      if (typeof transferId !== "number") throw new Error("clientFile transferId must be a number")
+
+      if (!client || typeof filePath !== "string") {
+        this.worker?.postMessage({command: "clientFileResult", result: "aborted", transferId})
+        return
+      }
+
+      void this.enqueueClientDelivery(client.clientCount, async () => {
+        const result = await client.sendFile(filePath, sendBody !== false)
+
+        this.worker?.postMessage({command: "clientFileResult", result, transferId})
+      }).catch((error) => {
+        this.logger.error(() => ["Failed to deliver file response", {clientCount: client.clientCount, filePath}, error])
+        this.worker?.postMessage({command: "clientFileResult", result: "aborted", transferId})
+      })
     } else if (command == "clientClose") {
       const {clientCount} = data
       const client = typeof clientCount === "number" ? this.clients[clientCount] : undefined
@@ -219,11 +260,8 @@ export default class VelociousHttpServerWorker {
         return
       }
 
-      void client.end()
-
-      if (typeof clientCount === "number") {
-        delete this.clients[clientCount]
-      }
+      void this.enqueueClientDelivery(client.clientCount, () => client.end())
+        .finally(() => delete this.clients[client.clientCount])
     } else if (command == "debugSnapshot") {
       const {requestId, snapshot} = data
       if (typeof requestId !== "number") throw new Error("debugSnapshot requestId must be a number")
@@ -255,6 +293,28 @@ export default class VelociousHttpServerWorker {
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
+  }
+
+  /**
+   * Preserves socket output ordering for one client.
+   * @param {number} clientCount - Client count.
+   * @param {() => Promise<void>} delivery - Delivery operation.
+   * @returns {Promise<void>} - Queued delivery.
+   */
+  enqueueClientDelivery(clientCount, delivery) {
+    const previous = this._clientDeliveryQueues.get(clientCount) || Promise.resolve()
+    const queued = previous
+      .catch(() => {})
+      .then(delivery)
+
+    this._clientDeliveryQueues.set(clientCount, queued)
+    const clearQueue = () => {
+      if (this._clientDeliveryQueues.get(clientCount) === queued) this._clientDeliveryQueues.delete(clientCount)
+    }
+
+    void queued.then(clearQueue, clearQueue)
+
+    return queued
   }
 
   /**

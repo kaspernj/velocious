@@ -2,7 +2,6 @@
 
 import crypto from "crypto"
 import fs from "node:fs/promises"
-import {createReadStream} from "node:fs"
 import {digg} from "diggerize"
 import {ensureError} from "typanic"
 import EventEmitter from "../../utils/event-emitter.js"
@@ -58,6 +57,9 @@ export default class VeoliciousHttpServerClient {
      * Narrows the runtime value to the documented type.
      * @type {RequestRunner[]} */
     this.requestRunners = []
+
+    /** @type {Set<(result: "completed" | "aborted") => Promise<void>>} */
+    this.pendingFileResponses = new Set()
   }
 
   /**
@@ -355,6 +357,7 @@ export default class VeoliciousHttpServerClient {
     const response = digg(requestRunner, "response")
     const request = requestRunner.getRequest()
     const filePath = response.getFilePath()
+    const fileOnFinished = response.getFileOnFinished()
     const date = new Date()
     const connectionHeader = request.header("connection")?.toLowerCase()?.trim()
     const httpVersion = request.httpVersion()
@@ -423,8 +426,9 @@ export default class VeoliciousHttpServerClient {
 
     if (isBodylessStatus) {
       this.logger.debug(() => ["sendResponse body suppressed for no-body status", {clientCount: this.clientCount, statusCode: response.getStatusCode()}])
+      if (hasFilePath) await this.sendFileOutput(filePath, false, fileOnFinished)
     } else if (hasFilePath) {
-      await this.sendFileOutput(filePath)
+      await this.sendFileOutput(filePath, true, fileOnFinished)
     } else {
       this.events.emit("output", body)
       this.logger.debug(() => ["sendResponse body emitted", {clientCount: this.clientCount, bodyLength: bodyIsString ? body.length : body.byteLength}])
@@ -441,25 +445,67 @@ export default class VeoliciousHttpServerClient {
   /**
    * Runs send file output.
    * @param {string} filePath - File path.
+   * @param {boolean} sendBody - Whether the file body should be sent.
+   * @param {((result: "completed" | "aborted") => void | Promise<void>) | null} onFinished - Completion callback.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async sendFileOutput(filePath) {
+  async sendFileOutput(filePath, sendBody, onFinished) {
     this.logger.debug(() => ["sendFileOutput start", {clientCount: this.clientCount, filePath}])
-    let totalBytes = 0
-    let chunkCount = 0
+
+    const result = await new Promise((resolve) => {
+      /** @type {Promise<void> | null} */
+      let settlement = null
+      const settle = (/** @type {"completed" | "aborted"} */ transferResult) => {
+        if (settlement) return settlement
+
+        this.pendingFileResponses.delete(settle)
+        settlement = this.runFileOnFinished({filePath, onFinished, result: transferResult})
+          .finally(() => resolve(transferResult))
+
+        return settlement
+      }
+
+      this.pendingFileResponses.add(settle)
+      this.events.emit("file", {filePath, sendBody, settle})
+    })
+
+    this.logger.debug(() => ["sendFileOutput done", {clientCount: this.clientCount, filePath, result}])
+  }
+
+  /**
+   * Runs a file completion callback without allowing cleanup failures to replace the committed response.
+   * @param {object} args - Completion details.
+   * @param {string} args.filePath - File path.
+   * @param {((result: "completed" | "aborted") => void | Promise<void>) | null} args.onFinished - Completion callback.
+   * @param {"completed" | "aborted"} args.result - Transfer result.
+   * @returns {Promise<void>} - Resolves after callback cleanup and error reporting finish.
+   */
+  async runFileOnFinished({filePath, onFinished, result}) {
+    if (!onFinished) return
 
     try {
-      for await (const chunk of createReadStream(filePath)) {
-        chunkCount += 1
-        totalBytes += chunk.length
-        this.logger.debug(() => ["sendFileOutput chunk", {clientCount: this.clientCount, chunkCount, chunkLength: chunk.length, totalBytes}])
-        this.events.emit("output", chunk)
+      await onFinished(result)
+    } catch (caughtError) {
+      const error = ensureError(caughtError)
+
+      await this.logger.error(() => ["File response onFinished callback failed", {clientCount: this.clientCount, filePath, result}, error])
+
+      const errorPayload = {
+        context: {clientCount: this.clientCount, filePath, result, stage: "send-file-on-finished"},
+        error
       }
-      this.logger.debug(() => ["sendFileOutput done", {clientCount: this.clientCount, chunkCount, totalBytes}])
-    } catch (error) {
-      this.logger.error(() => [`Velocious client ${this.clientCount} failed while streaming file output: ${filePath}`, error])
-      throw error
+
+      this.configuration.getErrorEvents().emit("framework-error", errorPayload)
+      this.configuration.getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
     }
+  }
+
+  /**
+   * Aborts all file responses awaiting transport acknowledgement.
+   * @returns {Promise<void>} - Resolves after pending callbacks settle.
+   */
+  async abortPendingFileResponses() {
+    await Promise.all([...this.pendingFileResponses].map((settle) => settle("aborted")))
   }
 
   /**
@@ -488,7 +534,7 @@ export default class VeoliciousHttpServerClient {
  * cannot carry a message body: every 1xx informational, 204 No
  * Content, and 304 Not Modified.
  * @param {number} statusCode - HTTP status code.
- * @returns {boolean}
+ * @returns {boolean} - Whether the status code forbids a response body.
  */
 function isNoBodyStatusCode(statusCode) {
   return (statusCode >= 100 && statusCode < 200) || statusCode === 204 || statusCode === 304

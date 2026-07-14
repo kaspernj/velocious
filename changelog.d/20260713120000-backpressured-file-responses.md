@@ -1,0 +1,1 @@
+Framework file responses now cross worker IPC as path descriptors and stream from the main thread with socket backpressure. `sendFile` accepts an optional sync or async `onFinished` callback reporting `"completed"` or `"aborted"`; response processing waits for cleanup and safely reports callback failures.

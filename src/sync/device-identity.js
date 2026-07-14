@@ -5,7 +5,7 @@ const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
 
 /**
  * JSON Web Key used by the sync signing helpers.
- * @typedef {JsonWebKey} SyncJsonWebKey
+ * @typedef {import("node:crypto").webcrypto.JsonWebKey} SyncJsonWebKey
  */
 
 /**
@@ -223,7 +223,7 @@ function signedMutationSignatureValue({deviceCertificate, mutation}) {
  */
 async function signStableJson({privateKey, value}) {
   const key = await cryptoSubtle().importKey("jwk", privateKey, {name: "ECDSA", namedCurve: "P-256"}, false, ["sign"])
-  const signature = await cryptoSubtle().sign({hash: "SHA-256", name: "ECDSA"}, key, /** @type {BufferSource} */ (utf8(stableJsonStringify(value))))
+  const signature = await cryptoSubtle().sign({hash: "SHA-256", name: "ECDSA"}, key, /** @type {Uint8Array<ArrayBuffer>} */ (utf8(stableJsonStringify(value))))
 
   return `${ECDSA_P256_SHA256_SIGNATURE_PREFIX}${base64UrlEncode(new Uint8Array(signature))}`
 }
@@ -240,7 +240,7 @@ async function verifyStableJsonSignature({publicKey, signature, value}) {
   const key = await cryptoSubtle().importKey("jwk", publicKey, {name: "ECDSA", namedCurve: "P-256"}, false, ["verify"])
   const signatureBytes = base64UrlDecode(signatureWithoutPrefix(signature))
 
-  return await cryptoSubtle().verify({hash: "SHA-256", name: "ECDSA"}, key, /** @type {BufferSource} */ (signatureBytes), /** @type {BufferSource} */ (utf8(stableJsonStringify(value))))
+  return await cryptoSubtle().verify({hash: "SHA-256", name: "ECDSA"}, key, /** @type {Uint8Array<ArrayBuffer>} */ (signatureBytes), /** @type {Uint8Array<ArrayBuffer>} */ (utf8(stableJsonStringify(value))))
 }
 
 /**

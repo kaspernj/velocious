@@ -2056,7 +2056,8 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get translator.
-   * @returns {(msgID: string, args?: Record<string, ?>) => string} */
+   * @returns {(msgID: string, args?: Record<string, ?>) => string} - The configured translator.
+   */
   getTranslator() {
     if (this._translator) return this._translator
 
@@ -2156,8 +2157,8 @@ export default class VelociousConfiguration {
    * Registers a `VelociousWebsocketConnection` subclass under a name.
    * Clients that send `{type: "connection-open", connectionType: name}`
    * will have this class instantiated for their connection.
-   * @param {string} name
-   * @param {typeof import("./http-server/websocket-connection.js").default} ConnectionClass
+   * @param {string} name - Client-facing connection type name.
+   * @param {typeof import("./http-server/websocket-connection.js").default} ConnectionClass - Websocket connection class.
    * @returns {void}
    */
   registerWebsocketConnection(name, ConnectionClass) {
@@ -2168,8 +2169,8 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get websocket connection class.
-   * @param {string} name
-   * @returns {typeof import("./http-server/websocket-connection.js").default | undefined}
+   * @param {string} name - Connection type name to look up.
+   * @returns {typeof import("./http-server/websocket-connection.js").default | undefined} - Registered websocket connection class.
    */
   getWebsocketConnectionClass(name) {
     return this._websocketConnectionClasses.get(name)
@@ -2178,8 +2179,8 @@ export default class VelociousConfiguration {
   /**
    * Registers a `VelociousWebsocketChannel` subclass under a name.
    * Clients subscribe via `{type: "channel-subscribe", channelType: name, ...}`.
-   * @param {string} name
-   * @param {typeof import("./http-server/websocket-channel.js").default} ChannelClass
+   * @param {string} name - Client-facing channel type name.
+   * @param {typeof import("./http-server/websocket-channel.js").default} ChannelClass - Websocket channel class.
    * @returns {void}
    */
   registerWebsocketChannel(name, ChannelClass) {
@@ -2190,8 +2191,8 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get websocket channel class.
-   * @param {string} name
-   * @returns {typeof import("./http-server/websocket-channel.js").default | undefined}
+   * @param {string} name - Channel type name to look up.
+   * @returns {typeof import("./http-server/websocket-channel.js").default | undefined} - Registered websocket channel class.
    */
   getWebsocketChannelClass(name) {
     return this._websocketChannelClasses.get(name)
@@ -2201,8 +2202,8 @@ export default class VelociousConfiguration {
    * Tracks a live channel subscription in the global routing registry.
    * Called by the session when `canSubscribe()` resolves truthy; the
    * session calls `_unregisterWebsocketChannelSubscription` on unsubscribe.
-   * @param {string} name
-   * @param {import("./http-server/websocket-channel.js").default} subscription
+   * @param {string} name - Channel type used as the routing key.
+   * @param {import("./http-server/websocket-channel.js").default} subscription - Live channel subscription to register.
    * @returns {void}
    */
   _registerWebsocketChannelSubscription(name, subscription) {
@@ -2218,8 +2219,8 @@ export default class VelociousConfiguration {
 
   /**
    * Runs unregister websocket channel subscription.
-   * @param {string} name
-   * @param {import("./http-server/websocket-channel.js").default} subscription
+   * @param {string} name - Channel type used as the routing key.
+   * @param {import("./http-server/websocket-channel.js").default} subscription - Live channel subscription to remove.
    * @returns {void}
    */
   _unregisterWebsocketChannelSubscription(name, subscription) {
@@ -2262,7 +2263,7 @@ export default class VelociousConfiguration {
    * connection message / channel dispatch. The wrapper receives the
    * session and a `next` callback; it must call `next()` to run the
    * handler. Use it to set up AsyncLocalStorage per request.
-   * @param {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null} wrapper
+   * @param {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null} wrapper - Per-message session-context wrapper, or null to disable it.
    * @returns {void}
    */
   setWebsocketAroundRequest(wrapper) {
@@ -2271,7 +2272,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get websocket around request.
-   * @returns {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null}
+   * @returns {((session: import("./http-server/client/websocket-session.js").default, next: () => Promise<void>) => Promise<void>) | null} - Websocket session wrapper.
    */
   getWebsocketAroundRequest() {
     return this._websocketAroundRequest
@@ -2282,7 +2283,7 @@ export default class VelociousConfiguration {
    * HTTP and WS-borne. Receives `{request, response, next}` and must
    * call `next()` to run the action. Use it for per-request context
    * like AsyncLocalStorage-scoped locale or tracing.
-   * @param {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} wrapper
+   * @param {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} wrapper - Per-action request-context wrapper, or null to disable it.
    * @returns {void}
    */
   setAroundAction(wrapper) {
@@ -2291,7 +2292,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get around action.
-   * @returns {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null}
+   * @returns {((context: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default, next: () => Promise<void>}) => Promise<void>) | null} - HTTP request wrapper.
    */
   getAroundAction() {
     return this._aroundAction
@@ -2310,7 +2311,7 @@ export default class VelociousConfiguration {
    *
    * Return `null`/`undefined` to mean "no identity" — resumes still
    * succeed if pause and resume both resolve to a nullish value.
-   * @param {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} resolver
+   * @param {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} resolver - Authenticated-caller identity resolver, or null to disable identity checks.
    * @returns {void}
    */
   setWebsocketSessionIdentityResolver(resolver) {
@@ -2319,14 +2320,15 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get websocket session identity resolver.
-   * @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
+   * @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} - The configured identity resolver.
+   */
   getWebsocketSessionIdentityResolver() {
     return this._websocketSessionIdentityResolver
   }
 
   /**
    * Runs set websocket session grace seconds.
-   * @param {number} seconds
+   * @param {number} seconds - Grace period before a paused session expires.
    * @returns {void}
    */
   setWebsocketSessionGraceSeconds(seconds) {
@@ -2336,7 +2338,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs set websocket session heartbeat seconds.
-   * @param {number} seconds
+   * @param {number} seconds - Heartbeat interval, with zero disabling reaping.
    * @returns {void}
    */
   setWebsocketSessionHeartbeatSeconds(seconds) {
@@ -2349,7 +2351,7 @@ export default class VelociousConfiguration {
    * timer. When the timer fires, the session's permanent teardown
    * hook is invoked. Called by the session itself from `_handleClose`
    * when there is resumable state (live Connections / Channel subs).
-   * @param {import("./http-server/client/websocket-session.js").default} session
+   * @param {import("./http-server/client/websocket-session.js").default} session - Resumable session to retain during its grace period.
    * @returns {void}
    */
   _pauseWebsocketSession(session) {
@@ -2372,8 +2374,8 @@ export default class VelociousConfiguration {
   /**
    * Looks up a paused session by id (does NOT remove it — caller is
    * expected to call `_resumeWebsocketSession` to complete the handoff).
-   * @param {string} sessionId
-   * @returns {import("./http-server/client/websocket-session.js").default | null}
+   * @param {string} sessionId - Paused session identifier to look up.
+   * @returns {import("./http-server/client/websocket-session.js").default | null} - Paused session with the requested identifier, if present.
    */
   _findPausedWebsocketSession(sessionId) {
     return this._pausedWebsocketSessions.get(sessionId)?.session || null
@@ -2383,7 +2385,7 @@ export default class VelociousConfiguration {
    * Removes a paused session from the registry and cancels its grace
    * timer. Called on successful resume handoff and on explicit
    * expiry.
-   * @param {string} sessionId
+   * @param {string} sessionId - Paused session identifier to remove and cancel.
    * @returns {void}
    */
   _clearPausedWebsocketSession(sessionId) {
@@ -2398,7 +2400,7 @@ export default class VelociousConfiguration {
   /**
    * Grace-timer callback. Calls the session's permanent-teardown
    * hook and drops it from the registry.
-   * @param {string} sessionId
+   * @param {string} sessionId - Paused session identifier whose grace period expired.
    * @returns {void}
    */
   _expireWebsocketSession(sessionId) {
@@ -2416,9 +2418,9 @@ export default class VelociousConfiguration {
 
   /**
    * Runs broadcast to channel.
-   * @param {string} name
-   * @param {Record<string, ?>} broadcastParams
-   * @param {?} body
+   * @param {string} name - Channel type receiving the broadcast.
+   * @param {Record<string, ?>} broadcastParams - Values used to match eligible subscriptions.
+   * @param {?} body - Broadcast payload delivered to matching subscriptions.
    * @returns {void}
    */
   broadcastToChannel(name, broadcastParams, body) {
