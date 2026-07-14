@@ -2,6 +2,7 @@
 
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
+import EventEmitter from "node:events"
 
 import BeaconClient from "../../src/beacon/client.js"
 import BeaconServer from "../../src/beacon/server.js"
@@ -25,6 +26,23 @@ function buildConfiguration() {
 }
 
 describe("BeaconClient", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("force-destroys sockets that do not close within the graceful bound", async () => {
+    class StalledSocket extends EventEmitter {
+      destroyed = false
+      end() {}
+      destroySoon() {}
+      destroy() { this.destroyed = true }
+    }
+
+    const socket = new StalledSocket()
+    const client = new BeaconClient({host: "127.0.0.1", port: 1, closeTimeoutMs: 10})
+    client._socket = /** @type {import("net").Socket} */ (/** @type {never} */ (socket))
+
+    await client.close()
+
+    expect(socket.destroyed).toBe(true)
+  })
+
   it("returns false from publish before the connection is established", async () => {
     const beacon = new BeaconServer({configuration: buildConfiguration(), host: "127.0.0.1", port: 0})
     await beacon.start()

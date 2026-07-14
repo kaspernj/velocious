@@ -1987,7 +1987,7 @@ VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 
 `maxConcurrentInlineJobs` (default: `4`) caps how many `executionMode: "inline"` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores. The older `forked: false` option still maps to inline mode.
 
-`maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel and exit after the job runner closes its framework resources. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
+`maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel. After the main process acknowledges their durable status report, forked and spawned one-shot runners exit without waiting for graceful Beacon/database teardown; the OS closes their process-owned resources. A missing or rejected status acknowledgement makes the runner exit as failed instead of reporting clean success. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
 
 ### Dispatch strategy
 

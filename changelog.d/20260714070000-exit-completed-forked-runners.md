@@ -1,0 +1,1 @@
+Fix forked and spawned background-job runners lingering after their durable completion report when graceful connection teardown stalls, while ensuring a missing or rejected durable acknowledgement exits as failed.
