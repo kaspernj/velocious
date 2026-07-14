@@ -6,6 +6,8 @@ import Logger from "../logger.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
 
+class BackgroundJobUpdateError extends Error {}
+
 export default class BackgroundJobsStatusReporter {
   /**
    * Runs constructor.
@@ -58,7 +60,7 @@ export default class BackgroundJobsStatusReporter {
           }
 
           if (message?.type === "job-update-error" && message.jobId === jobId) {
-            reject(new Error(message.error || "Job update failed"))
+            reject(new BackgroundJobUpdateError(message.error || "Job update failed"))
           }
         }
       })
@@ -86,6 +88,8 @@ export default class BackgroundJobsStatusReporter {
         await this.report({jobId, status, error, handoffId, handedOffAtMs, workerId})
         return
       } catch (error) {
+        if (error instanceof BackgroundJobUpdateError) throw error
+
         attempt += 1
         const delaySeconds = Math.min(30, 0.5 * attempt)
 
@@ -93,7 +97,7 @@ export default class BackgroundJobsStatusReporter {
 
         if (maxDurationMs && Date.now() - startTime >= maxDurationMs) {
           this.logger.warn(() => ["Background job status report timed out, giving up", error])
-          return
+          throw error
         }
 
         await wait(delaySeconds)

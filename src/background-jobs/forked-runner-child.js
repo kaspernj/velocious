@@ -51,7 +51,7 @@ async function runJobMessage(message) {
     throw new Error("Forked background job runner received invalid payload")
   }
 
-  await runJobPayload(message.payload)
+  await runJobPayload(message.payload, {closeConnections: false})
 }
 
 /**

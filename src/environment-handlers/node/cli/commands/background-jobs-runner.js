@@ -19,6 +19,7 @@ export default class BackgroundJobsRunnerCommand extends BaseCommand {
     const decoded = Buffer.from(payload, "base64").toString("utf8")
     const jobPayload = JSON.parse(decoded)
 
-    await runJobPayload(jobPayload)
+    await runJobPayload(jobPayload, {closeConnections: false})
+    process.exit(0)
   }
 }

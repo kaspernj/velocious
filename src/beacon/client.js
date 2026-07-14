@@ -9,6 +9,7 @@ import EventEmitter from "../utils/event-emitter.js"
 
 const DEFAULT_RECONNECT_DELAY_MS = 1000
 const MAX_RECONNECT_DELAY_MS = 30_000
+const DEFAULT_CLOSE_TIMEOUT_MS = 1000
 
 /**
  * BeaconBroadcastHandler type.
@@ -43,8 +44,9 @@ export default class BeaconClient extends EventEmitter {
    * @param {string} [args.peerId] - Optional explicit peer id (defaults to a random UUID).
    * @param {number} [args.reconnectDelayMs] - Starting reconnect delay in ms.
    * @param {number} [args.maxReconnectDelayMs] - Maximum reconnect delay in ms.
+   * @param {number} [args.closeTimeoutMs] - Maximum graceful socket close wait in ms.
    */
-  constructor({host, port, peerType, peerId, reconnectDelayMs, maxReconnectDelayMs}) {
+  constructor({host, port, peerType, peerId, reconnectDelayMs, maxReconnectDelayMs, closeTimeoutMs}) {
     super()
     this.host = host
     this.port = port
@@ -53,6 +55,7 @@ export default class BeaconClient extends EventEmitter {
     this._initialReconnectDelayMs = reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS
     this._maxReconnectDelayMs = maxReconnectDelayMs ?? MAX_RECONNECT_DELAY_MS
     this._reconnectDelayMs = this._initialReconnectDelayMs
+    this._closeTimeoutMs = closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS
     /**
      * Narrows the runtime value to the documented type.
      * @type {JsonSocket | undefined} */
@@ -66,7 +69,7 @@ export default class BeaconClient extends EventEmitter {
     this._closed = false
     /**
      * Narrows the runtime value to the documented type.
-     * @type {NodeJS.Timeout | undefined} */
+     * @type {ReturnType<typeof setTimeout> | undefined} */
     this._reconnectTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
@@ -235,10 +238,14 @@ export default class BeaconClient extends EventEmitter {
 
     if (socket.destroyed) return
 
-    await new Promise((resolve) => {
-      socket.once("close", () => resolve(undefined))
-      socket.end()
-      socket.destroySoon()
+    await timeout({timeout: this._closeTimeoutMs}, async () => {
+      await new Promise((resolve) => {
+        socket.once("close", () => resolve(undefined))
+        socket.end()
+        socket.destroySoon()
+      })
+    }).catch(() => {
+      socket.destroy()
     })
   }
 

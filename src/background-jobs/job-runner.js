@@ -50,9 +50,11 @@ async function connectBeacon(configuration) {
 /**
  * Runs run job payload.
  * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+ * @param {object} [options] - Runner options.
+ * @param {boolean} [options.closeConnections] - Whether to gracefully close framework connections after the job.
  * @returns {Promise<void>} - Resolves when complete.
  */
-export default async function runJobPayload(payload) {
+export default async function runJobPayload(payload, {closeConnections = true} = {}) {
   const configuration = await configurationResolver()
   configuration.setCurrent()
   await configuration.initialize({type: "background-jobs-runner"})
@@ -73,17 +75,6 @@ export default async function runJobPayload(payload) {
       await configuration.withConnections({name: `Background job runner: ${payload.jobName}`}, async () => {
         await perform.apply(jobInstance, payload.args || [])
       })
-
-      if (payload.id) {
-        await reporter.reportWithRetry({
-          jobId: payload.id,
-          status: "completed",
-          handoffId: payload.handoffId,
-          workerId: payload.workerId,
-          handedOffAtMs: payload.handedOffAtMs,
-          maxDurationMs: 30000
-        })
-      }
     } catch (error) {
       if (payload.id) {
         await reporter.reportWithRetry({
@@ -99,11 +90,24 @@ export default async function runJobPayload(payload) {
 
       throw error
     }
+
+    if (payload.id) {
+      await reporter.reportWithRetry({
+        jobId: payload.id,
+        status: "completed",
+        handoffId: payload.handoffId,
+        workerId: payload.workerId,
+        handedOffAtMs: payload.handedOffAtMs,
+        maxDurationMs: 30000
+      })
+    }
   } finally {
-    try {
-      await configuration.disconnectBeacon()
-    } finally {
-      await configuration.closeDatabaseConnections()
+    if (closeConnections) {
+      try {
+        await configuration.disconnectBeacon()
+      } finally {
+        await configuration.closeDatabaseConnections()
+      }
     }
   }
 }

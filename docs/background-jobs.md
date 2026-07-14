@@ -70,6 +70,15 @@ then `SIGKILL` after a short grace) so they are not orphaned across a deploy —
 an orphaned runner keeps running against deleted release code and holds its
 database connections open.
 
+After a forked or spawned one-shot runner receives the main process's durable
+status acknowledgement, it exits without waiting for graceful Beacon/database
+teardown; the operating system closes those process-owned resources. This keeps
+a completed runner from lingering when a graceful socket close stalls. Inline
+and long-lived worker shutdown still performs graceful framework cleanup. If
+the acknowledgement is missing or rejected through `job-update-error`, the
+one-shot runner exits as failed and does not reinterpret the transport failure
+as a failed job-performance report.
+
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 
 - unset, `"indefinite"`, or `"0"` (default): wait for in-flight jobs to finish
