@@ -706,12 +706,21 @@ export default class BackgroundJobsStore {
       try {
         db.clearSchemaCache()
         const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
-        const tableData = new TableData(JOBS_TABLE)
+        const concurrencyColumnNames = ["concurrency_key", "max_concurrency"]
 
-        if (!(await lockedTable.getColumnByName("concurrency_key"))) tableData.string("concurrency_key", {null: true, index: true})
-        if (!(await lockedTable.getColumnByName("max_concurrency"))) tableData.integer("max_concurrency", {null: true})
+        for (const concurrencyColumnName of concurrencyColumnNames) {
+          if (await lockedTable.getColumnByName(concurrencyColumnName)) continue
 
-        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+          const tableData = new TableData(JOBS_TABLE)
+          if (concurrencyColumnName == "concurrency_key") {
+            tableData.string("concurrency_key", {null: true, index: true})
+          } else {
+            tableData.integer("max_concurrency", {null: true})
+          }
+
+          for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+        }
+
         db.clearSchemaCache()
       } finally {
         await db.releaseAdvisoryLock(lockName)

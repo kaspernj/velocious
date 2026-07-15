@@ -522,10 +522,12 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     const pool = dummyConfiguration.getDatabasePool(firstStore.getDatabaseIdentifier())
 
     await pool.withConnection({name: "Background jobs prepare concurrency-only legacy schema"}, async (db) => {
-      const tableData = new TableData("background_jobs")
-      tableData.string("execution_mode", {null: true})
-      tableData.string("handoff_id", {null: true})
-      for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+      for (const columnName of ["execution_mode", "handoff_id"]) {
+        const tableData = new TableData("background_jobs")
+        tableData.string(columnName, {null: true})
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+      }
+
       db.clearSchemaCache()
     })
 
