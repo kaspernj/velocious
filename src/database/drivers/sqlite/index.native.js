@@ -81,4 +81,17 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
       return query(this.connection, sql)
     })
   }
+
+  /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    return await this._queryMutex.sync(async () => {
+      if (!this.connection) throw new Error("Not connected yet")
+      const result = await this.connection.runAsync(sql)
+      return result.changes
+    })
+  }
 }

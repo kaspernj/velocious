@@ -329,6 +329,19 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    const request = this._currentTransaction
+      ? new mssql.Request(this._currentTransaction)
+      : new mssql.Request(this.connection)
+    const result = await request.query(sql)
+    return result.rowsAffected.reduce((total, count) => total + count, 0)
+  }
+
+  /**
    * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.

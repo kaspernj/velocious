@@ -345,6 +345,24 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    if (!this.pool) await this.connect()
+    if (!this.pool) throw new Error("MySQL pool failed to initialize")
+    const pool = this.pool
+
+    return await new Promise((resolve, reject) => {
+      pool.query(sql, (error, result) => {
+        if (error) reject(error)
+        else resolve("affectedRows" in result ? result.affectedRows : 0)
+      })
+    })
+  }
+
+  /**
    * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.

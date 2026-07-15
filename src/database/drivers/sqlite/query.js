@@ -2,7 +2,7 @@
 
 /**
  * Runs query.
- * @param {import("sqlite3").Database} connection - Connection.
+ * @param {import("sqlite").Database} connection - Connection.
  * @param {string} sql - SQL string.
  * @returns {Promise<Record<string, ?>[]>} - Resolves with string value.
  */
@@ -13,7 +13,6 @@ export default async function query(connection, sql) {
      * @type {Record<string, ?>[]} */
     let result
 
-    // @ts-expect-error
     result = await connection.all(sql)
 
     return result

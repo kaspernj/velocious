@@ -47,6 +47,17 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
     return result
   }
 
+  /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async affectedRows(sql) {
+    await this.query(sql)
+    const connection = /** @type {import("sql.js").Database & {getRowsModified: () => number}} */ (this.connection)
+    return connection.getRowsModified()
+  }
+
   saveDatabase = async () => {
     const databaseContent = this.connection.export()
 

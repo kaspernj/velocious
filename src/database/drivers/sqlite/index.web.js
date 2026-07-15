@@ -8,7 +8,7 @@ import Base from "./base.js"
 
 /**
  * VelociousDatabaseDriversSqliteWeb class.
- * @typedef {{query: (sql: string) => Promise<Record<string, ?>[]>, close: () => Promise<void>}} SqliteWebConnection
+ * @typedef {{query: (sql: string) => Promise<Record<string, ?>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} SqliteWebConnection
  */
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
@@ -109,5 +109,15 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     }
 
     return result
+  }
+
+  /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    const connection = this.getConnection()
+    return await connection.affectedRows(sql)
   }
 }

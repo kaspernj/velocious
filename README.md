@@ -1930,6 +1930,8 @@ Create the file `src/routes/testing/another-action.ejs` and so something like th
 
 Velocious includes a simple background jobs system inspired by Sidekiq.
 
+Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
+
 Production apps can listen for `background-job-failed` or its `all-error` mirror to report accepted failed attempts, including retry and terminal state metadata. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 
 ## Setup
