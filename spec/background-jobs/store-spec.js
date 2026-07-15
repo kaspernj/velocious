@@ -49,6 +49,63 @@ async function createOrphanedJob({maxRetries, store}) {
   return await getJobOrFail({jobId, store})
 }
 
+class ScriptedBackgroundJobsStore extends BackgroundJobsStore {
+  /**
+   * @param {object} args - Options.
+   * @param {import("../../src/database/drivers/base.js").default} args.db - Scripted database connection.
+   * @param {import("../../src/background-jobs/types.js").BackgroundJobRow} args.job - Scripted job row.
+   */
+  constructor({db, job}) {
+    super({configuration: dummyConfiguration})
+    this.scriptedDb = db
+    this.scriptedJob = job
+  }
+
+  /** @returns {Promise<void>} - Resolves immediately. */
+  async ensureReady() {}
+
+  /** @param {Function} callback - Database callback. */
+  async _withDb(callback) {
+    return await callback(this.scriptedDb)
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @param {Function} callback - Transaction callback. */
+  async _transactionResult(db, callback) {
+    void db
+    return await callback()
+  }
+
+  /** @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow>} - Scripted job. */
+  async _getJobRowById() {
+    return this.scriptedJob
+  }
+}
+
+/** @returns {import("../../src/background-jobs/types.js").BackgroundJobRow} - Active concurrency-limited job. */
+function activeConcurrencyJob() {
+  return {
+    id: "concurrent-job",
+    jobName: "TestJob",
+    args: [],
+    executionMode: "inline",
+    forked: false,
+    status: "handed_off",
+    attempts: 0,
+    maxRetries: 0,
+    scheduledAtMs: 1,
+    createdAtMs: 1,
+    handedOffAtMs: 2,
+    handoffId: "handoff-1",
+    completedAtMs: null,
+    failedAtMs: null,
+    orphanedAtMs: null,
+    workerId: "worker-1",
+    lastError: null,
+    concurrencyKey: "shared-key",
+    maxConcurrency: 2
+  }
+}
+
 /** @returns {Promise<BackgroundJobsStore>} - Store with a legacy jobs table missing execution_mode. */
 async function createStoreWithLegacyJobsSchema() {
   dummyConfiguration.setCurrent()
@@ -164,6 +221,75 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     const claimedIndex = claims.findIndex(Boolean)
     expect(await store.cancel(ids[claimedIndex])).toEqual(true)
     expect(await store.markHandedOff({jobId: ids[1 - claimedIndex], workerId: "replacement"})).not.toBeNull()
+  })
+
+  it("releases a concurrency reservation when a competing queued claim loses", async () => {
+    let activeCount = 0
+    const db = {
+      affectedRows: async (sql) => {
+        if (sql.includes("active_count + 1")) {
+          activeCount += 1
+          return 1
+        }
+
+        return 0
+      },
+      query: async (sql) => {
+        if (sql.includes("active_count - 1")) activeCount -= 1
+        return []
+      },
+      quoteColumn: (value) => value,
+      quoteTable: (value) => value,
+      quote: (value) => `'${value}'`,
+      updateSql: () => "UPDATE background_jobs SET status = 'handed_off' WHERE status = 'queued'"
+    }
+    const queuedJob = activeConcurrencyJob()
+    queuedJob.status = "queued"
+    queuedJob.handoffId = null
+    queuedJob.handedOffAtMs = null
+    const scriptedDb = /** @type {import("../../src/database/drivers/base.js").default} */ (db)
+    const store = new ScriptedBackgroundJobsStore({db: scriptedDb, job: queuedJob})
+
+    expect(await store.markHandedOff({jobId: queuedJob.id, workerId: "claim-loser"})).toBeNull()
+    expect(activeCount).toEqual(0)
+  })
+
+  it("releases capacity only for the competing terminal transition that wins", async () => {
+    let activeCount = 1
+    let terminalUpdates = 0
+    let releases = 0
+    const db = {
+      affectedRows: async (sql) => {
+        if (sql.includes("active_count + 1")) {
+          activeCount += 1
+          return 1
+        }
+
+        terminalUpdates += 1
+        return terminalUpdates === 1 ? 1 : 0
+      },
+      query: async (sql) => {
+        if (sql.includes("active_count - 1")) {
+          activeCount -= 1
+          releases += 1
+        }
+        return []
+      },
+      quoteColumn: (value) => value,
+      quoteTable: (value) => value,
+      quote: (value) => `'${value}'`,
+      updateSql: () => "UPDATE background_jobs SET status = 'completed' WHERE status = 'handed_off'"
+    }
+    const job = activeConcurrencyJob()
+    const scriptedDb = /** @type {import("../../src/database/drivers/base.js").default} */ (db)
+    const store = new ScriptedBackgroundJobsStore({db: scriptedDb, job})
+    const report = {jobId: job.id, handoffId: job.handoffId || undefined, workerId: job.workerId || undefined, handedOffAtMs: job.handedOffAtMs || undefined}
+
+    expect(await Promise.all([store.markCompleted(report), store.markCompleted(report)])).toEqual([true, false])
+    expect(releases).toEqual(1)
+
+    expect(await store._reserveConcurrency(scriptedDb, job.concurrencyKey || "")).toEqual(true)
+    expect(activeCount).toEqual(1)
   })
 
   it("uses each conditional update result instead of a shared claim token", async () => {
@@ -388,6 +514,29 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       expect(await jobsTable.getColumnByName("concurrency_key")).not.toBeNull()
       expect(await jobsTable.getColumnByName("max_concurrency")).not.toBeNull()
       expect(await concurrencyTable.getColumnByName("reservation_token")).toEqual(undefined)
+    })
+  })
+
+  it("serializes and rechecks concurrent legacy concurrency-column migrations", async () => {
+    const firstStore = await createStoreWithLegacyJobsSchema()
+    const pool = dummyConfiguration.getDatabasePool(firstStore.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs prepare concurrency-only legacy schema"}, async (db) => {
+      const tableData = new TableData("background_jobs")
+      tableData.string("execution_mode", {null: true})
+      tableData.string("handoff_id", {null: true})
+      for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+      db.clearSchemaCache()
+    })
+
+    const secondStore = new BackgroundJobsStore({configuration: dummyConfiguration})
+
+    await Promise.all([firstStore.ensureReady(), secondStore.ensureReady()])
+
+    await pool.withConnection({name: "Background jobs verify concurrent concurrency migration"}, async (db) => {
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+      expect(await jobsTable.getColumnByName("concurrency_key")).not.toBeNull()
+      expect(await jobsTable.getColumnByName("max_concurrency")).not.toBeNull()
     })
   })
 

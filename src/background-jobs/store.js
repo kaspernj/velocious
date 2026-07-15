@@ -335,7 +335,7 @@ export default class BackgroundJobsStore {
       if (!queuedJob || queuedJob.status !== "queued") return null
       if (queuedJob.concurrencyKey && !(await this._reserveConcurrency(db, queuedJob.concurrencyKey))) return null
 
-      await db.update({
+      const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
           status: "handed_off",
@@ -346,9 +346,10 @@ export default class BackgroundJobsStore {
         conditions: {id: jobId, status: "queued"}
       })
 
-      const job = await this._getJobRowById(db, jobId)
-
-      if (job?.status !== "handed_off" || job.handoffId !== handoffId) return null
+      if (affectedRows !== 1) {
+        await this._releaseConcurrency(db, queuedJob.concurrencyKey)
+        return null
+      }
 
       return {handedOffAtMs, handoffId}
     }))
@@ -372,7 +373,7 @@ export default class BackgroundJobsStore {
       if (!job) return false
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
 
-      await db.update({
+      const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
           status: "completed",
@@ -381,11 +382,9 @@ export default class BackgroundJobsStore {
         conditions: this._activeHandoffConditions(job)
       })
 
-      const updatedJob = await this._getJobRowById(db, jobId)
-
-      if (updatedJob?.status === "completed") await this._releaseConcurrency(db, job.concurrencyKey)
-
-      return updatedJob?.status === "completed" && updatedJob.handoffId === job.handoffId
+      if (affectedRows !== 1) return false
+      await this._releaseConcurrency(db, job.concurrencyKey)
+      return true
     }))
   }
 
@@ -402,7 +401,7 @@ export default class BackgroundJobsStore {
     await this._withDb(async (db) => await db.transaction(async () => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || job.handoffId !== handoffId || job.status !== "handed_off") return
-      await db.update({
+      const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
           status: "queued",
@@ -413,8 +412,7 @@ export default class BackgroundJobsStore {
         },
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
       })
-      const updatedJob = await this._getJobRowById(db, jobId)
-      if (updatedJob?.status === "queued") await this._releaseConcurrency(db, job.concurrencyKey)
+      if (affectedRows === 1) await this._releaseConcurrency(db, job.concurrencyKey)
     }))
   }
 
@@ -438,7 +436,6 @@ export default class BackgroundJobsStore {
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return null
 
       const updatedJob = await this._applyFailure({db, job, error, markOrphaned: false})
-      if (updatedJob) await this._releaseConcurrency(db, job.concurrencyKey)
       return updatedJob
     }))
   }
@@ -475,7 +472,6 @@ export default class BackgroundJobsStore {
         })
 
         if (orphanedJob) orphanedCount += 1
-        if (orphanedJob) await this._releaseConcurrency(db, job.concurrencyKey)
       }
 
       return orphanedCount
@@ -505,9 +501,8 @@ export default class BackgroundJobsStore {
     return await this._withDb(async (db) => await this._transactionResult(db, async () => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || (job.status !== "queued" && job.status !== "handed_off")) return false
-      await db.update({tableName: JOBS_TABLE, data: {status: "cancelled"}, conditions: {id: job.id, status: job.status}})
-      const updatedJob = await this._getJobRowById(db, jobId)
-      if (updatedJob?.status !== "cancelled") return false
+      const affectedRows = await this._updateAffectedRows(db, {tableName: JOBS_TABLE, data: {status: "cancelled"}, conditions: {id: job.id, status: job.status}})
+      if (affectedRows !== 1) return false
       if (job.status === "handed_off") await this._releaseConcurrency(db, job.concurrencyKey)
       return true
     }))
@@ -699,12 +694,28 @@ export default class BackgroundJobsStore {
     await this._backfillExecutionModesOnce(db)
 
     const concurrencyTable = await db.getTableByNameOrFail(JOBS_TABLE)
-    if (!(await concurrencyTable.getColumnByName("concurrency_key"))) {
-      const tableData = new TableData(JOBS_TABLE)
-      tableData.string("concurrency_key", {null: true, index: true})
-      tableData.integer("max_concurrency", {null: true})
-      for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
-      db.clearSchemaCache()
+    const hasConcurrencyKey = await concurrencyTable.getColumnByName("concurrency_key")
+    const hasMaxConcurrency = await concurrencyTable.getColumnByName("max_concurrency")
+
+    if (!hasConcurrencyKey || !hasMaxConcurrency) {
+      const lockName = `${MIGRATION_SCOPE}:concurrency_columns`
+      const acquired = await db.acquireAdvisoryLock(lockName)
+
+      if (!acquired) throw new Error("Failed to acquire background jobs concurrency schema lock")
+
+      try {
+        db.clearSchemaCache()
+        const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
+        const tableData = new TableData(JOBS_TABLE)
+
+        if (!(await lockedTable.getColumnByName("concurrency_key"))) tableData.string("concurrency_key", {null: true, index: true})
+        if (!(await lockedTable.getColumnByName("max_concurrency"))) tableData.integer("max_concurrency", {null: true})
+
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+        db.clearSchemaCache()
+      } finally {
+        await db.releaseAdvisoryLock(lockName)
+      }
     }
   }
 
@@ -820,19 +831,18 @@ export default class BackgroundJobsStore {
       shouldRetry
     })
 
-    await db.update({
+    const affectedRows = await this._updateAffectedRows(db, {
       tableName: JOBS_TABLE,
       data: update,
       conditions: this._activeHandoffConditions(job)
     })
 
+    if (affectedRows !== 1) return null
+    await this._releaseConcurrency(db, job.concurrencyKey)
+
     const updatedJob = await this._getJobRowById(db, job.id)
 
     if (!updatedJob) return null
-    if (updatedJob.handoffId !== job.handoffId) return null
-    if (updatedJob.attempts !== nextAttempt) return null
-    if (updatedJob.status !== update.status) return null
-
     return updatedJob
   }
 
@@ -999,6 +1009,16 @@ export default class BackgroundJobsStore {
     const count = db.quoteColumn("active_count")
     const affectedRows = await db.affectedRows(`UPDATE ${table} SET ${count} = ${count} + 1 WHERE ${db.quoteColumn("concurrency_key")} = ${db.quote(concurrencyKey)} AND ${count} < ${db.quoteColumn("max_concurrency")}`)
     return affectedRows === 1
+  }
+
+  /**
+   * Runs a portable update and returns its affected-row count.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {import("../database/drivers/base.js").UpdateSqlArgsType} args - Update options.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _updateAffectedRows(db, args) {
+    return await db.affectedRows(db.updateSql(args))
   }
 
   /**
