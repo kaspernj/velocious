@@ -132,6 +132,89 @@ async function createStoreWithLegacyJobsSchema() {
 }
 
 describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => {
+  it("validates paired concurrency options and rejects conflicting caps", async () => {
+    const store = await createClearedStore()
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {concurrencyKey: "account:1"}})).toThrow(/must be paired/)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {concurrencyKey: "", maxConcurrency: 1}})).toThrow(/must be paired/)
+    await store.enqueue({jobName: "TestJob", args: [], options: {concurrencyKey: "account:1", maxConcurrency: 2}})
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {concurrencyKey: "account:1", maxConcurrency: 3}})).toThrow(/Conflicting maxConcurrency/)
+  })
+
+  it("claims atomically, skips saturated keys, and releases reservations", async () => {
+    const store = await createClearedStore()
+    const firstId = await store.enqueue({jobName: "TestJob", args: ["first"], options: {concurrencyKey: "serial", maxConcurrency: 1}})
+    const blockedId = await store.enqueue({jobName: "TestJob", args: ["blocked"], options: {concurrencyKey: "serial", maxConcurrency: 1}})
+    const freeId = await store.enqueue({jobName: "TestJob", args: ["free"], options: {concurrencyKey: "other", maxConcurrency: 1}})
+    const firstHandoff = await store.markHandedOff({jobId: firstId, workerId: "worker-1"})
+    if (!firstHandoff) throw new Error("Expected first job claim")
+
+    expect((await store.nextAvailableJob())?.id).toEqual(freeId)
+    expect(await store.markHandedOff({jobId: blockedId, workerId: "worker-2"})).toBeNull()
+
+    await store.markCompleted({jobId: firstId, workerId: "worker-1", ...firstHandoff})
+    expect((await store.nextAvailableJob())?.id).toEqual(blockedId)
+  })
+
+  it("allows only the cap across workers and releases on cancellation", async () => {
+    const store = await createClearedStore()
+    const ids = await Promise.all([1, 2].map(async (number) => await store.enqueue({jobName: "TestJob", args: [number], options: {concurrencyKey: "one-at-a-time", maxConcurrency: 1}})))
+    const claims = []
+    for (const [index, jobId] of ids.entries()) claims.push(await store.markHandedOff({jobId, workerId: `worker-${index}`}))
+    expect(claims.filter(Boolean)).toHaveLength(1)
+    const claimedIndex = claims.findIndex(Boolean)
+    expect(await store.cancel(ids[claimedIndex])).toEqual(true)
+    expect(await store.markHandedOff({jobId: ids[1 - claimedIndex], workerId: "replacement"})).not.toBeNull()
+  })
+
+  it("uses each conditional update result instead of a shared claim token", async () => {
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    let updateCount = 0
+    let sharedToken = null
+    let secondUpdateFinished
+    const secondUpdate = new Promise((resolve) => { secondUpdateFinished = resolve })
+    const db = {
+      affectedRows: async () => 1,
+      query: async (sql) => {
+        updateCount += 1
+        sharedToken = sql.match(/reservation_token = '([^']+)'/)?.[1] || null
+        if (updateCount === 1) await secondUpdate
+        else secondUpdateFinished()
+        return []
+      },
+      newQuery: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({results: async () => [{reservation_token: sharedToken}]})
+          })
+        })
+      }),
+      quoteColumn: (value) => value,
+      quoteTable: (value) => value,
+      quote: (value) => `'${value}'`
+    }
+
+    const claims = await Promise.all([
+      store._reserveConcurrency(/** @type {import("../../src/database/drivers/base.js").default} */ (db), "two-at-a-time"),
+      store._reserveConcurrency(/** @type {import("../../src/database/drivers/base.js").default} */ (db), "two-at-a-time")
+    ])
+
+    expect(claims).toEqual([true, true])
+  })
+
+  it("releases concurrency capacity for retries and orphan recovery", async () => {
+    const store = await createClearedStore()
+    const retryId = await store.enqueue({jobName: "TestJob", args: ["retry"], options: {concurrencyKey: "lifecycle", maxConcurrency: 1, maxRetries: 1}})
+    const waitingId = await store.enqueue({jobName: "TestJob", args: ["waiting"], options: {concurrencyKey: "lifecycle", maxConcurrency: 1}})
+    const retryHandoff = await store.markHandedOff({jobId: retryId, workerId: "worker-1"})
+    if (!retryHandoff) throw new Error("Expected retry job claim")
+    await store.markFailed({jobId: retryId, error: "retry", workerId: "worker-1", ...retryHandoff})
+    const waitingHandoff = await store.markHandedOff({jobId: waitingId, workerId: "worker-2"})
+    if (!waitingHandoff) throw new Error("Expected waiting job claim")
+    await store.markOrphanedJobs({orphanedAfterMs: 0})
+
+    expect(await store.markHandedOff({jobId: retryId, workerId: "worker-3"})).not.toBeNull()
+  })
+
   it("fences stale completion and failure reports after a handoff is requeued", async () => {
     const store = await createClearedStore()
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
@@ -297,6 +380,15 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
     const nextInline = await store.nextAvailableJob({executionMode: "inline"})
     expect(nextInline?.id).toEqual("legacy-inline-job")
+
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+    await pool.withConnection({name: "Background jobs verify concurrency migration"}, async (db) => {
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+      const concurrencyTable = await db.getTableByNameOrFail("background_job_concurrency")
+      expect(await jobsTable.getColumnByName("concurrency_key")).not.toBeNull()
+      expect(await jobsTable.getColumnByName("max_concurrency")).not.toBeNull()
+      expect(await concurrencyTable.getColumnByName("reservation_token")).toEqual(undefined)
+    })
   })
 
   it("records legacy execution mode backfill as a one-time migration", async () => {

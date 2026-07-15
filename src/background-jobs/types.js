@@ -13,6 +13,8 @@
  * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"forked"`.
  * @property {boolean} [forked] - Compatibility alias: `false` maps to `"inline"` and `true` maps to `"forked"`.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
+ * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap.
+ * @property {number} [maxConcurrency] - Positive integer cap; must be paired with `concurrencyKey`.
  */
 /**
  * @typedef {object} BackgroundJobPayload
@@ -43,6 +45,8 @@
  * @property {number | null} orphanedAtMs - Orphaned time in ms.
  * @property {string | null} workerId - Worker id handling the job.
  * @property {string | null} lastError - Last failure message.
+ * @property {string | null} concurrencyKey - Durable concurrency key.
+ * @property {number | null} maxConcurrency - Durable per-key cap.
  */
 /**
  * @typedef {object} BackgroundJobFailureEvent

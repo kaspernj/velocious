@@ -1051,6 +1051,22 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Executes a mutation and returns the number of rows changed by that statement.
+   * @param {string} sql - Mutation SQL string.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async affectedRows(sql) {
+    this._assertWritableQuery(sql)
+    await this.beforeQuery(sql, {})
+
+    try {
+      return await this._affectedRowsActual(sql)
+    } finally {
+      await this.afterQuery(sql, {})
+    }
+  }
+
+  /**
    * Runs query actual with logging.
    * @param {object} args - Options object.
    * @param {string} args.originalSql - Original SQL string before process-list comments.
@@ -1306,6 +1322,16 @@ export default class VelociousDatabaseDriversBase {
    */
   _queryActual(sql) { // eslint-disable-line no-unused-vars
     throw new Error(`queryActual not implemented`)
+  }
+
+  /**
+   * Executes a mutation and returns its affected row count.
+   * @abstract
+   * @param {string} sql - Mutation SQL string.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  _affectedRowsActual(sql) { // eslint-disable-line no-unused-vars
+    throw new Error(`affectedRowsActual not implemented`)
   }
 
   /**

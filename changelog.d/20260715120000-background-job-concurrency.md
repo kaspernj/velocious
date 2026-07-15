@@ -1,0 +1,1 @@
+Add portable, durable per-key concurrency limits for background jobs, including atomic cross-worker claims, stable cap validation, lifecycle release, orphan reconciliation, and saturated-key queue skipping.

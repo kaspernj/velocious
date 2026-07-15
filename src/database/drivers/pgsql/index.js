@@ -228,6 +228,18 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    if (!this.connection) await this.connect()
+    if (!this.connection) throw new Error("PostgreSQL connection failed to initialize")
+    const response = await this.connection.query(sql)
+    return response.rowCount || 0
+  }
+
+  /**
    * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.

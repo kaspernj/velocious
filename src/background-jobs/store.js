@@ -11,6 +11,7 @@ const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
 const EXECUTION_MODE_BACKFILL_MIGRATION_VERSION = "20260607131010"
 const JOBS_TABLE = "background_jobs"
+const CONCURRENCY_TABLE = "background_job_concurrency"
 const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 /**
@@ -94,8 +95,10 @@ export default class BackgroundJobsStore {
     const executionMode = this._normalizeExecutionMode(options)
     const maxRetries = this._normalizeMaxRetries(options?.maxRetries)
     const argsJson = JSON.stringify(args || [])
+    const concurrency = this._normalizeConcurrencyOptions(options)
 
     await this._withDb(async (db) => {
+      if (concurrency) await this._ensureConcurrencyKey(db, concurrency)
       await db.insert({
         tableName: JOBS_TABLE,
         data: {
@@ -108,7 +111,9 @@ export default class BackgroundJobsStore {
           attempts: 0,
           status: "queued",
           scheduled_at_ms: now,
-          created_at_ms: now
+          created_at_ms: now,
+          concurrency_key: concurrency?.concurrencyKey || null,
+          max_concurrency: concurrency?.maxConcurrency || null
         }
       })
     })
@@ -168,6 +173,17 @@ export default class BackgroundJobsStore {
       .from(JOBS_TABLE)
       .where({status: "queued"})
       .where(`scheduled_at_ms ${scheduledAtOperator} ${db.quote(now)}`)
+
+    if (scheduledAtOperator === "<=") {
+      const jobsTable = db.quoteTable(JOBS_TABLE)
+      const concurrencyTable = db.quoteTable(CONCURRENCY_TABLE)
+      query = query.where(
+        `(${jobsTable}.${db.quoteColumn("concurrency_key")} IS NULL OR EXISTS (` +
+        `SELECT 1 FROM ${concurrencyTable} WHERE ` +
+        `${concurrencyTable}.${db.quoteColumn("concurrency_key")} = ${jobsTable}.${db.quoteColumn("concurrency_key")} AND ` +
+        `${concurrencyTable}.${db.quoteColumn("active_count")} < ${concurrencyTable}.${db.quoteColumn("max_concurrency")}))`
+      )
+    }
 
     if (typeof forked === "boolean") {
       query = query.where({forked})
@@ -314,7 +330,11 @@ export default class BackgroundJobsStore {
     const handedOffAtMs = Date.now()
     const handoffId = randomUUID()
 
-    return await this._withDb(async (db) => {
+    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
+      const queuedJob = await this._getJobRowById(db, jobId)
+      if (!queuedJob || queuedJob.status !== "queued") return null
+      if (queuedJob.concurrencyKey && !(await this._reserveConcurrency(db, queuedJob.concurrencyKey))) return null
+
       await db.update({
         tableName: JOBS_TABLE,
         data: {
@@ -331,7 +351,7 @@ export default class BackgroundJobsStore {
       if (job?.status !== "handed_off" || job.handoffId !== handoffId) return null
 
       return {handedOffAtMs, handoffId}
-    })
+    }))
   }
 
   /**
@@ -346,7 +366,7 @@ export default class BackgroundJobsStore {
   async markCompleted({jobId, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._withHandoffLock({db, jobId}, async () => {
+    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return false
@@ -363,6 +383,8 @@ export default class BackgroundJobsStore {
 
       const updatedJob = await this._getJobRowById(db, jobId)
 
+      if (updatedJob?.status === "completed") await this._releaseConcurrency(db, job.concurrencyKey)
+
       return updatedJob?.status === "completed" && updatedJob.handoffId === job.handoffId
     }))
   }
@@ -377,7 +399,9 @@ export default class BackgroundJobsStore {
   async markReturnedToQueue({jobId, handoffId}) {
     await this.ensureReady()
 
-    await this._withDb(async (db) => {
+    await this._withDb(async (db) => await db.transaction(async () => {
+      const job = await this._getJobRowById(db, jobId)
+      if (!job || job.handoffId !== handoffId || job.status !== "handed_off") return
       await db.update({
         tableName: JOBS_TABLE,
         data: {
@@ -389,7 +413,9 @@ export default class BackgroundJobsStore {
         },
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
       })
-    })
+      const updatedJob = await this._getJobRowById(db, jobId)
+      if (updatedJob?.status === "queued") await this._releaseConcurrency(db, job.concurrencyKey)
+    }))
   }
 
   /**
@@ -405,13 +431,15 @@ export default class BackgroundJobsStore {
   async markFailed({jobId, error, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._withHandoffLock({db, jobId}, async () => {
+    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return null
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return null
 
-      return await this._applyFailure({db, job, error, markOrphaned: false})
+      const updatedJob = await this._applyFailure({db, job, error, markOrphaned: false})
+      if (updatedJob) await this._releaseConcurrency(db, job.concurrencyKey)
+      return updatedJob
     }))
   }
 
@@ -447,6 +475,7 @@ export default class BackgroundJobsStore {
         })
 
         if (orphanedJob) orphanedCount += 1
+        if (orphanedJob) await this._releaseConcurrency(db, job.concurrencyKey)
       }
 
       return orphanedCount
@@ -462,7 +491,26 @@ export default class BackgroundJobsStore {
 
     await this._withDb(async (db) => {
       await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)}`)
+      if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
     })
+  }
+
+  /**
+   * Cancels a queued or handed-off job and releases any durable concurrency reservation.
+   * @param {string} jobId - Job id.
+   * @returns {Promise<boolean>} - Whether the job was cancelled.
+   */
+  async cancel(jobId) {
+    await this.ensureReady()
+    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
+      const job = await this._getJobRowById(db, jobId)
+      if (!job || (job.status !== "queued" && job.status !== "handed_off")) return false
+      await db.update({tableName: JOBS_TABLE, data: {status: "cancelled"}, conditions: {id: job.id, status: job.status}})
+      const updatedJob = await this._getJobRowById(db, jobId)
+      if (updatedJob?.status !== "cancelled") return false
+      if (job.status === "handed_off") await this._releaseConcurrency(db, job.concurrencyKey)
+      return true
+    }))
   }
 
   /**
@@ -506,11 +554,15 @@ export default class BackgroundJobsStore {
       // row alone, otherwise later callers fail with "no such table".
       if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
         await this._ensureJobsTableColumns(db)
+        await this._ensureConcurrencyTable(db)
+        await this._reconcileConcurrency(db)
         return
       }
 
       await this._applyMigrations(db)
       await this._ensureJobsTableColumns(db)
+      await this._ensureConcurrencyTable(db)
+      await this._reconcileConcurrency(db)
 
       if (alreadyApplied) return
 
@@ -586,6 +638,8 @@ export default class BackgroundJobsStore {
     table.bigint("orphaned_at_ms", {null: true, index: true})
     table.string("worker_id", {null: true})
     table.text("last_error", {null: true})
+    table.string("concurrency_key", {null: true, index: true})
+    table.integer("max_concurrency", {null: true})
 
     await db.createTable(table)
   }
@@ -643,6 +697,15 @@ export default class BackgroundJobsStore {
     }
 
     await this._backfillExecutionModesOnce(db)
+
+    const concurrencyTable = await db.getTableByNameOrFail(JOBS_TABLE)
+    if (!(await concurrencyTable.getColumnByName("concurrency_key"))) {
+      const tableData = new TableData(JOBS_TABLE)
+      tableData.string("concurrency_key", {null: true, index: true})
+      tableData.integer("max_concurrency", {null: true})
+      for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+      db.clearSchemaCache()
+    }
   }
 
   /**
@@ -866,8 +929,105 @@ export default class BackgroundJobsStore {
       failedAtMs: this._normalizeNumber(row.failed_at_ms),
       orphanedAtMs: this._normalizeNumber(row.orphaned_at_ms),
       workerId: row.worker_id ? String(row.worker_id) : null,
-      lastError: row.last_error ? String(row.last_error) : null
+      lastError: row.last_error ? String(row.last_error) : null,
+      concurrencyKey: row.concurrency_key ? String(row.concurrency_key) : null,
+      maxConcurrency: this._normalizeNumber(row.max_concurrency)
     }
+  }
+
+  /**
+   * Validates concurrency options.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {{concurrencyKey: string, maxConcurrency: number} | null} - Normalized configuration.
+   */
+  _normalizeConcurrencyOptions(options) {
+    const key = options?.concurrencyKey
+    const cap = options?.maxConcurrency
+    if (key === undefined && cap === undefined) return null
+    if (typeof key !== "string" || key.length === 0 || !Number.isInteger(cap) || Number(cap) <= 0) {
+      throw new Error("background job concurrencyKey and maxConcurrency must be paired; concurrencyKey must be non-empty and maxConcurrency must be a positive integer")
+    }
+    return {concurrencyKey: key, maxConcurrency: Number(cap)}
+  }
+
+  /**
+   * Ensures the concurrency state table exists.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ready.
+   */
+  async _ensureConcurrencyTable(db) {
+    if (await db.tableExists(CONCURRENCY_TABLE)) return
+    const table = new TableData(CONCURRENCY_TABLE, {ifNotExists: true})
+    table.string("concurrency_key", {primaryKey: true})
+    table.integer("max_concurrency", {null: false})
+    table.integer("active_count", {null: false})
+    await db.createTable(table)
+  }
+
+  /**
+   * Registers or verifies a stable key configuration.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} concurrency - Concurrency configuration.
+   * @param {string} concurrency.concurrencyKey - Concurrency key.
+   * @param {number} concurrency.maxConcurrency - Stable cap.
+   * @returns {Promise<void>} - Resolves when verified.
+   */
+  async _ensureConcurrencyKey(db, {concurrencyKey, maxConcurrency}) {
+    const rows = await db.newQuery().from(CONCURRENCY_TABLE).where({concurrency_key: concurrencyKey}).limit(1).results()
+    if (!rows[0]) {
+      try {
+        await db.insert({tableName: CONCURRENCY_TABLE, data: {active_count: 0, concurrency_key: concurrencyKey, max_concurrency: maxConcurrency}})
+        return
+      } catch (error) {
+        const racedRows = await db.newQuery().from(CONCURRENCY_TABLE).where({concurrency_key: concurrencyKey}).limit(1).results()
+        if (!racedRows[0]) throw error
+        rows[0] = racedRows[0]
+      }
+    }
+    const configured = /** @type {{max_concurrency?: number | string}} */ (rows[0])
+    if (this._normalizeNumber(configured.max_concurrency) !== maxConcurrency) throw new Error(`Conflicting maxConcurrency for background job concurrencyKey: ${concurrencyKey}`)
+  }
+
+  /**
+   * Atomically reserves capacity for a key.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} concurrencyKey - Concurrency key.
+   * @returns {Promise<boolean>} - Whether capacity was reserved.
+   */
+  async _reserveConcurrency(db, concurrencyKey) {
+    const table = db.quoteTable(CONCURRENCY_TABLE)
+    const count = db.quoteColumn("active_count")
+    const affectedRows = await db.affectedRows(`UPDATE ${table} SET ${count} = ${count} + 1 WHERE ${db.quoteColumn("concurrency_key")} = ${db.quote(concurrencyKey)} AND ${count} < ${db.quoteColumn("max_concurrency")}`)
+    return affectedRows === 1
+  }
+
+  /**
+   * Releases capacity for a key.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string | null} concurrencyKey - Concurrency key.
+   * @returns {Promise<void>} - Resolves when released.
+   */
+  async _releaseConcurrency(db, concurrencyKey) {
+    if (!concurrencyKey) return
+    const table = db.quoteTable(CONCURRENCY_TABLE)
+    const count = db.quoteColumn("active_count")
+    await db.query(`UPDATE ${table} SET ${count} = ${count} - 1 WHERE ${db.quoteColumn("concurrency_key")} = ${db.quote(concurrencyKey)} AND ${count} > 0`)
+  }
+
+  /**
+   * Rebuilds durable counts from active handoffs after startup.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when reconciled.
+   */
+  async _reconcileConcurrency(db) {
+    if (!(await db.tableExists(CONCURRENCY_TABLE))) return
+    const concurrencyTable = db.quoteTable(CONCURRENCY_TABLE)
+    const jobsTable = db.quoteTable(JOBS_TABLE)
+    await db.query(
+      `UPDATE ${concurrencyTable} SET ${db.quoteColumn("active_count")} = (` +
+      `SELECT COUNT(*) FROM ${jobsTable} WHERE ${jobsTable}.${db.quoteColumn("status")} = ${db.quote("handed_off")} AND ` +
+      `${jobsTable}.${db.quoteColumn("concurrency_key")} = ${concurrencyTable}.${db.quoteColumn("concurrency_key")})`
+    )
   }
 
   /**
@@ -973,25 +1133,22 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * Serializes reports for one job so duplicate reports cannot both appear accepted.
+   * Runs a value-returning callback inside the driver's void-typed transaction API.
    * @template T
-   * @param {object} args - Options.
-   * @param {import("../database/drivers/base.js").default} args.db - Database connection.
-   * @param {string} args.jobId - Job id.
-   * @param {() => Promise<T>} callback - Locked callback.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {() => Promise<T>} callback - Transaction callback.
    * @returns {Promise<T>} - Callback result.
    */
-  async _withHandoffLock({db, jobId}, callback) {
-    const lockName = `background-job:${jobId}`
-    const acquired = await db.acquireAdvisoryLock(lockName)
-
-    if (!acquired) throw new Error(`Failed to acquire background job handoff lock: ${jobId}`)
-
-    try {
-      return await callback()
-    } finally {
-      await db.releaseAdvisoryLock(lockName)
-    }
+  async _transactionResult(db, callback) {
+    let completed = false
+    /** @type {T | undefined} */
+    let result
+    await db.transaction(async () => {
+      result = await callback()
+      completed = true
+    })
+    if (!completed) throw new Error("Background jobs transaction callback was not invoked")
+    return /** @type {T} */ (result)
   }
 
   /**

@@ -15,7 +15,7 @@ import fileExists from "../../../utils/file-exists.js"
 export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Connection.
-   * @type {import("sqlite3").Database | undefined} */
+   * @type {import("sqlite").Database | undefined} */
   connection = undefined
 
   /**
@@ -39,11 +39,10 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     this._advisoryLockDirectory = path.join(databaseDir, `${this.localStorageName()}.velocious-advisory-locks`)
 
     try {
-      // @ts-expect-error
-      this.connection = /** @type {import("sqlite3").Database} */ (await open({
+      this.connection = await open({
         filename: databasePath,
         driver: sqlite3.Database
-      }))
+      })
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Couldn't open database ${databasePath} because of ${error.constructor.name}: ${error.message}`, {cause: error})
@@ -77,6 +76,17 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     if (!this.connection) throw new Error("No connection")
 
     return await query(this.connection, sql)
+  }
+
+  /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    if (!this.connection) throw new Error("No connection")
+    const result = await this.connection.run(sql)
+    return result.changes || 0
   }
 
   /**
