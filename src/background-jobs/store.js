@@ -693,38 +693,35 @@ export default class BackgroundJobsStore {
 
     await this._backfillExecutionModesOnce(db)
 
-    const concurrencyTable = await db.getTableByNameOrFail(JOBS_TABLE)
-    const hasConcurrencyKey = await concurrencyTable.getColumnByName("concurrency_key")
-    const hasMaxConcurrency = await concurrencyTable.getColumnByName("max_concurrency")
+    const lockName = `${MIGRATION_SCOPE}:concurrency_columns`
+    const acquired = await db.acquireAdvisoryLock(lockName)
 
-    if (!hasConcurrencyKey || !hasMaxConcurrency) {
-      const lockName = `${MIGRATION_SCOPE}:concurrency_columns`
-      const acquired = await db.acquireAdvisoryLock(lockName)
+    if (!acquired) throw new Error("Failed to acquire background jobs concurrency schema lock")
 
-      if (!acquired) throw new Error("Failed to acquire background jobs concurrency schema lock")
+    try {
+      // SQL Server schema reads can deadlock with a concurrent ALTER TABLE, so
+      // acquire the lock before inspecting either column rather than only
+      // protecting the mutation.
+      db.clearSchemaCache()
+      const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
+      const concurrencyColumnNames = ["concurrency_key", "max_concurrency"]
 
-      try {
-        db.clearSchemaCache()
-        const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
-        const concurrencyColumnNames = ["concurrency_key", "max_concurrency"]
+      for (const concurrencyColumnName of concurrencyColumnNames) {
+        if (await lockedTable.getColumnByName(concurrencyColumnName)) continue
 
-        for (const concurrencyColumnName of concurrencyColumnNames) {
-          if (await lockedTable.getColumnByName(concurrencyColumnName)) continue
-
-          const tableData = new TableData(JOBS_TABLE)
-          if (concurrencyColumnName == "concurrency_key") {
-            tableData.string("concurrency_key", {null: true, index: true})
-          } else {
-            tableData.integer("max_concurrency", {null: true})
-          }
-
-          for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+        const tableData = new TableData(JOBS_TABLE)
+        if (concurrencyColumnName == "concurrency_key") {
+          tableData.string("concurrency_key", {null: true, index: true})
+        } else {
+          tableData.integer("max_concurrency", {null: true})
         }
 
-        db.clearSchemaCache()
-      } finally {
-        await db.releaseAdvisoryLock(lockName)
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
       }
+
+      db.clearSchemaCache()
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
     }
   }
 
