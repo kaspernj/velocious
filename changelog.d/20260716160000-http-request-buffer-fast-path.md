@@ -1,0 +1,1 @@
+Speed up HTTP request parsing by replacing per-byte processing in the request buffer with span-based line scanning and bulk fixed-length body copies, while preserving parse results for every tested request chunk boundary.
