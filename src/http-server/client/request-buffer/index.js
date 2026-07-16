@@ -67,11 +67,9 @@ export default class RequestBuffer {
    * @returns {Buffer | undefined} - Remaining data, if any.
    */
   feed(data) {
-    for (let index = 0; index < data.length; index += 1) {
-      const char = data[index]
+    let index = 0
 
-      if (this.readingBody) this.bodyLength += 1
-
+    while (index < data.length) {
       switch(this.state) {
         case "status":
         case "headers":
@@ -79,101 +77,169 @@ export default class RequestBuffer {
         case "multi-part-form-data-header":
         case "chunked-size":
         case "chunked-trailer":
-          this.data.push(char)
-
-          if (char == 10) {
-            const line = String.fromCharCode.apply(null, this.data)
-
-            this.data = []
-            this.parse(line)
-          }
-
-          break
-        case "chunked-data": {
-          const chunkedBodyChars = this.chunkedBodyChars
-
-          if (this.currentChunkSize === undefined) throw new Error("Chunk size not initialized")
-          if (!chunkedBodyChars) throw new Error("Chunked body not initialized")
-
-          chunkedBodyChars.push(char)
-          /**
-           * Current chunk bytes read.
-           * @type {number} */
-          const currentChunkBytesRead = (this.currentChunkBytesRead || 0) + 1
-
-          this.currentChunkBytesRead = currentChunkBytesRead
-
-          if (currentChunkBytesRead >= this.currentChunkSize) {
-            this.currentChunkCrlfRead = 0
-            this.setState("chunked-data-crlf")
-          }
-
-          break
-        }
-        case "chunked-data-crlf":
-          this.currentChunkCrlfRead = (this.currentChunkCrlfRead || 0) + 1
-
-          if (this.currentChunkCrlfRead >= 2) {
-            this.currentChunkBytesRead = 0
-            this.setState("chunked-size")
-          }
-
-          break
-        case "multi-part-form-data-body":
-          if (!this.formDataPart) throw new Error("FormData part not initialized")
-          if (!this.boundaryLineEnd) throw new Error("Boundary line end not initialized")
-          if (!this.boundaryLineNext) throw new Error("Boundary line next not initialized")
-
-          const body = this.formDataPart.body // eslint-disable-line no-case-declarations
-
-          body.push(char)
-
-          const possibleBoundaryEndPosition = body.length - this.boundaryLineEnd.length // eslint-disable-line no-case-declarations
-          const possibleBoundaryEndChars = body.slice(possibleBoundaryEndPosition, body.length) // eslint-disable-line no-case-declarations
-          const possibleBoundaryEnd = String.fromCharCode.apply(null, possibleBoundaryEndChars) // eslint-disable-line no-case-declarations
-
-          const possibleBoundaryNextPosition = body.length - this.boundaryLineNext.length // eslint-disable-line no-case-declarations
-          const possibleBoundaryNextChars = body.slice(possibleBoundaryNextPosition, body.length) // eslint-disable-line no-case-declarations
-          const possibleBoundaryNext = String.fromCharCode.apply(null, possibleBoundaryNextChars) // eslint-disable-line no-case-declarations
-
-          if (possibleBoundaryEnd == this.boundaryLineEnd) {
-            this.formDataPart.removeFromBody(possibleBoundaryEnd)
-            this.formDataPartDone()
-            this.completeRequest()
-          } else if (possibleBoundaryNext == this.boundaryLineNext) {
-            this.formDataPart.removeFromBody(possibleBoundaryNext)
-            this.formDataPartDone()
-            this.newFormDataPart()
-          } else if (this.contentLength && this.bodyLength >= this.contentLength) {
-            this.formDataPartDone()
-            this.completeRequest()
-          } else if (this.formDataPart.contentLength && this.bodyLength >= this.formDataPart.contentLength) {
-            this.formDataPartDone()
-
-            throw new Error("stub")
-          }
-
+          index = this.feedLine(data, index)
           break
         case "post-body":
-          if (!this.postBodyChars) throw new Error("postBodyChars not initialized")
-
-          this.postBodyChars[this.bodyLength - 1] = char
-
-          if (this.contentLength && this.bodyLength >= this.contentLength) {
-            this.postRequestDone()
-          }
-
+          index = this.feedPostBody(data, index)
           break
         default:
-          this.logger.error(() => [`Unknown state for request buffer`, {state: this.state}])
+          index = this.feedByte(data, index)
       }
 
       if (this.completed) {
-        return data.subarray(index + 1)
+        return data.subarray(index)
       }
     }
 
     return undefined
+  }
+
+  /**
+   * Consumes bytes for the line-based states up to and including the next newline.
+   * @param {Buffer} data - Data payload.
+   * @param {number} index - Read position.
+   * @returns {number} - New read position.
+   */
+  feedLine(data, index) {
+    const newlineIndex = data.indexOf(10, index)
+
+    if (newlineIndex === -1) {
+      if (this.readingBody) this.bodyLength += data.length - index
+
+      for (let dataIndex = index; dataIndex < data.length; dataIndex += 1) {
+        this.data.push(data[dataIndex])
+      }
+
+      return data.length
+    }
+
+    if (this.readingBody) this.bodyLength += newlineIndex + 1 - index
+
+    let line
+
+    if (this.data.length == 0) {
+      line = data.toString("latin1", index, newlineIndex + 1)
+    } else {
+      // The rest of a line that started in a previous chunk.
+      for (let dataIndex = index; dataIndex <= newlineIndex; dataIndex += 1) {
+        this.data.push(data[dataIndex])
+      }
+
+      line = String.fromCharCode.apply(null, this.data)
+      this.data = []
+    }
+
+    this.parse(line)
+
+    return newlineIndex + 1
+  }
+
+  /**
+   * Consumes fixed-length request body bytes in bulk.
+   * @param {Buffer} data - Data payload.
+   * @param {number} index - Read position.
+   * @returns {number} - New read position.
+   */
+  feedPostBody(data, index) {
+    if (!this.postBodyBuffers) throw new Error("postBodyBuffers not initialized")
+    if (this.contentLength === undefined) throw new Error("Content length not set")
+
+    const remainingBodyBytes = Math.max(1, this.contentLength - this.bodyLength)
+    const endIndex = Math.min(data.length, index + remainingBodyBytes)
+
+    this.postBodyBuffers.push(data.subarray(index, endIndex))
+    this.bodyLength += endIndex - index
+
+    if (this.contentLength && this.bodyLength >= this.contentLength) {
+      this.postRequestDone()
+    }
+
+    return endIndex
+  }
+
+  /**
+   * Consumes a single byte for the byte-based parser states.
+   * @param {Buffer} data - Data payload.
+   * @param {number} index - Read position.
+   * @returns {number} - New read position.
+   */
+  feedByte(data, index) {
+    const char = data[index]
+
+    if (this.readingBody) this.bodyLength += 1
+
+    switch(this.state) {
+      case "chunked-data": {
+        const chunkedBodyChars = this.chunkedBodyChars
+
+        if (this.currentChunkSize === undefined) throw new Error("Chunk size not initialized")
+        if (!chunkedBodyChars) throw new Error("Chunked body not initialized")
+
+        chunkedBodyChars.push(char)
+        /**
+         * Current chunk bytes read.
+         * @type {number} */
+        const currentChunkBytesRead = (this.currentChunkBytesRead || 0) + 1
+
+        this.currentChunkBytesRead = currentChunkBytesRead
+
+        if (currentChunkBytesRead >= this.currentChunkSize) {
+          this.currentChunkCrlfRead = 0
+          this.setState("chunked-data-crlf")
+        }
+
+        break
+      }
+      case "chunked-data-crlf":
+        this.currentChunkCrlfRead = (this.currentChunkCrlfRead || 0) + 1
+
+        if (this.currentChunkCrlfRead >= 2) {
+          this.currentChunkBytesRead = 0
+          this.setState("chunked-size")
+        }
+
+        break
+      case "multi-part-form-data-body": {
+        if (!this.formDataPart) throw new Error("FormData part not initialized")
+        if (!this.boundaryLineEnd) throw new Error("Boundary line end not initialized")
+        if (!this.boundaryLineNext) throw new Error("Boundary line next not initialized")
+
+        const body = this.formDataPart.body
+
+        body.push(char)
+
+        const possibleBoundaryEndPosition = body.length - this.boundaryLineEnd.length
+        const possibleBoundaryEndChars = body.slice(possibleBoundaryEndPosition, body.length)
+        const possibleBoundaryEnd = String.fromCharCode.apply(null, possibleBoundaryEndChars)
+
+        const possibleBoundaryNextPosition = body.length - this.boundaryLineNext.length
+        const possibleBoundaryNextChars = body.slice(possibleBoundaryNextPosition, body.length)
+        const possibleBoundaryNext = String.fromCharCode.apply(null, possibleBoundaryNextChars)
+
+        if (possibleBoundaryEnd == this.boundaryLineEnd) {
+          this.formDataPart.removeFromBody(possibleBoundaryEnd)
+          this.formDataPartDone()
+          this.completeRequest()
+        } else if (possibleBoundaryNext == this.boundaryLineNext) {
+          this.formDataPart.removeFromBody(possibleBoundaryNext)
+          this.formDataPartDone()
+          this.newFormDataPart()
+        } else if (this.contentLength && this.bodyLength >= this.contentLength) {
+          this.formDataPartDone()
+          this.completeRequest()
+        } else if (this.formDataPart.contentLength && this.bodyLength >= this.formDataPart.contentLength) {
+          this.formDataPartDone()
+
+          throw new Error("stub")
+        }
+
+        break
+      }
+      default:
+        this.logger.error(() => [`Unknown state for request buffer`, {state: this.state}])
+    }
+
+    return index + 1
   }
 
   /**
@@ -347,11 +413,8 @@ export default class RequestBuffer {
         } else {
           /**
            * Narrows the runtime value to the documented type.
-           * @type {number[]} */
-          this.postBodyChars = []
-
-          // this.postBodyBuffer = new ArrayBuffer(this.contentLength)
-          // this.postBodyChars = new Uint8Array(this.postBodyBuffer)
+           * @type {Buffer[]} */
+          this.postBodyBuffers = []
 
           this.setState("post-body")
         }
@@ -379,12 +442,11 @@ export default class RequestBuffer {
   }
 
   postRequestDone() {
-    if (this.postBodyChars) {
-      this.postBody = Buffer.from(this.postBodyChars).toString("utf8")
+    if (this.postBodyBuffers) {
+      this.postBody = Buffer.concat(this.postBodyBuffers).toString("utf8")
     }
 
-    delete this.postBodyChars
-    // delete this.postBodyBuffer
+    delete this.postBodyBuffers
 
     this.completeRequest()
   }
