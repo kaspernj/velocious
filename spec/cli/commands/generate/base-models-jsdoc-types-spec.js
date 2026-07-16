@@ -74,4 +74,11 @@ describe("Base-models JSDoc types", () => {
 
     expect(command.jsDocTypeFromColumn(column, modelClass)).toEqual("number")
   })
+
+  it("maps pgsql json to Record<string, unknown>", async () => {
+    const command = buildCommand()
+    const {column, modelClass} = buildColumnAndModelClass("json")
+
+    expect(command.jsDocTypeFromColumn(column, modelClass)).toEqual("Record<string, unknown>")
+  })
 })
