@@ -1,0 +1,1 @@
+Compute the `Content-Length` of string HTTP responses with Node's native `Buffer.byteLength(body, "utf8")` instead of encoding the whole body into a throwaway byte array purely to measure it, keeping the exact UTF-8 byte length (including multi-byte and astral-plane characters) unchanged.

@@ -400,7 +400,7 @@ export default class VeoliciousHttpServerClient {
         const stats = await fs.stat(filePath)
         contentLength = stats.size
       } else {
-        contentLength = bodyIsString ? new TextEncoder().encode(body).length : body.byteLength
+        contentLength = bodyIsString ? Buffer.byteLength(body, "utf8") : body.byteLength
       }
 
       response.setHeader("Content-Length", contentLength)
