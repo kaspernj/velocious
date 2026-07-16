@@ -36,5 +36,17 @@
   "ignoreUnresolvedImports": [
     "velocious",
     "velocious/**"
+  ],
+  "ignoreDependencies": [
+    "eslint",
+    "eslint-plugin-jsdoc-tag-lines",
+    "mssql",
+    "mysql",
+    "node-fetch",
+    "pg",
+    "sqlite",
+    "sqlite3",
+    "system-testing",
+    "uniqunize"
   ]
 }
