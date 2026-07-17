@@ -1274,6 +1274,7 @@ export default class VelociousConfiguration {
     const envPooledRunnerMaxLifetimeMsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS
     const envDispatchStrategy = process.env.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
     const envPollIntervalRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS
+    const envJobTimeoutRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS
     const envPort = envPortRaw ? Number(envPortRaw) : undefined
     const envMaxConcurrentForked = envMaxConcurrentForkedRaw ? Number(envMaxConcurrentForkedRaw) : undefined
     const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
@@ -1282,6 +1283,7 @@ export default class VelociousConfiguration {
     const envPooledRunnerMaxRssBytes = envPooledRunnerMaxRssBytesRaw ? Number(envPooledRunnerMaxRssBytesRaw) : undefined
     const envPooledRunnerMaxLifetimeMs = envPooledRunnerMaxLifetimeMsRaw ? Number(envPooledRunnerMaxLifetimeMsRaw) : undefined
     const envPollInterval = envPollIntervalRaw ? Number(envPollIntervalRaw) : undefined
+    const envJobTimeout = envJobTimeoutRaw ? Number(envJobTimeoutRaw) : undefined
     const configured = this._backgroundJobs || {}
     const host = configured.host || envHost || "127.0.0.1"
     const port = typeof configured.port === "number"
@@ -1312,6 +1314,12 @@ export default class VelociousConfiguration {
       ? configured.pollIntervalMs
       : (typeof envPollInterval === "number" && Number.isFinite(envPollInterval) && envPollInterval >= 1 ? envPollInterval : 1000)
     const queues = configured.queues && typeof configured.queues === "object" ? configured.queues : {}
+    // An explicit config value wins over the env var — including `null`/`0`,
+    // which disable the backstop even when the environment sets a default.
+    // Only fall through to the env var when config omits `jobTimeoutMs` entirely.
+    const jobTimeoutMs = "jobTimeoutMs" in configured
+      ? (typeof configured.jobTimeoutMs === "number" && configured.jobTimeoutMs > 0 ? configured.jobTimeoutMs : null)
+      : (typeof envJobTimeout === "number" && Number.isFinite(envJobTimeout) && envJobTimeout > 0 ? envJobTimeout : null)
     const configuredRetention = configured.retention && typeof configured.retention === "object" ? configured.retention : {}
     const retention = {
       completedTtlMs: typeof configuredRetention.completedTtlMs === "number" || configuredRetention.completedTtlMs === null
@@ -1328,7 +1336,7 @@ export default class VelociousConfiguration {
         : 60 * 60 * 1000
     }
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, retention}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobTimeoutMs, retention}
   }
 
   /**
