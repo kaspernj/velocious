@@ -74,8 +74,19 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async setConnectionCheckoutName(name) {
-    await this.query(`SET @velocious_connection_checkout_name = ${name === undefined ? "NULL" : this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false, sessionTimeZone: false})
+    const previousName = this._connectionCheckoutName
+
     await super.setConnectionCheckoutName(name)
+
+    if (name === undefined) {
+      if (previousName !== undefined) {
+        await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false, sessionTimeZone: false})
+      }
+
+      return
+    }
+
+    await this.query(`SET @velocious_connection_checkout_name = ${this.quote(name)}`, {logName: "Set Connection Checkout Name", processListComment: false, sessionTimeZone: false})
   }
 
   /**
@@ -83,7 +94,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async clearConnectionCheckoutName() {
-    await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false, sessionTimeZone: false})
+    if (this._connectionCheckoutName !== undefined) {
+      await this.query("SET @velocious_connection_checkout_name = NULL", {logName: "Clear Connection Checkout Name", processListComment: false, sessionTimeZone: false})
+    }
+
     await super.clearConnectionCheckoutName()
   }
 
