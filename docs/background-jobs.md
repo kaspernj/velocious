@@ -70,6 +70,8 @@ Graceful draining is unchanged. A worker that announces `draining` keeps its soc
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
+Restarting the **main** (every deploy) is handled specially. A fresh main holds no in-memory leases, so from its perspective every pre-existing `handed_off` row is orphaned — but disconnect recovery only fires on a worker socket `close`, which the old main's sockets do on it, not the new one. Rather than leave those handoffs holding their durable concurrency slots until the age-based orphan sweep (kept deliberately long so it never reclaims a legitimately long-running job — after every deploy that would choke capped queues), the new main waits a short startup grace period (`startupHandoffReclaimGraceMs`, default 15s) for workers to reconnect and re-announce their ids, then reclaims exactly the handoffs whose worker id did not come back. A worker that survived the restart keeps its id and reconnects, so its in-flight jobs are preserved; only genuinely orphaned handoffs are returned to the queue.
+
 ## Worker Liveness
 
 Disconnect recovery above depends on the worker's control socket firing a `close` event. A worker that wedges while alive — or a half-open TCP connection — never fires `close`, so its leases (and, if it is the only worker, the whole queue) would stay stuck until someone intervened. Two mechanisms make this self-healing:

@@ -144,4 +144,34 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     // never advertises capacity that a pending handoff will consume.
     expect(forkedReady.length).toEqual(2)
   })
+
+  it("reclaims handoffs orphaned by a main restart but keeps a reconnected worker's", async () => {
+    const {main, store} = await startBackgroundJobsMain()
+
+    try {
+      // Held by a worker that never reconnected — orphaned when the previous main went away.
+      const orphanedId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const orphanedHandoff = await store.markHandedOff({jobId: orphanedId, workerId: "gone-worker"})
+      if (!orphanedHandoff) throw new Error("Expected the orphaned job to hand off")
+
+      // Held by a worker that reconnected with the same id — still running it.
+      const liveId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const liveHandoff = await store.markHandedOff({jobId: liveId, workerId: "live-worker"})
+      if (!liveHandoff) throw new Error("Expected the live job to hand off")
+
+      const liveWorker = fakeWorkerSocket()
+      liveWorker.workerId = "live-worker"
+      main.workers.add(liveWorker)
+      main.workerHandoffs.set(liveWorker, new Map([[liveId, liveHandoff.handoffId]]))
+
+      await main._reclaimHandoffsOrphanedByRestart()
+
+      // The disconnected worker's handoff returns to the queue; the reconnected
+      // worker's in-flight job is left alone.
+      expect((await store.getJob(orphanedId))?.status).toEqual("queued")
+      expect((await store.getJob(liveId))?.status).toEqual("handed_off")
+    } finally {
+      await main.stop()
+    }
+  })
 })

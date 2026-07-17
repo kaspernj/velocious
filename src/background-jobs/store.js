@@ -464,10 +464,12 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {string} args.handoffId - Handoff lease id.
-   * @returns {Promise<void>} - Resolves when updated.
+   * @returns {Promise<boolean>} - Whether the job was actually returned to the queue (false when the handoff was already fenced/superseded).
    */
   async markReturnedToQueue({jobId, handoffId}) {
     await this.ensureReady()
+
+    let returned = false
 
     await this._withDb(async (db) => await db.transaction(async () => {
       const job = await this._getJobRowById(db, jobId)
@@ -483,8 +485,51 @@ export default class BackgroundJobsStore {
         },
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
       })
-      if (affectedRows === 1) await this._releaseConcurrency(db, job.concurrencyKey)
+      if (affectedRows !== 1) return
+
+      await this._releaseConcurrency(db, job.concurrencyKey)
+      returned = true
     }))
+
+    return returned
+  }
+
+  /**
+   * Reclaims `handed_off` jobs whose worker is not among `activeWorkerIds`,
+   * returning each to the queue (fenced on its handoff id) and releasing its
+   * durable concurrency reservation. Returns the number reclaimed.
+   *
+   * This closes the main-restart gap: a fresh main has no in-memory leases, so
+   * every pre-existing `handed_off` row is orphaned from its perspective.
+   * Rather than wait for the age-based orphan sweep (kept deliberately long so
+   * it never reclaims a legitimately long-running job), the main reclaims —
+   * once, after a startup grace period for workers to reconnect — exactly the
+   * handoffs whose worker id did not reconnect. A worker that survived the main
+   * restart keeps the same id and reconnects, so its in-flight jobs are kept.
+   * @param {object} args - Options.
+   * @param {Set<string>} args.activeWorkerIds - Ids of currently-connected workers.
+   * @returns {Promise<number>} - Number of handoffs reclaimed.
+   */
+  async reclaimHandoffsForDisconnectedWorkers({activeWorkerIds}) {
+    await this.ensureReady()
+
+    const rows = await this._withDb(async (db) =>
+      await db.newQuery().from(JOBS_TABLE).where({status: "handed_off"}).results()
+    )
+
+    let reclaimed = 0
+
+    for (const row of rows) {
+      const job = this._normalizeJobRow(row)
+
+      // Null-handoff legacy rows can't be fenced by `markReturnedToQueue`; the
+      // age-based orphan sweep reclaims those via its `handed_off_at_ms` fence.
+      if (!job.handoffId) continue
+      if (job.workerId && activeWorkerIds.has(job.workerId)) continue
+      if (await this.markReturnedToQueue({jobId: job.id, handoffId: job.handoffId})) reclaimed += 1
+    }
+
+    return reclaimed
   }
 
   /**
