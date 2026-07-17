@@ -297,6 +297,71 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     }
   })
 
+  it("dispatches a higher-priority queue before a lower-priority one regardless of enqueue order", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {urgent: {priority: 10}}})
+
+    try {
+      const store = await createClearedStore()
+      // Enqueue the default-priority job first, so pure FIFO would pick it — priority must override that.
+      const lowId = await store.enqueue({jobName: "TestJob", args: ["low"], options: {queue: "default"}})
+      const highId = await store.enqueue({jobName: "TestJob", args: ["high"], options: {queue: "urgent"}})
+
+      expect((await store.nextAvailableJob())?.id).toEqual(highId)
+
+      const highClaim = await store.markHandedOff({jobId: highId, workerId: "w1"})
+      if (!highClaim) throw new Error("Expected the high-priority job to claim")
+
+      expect((await store.nextAvailableJob())?.id).toEqual(lowId)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("skips a higher-priority queue that is at its cap and dispatches the lower-priority job instead", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {urgent: {priority: 10, maxConcurrent: 1}}})
+
+    try {
+      const store = await createClearedStore()
+      const firstUrgent = await store.enqueue({jobName: "TestJob", args: ["urgent-1"], options: {queue: "urgent"}})
+      const secondUrgent = await store.enqueue({jobName: "TestJob", args: ["urgent-2"], options: {queue: "urgent"}})
+      const lowId = await store.enqueue({jobName: "TestJob", args: ["low"], options: {queue: "default"}})
+
+      // Fill the urgent queue's cap of 1.
+      const claim = await store.markHandedOff({jobId: firstUrgent, workerId: "w1"})
+      if (!claim) throw new Error("Expected the first urgent job to claim")
+
+      // The second urgent job is blocked by the cap, so priority ordering must fall through to the low-priority job.
+      expect((await store.nextAvailableJob())?.id).toEqual(lowId)
+
+      // Freeing the cap lets the queued urgent job win again on priority.
+      await store.markCompleted({jobId: firstUrgent, workerId: "w1", ...claim})
+
+      expect((await store.nextAvailableJob())?.id).toEqual(secondUrgent)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("lets a negative priority sink a queue below the default queue", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {sweep: {priority: -5}}})
+
+    try {
+      const store = await createClearedStore()
+      // Enqueue the sunk-priority job first; the later default job must still win on priority.
+      const sweepId = await store.enqueue({jobName: "TestJob", args: ["sweep"], options: {queue: "sweep"}})
+      const defaultId = await store.enqueue({jobName: "TestJob", args: ["default"], options: {queue: "default"}})
+
+      expect((await store.nextAvailableJob())?.id).toEqual(defaultId)
+
+      const claim = await store.markHandedOff({jobId: defaultId, workerId: "w1"})
+      if (!claim) throw new Error("Expected the default job to claim")
+
+      expect((await store.nextAvailableJob())?.id).toEqual(sweepId)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
   it("defaults an unspecified queue to \"default\"", async () => {
     const store = await createClearedStore()
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})

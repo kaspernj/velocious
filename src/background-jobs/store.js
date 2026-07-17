@@ -225,6 +225,12 @@ export default class BackgroundJobsStore {
       query = query.where({execution_mode: executionModes})
     }
 
+    if (scheduledAtOperator === "<=") {
+      const priorityOrder = this._queuePriorityOrderSql(db)
+
+      if (priorityOrder) query = query.order(`${priorityOrder} DESC`)
+    }
+
     query = query
       .order("scheduled_at_ms ASC")
       .order("created_at_ms ASC")
@@ -236,6 +242,40 @@ export default class BackgroundJobsStore {
     if (!row) return null
 
     return this._normalizeJobRow(row)
+  }
+
+  /**
+   * Builds a raw SQL ORDER BY expression ranking queued jobs by their queue's
+   * configured priority (`backgroundJobs.queues[queue].priority`, default `0`),
+   * so the dispatcher picks higher-priority queues first regardless of enqueue
+   * order. Only applied to the dispatch path (`scheduledAtOperator === "<="`);
+   * the future-scheduled lookup must stay strictly time-ordered. Composes with
+   * the concurrency EXISTS filter: a higher-priority queue already at its cap is
+   * filtered out, so dispatch falls through to the next eligible lower-priority
+   * job. Returns null when no queue configures a non-zero priority so the plain
+   * FIFO ordering is left untouched (and no needless filesort is introduced).
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {string | null} - Raw SQL CASE expression, or null when no queue is prioritized.
+   */
+  _queuePriorityOrderSql(db) {
+    const queues = this.configuration.getBackgroundJobsConfig().queues || {}
+    /** @type {Array<[string, number]>} */
+    const prioritized = []
+
+    for (const [queue, queueConfig] of Object.entries(queues)) {
+      const priority = queueConfig?.priority
+
+      if (Number.isFinite(priority) && Number(priority) !== 0) prioritized.push([queue, Number(priority)])
+    }
+
+    if (prioritized.length === 0) return null
+
+    const queueColumn = db.quoteColumn("queue")
+    const whens = prioritized
+      .map(([queue, priority]) => `WHEN ${db.quote(queue)} THEN ${priority}`)
+      .join(" ")
+
+    return `CASE COALESCE(${queueColumn}, ${db.quote(DEFAULT_QUEUE)}) ${whens} ELSE 0 END`
   }
 
   /**

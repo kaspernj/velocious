@@ -164,15 +164,25 @@
  *   allowed to keep in flight. Default: `4`. This is a per-worker safety cap;
  *   for workload-shaped limits use per-queue caps (`queues`) instead, which are
  *   enforced cluster-wide and are immune to duplicate worker processes.
- * @property {Record<string, {maxConcurrent?: number}>} [queues] - Per-queue
- *   concurrency caps, Sidekiq-style. A job declares its queue (static `queue` on
- *   the job class, or the `queue` enqueue option; defaults to `"default"`), and
+ * @property {Record<string, {maxConcurrent?: number, priority?: number}>} [queues] - Per-queue
+ *   concurrency caps and dispatch priorities, Sidekiq-style. A job declares its queue (static
+ *   `queue` on the job class, or the `queue` enqueue option; defaults to `"default"`), and
  *   `queues[name].maxConcurrent` bounds how many jobs from that queue may be
  *   in flight across the whole cluster (enforced via durable per-key
  *   concurrency, so it holds regardless of how many worker processes run).
  *   Size each queue to its workload: I/O-bound queues (e.g. build runners
  *   waiting on remote Docker servers) can run far above the core count, while
- *   CPU-bound queues should stay near it. Default: `{}` (no queue caps).
+ *   CPU-bound queues should stay near it. `queues[name].priority` (default `0`)
+ *   makes the main process dispatch higher-priority queues before lower-priority
+ *   ones regardless of enqueue order, so a small time-critical queue can never be
+ *   starved by a flood of low-priority work sharing a worker pool. Unlike
+ *   Sidekiq's strict queue ordering, priority composes with the per-queue caps:
+ *   a higher-priority queue that is already at its `maxConcurrent` is skipped and
+ *   dispatch falls through to the next eligible lower-priority job, so a busy
+ *   high-priority queue does not block everything else. Priorities may be any
+ *   number, including negative to sink a queue below the default. Jobs within the
+ *   same priority keep FIFO (`scheduled_at`, then `created_at`) order.
+ *   Default: `{}` (no queue caps, all queues priority `0`).
  * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
  *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
  *   to restore the legacy fixed-interval poll.
