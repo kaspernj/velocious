@@ -535,6 +535,61 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.orphanedAtMs).toBeGreaterThan(0)
   })
 
+  it("fences orphan reclamation to the selected handoff timestamp so a re-handed-off lease is not clobbered", async () => {
+    // A handed-off row the sweep selected at an old cutoff-era timestamp.
+    const rawRow = {
+      id: "stranded-1",
+      job_name: "TestJob",
+      args_json: "[]",
+      execution_mode: "forked",
+      forked: true,
+      max_retries: 10,
+      attempts: 0,
+      status: "handed_off",
+      scheduled_at_ms: 1,
+      created_at_ms: 1,
+      handed_off_at_ms: 1000,
+      handoff_id: null,
+      worker_id: "dead-worker",
+      completed_at_ms: null,
+      failed_at_ms: null,
+      orphaned_at_ms: null,
+      last_error: null,
+      concurrency_key: null,
+      max_concurrency: null,
+      queue: "default"
+    }
+    let capturedConditions = null
+    let releaseCalls = 0
+    const db = {
+      newQuery: () => ({from: () => ({where: () => ({where: () => ({results: async () => [rawRow]})})})}),
+      updateSql: (/** @type {{conditions: Record<string, ?>}} */ args) => {
+        capturedConditions = args.conditions
+
+        return "UPDATE background_jobs SET status = 'orphaned' WHERE fenced"
+      },
+      // Simulate the row having been re-handed-off after the SELECT: the stale
+      // cutoff-era timestamp fence now matches no rows.
+      affectedRows: async () => 0,
+      query: async (/** @type {string} */ sql) => {
+        if (sql.includes("active_count - 1")) releaseCalls += 1
+
+        return []
+      },
+      quote: (/** @type {?} */ value) => (value === null ? "NULL" : `'${value}'`),
+      quoteColumn: (/** @type {string} */ value) => value,
+      quoteTable: (/** @type {string} */ value) => value
+    }
+    const scriptedDb = /** @type {import("../../src/database/drivers/base.js").default} */ (db)
+    const store = new ScriptedBackgroundJobsStore({db: scriptedDb, job: /** @type {?} */ (rawRow)})
+
+    const count = await store.markOrphanedJobs({orphanedAfterMs: 0})
+
+    expect(count).toEqual(0)
+    expect(capturedConditions).toEqual({id: "stranded-1", status: "handed_off", handed_off_at_ms: 1000})
+    expect(releaseCalls).toEqual(0)
+  })
+
   it("prunes completed rows past the retention window and keeps recent and non-terminal rows", async () => {
     const store = await createClearedStore()
 

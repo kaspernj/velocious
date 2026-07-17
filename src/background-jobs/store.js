@@ -476,18 +476,25 @@ export default class BackgroundJobsStore {
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
 
-        // Reclaim by id/status, not by handoff-id lease: this is a time-based
-        // sweep of rows already read as handed-off past the cutoff, and some
-        // rows have a null `handoff_id` (handed off by an older velocious
-        // before handoff-id fencing). Matching `{handoff_id: null}` renders as
-        // `handoff_id = NULL` in SQL, which matches nothing, so those rows
-        // would be stranded in `handed_off` forever.
+        // Fence the reclaim on the exact handoff this sweep selected, using its
+        // `handed_off_at_ms` rather than its `handoff_id`. Two reasons:
+        //   1. Null-safe. Some rows have a null `handoff_id` (handed off by an
+        //      older velocious before handoff-id fencing). `{handoff_id: null}`
+        //      renders as `handoff_id = NULL`, which matches nothing, so those
+        //      rows would be stranded in `handed_off` forever.
+        //   2. Race-safe. If the row is returned to the queue and re-handed-off
+        //      between the SELECT above and this update, it gets a fresh
+        //      `handed_off_at_ms` (always "now"), so this stale cutoff-era
+        //      timestamp no longer matches and we won't fail/orphan — or
+        //      wrongly release the concurrency reservation of — that new lease.
+        // `handed_off_at_ms` is always set on a handed-off row (and the SELECT
+        // required it `<= cutoff`), so it is a reliable null-safe lease pin.
         const orphanedJob = await this._applyFailure({
           db,
           job,
           error: "Job orphaned after timeout",
           markOrphaned: true,
-          conditions: {id: job.id, status: "handed_off"}
+          conditions: {id: job.id, status: "handed_off", handed_off_at_ms: job.handedOffAtMs}
         })
 
         if (orphanedJob) orphanedCount += 1
