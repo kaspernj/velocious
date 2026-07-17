@@ -145,31 +145,42 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     expect(forkedReady.length).toEqual(2)
   })
 
-  it("reclaims handoffs orphaned by a main restart but keeps a reconnected worker's", async () => {
+  it("adopts a reconnecting worker's handoffs on hello and releases them if it later disconnects", async () => {
     const {main, store} = await startBackgroundJobsMain()
 
     try {
-      // Held by a worker that never reconnected — orphaned when the previous main went away.
-      const orphanedId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
-      const orphanedHandoff = await store.markHandedOff({jobId: orphanedId, workerId: "gone-worker"})
-      if (!orphanedHandoff) throw new Error("Expected the orphaned job to hand off")
+      // A job the worker was running before the main restarted.
+      const ownId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const ownHandoff = await store.markHandedOff({jobId: ownId, workerId: "reconnecting-worker"})
+      if (!ownHandoff) throw new Error("Expected the reconnecting worker's job to hand off")
 
-      // Held by a worker that reconnected with the same id — still running it.
-      const liveId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
-      const liveHandoff = await store.markHandedOff({jobId: liveId, workerId: "live-worker"})
-      if (!liveHandoff) throw new Error("Expected the live job to hand off")
+      // A job held by a DIFFERENT worker that does not reconnect (e.g. still
+      // draining under the old release). It must be left untouched — never
+      // reclaimed early into a duplicate attempt.
+      const otherId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const otherHandoff = await store.markHandedOff({jobId: otherId, workerId: "other-worker"})
+      if (!otherHandoff) throw new Error("Expected the other worker's job to hand off")
 
-      const liveWorker = fakeWorkerSocket()
-      liveWorker.workerId = "live-worker"
-      main.workers.add(liveWorker)
-      main.workerHandoffs.set(liveWorker, new Map([[liveId, liveHandoff.handoffId]]))
+      // The worker reconnects with its stable id — drive the real hello handler.
+      const worker = fakeWorkerSocket()
+      main._handleRolelessSocketMessage({
+        jsonSocket: worker,
+        message: {type: "hello", role: "worker", workerId: "reconnecting-worker", supportsHandoffIdReporting: true, supportsHeartbeat: true}
+      })
 
-      await main._reclaimHandoffsOrphanedByRestart()
+      // Adoption runs asynchronously off the hello; wait for it to populate the map.
+      await new Promise((resolve) => setTimeout(resolve, 50))
 
-      // The disconnected worker's handoff returns to the queue; the reconnected
-      // worker's in-flight job is left alone.
-      expect((await store.getJob(orphanedId))?.status).toEqual("queued")
-      expect((await store.getJob(liveId))?.status).toEqual("handed_off")
+      expect(main.workerHandoffs.get(worker)?.get(ownId)).toEqual(ownHandoff.handoffId)
+      // The other worker's job is neither adopted nor reclaimed.
+      expect(main.workerHandoffs.get(worker)?.has(otherId)).toEqual(false)
+      expect((await store.getJob(otherId))?.status).toEqual("handed_off")
+
+      // When the reconnected worker later disconnects, only its adopted handoff returns to the queue.
+      await main._handleWorkerSocketClosed(worker)
+
+      expect((await store.getJob(ownId))?.status).toEqual("queued")
+      expect((await store.getJob(otherId))?.status).toEqual("handed_off")
     } finally {
       await main.stop()
     }

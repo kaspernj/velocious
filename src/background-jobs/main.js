@@ -27,15 +27,6 @@ const WORKER_STALE_TIMEOUT_MS = 60000
 /** How often the main scans workers for staleness. */
 const WORKER_LIVENESS_SWEEP_MS = 15000
 /**
- * After the main (re)starts, workers reconnect within seconds. Once this grace
- * has elapsed, any `handed_off` job whose worker id has not reconnected was
- * orphaned by the restart (a fresh main holds no leases) and is reclaimed at
- * once. Long enough for a reconnecting worker to re-announce itself, short
- * enough that a deploy does not strand its in-flight handoffs for the full
- * (deliberately hours-long) orphan-sweep window.
- */
-const STARTUP_HANDOFF_RECLAIM_GRACE_MS = 15000
-/**
  * WorkerExecutionModeCapability type.
  * @typedef {object} WorkerExecutionModeCapability
  * @property {import("./types.js").BackgroundJobExecutionMode} executionMode - Execution mode.
@@ -62,9 +53,8 @@ export default class BackgroundJobsMain {
    * @param {number} [args.port] - Port.
    * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
    * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
-   * @param {number} [args.startupHandoffReclaimGraceMs] - Override the grace period after start before reclaiming handoffs orphaned by a main restart (default 15000ms).
    */
-  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, startupHandoffReclaimGraceMs}) {
+  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs}) {
     this.configuration = configuration
     const config = configuration.getBackgroundJobsConfig()
     this.host = host || config.host
@@ -76,7 +66,6 @@ export default class BackgroundJobsMain {
     // long is treated as wedged/dead: its leases are released and it is dropped.
     this.workerStaleTimeoutMs = typeof workerStaleTimeoutMs === "number" && workerStaleTimeoutMs >= 1 ? workerStaleTimeoutMs : WORKER_STALE_TIMEOUT_MS
     this.workerLivenessSweepMs = typeof workerLivenessSweepMs === "number" && workerLivenessSweepMs >= 1 ? workerLivenessSweepMs : WORKER_LIVENESS_SWEEP_MS
-    this.startupHandoffReclaimGraceMs = typeof startupHandoffReclaimGraceMs === "number" && startupHandoffReclaimGraceMs >= 1 ? startupHandoffReclaimGraceMs : STARTUP_HANDOFF_RECLAIM_GRACE_MS
     this.store = new BackgroundJobsStore({configuration, databaseIdentifier: config.databaseIdentifier})
     this.logger = new Logger(this)
     /**
@@ -115,10 +104,6 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setInterval> | undefined} */
     this._workerStaleTimer = undefined
-    /**
-     * Narrows the runtime value to the documented type.
-     * @type {ReturnType<typeof setTimeout> | undefined} */
-    this._startupHandoffReclaimTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
      * @type {BackgroundJobsScheduler | undefined} */
@@ -173,16 +158,6 @@ export default class BackgroundJobsMain {
       this._workerStaleTimer = setInterval(() => {
         void this._sweepStaleWorkers()
       }, this.workerLivenessSweepMs)
-
-      // A fresh main holds no leases, so every pre-existing `handed_off` row is
-      // orphaned from its perspective. Give workers a grace period to reconnect
-      // and re-announce their ids, then reclaim exactly the handoffs whose
-      // worker never came back — instead of stranding them for the hours-long
-      // orphan sweep. One-shot: ongoing disconnects are handled by socket close.
-      this._startupHandoffReclaimTimer = setTimeout(() => {
-        void this._reclaimHandoffsOrphanedByRestart()
-      }, this.startupHandoffReclaimGraceMs)
-      if (typeof this._startupHandoffReclaimTimer.unref === "function") this._startupHandoffReclaimTimer.unref()
 
       this.scheduler = new BackgroundJobsScheduler({
         configuration: this.configuration,
@@ -256,13 +231,11 @@ export default class BackgroundJobsMain {
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
     if (this._workerStaleTimer) clearInterval(this._workerStaleTimer)
-    if (this._startupHandoffReclaimTimer) clearTimeout(this._startupHandoffReclaimTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
     this._orphanTimer = undefined
     this._workerStaleTimer = undefined
-    this._startupHandoffReclaimTimer = undefined
   }
 
   /**
@@ -449,9 +422,45 @@ export default class BackgroundJobsMain {
       jsonSocket.lastSeenAt = Date.now()
       this.workers.add(jsonSocket)
       this.workerHandoffs.set(jsonSocket, new Map())
+      void this._adoptWorkerHandoffs(jsonSocket)
     }
 
     return message.role
+  }
+
+  /**
+   * Adopts a reconnecting worker's still-active `handed_off` jobs into its new
+   * socket's handoff map. A fresh main (e.g. after a deploy restart) holds no
+   * in-memory leases, so a worker that reconnects with its stable id would
+   * otherwise have its pre-restart jobs tracked nowhere — if it then died, those
+   * leases (and their concurrency reservations) would sit stuck until the
+   * hours-long orphan sweep. Adopting them means `_handleWorkerSocketClosed`
+   * releases them on the worker's next disconnect, while a still-running worker
+   * (including one gracefully draining) keeps executing them untouched. No
+   * time-based reclaim is used, so a draining worker whose jobs outlive the old
+   * main is never wrongly requeued into a duplicate attempt.
+   * @param {JsonSocket} jsonSocket - The reconnected worker socket.
+   * @returns {Promise<void>}
+   */
+  async _adoptWorkerHandoffs(jsonSocket) {
+    const workerId = jsonSocket.workerId
+
+    if (typeof workerId !== "string" || workerId.length === 0) return
+
+    try {
+      const handoffs = await this.store.handedOffJobsForWorker({workerId})
+      const map = this.workerHandoffs.get(jsonSocket)
+
+      // The socket may have closed while the query was in flight; its map is then
+      // gone and the jobs are left for the orphan sweep rather than resurrected.
+      if (!map || !this.workers.has(jsonSocket)) return
+
+      for (const {jobId, handoffId} of handoffs) {
+        map.set(jobId, handoffId)
+      }
+    } catch (error) {
+      this._reportHandoffAdoptError(error)
+    }
   }
 
   /**
@@ -634,6 +643,23 @@ export default class BackgroundJobsMain {
     const errorEvents = this.configuration.getErrorEvents()
 
     this.logger.error(() => ["Failed to release disconnected worker handoffs:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+  }
+
+  /**
+   * Reports an unexpected worker-handoff adoption failure on framework error
+   * channels. A failed adoption is not fatal (the worker's jobs remain and are
+   * reclaimed by the orphan sweep), but must surface rather than be swallowed.
+   * @param {?} error - Adoption failure.
+   * @returns {void}
+   */
+  _reportHandoffAdoptError(error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {stage: "background-job-handoff-adopt"}, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Failed to adopt reconnected worker handoffs:", normalizedError])
     errorEvents.emit("framework-error", payload)
     errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
@@ -1155,38 +1181,6 @@ export default class BackgroundJobsMain {
       }
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])
-    }
-  }
-
-  /**
-   * One-shot, after the startup grace period: reclaims `handed_off` jobs
-   * orphaned by a main restart. A fresh main holds no in-memory leases, so any
-   * handed_off row whose worker id is not among the reconnected workers was
-   * stranded when the previous main went away — return it to the queue now
-   * rather than waiting for the hours-long orphan sweep. A worker that survived
-   * the restart keeps its id and reconnects, so its in-flight jobs are kept.
-   * @returns {Promise<void>}
-   */
-  async _reclaimHandoffsOrphanedByRestart() {
-    if (this._stopped) return
-
-    try {
-      /** @type {Set<string>} */
-      const activeWorkerIds = new Set()
-
-      for (const worker of this.workers) {
-        if (typeof worker.workerId === "string") activeWorkerIds.add(worker.workerId)
-      }
-
-      const count = await this.store.reclaimHandoffsForDisconnectedWorkers({activeWorkerIds})
-
-      if (count > 0) {
-        this.logger.warn(() => ["Reclaimed background job handoffs orphaned by a main restart", count])
-        this._notifyEnqueued()
-        await this._drain()
-      }
-    } catch (error) {
-      this.logger.error(() => ["Failed to reclaim restart-orphaned handoffs:", error])
     }
   }
 
