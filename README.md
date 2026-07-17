@@ -2131,6 +2131,38 @@ await MyJob.performLaterWithOptions({
 
 If a handed-off job does not report back within 2 hours, it is marked orphaned and re-queued if retries remain.
 
+## Queues
+
+Give a job a queue with `static queue = "..."` (or a `{queue}` job option; the option wins) and cap how many of that queue's jobs run in flight across the whole cluster under `backgroundJobs.queues`:
+
+```js
+backgroundJobs: {
+  queues: {
+    builds: {maxConcurrent: 100}, // I/O-bound: can run well above the core count
+    default: {maxConcurrent: 8}   // CPU-bound: keep near the core count
+  }
+}
+```
+
+A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key), hold regardless of how many worker processes run, and are reconciled against the existing backlog on startup when you change them. Scheduled jobs honor a job's `static queue` too. See [docs/background-jobs.md](docs/background-jobs.md#queues-per-queue-concurrency-caps).
+
+## Retention
+
+Terminal `background_jobs` rows are not deleted automatically unless you configure retention, so a busy app otherwise grows the table indefinitely. Set `backgroundJobs.retention` to prune old terminal rows:
+
+```js
+backgroundJobs: {
+  retention: {
+    completedTtlMs: 7 * 24 * 60 * 60 * 1000, // default: 7 days (null/0 disables)
+    failedTtlMs: 30 * 24 * 60 * 60 * 1000,   // default: 30 days for failed/orphaned (null/0 disables)
+    batchSize: 1000,                          // default: 1000 rows per delete batch
+    sweepIntervalMs: 60 * 60 * 1000           // default: 1 hour
+  }
+}
+```
+
+`background-jobs-main` registers a built-in `velocious:prune-terminal-background-jobs` job on the scheduler when retention is enabled, so pruning runs as an ordinary scheduled/queued job (it needs a worker, appears in the job tables, and is bounded to one non-overlapping run). See [docs/background-jobs.md](docs/background-jobs.md#retention-pruning-old-job-rows).
+
 ## Dashboard
 
 Velocious ships a mountable read-only HTTP API for inspecting jobs (queued, running, completed, failed, orphaned and scheduled), similar in spirit to `sidekiq-web`. Mount it in your routes file the way `Sidekiq::Web` is mounted in Rails:
