@@ -1260,7 +1260,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get background jobs config.
-   * @returns {Required<import("./configuration-types.js").BackgroundJobsConfiguration>} - Background jobs configuration.
+   * @returns {Required<import("./configuration-types.js").BackgroundJobsConfiguration> & {retention: import("./configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration}} - Background jobs configuration.
    */
   getBackgroundJobsConfig() {
     const envHost = process.env.VELOCIOUS_BACKGROUND_JOBS_HOST

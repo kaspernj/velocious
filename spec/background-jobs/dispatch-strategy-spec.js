@@ -109,4 +109,34 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
       await main.stop()
     }
   })
+
+  it("registers retention pruning as a normal scheduled job on the scheduler", async () => {
+    const {main, store} = await startBackgroundJobsMain({
+      backgroundJobsConfig: {retention: {sweepIntervalMs: 50, completedTtlMs: 1000}}
+    })
+
+    try {
+      let prunedJobRow = /** @type {Record<string, ?> | null} */ (null)
+      const deadline = Date.now() + 3000
+
+      while (Date.now() < deadline) {
+        const rows = await store._withDb(async (db) =>
+          await db.newQuery().from("background_jobs").where({job_name: "PruneTerminalBackgroundJobsJob"}).limit(1).results()
+        )
+
+        if (rows.length > 0) {
+          prunedJobRow = rows[0]
+          break
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      expect(prunedJobRow).toBeTruthy()
+      expect(String(prunedJobRow?.status)).toEqual("queued")
+    } finally {
+      await main.stop()
+      dummyConfiguration.setBackgroundJobsConfig({dispatchStrategy: "beacon", pollIntervalMs: 1000})
+    }
+  })
 })
