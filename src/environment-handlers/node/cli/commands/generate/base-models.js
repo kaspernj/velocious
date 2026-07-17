@@ -24,7 +24,7 @@ const jsDocTypeByColumnType = {
   float: "number",
   int: "number",
   integer: "number",
-  json: "Record<string, ?>",
+  json: "Record<string, unknown>",
   longtext: "string",
   mediumtext: "string",
   numeric: "number",
