@@ -392,6 +392,51 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+   * Purges every attachment stored under (model, name): deletes each row's
+   * backing storage and then removes the attachment rows. Used to clean up an
+   * owner record's attachments before/when the owner is destroyed.
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @returns {Promise<number>} - Number of attachments purged.
+   */
+  async purgeAll({model, name}) {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => {
+      const recordType = model.getModelClass().getModelName()
+      const recordId = String(model.id())
+      /** @type {Array<Record<string, ?>>} */
+      const rows = await db
+        .newQuery()
+        .from(ATTACHMENTS_TABLE)
+        .where({name, record_id: recordId, record_type: recordType})
+        .results()
+
+      // Refuse to purge when any row's driver cannot delete its backing storage:
+      // removing the row while the object stays behind would leak storage and
+      // discard the metadata needed to retry cleanup. Fail loudly instead.
+      for (const row of rows) {
+        const attachmentDriver = await this.resolveAttachmentDriver({model, name, row})
+
+        if (typeof attachmentDriver.delete !== "function") {
+          throw new Error(`Cannot purge attachment ${row.id} for ${recordType}#${recordId} (${name}): its storage driver does not support deletion.`)
+        }
+      }
+
+      for (const row of rows) {
+        await this.deleteAttachmentRowStorage({model, name, row})
+        // Delete only the snapshotted row by id, so an attachment inserted for the
+        // same (record, name) after the snapshot is not removed with its storage
+        // still present (which would leave it as unreachable storage).
+        await db.delete({conditions: {id: row.id}, tableName: ATTACHMENTS_TABLE})
+      }
+
+      return rows.length
+    })
+  }
+
+  /**
    * Runs attachment driver by name.
    * @param {string} driverName - Driver name.
    * @returns {Promise<Record<string, ?>>} - Attachment storage driver instance.
