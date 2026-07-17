@@ -14,11 +14,36 @@ import BackgroundJobsClient from "./client.js"
  */
 export default class VelociousJob {
   /**
+   * Queue this job class runs on. Subclasses set e.g. `static queue = "builds"`
+   * to route onto a queue with its own cluster-wide concurrency cap (configured
+   * via `backgroundJobs.queues`). The `{queue}` enqueue option overrides it.
+   * Left undefined, jobs run on the `"default"` queue.
+   * @type {string | undefined}
+   */
+  static queue = undefined
+
+  /**
    * Runs job name.
    * @returns {string} - Job name.
    */
   static jobName() {
     return this.name
+  }
+
+  /**
+   * Folds this job class's static `queue` into the enqueue options unless the
+   * caller already specified one.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {import("./types.js").BackgroundJobOptions} - Options including the resolved queue.
+   */
+  static _withQueue(options) {
+    const merged = options ? {...options} : {}
+
+    if (merged.queue === undefined && typeof this.queue === "string" && this.queue.length > 0) {
+      merged.queue = this.queue
+    }
+
+    return merged
   }
 
   /**
@@ -33,7 +58,7 @@ export default class VelociousJob {
     return await client.enqueue({
       jobName: this.jobName(),
       args: jobArgs,
-      options: jobOptions
+      options: this._withQueue(jobOptions)
     })
   }
 
@@ -50,7 +75,7 @@ export default class VelociousJob {
     return await client.enqueue({
       jobName: this.jobName(),
       args,
-      options
+      options: this._withQueue(options)
     })
   }
 

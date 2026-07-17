@@ -19,6 +19,10 @@ const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
  * @type {import("./types.js").BackgroundJobExecutionMode[]} */
 const EXECUTION_MODES = ["inline", "forked", "spawned"]
 const DEFAULT_EXECUTION_MODE = "forked"
+const DEFAULT_QUEUE = "default"
+// Queue-derived durable concurrency keys are namespaced so they can't collide
+// with explicit caller-supplied concurrencyKeys.
+const QUEUE_CONCURRENCY_KEY_PREFIX = "queue:"
 
 /**
  * Columns the dashboard is allowed to sort job listings by, mapped to their
@@ -95,10 +99,17 @@ export default class BackgroundJobsStore {
     const executionMode = this._normalizeExecutionMode(options)
     const maxRetries = this._normalizeMaxRetries(options?.maxRetries)
     const argsJson = JSON.stringify(args || [])
-    const concurrency = this._normalizeConcurrencyOptions(options)
+    const queue = this._normalizeQueue(options)
+    const concurrency = this._resolveConcurrency(options, queue)
 
     await this._withDb(async (db) => {
-      if (concurrency) await this._ensureConcurrencyKey(db, concurrency)
+      if (concurrency) {
+        if (concurrency.queueDerived) {
+          await this._ensureQueueConcurrencyKey(db, concurrency)
+        } else {
+          await this._ensureConcurrencyKey(db, concurrency)
+        }
+      }
       await db.insert({
         tableName: JOBS_TABLE,
         data: {
@@ -107,6 +118,7 @@ export default class BackgroundJobsStore {
           args_json: argsJson,
           forked: executionMode !== "inline",
           execution_mode: executionMode,
+          queue,
           max_retries: maxRetries,
           attempts: 0,
           status: "queued",
@@ -621,6 +633,7 @@ export default class BackgroundJobsStore {
     table.text("args_json", {null: false})
     table.boolean("forked", {null: false})
     table.string("execution_mode", {null: false})
+    table.string("queue", {null: true, index: true})
     table.integer("max_retries", {null: false})
     table.integer("attempts", {null: false})
     table.string("status", {null: false, index: true})
@@ -720,6 +733,43 @@ export default class BackgroundJobsStore {
       }
 
       db.clearSchemaCache()
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
+
+    await this._ensureQueueColumn(db)
+  }
+
+  /**
+   * Idempotently adds the `queue` column to an existing jobs table. Existing
+   * rows read back as the default queue (see {@link _normalizeJobRow}), so no
+   * data backfill is required.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureQueueColumn(db) {
+    const table = await db.getTableByNameOrFail(JOBS_TABLE)
+
+    if (await table.getColumnByName("queue")) return
+
+    const lockName = `${MIGRATION_SCOPE}:queue_column`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs queue schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
+
+      if (!(await lockedTable.getColumnByName("queue"))) {
+        const tableData = new TableData(JOBS_TABLE)
+
+        tableData.string("queue", {null: true, index: true})
+
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+
+        db.clearSchemaCache()
+      }
     } finally {
       await db.releaseAdvisoryLock(lockName)
     }
@@ -934,6 +984,7 @@ export default class BackgroundJobsStore {
       args: this._parseArgs(row.args_json),
       executionMode,
       forked: executionMode !== "inline",
+      queue: row.queue ? String(row.queue) : DEFAULT_QUEUE,
       status: row.status ? String(row.status) : "queued",
       attempts: this._normalizeNumber(row.attempts),
       maxRetries: this._normalizeNumber(row.max_retries),
@@ -964,6 +1015,89 @@ export default class BackgroundJobsStore {
       throw new Error("background job concurrencyKey and maxConcurrency must be paired; concurrencyKey must be non-empty and maxConcurrency must be a positive integer")
     }
     return {concurrencyKey: key, maxConcurrency: Number(cap)}
+  }
+
+  /**
+   * Normalizes a job's queue name, defaulting to "default".
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {string} - Queue name.
+   */
+  _normalizeQueue(options) {
+    const queue = options?.queue
+
+    if (typeof queue === "string" && queue.trim().length > 0) return queue.trim()
+
+    return DEFAULT_QUEUE
+  }
+
+  /**
+   * Resolves a job's durable concurrency. An explicit concurrencyKey/maxConcurrency
+   * pair always wins. Otherwise, when the job's queue has a configured cap
+   * (`backgroundJobs.queues[queue].maxConcurrent`), derive a queue-scoped
+   * concurrency key so the queue cap is enforced cluster-wide through the
+   * existing durable concurrency mechanism.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @param {string} queue - Normalized queue name.
+   * @returns {{concurrencyKey: string, maxConcurrency: number, queueDerived: boolean} | null} - Resolved concurrency.
+   */
+  _resolveConcurrency(options, queue) {
+    const explicit = this._normalizeConcurrencyOptions(options)
+
+    if (explicit) return {...explicit, queueDerived: false}
+
+    const cap = this._queueMaxConcurrency(queue)
+
+    if (cap === null) return null
+
+    return {concurrencyKey: `${QUEUE_CONCURRENCY_KEY_PREFIX}${queue}`, maxConcurrency: cap, queueDerived: true}
+  }
+
+  /**
+   * Reads the configured max concurrency for a queue from the background-jobs config.
+   * @param {string} queue - Queue name.
+   * @returns {number | null} - Positive integer cap, or null when the queue has no configured cap.
+   */
+  _queueMaxConcurrency(queue) {
+    const queues = this.configuration.getBackgroundJobsConfig().queues
+    const cap = queues?.[queue]?.maxConcurrent
+
+    if (Number.isInteger(cap) && Number(cap) > 0) return Number(cap)
+
+    return null
+  }
+
+  /**
+   * Like {@link _ensureConcurrencyKey}, but for queue-derived keys the configured
+   * queue cap is the source of truth: if it changed, update the stored cap
+   * instead of throwing on conflict (config-driven caps must be tunable).
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {{concurrencyKey: string, maxConcurrency: number}} concurrency - Concurrency configuration.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureQueueConcurrencyKey(db, {concurrencyKey, maxConcurrency}) {
+    const rows = await db.newQuery().from(CONCURRENCY_TABLE).where({concurrency_key: concurrencyKey}).limit(1).results()
+
+    if (!rows[0]) {
+      try {
+        await db.insert({tableName: CONCURRENCY_TABLE, data: {active_count: 0, concurrency_key: concurrencyKey, max_concurrency: maxConcurrency}})
+
+        return
+      } catch (error) {
+        const racedRows = await db.newQuery().from(CONCURRENCY_TABLE).where({concurrency_key: concurrencyKey}).limit(1).results()
+
+        if (!racedRows[0]) throw error
+
+        rows[0] = racedRows[0]
+      }
+    }
+
+    const configured = /** @type {{max_concurrency?: number | string}} */ (rows[0])
+
+    if (this._normalizeNumber(configured.max_concurrency) !== maxConcurrency) {
+      const table = db.quoteTable(CONCURRENCY_TABLE)
+
+      await db.query(`UPDATE ${table} SET ${db.quoteColumn("max_concurrency")} = ${Number(maxConcurrency)} WHERE ${db.quoteColumn("concurrency_key")} = ${db.quote(concurrencyKey)}`)
+    }
   }
 
   /**

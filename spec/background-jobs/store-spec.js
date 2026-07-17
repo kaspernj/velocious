@@ -223,6 +223,88 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(await store.markHandedOff({jobId: ids[1 - claimedIndex], workerId: "replacement"})).not.toBeNull()
   })
 
+  it("routes queue-configured jobs onto a cluster-wide per-queue concurrency cap", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
+
+    try {
+      const store = await createClearedStore()
+      const first = await store.enqueue({jobName: "TestJob", args: [1], options: {queue: "builds"}})
+      const second = await store.enqueue({jobName: "TestJob", args: [2], options: {queue: "builds"}})
+      const third = await store.enqueue({jobName: "TestJob", args: [3], options: {queue: "builds"}})
+      const firstRow = await getJobOrFail({jobId: first, store})
+
+      expect(firstRow.queue).toEqual("builds")
+      expect(firstRow.concurrencyKey).toEqual("queue:builds")
+      expect(firstRow.maxConcurrency).toEqual(2)
+
+      const claim1 = await store.markHandedOff({jobId: first, workerId: "w1"})
+      const claim2 = await store.markHandedOff({jobId: second, workerId: "w2"})
+
+      if (!claim1 || !claim2) throw new Error("Expected the first two queued jobs to claim")
+
+      expect(await store.markHandedOff({jobId: third, workerId: "w3"})).toBeNull()
+
+      await store.markCompleted({jobId: first, workerId: "w1", ...claim1})
+
+      expect(await store.markHandedOff({jobId: third, workerId: "w3"})).not.toBeNull()
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("lets an explicit concurrencyKey override the queue-derived cap", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 5}}})
+
+    try {
+      const store = await createClearedStore()
+      const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds", concurrencyKey: "account:1", maxConcurrency: 1}})
+      const row = await getJobOrFail({jobId, store})
+
+      expect(row.queue).toEqual("builds")
+      expect(row.concurrencyKey).toEqual("account:1")
+      expect(row.maxConcurrency).toEqual(1)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("leaves jobs on unconfigured queues uncapped", async () => {
+    const store = await createClearedStore()
+    const first = await store.enqueue({jobName: "TestJob", args: [1], options: {queue: "adhoc"}})
+    const second = await store.enqueue({jobName: "TestJob", args: [2], options: {queue: "adhoc"}})
+    const firstRow = await getJobOrFail({jobId: first, store})
+
+    expect(firstRow.queue).toEqual("adhoc")
+    expect(firstRow.concurrencyKey).toBeNull()
+    expect(await store.markHandedOff({jobId: first, workerId: "w1"})).not.toBeNull()
+    expect(await store.markHandedOff({jobId: second, workerId: "w2"})).not.toBeNull()
+  })
+
+  it("updates a queue's stored cap when the configured cap changes instead of throwing", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 1}}})
+
+    try {
+      const store = await createClearedStore()
+
+      await store.enqueue({jobName: "TestJob", args: [1], options: {queue: "builds"}})
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 3}}})
+      const jobId = await store.enqueue({jobName: "TestJob", args: [2], options: {queue: "builds"}})
+      const row = await getJobOrFail({jobId, store})
+
+      expect(row.maxConcurrency).toEqual(3)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("defaults an unspecified queue to \"default\"", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const row = await getJobOrFail({jobId, store})
+
+    expect(row.queue).toEqual("default")
+  })
+
   it("releases a concurrency reservation when a competing queued claim loses", async () => {
     let activeCount = 0
     const db = {
