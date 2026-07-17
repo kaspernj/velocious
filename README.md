@@ -2146,7 +2146,9 @@ backgroundJobs: {
 }
 ```
 
-A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key), hold regardless of how many worker processes run, and are reconciled against the existing backlog on startup when you change them. Scheduled jobs honor a job's `static queue` too. See [docs/background-jobs.md](docs/background-jobs.md#queues-per-queue-concurrency-caps).
+A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key), hold regardless of how many worker processes run, and are reconciled against the existing backlog on startup when you change them. Scheduled jobs honor a job's `static queue` too.
+
+Set `priority` (default `0`) to dispatch a queue ahead of lower-priority ones regardless of enqueue order, so a small time-critical queue is never starved by a flood of low-priority work sharing a worker pool. Unlike Sidekiq's strict queue ordering, priority composes with the caps: a higher-priority queue already at its `maxConcurrent` is skipped and dispatch falls through to the next eligible job. See [docs/background-jobs.md](docs/background-jobs.md#queues-per-queue-concurrency-caps).
 
 ## Retention
 

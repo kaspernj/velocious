@@ -15,8 +15,10 @@ Give a job class a queue with `static queue = "..."` (or pass `{queue}` in job o
 ```js
 backgroundJobs: {
   queues: {
+    buildPlanner: {maxConcurrent: 2, priority: 20}, // small, time-critical: always dispatched first
+    githubWebhooks: {maxConcurrent: 20, priority: 10},
     builds: {maxConcurrent: 100}, // I/O-bound work can run well above the core count
-    default: {maxConcurrent: 8}   // CPU-bound work should stay near the core count
+    default: {maxConcurrent: 8}   // priority defaults to 0
   }
 }
 ```
@@ -26,6 +28,14 @@ Each capped queue is enforced through the same durable per-key concurrency mecha
 - The `queue:` concurrency-key prefix is reserved — an explicit `concurrencyKey` may not start with it.
 - Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against the existing backlog when the main process starts: persisted jobs adopt or release the queue key to match the current config, so a changed cap takes effect without waiting for the queue to drain.
 - Scheduled jobs (`scheduledBackgroundJobs`) honor a job class's `static queue` as well.
+
+### Priorities
+
+`queues[name].priority` (default `0`) makes the main process dispatch higher-priority queues before lower-priority ones, regardless of when each job was enqueued. This keeps a small, time-critical queue (a build planner, webhook processing) from being starved by a flood of low-priority work that shares the same worker pool — the exact failure that an under-sized single `default` queue produces: side-effect noise crowds out the jobs that actually move the pipeline forward.
+
+Unlike Sidekiq's strict queue ordering, priority **composes with the per-queue caps**: a higher-priority queue that is already at its `maxConcurrent` is skipped, and dispatch falls through to the next eligible lower-priority job. So a busy high-priority queue can't block everything behind it — it only wins while it has spare capacity. Priorities may be any number (negative sinks a queue below the default), and jobs within the same priority keep FIFO (`scheduled_at`, then `created_at`) order. Priority ordering applies only to the dispatch decision; it does not reorder future-scheduled jobs, which stay strictly time-ordered.
+
+The cap-fallthrough guarantee is a property of the **queue-derived** cap. A job that supplies its own explicit `concurrencyKey`/`maxConcurrency` bypasses the queue cap entirely — an explicit key always wins (see above) — so it is bounded only by that explicit key, not by `queues[name].maxConcurrent`. Such a job is therefore never held back by the queue's cap; priority just orders it normally against the rest. If you want a job to be bounded by both a queue cap and a finer-grained key, model the finer-grained limit as its own queue rather than an explicit `concurrencyKey`.
 
 ## Retention (pruning old job rows)
 
