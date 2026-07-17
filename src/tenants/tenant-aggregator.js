@@ -91,6 +91,12 @@ export default class TenantAggregator {
     return filtered.map((tenant) => {
       const databaseConfiguration = this.configuration.resolveDatabaseConfiguration(this.options.identifier, tenant)
 
+      // The server key groups tenants that share a connection endpoint so co-located tenants can be
+      // UNION-ed on one connection. It only needs to be exact for the cross-database `UNION ALL`
+      // path, which is MySQL-only, where host/port/username/type fully identify the server. Every
+      // other driver takes the fan-out path (one connection per tenant), so a coarse key there just
+      // groups tenants that are then queried individually anyway — it can never route a query to the
+      // wrong server.
       return {
         database: databaseConfiguration.database,
         serverKey: JSON.stringify([
@@ -146,35 +152,41 @@ export default class TenantAggregator {
 
   /**
    * Runs the aggregate for one server's tenants, using a single cross-database `UNION ALL` when the
-   * driver supports it or one query per tenant otherwise.
+   * driver supports it or one query per tenant otherwise. The driver capability is probed in its own
+   * connection scope that is released before the fan-out runs, so a `max: 1` tenant pool is never
+   * asked for a second connection while the first is still held (which would deadlock).
    * @param {ResolvedTenant[]} group - Tenants sharing one server.
    * @returns {Promise<Array<Record<string, ?>>>} - Rows produced for this server.
    */
   async _runForServer(group) {
     const [firstTenant] = group
+    const supportsCrossDatabaseReferences = await this._withTenant(
+      firstTenant.tenant,
+      async (connections) => connections[this.options.identifier].supportsCrossDatabaseReferences()
+    )
 
-    return await this._withTenant(firstTenant.tenant, async (connections) => {
-      const connection = connections[this.options.identifier]
+    if (supportsCrossDatabaseReferences) {
+      return await this._withTenant(firstTenant.tenant, async (connections) => {
+        const connection = connections[this.options.identifier]
 
-      if (connection.supportsCrossDatabaseReferences()) {
         return await connection.query(this.buildAggregateSql({connection, entries: group, qualified: true}))
-      }
+      })
+    }
 
-      /** @type {Array<Record<string, ?>>} */
-      const rows = []
+    /** @type {Array<Record<string, ?>>} */
+    const rows = []
 
-      for (const resolvedTenant of group) {
-        const tenantRows = await this._withTenant(resolvedTenant.tenant, async (tenantConnections) => {
-          const tenantConnection = tenantConnections[this.options.identifier]
+    for (const resolvedTenant of group) {
+      const tenantRows = await this._withTenant(resolvedTenant.tenant, async (connections) => {
+        const connection = connections[this.options.identifier]
 
-          return await tenantConnection.query(this.buildAggregateSql({connection: tenantConnection, entries: [resolvedTenant], qualified: false}))
-        })
+        return await connection.query(this.buildAggregateSql({connection, entries: [resolvedTenant], qualified: false}))
+      })
 
-        rows.push(...tenantRows)
-      }
+      rows.push(...tenantRows)
+    }
 
-      return rows
-    })
+    return rows
   }
 
   /**
@@ -226,7 +238,11 @@ export default class TenantAggregator {
   }
 
   /**
-   * Merges rows from every server by combining each aggregate with its own operation.
+   * Merges rows from every server by combining each aggregate with its own operation. A `NULL`
+   * aggregate value (an empty tenant's `SUM`/`MAX`/`MIN` returns `NULL` on the fan-out path) is
+   * treated as "no contribution" and skipped, not coerced to `0` — otherwise an empty tenant would
+   * drag a `MAX` of negatives or a `MIN` of positives to `0`. A key whose every tenant contributed
+   * `NULL` stays `NULL`, matching SQL aggregate semantics over no rows.
    * @param {Array<Record<string, ?>>} rows - Rows collected from all servers/tenants.
    * @returns {Array<Record<string, ?>>} - One merged row per distinct key-column combination.
    */
@@ -245,11 +261,21 @@ export default class TenantAggregator {
           accumulator[keyColumn] = row[keyColumn]
         }
 
+        for (const name of Object.keys(this.aggregates)) {
+          accumulator[name] = null
+        }
+
         merged.set(mapKey, accumulator)
       }
 
       for (const [name, spec] of Object.entries(this.aggregates)) {
-        accumulator[name] = this._combine(spec.op, accumulator[name], Number(row[name] ?? 0))
+        const rawValue = row[name]
+
+        if (rawValue === null || rawValue === undefined) continue
+
+        const value = this._toExactNumber(rawValue)
+
+        accumulator[name] = accumulator[name] === null ? value : this._combine(spec.op, accumulator[name], value)
       }
     }
 
@@ -257,18 +283,36 @@ export default class TenantAggregator {
   }
 
   /**
-   * Combines two per-server aggregate values with the aggregate's own operation.
+   * Combines two non-null per-server aggregate values with the aggregate's own operation.
    * @param {AggregateOperation} op - Aggregate operation.
-   * @param {?} current - Accumulated value, or undefined for the first row.
+   * @param {number} current - Accumulated value.
    * @param {number} value - Incoming per-server value.
    * @returns {number} - Combined value.
    */
   _combine(op, current, value) {
-    if (current === undefined || current === null) return value
     if (op === "MAX") return Math.max(current, value)
     if (op === "MIN") return Math.min(current, value)
 
     return current + value
+  }
+
+  /**
+   * Converts a driver-returned aggregate value to a number, failing loudly rather than silently
+   * losing precision. Drivers return exact integer aggregates (MySQL `SUM`/`COUNT`, PostgreSQL
+   * `bigint`) as strings; an integer beyond `Number.MAX_SAFE_INTEGER` cannot be represented exactly
+   * as a JS number, so cross-server merging would corrupt the result — throw instead. (Fractional
+   * `DECIMAL`/`NUMERIC` values are still subject to normal floating-point representation.)
+   * @param {?} rawValue - Value returned by the driver for an aggregate column.
+   * @returns {number} - The value as a number.
+   */
+  _toExactNumber(rawValue) {
+    const value = Number(rawValue)
+
+    if (typeof rawValue === "string" && /^-?\d+$/.test(rawValue.trim()) && !Number.isSafeInteger(value)) {
+      throw new Error(`Aggregate value ${rawValue} exceeds the safe-integer range and cannot be merged without losing precision.`)
+    }
+
+    return value
   }
 
   /**

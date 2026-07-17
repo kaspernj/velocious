@@ -1,0 +1,3 @@
+# Changelog
+
+- Add `Tenant.aggregateAcross(...)`: run one aggregate over the same table across many tenant databases and get the merged result back, without looping tenant-by-tenant in application code. Tenant databases may be co-located on the default server or spread across other servers and can be created/dropped at runtime; the helper resolves the live tenant list, groups tenants by server, and per server emits a single cross-database `UNION ALL` on MySQL/MariaDB or falls back to one query per tenant on PostgreSQL/SQLite/MSSQL, merging every server's result with each aggregate's own operation (`SUM`, `COUNT`, `MAX`, `MIN`). Adds the driver capability `supportsCrossDatabaseReferences()`.

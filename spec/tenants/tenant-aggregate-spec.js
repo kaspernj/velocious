@@ -175,6 +175,62 @@ describe("Tenant.aggregateAcross", () => {
     })
   })
 
+  it("treats an empty tenant's NULL extremum as no contribution instead of zero", async () => {
+    await withConfiguration({listTenants: () => [{slug: "alpha"}, {slug: "beta"}]}, async ({configuration}) => {
+      // alpha's peak is negative; beta has no matching rows, so its grand-total MAX is NULL. The
+      // NULL must not drag the merged maximum up to 0.
+      await seedBuilds(configuration, "alpha", [
+        {dockerServerId: "server-1", estimatedCpuUsage: -8, status: "assigned"},
+        {dockerServerId: "server-1", estimatedCpuUsage: -5, status: "running"}
+      ])
+      await seedBuilds(configuration, "beta", [])
+
+      const rows = await Tenant.aggregateAcross({
+        aggregates: {peak: {column: "peak", op: "MAX"}},
+        identifier: "projectTenant",
+        subquery: ({quote, table}) => `
+          SELECT estimated_cpu_usage AS peak
+          FROM ${table("builds")}
+          WHERE status IN (${quote.list(["assigned", "running"])})
+        `
+      })
+
+      expect(rows).toEqual([{peak: -5}])
+    })
+  })
+
+  it("returns NULL for an aggregate no tenant contributed to", async () => {
+    await withConfiguration({listTenants: () => [{slug: "alpha"}, {slug: "beta"}]}, async ({configuration}) => {
+      await seedBuilds(configuration, "alpha", [])
+      await seedBuilds(configuration, "beta", [])
+
+      const rows = await Tenant.aggregateAcross({
+        aggregates: {peak: {column: "peak", op: "MAX"}},
+        identifier: "projectTenant",
+        subquery: ({quote, table}) => `
+          SELECT estimated_cpu_usage AS peak
+          FROM ${table("builds")}
+          WHERE status IN (${quote.list(["assigned", "running"])})
+        `
+      })
+
+      expect(rows).toEqual([{peak: null}])
+    })
+  })
+
+  it("throws rather than silently rounding an aggregate beyond the safe-integer range", () => {
+    const aggregator = new TenantAggregator({
+      aggregates: {reserved: "SUM"},
+      configuration: /** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ ({})),
+      identifier: "projectTenant",
+      subquery: () => ""
+    })
+
+    expect(aggregator._toExactNumber("100")).toEqual(100)
+    expect(aggregator._toExactNumber(42)).toEqual(42)
+    expect(() => aggregator._toExactNumber("9007199254740993")).toThrow(/exceeds the safe-integer range/)
+  })
+
   it("builds one cross-database UNION ALL when the driver supports qualified references", () => {
     // Stubs MySQL-style backtick quoting so the test asserts the SQL composed by buildAggregateSql
     // without standing up a real database connection.
