@@ -57,10 +57,9 @@ async function runJobMessage(message) {
     throw new Error("Forked background job runner received invalid payload")
   }
 
-  // Reflect the specific job in the process title so a `ps` snapshot shows which
-  // jobs are live and how many forks each is consuming.
-  process.title = `velocious job-runner: ${message.payload.jobName}`
-
+  // The per-job process title (and its restore) is set inside runJobPayload,
+  // which reads the job class's `static processTitle`. This process boots with
+  // the base "velocious background-jobs-runner" title set at module load above.
   await runJobPayload(message.payload, {closeConnections: false})
 }
 

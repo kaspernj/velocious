@@ -23,6 +23,18 @@ export default class VelociousJob {
   static queue = undefined
 
   /**
+   * Optional process title shown for the runner while this job executes.
+   * Velocious sets `process.title` to this for the duration of the job — so
+   * `ps`/`top`/`htop` identify what a runner is doing — and restores the
+   * runner's base title when the job finishes. Left undefined, the runner falls
+   * back to `velocious job-runner: <JobName>`. Set e.g.
+   * `static processTitle = "velocious media transcoder"` to give a job a
+   * custom, human-readable title.
+   * @type {string | undefined}
+   */
+  static processTitle = undefined
+
+  /**
    * Runs job name.
    * @returns {string} - Job name.
    */

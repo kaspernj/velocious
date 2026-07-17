@@ -48,6 +48,21 @@ async function connectBeacon(configuration) {
 }
 
 /**
+ * Resolves the process title to show while a job runs: the job class's declared
+ * `static processTitle`, else a `velocious job-runner: <JobName>` fallback.
+ * @param {typeof import("./job.js").default} JobClass - Resolved job class.
+ * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+ * @returns {string} - Process title.
+ */
+function runnerProcessTitle(JobClass, payload) {
+  const declared = JobClass.processTitle
+
+  if (typeof declared === "string" && declared.length > 0) return declared
+
+  return `velocious job-runner: ${payload.jobName}`
+}
+
+/**
  * Runs run job payload.
  * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
  * @param {object} [options] - Runner options.
@@ -69,6 +84,11 @@ export default async function runJobPayload(payload, {closeConnections = true} =
    * Perform.
    * @type {(...args: Array<?>) => Promise<void>} */
   const perform = jobInstance.perform
+
+  // Name the process after the job it is running so `ps`/`top` show what each
+  // runner is doing; restored in the `finally` below when the job finishes.
+  const previousTitle = process.title
+  process.title = runnerProcessTitle(JobClass, payload)
 
   try {
     try {
@@ -102,6 +122,9 @@ export default async function runJobPayload(payload, {closeConnections = true} =
       })
     }
   } finally {
+    // Restore the runner's base title so a lingering/idle runner (or a reused
+    // one) doesn't misreport a finished job as still running.
+    process.title = previousTitle
     if (closeConnections) {
       try {
         await configuration.disconnectBeacon()
