@@ -221,8 +221,11 @@ export default class RecordAttachmentHandle {
   /**
    * Purges every attachment under this (record, name): deletes the backing
    * storage for each and removes the attachment rows. A no-op for unpersisted
-   * records. Callers use this to clean up attachments before destroying the
-   * owner record.
+   * records. Only the attachments present when the purge starts are removed, so a
+   * concurrent attach for the same (record, name) is left intact. Throws (without
+   * deleting any rows) if a storage driver cannot delete its object, so a driver
+   * configured without a `delete` operation can never leak storage. Callers use
+   * this to clean up attachments before destroying the owner record.
    * @returns {Promise<number>} - Number of attachments purged.
    */
   async purgeAll() {

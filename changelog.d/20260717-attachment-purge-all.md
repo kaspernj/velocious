@@ -1,0 +1,3 @@
+# Changelog
+
+- Add `RecordAttachmentHandle#purgeAll()` (backed by `RecordAttachmentsStore#purgeAll`) to remove an owner record's attachments — deleting each attachment's backing storage and then its row — so callers can clean up attachments before/when destroying the owner. Only the attachments present when the purge starts are removed (a concurrent `attach()` for the same record/name is left intact), and it throws without deleting any rows if a storage driver has no `delete` operation, so a driver configured without deletion can never silently leak storage. A no-op for unpersisted records; returns the number of attachments purged.

@@ -119,6 +119,30 @@ describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transactio
     expect(await task.files().downloadAll()).toEqual([])
   })
 
+  it("refuses to purge when the storage driver cannot delete, preserving the attachment", async () => {
+    const originalDriver = Task.getAttachmentByName("descriptionFile").driver
+
+    // InlineMemoryAttachmentDriver has write/read/url but no delete operation.
+    Task.getAttachmentByName("descriptionFile").driver = InlineMemoryAttachmentDriver
+
+    try {
+      const project = await Project.create({name: "Attachment project"})
+      const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+      await task.descriptionFile().attach({content: "keep me", filename: "keep.txt"})
+
+      await expect(async () => await task.descriptionFile().purgeAll()).toThrow(/does not support deletion/)
+
+      // The attachment row is preserved so cleanup can be retried, rather than
+      // deleting the metadata and leaking the still-present backing storage.
+      const downloadedAttachment = await task.descriptionFile().download()
+
+      expect(downloadedAttachment.content().toString()).toEqual("keep me")
+    } finally {
+      Task.getAttachmentByName("descriptionFile").driver = originalDriver
+    }
+  })
+
   it("normalizes trailing slash filenames to basename values", async () => {
     const project = await Project.create({name: "Attachment project"})
     const task = await Task.create({name: "Attachment task", projectId: project.id()})

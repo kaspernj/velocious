@@ -406,20 +406,31 @@ export default class RecordAttachmentsStore {
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
       const recordId = String(model.id())
+      /** @type {Array<Record<string, ?>>} */
       const rows = await db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
         .where({name, record_id: recordId, record_type: recordType})
         .results()
 
+      // Refuse to purge when any row's driver cannot delete its backing storage:
+      // removing the row while the object stays behind would leak storage and
+      // discard the metadata needed to retry cleanup. Fail loudly instead.
       for (const row of rows) {
-        await this.deleteAttachmentRowStorage({model, name, row})
+        const attachmentDriver = await this.resolveAttachmentDriver({model, name, row})
+
+        if (typeof attachmentDriver.delete !== "function") {
+          throw new Error(`Cannot purge attachment ${row.id} for ${recordType}#${recordId} (${name}): its storage driver does not support deletion.`)
+        }
       }
 
-      await db.delete({
-        conditions: {name, record_id: recordId, record_type: recordType},
-        tableName: ATTACHMENTS_TABLE
-      })
+      for (const row of rows) {
+        await this.deleteAttachmentRowStorage({model, name, row})
+        // Delete only the snapshotted row by id, so an attachment inserted for the
+        // same (record, name) after the snapshot is not removed with its storage
+        // still present (which would leave it as unreachable storage).
+        await db.delete({conditions: {id: row.id}, tableName: ATTACHMENTS_TABLE})
+      }
 
       return rows.length
     })

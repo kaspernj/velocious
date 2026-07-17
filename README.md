@@ -440,7 +440,7 @@ This creates `src/frontend-models/user.js` (and one file per configured resource
 - Attribute methods like `user.name()` and `user.setName(...)`
 - Relationship helpers (when `relationships` are configured), for example `task.project()`, `await task.projectOrLoad()`, `await project.tasks().toArray()`, `await project.tasks().load()`, and `project.tasks().build({...})`
 - Preload relationships onto records you already have with `await record.preload(Model.preload({...}).select({...}))` (or `Preloader.preload(records, ...)` for arrays), including `selectsExtra(...)` and a `{force: true}` reload option — see [docs/frontend-models.md](docs/frontend-models.md#preloading-onto-loaded-records)
-- Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, and `await task.update({descriptionFile: file})`
+- Attachment helpers (when `attachments` are configured), for example `await task.descriptionFile().attach(file)`, `await task.descriptionFile().download()`, `await task.files().purgeAll()`, and `await task.update({descriptionFile: file})`
 
 React components can subscribe to lifecycle broadcasts without manual cleanup code:
 
@@ -500,6 +500,14 @@ await task.update({
   }
 })
 ```
+
+Purge a record's attachments — both the stored files and their rows — for example before destroying the owner record:
+
+```js
+const purgedCount = await task.files().purgeAll()
+```
+
+`purgeAll()` deletes each attachment's backing storage and then its row, and removes only the attachments that existed when the purge started (a concurrent `attach()` for the same record/name is left intact). It throws without deleting anything if a storage driver has no `delete` operation, so a driver configured without deletion can never silently leak storage. It is a no-op for unpersisted records and returns the number of attachments purged.
 
 Configure attachment storage drivers in `Configuration`:
 
