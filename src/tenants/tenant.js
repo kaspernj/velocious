@@ -2,6 +2,7 @@
 
 import Current from "../current.js"
 import {dropTenantDatabase} from "./default-tenant-database-provisioning.js"
+import TenantAggregator from "./tenant-aggregator.js"
 import TenantIterator from "./tenant-iterator.js"
 
 /**
@@ -72,6 +73,22 @@ export default class Tenant {
     return await iterator.run(tenants, async (callbackArgs) => {
       await configuration.ensureConnections({name: `Tenant.each: ${identifier}`}, async () => await callback(callbackArgs))
     })
+  }
+
+  /**
+   * Runs one aggregate query across many tenant databases and returns the merged result. The
+   * tenants may be co-located on the default server or spread across other servers, and can be
+   * created or dropped at runtime; the live tenant list is resolved (from `tenants` or the
+   * provider's `listTenants`), grouped by server, aggregated with a single cross-database
+   * `UNION ALL` where the driver supports it (MySQL/MSSQL) or one query per tenant otherwise
+   * (PostgreSQL/SQLite), and merged with each aggregate's own operation. The caller writes only one
+   * per-tenant subquery and declares the key columns and aggregates; see
+   * {@link import("./tenant-aggregator.js").TenantAggregateOptions}.
+   * @param {import("./tenant-aggregator.js").TenantAggregateOptions} options - Aggregate configuration.
+   * @returns {Promise<Array<Record<string, ?>>>} - One merged row per distinct key-column combination.
+   */
+  static async aggregateAcross(options) {
+    return await new TenantAggregator(options).run()
   }
 
   /**

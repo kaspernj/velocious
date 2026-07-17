@@ -158,6 +158,36 @@ Because `listTenants` runs every time, tenant databases are dynamic:
 - removed tenants disappear from the next provider result and are no longer migrated;
 - the app can still serve any one tenant immediately by resolving its tenant object through `tenantDatabaseResolver`.
 
+### Cross-tenant aggregation
+
+`Tenant.aggregateAcross` runs one aggregate over the same table in many tenant databases and returns the combined result, so a scheduler or dashboard can ask "how much is reserved per docker server across every tenant?" without looping tenant-by-tenant in application code. Tenant databases may be co-located on the default server or spread across other servers, and they can be created or dropped at runtime; the helper resolves the live tenant list, groups tenants by the server they live on, and — per server — emits a **single cross-database `UNION ALL`** when the driver supports two-part `` `database`.`table` `` references (MySQL/MariaDB) or falls back to **one query per tenant** otherwise (PostgreSQL, SQLite, and MSSQL — which needs three-part `database.schema.table` naming). Results from every server are merged with each aggregate's own operation, so you always get one combined result set.
+
+```js
+import Tenant from "velocious/build/src/tenants/tenant.js"
+
+const reservedByServer = await Tenant.aggregateAcross({
+  identifier: "projectTenant",
+  // Optional: pass explicit `tenants: [...]` descriptors, or omit to aggregate every tenant the
+  // provider's listTenants returns. `filter` narrows either source.
+  filter: (tenant) => tenant.tenantState === "migrated",
+  keyColumns: ["docker_server_id"],
+  // "SUM" is shorthand for {op: "SUM", column: "reserved"}; use {op: "COUNT", column: "*"} for COUNT(*).
+  aggregates: {reserved: "SUM", buildCount: {op: "COUNT", column: "*"}},
+  // One per-tenant subquery. `table(name)` returns the correctly-qualified table for the current
+  // execution path (a `database`.`table` identifier inside a cross-database UNION, or the plain
+  // table name when the tenant runs on its own connection). `quote(value)` / `quote.list(values)`
+  // quote values for the active connection.
+  subquery: ({quote, table}) => `
+    SELECT docker_server_id AS docker_server_id, COALESCE(estimated_cpu_usage, 0) AS reserved
+    FROM ${table("builds")}
+    WHERE status IN (${quote.list(["assigned", "running"])})
+  `
+})
+// => [{docker_server_id: "server-1", reserved: 650, buildCount: 3}, ...] merged across every tenant.
+```
+
+The subquery must select every `keyColumns` entry plus every aggregate source column. Supported operations are `SUM`, `COUNT`, `MAX`, and `MIN` — each is associative, so per-server results merge correctly whether they came from one `UNION ALL` or several per-tenant queries. A `NULL` aggregate value (an empty tenant's `SUM`/`MAX`/`MIN`) is treated as "no contribution" while merging; a key contributed to by no tenant comes back `NULL`. Exact integer aggregates that exceed JavaScript's safe-integer range throw rather than silently rounding. Omit `keyColumns` for a single grand-total row. Whether a driver can span databases in one statement is exposed by `connection.supportsCrossDatabaseReferences()`.
+
 The same provider list is used when a non-tenant model destroys with `dependent: "restrict"` relationships pointing at tenant-switched child models. Velocious counts the relationship inside each tenant context and blocks the parent destroy if any tenant has dependent rows. This keeps application code from duplicating tenant scans just to avoid foreign-key failures at delete time.
 
 If lifecycle commands need to include tenants whose databases are not readable yet, add `listRestrictTenants`. Dependent restrict checks use `listRestrictTenants` when present and otherwise fall back to `listTenants`.

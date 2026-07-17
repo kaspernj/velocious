@@ -824,6 +824,19 @@ export default class VelociousDatabaseDriversBase {
   supportsInsertIntoReturning() { return false }
 
   /**
+   * Whether a single connection can reference tables in another database on the same server via a
+   * two-part `database`.`table` identifier. When true, a query spanning several databases on this
+   * server can be expressed as one statement (a cross-tenant `UNION ALL`); when false, each database
+   * is queried on its own connection and the results merged in the caller. Only MySQL/MariaDB return
+   * true: PostgreSQL (one database per connection) and SQLite (one attached file per connection)
+   * cannot, and MSSQL is excluded because it reads a two-part name as `schema.table` (cross-database
+   * access needs a three-part `database.schema.table`), so it stays on the always-correct fan-out
+   * path. Consumed by `Tenant.aggregateAcross`.
+   * @returns {boolean} - Whether two-part cross-database references are supported.
+   */
+  supportsCrossDatabaseReferences() { return false }
+
+  /**
    * Runs table exists.
    * @param {string} tableName - Table name.
    * @returns {Promise<boolean>} - Resolves with Whether table exists.

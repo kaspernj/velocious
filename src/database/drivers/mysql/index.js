@@ -375,6 +375,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    */
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
   supportsDefaultPrimaryKeyUUID() { return false }
+  supportsCrossDatabaseReferences() { return true }
 
   /**
    * Runs escape.
