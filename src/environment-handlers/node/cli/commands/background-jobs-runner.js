@@ -19,6 +19,9 @@ export default class BackgroundJobsRunnerCommand extends BaseCommand {
     const decoded = Buffer.from(payload, "base64").toString("utf8")
     const jobPayload = JSON.parse(decoded)
 
+    // Name the process after the job so `ps`/`top` show which jobs are running.
+    process.title = `velocious job-runner: ${jobPayload.jobName}`
+
     await runJobPayload(jobPayload, {closeConnections: false})
     process.exit(0)
   }
