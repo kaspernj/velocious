@@ -51,6 +51,7 @@ export default class BackgroundJobsStore {
     this.databaseIdentifier = databaseIdentifier
     this.logger = new Logger(this)
     this._readyPromise = null
+    this._queueConcurrencyReconciled = false
   }
 
   /**
@@ -101,8 +102,26 @@ export default class BackgroundJobsStore {
     const argsJson = JSON.stringify(args || [])
     const queue = this._normalizeQueue(options)
     const concurrency = this._resolveConcurrency(options, queue)
+    /** @type {string} */
+    let resultJobId = jobId
 
     await this._withDb(async (db) => {
+      if (options?.deduplicateWhileQueued && concurrency?.concurrencyKey) {
+        const existing = await db
+          .newQuery()
+          .from(JOBS_TABLE)
+          .select("id")
+          .where({status: "queued", concurrency_key: concurrency.concurrencyKey})
+          .limit(1)
+          .results()
+
+        if (existing[0]) {
+          resultJobId = String(/** @type {Record<string, ?>} */ (existing[0]).id)
+
+          return
+        }
+      }
+
       if (concurrency) {
         if (concurrency.queueDerived) {
           await this._ensureQueueConcurrencyKey(db, concurrency)
@@ -130,7 +149,7 @@ export default class BackgroundJobsStore {
       })
     })
 
-    return jobId
+    return resultJobId
   }
 
   /**
@@ -648,6 +667,7 @@ export default class BackgroundJobsStore {
       if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
         await this._ensureJobsTableColumns(db)
         await this._ensureConcurrencyTable(db)
+        await this._reconcileQueueConcurrency(db)
         await this._reconcileConcurrency(db)
         return
       }
@@ -655,6 +675,7 @@ export default class BackgroundJobsStore {
       await this._applyMigrations(db)
       await this._ensureJobsTableColumns(db)
       await this._ensureConcurrencyTable(db)
+      await this._reconcileQueueConcurrency(db)
       await this._reconcileConcurrency(db)
 
       if (alreadyApplied) return
@@ -834,16 +855,15 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when ensured.
    */
   async _ensureQueueColumn(db) {
-    const table = await db.getTableByNameOrFail(JOBS_TABLE)
-
-    if (await table.getColumnByName("queue")) return
-
     const lockName = `${MIGRATION_SCOPE}:queue_column`
     const acquired = await db.acquireAdvisoryLock(lockName)
 
     if (!acquired) throw new Error("Failed to acquire background jobs queue schema lock")
 
     try {
+      // SQL Server schema reads can deadlock with a concurrent ALTER TABLE, so
+      // acquire the lock before inspecting the column rather than only
+      // protecting the mutation (mirrors the concurrency-column migration).
       db.clearSchemaCache()
       const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
 
@@ -1101,6 +1121,9 @@ export default class BackgroundJobsStore {
     if (typeof key !== "string" || key.length === 0 || !Number.isInteger(cap) || Number(cap) <= 0) {
       throw new Error("background job concurrencyKey and maxConcurrency must be paired; concurrencyKey must be non-empty and maxConcurrency must be a positive integer")
     }
+    if (key.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX)) {
+      throw new Error(`background job concurrencyKey must not start with the reserved "${QUEUE_CONCURRENCY_KEY_PREFIX}" prefix, which is reserved for queue-derived concurrency caps`)
+    }
     return {concurrencyKey: key, maxConcurrency: Number(cap)}
   }
 
@@ -1275,6 +1298,65 @@ export default class BackgroundJobsStore {
       `SELECT COUNT(*) FROM ${jobsTable} WHERE ${jobsTable}.${db.quoteColumn("status")} = ${db.quote("handed_off")} AND ` +
       `${jobsTable}.${db.quoteColumn("concurrency_key")} = ${concurrencyTable}.${db.quoteColumn("concurrency_key")})`
     )
+  }
+
+  /**
+   * Reconciles queue-derived concurrency with the current configuration, once
+   * per process. Enqueue only consults config for new jobs, so a cap added,
+   * removed, or changed while a backlog exists otherwise leaves persisted rows
+   * stale: pre-cap jobs keep a null key and bypass the cap, post-removal jobs
+   * stay capped under a now-unconfigured key, and a changed numeric cap stays
+   * stale until the next enqueue. Bring the durable state in line with config:
+   * sync each configured queue's stored cap, adopt not-yet-keyed non-terminal
+   * jobs onto their queue key, and release non-terminal jobs from queue keys
+   * whose queue is no longer capped. Runs before {@link _reconcileConcurrency}
+   * so the rebuilt active counts reflect the adopted/released keys.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when reconciled.
+   */
+  async _reconcileQueueConcurrency(db) {
+    if (this._queueConcurrencyReconciled) return
+    if (!(await db.tableExists(CONCURRENCY_TABLE))) return
+
+    const queuesConfig = this.configuration.getBackgroundJobsConfig().queues || {}
+    const jobsTable = db.quoteTable(JOBS_TABLE)
+    const keyColumn = db.quoteColumn("concurrency_key")
+    const capColumn = db.quoteColumn("max_concurrency")
+    const queueColumn = db.quoteColumn("queue")
+    const nonTerminal = `${db.quoteColumn("status")} IN (${db.quote("queued")}, ${db.quote("handed_off")})`
+    /** @type {Set<string>} */
+    const cappedQueues = new Set()
+
+    for (const queue of Object.keys(queuesConfig)) {
+      const cap = this._queueMaxConcurrency(queue)
+
+      if (cap === null) continue
+
+      cappedQueues.add(queue)
+      const concurrencyKey = `${QUEUE_CONCURRENCY_KEY_PREFIX}${queue}`
+
+      await this._ensureQueueConcurrencyKey(db, {concurrencyKey, maxConcurrency: cap})
+      await db.query(
+        `UPDATE ${jobsTable} SET ${keyColumn} = ${db.quote(concurrencyKey)}, ${capColumn} = ${Number(cap)} ` +
+        `WHERE ${queueColumn} = ${db.quote(queue)} AND ${keyColumn} IS NULL AND ${nonTerminal}`
+      )
+    }
+
+    const concurrencyRows = await db.newQuery().from(CONCURRENCY_TABLE).select("concurrency_key").results()
+
+    for (const row of concurrencyRows) {
+      const concurrencyKey = String(/** @type {Record<string, ?>} */ (row).concurrency_key)
+
+      if (!concurrencyKey.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX)) continue
+      if (cappedQueues.has(concurrencyKey.slice(QUEUE_CONCURRENCY_KEY_PREFIX.length))) continue
+
+      await db.query(
+        `UPDATE ${jobsTable} SET ${keyColumn} = NULL, ${capColumn} = NULL ` +
+        `WHERE ${keyColumn} = ${db.quote(concurrencyKey)} AND ${nonTerminal}`
+      )
+    }
+
+    this._queueConcurrencyReconciled = true
   }
 
   /**

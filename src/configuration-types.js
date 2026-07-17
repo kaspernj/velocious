@@ -194,8 +194,17 @@
  *   jobs older than this many ms. `null` or `<= 0` disables (keeps them for
  *   debugging). Default: `2592000000` (30 days).
  * @property {number} [batchSize] - Rows deleted per batch. Default: `1000`.
- * @property {number} [sweepIntervalMs] - How often the main process runs the
- *   retention sweep. Default: `3600000` (1 hour).
+ * @property {number} [sweepIntervalMs] - How often the retention sweep runs.
+ *   Default: `3600000` (1 hour).
+ */
+/**
+ * Fully-resolved retention config as returned by `getBackgroundJobsConfig()`
+ * (every field defaulted), as opposed to the partial user-provided input.
+ * @typedef {object} ResolvedBackgroundJobsRetentionConfiguration
+ * @property {number | null} completedTtlMs - Resolved completed-job TTL in ms (`null` disables).
+ * @property {number | null} failedTtlMs - Resolved failed/orphaned TTL in ms (`null` disables).
+ * @property {number} batchSize - Resolved delete batch size.
+ * @property {number} sweepIntervalMs - Resolved sweep interval in ms.
  */
 
 /**

@@ -5,6 +5,7 @@ import JsonSocket from "./json-socket.js"
 import BackgroundJobsScheduler from "./scheduler.js"
 import BackgroundJobsStore from "./store.js"
 import Logger from "../logger.js"
+import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
 
 /**
  * Channel used by `background-jobs-main` to coordinate dispatch wake-ups
@@ -101,10 +102,6 @@ export default class BackgroundJobsMain {
     this._orphanTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {ReturnType<typeof setTimeout> | undefined} */
-    this._retentionTimer = undefined
-    /**
-     * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setInterval> | undefined} */
     this._workerStaleTimer = undefined
     /**
@@ -158,10 +155,6 @@ export default class BackgroundJobsMain {
         void this._sweepOrphans()
       }, 60000)
 
-      this._retentionTimer = setInterval(() => {
-        void this._sweepRetention()
-      }, this.retention.sweepIntervalMs)
-
       this._workerStaleTimer = setInterval(() => {
         void this._sweepStaleWorkers()
       }, this.workerLivenessSweepMs)
@@ -172,13 +165,26 @@ export default class BackgroundJobsMain {
           await this.store.enqueue({
             jobName: jobClass.jobName(),
             args,
-            options
+            // Fold in the job class's static `queue` (as performLater* do) so a
+            // scheduled job with `static queue = "..."` lands on its queue and
+            // honors the configured cap without every schedule repeating it.
+            options: jobClass._withQueue(options)
           })
           this._notifyEnqueued()
           await this._drain()
         }
       })
       await this.scheduler.start()
+
+      // Retention pruning runs as an ordinary scheduled job on the normal
+      // scheduler (so it is visible in the job tables and dispatched to a
+      // worker), rather than a hidden in-process timer. Skipped when retention
+      // is disabled. The scheduler owns the timer, so scheduler.stop() clears it.
+      const retentionSchedule = PruneTerminalBackgroundJobsJob.scheduleConfiguration(this.retention)
+
+      if (retentionSchedule) {
+        this.scheduler.scheduleJob({jobConfiguration: retentionSchedule, jobKey: "velociousPruneTerminalBackgroundJobs"})
+      }
 
       // Startup catch-up: drain anything that was waiting before this
       // process came up. In beacon mode this is also the safety net for
@@ -224,13 +230,11 @@ export default class BackgroundJobsMain {
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
-    if (this._retentionTimer) clearInterval(this._retentionTimer)
     if (this._workerStaleTimer) clearInterval(this._workerStaleTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
     this._orphanTimer = undefined
-    this._retentionTimer = undefined
     this._workerStaleTimer = undefined
   }
 
@@ -1165,26 +1169,6 @@ export default class BackgroundJobsMain {
       }
 
       await this._handleWorkerSocketClosed(worker)
-    }
-  }
-
-  /**
-   * Deletes terminal job rows past their retention window so the jobs table
-   * does not grow unbounded. Runs on its own interval; failures are logged and
-   * retried on the next tick.
-   * @returns {Promise<void>} - Resolves after one retention sweep.
-   */
-  async _sweepRetention() {
-    try {
-      const deleted = await this.store.pruneTerminalJobs({
-        completedTtlMs: this.retention.completedTtlMs,
-        failedTtlMs: this.retention.failedTtlMs,
-        batchSize: this.retention.batchSize
-      })
-
-      if (deleted > 0) this.logger.warn(() => ["Pruned terminal background jobs", deleted])
-    } catch (error) {
-      this.logger.error(() => ["Failed to prune terminal jobs:", error])
     }
   }
 }
