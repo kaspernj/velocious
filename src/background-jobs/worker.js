@@ -307,13 +307,6 @@ export default class BackgroundJobsWorker {
 
       try {
         this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
-
-        // Safety net: re-announce current spare capacity every heartbeat so a
-        // single dropped "ready" message can't leave the main believing this
-        // worker is full until its next completion (which may never come once it
-        // has gone idle). `_sendReadyIfRunning` sends nothing when genuinely at
-        // capacity, and the main re-adds a ready worker idempotently.
-        this._sendReadyIfRunning()
       } catch {
         // Socket is closing/closed; the close handler drives reconnect.
       }
