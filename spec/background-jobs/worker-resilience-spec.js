@@ -106,4 +106,59 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
       await main.stop()
     }
   })
+
+  it("re-announces forked readiness on every completion, not just the cap-1 edge", async () => {
+    const worker = new BackgroundJobsWorker({maxConcurrentForkedJobs: 2})
+    /** @type {Array<{type: string, acceptsForked?: boolean}>} */
+    const sent = []
+
+    worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {unknown} */ ({
+      send: (/** @type {{type: string, acceptsForked?: boolean}} */ message) => sent.push(message)
+    }))
+
+    /** @type {() => void} */
+    let resolveFirst = () => {}
+    /** @type {() => void} */
+    let resolveSecond = () => {}
+    const first = new Promise((resolve) => { resolveFirst = resolve })
+    const second = new Promise((resolve) => { resolveSecond = resolve })
+
+    // Fill both forked slots to capacity.
+    worker._trackProcessJob(first)
+    worker._trackProcessJob(second)
+
+    // Ignore the messages emitted while filling up; assert only on what the
+    // worker announces as slots free again.
+    sent.length = 0
+
+    resolveFirst()
+    resolveSecond()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const forkedReady = sent.filter((message) => message.type === "ready" && message.acceptsForked === true)
+
+    // The pre-fix knife-edge (`size === cap - 1`) announced readiness only on the
+    // first completion; the second freed slot went silent and could leave the
+    // worker out of the main's ready set — wedging dispatch. Both completions
+    // must now re-announce.
+    expect(forkedReady.length).toEqual(2)
+  })
+
+  it("re-announces spare capacity on each heartbeat as a wedge safety net", async () => {
+    const worker = new BackgroundJobsWorker({heartbeatIntervalMs: 5})
+    /** @type {Array<{type: string, acceptsForked?: boolean}>} */
+    const sent = []
+
+    worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {unknown} */ ({
+      send: (/** @type {{type: string, acceptsForked?: boolean}} */ message) => sent.push(message)
+    }))
+    worker._startHeartbeat()
+
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    worker._stopHeartbeat()
+
+    // An idle worker with spare capacity must keep telling the main it is ready,
+    // so a single dropped "ready" can't wedge dispatch until the next completion.
+    expect(sent.some((message) => message.type === "ready" && message.acceptsForked === true)).toEqual(true)
+  })
 })

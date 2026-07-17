@@ -307,6 +307,13 @@ export default class BackgroundJobsWorker {
 
       try {
         this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
+
+        // Safety net: re-announce current spare capacity every heartbeat so a
+        // single dropped "ready" message can't leave the main believing this
+        // worker is full until its next completion (which may never come once it
+        // has gone idle). `_sendReadyIfRunning` sends nothing when genuinely at
+        // capacity, and the main re-adds a ready worker idempotently.
+        this._sendReadyIfRunning()
       } catch {
         // Socket is closing/closed; the close handler drives reconnect.
       }
@@ -386,9 +393,9 @@ export default class BackgroundJobsWorker {
     inflight = this._runInlineJobAndReport(payload).finally(() => {
       this.inflightInlineJobs.delete(inflight)
 
-      if (!this.shouldStop && this.inflightInlineJobs.size === this.maxConcurrentInlineJobs - 1) {
-        this._sendReadyIfRunning()
-      }
+      // Re-announce on every completion below cap, not just the cap→cap-1 edge —
+      // see _trackProcessJob for why the knife-edge condition silently wedges.
+      if (!this.shouldStop) this._sendReadyIfRunning()
     })
 
     this.inflightInlineJobs.add(inflight)
@@ -439,9 +446,16 @@ export default class BackgroundJobsWorker {
     inflight = processJob.finally(() => {
       this.inflightProcessJobs.delete(inflight)
 
-      if (!this.shouldStop && this.inflightProcessJobs.size === this.maxConcurrentForkedJobs - 1) {
-        this._sendReadyIfRunning()
-      }
+      // Re-announce readiness on EVERY completion that leaves us below cap — not
+      // just the single cap→cap-1 edge. The main removes a worker from its ready
+      // set on each dispatch (`_drainOnce`) and only re-adds it on a fresh
+      // "ready"; gating the re-announce on one knife-edge transition means a
+      // single missed or lost signal leaves the worker out of the ready set and
+      // wedges dispatch cluster-wide. This was the silent-freeze root cause.
+      // `_sendReadyIfRunning` self-guards (it sends nothing when the worker is
+      // genuinely at capacity), so re-announcing on every freed slot is safe and
+      // idempotent on the main.
+      if (!this.shouldStop) this._sendReadyIfRunning()
     })
 
     this.inflightProcessJobs.add(inflight)
