@@ -31,6 +31,13 @@ export default class JsonSocket extends EventEmitter {
      * @type {boolean} */
     this.acceptsInlineJobs = true
     /**
+     * Whether this worker advertised heartbeat support in its hello. Only
+     * heartbeat-capable workers are subject to the main's stale-liveness
+     * eviction; a legacy worker (e.g. mid rolling deploy) is exempt so its
+     * active leases are not released while it is still running them.
+     * @type {boolean} */
+    this.supportsHeartbeat = false
+    /**
      * Last time (ms) the main saw any message from this worker socket; used by
      * the main's liveness sweep to drop a wedged/silent worker.
      * @type {number | undefined} */

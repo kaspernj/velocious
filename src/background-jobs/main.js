@@ -414,6 +414,7 @@ export default class BackgroundJobsMain {
     if (message.role === "worker") {
       jsonSocket.workerId = message.workerId
       jsonSocket.supportsHandoffIdReporting = message.supportsHandoffIdReporting === true
+      jsonSocket.supportsHeartbeat = message.supportsHeartbeat === true
       jsonSocket.lastSeenAt = Date.now()
       this.workers.add(jsonSocket)
       this.workerHandoffs.set(jsonSocket, new Map())
@@ -1143,6 +1144,12 @@ export default class BackgroundJobsMain {
     const stale = []
 
     for (const worker of this.workers) {
+      // Only evict heartbeat-capable workers. A legacy worker (e.g. one from the
+      // previous release during a rolling deploy) never heartbeats, so evicting
+      // it on silence would wrongly release the leases of a job it is still
+      // running. Its disconnect is still handled by the socket `close` path.
+      if (!worker.supportsHeartbeat) continue
+
       const lastSeenAt = typeof worker.lastSeenAt === "number" ? worker.lastSeenAt : 0
 
       if (lastSeenAt <= cutoff) stale.push(worker)

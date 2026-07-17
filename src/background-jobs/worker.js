@@ -14,13 +14,6 @@ const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
 /** How often the worker sends a liveness heartbeat to the main. */
 const HEARTBEAT_INTERVAL_MS = 15000
-/**
- * Bound on how long the worker retries reporting a job result to the main. An
- * unbounded retry (the previous behavior) would block a forked child's slot
- * from being released when the main was unreachable, leaking slots until the
- * worker stopped accepting jobs entirely.
- */
-const REPORT_MAX_DURATION_MS = 30000
 /** TCP keepalive so a half-open connection to the main surfaces as a close. */
 const SOCKET_KEEPALIVE_MS = 10000
 /**
@@ -39,9 +32,8 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
-   * @param {number} [args.reportMaxDurationMs] - Override the max time spent retrying a job-result report before giving up (default 30000ms).
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs, heartbeatIntervalMs, reportMaxDurationMs} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs, heartbeatIntervalMs} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -90,13 +82,18 @@ export default class BackgroundJobsWorker {
     this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
       ? heartbeatIntervalMs
       : HEARTBEAT_INTERVAL_MS
-    this.reportMaxDurationMs = typeof reportMaxDurationMs === "number" && reportMaxDurationMs >= 1
-      ? reportMaxDurationMs
-      : REPORT_MAX_DURATION_MS
     /**
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setInterval> | undefined} */
     this._heartbeatTimer = undefined
+    /**
+     * In-flight job-result reports to the main. Reporting is decoupled from the
+     * job/child slot (freeing the slot never waits on a report) and retried
+     * durably, so a transient main/DB outage cannot leak slots or lose a
+     * terminal report. Tracked so a graceful `stop()` can drain them.
+     * @type {Set<Promise<void>>}
+     */
+    this.inflightReports = new Set()
     /**
      * Narrows the runtime value to the documented type.
      * @type {JsonSocket | undefined} */
@@ -192,6 +189,9 @@ export default class BackgroundJobsWorker {
     await this._drainInflight(this.inflightInlineJobs, timeoutMs)
     await this._drainInflight(this.inflightProcessJobs, timeoutMs)
     await this._terminateProcessChildren()
+    // Give in-flight result reports (now decoupled from job slots) a bounded
+    // chance to land before the socket closes.
+    await this._drainInflight(this.inflightReports, timeoutMs)
 
     if (this.jsonSocket) this.jsonSocket.close()
     if (this.configuration) {
@@ -287,7 +287,7 @@ export default class BackgroundJobsWorker {
     })
 
     socket.on("connect", () => {
-      jsonSocket.send({type: "hello", role: "worker", supportsHandoffIdReporting: true, workerId: this.workerId})
+      jsonSocket.send({type: "hello", role: "worker", supportsHandoffIdReporting: true, supportsHeartbeat: true, workerId: this.workerId})
       this._sendReadyIfRunning()
       this._startHeartbeat()
     })
@@ -454,9 +454,12 @@ export default class BackgroundJobsWorker {
    * @returns {Promise<void>} - Resolves when complete (success or failure reported).
    */
   async _runInlineJobAndReport(payload) {
+    // Report in the background so freeing this inline slot never waits on the
+    // report. Reporting is durable (retried until it lands), so a transient
+    // main/DB outage neither wedges the slot nor loses the terminal result.
     try {
       await this._runJobInline(payload)
-      await this._reportJobResult({
+      this._reportJobResultInBackground({
         jobId: payload.id,
         status: "completed",
         handoffId: payload.handoffId,
@@ -464,7 +467,7 @@ export default class BackgroundJobsWorker {
         workerId: payload.workerId || this.workerId
       })
     } catch (error) {
-      await this._reportJobResult({
+      this._reportJobResultInBackground({
         jobId: payload.id,
         status: "failed",
         error,
@@ -582,10 +585,10 @@ export default class BackgroundJobsWorker {
   _waitForForkedChild({child, payload}) {
     return new Promise((resolve) => {
       child.once("exit", (code, signal) => {
-        void this._handleForkedChildExit({child, code, signal, payload, resolve})
+        this._handleForkedChildExit({child, code, signal, payload, resolve})
       })
       child.once("error", (error) => {
-        void this._handleForkedChildError({child, error, payload, resolve})
+        this._handleForkedChildError({child, error, payload, resolve})
       })
     })
   }
@@ -598,9 +601,9 @@ export default class BackgroundJobsWorker {
    * @param {keyof typeof import("node:os").constants.signals | null} args.signal - Exit signal.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
    * @param {(value: void) => void} args.resolve - Promise resolver.
-   * @returns {Promise<void>} - Resolves after failure is reported.
+   * @returns {void}
    */
-  async _handleForkedChildExit({child, code, signal, payload, resolve}) {
+  _handleForkedChildExit({child, code, signal, payload, resolve}) {
     this.inflightProcessChildren.delete(child)
 
     // Free the worker slot as soon as the child is gone — never gate it on the
@@ -610,7 +613,7 @@ export default class BackgroundJobsWorker {
 
     if (this._forkedChildExitedCleanly({code, signal})) return
 
-    await this._reportForkedChildFailure({
+    this._reportForkedChildFailure({
       payload,
       error: new Error(`Forked background job runner exited before reporting: code=${code} signal=${signal || "none"}`)
     })
@@ -634,14 +637,14 @@ export default class BackgroundJobsWorker {
    * @param {Error} args.error - Child process error.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
    * @param {(value: void) => void} args.resolve - Promise resolver.
-   * @returns {Promise<void>} - Resolves after failure is reported.
+   * @returns {void}
    */
-  async _handleForkedChildError({child, error, payload, resolve}) {
+  _handleForkedChildError({child, error, payload, resolve}) {
     this.inflightProcessChildren.delete(child)
     // Free the slot first (see _handleForkedChildExit) — reporting is best-effort.
     resolve(undefined)
     console.error("Background jobs forked runner error:", error)
-    await this._reportForkedChildFailure({payload, error})
+    this._reportForkedChildFailure({payload, error})
   }
 
   /**
@@ -656,7 +659,7 @@ export default class BackgroundJobsWorker {
       child.send({type: "job", payload})
     } catch (error) {
       child.kill("SIGTERM")
-      void this._reportForkedChildFailure({payload, error})
+      this._reportForkedChildFailure({payload, error})
     }
   }
 
@@ -665,10 +668,10 @@ export default class BackgroundJobsWorker {
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
    * @param {?} args.error - Error.
-   * @returns {Promise<void>} - Resolves after failure is reported.
+   * @returns {void}
    */
-  async _reportForkedChildFailure({payload, error}) {
-    await this._reportJobResult({
+  _reportForkedChildFailure({payload, error}) {
+    this._reportJobResultInBackground({
       jobId: payload.id,
       status: "failed",
       error,
@@ -738,9 +741,35 @@ export default class BackgroundJobsWorker {
     if (!this.statusReporter) return
 
     try {
-      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId, maxDurationMs: this.reportMaxDurationMs})
+      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }
+  }
+
+  /**
+   * Fires a durable job-result report without blocking the caller (so freeing a
+   * job/child slot never waits on the report). The report is tracked so a
+   * graceful `stop()` can drain in-flight reports before closing the socket.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {"completed" | "failed"} args.status - Status.
+   * @param {?} [args.error] - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {string} [args.workerId] - Worker id.
+   * @returns {void}
+   */
+  _reportJobResultInBackground({jobId, status, error, handoffId, handedOffAtMs, workerId}) {
+    /**
+     * Defines report.
+     * @type {Promise<void>} */
+    let report
+
+    report = this._reportJobResult({jobId, status, error, handoffId, handedOffAtMs, workerId}).finally(() => {
+      this.inflightReports.delete(report)
+    })
+
+    this.inflightReports.add(report)
   }
 }

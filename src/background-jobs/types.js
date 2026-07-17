@@ -65,7 +65,7 @@
  * @typedef {"worker" | "client" | "reporter"} BackgroundJobSocketRole
  */
 /**
- * @typedef {{type: "hello", role: BackgroundJobSocketRole, supportsHandoffIdReporting?: boolean, workerId?: string}} BackgroundJobHelloMessage
+ * @typedef {{type: "hello", role: BackgroundJobSocketRole, supportsHandoffIdReporting?: boolean, supportsHeartbeat?: boolean, workerId?: string}} BackgroundJobHelloMessage
  * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
  * @typedef {{type: "heartbeat", workerId?: string}} BackgroundJobHeartbeatMessage
