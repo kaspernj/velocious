@@ -1,0 +1,4 @@
+# Changelog
+
+- Fix background-job orphan recovery so it reclaims handed-off rows whose `handoff_id` is null (for example rows handed off by an older velocious before handoff-id fencing existed); the sweep previously fenced its update on `handoff_id = NULL`, which matches nothing, leaving such rows stranded in `handed_off` forever. Reclamation now fences on the selected handoff's `handed_off_at_ms`, which is null-safe and still race-safe against a job that is re-handed-off between selection and update.
+- Add background-job retention: the main process periodically prunes terminal rows (`completed` older than `retention.completedTtlMs`, default 7 days; `failed`/`orphaned` older than `retention.failedTtlMs`, default 30 days) in id-batched deletes so the jobs table does not grow unbounded. Configurable under `backgroundJobs.retention` (`completedTtlMs`, `failedTtlMs`, `batchSize`, `sweepIntervalMs`).

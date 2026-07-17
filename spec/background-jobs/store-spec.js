@@ -513,6 +513,135 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.orphanedAtMs).toBeGreaterThan(0)
   })
 
+  it("reclaims handed-off jobs whose handoff_id is null (older-velocious legacy rows)", async () => {
+    const store = await createClearedStore()
+
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, maxRetries: 1}})
+    await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    // Simulate a row handed off by an older velocious that never populated
+    // handoff_id. The old orphan sweep matched `{handoff_id: null}`, which
+    // renders as `handoff_id = NULL` and strands such rows forever.
+    await store._withDb(async (db) => {
+      await db.query(`UPDATE background_jobs SET handoff_id = NULL WHERE id = ${db.quote(jobId)}`)
+    })
+
+    const orphanedCount = await store.markOrphanedJobs({orphanedAfterMs: 0})
+    const job = await getJobOrFail({jobId, store})
+
+    expect(orphanedCount).toEqual(1)
+    expect(job.status).toEqual("queued")
+    expect(job.attempts).toEqual(1)
+    expect(job.orphanedAtMs).toBeGreaterThan(0)
+  })
+
+  it("fences orphan reclamation to the selected handoff timestamp so a re-handed-off lease is not clobbered", async () => {
+    // A handed-off row the sweep selected at an old cutoff-era timestamp.
+    const rawRow = {
+      id: "stranded-1",
+      job_name: "TestJob",
+      args_json: "[]",
+      execution_mode: "forked",
+      forked: true,
+      max_retries: 10,
+      attempts: 0,
+      status: "handed_off",
+      scheduled_at_ms: 1,
+      created_at_ms: 1,
+      handed_off_at_ms: 1000,
+      handoff_id: null,
+      worker_id: "dead-worker",
+      completed_at_ms: null,
+      failed_at_ms: null,
+      orphaned_at_ms: null,
+      last_error: null,
+      concurrency_key: null,
+      max_concurrency: null,
+      queue: "default"
+    }
+    let capturedConditions = null
+    let releaseCalls = 0
+    const db = {
+      newQuery: () => ({from: () => ({where: () => ({where: () => ({results: async () => [rawRow]})})})}),
+      updateSql: (/** @type {{conditions: Record<string, ?>}} */ args) => {
+        capturedConditions = args.conditions
+
+        return "UPDATE background_jobs SET status = 'orphaned' WHERE fenced"
+      },
+      // Simulate the row having been re-handed-off after the SELECT: the stale
+      // cutoff-era timestamp fence now matches no rows.
+      affectedRows: async () => 0,
+      query: async (/** @type {string} */ sql) => {
+        if (sql.includes("active_count - 1")) releaseCalls += 1
+
+        return []
+      },
+      quote: (/** @type {?} */ value) => (value === null ? "NULL" : `'${value}'`),
+      quoteColumn: (/** @type {string} */ value) => value,
+      quoteTable: (/** @type {string} */ value) => value
+    }
+    const scriptedDb = /** @type {import("../../src/database/drivers/base.js").default} */ (db)
+    const store = new ScriptedBackgroundJobsStore({db: scriptedDb, job: /** @type {?} */ (rawRow)})
+
+    const count = await store.markOrphanedJobs({orphanedAfterMs: 0})
+
+    expect(count).toEqual(0)
+    expect(capturedConditions).toEqual({id: "stranded-1", status: "handed_off", handed_off_at_ms: 1000})
+    expect(releaseCalls).toEqual(0)
+  })
+
+  it("prunes completed rows past the retention window and keeps recent and non-terminal rows", async () => {
+    const store = await createClearedStore()
+
+    const oldCompletedId = await store.enqueue({jobName: "TestJob", args: ["old"], options: {forked: false}})
+    const oldHandoff = await store.markHandedOff({jobId: oldCompletedId, workerId: "w"})
+    if (!oldHandoff) throw new Error("Expected the old job to be handed off")
+    await store.markCompleted({jobId: oldCompletedId, workerId: "w", ...oldHandoff})
+
+    const recentCompletedId = await store.enqueue({jobName: "TestJob", args: ["recent"], options: {forked: false}})
+    const recentHandoff = await store.markHandedOff({jobId: recentCompletedId, workerId: "w"})
+    if (!recentHandoff) throw new Error("Expected the recent job to be handed off")
+    await store.markCompleted({jobId: recentCompletedId, workerId: "w", ...recentHandoff})
+
+    const queuedId = await store.enqueue({jobName: "TestJob", args: ["queued"], options: {forked: false}})
+
+    // Age the old row's completion 10 days into the past.
+    await store._withDb(async (db) => {
+      await db.query(`UPDATE background_jobs SET completed_at_ms = ${db.quote(Date.now() - 10 * 24 * 60 * 60 * 1000)} WHERE id = ${db.quote(oldCompletedId)}`)
+    })
+
+    const deleted = await store.pruneTerminalJobs({completedTtlMs: 7 * 24 * 60 * 60 * 1000, batchSize: 100})
+
+    expect(deleted).toEqual(1)
+    expect(await store.getJob(oldCompletedId)).toEqual(null)
+    expect((await getJobOrFail({jobId: recentCompletedId, store})).status).toEqual("completed")
+    expect((await getJobOrFail({jobId: queuedId, store})).status).toEqual("queued")
+  })
+
+  it("prunes failed and orphaned rows past the failed retention window", async () => {
+    const store = await createClearedStore()
+
+    const orphaned = await createOrphanedJob({maxRetries: 0, store})
+
+    const failedId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, maxRetries: 0}})
+    const failedHandoff = await store.markHandedOff({jobId: failedId, workerId: "w"})
+    if (!failedHandoff) throw new Error("Expected the failing job to be handed off")
+    await store.markFailed({jobId: failedId, error: "boom", workerId: "w", ...failedHandoff})
+
+    // Age both terminal timestamps 60 days into the past.
+    await store._withDb(async (db) => {
+      const past = db.quote(Date.now() - 60 * 24 * 60 * 60 * 1000)
+      await db.query(`UPDATE background_jobs SET orphaned_at_ms = ${past} WHERE id = ${db.quote(orphaned.id)}`)
+      await db.query(`UPDATE background_jobs SET failed_at_ms = ${past} WHERE id = ${db.quote(failedId)}`)
+    })
+
+    const deleted = await store.pruneTerminalJobs({failedTtlMs: 30 * 24 * 60 * 60 * 1000, batchSize: 100})
+
+    expect(deleted).toEqual(2)
+    expect(await store.getJob(orphaned.id)).toEqual(null)
+    expect(await store.getJob(failedId)).toEqual(null)
+  })
+
   it("returns the soonest future-scheduled queued job from nextScheduledJob", async () => {
     const store = await createClearedStore()
 

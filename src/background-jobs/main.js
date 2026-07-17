@@ -54,6 +54,7 @@ export default class BackgroundJobsMain {
     this.port = typeof port === "number" ? port : config.port
     this.dispatchStrategy = config.dispatchStrategy
     this.pollIntervalMs = config.pollIntervalMs
+    this.retention = config.retention
     this.store = new BackgroundJobsStore({configuration, databaseIdentifier: config.databaseIdentifier})
     this.logger = new Logger(this)
     /**
@@ -88,6 +89,10 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setTimeout> | undefined} */
     this._orphanTimer = undefined
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {ReturnType<typeof setTimeout> | undefined} */
+    this._retentionTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
      * @type {BackgroundJobsScheduler | undefined} */
@@ -138,6 +143,10 @@ export default class BackgroundJobsMain {
       this._orphanTimer = setInterval(() => {
         void this._sweepOrphans()
       }, 60000)
+
+      this._retentionTimer = setInterval(() => {
+        void this._sweepRetention()
+      }, this.retention.sweepIntervalMs)
 
       this.scheduler = new BackgroundJobsScheduler({
         configuration: this.configuration,
@@ -197,10 +206,12 @@ export default class BackgroundJobsMain {
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
+    if (this._retentionTimer) clearInterval(this._retentionTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
     this._orphanTimer = undefined
+    this._retentionTimer = undefined
   }
 
   /**
@@ -1083,6 +1094,26 @@ export default class BackgroundJobsMain {
       }
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])
+    }
+  }
+
+  /**
+   * Deletes terminal job rows past their retention window so the jobs table
+   * does not grow unbounded. Runs on its own interval; failures are logged and
+   * retried on the next tick.
+   * @returns {Promise<void>} - Resolves after one retention sweep.
+   */
+  async _sweepRetention() {
+    try {
+      const deleted = await this.store.pruneTerminalJobs({
+        completedTtlMs: this.retention.completedTtlMs,
+        failedTtlMs: this.retention.failedTtlMs,
+        batchSize: this.retention.batchSize
+      })
+
+      if (deleted > 0) this.logger.warn(() => ["Pruned terminal background jobs", deleted])
+    } catch (error) {
+      this.logger.error(() => ["Failed to prune terminal jobs:", error])
     }
   }
 }

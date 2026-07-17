@@ -476,11 +476,25 @@ export default class BackgroundJobsStore {
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
 
+        // Fence the reclaim on the exact handoff this sweep selected, using its
+        // `handed_off_at_ms` rather than its `handoff_id`. Two reasons:
+        //   1. Null-safe. Some rows have a null `handoff_id` (handed off by an
+        //      older velocious before handoff-id fencing). `{handoff_id: null}`
+        //      renders as `handoff_id = NULL`, which matches nothing, so those
+        //      rows would be stranded in `handed_off` forever.
+        //   2. Race-safe. If the row is returned to the queue and re-handed-off
+        //      between the SELECT above and this update, it gets a fresh
+        //      `handed_off_at_ms` (always "now"), so this stale cutoff-era
+        //      timestamp no longer matches and we won't fail/orphan — or
+        //      wrongly release the concurrency reservation of — that new lease.
+        // `handed_off_at_ms` is always set on a handed-off row (and the SELECT
+        // required it `<= cutoff`), so it is a reliable null-safe lease pin.
         const orphanedJob = await this._applyFailure({
           db,
           job,
           error: "Job orphaned after timeout",
-          markOrphaned: true
+          markOrphaned: true,
+          conditions: {id: job.id, status: "handed_off", handed_off_at_ms: job.handedOffAtMs}
         })
 
         if (orphanedJob) orphanedCount += 1
@@ -488,6 +502,78 @@ export default class BackgroundJobsStore {
 
       return orphanedCount
     })
+  }
+
+  /**
+   * Deletes terminal job rows past their retention window so the jobs table
+   * does not grow unbounded (completed rows in particular accumulate forever
+   * otherwise). Batched by id — SELECT a page of ids, then
+   * `DELETE ... WHERE id IN (...)` — rather than `DELETE ... LIMIT`, which not
+   * every driver supports; each batch runs on its own connection so the sweep
+   * yields between batches instead of holding one long transaction.
+   * @param {object} [args] - Options.
+   * @param {number | null} [args.completedTtlMs] - Delete `completed` jobs whose `completed_at_ms` is older than this many ms. Falsy or `<= 0` disables completed pruning.
+   * @param {number | null} [args.failedTtlMs] - Delete terminal `failed`/`orphaned` jobs older than this many ms (by `failed_at_ms`/`orphaned_at_ms`). Falsy or `<= 0` disables.
+   * @param {number} [args.batchSize] - Max rows deleted per batch. Default `1000`.
+   * @returns {Promise<number>} - Total rows deleted.
+   */
+  async pruneTerminalJobs({completedTtlMs = null, failedTtlMs = null, batchSize = 1000} = {}) {
+    await this.ensureReady()
+
+    const now = Date.now()
+    const size = batchSize > 0 ? batchSize : 1000
+    let deleted = 0
+
+    if (completedTtlMs && completedTtlMs > 0) {
+      deleted += await this._pruneStatusBatches({status: "completed", column: "completed_at_ms", cutoff: now - completedTtlMs, batchSize: size})
+    }
+
+    if (failedTtlMs && failedTtlMs > 0) {
+      deleted += await this._pruneStatusBatches({status: "failed", column: "failed_at_ms", cutoff: now - failedTtlMs, batchSize: size})
+      deleted += await this._pruneStatusBatches({status: "orphaned", column: "orphaned_at_ms", cutoff: now - failedTtlMs, batchSize: size})
+    }
+
+    return deleted
+  }
+
+  /**
+   * Deletes rows of one terminal status older than a cutoff, batch by batch,
+   * until a page returns fewer than `batchSize` rows.
+   * @param {object} args - Options.
+   * @param {string} args.status - Terminal status to prune.
+   * @param {string} args.column - Timestamp column compared against the cutoff.
+   * @param {number} args.cutoff - Delete rows whose column value is `<= cutoff`.
+   * @param {number} args.batchSize - Max rows per batch.
+   * @returns {Promise<number>} - Rows deleted for this status.
+   */
+  async _pruneStatusBatches({status, column, cutoff, batchSize}) {
+    let deleted = 0
+
+    for (;;) {
+      const removed = await this._withDb(async (db) => {
+        const rows = await db
+          .newQuery()
+          .from(JOBS_TABLE)
+          .select("id")
+          .where({status})
+          .where(`${db.quoteColumn(column)} <= ${db.quote(cutoff)}`)
+          .limit(batchSize)
+          .results()
+
+        if (rows.length === 0) return 0
+
+        const ids = rows.map((/** @type {Record<string, ?>} */ row) => db.quote(String(row.id))).join(", ")
+
+        await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`)
+
+        return rows.length
+      })
+
+      deleted += removed
+      if (removed < batchSize) break
+    }
+
+    return deleted
   }
 
   /**
@@ -869,9 +955,10 @@ export default class BackgroundJobsStore {
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {?} args.error - Error.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
+   * @param {Record<string, ?>} [args.conditions] - Update fencing conditions. Defaults to the active-handoff lease match; the time-based orphan sweep overrides this with an id/status match so it can reclaim rows whose `handoff_id` is null (e.g. handed off by an older velocious before handoff-id fencing existed).
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the lease transition won.
    */
-  async _applyFailure({db, job, error, markOrphaned}) {
+  async _applyFailure({db, job, error, markOrphaned, conditions}) {
     const now = Date.now()
     const nextAttempt = (job.attempts || 0) + 1
     const maxRetries = this._normalizeMaxRetries(job.maxRetries)
@@ -890,7 +977,7 @@ export default class BackgroundJobsStore {
     const affectedRows = await this._updateAffectedRows(db, {
       tableName: JOBS_TABLE,
       data: update,
-      conditions: this._activeHandoffConditions(job)
+      conditions: conditions ?? this._activeHandoffConditions(job)
     })
 
     if (affectedRows !== 1) return null
