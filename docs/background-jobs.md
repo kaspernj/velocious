@@ -179,3 +179,34 @@ window, set this timeout shorter than that window so the worker reaps its proces
 runners itself before the supervisor's `SIGKILL` (which would orphan them). With
 the indefinite default, give the supervisor a graceful-stop window at least as
 long as your longest job instead.
+
+## Forked Job Timeout (hung-runner backstop)
+
+The shutdown drain above bounds how long *shutdown* waits, but it does not bound
+a single job's runtime. A genuinely-hung `"forked"` runner — stuck in a native
+call, a wedged socket read, a deadlock — never finishes, so it keeps its slot,
+its whole-app boot, and its database connections. That is especially costly
+while a retired release's worker drains after a deploy: with an indefinite drain
+(`VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`), one hung job pins that
+worker's resources until the process is killed by hand.
+
+`backgroundJobs.jobTimeoutMs` (config) or `VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS`
+(env, milliseconds) arms a per-runner wall-clock backstop. A forked job still
+running after the timeout is terminated — `SIGTERM`, then `SIGKILL` after the
+same reaping grace as shutdown — and reported `failed` with a timeout message.
+The runner's slot is freed on exit, so the worker (including a draining one) can
+always reach zero in-flight jobs and exit.
+
+```js
+backgroundJobs: {
+  // Kill and fail any forked runner still going after 90 minutes.
+  jobTimeoutMs: 90 * 60 * 1000
+}
+```
+
+This is a coarse safety net, not per-job tuning. It applies to every forked
+runner on the worker, so set it **well above** the longest legitimate forked job
+(build runners, large imports) — pick a ceiling that only a stuck runner would
+ever cross. Omit it, or set `null`/`<= 0`, to disable (the default), which keeps
+the prior unbounded behavior. `"inline"` jobs are not covered: they share the
+worker's process and cannot be killed without killing the worker.
