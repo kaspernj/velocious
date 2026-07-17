@@ -27,6 +27,9 @@ function resolveShutdownTimeoutMs() {
 
 export default class BackgroundJobsWorkerCommand extends BaseCommand {
   async execute() {
+    // Identify this process in `ps`/`top` instead of a generic "node" entry.
+    process.title = "velocious background-jobs-worker"
+
     const worker = new BackgroundJobsWorker({configuration: this.getConfiguration()})
     await worker.start()
 

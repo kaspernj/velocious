@@ -16,6 +16,10 @@ export default class BackgroundJobsRunnerCommand extends BaseCommand {
       process.once(signal, () => process.exit(0))
     }
 
+    // Base title; runJobPayload sets the per-job title (from the job class's
+    // `static processTitle`) for the duration of the job and restores this after.
+    process.title = "velocious background-jobs-runner"
+
     const decoded = Buffer.from(payload, "base64").toString("utf8")
     const jobPayload = JSON.parse(decoded)
 

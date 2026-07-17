@@ -2,6 +2,12 @@
 
 import runJobPayload from "./job-runner.js"
 
+// Name the process so `ps`/`top`/`htop` can identify forked job runners at a
+// glance instead of a wall of generic "node" entries. Updated to the specific
+// job name once one arrives (see runJobMessage), so operators can see exactly
+// which jobs are running, how many of each, and which are eating resources.
+process.title = "velocious background-jobs-runner"
+
 let finishing = false
 
 /**
@@ -51,6 +57,9 @@ async function runJobMessage(message) {
     throw new Error("Forked background job runner received invalid payload")
   }
 
+  // The per-job process title (and its restore) is set inside runJobPayload,
+  // which reads the job class's `static processTitle`. This process boots with
+  // the base "velocious background-jobs-runner" title set at module load above.
   await runJobPayload(message.payload, {closeConnections: false})
 }
 

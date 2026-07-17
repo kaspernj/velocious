@@ -3,6 +3,9 @@ import BackgroundJobsMain from "../../../../background-jobs/main.js"
 
 export default class BackgroundJobsMainCommand extends BaseCommand {
   async execute() {
+    // Identify this process in `ps`/`top` instead of a generic "node" entry.
+    process.title = "velocious background-jobs-main"
+
     const main = new BackgroundJobsMain({configuration: this.getConfiguration()})
     await main.start()
 

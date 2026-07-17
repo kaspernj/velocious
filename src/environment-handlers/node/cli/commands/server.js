@@ -133,6 +133,9 @@ export default class VelociousCliCommandsServer extends BaseCommand{
    * @returns {Promise<void>} - Starts the HTTP server and waits until it stops.
    */
   async execute() {
+    // Identify this process in `ps`/`top` instead of a generic "node" entry.
+    process.title = "velocious server"
+
     const parsedProcessArgs = this.args?.parsedProcessArgs || {}
     const configuration = this.getConfiguration()
     const httpServer = httpServerConfigFromParsedArgs(parsedProcessArgs, configuration.httpServer)

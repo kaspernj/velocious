@@ -80,6 +80,23 @@ Disconnect recovery above depends on the worker's control socket firing a `close
 
 Heartbeat interval, stale timeout, and sweep interval are overridable via the worker/main constructors for tests and tuning.
 
+## Process titles
+
+Every velocious process sets a descriptive `process.title`, so `ps`/`top`/`htop` identify it instead of showing a wall of generic `node` entries — essential for seeing which processes and jobs consume CPU/RAM in production:
+
+- The long-lived daemons are named `velocious background-jobs-main`, `velocious background-jobs-worker`, `velocious server`, and `velocious beacon`.
+- Each forked or spawned **job runner** is named after the job it is executing, so a single `ps aux` snapshot shows which jobs are live and how many runners each holds.
+
+By default a runner is titled `velocious job-runner: <JobName>`. A job class can declare a custom, human-readable title:
+
+```js
+export default class TranscodeMediaJob extends VelociousJob {
+  static processTitle = "velocious media transcoder"
+}
+```
+
+Velocious sets the job's title for the duration of the job and restores the runner's base title (`velocious background-jobs-runner`) in a `finally` when the job finishes, so a lingering or reused runner never misreports a completed job as still running. `ps aux`/`top` show the full title; only the 15-character `comm` column truncates.
+
 ## Failure Events
 
 `background-jobs-main` emits a `background-job-failed` error event after it accepts a worker failure report and records the updated job state. Duplicate or stale worker reports do not emit this event because they are rejected before the job row changes.
