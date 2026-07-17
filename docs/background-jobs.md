@@ -2,6 +2,14 @@
 
 Velocious background jobs are documented in the main README. This page covers behavior that applications usually need when operating background jobs in production.
 
+## Execution modes and pooled runners
+
+New enqueues default to `executionMode: "pooled"`. Each worker owns a local pool of warm Node child processes; a child runs one job at a time and is reused for sequential jobs. Completion still flows through the runner's durable status reporter, so the main process and database acknowledgement remain authoritative. Pooled capacity is advertised explicitly and is separate from inline and forked/spawned capacity. For rolling upgrades, pooled rows use the legacy-safe persisted `"forked"` vocabulary plus an upgraded-only marker: upgraded mains dispatch them as pooled, while an older main can deserialize and safely run them with its one-shot forked runner instead of wedging its queue drain.
+
+Set `backgroundJobs.pooledRunnerCount` (default `4`) to bound the per-worker pool. `pooledRunnerCount` and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. Invalid values fall back to their defaults. A runner is replaced after an acknowledged terminal report when it reaches `pooledRunnerMaxJobs` (default `100`), child-measured `pooledRunnerMaxRssBytes` (default `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` from child creation (default `3600000`, or one hour). Thresholds never interrupt a busy runner; they retire it before the next dispatch. Exited, unacknowledged, or unhealthy runners are retired and replaced lazily. A pooled slot remains occupied until the main/DB accepts or rejects the terminal report or the parent fallback report settles, preventing reuse while terminal state is unresolved. Graceful worker shutdown stops advertising capacity, drains current pooled jobs and reports, and then terminates every idle child within the existing shutdown bounds.
+
+Compatibility is explicit: `forked: true` means `"forked"`, `forked: false` means `"inline"`, and legacy persisted rows with `forked = true` remain forked after migration. Use `executionMode: "spawned"` only for the legacy detached CLI behavior.
+
 ## Durable concurrency limits
 
 Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `performLaterWithOptions`). The key is an opaque, non-empty string shared by jobs that use the same limit, and the cap is a positive integer. Omitting both preserves unlimited behavior. Once a key is registered, every enqueue for that key must use the same cap; a conflicting cap is rejected.
@@ -149,6 +157,7 @@ The mirrored `all-error` payload includes the same `error` and `context` plus `e
 
 When a `background-jobs-worker` receives `SIGTERM`/`SIGINT` it stops accepting new
 work, drains in-flight jobs, and exits. Out-of-process jobs include
+`executionMode: "pooled"` jobs, which run serially in reusable attached children,
 `executionMode: "forked"` jobs, which run in an attached `child_process.fork()`
 child, and `executionMode: "spawned"` jobs, which use the legacy spawned
 `background-jobs-runner` CLI process. On a graceful stop the worker waits for
@@ -172,7 +181,7 @@ The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIM
   and never interrupt a running job. Use this when jobs may run for a long time
   (e.g. builds) and a deploy must not cut them off.
 - a positive integer (milliseconds): finish in-flight jobs for up to that long,
-  then reap any forked or spawned runners still in flight.
+  then reap any pooled, forked, or spawned runners still in flight.
 
 When a process supervisor force-kills the worker after its own graceful-stop
 window, set this timeout shorter than that window so the worker reaps its process

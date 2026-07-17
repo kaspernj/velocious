@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * @typedef {"inline" | "forked" | "spawned"} BackgroundJobExecutionMode
+ * @typedef {"inline" | "forked" | "pooled" | "spawned"} BackgroundJobExecutionMode
  */
 /**
  * @typedef {object} BackgroundJobHandoff
@@ -10,8 +10,8 @@
  */
 /**
  * @typedef {object} BackgroundJobOptions
- * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"forked"`.
- * @property {boolean} [forked] - Compatibility alias: `false` maps to `"inline"` and `true` maps to `"forked"`.
+ * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"pooled"` (a warm, reused local runner process). `"forked"` runs the job in a fresh `child_process.fork()` child, `"spawned"` in a detached CLI runner, and `"inline"` inside the worker process.
+ * @property {boolean} [forked] - Compatibility alias: `false` maps to `"inline"` and `true` maps to `"forked"`. Omitting both `forked` and `executionMode` uses the default `"pooled"` mode.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
  * @property {string} [queue] - Queue name. Defaults to `"default"`. When the queue has a configured cap in `backgroundJobs.queues`, that cap is enforced cluster-wide.
  * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap. Overrides any queue-derived cap.
@@ -66,8 +66,8 @@
  * @typedef {"worker" | "client" | "reporter"} BackgroundJobSocketRole
  */
 /**
- * @typedef {{type: "hello", role: BackgroundJobSocketRole, supportsHandoffIdReporting?: boolean, supportsHeartbeat?: boolean, workerId?: string}} BackgroundJobHelloMessage
- * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
+ * @typedef {{type: "hello", role: BackgroundJobSocketRole, supportsHandoffIdReporting?: boolean, supportsHeartbeat?: boolean, supportsPooled?: boolean, workerId?: string}} BackgroundJobHelloMessage
+ * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsPooled?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
  * @typedef {{type: "heartbeat", workerId?: string}} BackgroundJobHeartbeatMessage
  * @typedef {{type: "enqueue", jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage

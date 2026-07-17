@@ -1268,11 +1268,19 @@ export default class VelociousConfiguration {
     const envDatabaseIdentifier = process.env.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
     const envMaxConcurrentForkedRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS
     const envMaxConcurrentRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS
+    const envPooledRunnerCountRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_COUNT
+    const envPooledRunnerMaxJobsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS
+    const envPooledRunnerMaxRssBytesRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_RSS_BYTES
+    const envPooledRunnerMaxLifetimeMsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS
     const envDispatchStrategy = process.env.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
     const envPollIntervalRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS
     const envPort = envPortRaw ? Number(envPortRaw) : undefined
     const envMaxConcurrentForked = envMaxConcurrentForkedRaw ? Number(envMaxConcurrentForkedRaw) : undefined
     const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
+    const envPooledRunnerCount = envPooledRunnerCountRaw ? Number(envPooledRunnerCountRaw) : undefined
+    const envPooledRunnerMaxJobs = envPooledRunnerMaxJobsRaw ? Number(envPooledRunnerMaxJobsRaw) : undefined
+    const envPooledRunnerMaxRssBytes = envPooledRunnerMaxRssBytesRaw ? Number(envPooledRunnerMaxRssBytesRaw) : undefined
+    const envPooledRunnerMaxLifetimeMs = envPooledRunnerMaxLifetimeMsRaw ? Number(envPooledRunnerMaxLifetimeMsRaw) : undefined
     const envPollInterval = envPollIntervalRaw ? Number(envPollIntervalRaw) : undefined
     const configured = this._backgroundJobs || {}
     const host = configured.host || envHost || "127.0.0.1"
@@ -1286,6 +1294,18 @@ export default class VelociousConfiguration {
     const maxConcurrentForkedJobs = typeof configured.maxConcurrentForkedJobs === "number" && configured.maxConcurrentForkedJobs >= 1
       ? configured.maxConcurrentForkedJobs
       : (typeof envMaxConcurrentForked === "number" && Number.isFinite(envMaxConcurrentForked) && envMaxConcurrentForked >= 1 ? envMaxConcurrentForked : 4)
+    const pooledRunnerCount = typeof configured.pooledRunnerCount === "number" && Number.isFinite(configured.pooledRunnerCount) && Number.isInteger(configured.pooledRunnerCount) && configured.pooledRunnerCount >= 1
+      ? configured.pooledRunnerCount
+      : (typeof envPooledRunnerCount === "number" && Number.isFinite(envPooledRunnerCount) && Number.isInteger(envPooledRunnerCount) && envPooledRunnerCount >= 1 ? envPooledRunnerCount : 4)
+    const pooledRunnerMaxJobs = typeof configured.pooledRunnerMaxJobs === "number" && Number.isFinite(configured.pooledRunnerMaxJobs) && Number.isInteger(configured.pooledRunnerMaxJobs) && configured.pooledRunnerMaxJobs >= 1
+      ? configured.pooledRunnerMaxJobs
+      : (typeof envPooledRunnerMaxJobs === "number" && Number.isFinite(envPooledRunnerMaxJobs) && Number.isInteger(envPooledRunnerMaxJobs) && envPooledRunnerMaxJobs >= 1 ? envPooledRunnerMaxJobs : 100)
+    const pooledRunnerMaxRssBytes = typeof configured.pooledRunnerMaxRssBytes === "number" && Number.isFinite(configured.pooledRunnerMaxRssBytes) && configured.pooledRunnerMaxRssBytes >= 1
+      ? configured.pooledRunnerMaxRssBytes
+      : (typeof envPooledRunnerMaxRssBytes === "number" && Number.isFinite(envPooledRunnerMaxRssBytes) && envPooledRunnerMaxRssBytes >= 1 ? envPooledRunnerMaxRssBytes : 512 * 1024 * 1024)
+    const pooledRunnerMaxLifetimeMs = typeof configured.pooledRunnerMaxLifetimeMs === "number" && Number.isFinite(configured.pooledRunnerMaxLifetimeMs) && configured.pooledRunnerMaxLifetimeMs >= 1
+      ? configured.pooledRunnerMaxLifetimeMs
+      : (typeof envPooledRunnerMaxLifetimeMs === "number" && Number.isFinite(envPooledRunnerMaxLifetimeMs) && envPooledRunnerMaxLifetimeMs >= 1 ? envPooledRunnerMaxLifetimeMs : 60 * 60 * 1000)
     const dispatchStrategyRaw = configured.dispatchStrategy || envDispatchStrategy
     const dispatchStrategy = dispatchStrategyRaw === "polling" ? "polling" : "beacon"
     const pollIntervalMs = typeof configured.pollIntervalMs === "number" && configured.pollIntervalMs >= 1
@@ -1308,7 +1328,7 @@ export default class VelociousConfiguration {
         : 60 * 60 * 1000
     }
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs, queues, retention}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, retention}
   }
 
   /**

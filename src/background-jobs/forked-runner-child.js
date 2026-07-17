@@ -1,12 +1,13 @@
 // @ts-check
 
 import runJobPayload from "./job-runner.js"
+import setRunnerProcessTitle from "./runner-process-title.js"
 
 // Name the process so `ps`/`top`/`htop` can identify forked job runners at a
 // glance instead of a wall of generic "node" entries. Updated to the specific
 // job name once one arrives (see runJobMessage), so operators can see exactly
 // which jobs are running, how many of each, and which are eating resources.
-process.title = "velocious background-jobs-runner"
+setRunnerProcessTitle()
 
 let finishing = false
 

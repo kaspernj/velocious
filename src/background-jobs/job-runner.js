@@ -6,6 +6,16 @@ import BackgroundJobsStatusReporter from "./status-reporter.js"
 
 const BEACON_READY_TIMEOUT_MS = 5000
 
+export class BackgroundJobPerformedFailure extends Error {
+  /**
+   * @param {Error} cause - A job perform error whose failed terminal report was acknowledged.
+   */
+  constructor(cause) {
+    super(cause.message, {cause})
+    this.name = "BackgroundJobPerformedFailure"
+  }
+}
+
 /**
  * Runs report beacon ready error.
  * @param {import("../configuration.js").default} configuration - Configuration.
@@ -96,11 +106,12 @@ export default async function runJobPayload(payload, {closeConnections = true} =
         await perform.apply(jobInstance, payload.args || [])
       })
     } catch (error) {
+      const performedError = error instanceof Error ? error : new Error(String(error))
       if (payload.id) {
         await reporter.reportWithRetry({
           jobId: payload.id,
           status: "failed",
-          error,
+          error: performedError,
           handoffId: payload.handoffId,
           workerId: payload.workerId,
           handedOffAtMs: payload.handedOffAtMs,
@@ -108,7 +119,7 @@ export default async function runJobPayload(payload, {closeConnections = true} =
         })
       }
 
-      throw error
+      throw new BackgroundJobPerformedFailure(performedError)
     }
 
     if (payload.id) {

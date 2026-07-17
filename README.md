@@ -1975,6 +1975,10 @@ export default new Configuration({
     databaseIdentifier: "default",
     maxConcurrentForkedJobs: 4,
     maxConcurrentInlineJobs: 4,
+    pooledRunnerCount: 4,
+    pooledRunnerMaxJobs: 100,
+    pooledRunnerMaxRssBytes: 536870912,
+    pooledRunnerMaxLifetimeMs: 3600000,
     dispatchStrategy: "beacon"
   }
 })
@@ -1988,6 +1992,10 @@ VELOCIOUS_BACKGROUND_JOBS_PORT=7331
 VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER=default
 VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS=4
 VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS=4
+VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_COUNT=4
+VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS=100
+VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_RSS_BYTES=536870912
+VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS=3600000
 VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
 VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
@@ -1996,6 +2004,8 @@ VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked or spawned child runners still running, so they are not orphaned across a deploy. The default waits for jobs to finish and never interrupts a running job; set a positive number of milliseconds for a finite cap (keep it shorter than your process supervisor's graceful-stop window so the worker reaps its own runners first). See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-process-job-draining).
 
 `maxConcurrentInlineJobs` (default: `4`) caps how many `executionMode: "inline"` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores. The older `forked: false` option still maps to inline mode.
+
+New jobs default to `executionMode: "pooled"`: a worker runs them serially in warm, reusable Node child runners. `pooledRunnerCount` (default: `4`) bounds this independent per-worker capacity. It and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. A child is recycled after an acknowledged job when it reaches `pooledRunnerMaxJobs` (default: `100`), `pooledRunnerMaxRssBytes` (default: `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` (default: `3600000`, or one hour). Pooled rows remain readable by older mains during rolling upgrades and run there with legacy one-shot fork behavior. `forked: true` remains an explicit alias for `"forked"`; `forked: false` remains inline. See [execution modes and pooled runners](docs/background-jobs.md#execution-modes-and-pooled-runners).
 
 `maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel. After the main process acknowledges their durable status report, forked and spawned one-shot runners exit without waiting for graceful Beacon/database teardown; the OS closes their process-owned resources. A missing or rejected status acknowledgement makes the runner exit as failed instead of reporting clean success. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
 

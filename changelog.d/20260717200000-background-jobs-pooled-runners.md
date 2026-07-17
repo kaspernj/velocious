@@ -1,0 +1,1 @@
+Add pooled background-job execution as the default, with bounded reusable child runners, independent worker capacity, durable completion acknowledgement, graceful draining, and explicit legacy forked/inline compatibility.

@@ -38,6 +38,12 @@ const WORKER_LIVENESS_SWEEP_MS = 15000
 const WORKER_EXECUTION_MODE_CAPABILITIES = [
   {executionMode: "inline", accepts: (worker) => worker.acceptsInlineJobs !== false},
   {executionMode: "forked", accepts: (worker) => worker.acceptsForkedJobs !== false},
+  // Pooled is opt-in: only workers that explicitly advertise `acceptsPooled`
+  // receive pooled jobs. The `=== true` (rather than `!== false`) check keeps a
+  // pre-pooled worker — which never sends the field — out of the pooled-capable
+  // set, so the main never dispatches a pooled job to a worker that cannot run
+  // one. This is the conservative half of the extended readiness protocol.
+  {executionMode: "pooled", accepts: (worker) => worker.acceptsPooledJobs === true},
   {executionMode: "spawned", accepts: (worker) => worker.acceptsSpawnedJobs !== false}
 ]
 const WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE = new Map(
@@ -533,6 +539,7 @@ export default class BackgroundJobsMain {
   _handleWorkerReady({jsonSocket, message}) {
     jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
     jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
+    jsonSocket.acceptsPooledJobs = message.acceptsPooled === true
     jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
     if (jsonSocket.supportsHandoffIdReporting) {
       this.readyWorkers.add(jsonSocket)
@@ -1079,7 +1086,7 @@ export default class BackgroundJobsMain {
     const executionModes = this.readyWorkerExecutionModes()
 
     if (executionModes.length === 0) return null
-    if (executionModes.length === 3) return await this.store.nextAvailableJob()
+    if (executionModes.length === WORKER_EXECUTION_MODE_CAPABILITIES.length) return await this.store.nextAvailableJob()
 
     return await this.store.nextAvailableJob({executionMode: executionModes})
   }
