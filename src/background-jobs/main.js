@@ -22,6 +22,10 @@ const DISPATCH_CHANNEL = "velocious-background-jobs-dispatch"
  * scheduled-job timer here and re-arm when it expires.
  */
 const MAX_TIMER_MS = 2_147_483_647 // ~24.8 days
+/** A worker silent (no heartbeat/ready/report) longer than this is dropped. */
+const WORKER_STALE_TIMEOUT_MS = 60000
+/** How often the main scans workers for staleness. */
+const WORKER_LIVENESS_SWEEP_MS = 15000
 /**
  * WorkerExecutionModeCapability type.
  * @typedef {object} WorkerExecutionModeCapability
@@ -47,8 +51,10 @@ export default class BackgroundJobsMain {
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.host] - Hostname.
    * @param {number} [args.port] - Port.
+   * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
+   * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
    */
-  constructor({configuration, host, port}) {
+  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs}) {
     this.configuration = configuration
     const config = configuration.getBackgroundJobsConfig()
     this.host = host || config.host
@@ -56,6 +62,10 @@ export default class BackgroundJobsMain {
     this.dispatchStrategy = config.dispatchStrategy
     this.pollIntervalMs = config.pollIntervalMs
     this.retention = config.retention
+    // A worker that stops sending anything (heartbeat/ready/report) for this
+    // long is treated as wedged/dead: its leases are released and it is dropped.
+    this.workerStaleTimeoutMs = typeof workerStaleTimeoutMs === "number" && workerStaleTimeoutMs >= 1 ? workerStaleTimeoutMs : WORKER_STALE_TIMEOUT_MS
+    this.workerLivenessSweepMs = typeof workerLivenessSweepMs === "number" && workerLivenessSweepMs >= 1 ? workerLivenessSweepMs : WORKER_LIVENESS_SWEEP_MS
     this.store = new BackgroundJobsStore({configuration, databaseIdentifier: config.databaseIdentifier})
     this.logger = new Logger(this)
     /**
@@ -90,6 +100,10 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setTimeout> | undefined} */
     this._orphanTimer = undefined
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {ReturnType<typeof setInterval> | undefined} */
+    this._workerStaleTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
      * @type {BackgroundJobsScheduler | undefined} */
@@ -140,6 +154,10 @@ export default class BackgroundJobsMain {
       this._orphanTimer = setInterval(() => {
         void this._sweepOrphans()
       }, 60000)
+
+      this._workerStaleTimer = setInterval(() => {
+        void this._sweepStaleWorkers()
+      }, this.workerLivenessSweepMs)
 
       this.scheduler = new BackgroundJobsScheduler({
         configuration: this.configuration,
@@ -212,10 +230,12 @@ export default class BackgroundJobsMain {
     if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
+    if (this._workerStaleTimer) clearInterval(this._workerStaleTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
     this._orphanTimer = undefined
+    this._workerStaleTimer = undefined
   }
 
   /**
@@ -398,6 +418,8 @@ export default class BackgroundJobsMain {
     if (message.role === "worker") {
       jsonSocket.workerId = message.workerId
       jsonSocket.supportsHandoffIdReporting = message.supportsHandoffIdReporting === true
+      jsonSocket.supportsHeartbeat = message.supportsHeartbeat === true
+      jsonSocket.lastSeenAt = Date.now()
       this.workers.add(jsonSocket)
       this.workerHandoffs.set(jsonSocket, new Map())
     }
@@ -426,6 +448,14 @@ export default class BackgroundJobsMain {
    * @returns {void}
    */
   _handleWorkerSocketMessage({jsonSocket, message}) {
+    // Any message from the worker proves it is alive; the liveness sweep uses
+    // this to detect a wedged/silent worker.
+    jsonSocket.lastSeenAt = Date.now()
+
+    if (message?.type === "heartbeat") {
+      return
+    }
+
     if (message?.type === "ready") {
       this._handleWorkerReady({jsonSocket, message})
       return
@@ -1098,6 +1128,47 @@ export default class BackgroundJobsMain {
       }
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])
+    }
+  }
+
+  /**
+   * Drops workers that have gone silent past `workerStaleTimeoutMs` (no
+   * heartbeat, ready, or report). A wedged worker keeps its socket open, so the
+   * `close`-based cleanup never fires and its in-flight leases — and the whole
+   * queue — stay stuck until a human notices. Releasing the lost worker's
+   * leases lets its jobs run elsewhere and stops dispatch to it; the worker's
+   * own process lifecycle is the supervisor's concern.
+   * @returns {Promise<void>} - Resolves after the sweep.
+   */
+  async _sweepStaleWorkers() {
+    if (this._stopped) return
+
+    const cutoff = Date.now() - this.workerStaleTimeoutMs
+    /** @type {JsonSocket[]} */
+    const stale = []
+
+    for (const worker of this.workers) {
+      // Only evict heartbeat-capable workers. A legacy worker (e.g. one from the
+      // previous release during a rolling deploy) never heartbeats, so evicting
+      // it on silence would wrongly release the leases of a job it is still
+      // running. Its disconnect is still handled by the socket `close` path.
+      if (!worker.supportsHeartbeat) continue
+
+      const lastSeenAt = typeof worker.lastSeenAt === "number" ? worker.lastSeenAt : 0
+
+      if (lastSeenAt <= cutoff) stale.push(worker)
+    }
+
+    for (const worker of stale) {
+      this.logger.warn(() => ["Dropping stale background jobs worker", {workerId: worker.workerId, lastSeenAt: worker.lastSeenAt}])
+
+      try {
+        worker.close()
+      } catch {
+        // Already closing; the lease release below is what matters.
+      }
+
+      await this._handleWorkerSocketClosed(worker)
     }
   }
 }

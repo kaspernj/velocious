@@ -60,6 +60,15 @@ Graceful draining is unchanged. A worker that announces `draining` keeps its soc
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
+## Worker Liveness
+
+Disconnect recovery above depends on the worker's control socket firing a `close` event. A worker that wedges while alive — or a half-open TCP connection — never fires `close`, so its leases (and, if it is the only worker, the whole queue) would stay stuck until someone intervened. Two mechanisms make this self-healing:
+
+- **Heartbeats.** A worker advertises `supportsHeartbeat` in its hello and then sends a periodic `heartbeat` (default every 15s); the sockets also enable TCP keepalive. The main records the last time it saw any message from each worker and, on a periodic sweep, drops a heartbeat-capable worker that has been silent longer than `workerStaleTimeoutMs` (default 60s) — releasing its leases so its jobs run elsewhere and it stops receiving new work. A worker that does **not** advertise heartbeat support (for example an older release mid rolling deploy) is exempt from stale eviction and is only reclaimed through the `close`-based path, so its in-flight leases are never released while it is still running them.
+- **Decoupled, durable reporting.** Freeing a worker's job slot never waits on reporting the result to the main. When a job (inline or forked) finishes, its slot is released immediately and the completion/failure report is sent in the background and retried durably until it lands. A transient main/DB outage therefore can neither leak worker slots (which previously drove the worker to stop accepting jobs) nor lose a terminal report and re-run already-completed work. A graceful `stop()` drains in-flight reports before closing the socket.
+
+Heartbeat interval, stale timeout, and sweep interval are overridable via the worker/main constructors for tests and tuning.
+
 ## Failure Events
 
 `background-jobs-main` emits a `background-job-failed` error event after it accepts a worker failure report and records the updated job state. Duplicate or stale worker reports do not emit this event because they are rejected before the job row changes.

@@ -2131,6 +2131,8 @@ await MyJob.performLaterWithOptions({
 
 If a handed-off job does not report back within 2 hours, it is marked orphaned and re-queued if retries remain.
 
+Workers also send periodic heartbeats (and use TCP keepalive) so the main can drop a wedged or half-open worker that never fires a socket `close` and release its leases, and job slots are freed independently of durable, background result reporting so a transient outage can't wedge a worker or lose a completion. See [docs/background-jobs.md](docs/background-jobs.md#worker-liveness).
+
 ## Queues
 
 Give a job a queue with `static queue = "..."` (or a `{queue}` job option; the option wins) and cap how many of that queue's jobs run in flight across the whole cluster under `backgroundJobs.queues`:
