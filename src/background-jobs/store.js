@@ -498,6 +498,78 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Deletes terminal job rows past their retention window so the jobs table
+   * does not grow unbounded (completed rows in particular accumulate forever
+   * otherwise). Batched by id — SELECT a page of ids, then
+   * `DELETE ... WHERE id IN (...)` — rather than `DELETE ... LIMIT`, which not
+   * every driver supports; each batch runs on its own connection so the sweep
+   * yields between batches instead of holding one long transaction.
+   * @param {object} [args] - Options.
+   * @param {number | null} [args.completedTtlMs] - Delete `completed` jobs whose `completed_at_ms` is older than this many ms. Falsy or `<= 0` disables completed pruning.
+   * @param {number | null} [args.failedTtlMs] - Delete terminal `failed`/`orphaned` jobs older than this many ms (by `failed_at_ms`/`orphaned_at_ms`). Falsy or `<= 0` disables.
+   * @param {number} [args.batchSize] - Max rows deleted per batch. Default `1000`.
+   * @returns {Promise<number>} - Total rows deleted.
+   */
+  async pruneTerminalJobs({completedTtlMs = null, failedTtlMs = null, batchSize = 1000} = {}) {
+    await this.ensureReady()
+
+    const now = Date.now()
+    const size = batchSize > 0 ? batchSize : 1000
+    let deleted = 0
+
+    if (completedTtlMs && completedTtlMs > 0) {
+      deleted += await this._pruneStatusBatches({status: "completed", column: "completed_at_ms", cutoff: now - completedTtlMs, batchSize: size})
+    }
+
+    if (failedTtlMs && failedTtlMs > 0) {
+      deleted += await this._pruneStatusBatches({status: "failed", column: "failed_at_ms", cutoff: now - failedTtlMs, batchSize: size})
+      deleted += await this._pruneStatusBatches({status: "orphaned", column: "orphaned_at_ms", cutoff: now - failedTtlMs, batchSize: size})
+    }
+
+    return deleted
+  }
+
+  /**
+   * Deletes rows of one terminal status older than a cutoff, batch by batch,
+   * until a page returns fewer than `batchSize` rows.
+   * @param {object} args - Options.
+   * @param {string} args.status - Terminal status to prune.
+   * @param {string} args.column - Timestamp column compared against the cutoff.
+   * @param {number} args.cutoff - Delete rows whose column value is `<= cutoff`.
+   * @param {number} args.batchSize - Max rows per batch.
+   * @returns {Promise<number>} - Rows deleted for this status.
+   */
+  async _pruneStatusBatches({status, column, cutoff, batchSize}) {
+    let deleted = 0
+
+    for (;;) {
+      const removed = await this._withDb(async (db) => {
+        const rows = await db
+          .newQuery()
+          .from(JOBS_TABLE)
+          .select("id")
+          .where({status})
+          .where(`${db.quoteColumn(column)} <= ${db.quote(cutoff)}`)
+          .limit(batchSize)
+          .results()
+
+        if (rows.length === 0) return 0
+
+        const ids = rows.map((/** @type {Record<string, ?>} */ row) => db.quote(String(row.id))).join(", ")
+
+        await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`)
+
+        return rows.length
+      })
+
+      deleted += removed
+      if (removed < batchSize) break
+    }
+
+    return deleted
+  }
+
+  /**
    * Runs clear all.
    * @returns {Promise<void>} - Resolves when cleared.
    */

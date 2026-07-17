@@ -1292,8 +1292,23 @@ export default class VelociousConfiguration {
       ? configured.pollIntervalMs
       : (typeof envPollInterval === "number" && Number.isFinite(envPollInterval) && envPollInterval >= 1 ? envPollInterval : 1000)
     const queues = configured.queues && typeof configured.queues === "object" ? configured.queues : {}
+    const configuredRetention = configured.retention && typeof configured.retention === "object" ? configured.retention : {}
+    const retention = {
+      completedTtlMs: typeof configuredRetention.completedTtlMs === "number" || configuredRetention.completedTtlMs === null
+        ? configuredRetention.completedTtlMs
+        : 7 * 24 * 60 * 60 * 1000,
+      failedTtlMs: typeof configuredRetention.failedTtlMs === "number" || configuredRetention.failedTtlMs === null
+        ? configuredRetention.failedTtlMs
+        : 30 * 24 * 60 * 60 * 1000,
+      batchSize: typeof configuredRetention.batchSize === "number" && configuredRetention.batchSize > 0
+        ? configuredRetention.batchSize
+        : 1000,
+      sweepIntervalMs: typeof configuredRetention.sweepIntervalMs === "number" && configuredRetention.sweepIntervalMs > 0
+        ? configuredRetention.sweepIntervalMs
+        : 60 * 60 * 1000
+    }
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs, queues}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs, queues, retention}
   }
 
   /**

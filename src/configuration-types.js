@@ -178,6 +178,24 @@
  *   to restore the legacy fixed-interval poll.
  * @property {number} [pollIntervalMs] - Poll interval in milliseconds. Only used
  *   when `dispatchStrategy === "polling"`. Default: `1000`.
+ * @property {BackgroundJobsRetentionConfiguration} [retention] - Retention/pruning
+ *   of terminal job rows. Without pruning the jobs table grows unbounded
+ *   (completed rows accumulate forever), which bloats storage and indexes and
+ *   eventually slows dispatch. The main process sweeps terminal rows past their
+ *   window on an interval.
+ */
+
+/**
+ * @typedef {object} BackgroundJobsRetentionConfiguration
+ * @property {number | null} [completedTtlMs] - Delete `completed` jobs whose
+ *   `completed_at_ms` is older than this many ms. `null` or `<= 0` disables
+ *   completed pruning. Default: `604800000` (7 days).
+ * @property {number | null} [failedTtlMs] - Delete terminal `failed`/`orphaned`
+ *   jobs older than this many ms. `null` or `<= 0` disables (keeps them for
+ *   debugging). Default: `2592000000` (30 days).
+ * @property {number} [batchSize] - Rows deleted per batch. Default: `1000`.
+ * @property {number} [sweepIntervalMs] - How often the main process runs the
+ *   retention sweep. Default: `3600000` (1 hour).
  */
 
 /**

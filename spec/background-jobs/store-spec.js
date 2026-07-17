@@ -535,6 +535,58 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.orphanedAtMs).toBeGreaterThan(0)
   })
 
+  it("prunes completed rows past the retention window and keeps recent and non-terminal rows", async () => {
+    const store = await createClearedStore()
+
+    const oldCompletedId = await store.enqueue({jobName: "TestJob", args: ["old"], options: {forked: false}})
+    const oldHandoff = await store.markHandedOff({jobId: oldCompletedId, workerId: "w"})
+    if (!oldHandoff) throw new Error("Expected the old job to be handed off")
+    await store.markCompleted({jobId: oldCompletedId, workerId: "w", ...oldHandoff})
+
+    const recentCompletedId = await store.enqueue({jobName: "TestJob", args: ["recent"], options: {forked: false}})
+    const recentHandoff = await store.markHandedOff({jobId: recentCompletedId, workerId: "w"})
+    if (!recentHandoff) throw new Error("Expected the recent job to be handed off")
+    await store.markCompleted({jobId: recentCompletedId, workerId: "w", ...recentHandoff})
+
+    const queuedId = await store.enqueue({jobName: "TestJob", args: ["queued"], options: {forked: false}})
+
+    // Age the old row's completion 10 days into the past.
+    await store._withDb(async (db) => {
+      await db.query(`UPDATE background_jobs SET completed_at_ms = ${db.quote(Date.now() - 10 * 24 * 60 * 60 * 1000)} WHERE id = ${db.quote(oldCompletedId)}`)
+    })
+
+    const deleted = await store.pruneTerminalJobs({completedTtlMs: 7 * 24 * 60 * 60 * 1000, batchSize: 100})
+
+    expect(deleted).toEqual(1)
+    expect(await store.getJob(oldCompletedId)).toEqual(null)
+    expect((await getJobOrFail({jobId: recentCompletedId, store})).status).toEqual("completed")
+    expect((await getJobOrFail({jobId: queuedId, store})).status).toEqual("queued")
+  })
+
+  it("prunes failed and orphaned rows past the failed retention window", async () => {
+    const store = await createClearedStore()
+
+    const orphaned = await createOrphanedJob({maxRetries: 0, store})
+
+    const failedId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, maxRetries: 0}})
+    const failedHandoff = await store.markHandedOff({jobId: failedId, workerId: "w"})
+    if (!failedHandoff) throw new Error("Expected the failing job to be handed off")
+    await store.markFailed({jobId: failedId, error: "boom", workerId: "w", ...failedHandoff})
+
+    // Age both terminal timestamps 60 days into the past.
+    await store._withDb(async (db) => {
+      const past = db.quote(Date.now() - 60 * 24 * 60 * 60 * 1000)
+      await db.query(`UPDATE background_jobs SET orphaned_at_ms = ${past} WHERE id = ${db.quote(orphaned.id)}`)
+      await db.query(`UPDATE background_jobs SET failed_at_ms = ${past} WHERE id = ${db.quote(failedId)}`)
+    })
+
+    const deleted = await store.pruneTerminalJobs({failedTtlMs: 30 * 24 * 60 * 60 * 1000, batchSize: 100})
+
+    expect(deleted).toEqual(2)
+    expect(await store.getJob(orphaned.id)).toEqual(null)
+    expect(await store.getJob(failedId)).toEqual(null)
+  })
+
   it("returns the soonest future-scheduled queued job from nextScheduledJob", async () => {
     const store = await createClearedStore()
 
