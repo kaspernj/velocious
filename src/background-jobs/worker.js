@@ -12,6 +12,17 @@ import {fileURLToPath} from "node:url"
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
+/** How often the worker sends a liveness heartbeat to the main. */
+const HEARTBEAT_INTERVAL_MS = 15000
+/**
+ * Bound on how long the worker retries reporting a job result to the main. An
+ * unbounded retry (the previous behavior) would block a forked child's slot
+ * from being released when the main was unreachable, leaking slots until the
+ * worker stopped accepting jobs entirely.
+ */
+const REPORT_MAX_DURATION_MS = 30000
+/** TCP keepalive so a half-open connection to the main surfaces as a close. */
+const SOCKET_KEEPALIVE_MS = 10000
 /**
  * Execution modes.
  * @type {import("./types.js").BackgroundJobExecutionMode[]} */
@@ -27,8 +38,10 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.maxConcurrentForkedJobs] - Override the process runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
+   * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
+   * @param {number} [args.reportMaxDurationMs] - Override the max time spent retrying a job-result report before giving up (default 30000ms).
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs, heartbeatIntervalMs, reportMaxDurationMs} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -74,6 +87,16 @@ export default class BackgroundJobsWorker {
       : FORKED_CHILD_SIGKILL_GRACE_MS
     this.shouldStop = false
     this.workerId = randomUUID()
+    this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
+      ? heartbeatIntervalMs
+      : HEARTBEAT_INTERVAL_MS
+    this.reportMaxDurationMs = typeof reportMaxDurationMs === "number" && reportMaxDurationMs >= 1
+      ? reportMaxDurationMs
+      : REPORT_MAX_DURATION_MS
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {ReturnType<typeof setInterval> | undefined} */
+    this._heartbeatTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
      * @type {JsonSocket | undefined} */
@@ -154,6 +177,7 @@ export default class BackgroundJobsWorker {
   async stop({timeoutMs} = {}) {
     if (this.shouldStop) return
     this.shouldStop = true
+    this._stopHeartbeat()
 
     // Announce drain so main stops dispatching but keeps the connection
     // open until we close it ourselves below.
@@ -238,6 +262,7 @@ export default class BackgroundJobsWorker {
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
     const socket = net.createConnection({host, port})
+    socket.setKeepAlive(true, SOCKET_KEEPALIVE_MS)
     const jsonSocket = new JsonSocket(socket)
     this.jsonSocket = jsonSocket
 
@@ -256,6 +281,7 @@ export default class BackgroundJobsWorker {
     })
 
     jsonSocket.on("close", () => {
+      this._stopHeartbeat()
       if (this.shouldStop) return
       setTimeout(() => { void this._connect() }, 1000)
     })
@@ -263,7 +289,41 @@ export default class BackgroundJobsWorker {
     socket.on("connect", () => {
       jsonSocket.send({type: "hello", role: "worker", supportsHandoffIdReporting: true, workerId: this.workerId})
       this._sendReadyIfRunning()
+      this._startHeartbeat()
     })
+  }
+
+  /**
+   * Sends periodic liveness heartbeats to the main so a wedged or silent worker
+   * can be detected and dropped there (its leases released) instead of freezing
+   * the queue until a human notices.
+   * @returns {void}
+   */
+  _startHeartbeat() {
+    this._stopHeartbeat()
+
+    this._heartbeatTimer = setInterval(() => {
+      if (this.shouldStop || !this.jsonSocket) return
+
+      try {
+        this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
+      } catch {
+        // Socket is closing/closed; the close handler drives reconnect.
+      }
+    }, this.heartbeatIntervalMs)
+
+    if (typeof this._heartbeatTimer.unref === "function") this._heartbeatTimer.unref()
+  }
+
+  /**
+   * Stops the liveness heartbeat timer.
+   * @returns {void}
+   */
+  _stopHeartbeat() {
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer)
+      this._heartbeatTimer = undefined
+    }
   }
 
   /**
@@ -543,17 +603,17 @@ export default class BackgroundJobsWorker {
   async _handleForkedChildExit({child, code, signal, payload, resolve}) {
     this.inflightProcessChildren.delete(child)
 
-    if (this._forkedChildExitedCleanly({code, signal})) {
-      resolve(undefined)
-      return
-    }
+    // Free the worker slot as soon as the child is gone — never gate it on the
+    // failure report. A hung/slow report must not leak the slot; enough leaked
+    // slots drive `acceptsForked` to false and silently wedge the worker.
+    resolve(undefined)
+
+    if (this._forkedChildExitedCleanly({code, signal})) return
 
     await this._reportForkedChildFailure({
       payload,
       error: new Error(`Forked background job runner exited before reporting: code=${code} signal=${signal || "none"}`)
     })
-
-    resolve(undefined)
   }
 
   /**
@@ -578,9 +638,10 @@ export default class BackgroundJobsWorker {
    */
   async _handleForkedChildError({child, error, payload, resolve}) {
     this.inflightProcessChildren.delete(child)
+    // Free the slot first (see _handleForkedChildExit) — reporting is best-effort.
+    resolve(undefined)
     console.error("Background jobs forked runner error:", error)
     await this._reportForkedChildFailure({payload, error})
-    resolve(undefined)
   }
 
   /**
@@ -677,7 +738,7 @@ export default class BackgroundJobsWorker {
     if (!this.statusReporter) return
 
     try {
-      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId})
+      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId, maxDurationMs: this.reportMaxDurationMs})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }

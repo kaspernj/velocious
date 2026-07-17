@@ -30,6 +30,11 @@ export default class JsonSocket extends EventEmitter {
      * Narrows the runtime value to the documented type.
      * @type {boolean} */
     this.acceptsInlineJobs = true
+    /**
+     * Last time (ms) the main saw any message from this worker socket; used by
+     * the main's liveness sweep to drop a wedged/silent worker.
+     * @type {number | undefined} */
+    this.lastSeenAt = undefined
     this.buffer = ""
     this.socket.setEncoding("utf8")
     this.socket.on("data", (chunk) => this._onData(String(chunk)))

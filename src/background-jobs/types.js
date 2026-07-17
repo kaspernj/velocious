@@ -68,6 +68,7 @@
  * @typedef {{type: "hello", role: BackgroundJobSocketRole, supportsHandoffIdReporting?: boolean, workerId?: string}} BackgroundJobHelloMessage
  * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
+ * @typedef {{type: "heartbeat", workerId?: string}} BackgroundJobHeartbeatMessage
  * @typedef {{type: "enqueue", jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
  * @typedef {{type: "enqueued", jobId: string}} BackgroundJobEnqueuedMessage
  * @typedef {{type: "enqueue-error", error?: string}} BackgroundJobEnqueueErrorMessage
@@ -78,7 +79,7 @@
  * @typedef {{type: "job-update-error", jobId: string, error?: string}} BackgroundJobUpdateErrorMessage
  */
 /**
- * @typedef {BackgroundJobHelloMessage | BackgroundJobReadyMessage | BackgroundJobDrainingMessage | BackgroundJobEnqueueMessage | BackgroundJobEnqueuedMessage | BackgroundJobEnqueueErrorMessage | BackgroundJobJobMessage | BackgroundJobCompleteMessage | BackgroundJobFailedMessage | BackgroundJobUpdatedMessage | BackgroundJobUpdateErrorMessage} BackgroundJobSocketMessage
+ * @typedef {BackgroundJobHelloMessage | BackgroundJobReadyMessage | BackgroundJobDrainingMessage | BackgroundJobHeartbeatMessage | BackgroundJobEnqueueMessage | BackgroundJobEnqueuedMessage | BackgroundJobEnqueueErrorMessage | BackgroundJobJobMessage | BackgroundJobCompleteMessage | BackgroundJobFailedMessage | BackgroundJobUpdatedMessage | BackgroundJobUpdateErrorMessage} BackgroundJobSocketMessage
  */
 
 export const nothing = {}
