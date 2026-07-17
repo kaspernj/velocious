@@ -513,6 +513,28 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.orphanedAtMs).toBeGreaterThan(0)
   })
 
+  it("reclaims handed-off jobs whose handoff_id is null (older-velocious legacy rows)", async () => {
+    const store = await createClearedStore()
+
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, maxRetries: 1}})
+    await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    // Simulate a row handed off by an older velocious that never populated
+    // handoff_id. The old orphan sweep matched `{handoff_id: null}`, which
+    // renders as `handoff_id = NULL` and strands such rows forever.
+    await store._withDb(async (db) => {
+      await db.query(`UPDATE background_jobs SET handoff_id = NULL WHERE id = ${db.quote(jobId)}`)
+    })
+
+    const orphanedCount = await store.markOrphanedJobs({orphanedAfterMs: 0})
+    const job = await getJobOrFail({jobId, store})
+
+    expect(orphanedCount).toEqual(1)
+    expect(job.status).toEqual("queued")
+    expect(job.attempts).toEqual(1)
+    expect(job.orphanedAtMs).toBeGreaterThan(0)
+  })
+
   it("returns the soonest future-scheduled queued job from nextScheduledJob", async () => {
     const store = await createClearedStore()
 

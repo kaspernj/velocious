@@ -476,11 +476,18 @@ export default class BackgroundJobsStore {
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
 
+        // Reclaim by id/status, not by handoff-id lease: this is a time-based
+        // sweep of rows already read as handed-off past the cutoff, and some
+        // rows have a null `handoff_id` (handed off by an older velocious
+        // before handoff-id fencing). Matching `{handoff_id: null}` renders as
+        // `handoff_id = NULL` in SQL, which matches nothing, so those rows
+        // would be stranded in `handed_off` forever.
         const orphanedJob = await this._applyFailure({
           db,
           job,
           error: "Job orphaned after timeout",
-          markOrphaned: true
+          markOrphaned: true,
+          conditions: {id: job.id, status: "handed_off"}
         })
 
         if (orphanedJob) orphanedCount += 1
@@ -869,9 +876,10 @@ export default class BackgroundJobsStore {
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
    * @param {?} args.error - Error.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
+   * @param {Record<string, ?>} [args.conditions] - Update fencing conditions. Defaults to the active-handoff lease match; the time-based orphan sweep overrides this with an id/status match so it can reclaim rows whose `handoff_id` is null (e.g. handed off by an older velocious before handoff-id fencing existed).
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the lease transition won.
    */
-  async _applyFailure({db, job, error, markOrphaned}) {
+  async _applyFailure({db, job, error, markOrphaned, conditions}) {
     const now = Date.now()
     const nextAttempt = (job.attempts || 0) + 1
     const maxRetries = this._normalizeMaxRetries(job.maxRetries)
@@ -890,7 +898,7 @@ export default class BackgroundJobsStore {
     const affectedRows = await this._updateAffectedRows(db, {
       tableName: JOBS_TABLE,
       data: update,
-      conditions: this._activeHandoffConditions(job)
+      conditions: conditions ?? this._activeHandoffConditions(job)
     })
 
     if (affectedRows !== 1) return null
