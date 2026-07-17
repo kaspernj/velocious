@@ -8,6 +8,25 @@ Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `perf
 
 Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned; startup reconciliation repairs reservation counts after an unclean scheduler stop.
 
+## Queues (per-queue concurrency caps)
+
+Give a job class a queue with `static queue = "..."` (or pass `{queue}` in job options — the option wins). A job with no queue runs on `"default"`. Configure a cluster-wide cap per queue under `backgroundJobs.queues`:
+
+```js
+backgroundJobs: {
+  queues: {
+    builds: {maxConcurrent: 100}, // I/O-bound work can run well above the core count
+    default: {maxConcurrent: 8}   // CPU-bound work should stay near the core count
+  }
+}
+```
+
+Each capped queue is enforced through the same durable per-key concurrency mechanism described above: a job on the queue is given the reserved concurrency key `queue:<name>`, so `queues[name].maxConcurrent` bounds how many jobs from that queue run in flight across every main/worker process, regardless of how many processes run. A queue with no configured cap is unlimited.
+
+- The `queue:` concurrency-key prefix is reserved — an explicit `concurrencyKey` may not start with it.
+- Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against the existing backlog when the main process starts: persisted jobs adopt or release the queue key to match the current config, so a changed cap takes effect without waiting for the queue to drain.
+- Scheduled jobs (`scheduledBackgroundJobs`) honor a job class's `static queue` as well.
+
 ## Retention (pruning old job rows)
 
 Terminal job rows are not deleted automatically unless retention is configured — a busy application otherwise accumulates `completed` (and `failed`/`orphaned`) rows indefinitely, bloating the table and its indexes and eventually slowing dispatch. Configure retention under `backgroundJobs.retention`:

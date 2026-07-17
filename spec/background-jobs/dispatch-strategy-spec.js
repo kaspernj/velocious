@@ -5,6 +5,7 @@ import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import {outputPathFor, startBackgroundJobs, startBackgroundJobsMain, waitForOutputJson} from "../helpers/background-jobs-helper.js"
 import PruneTerminalBackgroundJobsJob from "../../src/jobs/prune-terminal-background-jobs.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import QueuedTestJob from "../dummy/src/jobs/queued-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
 describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: true}}, () => {
@@ -138,6 +139,35 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
     } finally {
       await main.stop()
       dummyConfiguration.setBackgroundJobsConfig({dispatchStrategy: "beacon", pollIntervalMs: 1000})
+    }
+  })
+
+  it("applies a scheduled job's static queue when enqueuing", async () => {
+    const {main, store} = await startBackgroundJobsMain()
+
+    try {
+      main.scheduler.scheduleJob({jobConfiguration: {class: QueuedTestJob, every: 50}, jobKey: "queuedTestJob"})
+
+      let enqueuedRow = /** @type {Record<string, ?> | null} */ (null)
+      const deadline = Date.now() + 3000
+
+      while (Date.now() < deadline) {
+        const rows = await store._withDb(async (db) =>
+          await db.newQuery().from("background_jobs").where({job_name: QueuedTestJob.jobName()}).limit(1).results()
+        )
+
+        if (rows.length > 0) {
+          enqueuedRow = rows[0]
+          break
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      expect(enqueuedRow).toBeTruthy()
+      expect(String(enqueuedRow?.queue)).toEqual("builds")
+    } finally {
+      await main.stop()
     }
   })
 })

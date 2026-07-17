@@ -147,7 +147,10 @@ export default class BackgroundJobsMain {
           await this.store.enqueue({
             jobName: jobClass.jobName(),
             args,
-            options
+            // Fold in the job class's static `queue` (as performLater* do) so a
+            // scheduled job with `static queue = "..."` lands on its queue and
+            // honors the configured cap without every schedule repeating it.
+            options: jobClass._withQueue(options)
           })
           this._notifyEnqueued()
           await this._drain()

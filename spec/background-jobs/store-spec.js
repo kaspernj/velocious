@@ -305,6 +305,49 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(row.queue).toEqual("default")
   })
 
+  it("rejects an explicit concurrencyKey that uses the reserved queue: prefix", async () => {
+    const store = await createClearedStore()
+    let error = /** @type {Error | null} */ (null)
+
+    try {
+      await store.enqueue({jobName: "TestJob", args: [], options: {concurrencyKey: "queue:builds", maxConcurrency: 2}})
+    } catch (newError) {
+      error = /** @type {Error} */ (newError)
+    }
+
+    expect(error).toBeTruthy()
+    expect(error?.message).toContain("reserved")
+  })
+
+  it("reconciles queue caps against the persisted backlog on startup", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, queue: "builds"}})
+
+    // No cap configured yet, so the queued job carries no concurrency key.
+    expect((await getJobOrFail({jobId, store})).concurrencyKey).toEqual(null)
+
+    try {
+      // Adding a cap adopts the existing backlog onto the queue key on startup.
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
+      const adoptStore = new BackgroundJobsStore({configuration: dummyConfiguration})
+      await adoptStore.ensureReady()
+      const adopted = await getJobOrFail({jobId, store: adoptStore})
+
+      expect(adopted.concurrencyKey).toEqual("queue:builds")
+      expect(adopted.maxConcurrency).toEqual(2)
+
+      // Removing the cap releases the backlog from the queue key on startup.
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+      const releaseStore = new BackgroundJobsStore({configuration: dummyConfiguration})
+      await releaseStore.ensureReady()
+
+      expect((await getJobOrFail({jobId, store: releaseStore})).concurrencyKey).toEqual(null)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
   it("coalesces deduplicateWhileQueued enqueues onto a still-queued job", async () => {
     const store = await createClearedStore()
     const options = {concurrencyKey: "recurring-key", maxConcurrency: 1, deduplicateWhileQueued: true, forked: false}
