@@ -146,6 +146,23 @@ describe("database - pool - async tracked multi connection MySQL checkout names"
     })
   })
 
+  it("clears a named checkout when its name is set to undefined", async () => {
+    await withMysqlCheckoutNamePool(async (pool) => {
+      const connection = /** @type {CheckoutNameCapturingMysqlDriver} */ (await pool.checkout({name: "named checkout"}))
+
+      await connection.setConnectionCheckoutName(undefined)
+
+      expect(connection.checkoutNameQueries).toEqual([
+        "SET @velocious_connection_checkout_name = 'named checkout'",
+        "SET @velocious_connection_checkout_name = NULL"
+      ])
+
+      await pool.checkin(connection)
+
+      expect(connection.checkoutNameQueries).toHaveLength(2)
+    })
+  })
+
   it("disposes a connection when clearing a named lease fails", async () => {
     await withMysqlCheckoutNamePool(async (pool) => {
       const connection = /** @type {CheckoutNameCapturingMysqlDriver} */ (await pool.checkout({name: "named checkout"}))
