@@ -1291,8 +1291,9 @@ export default class VelociousConfiguration {
     const pollIntervalMs = typeof configured.pollIntervalMs === "number" && configured.pollIntervalMs >= 1
       ? configured.pollIntervalMs
       : (typeof envPollInterval === "number" && Number.isFinite(envPollInterval) && envPollInterval >= 1 ? envPollInterval : 1000)
+    const queues = configured.queues && typeof configured.queues === "object" ? configured.queues : {}
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, dispatchStrategy, pollIntervalMs, queues}
   }
 
   /**

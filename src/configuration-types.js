@@ -161,7 +161,18 @@
  *   long-running jobs and for using more cores. Default: `4`.
  * @property {number} [maxConcurrentForkedJobs] - How many out-of-process
  *   `"forked"` or `"spawned"` jobs a single `background-jobs-worker` is
- *   allowed to keep in flight. Default: `4`.
+ *   allowed to keep in flight. Default: `4`. This is a per-worker safety cap;
+ *   for workload-shaped limits use per-queue caps (`queues`) instead, which are
+ *   enforced cluster-wide and are immune to duplicate worker processes.
+ * @property {Record<string, {maxConcurrent?: number}>} [queues] - Per-queue
+ *   concurrency caps, Sidekiq-style. A job declares its queue (static `queue` on
+ *   the job class, or the `queue` enqueue option; defaults to `"default"`), and
+ *   `queues[name].maxConcurrent` bounds how many jobs from that queue may be
+ *   in flight across the whole cluster (enforced via durable per-key
+ *   concurrency, so it holds regardless of how many worker processes run).
+ *   Size each queue to its workload: I/O-bound queues (e.g. build runners
+ *   waiting on remote Docker servers) can run far above the core count, while
+ *   CPU-bound queues should stay near it. Default: `{}` (no queue caps).
  * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
  *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
  *   to restore the legacy fixed-interval poll.

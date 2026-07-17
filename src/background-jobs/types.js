@@ -13,7 +13,8 @@
  * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"forked"`.
  * @property {boolean} [forked] - Compatibility alias: `false` maps to `"inline"` and `true` maps to `"forked"`.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
- * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap.
+ * @property {string} [queue] - Queue name. Defaults to `"default"`. When the queue has a configured cap in `backgroundJobs.queues`, that cap is enforced cluster-wide.
+ * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap. Overrides any queue-derived cap.
  * @property {number} [maxConcurrency] - Positive integer cap; must be paired with `concurrencyKey`.
  */
 /**
@@ -33,6 +34,7 @@
  * @property {Array<?>} args - Serialized job arguments.
  * @property {BackgroundJobExecutionMode} executionMode - How the job should run.
  * @property {boolean} forked - Compatibility flag; true for non-inline execution.
+ * @property {string} queue - Queue name (defaults to `"default"`).
  * @property {string} status - Current job status.
  * @property {number | null} attempts - Failure attempts count.
  * @property {number | null} maxRetries - Max retry attempts.
