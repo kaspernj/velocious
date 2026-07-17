@@ -1294,8 +1294,11 @@ export default class VelociousConfiguration {
       ? configured.pollIntervalMs
       : (typeof envPollInterval === "number" && Number.isFinite(envPollInterval) && envPollInterval >= 1 ? envPollInterval : 1000)
     const queues = configured.queues && typeof configured.queues === "object" ? configured.queues : {}
-    const jobTimeoutMs = typeof configured.jobTimeoutMs === "number" && configured.jobTimeoutMs > 0
-      ? configured.jobTimeoutMs
+    // An explicit config value wins over the env var — including `null`/`0`,
+    // which disable the backstop even when the environment sets a default.
+    // Only fall through to the env var when config omits `jobTimeoutMs` entirely.
+    const jobTimeoutMs = "jobTimeoutMs" in configured
+      ? (typeof configured.jobTimeoutMs === "number" && configured.jobTimeoutMs > 0 ? configured.jobTimeoutMs : null)
       : (typeof envJobTimeout === "number" && Number.isFinite(envJobTimeout) && envJobTimeout > 0 ? envJobTimeout : null)
     const configuredRetention = configured.retention && typeof configured.retention === "object" ? configured.retention : {}
     const retention = {

@@ -11,6 +11,13 @@ import {fileURLToPath} from "node:url"
 
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
+/**
+ * Largest delay Node's `setTimeout` accepts without overflowing to a 1ms delay
+ * (a 32-bit signed int of ms, ~24.8 days). A `jobTimeoutMs` above this — or a
+ * non-finite one like `Infinity` — is clamped/disabled rather than coerced to
+ * ~1ms, which would otherwise terminate every forked job almost immediately.
+ */
+const MAX_FORKED_JOB_TIMEOUT_MS = 2_147_483_647
 const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
 /** How often the worker sends a liveness heartbeat to the main. */
 const HEARTBEAT_INTERVAL_MS = 15000
@@ -652,17 +659,16 @@ export default class BackgroundJobsWorker {
    * @returns {number | null} - Timeout in ms, or null when disabled.
    */
   _resolveForkedJobTimeoutMs() {
-    if (typeof this.jobTimeoutMsOverride === "number") {
-      return this.jobTimeoutMsOverride > 0 ? this.jobTimeoutMsOverride : null
-    }
+    const raw = typeof this.jobTimeoutMsOverride === "number"
+      ? this.jobTimeoutMsOverride
+      : (this.configuration ? this.configuration.getBackgroundJobsConfig().jobTimeoutMs : null)
 
-    const configuration = this.configuration
+    // A non-finite (e.g. Infinity) or non-positive value disables the backstop;
+    // a finite value beyond Node's timer range is clamped to the max rather than
+    // silently coerced to ~1ms (which would kill every forked job immediately).
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return null
 
-    if (!configuration) return null
-
-    const {jobTimeoutMs} = configuration.getBackgroundJobsConfig()
-
-    return typeof jobTimeoutMs === "number" && jobTimeoutMs > 0 ? jobTimeoutMs : null
+    return Math.min(raw, MAX_FORKED_JOB_TIMEOUT_MS)
   }
 
   /**

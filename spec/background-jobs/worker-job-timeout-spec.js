@@ -62,6 +62,17 @@ describe("Background jobs - worker forked job timeout", () => {
     expect(worker.inflightProcessChildren.has(/** @type {?} */ (child))).toEqual(false)
   })
 
+  it("disables non-finite/non-positive timeouts and clamps huge finite ones to Node's timer max", () => {
+    // Infinity / <= 0 disable the backstop; a value beyond Node's ~24.8-day timer
+    // range is clamped to the max instead of being coerced to a ~1ms delay (which
+    // would terminate every forked job almost immediately).
+    expect(new BackgroundJobsWorker({jobTimeoutMs: Infinity})._resolveForkedJobTimeoutMs()).toEqual(null)
+    expect(new BackgroundJobsWorker({jobTimeoutMs: 0})._resolveForkedJobTimeoutMs()).toEqual(null)
+    expect(new BackgroundJobsWorker({jobTimeoutMs: -5})._resolveForkedJobTimeoutMs()).toEqual(null)
+    expect(new BackgroundJobsWorker({jobTimeoutMs: 5_000_000_000})._resolveForkedJobTimeoutMs()).toEqual(2_147_483_647)
+    expect(new BackgroundJobsWorker({jobTimeoutMs: 15})._resolveForkedJobTimeoutMs()).toEqual(15)
+  })
+
   it("does not arm a timeout when jobTimeoutMs is not configured", async () => {
     const worker = new BackgroundJobsWorker({})
     const child = new FakeHungChild()
