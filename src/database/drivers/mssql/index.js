@@ -350,6 +350,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
   supportsDefaultPrimaryKeyUUID() { return true }
+  supportsCrossDatabaseReferences() { return true }
 
   /**
    * Runs escape.
