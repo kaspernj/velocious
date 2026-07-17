@@ -2133,6 +2133,8 @@ If a handed-off job does not report back within 2 hours, it is marked orphaned a
 
 Workers also send periodic heartbeats (and use TCP keepalive) so the main can drop a wedged or half-open worker that never fires a socket `close` and release its leases, and job slots are freed independently of durable, background result reporting so a transient outage can't wedge a worker or lose a completion. See [docs/background-jobs.md](docs/background-jobs.md#worker-liveness).
 
+Every background-jobs process sets a descriptive `process.title` (`velocious background-jobs-main`/`-worker`/`server`/`beacon`), and each forked/spawned job runner is named after the job it runs (`velocious job-runner: <JobName>`, or a job class's `static processTitle`), so `ps`/`top` show which jobs are consuming resources. See [docs/background-jobs.md](docs/background-jobs.md#process-titles).
+
 ## Queues
 
 Give a job a queue with `static queue = "..."` (or a `{queue}` job option; the option wins) and cap how many of that queue's jobs run in flight across the whole cluster under `backgroundJobs.queues`:
