@@ -488,6 +488,38 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Returns the active `handed_off` jobs (jobId + handoffId) held under a worker
+   * id. Used on worker reconnect: after a main restart a worker reconnects with
+   * its stable id, and the fresh main adopts these leases so they are tracked —
+   * and released if the reconnected worker later disconnects — instead of
+   * sitting stuck until the age-based orphan sweep. This never reclaims, so a
+   * gracefully-draining worker that keeps running its in-flight jobs is left
+   * untouched. Rows with a null handoff id (legacy) are skipped; the orphan
+   * sweep reclaims those via its `handed_off_at_ms` fence.
+   * @param {object} args - Options.
+   * @param {string} args.workerId - Worker id.
+   * @returns {Promise<Array<{jobId: string, handoffId: string}>>} - Active handoffs.
+   */
+  async handedOffJobsForWorker({workerId}) {
+    await this.ensureReady()
+
+    const rows = await this._withDb(async (db) =>
+      await db.newQuery().from(JOBS_TABLE).where({status: "handed_off", worker_id: workerId}).results()
+    )
+
+    /** @type {Array<{jobId: string, handoffId: string}>} */
+    const handoffs = []
+
+    for (const row of rows) {
+      const job = this._normalizeJobRow(row)
+
+      if (job.handoffId) handoffs.push({jobId: job.id, handoffId: job.handoffId})
+    }
+
+    return handoffs
+  }
+
+  /**
    * Runs mark failed.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.

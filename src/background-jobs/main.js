@@ -422,9 +422,45 @@ export default class BackgroundJobsMain {
       jsonSocket.lastSeenAt = Date.now()
       this.workers.add(jsonSocket)
       this.workerHandoffs.set(jsonSocket, new Map())
+      void this._adoptWorkerHandoffs(jsonSocket)
     }
 
     return message.role
+  }
+
+  /**
+   * Adopts a reconnecting worker's still-active `handed_off` jobs into its new
+   * socket's handoff map. A fresh main (e.g. after a deploy restart) holds no
+   * in-memory leases, so a worker that reconnects with its stable id would
+   * otherwise have its pre-restart jobs tracked nowhere — if it then died, those
+   * leases (and their concurrency reservations) would sit stuck until the
+   * hours-long orphan sweep. Adopting them means `_handleWorkerSocketClosed`
+   * releases them on the worker's next disconnect, while a still-running worker
+   * (including one gracefully draining) keeps executing them untouched. No
+   * time-based reclaim is used, so a draining worker whose jobs outlive the old
+   * main is never wrongly requeued into a duplicate attempt.
+   * @param {JsonSocket} jsonSocket - The reconnected worker socket.
+   * @returns {Promise<void>}
+   */
+  async _adoptWorkerHandoffs(jsonSocket) {
+    const workerId = jsonSocket.workerId
+
+    if (typeof workerId !== "string" || workerId.length === 0) return
+
+    try {
+      const handoffs = await this.store.handedOffJobsForWorker({workerId})
+      const map = this.workerHandoffs.get(jsonSocket)
+
+      // The socket may have closed while the query was in flight; its map is then
+      // gone and the jobs are left for the orphan sweep rather than resurrected.
+      if (!map || !this.workers.has(jsonSocket)) return
+
+      for (const {jobId, handoffId} of handoffs) {
+        map.set(jobId, handoffId)
+      }
+    } catch (error) {
+      this._reportHandoffAdoptError(error)
+    }
   }
 
   /**
@@ -607,6 +643,23 @@ export default class BackgroundJobsMain {
     const errorEvents = this.configuration.getErrorEvents()
 
     this.logger.error(() => ["Failed to release disconnected worker handoffs:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+  }
+
+  /**
+   * Reports an unexpected worker-handoff adoption failure on framework error
+   * channels. A failed adoption is not fatal (the worker's jobs remain and are
+   * reclaimed by the orphan sweep), but must surface rather than be swallowed.
+   * @param {?} error - Adoption failure.
+   * @returns {void}
+   */
+  _reportHandoffAdoptError(error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {stage: "background-job-handoff-adopt"}, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Failed to adopt reconnected worker handoffs:", normalizedError])
     errorEvents.emit("framework-error", payload)
     errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
