@@ -105,6 +105,20 @@ describe("Record - attachments", {tags: ["dummy"], databaseCleaning: {transactio
     expect(metadata.map((entry) => entry.byteSize)).toEqual([1, 2])
   })
 
+  it("purges all attachments and their storage", async () => {
+    const project = await Project.create({name: "Attachment project"})
+    const task = await Task.create({name: "Attachment task", projectId: project.id()})
+
+    await task.files().attach({content: "A", filename: "a.txt"})
+    await task.files().attach({content: "B", filename: "b.txt"})
+
+    const purgedCount = await task.files().purgeAll()
+
+    expect(purgedCount).toEqual(2)
+    expect(await task.files().listMetadata()).toEqual([])
+    expect(await task.files().downloadAll()).toEqual([])
+  })
+
   it("normalizes trailing slash filenames to basename values", async () => {
     const project = await Project.create({name: "Attachment project"})
     const task = await Task.create({name: "Attachment task", projectId: project.id()})

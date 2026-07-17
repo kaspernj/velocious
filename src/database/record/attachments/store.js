@@ -392,6 +392,40 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+   * Purges every attachment stored under (model, name): deletes each row's
+   * backing storage and then removes the attachment rows. Used to clean up an
+   * owner record's attachments before/when the owner is destroyed.
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @returns {Promise<number>} - Number of attachments purged.
+   */
+  async purgeAll({model, name}) {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => {
+      const recordType = model.getModelClass().getModelName()
+      const recordId = String(model.id())
+      const rows = await db
+        .newQuery()
+        .from(ATTACHMENTS_TABLE)
+        .where({name, record_id: recordId, record_type: recordType})
+        .results()
+
+      for (const row of rows) {
+        await this.deleteAttachmentRowStorage({model, name, row})
+      }
+
+      await db.delete({
+        conditions: {name, record_id: recordId, record_type: recordType},
+        tableName: ATTACHMENTS_TABLE
+      })
+
+      return rows.length
+    })
+  }
+
+  /**
    * Runs attachment driver by name.
    * @param {string} driverName - Driver name.
    * @returns {Promise<Record<string, ?>>} - Attachment storage driver instance.
