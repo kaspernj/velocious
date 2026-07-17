@@ -192,6 +192,15 @@
  *   to restore the legacy fixed-interval poll.
  * @property {number} [pollIntervalMs] - Poll interval in milliseconds. Only used
  *   when `dispatchStrategy === "polling"`. Default: `1000`.
+ * @property {number | null} [jobTimeoutMs] - Wall-clock backstop, in ms, for a
+ *   `"forked"` job runner. A forked job still running after this is terminated
+ *   (SIGTERM, then SIGKILL after the reaping grace) and reported failed, so a
+ *   single genuinely-hung runner can't pin a draining worker — and its full-app
+ *   boot and DB connections — indefinitely (e.g. across a deploy where a retired
+ *   worker drains in-flight jobs). This is a coarse safety net, not per-job
+ *   tuning: set it well above the longest legitimate forked job (build runners,
+ *   long imports) so only genuinely-stuck runners are killed. Omit, `null`, or
+ *   `<= 0` to disable (default), which preserves the prior unbounded behavior.
  * @property {BackgroundJobsRetentionConfiguration} [retention] - Retention/pruning
  *   of terminal job rows. Without pruning the jobs table grows unbounded
  *   (completed rows accumulate forever), which bloats storage and indexes and

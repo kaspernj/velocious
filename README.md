@@ -1975,7 +1975,8 @@ export default new Configuration({
     databaseIdentifier: "default",
     maxConcurrentForkedJobs: 4,
     maxConcurrentInlineJobs: 4,
-    dispatchStrategy: "beacon"
+    dispatchStrategy: "beacon",
+    jobTimeoutMs: null
   }
 })
 ```
@@ -1991,6 +1992,7 @@ VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS=4
 VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
 VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
+VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS=5400000
 ```
 
 `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked or spawned child runners still running, so they are not orphaned across a deploy. The default waits for jobs to finish and never interrupts a running job; set a positive number of milliseconds for a finite cap (keep it shorter than your process supervisor's graceful-stop window so the worker reaps its own runners first). See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-process-job-draining).
@@ -1998,6 +2000,8 @@ VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 `maxConcurrentInlineJobs` (default: `4`) caps how many `executionMode: "inline"` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores. The older `forked: false` option still maps to inline mode.
 
 `maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel. After the main process acknowledges their durable status report, forked and spawned one-shot runners exit without waiting for graceful Beacon/database teardown; the OS closes their process-owned resources. A missing or rejected status acknowledgement makes the runner exit as failed instead of reporting clean success. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
+
+`jobTimeoutMs` (or `VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS`, milliseconds; default: disabled) is a wall-clock backstop for a single `"forked"` runner. A forked job still running after the timeout is terminated (`SIGTERM`, then `SIGKILL` after the reaping grace) and reported `failed`, so a genuinely-hung runner can't pin a worker — and its whole-app boot and DB connections — indefinitely (notably a retired-release worker draining after a deploy). It's a coarse safety net, not per-job tuning: it applies to every forked runner, so set it well above the longest legitimate forked job. Omit it, or set `null`/`<= 0`, to disable. `"inline"` jobs are not covered — they share the worker's process and can't be killed without killing the worker. See [docs/background-jobs.md](docs/background-jobs.md#forked-job-timeout-hung-runner-backstop).
 
 ### Dispatch strategy
 

@@ -21,6 +21,15 @@ const SOCKET_KEEPALIVE_MS = 10000
  * @type {import("./types.js").BackgroundJobExecutionMode[]} */
 const EXECUTION_MODES = ["inline", "forked", "spawned"]
 
+/**
+ * Per-forked-child timeout bookkeeping.
+ * @typedef {object} ForkedJobTimeoutState
+ * @property {boolean} timedOut - Whether the timeout fired and the child was terminated.
+ * @property {number | null} timeoutMs - The armed timeout in ms, or null when disabled.
+ * @property {ReturnType<typeof setTimeout> | null} timer - The pending timeout timer, cleared on exit.
+ * @property {ReturnType<typeof setTimeout> | null} sigkillTimer - The pending SIGKILL grace timer, cleared on exit.
+ */
+
 export default class BackgroundJobsWorker {
   /**
    * Runs constructor.
@@ -32,8 +41,9 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
+   * @param {number} [args.jobTimeoutMs] - Override the forked-job wall-clock timeout from `configuration.getBackgroundJobsConfig()`. `0` disables it.
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs, heartbeatIntervalMs} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -77,6 +87,13 @@ export default class BackgroundJobsWorker {
     this.forkedChildSigkillGraceMs = typeof forkedChildSigkillGraceMs === "number" && forkedChildSigkillGraceMs >= 0
       ? forkedChildSigkillGraceMs
       : FORKED_CHILD_SIGKILL_GRACE_MS
+    /**
+     * Constructor override for the forked-job wall-clock timeout. When unset the
+     * timeout is read from `configuration.getBackgroundJobsConfig().jobTimeoutMs`
+     * at fork time (default: disabled).
+     * @type {number | undefined}
+     */
+    this.jobTimeoutMsOverride = typeof jobTimeoutMs === "number" ? jobTimeoutMs : undefined
     this.shouldStop = false
     this.workerId = randomUUID()
     this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
@@ -590,14 +607,108 @@ export default class BackgroundJobsWorker {
    * @returns {Promise<void>} - Resolves when the child exits.
    */
   _waitForForkedChild({child, payload}) {
+    const timeoutState = this._armForkedJobTimeout({child})
+
     return new Promise((resolve) => {
       child.once("exit", (code, signal) => {
-        this._handleForkedChildExit({child, code, signal, payload, resolve})
+        this._clearForkedJobTimeout(timeoutState)
+        this._handleForkedChildExit({child, code, signal, payload, resolve, timeoutState})
       })
       child.once("error", (error) => {
+        this._clearForkedJobTimeout(timeoutState)
         this._handleForkedChildError({child, error, payload, resolve})
       })
     })
+  }
+
+  /**
+   * Arms a wall-clock backstop for a forked job runner. A forked job still
+   * running after `jobTimeoutMs` is terminated (SIGTERM, then SIGKILL after the
+   * grace) so a single genuinely-hung runner can't pin a draining worker — and
+   * its full-app boot and database connections — indefinitely. Returns a state
+   * object the exit/error handlers use to cancel the timer and to report a
+   * timeout-specific failure. When no timeout is configured the timer is null
+   * and behavior is unchanged.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @returns {ForkedJobTimeoutState} - Timeout state.
+   */
+  _armForkedJobTimeout({child}) {
+    const timeoutMs = this._resolveForkedJobTimeoutMs()
+    /** @type {ForkedJobTimeoutState} */
+    const state = {timedOut: false, timeoutMs, timer: null, sigkillTimer: null}
+
+    if (!(typeof timeoutMs === "number" && timeoutMs > 0)) return state
+
+    state.timer = setTimeout(() => this._onForkedJobTimeout({child, state}), timeoutMs)
+
+    return state
+  }
+
+  /**
+   * Resolves the effective forked-job timeout in ms, or null when disabled. The
+   * constructor override wins; otherwise the value comes from the background-jobs
+   * configuration. A non-positive value disables the backstop.
+   * @returns {number | null} - Timeout in ms, or null when disabled.
+   */
+  _resolveForkedJobTimeoutMs() {
+    if (typeof this.jobTimeoutMsOverride === "number") {
+      return this.jobTimeoutMsOverride > 0 ? this.jobTimeoutMsOverride : null
+    }
+
+    const configuration = this.configuration
+
+    if (!configuration) return null
+
+    const {jobTimeoutMs} = configuration.getBackgroundJobsConfig()
+
+    return typeof jobTimeoutMs === "number" && jobTimeoutMs > 0 ? jobTimeoutMs : null
+  }
+
+  /**
+   * Fired when a forked runner overruns its timeout. Sends SIGTERM for a clean
+   * shutdown, then SIGKILL after the grace for a runner that ignores it. The
+   * resulting non-clean exit flows through `_handleForkedChildExit`, which frees
+   * the slot and reports the job failed.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {ForkedJobTimeoutState} args.state - Timeout state.
+   * @returns {void}
+   */
+  _onForkedJobTimeout({child, state}) {
+    state.timedOut = true
+
+    try {
+      child.kill("SIGTERM")
+    } catch {
+      // Child already exited; nothing to do.
+    }
+
+    state.sigkillTimer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }, this.forkedChildSigkillGraceMs)
+  }
+
+  /**
+   * Cancels any pending timeout/SIGKILL timers for a forked runner that has
+   * exited (or errored) so they never fire against a gone or reused child.
+   * @param {ForkedJobTimeoutState} state - Timeout state.
+   * @returns {void}
+   */
+  _clearForkedJobTimeout(state) {
+    if (state.timer) {
+      clearTimeout(state.timer)
+      state.timer = null
+    }
+
+    if (state.sigkillTimer) {
+      clearTimeout(state.sigkillTimer)
+      state.sigkillTimer = null
+    }
   }
 
   /**
@@ -608,9 +719,10 @@ export default class BackgroundJobsWorker {
    * @param {keyof typeof import("node:os").constants.signals | null} args.signal - Exit signal.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
    * @param {(value: void) => void} args.resolve - Promise resolver.
+   * @param {ForkedJobTimeoutState} [args.timeoutState] - Timeout state, when the runner had a wall-clock backstop.
    * @returns {void}
    */
-  _handleForkedChildExit({child, code, signal, payload, resolve}) {
+  _handleForkedChildExit({child, code, signal, payload, resolve, timeoutState}) {
     this.inflightProcessChildren.delete(child)
 
     // Free the worker slot as soon as the child is gone — never gate it on the
@@ -620,10 +732,11 @@ export default class BackgroundJobsWorker {
 
     if (this._forkedChildExitedCleanly({code, signal})) return
 
-    this._reportForkedChildFailure({
-      payload,
-      error: new Error(`Forked background job runner exited before reporting: code=${code} signal=${signal || "none"}`)
-    })
+    const error = timeoutState?.timedOut
+      ? new Error(`Forked background job runner timed out after ${timeoutState.timeoutMs}ms and was terminated: code=${code} signal=${signal || "none"}`)
+      : new Error(`Forked background job runner exited before reporting: code=${code} signal=${signal || "none"}`)
+
+    this._reportForkedChildFailure({payload, error})
   }
 
   /**
