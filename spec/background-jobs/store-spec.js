@@ -305,6 +305,29 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(row.queue).toEqual("default")
   })
 
+  it("coalesces deduplicateWhileQueued enqueues onto a still-queued job", async () => {
+    const store = await createClearedStore()
+    const options = {concurrencyKey: "recurring-key", maxConcurrency: 1, deduplicateWhileQueued: true, forked: false}
+
+    const firstId = await store.enqueue({jobName: "TestJob", args: [], options})
+    const secondId = await store.enqueue({jobName: "TestJob", args: [], options})
+
+    // The second enqueue coalesces onto the still-queued first job.
+    expect(secondId).toEqual(firstId)
+
+    const rows = await store._withDb(async (db) =>
+      await db.newQuery().from("background_jobs").where({concurrency_key: "recurring-key"}).results()
+    )
+
+    expect(rows.length).toEqual(1)
+
+    // Once the first is no longer queued (handed off), a fresh enqueue is allowed.
+    await store.markHandedOff({jobId: firstId, workerId: "w"})
+    const thirdId = await store.enqueue({jobName: "TestJob", args: [], options})
+
+    expect(thirdId).not.toEqual(firstId)
+  })
+
   it("releases a concurrency reservation when a competing queued claim loses", async () => {
     let activeCount = 0
     const db = {

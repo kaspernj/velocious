@@ -3,6 +3,7 @@
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import {outputPathFor, startBackgroundJobs, startBackgroundJobsMain, waitForOutputJson} from "../helpers/background-jobs-helper.js"
+import PruneTerminalBackgroundJobsJob from "../../src/jobs/prune-terminal-background-jobs.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
@@ -121,7 +122,7 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
 
       while (Date.now() < deadline) {
         const rows = await store._withDb(async (db) =>
-          await db.newQuery().from("background_jobs").where({job_name: "PruneTerminalBackgroundJobsJob"}).limit(1).results()
+          await db.newQuery().from("background_jobs").where({job_name: PruneTerminalBackgroundJobsJob.jobName()}).limit(1).results()
         )
 
         if (rows.length > 0) {

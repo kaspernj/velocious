@@ -14,10 +14,23 @@ import VelociousJob from "../background-jobs/job.js"
  */
 export default class PruneTerminalBackgroundJobsJob extends VelociousJob {
   /**
+   * Reserved job name that an application job cannot shadow. The registry loads
+   * app `src/jobs` first and skips duplicate built-in names, so if this used the
+   * default class-name identity an app class named `PruneTerminalBackgroundJobsJob`
+   * would be dispatched instead. A `:`-namespaced name can never collide with a
+   * default (class-name) identity, since class names cannot contain `:`.
+   * @returns {string} - Reserved job name.
+   */
+  static jobName() {
+    return "velocious:prune-terminal-background-jobs"
+  }
+
+  /**
    * Builds the scheduler configuration for this job from a resolved retention
    * config, or returns `null` when retention is fully disabled (nothing to
-   * prune, so nothing to schedule). A single `concurrencyKey`/`maxConcurrency`
-   * keeps a slow prune from piling up overlapping runs.
+   * prune, so nothing to schedule). `maxConcurrency: 1` keeps runs from
+   * overlapping, and `deduplicateWhileQueued` stops the interval scheduler from
+   * piling up redundant queued rows when a prune is slow or no worker is free.
    * @param {import("../configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration} retention - Resolved retention config.
    * @returns {import("../configuration-types.js").ScheduledBackgroundJobConfiguration | null} - Scheduler config for the prune job, or null when retention is disabled.
    */
@@ -32,7 +45,7 @@ export default class PruneTerminalBackgroundJobsJob extends VelociousJob {
     return {
       class: this,
       every: retention.sweepIntervalMs,
-      options: {concurrencyKey: "velocious-prune-terminal-background-jobs", maxConcurrency: 1}
+      options: {concurrencyKey: "velocious-prune-terminal-background-jobs", maxConcurrency: 1, deduplicateWhileQueued: true}
     }
   }
 

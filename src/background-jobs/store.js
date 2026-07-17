@@ -101,8 +101,26 @@ export default class BackgroundJobsStore {
     const argsJson = JSON.stringify(args || [])
     const queue = this._normalizeQueue(options)
     const concurrency = this._resolveConcurrency(options, queue)
+    /** @type {string} */
+    let resultJobId = jobId
 
     await this._withDb(async (db) => {
+      if (options?.deduplicateWhileQueued && concurrency?.concurrencyKey) {
+        const existing = await db
+          .newQuery()
+          .from(JOBS_TABLE)
+          .select("id")
+          .where({status: "queued", concurrency_key: concurrency.concurrencyKey})
+          .limit(1)
+          .results()
+
+        if (existing[0]) {
+          resultJobId = String(/** @type {Record<string, ?>} */ (existing[0]).id)
+
+          return
+        }
+      }
+
       if (concurrency) {
         if (concurrency.queueDerived) {
           await this._ensureQueueConcurrencyKey(db, concurrency)
@@ -130,7 +148,7 @@ export default class BackgroundJobsStore {
       })
     })
 
-    return jobId
+    return resultJobId
   }
 
   /**

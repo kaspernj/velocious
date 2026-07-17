@@ -5,6 +5,11 @@ import PruneTerminalBackgroundJobsJob from "../../src/jobs/prune-terminal-backgr
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 describe("PruneTerminalBackgroundJobsJob", {databaseCleaning: {truncate: true}}, () => {
+  it("uses a reserved job name that an app job cannot shadow via the class name", () => {
+    expect(PruneTerminalBackgroundJobsJob.jobName()).toEqual("velocious:prune-terminal-background-jobs")
+    expect(PruneTerminalBackgroundJobsJob.jobName()).not.toEqual(PruneTerminalBackgroundJobsJob.name)
+  })
+
   it("returns a schedule configuration when retention is enabled", () => {
     const config = PruneTerminalBackgroundJobsJob.scheduleConfiguration({
       completedTtlMs: 604800000,
@@ -15,7 +20,7 @@ describe("PruneTerminalBackgroundJobsJob", {databaseCleaning: {truncate: true}},
 
     expect(config?.class).toEqual(PruneTerminalBackgroundJobsJob)
     expect(config?.every).toEqual(3600000)
-    expect(config?.options).toEqual({concurrencyKey: "velocious-prune-terminal-background-jobs", maxConcurrency: 1})
+    expect(config?.options).toEqual({concurrencyKey: "velocious-prune-terminal-background-jobs", maxConcurrency: 1, deduplicateWhileQueued: true})
   })
 
   it("returns null when retention is fully disabled", () => {

@@ -8,6 +8,29 @@ Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `perf
 
 Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned; startup reconciliation repairs reservation counts after an unclean scheduler stop.
 
+## Retention (pruning old job rows)
+
+Terminal job rows are not deleted automatically unless retention is configured — a busy application otherwise accumulates `completed` (and `failed`/`orphaned`) rows indefinitely, bloating the table and its indexes and eventually slowing dispatch. Configure retention under `backgroundJobs.retention`:
+
+```js
+backgroundJobs: {
+  retention: {
+    completedTtlMs: 7 * 24 * 60 * 60 * 1000, // delete completed jobs older than this (default: 7 days; null/0 disables)
+    failedTtlMs: 30 * 24 * 60 * 60 * 1000,   // delete failed/orphaned jobs older than this (default: 30 days; null/0 disables)
+    batchSize: 1000,                          // rows deleted per batch (default: 1000)
+    sweepIntervalMs: 60 * 60 * 1000           // how often the prune runs (default: 1 hour)
+  }
+}
+```
+
+When at least one TTL is enabled, `background-jobs-main` registers a built-in `velocious:prune-terminal-background-jobs` job on the scheduler. **It runs as an ordinary background job**, so:
+
+- it requires a running worker to execute — a stopped worker pool means no pruning until one returns;
+- each run appears in the job tables as a normal queued job and can retry or fail like any other job;
+- runs are bounded — a `maxConcurrency: 1` reservation prevents overlap, and enqueue-time deduplication keeps the recurring schedule from piling up redundant queued rows when a prune runs slower than its interval or no worker is free.
+
+Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`) so a large backlog is removed incrementally rather than in one long transaction. Retention only ever deletes terminal rows; `queued` and in-flight jobs are never pruned.
+
 ## Worker Disconnect Recovery
 
 Each durable worker handoff has a unique lease id. If a worker socket disconnects unexpectedly, `background-jobs-main` immediately returns only the jobs handed to that exact socket to the queue and makes them available to another connected worker. Two connections that advertise the same worker id remain isolated from each other.
