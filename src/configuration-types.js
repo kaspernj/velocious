@@ -179,10 +179,14 @@
  *   Sidekiq's strict queue ordering, priority composes with the per-queue caps:
  *   a higher-priority queue that is already at its `maxConcurrent` is skipped and
  *   dispatch falls through to the next eligible lower-priority job, so a busy
- *   high-priority queue does not block everything else. Priorities may be any
- *   number, including negative to sink a queue below the default. Jobs within the
- *   same priority keep FIFO (`scheduled_at`, then `created_at`) order.
- *   Default: `{}` (no queue caps, all queues priority `0`).
+ *   high-priority queue does not block everything else. This fallthrough is a
+ *   property of the queue-derived cap; a job that supplies its own explicit
+ *   `concurrencyKey`/`maxConcurrency` bypasses the queue cap entirely (an
+ *   explicit key always wins — see above) and is bounded only by that key, so it
+ *   is not held back by the queue's cap and priority simply orders it normally.
+ *   Priorities may be any number, including negative to sink a queue below the
+ *   default. Jobs within the same priority keep FIFO (`scheduled_at`, then
+ *   `created_at`) order. Default: `{}` (no queue caps, all queues priority `0`).
  * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
  *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
  *   to restore the legacy fixed-interval poll.
