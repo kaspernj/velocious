@@ -26,6 +26,8 @@ export default class JsonSocket extends EventEmitter {
      * Narrows the runtime value to the documented type.
      * @type {boolean} */
     this.acceptsForkedJobs = true
+    /** @type {boolean} */
+    this.acceptsPooledJobs = false
     /**
      * Narrows the runtime value to the documented type.
      * @type {boolean} */

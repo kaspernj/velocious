@@ -164,6 +164,10 @@
  *   allowed to keep in flight. Default: `4`. This is a per-worker safety cap;
  *   for workload-shaped limits use per-queue caps (`queues`) instead, which are
  *   enforced cluster-wide and are immune to duplicate worker processes.
+ * @property {number} [pooledRunnerCount] - Number of warm, reusable child runners owned by each worker. Pooled capacity is separate from inline and forked/spawned capacity. Default: `4`.
+ * @property {number} [pooledRunnerMaxJobs] - Number of sequential jobs a pooled child runs before it is replaced, bounding process-level resource accumulation. Default: `100`.
+ * @property {number} [pooledRunnerMaxRssBytes] - RSS bytes after an acknowledged job at which a pooled child is replaced. Default: `536870912` (512 MiB).
+ * @property {number} [pooledRunnerMaxLifetimeMs] - Age after an acknowledged job at which a pooled child is replaced. Default: `3600000` (one hour).
  * @property {Record<string, {maxConcurrent?: number, priority?: number}>} [queues] - Per-queue
  *   concurrency caps and dispatch priorities, Sidekiq-style. A job declares its queue (static
  *   `queue` on the job class, or the `queue` enqueue option; defaults to `"default"`), and

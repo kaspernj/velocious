@@ -846,10 +846,14 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       args: [],
       options: {forked: false}
     })
+    const pooledJobId = await store.enqueue({jobName: "TestJob", args: []})
+    const aliasedForkedJobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: true}})
 
     const forkedJob = await getJobOrFail({jobId: forkedJobId, store})
     const spawnedJob = await getJobOrFail({jobId: spawnedJobId, store})
     const inlineJob = await getJobOrFail({jobId: inlineJobId, store})
+    const pooledJob = await getJobOrFail({jobId: pooledJobId, store})
+    const aliasedForkedJob = await getJobOrFail({jobId: aliasedForkedJobId, store})
 
     expect(forkedJob.executionMode).toEqual("forked")
     expect(forkedJob.forked).toEqual(true)
@@ -857,6 +861,48 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(spawnedJob.forked).toEqual(true)
     expect(inlineJob.executionMode).toEqual("inline")
     expect(inlineJob.forked).toEqual(false)
+    expect(pooledJob.executionMode).toEqual("pooled")
+    expect(pooledJob.forked).toEqual(true)
+    expect(aliasedForkedJob.executionMode).toEqual("forked")
+  })
+
+  it("persists pooled defaults in the old execution-mode vocabulary while upgraded stores read pooled", async () => {
+    const store = await createClearedStore()
+    const pooledJobId = await store.enqueue({jobName: "TestJob", args: []})
+    const legacyAcceptedExecutionModes = ["inline", "forked", "spawned"]
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs verify rolling-safe pooled row"}, async (db) => {
+      const rows = await db
+        .newQuery()
+        .from("background_jobs")
+        .where({id: pooledJobId})
+        .results()
+      const persistedExecutionMode = String(rows[0]?.execution_mode)
+
+      expect(legacyAcceptedExecutionModes.includes(persistedExecutionMode)).toEqual(true)
+      expect(persistedExecutionMode).toEqual("forked")
+    })
+
+    const upgradedJob = await getJobOrFail({jobId: pooledJobId, store})
+    expect(upgradedJob.executionMode).toEqual("pooled")
+
+    const nextForked = await store.nextAvailableJob({executionMode: "forked"})
+    const nextPooled = await store.nextAvailableJob({executionMode: "pooled"})
+    expect(nextForked).toBeNull()
+    expect(nextPooled?.id).toEqual(pooledJobId)
+  })
+
+  it("keeps a failed pooled job pooled when it returns to the queue", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {maxRetries: 1}})
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+    if (!handoff) throw new Error("Expected pooled job handoff")
+
+    await store.markFailed({jobId, error: "retry", workerId: "worker-1", ...handoff})
+
+    const job = await getJobOrFail({jobId, store})
+    expect(job.executionMode).toEqual("pooled")
   })
 
   it("backfills execution modes for legacy queued jobs", async () => {

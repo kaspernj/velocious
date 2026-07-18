@@ -18,8 +18,25 @@ const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 /**
  * Execution modes.
  * @type {import("./types.js").BackgroundJobExecutionMode[]} */
-const EXECUTION_MODES = ["inline", "forked", "spawned"]
-const DEFAULT_EXECUTION_MODE = "forked"
+const EXECUTION_MODES = ["inline", "forked", "pooled", "spawned"]
+/**
+ * Execution mode for a new enqueue that names neither `executionMode` nor the
+ * legacy `forked` flag. Pooled routes the job to a warm, reused local runner
+ * process — the same isolation as forked without paying a fresh process per job.
+ * @type {import("./types.js").BackgroundJobExecutionMode} */
+const DEFAULT_EXECUTION_MODE = "pooled"
+/**
+ * Execution mode a legacy `forked = true` row (persisted before the
+ * `execution_mode` column existed) backfills to. It must stay `"forked"` so an
+ * upgrade never silently reinterprets already-persisted forked jobs as pooled —
+ * distinct from {@link DEFAULT_EXECUTION_MODE}, which only governs new enqueues.
+ * @type {import("./types.js").BackgroundJobExecutionMode} */
+const LEGACY_FORKED_EXECUTION_MODE = "forked"
+// Pooled jobs persist with the legacy-safe `forked` mode so a pre-pool main can
+// deserialize and run them during a rolling upgrade. Old versions ignore the
+// nullable handoff id on queued rows, making it a backward-compatible marker.
+const POOLED_HANDOFF_ID_PREFIX = "velocious-pooled:"
+const POOLED_QUEUED_HANDOFF_ID = `${POOLED_HANDOFF_ID_PREFIX}queued`
 const DEFAULT_QUEUE = "default"
 // Queue-derived durable concurrency keys are namespaced so they can't collide
 // with explicit caller-supplied concurrencyKeys.
@@ -138,7 +155,7 @@ export default class BackgroundJobsStore {
           job_name: jobName,
           args_json: argsJson,
           forked: executionMode !== "inline",
-          execution_mode: executionMode,
+          execution_mode: executionMode === "pooled" ? LEGACY_FORKED_EXECUTION_MODE : executionMode,
           queue,
           max_retries: maxRetries,
           attempts: 0,
@@ -146,7 +163,8 @@ export default class BackgroundJobsStore {
           scheduled_at_ms: scheduledAtMs,
           created_at_ms: now,
           concurrency_key: concurrency?.concurrencyKey || null,
-          max_concurrency: concurrency?.maxConcurrency || null
+          max_concurrency: concurrency?.maxConcurrency || null,
+          handoff_id: executionMode === "pooled" ? POOLED_QUEUED_HANDOFF_ID : null
         }
       })
     })
@@ -221,11 +239,7 @@ export default class BackgroundJobsStore {
     if (typeof forked === "boolean") {
       query = query.where({forked})
     }
-    if (executionMode) {
-      const executionModes = Array.isArray(executionMode) ? executionMode : [executionMode]
-
-      query = query.where({execution_mode: executionModes})
-    }
+    if (executionMode) query = this._whereExecutionMode({db, executionMode, query})
 
     if (scheduledAtOperator === "<=") {
       const priorityOrder = this._queuePriorityOrderSql(db)
@@ -401,12 +415,14 @@ export default class BackgroundJobsStore {
     await this.ensureReady()
 
     const handedOffAtMs = Date.now()
-    const handoffId = randomUUID()
 
     return await this._withDb(async (db) => await this._transactionResult(db, async () => {
       const queuedJob = await this._getJobRowById(db, jobId)
       if (!queuedJob || queuedJob.status !== "queued") return null
       if (queuedJob.concurrencyKey && !(await this._reserveConcurrency(db, queuedJob.concurrencyKey))) return null
+      const handoffId = queuedJob.executionMode === "pooled"
+        ? `${POOLED_HANDOFF_ID_PREFIX}${randomUUID()}`
+        : randomUUID()
 
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
@@ -480,7 +496,7 @@ export default class BackgroundJobsStore {
           status: "queued",
           scheduled_at_ms: Date.now(),
           handed_off_at_ms: null,
-          handoff_id: null,
+          handoff_id: job.executionMode === "pooled" ? POOLED_QUEUED_HANDOFF_ID : null,
           worker_id: null
         },
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
@@ -990,7 +1006,7 @@ export default class BackgroundJobsStore {
       const executionModeColumnSql = db.quoteColumn("execution_mode")
 
       await db.query(
-        `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote(DEFAULT_EXECUTION_MODE)} ` +
+        `UPDATE ${tableNameSql} SET ${executionModeColumnSql} = ${db.quote(LEGACY_FORKED_EXECUTION_MODE)} ` +
         `WHERE ${forkedColumnSql} = ${db.quote(true)} AND ${executionModeColumnSql} IS NULL`
       )
       await db.query(
@@ -1081,6 +1097,7 @@ export default class BackgroundJobsStore {
       scheduledAt,
       shouldRetry
     })
+    if (shouldRetry && job.executionMode === "pooled") update.handoff_id = POOLED_QUEUED_HANDOFF_ID
 
     const affectedRows = await this._updateAffectedRows(db, {
       tableName: JOBS_TABLE,
@@ -1189,8 +1206,10 @@ export default class BackgroundJobsStore {
    * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
    */
   _normalizeJobRow(row) {
-    const executionMode = row.execution_mode
-      ? this._normalizeExecutionModeName(String(row.execution_mode))
+    const persistedExecutionMode = row.execution_mode ? String(row.execution_mode) : null
+    const handoffId = row.handoff_id ? String(row.handoff_id) : null
+    const executionMode = persistedExecutionMode
+      ? this._normalizePersistedExecutionMode({executionMode: persistedExecutionMode, handoffId})
       : this._normalizeExecutionMode({forked: this._normalizeBoolean(row.forked)})
 
     return {
@@ -1206,7 +1225,7 @@ export default class BackgroundJobsStore {
       scheduledAtMs: this._normalizeNumber(row.scheduled_at_ms),
       createdAtMs: this._normalizeNumber(row.created_at_ms),
       handedOffAtMs: this._normalizeNumber(row.handed_off_at_ms),
-      handoffId: row.handoff_id ? String(row.handoff_id) : null,
+      handoffId,
       completedAtMs: this._normalizeNumber(row.completed_at_ms),
       failedAtMs: this._normalizeNumber(row.failed_at_ms),
       orphanedAtMs: this._normalizeNumber(row.orphaned_at_ms),
@@ -1506,7 +1525,11 @@ export default class BackgroundJobsStore {
     if (executionMode) {
       return this._normalizeExecutionModeName(executionMode)
     }
+    // The legacy `forked` flag stays authoritative when supplied: `false` is
+    // inline and `true` is forked (never the pooled default). Only an enqueue
+    // that names neither option falls through to the pooled default.
     if (options?.forked === false) return "inline"
+    if (options?.forked === true) return LEGACY_FORKED_EXECUTION_MODE
 
     return DEFAULT_EXECUTION_MODE
   }
@@ -1522,6 +1545,47 @@ export default class BackgroundJobsStore {
     }
 
     throw new Error(`Invalid background job executionMode: ${executionMode}`)
+  }
+
+  /**
+   * Normalizes a legacy-safe persisted execution mode.
+   * @param {object} args - Options.
+   * @param {string} args.executionMode - Persisted legacy execution mode.
+   * @param {string | null} args.handoffId - Persisted handoff id or pooled marker.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Runtime execution mode.
+   */
+  _normalizePersistedExecutionMode({executionMode, handoffId}) {
+    if (executionMode === LEGACY_FORKED_EXECUTION_MODE && handoffId?.startsWith(POOLED_HANDOFF_ID_PREFIX)) return "pooled"
+
+    return this._normalizeExecutionModeName(executionMode)
+  }
+
+  /**
+   * Filters persisted legacy-safe execution modes.
+   * @param {object} args - Options.
+   * @param {import("../database/drivers/base.js").default} args.db - Database connection.
+   * @param {import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]} args.executionMode - Runtime modes.
+   * @param {import("../database/query/index.js").default} args.query - Query to filter.
+   * @returns {import("../database/query/index.js").default} - Filtered query.
+   */
+  _whereExecutionMode({db, executionMode, query}) {
+    const executionModes = Array.isArray(executionMode) ? executionMode : [executionMode]
+    /** @type {string[]} */
+    const conditions = []
+    const executionModeColumn = db.quoteColumn("execution_mode")
+    const handoffIdColumn = db.quoteColumn("handoff_id")
+
+    for (const mode of executionModes) {
+      if (mode === "pooled") {
+        conditions.push(`(${executionModeColumn} = ${db.quote(LEGACY_FORKED_EXECUTION_MODE)} AND ${handoffIdColumn} = ${db.quote(POOLED_QUEUED_HANDOFF_ID)})`)
+      } else if (mode === LEGACY_FORKED_EXECUTION_MODE) {
+        conditions.push(`(${executionModeColumn} = ${db.quote(mode)} AND (${handoffIdColumn} IS NULL OR ${handoffIdColumn} <> ${db.quote(POOLED_QUEUED_HANDOFF_ID)}))`)
+      } else {
+        conditions.push(`${executionModeColumn} = ${db.quote(mode)}`)
+      }
+    }
+
+    return query.where(`(${conditions.join(" OR ")})`)
   }
 
   /**

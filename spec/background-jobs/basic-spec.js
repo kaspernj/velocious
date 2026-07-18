@@ -18,7 +18,7 @@ import TestJob from "../dummy/src/jobs/test-job.js"
  * @param {string} args.workerId - Worker id.
  * @returns {Promise<{jsonSocket: JsonSocket, nextJob: () => Promise<import("../../src/background-jobs/types.js").BackgroundJobPayload>, receivedJobs: import("../../src/background-jobs/types.js").BackgroundJobPayload[]}>} - Connected controllable worker.
  */
-async function connectControllableWorker({port, supportsHandoffIdReporting = true, workerId}) {
+async function connectControllableWorker({port, supportsHandoffIdReporting = true, workerId, acceptsPooled = false}) {
   const socket = net.createConnection({host: "127.0.0.1", port})
   const jsonSocket = new JsonSocket(socket)
   /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
@@ -38,7 +38,7 @@ async function connectControllableWorker({port, supportsHandoffIdReporting = tru
   } else {
     jsonSocket.send({type: "hello", role: "worker", workerId})
   }
-  jsonSocket.send({type: "ready", acceptsForked: true, acceptsInline: true, acceptsSpawned: true})
+  jsonSocket.send({type: "ready", acceptsForked: true, acceptsInline: true, acceptsPooled, acceptsSpawned: true})
 
   return {
     jsonSocket,
@@ -56,6 +56,89 @@ async function connectControllableWorker({port, supportsHandoffIdReporting = tru
 }
 
 describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
+  it("reuses a pooled runner for sequential jobs", async () => {
+    const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
+    const outputPath = await outputPathFor("pooled-runner-reuse")
+    try {
+      const firstId = await store.enqueue({jobName: "PooledRunnerTestJob", args: [outputPath]})
+      await main._drain()
+      await waitForJobCompleted({jobId: firstId, store})
+      const secondId = await store.enqueue({jobName: "PooledRunnerTestJob", args: [outputPath]})
+      await main._drain()
+      await waitForJobCompleted({jobId: secondId, store})
+
+      const pids = await waitForOutputJson({outputPath, predicate: (value) => value.length === 2})
+      expect(pids[0]).toEqual(pids[1])
+    } finally {
+      await worker.stop({timeoutMs: 1000})
+      expect(worker.pooledChildren.size).toEqual(0)
+      expect(worker.inflightProcessChildren.size).toEqual(0)
+      await main.stop()
+    }
+  })
+
+  it("routes pooled jobs only to workers advertising pooled capacity", async () => {
+    const {main, store} = await startBackgroundJobsMain()
+    const legacy = await connectControllableWorker({port: main.getPort(), workerId: "legacy"})
+    const pooled = await connectControllableWorker({port: main.getPort(), workerId: "pooled", acceptsPooled: true})
+
+    try {
+      const jobId = await store.enqueue({jobName: "TestJob", args: []})
+
+      await main._drain()
+      const payload = await pooled.nextJob()
+      expect(payload.id).toEqual(jobId)
+      expect(legacy.receivedJobs).toEqual([])
+    } finally {
+      legacy.jsonSocket.close()
+      pooled.jsonSocket.close()
+      await main.stop()
+    }
+  })
+
+  it("drains a later eligible job when no ready worker accepts an earlier pooled job", async () => {
+    const {main, store} = await startBackgroundJobsMain()
+    const worker = await connectControllableWorker({port: main.getPort(), workerId: "non-pooled-worker"})
+
+    try {
+      const pooledJobId = await store.enqueue({jobName: "TestJob", args: []})
+      const inlineJobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
+
+      await main._drain()
+
+      const payload = await worker.nextJob()
+      expect(payload.id).toEqual(inlineJobId)
+      expect(payload.options.executionMode).toEqual("inline")
+      expect((await store.getJob(pooledJobId))?.status).toEqual("queued")
+      expect(worker.receivedJobs).toEqual([])
+    } finally {
+      worker.jsonSocket.close()
+      await main.stop()
+    }
+  })
+
+  it("gracefully drains a busy pooled job and then retires its child", async () => {
+    const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1}})
+    const outputPath = await outputPathFor("pooled-runner-drain")
+
+    try {
+      const jobId = await store.enqueue({jobName: "SlowTestJob", args: ["drained", outputPath, 100]})
+      await main._drain()
+      await timeout({timeout: 2000}, async () => {
+        while (worker.inflightPooledJobs.size === 0) await wait(0.01)
+      })
+
+      await worker.stop({timeoutMs: 2000})
+
+      expect((await store.getJob(jobId))?.status).toEqual("completed")
+      expect(await waitForOutputJson({outputPath})).toEqual({message: "drained"})
+      expect(worker.pooledChildren.size).toEqual(0)
+      expect(worker.inflightProcessChildren.size).toEqual(0)
+    } finally {
+      await main.stop()
+    }
+  })
+
   it("dispatches fenced handoffs only to workers that advertise handoff-id reporting", async () => {
     const {main, store} = await startBackgroundJobsMain()
     const legacyWorker = await connectControllableWorker({
