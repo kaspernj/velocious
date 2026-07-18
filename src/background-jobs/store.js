@@ -99,6 +99,7 @@ export default class BackgroundJobsStore {
     const now = Date.now()
     const executionMode = this._normalizeExecutionMode(options)
     const maxRetries = this._normalizeMaxRetries(options?.maxRetries)
+    const scheduledAtMs = this._normalizeScheduledAtMs(options?.scheduledAtMs, now)
     const argsJson = JSON.stringify(args || [])
     const queue = this._normalizeQueue(options)
     const concurrency = this._resolveConcurrency(options, queue)
@@ -141,7 +142,7 @@ export default class BackgroundJobsStore {
           max_retries: maxRetries,
           attempts: 0,
           status: "queued",
-          scheduled_at_ms: now,
+          scheduled_at_ms: scheduledAtMs,
           created_at_ms: now,
           concurrency_key: concurrency?.concurrencyKey || null,
           max_concurrency: concurrency?.maxConcurrency || null
@@ -723,6 +724,19 @@ export default class BackgroundJobsStore {
     }
 
     return DEFAULT_MAX_RETRIES
+  }
+
+  /**
+   * Runs normalize scheduled at ms.
+   * @param {number | undefined} scheduledAtMs - Requested dispatch timestamp.
+   * @param {number} defaultScheduledAtMs - Default dispatch timestamp.
+   * @returns {number} - Dispatch timestamp.
+   */
+  _normalizeScheduledAtMs(scheduledAtMs, defaultScheduledAtMs) {
+    if (scheduledAtMs === undefined) return defaultScheduledAtMs
+    if (Number.isSafeInteger(scheduledAtMs) && scheduledAtMs >= 0) return scheduledAtMs
+
+    throw new Error("background job scheduledAtMs must be a non-negative safe integer")
   }
 
   async _ensureSchema() {

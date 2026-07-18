@@ -17,6 +17,7 @@
  * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap. Overrides any queue-derived cap.
  * @property {number} [maxConcurrency] - Positive integer cap; must be paired with `concurrencyKey`.
  * @property {boolean} [deduplicateWhileQueued] - When true (requires `concurrencyKey`), skip the enqueue if a still-queued job with the same `concurrencyKey` already exists, returning that job's id. Keeps an interval-scheduled recurring job (e.g. retention pruning) from piling up redundant queued rows when it runs slower than its interval or no worker is free.
+ * @property {number} [scheduledAtMs] - Epoch timestamp in milliseconds when the job becomes eligible for dispatch. Defaults to enqueue time.
  */
 /**
  * @typedef {object} BackgroundJobPayload
