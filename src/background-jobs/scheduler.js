@@ -115,7 +115,8 @@ export default class BackgroundJobsScheduler {
 
   /**
    * Runs stop.
-   * @returns {Promise<void>} - Resolves after in-flight scheduled enqueues finish. */
+   * @returns {Promise<void>} Resolves after in-flight scheduled enqueues finish.
+   */
   async stop() {
     this.stopped = true
 
