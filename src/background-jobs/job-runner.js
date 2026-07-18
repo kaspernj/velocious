@@ -78,9 +78,10 @@ function runnerProcessTitle(JobClass, payload) {
  * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
  * @param {object} [options] - Runner options.
  * @param {boolean} [options.closeConnections] - Whether to gracefully close framework connections after the job.
+ * @param {boolean} [options.manageProcessTitle] - Whether to set the per-job process title and restore it afterwards. Off for concurrent pooled runners, where interleaved snapshot/restore of the single process-wide `process.title` would corrupt it; the pooled child owns an aggregate title instead.
  * @returns {Promise<void>} - Resolves when complete.
  */
-export default async function runJobPayload(payload, {closeConnections = true} = {}) {
+export default async function runJobPayload(payload, {closeConnections = true, manageProcessTitle = true} = {}) {
   const configuration = await configurationResolver()
   configuration.setCurrent()
   await configuration.initialize({type: "background-jobs-runner"})
@@ -98,8 +99,9 @@ export default async function runJobPayload(payload, {closeConnections = true} =
 
   // Name the process after the job it is running so `ps`/`top` show what each
   // runner is doing; restored in the `finally` below when the job finishes.
+  // Skipped for concurrent pooled runners, whose child owns an aggregate title.
   const previousTitle = process.title
-  process.title = runnerProcessTitle(JobClass, payload)
+  if (manageProcessTitle) process.title = runnerProcessTitle(JobClass, payload)
 
   try {
     try {
@@ -136,7 +138,7 @@ export default async function runJobPayload(payload, {closeConnections = true} =
   } finally {
     // Restore the runner's base title so a lingering/idle runner (or a reused
     // one) doesn't misreport a finished job as still running.
-    process.title = previousTitle
+    if (manageProcessTitle) process.title = previousTitle
     if (closeConnections) {
       try {
         await configuration.disconnectBeacon()

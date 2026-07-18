@@ -3,8 +3,32 @@
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
 
+const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
+
 setRunnerProcessTitle()
-let running = false
+
+/**
+ * Ids of jobs currently running in this child. A pooled child runs up to
+ * `pooledRunnerConcurrency` jobs at once (the worker only dispatches within that
+ * bound); the set dedupes a redelivered job id and lets each job settle
+ * independently.
+ * @type {Set<string>}
+ */
+const runningJobIds = new Set()
+
+/**
+ * Sets an aggregate process title from the current in-flight count. A child runs
+ * jobs concurrently, so a per-job title (which `runJobPayload` would snapshot and
+ * restore around a single job) cannot represent the process — interleaved
+ * completions would leave a stale label. Recomputing from `runningJobIds.size` is
+ * concurrency-safe and honest: `ps`/`top` show how many jobs the child is running.
+ * @returns {void}
+ */
+function updateProcessTitle() {
+  const count = runningJobIds.size
+
+  process.title = count > 0 ? `${BASE_PROCESS_TITLE}: ${count} ${count === 1 ? "job" : "jobs"}` : BASE_PROCESS_TITLE
+}
 
 /**
  * Checks whether an IPC value is a runnable pooled job message.
@@ -46,33 +70,46 @@ function sendOutcome({jobId, acknowledged, status, error}) {
 }
 
 /**
- * Handles one serial job message.
- * @param {?} message - IPC message.
+ * Runs one job concurrently with any siblings and reports its own terminal
+ * outcome. A single job's unexpected failure reports that job for reclamation
+ * (`acknowledged: false`) but does NOT take down the child — its concurrent
+ * siblings keep running. Only a process-level fault (which escapes every
+ * per-job try/catch) ends the child, which the worker sees as an exit and
+ * reclaims for the whole in-flight set.
+ * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload.
  * @returns {Promise<void>} - Resolves after reporting.
  */
-async function handleMessage(message) {
-  if (running || !isJobMessage(message)) return
-
-  running = true
+async function runJob(payload) {
   try {
-    await runJobPayload(message.payload, {closeConnections: false})
-    await sendOutcome({jobId: message.payload.id, acknowledged: true, status: "completed"})
+    await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+    await sendOutcome({jobId: payload.id, acknowledged: true, status: "completed"})
   } catch (error) {
     if (error instanceof BackgroundJobPerformedFailure) {
-      await sendOutcome({jobId: message.payload.id, acknowledged: true, status: "failed"})
+      await sendOutcome({jobId: payload.id, acknowledged: true, status: "failed"})
     } else {
       const reportError = error instanceof Error ? error : new Error(String(error))
       console.error("Pooled background job runner failed before terminal acknowledgement:", reportError)
-      await sendOutcome({jobId: message.payload.id, acknowledged: false, error: reportError})
-      process.exitCode = 1
-      if (process.disconnect) process.disconnect()
-      setImmediate(() => process.exit(1))
+      await sendOutcome({jobId: payload.id, acknowledged: false, error: reportError})
     }
   } finally {
-    running = false
+    runningJobIds.delete(payload.id)
+    updateProcessTitle()
   }
 }
 
-process.on("message", (message) => { void handleMessage(message) })
+/**
+ * Handles a job message, starting it alongside any concurrent siblings.
+ * @param {?} message - IPC message.
+ * @returns {void}
+ */
+function handleMessage(message) {
+  if (!isJobMessage(message) || runningJobIds.has(message.payload.id)) return
+
+  runningJobIds.add(message.payload.id)
+  updateProcessTitle()
+  void runJob(message.payload)
+}
+
+process.on("message", (message) => handleMessage(message))
 process.once("disconnect", () => process.exit(0))
 for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => process.exit(1))

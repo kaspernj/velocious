@@ -192,6 +192,12 @@ export default class VelociousConfiguration {
     }
 
     this._isInitialized = false
+    /**
+     * In-progress `initialize()` promise, memoized so concurrent callers await
+     * the same bootstrap. Reset to undefined if initialization fails.
+     * @type {Promise<void> | undefined}
+     */
+    this._initializePromise = undefined
     this.httpServer = httpServer || {}
     /**
      * Stores the http server instance value.
@@ -1269,6 +1275,7 @@ export default class VelociousConfiguration {
     const envMaxConcurrentForkedRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS
     const envMaxConcurrentRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS
     const envPooledRunnerCountRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_COUNT
+    const envPooledRunnerConcurrencyRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_CONCURRENCY
     const envPooledRunnerMaxJobsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS
     const envPooledRunnerMaxRssBytesRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_RSS_BYTES
     const envPooledRunnerMaxLifetimeMsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS
@@ -1279,6 +1286,7 @@ export default class VelociousConfiguration {
     const envMaxConcurrentForked = envMaxConcurrentForkedRaw ? Number(envMaxConcurrentForkedRaw) : undefined
     const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
     const envPooledRunnerCount = envPooledRunnerCountRaw ? Number(envPooledRunnerCountRaw) : undefined
+    const envPooledRunnerConcurrency = envPooledRunnerConcurrencyRaw ? Number(envPooledRunnerConcurrencyRaw) : undefined
     const envPooledRunnerMaxJobs = envPooledRunnerMaxJobsRaw ? Number(envPooledRunnerMaxJobsRaw) : undefined
     const envPooledRunnerMaxRssBytes = envPooledRunnerMaxRssBytesRaw ? Number(envPooledRunnerMaxRssBytesRaw) : undefined
     const envPooledRunnerMaxLifetimeMs = envPooledRunnerMaxLifetimeMsRaw ? Number(envPooledRunnerMaxLifetimeMsRaw) : undefined
@@ -1299,6 +1307,9 @@ export default class VelociousConfiguration {
     const pooledRunnerCount = typeof configured.pooledRunnerCount === "number" && Number.isFinite(configured.pooledRunnerCount) && Number.isInteger(configured.pooledRunnerCount) && configured.pooledRunnerCount >= 1
       ? configured.pooledRunnerCount
       : (!("pooledRunnerCount" in configured) && typeof envPooledRunnerCount === "number" && Number.isFinite(envPooledRunnerCount) && Number.isInteger(envPooledRunnerCount) && envPooledRunnerCount >= 1 ? envPooledRunnerCount : 4)
+    const pooledRunnerConcurrency = typeof configured.pooledRunnerConcurrency === "number" && Number.isFinite(configured.pooledRunnerConcurrency) && Number.isInteger(configured.pooledRunnerConcurrency) && configured.pooledRunnerConcurrency >= 1
+      ? configured.pooledRunnerConcurrency
+      : (!("pooledRunnerConcurrency" in configured) && typeof envPooledRunnerConcurrency === "number" && Number.isFinite(envPooledRunnerConcurrency) && Number.isInteger(envPooledRunnerConcurrency) && envPooledRunnerConcurrency >= 1 ? envPooledRunnerConcurrency : 1)
     const pooledRunnerMaxJobs = typeof configured.pooledRunnerMaxJobs === "number" && Number.isFinite(configured.pooledRunnerMaxJobs) && Number.isInteger(configured.pooledRunnerMaxJobs) && configured.pooledRunnerMaxJobs >= 1
       ? configured.pooledRunnerMaxJobs
       : (!("pooledRunnerMaxJobs" in configured) && typeof envPooledRunnerMaxJobs === "number" && Number.isFinite(envPooledRunnerMaxJobs) && Number.isInteger(envPooledRunnerMaxJobs) && envPooledRunnerMaxJobs >= 1 ? envPooledRunnerMaxJobs : 100)
@@ -1336,7 +1347,7 @@ export default class VelociousConfiguration {
         : 60 * 60 * 1000
     }
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobTimeoutMs, retention}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobTimeoutMs, retention}
   }
 
   /**
@@ -1934,9 +1945,16 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize({type} = {type: "undefined"}) {
-    if (!this.isInitialized()) {
-      this._isInitialized = true
+    if (this._isInitialized) return
+    // Memoize the in-progress initialization so concurrent callers await the same
+    // bootstrap instead of racing. `_isInitialized` was previously set to `true`
+    // up front, so a second caller (e.g. a pooled runner with
+    // `pooledRunnerConcurrency > 1` starting several jobs on a cold child) could
+    // skip initialization and load models / perform a job while the first call
+    // was still awaiting model discovery and initializers. Mirrors connectBeacon.
+    if (this._initializePromise) return await this._initializePromise
 
+    this._initializePromise = (async () => {
       await this.initializeModels({type})
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
@@ -1957,6 +1975,17 @@ export default class VelociousConfiguration {
           }
         }
       }
+
+      this._isInitialized = true
+    })()
+
+    try {
+      await this._initializePromise
+    } catch (error) {
+      // Let a later call retry a failed initialization instead of every future
+      // caller awaiting the same cached rejection.
+      this._initializePromise = undefined
+      throw error
     }
   }
 
