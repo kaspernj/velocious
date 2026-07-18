@@ -3,6 +3,7 @@
 import {randomUUID} from "crypto"
 import Logger from "../logger.js"
 import TableData from "../database/table-data/index.js"
+import VelociousError from "../velocious-error.js"
 import BackgroundJobRecord from "./job-record.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 
@@ -737,7 +738,7 @@ export default class BackgroundJobsStore {
     if (scheduledAtMs === undefined) return defaultScheduledAtMs
     if (Number.isSafeInteger(scheduledAtMs) && scheduledAtMs >= 0) return scheduledAtMs
 
-    throw new Error("background job scheduledAtMs must be a non-negative safe integer")
+    throw VelociousError.safe("background job scheduledAtMs must be a non-negative safe integer")
   }
 
   async _ensureSchema() {
