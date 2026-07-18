@@ -791,6 +791,33 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(next?.scheduledAtMs).toBeGreaterThan(Date.now())
   })
 
+  it("enqueues a job for an explicit future scheduledAtMs", async () => {
+    const store = await createClearedStore()
+    const laterScheduledAtMs = Date.now() + 60000
+    const soonerScheduledAtMs = laterScheduledAtMs - 30000
+    const laterJobId = await store.enqueue({
+      jobName: "TestJob",
+      args: ["later"],
+      options: {forked: false, scheduledAtMs: laterScheduledAtMs}
+    })
+    const soonerJobId = await store.enqueue({
+      jobName: "TestJob",
+      args: ["sooner"],
+      options: {forked: false, scheduledAtMs: soonerScheduledAtMs}
+    })
+
+    expect((await getJobOrFail({jobId: laterJobId, store})).scheduledAtMs).toEqual(laterScheduledAtMs)
+    expect(await store.nextAvailableJob()).toBeNull()
+    expect((await store.nextScheduledJob())?.id).toEqual(soonerJobId)
+  })
+
+  it("rejects invalid scheduledAtMs enqueue options", async () => {
+    const store = await createClearedStore()
+
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {scheduledAtMs: -1}})).toThrow(/scheduledAtMs/)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {scheduledAtMs: Number.POSITIVE_INFINITY}})).toThrow(/scheduledAtMs/)
+  })
+
   it("returns null from nextScheduledJob when no future-scheduled jobs exist", async () => {
     const store = await createClearedStore()
 

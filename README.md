@@ -2052,6 +2052,17 @@ await MyJob.performLaterWithOptions({
 })
 ```
 
+Schedule a one-off job for a specific epoch timestamp in milliseconds:
+
+```js
+await MyJob.performLaterWithOptions({
+  args: ["a", "b"],
+  options: {scheduledAtMs: Date.now() + 2 * 60 * 60 * 1000}
+})
+```
+
+Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
+
 The older `options: {forked: false}` form is still accepted as an alias for inline execution, and `options: {forked: true}` maps to forked execution. To use the previous spawned CLI runner behavior explicitly, pass `options: {executionMode: "spawned"}`.
 
 Inline jobs share the worker process and run concurrently up to `maxConcurrentInlineJobs`, so a single slow inline job no longer blocks the queue. A single worker can also override the configured cap explicitly:
