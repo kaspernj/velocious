@@ -124,4 +124,43 @@ describe("Background jobs - runner process title", {databaseCleaning: {transacti
       await cleanup()
     }
   })
+
+  it("leaves the process title untouched when manageProcessTitle is false", async () => {
+    const {cleanup, directory} = await createTempProjectDir()
+    await writeTitleJob(directory, {className: "UnmanagedTitleJob", fileName: "unmanaged-title-job.js"})
+
+    /** @type {Configuration | undefined} */
+    let previousConfiguration
+
+    try {
+      previousConfiguration = Configuration.current()
+    } catch (error) {
+      if (!(error instanceof CurrentConfigurationNotSetError)) throw error
+    }
+
+    const configuration = createConfiguration({directory, name: "job-runner-title-unmanaged"})
+    const baseTitle = process.title
+    const out = path.join(directory, "unmanaged.txt")
+    // A pooled child owns an aggregate title across its concurrent jobs; the
+    // runner must not rename the process per job (interleaved restores corrupt it).
+    const callerOwnedTitle = "velocious background-jobs-runner: 3 jobs"
+
+    try {
+      configuration.setCurrent()
+      process.title = callerOwnedTitle
+
+      await runJobPayload({jobName: "UnmanagedTitleJob", args: [out]}, {closeConnections: false, manageProcessTitle: false})
+
+      // The caller-owned title is what the job observed while running, and it is
+      // left untouched afterwards.
+      expect(await fs.readFile(out, "utf8")).toEqual(callerOwnedTitle)
+      expect(process.title).toEqual(callerOwnedTitle)
+    } finally {
+      process.title = baseTitle
+      previousConfiguration?.setCurrent()
+      await configuration.disconnectBeacon()
+      await configuration.closeDatabaseConnections()
+      await cleanup()
+    }
+  })
 })

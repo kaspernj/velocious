@@ -192,6 +192,12 @@ export default class VelociousConfiguration {
     }
 
     this._isInitialized = false
+    /**
+     * In-progress `initialize()` promise, memoized so concurrent callers await
+     * the same bootstrap. Reset to undefined if initialization fails.
+     * @type {Promise<void> | undefined}
+     */
+    this._initializePromise = undefined
     this.httpServer = httpServer || {}
     /**
      * Stores the http server instance value.
@@ -1939,9 +1945,16 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize({type} = {type: "undefined"}) {
-    if (!this.isInitialized()) {
-      this._isInitialized = true
+    if (this._isInitialized) return
+    // Memoize the in-progress initialization so concurrent callers await the same
+    // bootstrap instead of racing. `_isInitialized` was previously set to `true`
+    // up front, so a second caller (e.g. a pooled runner with
+    // `pooledRunnerConcurrency > 1` starting several jobs on a cold child) could
+    // skip initialization and load models / perform a job while the first call
+    // was still awaiting model discovery and initializers. Mirrors connectBeacon.
+    if (this._initializePromise) return await this._initializePromise
 
+    this._initializePromise = (async () => {
       await this.initializeModels({type})
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
@@ -1962,6 +1975,17 @@ export default class VelociousConfiguration {
           }
         }
       }
+
+      this._isInitialized = true
+    })()
+
+    try {
+      await this._initializePromise
+    } catch (error) {
+      // Let a later call retry a failed initialization instead of every future
+      // caller awaiting the same cached rejection.
+      this._initializePromise = undefined
+      throw error
     }
   }
 

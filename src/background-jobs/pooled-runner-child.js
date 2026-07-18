@@ -3,6 +3,8 @@
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
 
+const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
+
 setRunnerProcessTitle()
 
 /**
@@ -13,6 +15,20 @@ setRunnerProcessTitle()
  * @type {Set<string>}
  */
 const runningJobIds = new Set()
+
+/**
+ * Sets an aggregate process title from the current in-flight count. A child runs
+ * jobs concurrently, so a per-job title (which `runJobPayload` would snapshot and
+ * restore around a single job) cannot represent the process — interleaved
+ * completions would leave a stale label. Recomputing from `runningJobIds.size` is
+ * concurrency-safe and honest: `ps`/`top` show how many jobs the child is running.
+ * @returns {void}
+ */
+function updateProcessTitle() {
+  const count = runningJobIds.size
+
+  process.title = count > 0 ? `${BASE_PROCESS_TITLE}: ${count} ${count === 1 ? "job" : "jobs"}` : BASE_PROCESS_TITLE
+}
 
 /**
  * Checks whether an IPC value is a runnable pooled job message.
@@ -65,7 +81,7 @@ function sendOutcome({jobId, acknowledged, status, error}) {
  */
 async function runJob(payload) {
   try {
-    await runJobPayload(payload, {closeConnections: false})
+    await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
     await sendOutcome({jobId: payload.id, acknowledged: true, status: "completed"})
   } catch (error) {
     if (error instanceof BackgroundJobPerformedFailure) {
@@ -77,6 +93,7 @@ async function runJob(payload) {
     }
   } finally {
     runningJobIds.delete(payload.id)
+    updateProcessTitle()
   }
 }
 
@@ -89,6 +106,7 @@ function handleMessage(message) {
   if (!isJobMessage(message) || runningJobIds.has(message.payload.id)) return
 
   runningJobIds.add(message.payload.id)
+  updateProcessTitle()
   void runJob(message.payload)
 }
 
