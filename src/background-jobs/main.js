@@ -87,6 +87,11 @@ export default class BackgroundJobsMain {
      * @type {Map<JsonSocket, Map<string, string>>} */
     this.workerHandoffs = new Map()
     /**
+     * Handoff-adoption queries started by worker hello messages. Shutdown must
+     * wait for these before closing the configuration's database pools.
+     * @type {Set<Promise<void>>} */
+    this.inflightWorkerHandoffAdoptions = new Set()
+    /**
      * Narrows the runtime value to the documented type.
      * @type {net.Server | undefined} */
     this.server = undefined
@@ -215,8 +220,11 @@ export default class BackgroundJobsMain {
     this._clearTimers()
     this._disconnectBeaconHandlers()
     await this.scheduler?.stop()
-
-    await this._stopBeaconAndServer()
+    try {
+      await this._drainWorkerHandoffAdoptions()
+    } finally {
+      await this._stopBeaconAndServer()
+    }
   }
 
   /**
@@ -422,16 +430,43 @@ export default class BackgroundJobsMain {
     if (message?.type !== "hello") return null
 
     if (message.role === "worker") {
+      if (this._stopped) {
+        jsonSocket.close()
+        return message.role
+      }
+
       jsonSocket.workerId = message.workerId
       jsonSocket.supportsHandoffIdReporting = message.supportsHandoffIdReporting === true
       jsonSocket.supportsHeartbeat = message.supportsHeartbeat === true
       jsonSocket.lastSeenAt = Date.now()
       this.workers.add(jsonSocket)
       this.workerHandoffs.set(jsonSocket, new Map())
-      void this._adoptWorkerHandoffs(jsonSocket)
+      this._trackWorkerHandoffAdoption(jsonSocket)
     }
 
     return message.role
+  }
+
+  /**
+   * Tracks a worker handoff-adoption query through shutdown.
+   * @param {JsonSocket} jsonSocket - Reconnecting worker socket.
+   * @returns {void}
+   */
+  _trackWorkerHandoffAdoption(jsonSocket) {
+    const adoption = this._adoptWorkerHandoffs(jsonSocket)
+    this.inflightWorkerHandoffAdoptions.add(adoption)
+    const removeAdoption = () => this.inflightWorkerHandoffAdoptions.delete(adoption)
+    void adoption.then(removeAdoption, removeAdoption)
+  }
+
+  /**
+   * Waits for worker handoff-adoption queries to finish.
+   * @returns {Promise<void>} - Resolves when no adoption query remains.
+   */
+  async _drainWorkerHandoffAdoptions() {
+    while (this.inflightWorkerHandoffAdoptions.size > 0) {
+      await Promise.all([...this.inflightWorkerHandoffAdoptions])
+    }
   }
 
   /**

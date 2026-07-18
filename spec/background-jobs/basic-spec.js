@@ -81,16 +81,19 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     const {main, store} = await startBackgroundJobsMain()
     const legacy = await connectControllableWorker({port: main.getPort(), workerId: "legacy"})
     const pooled = await connectControllableWorker({port: main.getPort(), workerId: "pooled", acceptsPooled: true})
-    const jobId = await store.enqueue({jobName: "TestJob", args: []})
 
-    await main._drain()
-    const payload = await pooled.nextJob()
-    expect(payload.id).toEqual(jobId)
-    expect(legacy.receivedJobs).toEqual([])
+    try {
+      const jobId = await store.enqueue({jobName: "TestJob", args: []})
 
-    legacy.jsonSocket.close()
-    pooled.jsonSocket.close()
-    await main.stop()
+      await main._drain()
+      const payload = await pooled.nextJob()
+      expect(payload.id).toEqual(jobId)
+      expect(legacy.receivedJobs).toEqual([])
+    } finally {
+      legacy.jsonSocket.close()
+      pooled.jsonSocket.close()
+      await main.stop()
+    }
   })
 
   it("drains a later eligible job when no ready worker accepts an earlier pooled job", async () => {

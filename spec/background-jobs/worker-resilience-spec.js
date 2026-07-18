@@ -373,8 +373,9 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
         message: {type: "hello", role: "worker", workerId: "reconnecting-worker", supportsHandoffIdReporting: true, supportsHeartbeat: true}
       })
 
-      // Adoption runs asynchronously off the hello; wait for it to populate the map.
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      // Adoption runs asynchronously off the hello; use the same lifecycle
+      // barrier that shutdown uses before it closes database connections.
+      await main._drainWorkerHandoffAdoptions()
 
       expect(main.workerHandoffs.get(worker)?.get(ownId)).toEqual(ownHandoff.handoffId)
       // The other worker's job is neither adopted nor reclaimed.
@@ -388,6 +389,59 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
       expect((await store.getJob(otherId))?.status).toEqual("handed_off")
     } finally {
       await main.stop()
+    }
+  })
+
+  it("waits for a worker hello's handoff adoption before stopping", async () => {
+    const {main} = await startBackgroundJobsMain()
+    const originalCloseDatabaseConnections = main.configuration.closeDatabaseConnections
+    /** @type {() => void} */
+    let releaseAdoption = () => {}
+    const adoption = new Promise((resolve) => { releaseAdoption = resolve })
+    let adoptionStarted = false
+    let databaseConnectionsClosed = false
+    let stopSettled = false
+
+    main.configuration.closeDatabaseConnections = async () => {
+      databaseConnectionsClosed = true
+      await originalCloseDatabaseConnections.call(main.configuration)
+    }
+    main._adoptWorkerHandoffs = async () => {
+      adoptionStarted = true
+      await adoption
+    }
+
+    try {
+      const worker = fakeWorkerSocket()
+      const role = main._handleSocketMessage({
+        jsonSocket: worker,
+        message: {type: "hello", role: "worker", workerId: "stopping-worker", supportsHandoffIdReporting: true, supportsHeartbeat: true},
+        role: null
+      })
+      expect(role).toEqual("worker")
+      expect(adoptionStarted).toEqual(true)
+
+      const stopPromise = main.stop().then(() => { stopSettled = true })
+
+      try {
+        // Give ordinary server/database shutdown a full event-loop turn. The
+        // deferred adoption must still keep stop pending before pools can close.
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(stopSettled).toEqual(false)
+        expect(databaseConnectionsClosed).toEqual(false)
+        expect(main.inflightWorkerHandoffAdoptions.size).toEqual(1)
+      } finally {
+        releaseAdoption()
+        await stopPromise
+      }
+
+      expect(stopSettled).toEqual(true)
+      expect(databaseConnectionsClosed).toEqual(true)
+      expect(main.inflightWorkerHandoffAdoptions.size).toEqual(0)
+    } finally {
+      releaseAdoption()
+      main.configuration.closeDatabaseConnections = originalCloseDatabaseConnections
+      if (!stopSettled) await main.stop()
     }
   })
 })
