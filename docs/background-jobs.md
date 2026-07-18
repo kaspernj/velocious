@@ -10,6 +10,8 @@ Set `backgroundJobs.pooledRunnerCount` (default `4`) to bound the per-worker poo
 
 Compatibility is explicit: `forked: true` means `"forked"`, `forked: false` means `"inline"`, and legacy persisted rows with `forked = true` remain forked after migration. Use `executionMode: "spawned"` only for the legacy detached CLI behavior.
 
+For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-background-job-enqueue.md). Recurring schedules use the separate `scheduledBackgroundJobs` configuration described in the [README](../README.md#scheduled-jobs).
+
 ## Durable concurrency limits
 
 Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `performLaterWithOptions`). The key is an opaque, non-empty string shared by jobs that use the same limit, and the cap is a positive integer. Omitting both preserves unlimited behavior. Once a key is registered, every enqueue for that key must use the same cap; a conflicting cap is rejected.
@@ -153,6 +155,21 @@ The `background-job-failed` payload has:
 - `context.workerId`: the worker id included in the accepted report.
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
+
+### Orphaned jobs
+
+`background-jobs-main` also emits a `background-job-orphaned` error event (mirrored to `all-error` as `errorType: "background-job-orphaned"`) for each job its time-based orphan sweep reclaims — a job whose worker died mid-run and stopped reporting, so it was stuck `handed_off` past the orphan timeout. Unlike `background-job-failed`, which fires on a worker's failure report, this fires from the main process's sweep, so an application can react to the specific job a dead worker left behind — enqueue a targeted recovery for the work it was doing — instead of only polling for the aftermath.
+
+```js
+configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) => {
+  if (context.jobName !== "RunBuildJob") return
+
+  // context.jobArgs are the orphaned job's serialized arguments.
+  enqueueTargetedRecovery(context.jobArgs[0])
+})
+```
+
+The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state.
 
 ## Worker Shutdown And Process-Job Draining
 

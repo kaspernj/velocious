@@ -25,6 +25,7 @@
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Background jobs with failure events for production reporting (see [docs/background-jobs.md](docs/background-jobs.md))
+* Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
@@ -1940,7 +1941,7 @@ Velocious includes a simple background jobs system inspired by Sidekiq.
 
 Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
 
-Production apps can listen for `background-job-failed` or its `all-error` mirror to report accepted failed attempts, including retry and terminal state metadata. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
+Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata, and for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 
 ## Setup
 
@@ -2061,6 +2062,17 @@ await MyJob.performLaterWithOptions({
   options: {executionMode: "inline"}
 })
 ```
+
+[Schedule a one-off job](docs/scheduled-background-job-enqueue.md) for a specific epoch timestamp in milliseconds:
+
+```js
+await MyJob.performLaterWithOptions({
+  args: ["a", "b"],
+  options: {scheduledAtMs: Date.now() + 2 * 60 * 60 * 1000}
+})
+```
+
+Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
 
 The older `options: {forked: false}` form is still accepted as an alias for inline execution, and `options: {forked: true}` maps to forked execution. To use the previous spawned CLI runner behavior explicitly, pass `options: {executionMode: "spawned"}`.
 

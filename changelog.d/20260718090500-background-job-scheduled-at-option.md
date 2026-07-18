@@ -1,0 +1,1 @@
+Add `scheduledAtMs` to background-job enqueue options so applications can durably schedule a one-off job for an exact future epoch timestamp. Future jobs stay queued and ineligible until their timestamp, while the event-driven dispatcher wakes at the earliest scheduled time.

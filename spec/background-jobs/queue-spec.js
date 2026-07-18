@@ -193,4 +193,86 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
       await main.stop()
     }
   })
+
+  it("emits background-job-orphaned when the orphan sweep reclaims a dead worker's job", async () => {
+    const {main, worker} = await startBackgroundJobs()
+    // Stop the worker first so nothing consumes the job — it must stay
+    // `handed_off` (a dead worker's lease) for the sweep to reclaim it.
+    await worker.stop()
+
+    const orphanedEvents = []
+    const onOrphaned = (payload) => {
+      orphanedEvents.push(payload)
+    }
+
+    dummyConfiguration.getErrorEvents().on("background-job-orphaned", onOrphaned)
+
+    try {
+      const jobId = await main.store.enqueue({jobName: "AppendJob", args: ["orphan", "me"], options: {forked: false, maxRetries: 0}})
+
+      await main.store.markHandedOff({jobId, workerId: "dead-worker"})
+      // Backdate the handoff so the default-cutoff sweep reclaims it immediately.
+      await main.store._withDb(async (db) => {
+        await db.query(`UPDATE background_jobs SET handed_off_at_ms = 1 WHERE id = ${db.quote(jobId)}`)
+      })
+
+      await main._sweepOrphans()
+
+      await timeout({timeout: 2000}, async () => {
+        while (true) {
+          if (orphanedEvents.length >= 1) break
+
+          await wait(0.05)
+        }
+      })
+
+      expect(orphanedEvents.length).toEqual(1)
+      expect(orphanedEvents[0].context.jobId).toEqual(jobId)
+      expect(orphanedEvents[0].context.jobName).toEqual("AppendJob")
+      expect(orphanedEvents[0].context.jobArgs).toEqual(["orphan", "me"])
+      expect(orphanedEvents[0].context.stage).toEqual("background-job-orphaned")
+      expect(orphanedEvents[0].context.terminal).toEqual(true)
+      expect(orphanedEvents[0].context.willRetry).toEqual(false)
+    } finally {
+      dummyConfiguration.getErrorEvents().off("background-job-orphaned", onOrphaned)
+      await main.stop()
+    }
+  })
+
+  it("isolates a throwing background-job-orphaned handler so every orphaned job still notifies", async () => {
+    const {main, worker} = await startBackgroundJobs()
+    await worker.stop()
+
+    const seenJobIds = []
+    const onOrphaned = (payload) => {
+      seenJobIds.push(payload.context.jobId)
+      throw new Error("handler boom")
+    }
+
+    dummyConfiguration.getErrorEvents().on("background-job-orphaned", onOrphaned)
+
+    try {
+      const jobIds = []
+
+      for (const args of [["a"], ["b"]]) {
+        const jobId = await main.store.enqueue({jobName: "AppendJob", args, options: {forked: false, maxRetries: 0}})
+
+        await main.store.markHandedOff({jobId, workerId: "dead-worker"})
+        jobIds.push(jobId)
+      }
+
+      await main.store._withDb(async (db) => {
+        await db.query("UPDATE background_jobs SET handed_off_at_ms = 1")
+      })
+
+      await main._sweepOrphans()
+
+      // Without per-job isolation the first throwing handler would abort the loop
+      // and the second orphaned job would never fire its event.
+      expect(seenJobIds.slice().sort()).toEqual(jobIds.slice().sort())
+    } finally {
+      dummyConfiguration.getErrorEvents().off("background-job-orphaned", onOrphaned)
+      await main.stop()
+    }
+  })
 })

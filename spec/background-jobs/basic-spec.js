@@ -264,6 +264,36 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     await main.stop()
   })
 
+  it("returns scheduledAtMs validation errors to enqueue callers", async () => {
+    const {main} = await startBackgroundJobsMain()
+    const errorEvents = dummyConfiguration.getErrorEvents()
+    let frameworkErrorCount = 0
+    const onFrameworkError = () => {
+      frameworkErrorCount += 1
+    }
+
+    dummyConfiguration.setBackgroundJobsConfig({host: "127.0.0.1", port: main.getPort()})
+
+    /** @type {Error | undefined} */
+    let enqueueError
+
+    errorEvents.on("framework-error", onFrameworkError)
+
+    try {
+      await TestJob.performLaterWithOptions({args: [], options: {scheduledAtMs: -1}})
+    } catch (error) {
+      if (!(error instanceof Error)) throw error
+
+      enqueueError = error
+    } finally {
+      errorEvents.off("framework-error", onFrameworkError)
+      await main.stop()
+    }
+
+    expect(enqueueError?.message).toEqual("background job scheduledAtMs must be a non-negative safe integer")
+    expect(frameworkErrorCount).toEqual(0)
+  })
+
   it("runs a job in a true forked worker child", async () => {
     const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("forked-job")
