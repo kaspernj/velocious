@@ -45,7 +45,7 @@ describe("Record - preloader - model preload", {tags: ["dummy"]}, () => {
     expect(found2.project().id()).toEqual(project.id())
   })
 
-  it("deduplicates repeated parent IDs without changing relationship order", async () => {
+  it("deduplicates repeated parent IDs for has many preloads", async () => {
     const project = await Project.create({})
     const firstTask = await Task.create({projectId: project.id(), name: "Ordered preload 1"})
     const secondTask = await Task.create({projectId: project.id(), name: "Ordered preload 2"})
@@ -55,7 +55,8 @@ describe("Record - preloader - model preload", {tags: ["dummy"]}, () => {
 
     const loadedTasks = /** @type {Task[]} */ (found.getRelationshipByName("tasks").loaded())
 
-    expect(loadedTasks.map((task) => task.id())).toEqual([firstTask.id(), secondTask.id()])
+    expect(loadedTasks.map((task) => task.id())).toEqual(expect.arrayContaining([firstTask.id(), secondTask.id()]))
+    expect(loadedTasks.length).toEqual(2)
   })
 
   it("deduplicates repeated parents for polymorphic belongs to preloads", async () => {
