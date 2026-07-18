@@ -1205,16 +1205,22 @@ export default class BackgroundJobsMain {
 
       if (orphanedJobs.length > 0) {
         this.logger.warn(() => ["Marked orphaned background jobs", orphanedJobs.length])
-        // Emit an event per orphaned job so applications can react to a dead
-        // worker's specific job (e.g. targeted recovery) instead of only
-        // polling for its aftermath.
-        for (const job of orphanedJobs) {
-          this._emitBackgroundJobOrphaned({job})
-        }
-        // Reclaimed orphans become `queued` again — wake the dispatcher
-        // so they aren't stranded until the next external signal.
+        // Reclaimed orphans become `queued` again — wake the dispatcher first so
+        // an application event handler that throws below cannot strand them
+        // queued until the next external enqueue/reconnect.
         this._notifyEnqueued()
         await this._drain()
+        // Emit an event per orphaned job so applications can react to a dead
+        // worker's specific job (e.g. targeted recovery) instead of only polling
+        // for its aftermath. Isolate each so one throwing handler can't suppress
+        // the events for the rest.
+        for (const job of orphanedJobs) {
+          try {
+            this._emitBackgroundJobOrphaned({job})
+          } catch (error) {
+            this.logger.error(() => ["A background-job-orphaned event handler threw:", error])
+          }
+        }
       }
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])

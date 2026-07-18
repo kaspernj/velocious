@@ -238,4 +238,41 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
       await main.stop()
     }
   })
+
+  it("isolates a throwing background-job-orphaned handler so every orphaned job still notifies", async () => {
+    const {main, worker} = await startBackgroundJobs()
+    await worker.stop()
+
+    const seenJobIds = []
+    const onOrphaned = (payload) => {
+      seenJobIds.push(payload.context.jobId)
+      throw new Error("handler boom")
+    }
+
+    dummyConfiguration.getErrorEvents().on("background-job-orphaned", onOrphaned)
+
+    try {
+      const jobIds = []
+
+      for (const args of [["a"], ["b"]]) {
+        const jobId = await main.store.enqueue({jobName: "AppendJob", args, options: {forked: false, maxRetries: 0}})
+
+        await main.store.markHandedOff({jobId, workerId: "dead-worker"})
+        jobIds.push(jobId)
+      }
+
+      await main.store._withDb(async (db) => {
+        await db.query("UPDATE background_jobs SET handed_off_at_ms = 1")
+      })
+
+      await main._sweepOrphans()
+
+      // Without per-job isolation the first throwing handler would abort the loop
+      // and the second orphaned job would never fire its event.
+      expect(seenJobIds.slice().sort()).toEqual(jobIds.slice().sort())
+    } finally {
+      dummyConfiguration.getErrorEvents().off("background-job-orphaned", onOrphaned)
+      await main.stop()
+    }
+  })
 })

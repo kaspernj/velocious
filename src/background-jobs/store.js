@@ -1076,10 +1076,30 @@ export default class BackgroundJobsStore {
     if (affectedRows !== 1) return null
     await this._releaseConcurrency(db, job.concurrencyKey)
 
-    const updatedJob = await this._getJobRowById(db, job.id)
+    // Return a snapshot of the transition this update just applied rather than re-reading the row.
+    // We won the conditional update (affectedRows === 1), so this state is authoritative; re-reading
+    // could instead observe a newer state if another dispatcher reclaims a requeued job between the
+    // update and the read (overlapping mains / polling dispatch), which would misreport the
+    // status/terminal/willRetry of this transition to failure/orphan event listeners.
+    const status = shouldRetry ? "queued" : (markOrphaned ? "orphaned" : "failed")
+    /** @type {import("./types.js").BackgroundJobRow} */
+    const transitionedJob = {
+      ...job,
+      attempts: nextAttempt,
+      handedOffAtMs: null,
+      lastError: failureMessage,
+      status,
+      workerId: null
+    }
 
-    if (!updatedJob) return null
-    return updatedJob
+    if (markOrphaned) transitionedJob.orphanedAtMs = now
+    if (shouldRetry) {
+      transitionedJob.scheduledAtMs = scheduledAt
+    } else if (!markOrphaned) {
+      transitionedJob.failedAtMs = now
+    }
+
+    return transitionedJob
   }
 
   /**
