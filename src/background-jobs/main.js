@@ -6,6 +6,7 @@ import BackgroundJobsScheduler from "./scheduler.js"
 import BackgroundJobsStore from "./store.js"
 import Logger from "../logger.js"
 import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
+import VelociousError from "../velocious-error.js"
 
 /**
  * Channel used by `background-jobs-main` to coordinate dispatch wake-ups
@@ -683,7 +684,21 @@ export default class BackgroundJobsMain {
       this._notifyEnqueued()
       await this._drain()
     } catch (error) {
-      this.logger.error(() => ["Failed to enqueue background job:", error])
+      if (error instanceof VelociousError && error.safeToExpose) {
+        jsonSocket.send({type: "enqueue-error", error: error.message})
+        return
+      }
+
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      const payload = {
+        context: {jobName: message.jobName, stage: "background-job-enqueue"},
+        error: normalizedError
+      }
+      const errorEvents = this.configuration.getErrorEvents()
+
+      this.logger.error(() => ["Failed to enqueue background job:", normalizedError])
+      errorEvents.emit("framework-error", payload)
+      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
       jsonSocket.send({type: "enqueue-error", error: "Failed to enqueue job"})
     }
   }

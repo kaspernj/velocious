@@ -25,6 +25,7 @@
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Background jobs with failure events for production reporting (see [docs/background-jobs.md](docs/background-jobs.md))
+* Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
@@ -2052,7 +2053,7 @@ await MyJob.performLaterWithOptions({
 })
 ```
 
-Schedule a one-off job for a specific epoch timestamp in milliseconds:
+[Schedule a one-off job](docs/scheduled-background-job-enqueue.md) for a specific epoch timestamp in milliseconds:
 
 ```js
 await MyJob.performLaterWithOptions({
