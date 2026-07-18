@@ -81,6 +81,8 @@ export default class BackgroundJobsScheduler {
      * Narrows the runtime value to the documented type.
      * @type {Array<ReturnType<typeof setTimeout>>} */
     this.timeoutIds = []
+    /** @type {Set<Promise<void>>} - Scheduled enqueues that shutdown must drain. */
+    this.pendingEnqueues = new Set()
     /**
      * Narrows the runtime value to the documented type.
      * @type {boolean} - True between stop() and the next start(); cron self-rescheduler checks this so a stop() during an in-flight enqueue doesn't immediately re-arm.
@@ -113,8 +115,8 @@ export default class BackgroundJobsScheduler {
 
   /**
    * Runs stop.
-   * @returns {void} */
-  stop() {
+   * @returns {Promise<void>} - Resolves after in-flight scheduled enqueues finish. */
+  async stop() {
     this.stopped = true
 
     for (const intervalId of this.intervalIds) {
@@ -127,6 +129,8 @@ export default class BackgroundJobsScheduler {
 
     this.intervalIds = []
     this.timeoutIds = []
+
+    await Promise.all(this.pendingEnqueues)
   }
 
   /**
@@ -176,10 +180,10 @@ export default class BackgroundJobsScheduler {
     }
 
     const timeoutId = setTimeout(() => {
-      void this.enqueueScheduledJob({jobConfiguration, jobKey})
+      void this.runScheduledJob({jobConfiguration, jobKey})
 
       const intervalId = setInterval(() => {
-        void this.enqueueScheduledJob({jobConfiguration, jobKey})
+        void this.runScheduledJob({jobConfiguration, jobKey})
       }, intervalMs)
 
       this.intervalIds.push(intervalId)
@@ -214,7 +218,7 @@ export default class BackgroundJobsScheduler {
       const timeoutId = setTimeout(async () => {
         if (this.stopped) return
 
-        await this.enqueueScheduledJob({jobConfiguration, jobKey})
+        await this.runScheduledJob({jobConfiguration, jobKey})
 
         // The await above can yield to a stop() call. Re-check before
         // re-arming so we don't keep firing after shutdown.
@@ -227,6 +231,24 @@ export default class BackgroundJobsScheduler {
     }
 
     scheduleNext()
+  }
+
+  /**
+   * Tracks a scheduled enqueue so stop() cannot return while it can still mutate the store.
+   * @param {object} args - Options.
+   * @param {import("../configuration-types.js").ScheduledBackgroundJobConfiguration} args.jobConfiguration - Job configuration.
+   * @param {string} args.jobKey - Job key.
+   * @returns {Promise<void>} - Resolves after the enqueue attempt finishes.
+   */
+  async runScheduledJob({jobConfiguration, jobKey}) {
+    const pendingEnqueue = this.enqueueScheduledJob({jobConfiguration, jobKey})
+    this.pendingEnqueues.add(pendingEnqueue)
+
+    try {
+      await pendingEnqueue
+    } finally {
+      this.pendingEnqueues.delete(pendingEnqueue)
+    }
   }
 
   /**

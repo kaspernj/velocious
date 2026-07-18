@@ -2128,7 +2128,7 @@ Cron fields are: `minute hour day-of-month month day-of-week`. Supported syntax:
 
 Each job must define exactly one of `every` or `cron`. Cron times are evaluated in the **server's local timezone**, at minute granularity.
 
-`background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself.
+`background-jobs-main` owns the schedule and enqueues the configured jobs into the normal Velocious background-jobs queue. The HTTP server does not run scheduled jobs itself. Graceful main shutdown waits for scheduled enqueues already in flight before closing database connections, so stopped schedulers cannot write into a later application or test lifecycle.
 
 ## Persistence and retries
 

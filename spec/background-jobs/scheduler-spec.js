@@ -270,11 +270,16 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
       const firePromise = timeoutCallbacks[timeoutCallbacks.length - 1]?.()
 
       // While the enqueue is pending, stop the scheduler.
-      scheduler.stop()
+      const stopPromise = scheduler.stop()
+      let stopFinished = false
+      void stopPromise.then(() => { stopFinished = true })
+      await Promise.resolve()
+      expect(stopFinished).toBeFalse()
       // Now release the enqueue. The post-await branch must NOT
       // schedule another setTimeout because we're stopped.
       resolveEnqueue?.()
-      await firePromise
+      await Promise.all([firePromise, stopPromise])
+      expect(stopFinished).toBeTrue()
 
       expect(enqueuedJobs.length).toEqual(1)
       // No new setTimeout queued after the stop+release sequence.

@@ -214,7 +214,7 @@ export default class BackgroundJobsMain {
     this._closeWorkers()
     this._clearTimers()
     this._disconnectBeaconHandlers()
-    this.scheduler?.stop()
+    await this.scheduler?.stop()
 
     await this._stopBeaconAndServer()
   }

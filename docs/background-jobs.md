@@ -36,6 +36,7 @@ Each capped queue is enforced through the same durable per-key concurrency mecha
 - The `queue:` concurrency-key prefix is reserved — an explicit `concurrencyKey` may not start with it.
 - Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against the existing backlog when the main process starts: persisted jobs adopt or release the queue key to match the current config, so a changed cap takes effect without waiting for the queue to drain.
 - Scheduled jobs (`scheduledBackgroundJobs`) honor a job class's `static queue` as well.
+- Graceful `background-jobs-main` shutdown drains scheduled enqueues that have already fired before it closes database connections. Once shutdown resolves, that scheduler can no longer add rows during a subsequent application or test lifecycle.
 
 ### Priorities
 
