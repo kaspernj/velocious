@@ -1,0 +1,3 @@
+# Changelog
+
+- Add a `background-job-orphaned` error event (mirrored to `all-error`). `background-jobs-main` now emits it for each job its time-based orphan sweep reclaims after a worker died mid-run, with the same `context` shape as `background-job-failed` (`jobId`, `jobName`, `jobArgs`, `attempts`, `maxRetries`, `status`, `terminal`, `willRetry`, `stage`). Applications can react to a dead worker's specific job — enqueue a targeted recovery for the work it left behind — instead of only polling for the aftermath. `store.markOrphanedJobs()` now returns the reclaimed job rows rather than a count.

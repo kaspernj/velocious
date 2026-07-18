@@ -547,7 +547,7 @@ export default class BackgroundJobsStore {
    * Runs mark orphaned jobs.
    * @param {object} [args] - Options.
    * @param {number} [args.orphanedAfterMs] - Mark jobs orphaned after this duration.
-   * @returns {Promise<number>} - Count of orphaned jobs.
+   * @returns {Promise<import("./types.js").BackgroundJobRow[]>} - The jobs this sweep marked orphaned.
    */
   async markOrphanedJobs({orphanedAfterMs = ORPHANED_AFTER_MS} = {}) {
     await this.ensureReady()
@@ -562,7 +562,8 @@ export default class BackgroundJobsStore {
 
       const rows = await query.results()
 
-      let orphanedCount = 0
+      /** @type {import("./types.js").BackgroundJobRow[]} */
+      const orphanedJobs = []
 
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
@@ -588,10 +589,10 @@ export default class BackgroundJobsStore {
           conditions: {id: job.id, status: "handed_off", handed_off_at_ms: job.handedOffAtMs}
         })
 
-        if (orphanedJob) orphanedCount += 1
+        if (orphanedJob) orphanedJobs.push(orphanedJob)
       }
 
-      return orphanedCount
+      return orphanedJobs
     })
   }
 
