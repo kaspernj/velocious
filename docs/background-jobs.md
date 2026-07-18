@@ -145,6 +145,21 @@ The `background-job-failed` payload has:
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
 
+### Orphaned jobs
+
+`background-jobs-main` also emits a `background-job-orphaned` error event (mirrored to `all-error` as `errorType: "background-job-orphaned"`) for each job its time-based orphan sweep reclaims — a job whose worker died mid-run and stopped reporting, so it was stuck `handed_off` past the orphan timeout. Unlike `background-job-failed`, which fires on a worker's failure report, this fires from the main process's sweep, so an application can react to the specific job a dead worker left behind — enqueue a targeted recovery for the work it was doing — instead of only polling for the aftermath.
+
+```js
+configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) => {
+  if (context.jobName !== "RunBuildJob") return
+
+  // context.jobArgs are the orphaned job's serialized arguments.
+  enqueueTargetedRecovery(context.jobArgs[0])
+})
+```
+
+The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state.
+
 ## Worker Shutdown And Process-Job Draining
 
 When a `background-jobs-worker` receives `SIGTERM`/`SIGINT` it stops accepting new

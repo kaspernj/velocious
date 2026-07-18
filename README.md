@@ -1940,7 +1940,7 @@ Velocious includes a simple background jobs system inspired by Sidekiq.
 
 Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
 
-Production apps can listen for `background-job-failed` or its `all-error` mirror to report accepted failed attempts, including retry and terminal state metadata. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
+Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata, and for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 
 ## Setup
 

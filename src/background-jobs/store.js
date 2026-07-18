@@ -547,7 +547,7 @@ export default class BackgroundJobsStore {
    * Runs mark orphaned jobs.
    * @param {object} [args] - Options.
    * @param {number} [args.orphanedAfterMs] - Mark jobs orphaned after this duration.
-   * @returns {Promise<number>} - Count of orphaned jobs.
+   * @returns {Promise<import("./types.js").BackgroundJobRow[]>} - The jobs this sweep marked orphaned.
    */
   async markOrphanedJobs({orphanedAfterMs = ORPHANED_AFTER_MS} = {}) {
     await this.ensureReady()
@@ -562,7 +562,8 @@ export default class BackgroundJobsStore {
 
       const rows = await query.results()
 
-      let orphanedCount = 0
+      /** @type {import("./types.js").BackgroundJobRow[]} */
+      const orphanedJobs = []
 
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
@@ -588,10 +589,10 @@ export default class BackgroundJobsStore {
           conditions: {id: job.id, status: "handed_off", handed_off_at_ms: job.handedOffAtMs}
         })
 
-        if (orphanedJob) orphanedCount += 1
+        if (orphanedJob) orphanedJobs.push(orphanedJob)
       }
 
-      return orphanedCount
+      return orphanedJobs
     })
   }
 
@@ -1075,10 +1076,30 @@ export default class BackgroundJobsStore {
     if (affectedRows !== 1) return null
     await this._releaseConcurrency(db, job.concurrencyKey)
 
-    const updatedJob = await this._getJobRowById(db, job.id)
+    // Return a snapshot of the transition this update just applied rather than re-reading the row.
+    // We won the conditional update (affectedRows === 1), so this state is authoritative; re-reading
+    // could instead observe a newer state if another dispatcher reclaims a requeued job between the
+    // update and the read (overlapping mains / polling dispatch), which would misreport the
+    // status/terminal/willRetry of this transition to failure/orphan event listeners.
+    const status = shouldRetry ? "queued" : (markOrphaned ? "orphaned" : "failed")
+    /** @type {import("./types.js").BackgroundJobRow} */
+    const transitionedJob = {
+      ...job,
+      attempts: nextAttempt,
+      handedOffAtMs: null,
+      lastError: failureMessage,
+      status,
+      workerId: null
+    }
 
-    if (!updatedJob) return null
-    return updatedJob
+    if (markOrphaned) transitionedJob.orphanedAtMs = now
+    if (shouldRetry) {
+      transitionedJob.scheduledAtMs = scheduledAt
+    } else if (!markOrphaned) {
+      transitionedJob.failedAtMs = now
+    }
+
+    return transitionedJob
   }
 
   /**
