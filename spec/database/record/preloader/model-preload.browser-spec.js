@@ -1,4 +1,8 @@
+// @ts-check
+
 import Preloader from "../../../../src/database/query/preloader.js"
+import Comment from "../../../dummy/src/models/comment.js"
+import Interaction from "../../../dummy/src/models/interaction.js"
 import Project from "../../../dummy/src/models/project.js"
 import Task from "../../../dummy/src/models/task.js"
 
@@ -35,10 +39,63 @@ describe("Record - preloader - model preload", {tags: ["dummy"]}, () => {
     const found1 = /** @type {Task} */ (await Task.find(task1.id()))
     const found2 = /** @type {Task} */ (await Task.find(task2.id()))
 
-    await Preloader.preload([found1, found2], Task.preload("project"))
+    await Preloader.preload([found1, found2, found1], Task.preload("project"))
 
     expect(found1.project().id()).toEqual(project.id())
     expect(found2.project().id()).toEqual(project.id())
+  })
+
+  it("deduplicates repeated parent IDs for has many preloads", async () => {
+    const project = await Project.create({})
+    const firstTask = await Task.create({projectId: project.id(), name: "Ordered preload 1"})
+    const secondTask = await Task.create({projectId: project.id(), name: "Ordered preload 2"})
+    const found = /** @type {Project} */ (await Project.find(project.id()))
+
+    await Preloader.preload([found, found], Project.preload("tasks"))
+
+    const loadedTasks = /** @type {Task[]} */ (found.getRelationshipByName("tasks").loaded())
+
+    expect(loadedTasks.map((task) => task.id())).toEqual(expect.arrayContaining([firstTask.id(), secondTask.id()]))
+    expect(loadedTasks.length).toEqual(2)
+  })
+
+  it("deduplicates repeated parents for polymorphic belongs to preloads", async () => {
+    const project = await Project.create({})
+    const task = await Task.create({projectId: project.id(), name: "Polymorphic parent task"})
+    const projectInteraction = await Interaction.create({kind: "Project subject", subjectId: project.id(), subjectType: "Project"})
+    const taskInteraction = await Interaction.create({kind: "Task subject", subjectId: task.id(), subjectType: "Task"})
+    const foundProjectInteraction = /** @type {Interaction} */ (await Interaction.find(projectInteraction.id()))
+    const foundTaskInteraction = /** @type {Interaction} */ (await Interaction.find(taskInteraction.id()))
+
+    await Preloader.preload([foundProjectInteraction, foundTaskInteraction, foundProjectInteraction], Interaction.preload("subject"))
+
+    expect(foundProjectInteraction.subject()?.id()).toEqual(project.id())
+    expect(foundTaskInteraction.subject()?.id()).toEqual(task.id())
+  })
+
+  it("deduplicates repeated parents for has one preloads", async () => {
+    const project = await Project.create({})
+    const task = await Task.create({projectId: project.id(), name: "Repeated has one parent"})
+    const foundProject = /** @type {Project} */ (await Project.find(project.id()))
+
+    await Preloader.preload([foundProject, foundProject], Project.preload("reviewTask"))
+
+    const loadedTask = /** @type {Task | undefined} */ (foundProject.getRelationshipByName("reviewTask").loaded())
+
+    expect(loadedTask?.id()).toEqual(task.id())
+  })
+
+  it("deduplicates repeated parents for has many through preloads", async () => {
+    const project = await Project.create({})
+    const task = await Task.create({projectId: project.id(), name: "Repeated has many through parent"})
+    const comment = await Comment.create({taskId: task.id(), body: "Through preload comment"})
+    const foundProject = /** @type {Project} */ (await Project.find(project.id()))
+
+    await Preloader.preload([foundProject, foundProject], Project.preload("comments"))
+
+    const loadedComments = /** @type {Comment[]} */ (foundProject.getRelationshipByName("comments").loaded())
+
+    expect(loadedComments.map((loadedComment) => loadedComment.id())).toEqual([comment.id()])
   })
 
   it("accepts a raw preload spec instead of a query", async () => {

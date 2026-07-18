@@ -58,8 +58,8 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Foreign key values.
-     * @type {Array<number | string>} */
-    const foreignKeyValues = []
+     * @type {Set<number | string>} */
+    const foreignKeyValues = new Set()
 
     for (const model of modelsToLoad) {
       const foreignKeyValue = /** @type {string | number | null | undefined} */ (model.readColumn(foreignKey))
@@ -69,7 +69,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       // throws on non-string primary-key columns.
       if (foreignKeyValue === null || foreignKeyValue === undefined) continue
 
-      if (!foreignKeyValues.includes(foreignKeyValue)) foreignKeyValues.push(foreignKeyValue)
+      foreignKeyValues.add(foreignKeyValue)
     }
 
     /**
@@ -83,7 +83,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     let targetModels = []
 
     // Only query when at least one model has a non-null foreign key.
-    if (foreignKeyValues.length > 0) {
+    if (foreignKeyValues.size > 0) {
       await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
 
       /**
@@ -91,7 +91,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
        * @type {Record<string, string | number | Array<string | number>>} */
       const whereArgs = {}
 
-      whereArgs[primaryKey] = foreignKeyValues
+      whereArgs[primaryKey] = [...foreignKeyValues]
 
       // Load target models to be preloaded on the given models
       let query = targetModelClass.where(whereArgs)
@@ -178,15 +178,15 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     /**
      * Foreign key values by type.
-     * @type {Record<string, Array<number | string>>} */
+     * @type {Record<string, Set<number | string>>} */
     const foreignKeyValuesByType = {}
 
     for (const meta of modelMeta) {
       if (meta.targetType === undefined || meta.targetType === null) continue
       if (meta.foreignKeyValue === undefined || meta.foreignKeyValue === null) continue
 
-      if (!foreignKeyValuesByType[meta.targetType]) foreignKeyValuesByType[meta.targetType] = []
-      if (!foreignKeyValuesByType[meta.targetType].includes(meta.foreignKeyValue)) foreignKeyValuesByType[meta.targetType].push(meta.foreignKeyValue)
+      if (!foreignKeyValuesByType[meta.targetType]) foreignKeyValuesByType[meta.targetType] = new Set()
+      foreignKeyValuesByType[meta.targetType].add(meta.foreignKeyValue)
     }
 
     /**
@@ -209,7 +209,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
        * @type {Record<string, string | number | Array<string | number>>} */
       const whereArgs = {}
 
-      whereArgs[primaryKey] = foreignKeyValuesByType[targetType]
+      whereArgs[primaryKey] = [...foreignKeyValuesByType[targetType]]
 
       let query = targetModelClass.where(whereArgs)
 

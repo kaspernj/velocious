@@ -23,8 +23,8 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
   async run() {
     /**
      * Models primary key values.
-     * @type {Array<number | string>} */
-    const modelsPrimaryKeyValues = []
+     * @type {Set<number | string>} */
+    const modelsPrimaryKeyValues = new Set()
 
     /**
      * Models by primary key value.
@@ -63,20 +63,20 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
 
       preloadCollections[primaryKeyValue] = undefined
 
-      if (!modelsPrimaryKeyValues.includes(primaryKeyValue)) modelsPrimaryKeyValues.push(primaryKeyValue)
+      modelsPrimaryKeyValues.add(primaryKeyValue)
       if (!(primaryKeyValue in modelsByPrimaryKeyValue)) modelsByPrimaryKeyValue[primaryKeyValue] = []
 
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
     }
 
-    if (modelsPrimaryKeyValues.length == 0) return satisfiedTargets
+    if (modelsPrimaryKeyValues.size == 0) return satisfiedTargets
 
     /**
      * Where args.
      * @type {Record<string, string | number | Array<string | number>>} */
     const whereArgs = {}
 
-    whereArgs[foreignKey] = modelsPrimaryKeyValues
+    whereArgs[foreignKey] = [...modelsPrimaryKeyValues]
 
     if (this.relationship.getPolymorphic()) {
       const typeColumn = this.relationship.getPolymorphicTypeColumn()

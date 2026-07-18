@@ -130,8 +130,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     /**
      * Models primary key values.
-     * @type {Array<number | string>} */
-    const modelsPrimaryKeyValues = []
+     * @type {Set<number | string>} */
+    const modelsPrimaryKeyValues = new Set()
 
     /**
      * Models by primary key value.
@@ -148,7 +148,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
       preloadCollections[primaryKeyValue] = []
 
-      if (!modelsPrimaryKeyValues.includes(primaryKeyValue)) modelsPrimaryKeyValues.push(primaryKeyValue)
+      modelsPrimaryKeyValues.add(primaryKeyValue)
       if (!(primaryKeyValue in modelsByPrimaryKeyValue)) modelsByPrimaryKeyValue[primaryKeyValue] = []
 
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
@@ -156,7 +156,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     // Step 1: Query the through table to build parent→target ID mapping
     const throughModels = await throughModelClass
-      .where({[throughForeignKey]: modelsPrimaryKeyValues})
+      .where({[throughForeignKey]: [...modelsPrimaryKeyValues]})
       .toArray()
 
     /**
@@ -260,8 +260,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     /**
      * Models primary key values.
-     * @type {Array<number | string>} */
-    const modelsPrimaryKeyValues = []
+     * @type {Set<number | string>} */
+    const modelsPrimaryKeyValues = new Set()
 
     /**
      * Models by primary key value.
@@ -278,7 +278,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
       preloadCollections[primaryKeyValue] = []
 
-      if (!modelsPrimaryKeyValues.includes(primaryKeyValue)) modelsPrimaryKeyValues.push(primaryKeyValue)
+      modelsPrimaryKeyValues.add(primaryKeyValue)
       if (!(primaryKeyValue in modelsByPrimaryKeyValue)) modelsByPrimaryKeyValue[primaryKeyValue] = []
 
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
@@ -289,7 +289,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
      * @type {Record<string, string | number | Array<string | number>>} */
     const whereArgs = {}
 
-    whereArgs[foreignKey] = modelsPrimaryKeyValues
+    whereArgs[foreignKey] = [...modelsPrimaryKeyValues]
 
     if (this.relationship.getPolymorphic()) {
       const typeColumn = this.relationship.getPolymorphicTypeColumn()
