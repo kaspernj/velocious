@@ -124,6 +124,11 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} */
     const sent = []
     worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {unknown} */ ({send: (message) => sent.push(message)}))
+    // Occupy the single pooled slot with a full child (concurrency defaults to 1).
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({}))
+    const inflight = new Map([["p1", {payload: {id: "p1", jobName: "TestJob"}, resolve: () => {}}]])
+    worker.pooledChildren.add(child)
+    worker.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight, retiring: false})
     /** @type {() => void} */
     let resolvePooled = () => {}
     worker._trackPooledJob(new Promise((resolve) => { resolvePooled = resolve }))
@@ -133,6 +138,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     expect(atCapacity?.type === "ready" && atCapacity.acceptsForked).toEqual(true)
 
     sent.length = 0
+    inflight.delete("p1")
     resolvePooled()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(sent.some((message) => message.type === "ready" && message.acceptsPooled === true)).toEqual(true)
@@ -155,9 +161,8 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     worker.pooledChildren.add(child)
     worker.inflightProcessChildren.add(child)
     worker.pooledChildStates.set(child, {
-      createdAtMs: Date.now(), jobsRun: 2,
-      payload: {id: "pooled-failed", jobName: "TestJob"},
-      resolve: () => { resolved = true }
+      createdAtMs: Date.now(), jobsRun: 2, retiring: false,
+      inflight: new Map([["pooled-failed", {payload: {id: "pooled-failed", jobName: "TestJob"}, resolve: () => { resolved = true }}]])
     })
 
     void worker._handlePooledChildFailure({child, error: new Error("runner exited")})
@@ -179,9 +184,8 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     let resolved = false
     worker.pooledChildren.add(child)
     worker.pooledChildStates.set(child, {
-      createdAtMs: Date.now(), jobsRun: 0,
-      payload: {id: "acknowledged-failure", jobName: "FailingJob"},
-      resolve: () => { resolved = true }
+      createdAtMs: Date.now(), jobsRun: 0, retiring: false,
+      inflight: new Map([["acknowledged-failure", {payload: {id: "acknowledged-failure", jobName: "FailingJob"}, resolve: () => { resolved = true }}]])
     })
 
     worker._handlePooledChildMessage({child, message: {
@@ -206,8 +210,8 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
       worker.pooledChildren.add(child)
       worker.inflightProcessChildren.add(child)
       worker.pooledChildStates.set(child, {
-        createdAtMs: threshold === "age" ? Date.now() - 20 : Date.now(), jobsRun: 0,
-        payload: {id: `threshold-${threshold}`, jobName: "TestJob"}
+        createdAtMs: threshold === "age" ? Date.now() - 20 : Date.now(), jobsRun: 0, retiring: false,
+        inflight: new Map([[`threshold-${threshold}`, {payload: {id: `threshold-${threshold}`, jobName: "TestJob"}}]])
       })
 
       worker._handlePooledChildMessage({child, message: {
@@ -219,6 +223,80 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
       expect(worker.pooledChildren.has(child)).toEqual(false)
     })
   }
+
+  it("runs jobs concurrently on one pooled child up to pooledRunnerConcurrency", () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 2, pooledRunnerConcurrency: 3})
+    /** @type {Array<{id: string}>} */
+    const sends = []
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({send: (/** @type {{payload: {id: string}}} */ message) => sends.push(message.payload)}))
+    worker.pooledChildren.add(child)
+    worker.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), retiring: false})
+
+    for (const id of ["a", "b", "c"]) void worker._runPooledJob({id, jobName: "TestJob"})
+
+    // All three ran concurrently on the same child; none spawned a new one.
+    expect(sends.map((payload) => payload.id)).toEqual(["a", "b", "c"])
+    expect(worker.pooledChildStates.get(child)?.inflight.size).toEqual(3)
+    expect(worker.pooledChildren.size).toEqual(1)
+    // Capacity: 2 children x 3 concurrency = 6 slots, 3 used, so 3 free (the
+    // full child's 0 open slots + one spawnable child's 3).
+    expect(worker._availablePooledSlots()).toEqual(3)
+  })
+
+  it("eagerly spawns one replacement when a concurrent child retires, terminating it only once drained", () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 1, pooledRunnerConcurrency: 2, pooledRunnerMaxJobs: 1})
+    worker.configuration = /** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ ({}))
+    let spawned = 0
+    worker._createPooledChild = () => { spawned += 1; return /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({})) }
+    let killed = false
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({kill: () => { killed = true }}))
+    worker.pooledChildren.add(child)
+    worker.inflightProcessChildren.add(child)
+    worker.pooledChildStates.set(child, {
+      createdAtMs: Date.now(), jobsRun: 0, retiring: false,
+      inflight: new Map([
+        ["j1", {payload: {id: "j1", jobName: "TestJob"}, resolve: () => {}}],
+        ["j2", {payload: {id: "j2", jobName: "TestJob"}, resolve: () => {}}]
+      ])
+    })
+
+    // j1 completes -> jobsRun hits maxJobs(1) -> retire + pre-warm, but j2 is still running.
+    worker._handlePooledChildMessage({child, message: {type: "job-outcome", jobId: "j1", acknowledged: true, status: "completed", rssBytes: 1}})
+    expect(worker.pooledChildStates.get(child)?.retiring).toEqual(true)
+    expect(spawned).toEqual(1)
+    expect(killed).toEqual(false)
+
+    // j2 completes -> drained -> terminate the retiring child, no further replacement.
+    worker._handlePooledChildMessage({child, message: {type: "job-outcome", jobId: "j2", acknowledged: true, status: "completed", rssBytes: 1}})
+    expect(killed).toEqual(true)
+    expect(worker.pooledChildren.has(child)).toEqual(false)
+    expect(spawned).toEqual(1)
+  })
+
+  it("reports every in-flight job when a concurrent pooled child crashes", async () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerConcurrency: 3})
+    /** @type {Array<{jobId: string, status: string}>} */
+    const reports = []
+    worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {unknown} */ ({
+      reportWithRetry: async (/** @type {{jobId: string, status: string}} */ args) => { reports.push(args) }
+    }))
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({}))
+    worker.pooledChildren.add(child)
+    worker.inflightProcessChildren.add(child)
+    worker.pooledChildStates.set(child, {
+      createdAtMs: Date.now(), jobsRun: 0, retiring: false,
+      inflight: new Map([
+        ["c1", {payload: {id: "c1", jobName: "TestJob"}, resolve: () => {}}],
+        ["c2", {payload: {id: "c2", jobName: "TestJob"}, resolve: () => {}}]
+      ])
+    })
+
+    await worker._handlePooledChildFailure({child, error: new Error("runner crashed")})
+
+    expect(reports.map((report) => report.jobId).sort()).toEqual(["c1", "c2"])
+    expect(reports.every((report) => report.status === "failed")).toEqual(true)
+    expect(worker.pooledChildren.size).toEqual(0)
+  })
 
   it("frees the forked slot on child exit and reports durably in the background", async () => {
     const worker = new BackgroundJobsWorker({})

@@ -5,6 +5,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 const pooledRunnerEnv = {
+  VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_CONCURRENCY: "20",
   VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_COUNT: "8",
   VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS: "200",
   VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS: "7200000",
@@ -66,6 +67,19 @@ describe("Background jobs configuration", () => {
       const envConfig = buildConfiguration().getBackgroundJobsConfig()
       expect(envConfig.pooledRunnerCount).toEqual(8)
       expect(envConfig.pooledRunnerMaxJobs).toEqual(200)
+    })
+  })
+
+  it("defaults pooled runner concurrency to 1 and requires a positive integer", () => {
+    expect(buildConfiguration().getBackgroundJobsConfig().pooledRunnerConcurrency).toEqual(1)
+
+    withPooledRunnerEnv(() => {
+      for (const invalidValue of [1.5, Infinity, 0, -1]) {
+        expect(buildConfiguration({pooledRunnerConcurrency: invalidValue}).getBackgroundJobsConfig().pooledRunnerConcurrency).toEqual(1)
+      }
+
+      expect(buildConfiguration({pooledRunnerConcurrency: 25}).getBackgroundJobsConfig().pooledRunnerConcurrency).toEqual(25)
+      expect(buildConfiguration().getBackgroundJobsConfig().pooledRunnerConcurrency).toEqual(20)
     })
   })
 

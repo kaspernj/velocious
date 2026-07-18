@@ -66,6 +66,7 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.maxConcurrentForkedJobs] - Override the process runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.pooledRunnerCount] - Override the pooled runner count.
+   * @param {number} [args.pooledRunnerConcurrency] - Override the per-runner concurrency.
    * @param {number} [args.pooledRunnerMaxJobs] - Override the per-runner recycle job count.
    * @param {number} [args.pooledRunnerMaxRssBytes] - Override the per-runner recycle RSS limit.
    * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
@@ -73,7 +74,7 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
    * @param {number} [args.jobTimeoutMs] - Override the forked-job wall-clock timeout from `configuration.getBackgroundJobsConfig()`. `0` disables it.
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -110,10 +111,12 @@ export default class BackgroundJobsWorker {
      * @type {number} */
     this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
     this.pooledRunnerCountOverride = positiveInteger(pooledRunnerCount)
+    this.pooledRunnerConcurrencyOverride = positiveInteger(pooledRunnerConcurrency)
     this.pooledRunnerMaxJobsOverride = positiveInteger(pooledRunnerMaxJobs)
     this.pooledRunnerMaxRssBytesOverride = positiveNumber(pooledRunnerMaxRssBytes)
     this.pooledRunnerMaxLifetimeMsOverride = positiveNumber(pooledRunnerMaxLifetimeMs)
     this.pooledRunnerCount = this.pooledRunnerCountOverride || 4
+    this.pooledRunnerConcurrency = this.pooledRunnerConcurrencyOverride || 1
     this.pooledRunnerMaxJobs = this.pooledRunnerMaxJobsOverride || 100
     this.pooledRunnerMaxRssBytes = this.pooledRunnerMaxRssBytesOverride || 512 * 1024 * 1024
     this.pooledRunnerMaxLifetimeMs = this.pooledRunnerMaxLifetimeMsOverride || 60 * 60 * 1000
@@ -183,7 +186,7 @@ export default class BackgroundJobsWorker {
     this.inflightPooledJobs = new Set()
     /** @type {Set<import("node:child_process").ChildProcess>} */
     this.pooledChildren = new Set()
-    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, payload?: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, settling?: boolean}>} */
+    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void}>, retiring: boolean, settling?: boolean}>} */
     this.pooledChildStates = new Map()
   }
 
@@ -210,6 +213,7 @@ export default class BackgroundJobsWorker {
     }
     const poolConfig = this.configuration.getBackgroundJobsConfig()
     if (typeof this.pooledRunnerCountOverride !== "number") this.pooledRunnerCount = poolConfig.pooledRunnerCount
+    if (typeof this.pooledRunnerConcurrencyOverride !== "number") this.pooledRunnerConcurrency = poolConfig.pooledRunnerConcurrency
     if (typeof this.pooledRunnerMaxJobsOverride !== "number") this.pooledRunnerMaxJobs = poolConfig.pooledRunnerMaxJobs
     if (typeof this.pooledRunnerMaxRssBytesOverride !== "number") this.pooledRunnerMaxRssBytes = poolConfig.pooledRunnerMaxRssBytes
     if (typeof this.pooledRunnerMaxLifetimeMsOverride !== "number") this.pooledRunnerMaxLifetimeMs = poolConfig.pooledRunnerMaxLifetimeMs
@@ -582,7 +586,7 @@ export default class BackgroundJobsWorker {
   _readyMessage() {
     const acceptsProcessJob = this.inflightProcessJobs.size < this.maxConcurrentForkedJobs
     const acceptsInline = this.inflightInlineJobs.size < this.maxConcurrentInlineJobs
-    const acceptsPooled = this.inflightPooledJobs.size < this.pooledRunnerCount
+    const acceptsPooled = this._availablePooledSlots() > 0
 
     if (!acceptsProcessJob && !acceptsInline && !acceptsPooled) return null
 
@@ -612,23 +616,54 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Runs a payload in an idle pooled child.
+   * Free pooled slots across the pool: open slots in non-retiring children plus
+   * the slots we could add by spawning more children up to `pooledRunnerCount`.
+   * Retiring children (draining before replacement) never contribute capacity.
+   * @returns {number} - Number of pooled jobs the worker can accept right now.
+   */
+  _availablePooledSlots() {
+    let openInExisting = 0
+    let nonRetiringChildren = 0
+
+    for (const child of this.pooledChildren) {
+      const state = this.pooledChildStates.get(child)
+      if (!state || state.retiring) continue
+      nonRetiringChildren += 1
+      openInExisting += this.pooledRunnerConcurrency - state.inflight.size
+    }
+
+    const spawnableChildren = Math.max(0, this.pooledRunnerCount - nonRetiringChildren)
+
+    return openInExisting + spawnableChildren * this.pooledRunnerConcurrency
+  }
+
+  /**
+   * Runs a payload on a pooled child with a free concurrency slot, spawning a
+   * new child when every non-retiring child is full and the pool is below
+   * `pooledRunnerCount`. Each child runs up to `pooledRunnerConcurrency` jobs at
+   * once on its own event loop.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload.
    * @returns {Promise<void>} - Resolves after the durable report.
    */
   _runPooledJob(payload) {
-    let child = [...this.pooledChildren].find((candidate) => !this.pooledChildStates.get(candidate)?.payload)
+    let child
+    for (const candidate of this.pooledChildren) {
+      const state = this.pooledChildStates.get(candidate)
+      if (state && !state.retiring && state.inflight.size < this.pooledRunnerConcurrency) {
+        child = candidate
+        break
+      }
+    }
     if (!child) child = this._createPooledChild()
     const state = this.pooledChildStates.get(child)
     if (!state) throw new Error("Pooled runner state missing")
 
     return new Promise((resolve) => {
-      state.payload = payload
-      state.resolve = resolve
+      state.inflight.set(payload.id, {payload, resolve})
       try {
         child.send({type: "job", payload})
       } catch (error) {
-        this._handlePooledChildFailure({child, error})
+        void this._handlePooledChildFailure({child, error})
       }
     })
   }
@@ -647,7 +682,7 @@ export default class BackgroundJobsWorker {
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
-    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0})
+    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), retiring: false})
     child.on("message", (message) => this._handlePooledChildMessage({child, message}))
     child.once("exit", (code, signal) => this._handlePooledChildFailure({child, error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)}))
     child.once("error", (error) => this._handlePooledChildFailure({child, error}))
@@ -655,7 +690,8 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Handles a pooled child's durable-report acknowledgement.
+   * Handles a pooled child's per-job durable-report acknowledgement. A child
+   * runs jobs concurrently and reports one `job-outcome` per job id.
    * @param {object} args - Message details.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
    * @param {?} args.message - IPC message.
@@ -665,23 +701,70 @@ export default class BackgroundJobsWorker {
     if (!message || typeof message !== "object") return
     const record = /** @type {{type?: ?, jobId?: ?, acknowledged?: ?, rssBytes?: ?, error?: ?}} */ (message)
     const state = this.pooledChildStates.get(child)
-    if (record.type !== "job-outcome" || !state?.payload || record.jobId !== state.payload.id || state.settling) return
-    if (record.acknowledged !== true) {
-      void this._handlePooledChildFailure({child, error: new Error(typeof record.error === "string" ? record.error : "Pooled runner terminal report was not acknowledged")})
-      return
-    }
-    const resolve = state.resolve
-    state.payload = undefined
-    state.resolve = undefined
+    if (record.type !== "job-outcome" || !state || state.settling || typeof record.jobId !== "string") return
+    const entry = state.inflight.get(record.jobId)
+    if (!entry) return
+
+    state.inflight.delete(record.jobId)
     state.jobsRun += 1
-    if (resolve) resolve(undefined)
+    const resolve = entry.resolve
+
+    if (record.acknowledged === true) {
+      if (resolve) resolve(undefined)
+    } else {
+      // The child stayed alive but could not confirm this one job's terminal
+      // report; reclaim just this job — its concurrent siblings are unaffected.
+      void this._reportJobResult({
+        jobId: entry.payload.id,
+        status: "failed",
+        error: new Error(typeof record.error === "string" ? record.error : "Pooled runner terminal report was not acknowledged"),
+        handoffId: entry.payload.handoffId,
+        handedOffAtMs: entry.payload.handedOffAtMs,
+        workerId: entry.payload.workerId || this.workerId
+      }).finally(() => { if (resolve) resolve(undefined) })
+    }
+
     const rssBytes = typeof record.rssBytes === "number" ? record.rssBytes : Number.POSITIVE_INFINITY
     const runnerAgeMs = Date.now() - state.createdAtMs
-    if (state.jobsRun >= this.pooledRunnerMaxJobs || rssBytes >= this.pooledRunnerMaxRssBytes || runnerAgeMs >= this.pooledRunnerMaxLifetimeMs || this.shouldStop) this._retirePooledChild(child)
+    if (!state.retiring && (state.jobsRun >= this.pooledRunnerMaxJobs || rssBytes >= this.pooledRunnerMaxRssBytes || runnerAgeMs >= this.pooledRunnerMaxLifetimeMs || this.shouldStop)) {
+      this._beginRetirePooledChild(child)
+    }
+    this._terminateIfDrained(child)
   }
 
   /**
-   * Retires an idle pooled child.
+   * Marks a pooled child for retirement and eagerly spawns a single replacement
+   * (1-for-1) so its capacity is restored immediately without waiting for it to
+   * finish draining. The retiring child stops receiving new jobs and is
+   * terminated only once its in-flight set drains, so a long-running job (e.g. a
+   * build) is never cut off.
+   * @param {import("node:child_process").ChildProcess} child - Child to retire.
+   * @returns {void}
+   */
+  _beginRetirePooledChild(child) {
+    const state = this.pooledChildStates.get(child)
+    if (!state || state.retiring) return
+
+    state.retiring = true
+    // Best-effort pre-warm: skip when stopping (no new work) or before the
+    // worker is initialized (no configuration to fork a child from).
+    if (!this.shouldStop && this.configuration) this._createPooledChild()
+  }
+
+  /**
+   * Terminates a retiring pooled child once it has no in-flight jobs left.
+   * @param {import("node:child_process").ChildProcess} child - Child to check.
+   * @returns {void}
+   */
+  _terminateIfDrained(child) {
+    const state = this.pooledChildStates.get(child)
+    if (!state || !state.retiring || state.inflight.size > 0) return
+
+    this._retirePooledChild(child)
+  }
+
+  /**
+   * Retires a drained pooled child (removes it from tracking, then SIGTERMs it).
    * @param {import("node:child_process").ChildProcess} child - Child process to retire.
    * @returns {void}
    */
@@ -693,7 +776,11 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Removes and reports an unhealthy pooled child.
+   * Removes an exited/unhealthy pooled child and reports every job that was
+   * in-flight on it as failed — a process-level crash's blast radius is the
+   * child's whole in-flight set. Capacity is refilled lazily on the next
+   * dispatch (a spawnable slot is still advertised), avoiding a tight respawn
+   * loop when a child crashes on startup.
    * @param {object} args - Failure details.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
    * @param {?} args.error - Failure.
@@ -705,21 +792,22 @@ export default class BackgroundJobsWorker {
     if (state) state.settling = true
     this.pooledChildren.delete(child)
     this.inflightProcessChildren.delete(child)
-    if (!state?.payload) {
-      this.pooledChildStates.delete(child)
-      return
-    }
-    const payload = state.payload
-    await this._reportJobResult({
-      jobId: payload.id,
-      status: "failed",
-      error,
-      handoffId: payload.handoffId,
-      handedOffAtMs: payload.handedOffAtMs,
-      workerId: payload.workerId || this.workerId
-    })
+
+    const entries = state ? [...state.inflight.values()] : []
+    if (state) state.inflight.clear()
     this.pooledChildStates.delete(child)
-    if (state.resolve) state.resolve(undefined)
+
+    await Promise.allSettled(entries.map(async (entry) => {
+      await this._reportJobResult({
+        jobId: entry.payload.id,
+        status: "failed",
+        error,
+        handoffId: entry.payload.handoffId,
+        handedOffAtMs: entry.payload.handedOffAtMs,
+        workerId: entry.payload.workerId || this.workerId
+      })
+      if (entry.resolve) entry.resolve(undefined)
+    }))
   }
 
   /**
