@@ -35,10 +35,23 @@ describe("Record - preloader - model preload", {tags: ["dummy"]}, () => {
     const found1 = /** @type {Task} */ (await Task.find(task1.id()))
     const found2 = /** @type {Task} */ (await Task.find(task2.id()))
 
-    await Preloader.preload([found1, found2], Task.preload("project"))
+    await Preloader.preload([found1, found2, found1], Task.preload("project"))
 
     expect(found1.project().id()).toEqual(project.id())
     expect(found2.project().id()).toEqual(project.id())
+  })
+
+  it("deduplicates repeated parent IDs without changing relationship order", async () => {
+    const project = await Project.create({})
+    const firstTask = await Task.create({projectId: project.id(), name: "Ordered preload 1"})
+    const secondTask = await Task.create({projectId: project.id(), name: "Ordered preload 2"})
+    const found = /** @type {Project} */ (await Project.find(project.id()))
+
+    await Preloader.preload([found, found], Project.preload("tasks"))
+
+    const loadedTasks = /** @type {Task[]} */ (found.getRelationshipByName("tasks").loaded())
+
+    expect(loadedTasks.map((task) => task.id())).toEqual([firstTask.id(), secondTask.id()])
   })
 
   it("accepts a raw preload spec instead of a query", async () => {
