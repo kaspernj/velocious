@@ -30,6 +30,7 @@ const SOCKET_KEEPALIVE_MS = 10000
 const EXECUTION_MODES = ["inline", "forked", "pooled", "spawned"]
 
 /**
+ * Normalizes a candidate pooled-runner count or job limit.
  * @param {number | undefined} value - Candidate positive integer.
  * @returns {number | undefined} - Normalized value.
  */
@@ -38,6 +39,7 @@ function positiveInteger(value) {
 }
 
 /**
+ * Normalizes a candidate pooled-runner resource limit.
  * @param {number | undefined} value - Candidate positive number.
  * @returns {number | undefined} - Normalized value.
  */
@@ -678,7 +680,11 @@ export default class BackgroundJobsWorker {
     if (state.jobsRun >= this.pooledRunnerMaxJobs || rssBytes >= this.pooledRunnerMaxRssBytes || runnerAgeMs >= this.pooledRunnerMaxLifetimeMs || this.shouldStop) this._retirePooledChild(child)
   }
 
-  /** Retires an idle pooled child. @param {import("node:child_process").ChildProcess} child - Child. */
+  /**
+   * Retires an idle pooled child.
+   * @param {import("node:child_process").ChildProcess} child - Child process to retire.
+   * @returns {void}
+   */
   _retirePooledChild(child) {
     this.pooledChildren.delete(child)
     this.pooledChildStates.delete(child)

@@ -8,6 +8,7 @@ const BEACON_READY_TIMEOUT_MS = 5000
 
 export class BackgroundJobPerformedFailure extends Error {
   /**
+   * Creates a performed-job failure after its terminal report is acknowledged.
    * @param {Error} cause - A job perform error whose failed terminal report was acknowledged.
    */
   constructor(cause) {
