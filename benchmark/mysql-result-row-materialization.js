@@ -56,10 +56,34 @@ function median(values) {
   return sorted.length % 2 == 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
+/**
+ * @param {(rows: Array<Record<string, ?>>, fields: Array<{name: string}>) => Array<Record<string, ?>>} strategy - Strategy.
+ * @param {Array<Array<Record<string, string | number | Date | Buffer | null>> | import("mysql").OkPacket>} rows - Actual CALL rows.
+ * @param {Array<Array<import("mysql").FieldInfo> | undefined>} fields - Actual CALL fields.
+ * @returns {string} - Diagnostic.
+ */
+function captureProcedureAttempt(strategy, rows, fields) {
+  const rawShape = JSON.stringify({fields, rows})
+  // Intentionally cross the ordinary-query contract boundary to diagnose how
+  // each strategy handles the exact shape returned by mysql for CALL.
+  const strategyRows = /** @type {Array<Record<string, ?>>} */ (rows)
+  const strategyFields = /** @type {Array<{name: string}>} */ (fields)
+
+  try {
+    const result = strategy(strategyRows, strategyFields)
+    if (JSON.stringify({fields, rows}) != rawShape) return "changes raw input"
+    return JSON.stringify(result) == JSON.stringify(rows) ? "preserves" : "changes shape"
+  } catch {
+    return "throws"
+  }
+}
+
 const pool = mysql.createPool({...mysqlOptions, connectionLimit: 1, timezone: "Z"})
 const tableName = `velocious_benchmark_numbers_${process.pid}`
+const procedureName = `velocious_benchmark_procedure_${process.pid}`
 const sql = `SELECT n AS task_id, CONCAT('task-', n) AS task_alias, IF(n % 7 = 0, NULL, n * 1.25) AS nullable_value, TIMESTAMP('2026-07-18 12:34:56') AS occurred_at, UNHEX(LPAD(HEX(n), 16, '0')) AS payload FROM ${tableName} ORDER BY n LIMIT ${rowCount}`
 let tableCreated = false
+let procedureCreated = false
 
 try {
   await rawQuery(pool, `CREATE TABLE ${tableName} (n INT PRIMARY KEY)`)
@@ -72,9 +96,11 @@ try {
 
   const raw = await rawQuery(pool, sql)
   const baseline = fieldCopy(raw.rows, raw.fields)
-  const procedureRows = [[raw.rows[0]]]
-  const procedureFields = [[raw.fields]]
-  const procedureBaseline = fieldCopy(procedureRows, procedureFields)
+
+  await rawQuery(pool, `CREATE PROCEDURE ${procedureName}() SELECT n AS task_id, CONCAT('task-', n) AS task_alias, IF(n % 7 = 0, NULL, n * 1.25) AS nullable_value, TIMESTAMP('2026-07-18 12:34:56') AS occurred_at, UNHEX(LPAD(HEX(n), 16, '0')) AS payload FROM ${tableName} ORDER BY n LIMIT 1`)
+  procedureCreated = true
+
+  const procedureRaw = await rawQuery(pool, `CALL ${procedureName}()`)
   console.log(`Node ${process.version}; rows=${rowCount}; iterations=${iterations}; warmups=${warmupIterations}`)
   console.log("strategy\tmaterialization ms\tend-to-end ms\tcontract")
 
@@ -87,8 +113,7 @@ try {
     const plain = candidate.every((row) => Object.getPrototypeOf(row) === Object.prototype)
     const isolated = candidate !== raw.rows && candidate.every((row, index) => row !== raw.rows[index])
     const valuesPreserved = JSON.stringify(candidate) === JSON.stringify(baseline)
-    const procedureShapePreserved = JSON.stringify(strategy(procedureRows, procedureFields)) === JSON.stringify(procedureBaseline)
-    const contract = plain && isolated && valuesPreserved && procedureShapePreserved ? "pass" : `fail (plain=${plain}, isolated=${isolated}, values=${valuesPreserved}, procedure=${procedureShapePreserved})`
+    const contract = plain && isolated && valuesPreserved ? "pass" : `fail (plain=${plain}, isolation=${isolated}, values=${valuesPreserved})`
 
     contracts[name] = contract
   }
@@ -120,10 +145,19 @@ try {
     console.log(`${name}\t${median(materializationSamples[name]).toFixed(3)}\t${median(endToEndSamples[name]).toFixed(3)}\t${contracts[name]}`)
   }
 
-  console.log("Stored-procedure note: mysql CALL returns nested result sets and an OK packet; direct rows change the legacy flat-row adapter shape and are not contract-compatible.")
+  console.log("\nCALL diagnostic (not part of SELECT contract)")
+  console.log("strategy\toutcome")
+  for (const [name, strategy] of strategyEntries) {
+    console.log(`${name}\t${captureProcedureAttempt(strategy, procedureRaw.rows, procedureRaw.fields)}`)
+  }
+  console.log("Note: mysql CALL returns nested result sets plus an OK packet; field copy throws on the undefined terminal fields slot. This benchmark does not claim stored-procedure compatibility.")
 } finally {
   try {
-    if (tableCreated) await rawQuery(pool, `DROP TABLE ${tableName}`)
+    try {
+      if (procedureCreated) await rawQuery(pool, `DROP PROCEDURE ${procedureName}`)
+    } finally {
+      if (tableCreated) await rawQuery(pool, `DROP TABLE ${tableName}`)
+    }
   } finally {
     await new Promise((resolve) => pool.end(resolve))
   }
