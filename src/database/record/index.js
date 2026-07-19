@@ -745,7 +745,7 @@ class VelociousDatabaseRecord {
       }
 
       prototype[`${relationshipName}OrLoad`] = async function() {
-        return await this.relationshipOrLoad(relationshipName, {preloadTranslations: true})
+        return await this.relationshipOrLoad(relationshipName)
       }
 
       prototype[`set${inflection.camelize(relationshipName)}`] = function(/** @type {VelociousDatabaseRecord | null | undefined} */ model) {

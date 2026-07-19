@@ -101,6 +101,24 @@ describe("Record - instance relationships - belongs to relationship", {tags: ["d
     expect(task.project().name()).toEqual("Target translated project")
   })
 
+  it("keeps belongs-to target translations lazy until explicitly preloaded", async () => {
+    const project = await Project.create({name: "Translated project"})
+    const TranslationClass = Project.getTranslationClass()
+
+    await TranslationClass.create({projectId: project.id(), locale: "da", name: "Oversat projekt"})
+
+    const task = await Task.create({name: "Translated project task", project})
+    const reloadedTask = /** @type {Task} */ (await Task.find(task.id()))
+    const loadedProject = await reloadedTask.projectOrLoad()
+
+    expect(loadedProject?.getRelationshipByName("translations").getPreloaded()).toBeFalse()
+
+    await loadedProject?.preload("translations")
+
+    expect(loadedProject?.getRelationshipByName("translations").getPreloaded()).toBeTrue()
+    expect(loadedProject?.translationsLoaded().find((translation) => translation.locale() == "da")?.name()).toEqual("Oversat projekt")
+  })
+
   it("does not treat a saved foreign key as a loaded belongs-to relationship", async () => {
     const project = await Project.create({name: "Assigned foreign key project"})
     const task = await Task.create({name: "Assigned foreign key task", projectId: project.id()})
