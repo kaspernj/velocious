@@ -107,11 +107,14 @@ export default class BackgroundJobsStore {
    * it in the dumped structure SQL — instead of it only appearing once a store boots.
    * Idempotent: reuses the same `_ensureSchema` the runtime store uses, which skips
    * work already applied (tracked in `velocious_internal_migrations`).
+   * @param {import("../database/drivers/base.js").default} [db] - Reuse an already
+   *   checked-out connection (e.g. the one `db:migrate` holds) rather than opening a
+   *   nested checkout that would deadlock a single-connection pool.
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
-  async ensureSchema() {
+  async ensureSchema(db) {
     this.configuration.setCurrent()
-    await this._ensureSchema()
+    await this._ensureSchema(db)
   }
 
   /**
@@ -760,35 +763,55 @@ export default class BackgroundJobsStore {
     throw VelociousError.safe("background job scheduledAtMs must be a non-negative safe integer")
   }
 
-  async _ensureSchema() {
-    await this._withDb(async (db) => {
-      await this._ensureMigrationsTable(db)
+  /**
+   * @param {import("../database/drivers/base.js").default} [existingDb] - Reuse an
+   *   already-checked-out connection (e.g. the one `db:migrate` holds) instead of
+   *   checking out a nested one — the nested checkout would deadlock a database
+   *   whose pool is capped at a single connection already held by the caller.
+   * @returns {Promise<void>} - Resolves when the schema is present.
+   */
+  async _ensureSchema(existingDb) {
+    if (existingDb) {
+      await this._applySchema(existingDb)
 
-      const alreadyApplied = await this._hasMigration(db)
+      return
+    }
 
-      // Even when the migration row is present, the jobs table itself can have
-      // been dropped underneath us by a transaction rollback in another caller
-      // (DDL is transactional on SQLite/MSSQL). Verify the table physically
-      // exists and recreate it when missing rather than trusting the migration
-      // row alone, otherwise later callers fail with "no such table".
-      if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
-        await this._ensureJobsTableColumns(db)
-        await this._ensureConcurrencyTable(db)
-        await this._reconcileQueueConcurrency(db)
-        await this._reconcileConcurrency(db)
-        return
-      }
+    await this._withDb((db) => this._applySchema(db))
+  }
 
-      await this._applyMigrations(db)
+  /**
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the schema is present.
+   */
+  async _applySchema(db) {
+    await this._ensureMigrationsTable(db)
+
+    const alreadyApplied = await this._hasMigration(db)
+
+    // Even when the migration row is present, the jobs table itself can have
+    // been dropped underneath us by a transaction rollback in another caller
+    // (DDL is transactional on SQLite/MSSQL). Verify the table physically
+    // exists and recreate it when missing rather than trusting the migration
+    // row alone, otherwise later callers fail with "no such table".
+    if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
       await this._ensureJobsTableColumns(db)
       await this._ensureConcurrencyTable(db)
       await this._reconcileQueueConcurrency(db)
       await this._reconcileConcurrency(db)
 
-      if (alreadyApplied) return
+      return
+    }
 
-      await this._recordMigration(db, MIGRATION_VERSION)
-    })
+    await this._applyMigrations(db)
+    await this._ensureJobsTableColumns(db)
+    await this._ensureConcurrencyTable(db)
+    await this._reconcileQueueConcurrency(db)
+    await this._reconcileConcurrency(db)
+
+    if (alreadyApplied) return
+
+    await this._recordMigration(db, MIGRATION_VERSION)
   }
 
   /**
