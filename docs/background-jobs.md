@@ -207,7 +207,7 @@ runners itself before the supervisor's `SIGKILL` (which would orphan them). With
 the indefinite default, give the supervisor a graceful-stop window at least as
 long as your longest job instead.
 
-## Forked Job Timeout (hung-runner backstop)
+## Job Timeout (hung-runner backstop)
 
 The shutdown drain above bounds how long *shutdown* waits, but it does not bound
 a single job's runtime. A genuinely-hung `"forked"` runner — stuck in a native
@@ -218,11 +218,15 @@ while a retired release's worker drains after a deploy: with an indefinite drain
 worker's resources until the process is killed by hand.
 
 `backgroundJobs.jobTimeoutMs` (config) or `VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS`
-(env, milliseconds) arms a per-runner wall-clock backstop. A forked job still
-running after the timeout is terminated — `SIGTERM`, then `SIGKILL` after the
-same reaping grace as shutdown — and reported `failed` with a timeout message.
-The runner's slot is freed on exit, so the worker (including a draining one) can
-always reach zero in-flight jobs and exit.
+(env, milliseconds) arms a wall-clock backstop for forked and pooled jobs. A job
+still running after the timeout is terminated — `SIGTERM`, then `SIGKILL` after
+the same reaping grace as shutdown — and reported `failed` with a timeout
+message. For a **forked** job that kills its dedicated runner. For a **pooled**
+job it kills the shared child running the hung job, so that child's other
+in-flight jobs are also reported `failed` and requeued — a hung JS job can't be
+cancelled otherwise — and a replacement child is spawned. Either way the slot is
+freed on exit, so the worker (including a draining one) can always reach zero
+in-flight jobs and exit.
 
 ```js
 backgroundJobs: {
