@@ -333,6 +333,19 @@ export default class VelociousDatabaseDriversMysql extends Base{
         return {retry: true, reconnect: false, waitMs: 50}
       }
 
+      // A deadlock or lock-wait-timeout aborts the whole transaction; it must be retried at the
+      // transaction level (re-running the callback), not the query level, so flag it as such and
+      // keep `retry` false so an in-transaction query does not retry against the dead transaction.
+      if (
+        errorCode == "ER_LOCK_DEADLOCK" ||
+        errorCode == "ER_LOCK_WAIT_TIMEOUT" ||
+        message.includes("ER_LOCK_DEADLOCK") ||
+        message.includes("Deadlock found") ||
+        message.includes("Lock wait timeout exceeded")
+      ) {
+        return {retry: false, reconnect: false, deadlock: true, waitMs: 50}
+      }
+
       shouldReconnect ||= (
         errorCode == "ECONNREFUSED" ||
         message.includes("ECONNREFUSED") ||
