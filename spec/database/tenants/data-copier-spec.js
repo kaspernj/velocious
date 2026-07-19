@@ -83,6 +83,30 @@ describe("DataCopier", () => {
     })
   })
 
+  it("loadRowIds returns only the keyed tenant's ids per table, following the child traversal", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+      const idsByTableName = await copier.loadRowIds(sourceDb, "acct-a")
+
+      expect(idsByTableName.get("gizmos")).toEqual(["g1"])
+      expect((idsByTableName.get("gizmo_parts") || []).slice().sort()).toEqual(["p1", "p2"])
+    })
+  })
+
+  it("loadRowIds returns empty id lists for a tenant key with no rows", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+      const idsByTableName = await copier.loadRowIds(sourceDb, "acct-unknown")
+
+      expect(idsByTableName.get("gizmos")).toEqual([])
+      expect(idsByTableName.get("gizmo_parts")).toEqual([])
+    })
+  })
+
   it("deleteTenantRows removes only the keyed tenant's rows from the target and returns them", async () => {
     await withDatabases(async ({sourceDb, targetDb}) => {
       await seedSource(targetDb)
