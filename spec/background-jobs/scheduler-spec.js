@@ -73,7 +73,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
                   args: ["hello", "/tmp/out.json"],
                   class: TestJob,
                   every: ["1m", {firstIn: "5s"}],
-                  options: {forked: false}
+                  options: {executionMode: "inline"}
                 }
               }
             }
@@ -95,7 +95,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
         args: ["hello", "/tmp/out.json"],
         jobClass: TestJob,
         jobKey: "scheduledTestJob",
-        options: {forked: false}
+        options: {executionMode: "inline"}
       }])
 
       await intervalCallbacks[intervalCallbacks.length - 1]?.()
@@ -143,7 +143,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
                   // Every minute — shortest cadence so we don't have
                   // to wait long for the test.
                   cron: "* * * * *",
-                  options: {forked: false}
+                  options: {executionMode: "inline"}
                 }
               }
             }
@@ -174,7 +174,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
         args: ["cron"],
         jobClass: TestJob,
         jobKey: "cronTestJob",
-        options: {forked: false}
+        options: {executionMode: "inline"}
       }])
 
       // After firing, the cron path uses setTimeout again (NOT

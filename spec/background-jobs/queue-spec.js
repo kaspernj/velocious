@@ -17,7 +17,7 @@ import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 async function appendInlineAndWait(outputPath) {
   await AppendJob.performLaterWithOptions({
     args: ["inline", outputPath],
-    options: {forked: false}
+    options: {executionMode: "inline"}
   })
 
   return await waitForOutputJson({
@@ -33,11 +33,11 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
 
     await AppendJob.performLaterWithOptions({
       args: ["first", outputPath],
-      options: {forked: false}
+      options: {executionMode: "inline"}
     })
     await AppendJob.performLaterWithOptions({
       args: ["second", outputPath],
-      options: {forked: false}
+      options: {executionMode: "inline"}
     })
 
     const entries = await waitForOutputJson({
@@ -133,9 +133,9 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
     const outPath3 = await outputPathFor("parallel3")
     const startedAt = Date.now()
 
-    await DelayedJob.performLaterWithOptions({args: ["a", outPath1], options: {forked: false}})
-    await DelayedJob.performLaterWithOptions({args: ["b", outPath2], options: {forked: false}})
-    await DelayedJob.performLaterWithOptions({args: ["c", outPath3], options: {forked: false}})
+    await DelayedJob.performLaterWithOptions({args: ["a", outPath1], options: {executionMode: "inline"}})
+    await DelayedJob.performLaterWithOptions({args: ["b", outPath2], options: {executionMode: "inline"}})
+    await DelayedJob.performLaterWithOptions({args: ["c", outPath3], options: {executionMode: "inline"}})
 
     await Promise.all([
       waitForOutputJson({outputPath: outPath1, timeoutSeconds: 4}),
@@ -167,7 +167,7 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
     try {
       const jobId = await FailingJob.performLaterWithOptions({
         args: ["planned failure"],
-        options: {forked: false, maxRetries: 0}
+        options: {executionMode: "inline", maxRetries: 0}
       })
 
       await timeout({timeout: 2000}, async () => {
@@ -208,7 +208,7 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
     dummyConfiguration.getErrorEvents().on("background-job-orphaned", onOrphaned)
 
     try {
-      const jobId = await main.store.enqueue({jobName: "AppendJob", args: ["orphan", "me"], options: {forked: false, maxRetries: 0}})
+      const jobId = await main.store.enqueue({jobName: "AppendJob", args: ["orphan", "me"], options: {executionMode: "inline", maxRetries: 0}})
 
       await main.store.markHandedOff({jobId, workerId: "dead-worker"})
       // Backdate the handoff so the default-cutoff sweep reclaims it immediately.
@@ -255,7 +255,7 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
       const jobIds = []
 
       for (const args of [["a"], ["b"]]) {
-        const jobId = await main.store.enqueue({jobName: "AppendJob", args, options: {forked: false, maxRetries: 0}})
+        const jobId = await main.store.enqueue({jobName: "AppendJob", args, options: {executionMode: "inline", maxRetries: 0}})
 
         await main.store.markHandedOff({jobId, workerId: "dead-worker"})
         jobIds.push(jobId)

@@ -351,7 +351,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     const {main, store} = await startBackgroundJobsMain()
 
     try {
-      const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
       const handoff = await store.markHandedOff({jobId, workerId: "stale"})
       if (!handoff) throw new Error("Expected the job to be handed off")
 
@@ -433,14 +433,14 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
 
     try {
       // A job the worker was running before the main restarted.
-      const ownId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const ownId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
       const ownHandoff = await store.markHandedOff({jobId: ownId, workerId: "reconnecting-worker"})
       if (!ownHandoff) throw new Error("Expected the reconnecting worker's job to hand off")
 
       // A job held by a DIFFERENT worker that does not reconnect (e.g. still
       // draining under the old release). It must be left untouched — never
       // reclaimed early into a duplicate attempt.
-      const otherId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+      const otherId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
       const otherHandoff = await store.markHandedOff({jobId: otherId, workerId: "other-worker"})
       if (!otherHandoff) throw new Error("Expected the other worker's job to hand off")
 

@@ -42,7 +42,7 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
 
       await TestJob.performLaterWithOptions({
         args: ["beacon-dispatched", outputPath],
-        options: {forked: false}
+        options: {executionMode: "inline"}
       })
 
       const result = await waitForOutputJson({outputPath})
@@ -60,7 +60,7 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
 
     // Pre-create a future-scheduled job so the dispatcher's initial drain
     // calls `_armScheduledTimer` against a real future timestamp.
-    const futureJobId = await store.enqueue({jobName: "TestJob", args: ["future"], options: {forked: false, maxRetries: 5}})
+    const futureJobId = await store.enqueue({jobName: "TestJob", args: ["future"], options: {executionMode: "inline", maxRetries: 5}})
     const handoff = await store.markHandedOff({jobId: futureJobId, workerId: "worker-z"})
     if (!handoff) throw new Error("Expected the future job to be handed off")
     await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-z", ...handoff})

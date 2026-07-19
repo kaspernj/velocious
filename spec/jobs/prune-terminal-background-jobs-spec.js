@@ -35,7 +35,7 @@ describe("PruneTerminalBackgroundJobsJob", {databaseCleaning: {truncate: true}},
     const store = new BackgroundJobsStore({configuration: dummyConfiguration})
     await store.clearAll()
 
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
     const handoff = await store.markHandedOff({jobId, workerId: "w"})
     if (!handoff) throw new Error("Expected the job to be handed off")
     await store.markCompleted({jobId, workerId: "w", ...handoff})

@@ -26,10 +26,10 @@ async function seedJobs() {
   const store = new BackgroundJobsStore({configuration: dummyConfiguration})
 
   await store.clearAll()
-  await store.enqueue({jobName: "TestJob", args: ["alpha"], options: {forked: false}})
-  await store.enqueue({jobName: "TestJob", args: ["beta"], options: {forked: false}})
+  await store.enqueue({jobName: "TestJob", args: ["alpha"], options: {executionMode: "inline"}})
+  await store.enqueue({jobName: "TestJob", args: ["beta"], options: {executionMode: "inline"}})
 
-  const failedId = await store.enqueue({jobName: "FailingJob", args: ["b"], options: {forked: false, maxRetries: 0}})
+  const failedId = await store.enqueue({jobName: "FailingJob", args: ["b"], options: {executionMode: "inline", maxRetries: 0}})
   const handoff = await store.markHandedOff({jobId: failedId, workerId: "worker-1"})
   if (!handoff) throw new Error("Expected the failed job to be handed off")
 

@@ -480,14 +480,9 @@ export default class BackgroundJobsWorker {
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Execution mode.
    */
   _executionModeForPayload(payload) {
-    const options = payload.options || {}
-    const executionMode = options.executionMode
+    const executionMode = payload.options?.executionMode
 
-    if (executionMode) return this._normalizeExecutionMode(executionMode)
-
-    if (options.forked === false) return "inline"
-    if (options.forked === true) return "forked"
-    return "pooled"
+    return executionMode ? this._normalizeExecutionMode(executionMode) : "pooled"
   }
 
   /**

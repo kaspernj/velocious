@@ -10,8 +10,7 @@
  */
 /**
  * @typedef {object} BackgroundJobOptions
- * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"pooled"` (a warm, reused local runner process). `"forked"` runs the job in a fresh `child_process.fork()` child, `"spawned"` in a detached CLI runner, and `"inline"` inside the worker process.
- * @property {boolean} [forked] - Compatibility alias: `false` maps to `"inline"` and `true` maps to `"forked"`. Omitting both `forked` and `executionMode` uses the default `"pooled"` mode.
+ * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"pooled"` (a warm, reused local runner process). `"forked"` runs the job in a fresh `child_process.fork()` child, `"spawned"` in a detached CLI runner, and `"inline"` inside the worker process. Omit to use the default `"pooled"` mode.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
  * @property {string} [queue] - Queue name. Defaults to `"default"`. When the queue has a configured cap in `backgroundJobs.queues`, that cap is enforced cluster-wide.
  * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap. Overrides any queue-derived cap.
@@ -35,7 +34,6 @@
  * @property {string} jobName - Job class name.
  * @property {Array<?>} args - Serialized job arguments.
  * @property {BackgroundJobExecutionMode} executionMode - How the job should run.
- * @property {boolean} forked - Compatibility flag; true for non-inline execution.
  * @property {string} queue - Queue name (defaults to `"default"`).
  * @property {string} status - Current job status.
  * @property {number | null} attempts - Failure attempts count.

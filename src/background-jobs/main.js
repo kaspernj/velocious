@@ -1142,8 +1142,7 @@ export default class BackgroundJobsMain {
             workerId: worker.workerId,
             handedOffAtMs: handoff.handedOffAtMs,
             options: {
-              executionMode: job.executionMode,
-              forked: job.forked
+              executionMode: job.executionMode
             }
           }
         })

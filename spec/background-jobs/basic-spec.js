@@ -147,7 +147,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
       workerId: "legacy-worker"
     })
     const capableWorker = await connectControllableWorker({port: main.getPort(), workerId: "capable-worker"})
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
 
     await main._drain()
 
@@ -183,7 +183,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
   it("immediately requeues a disconnected worker's exact handoff to another socket", async () => {
     const {main, store} = await startBackgroundJobsMain()
     const firstWorker = await connectControllableWorker({port: main.getPort(), workerId: "shared-worker-id"})
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
 
     await main._drain()
 
@@ -251,7 +251,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
 
     const jobId = await TestJob.performLaterWithOptions({
       args: ["hello", outputPath],
-      options: {forked: false}
+      options: {executionMode: "inline"}
     })
 
     const result = await waitForOutputJson({outputPath})
@@ -322,7 +322,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
           args: ["scheduled", outputPath],
           class: TestJob,
           every: ["1 hour", {firstIn: "25ms"}],
-          options: {forked: false}
+          options: {executionMode: "inline"}
         }
       }
     })
@@ -359,7 +359,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
         validScheduledTestJob: {
           class: TestJob,
           every: ["1 hour", {firstIn: "25ms"}],
-          options: {forked: false}
+          options: {executionMode: "inline"}
         },
         invalidScheduledTestJob: {
           every: "1m"
@@ -401,7 +401,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
 
     const jobId = await SlowTestJob.performLaterWithOptions({
       args: ["graceful", outputPath, 400],
-      options: {forked: false}
+      options: {executionMode: "inline"}
     })
 
     // Wait until the worker has actually picked the job up; otherwise
