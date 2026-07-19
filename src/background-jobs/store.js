@@ -764,6 +764,8 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Ensures the background-jobs schema exists, reusing a caller-held connection when
+   * one is given rather than checking out its own.
    * @param {import("../database/drivers/base.js").default} [existingDb] - Reuse an
    *   already-checked-out connection (e.g. the one `db:migrate` holds) instead of
    *   checking out a nested one — the nested checkout would deadlock a database
@@ -781,6 +783,8 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Creates or upgrades the background-jobs tables, columns and concurrency rows on
+   * the given connection.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
