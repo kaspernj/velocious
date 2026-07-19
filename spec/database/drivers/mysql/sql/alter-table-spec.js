@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../../../../src/testing/test.js"
 import MysqlDriver from "../../../../../src/database/drivers/mysql/index.js"
 import TableData from "../../../../../src/database/table-data/index.js"
 import TableForeignKey from "../../../../../src/database/table-data/table-foreign-key.js"
+import TableIndex from "../../../../../src/database/table-data/table-index.js"
 
 /** @returns {MysqlDriver} */
 function buildDriver() {
@@ -32,6 +33,17 @@ describe("database/drivers/mysql/sql/alter-table", {databaseCleaning: {transacti
 
     expect(sqls).toEqual([
       "ALTER TABLE `github_webhooks` ADD COLUMN `attempt_count` INTEGER DEFAULT 0 NOT NULL"
+    ])
+  })
+
+  it("adds a column and unique index in the same alter statement", async () => {
+    const tableData = new TableData("widgets")
+
+    tableData.integer("id", {autoIncrement: true, null: false})
+    tableData.addIndex(new TableIndex(["id"], {name: "index_widgets_on_id", unique: true}))
+
+    expect(await buildDriver().alterTableSQLs(tableData)).toEqual([
+      "ALTER TABLE `widgets` ADD COLUMN `id` INTEGER AUTO_INCREMENT NOT NULL, ADD UNIQUE INDEX `index_widgets_on_id` (`id`)"
     ])
   })
 

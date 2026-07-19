@@ -143,6 +143,37 @@ export default class SchemaCloner {
       tableData.addColumn(sourceColumn.getName(), this.columnArgsFromSourceColumn(sourceColumn, {isNewColumn: false}))
     }
 
+    if (this.targetDb.getType() === "mysql") {
+      const missingAutoIncrementColumnNames = new Set(
+        missingColumns
+          .filter((sourceColumn) => sourceColumn.getAutoIncrement())
+          .map((sourceColumn) => sourceColumn.getName())
+      )
+      const targetIndexesByName = new Map(
+        (await targetTable.getIndexes()).map((targetIndex) => [targetIndex.getName(), targetIndex])
+      )
+
+      for (const sourceIndex of await sourceTable.getIndexes()) {
+        if (
+          !sourceIndex.isPrimaryKey() &&
+          sourceIndex.isUnique() &&
+          missingAutoIncrementColumnNames.has(sourceIndex.getColumnNames()[0])
+        ) {
+          const targetIndex = targetIndexesByName.get(sourceIndex.getName())
+
+          if (targetIndex) {
+            if (this.indexesMatch(sourceIndex, targetIndex)) continue
+
+            this.assertSafeIndexReplacement({sourceIndex, tableName, targetIndex})
+            await this.dropTargetIndex({tableName, targetIndex})
+            targetIndexesByName.delete(targetIndex.getName())
+          }
+
+          tableData.addIndex(this.tableDataIndexFromSourceIndex(sourceIndex))
+        }
+      }
+    }
+
     for (const alterSql of await this.targetDb.alterTableSQLs(tableData)) {
       await this.targetDb.query(alterSql)
     }
@@ -186,15 +217,7 @@ export default class SchemaCloner {
 
       if (targetIndex) {
         if (!this.indexesMatch(sourceIndex, targetIndex)) {
-          // Replacing a non-unique index with a unique one is unsafe because
-          // the target may have duplicate values that will reject the new
-          // unique constraint, and the old index was already dropped by this
-          // point. The opposite direction (unique → non-unique) is always
-          // safe — non-unique indexes never fail on duplicate values.
-          if (sourceIndex.isUnique() && !targetIndex.isUnique()) {
-            throw new Error(`Schema clone index drift for ${tableName}.${sourceIndex.getName()}: cannot safely replace a non-unique index with a unique one.`)
-          }
-
+          this.assertSafeIndexReplacement({sourceIndex, tableName, targetIndex})
           await this.dropTargetIndex({tableName, targetIndex})
           targetIndexesByName.delete(targetIndex.getName())
           targetIndexSignatures.delete(this.indexSignature(targetIndex))
@@ -238,6 +261,20 @@ export default class SchemaCloner {
 
     for (const sql of dropSqls) {
       await this.targetDb.query(sql)
+    }
+  }
+
+  /**
+   * Refuses index replacements that could fail after the existing index is dropped.
+   * @param {{sourceIndex: import("../drivers/base-columns-index.js").default, tableName: string, targetIndex: import("../drivers/base-columns-index.js").default}} args - Source and target index definitions.
+   * @returns {void}
+   */
+  assertSafeIndexReplacement({sourceIndex, tableName, targetIndex}) {
+    // Replacing a non-unique index with a unique one is unsafe because the
+    // target may have duplicate values that will reject the new constraint.
+    // The opposite direction is safe because non-unique indexes accept them.
+    if (sourceIndex.isUnique() && !targetIndex.isUnique()) {
+      throw new Error(`Schema clone index drift for ${tableName}.${sourceIndex.getName()}: cannot safely replace a non-unique index with a unique one.`)
     }
   }
 
