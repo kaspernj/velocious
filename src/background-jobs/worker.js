@@ -72,7 +72,7 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
-   * @param {number} [args.jobTimeoutMs] - Override the forked-job wall-clock timeout from `configuration.getBackgroundJobsConfig()`. `0` disables it.
+   * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
    */
   constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs} = {}) {
     /**
@@ -129,7 +129,7 @@ export default class BackgroundJobsWorker {
       ? forkedChildSigkillGraceMs
       : FORKED_CHILD_SIGKILL_GRACE_MS
     /**
-     * Constructor override for the forked-job wall-clock timeout. When unset the
+     * Constructor override for the forked and pooled wall-clock job timeout. When unset the
      * timeout is read from `configuration.getBackgroundJobsConfig().jobTimeoutMs`
      * at fork time (default: disabled).
      * @type {number | undefined}
@@ -186,7 +186,7 @@ export default class BackgroundJobsWorker {
     this.inflightPooledJobs = new Set()
     /** @type {Set<import("node:child_process").ChildProcess>} */
     this.pooledChildren = new Set()
-    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void}>, retiring: boolean, settling?: boolean}>} */
+    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, retiring: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
     this.pooledChildStates = new Map()
   }
 
@@ -659,13 +659,67 @@ export default class BackgroundJobsWorker {
     if (!state) throw new Error("Pooled runner state missing")
 
     return new Promise((resolve) => {
-      state.inflight.set(payload.id, {payload, resolve})
+      const timeoutTimer = this._armPooledJobTimeout({child, jobId: payload.id})
+
+      state.inflight.set(payload.id, {payload, resolve, timeoutTimer})
       try {
         child.send({type: "job", payload})
       } catch (error) {
         void this._handlePooledChildFailure({child, error})
       }
     })
+  }
+
+  /**
+   * Arms a per-job wall-clock backstop for a pooled job. A pooled child hosts many
+   * concurrent jobs, so a single genuinely-hung job would otherwise pin its
+   * runner's concurrency slot forever — the lifetime recycle only retires a child
+   * once its in-flight set drains, which a hung job never does. On overrun the
+   * whole child is terminated so the hung job (and its siblings) requeue. Returns
+   * the timer, or null when no timeout is configured.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {string} args.jobId - Job id whose overrun is guarded.
+   * @returns {ReturnType<typeof setTimeout> | null} - The armed timer, or null.
+   */
+  _armPooledJobTimeout({child, jobId}) {
+    const timeoutMs = this._resolveJobTimeoutMs()
+
+    if (!(typeof timeoutMs === "number" && timeoutMs > 0)) return null
+
+    return setTimeout(() => this._onPooledJobTimeout({child, jobId}), timeoutMs)
+  }
+
+  /**
+   * Fired when a pooled job overruns its timeout. Terminates the child running it
+   * (SIGTERM, then SIGKILL after the grace) — a hung JS job cannot be cancelled
+   * any other way. The non-clean exit flows through `_handlePooledChildFailure`,
+   * which reports every in-flight job on the child failed (so they requeue) and
+   * drops it from tracking; capacity is refilled on the next dispatch.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {string} args.jobId - Job id that overran.
+   * @returns {void}
+   */
+  _onPooledJobTimeout({child, jobId}) {
+    const state = this.pooledChildStates.get(child)
+
+    // Already settling/gone, or the job finished in the race with this timer.
+    if (!state || state.settling || !state.inflight.has(jobId)) return
+
+    try {
+      child.kill("SIGTERM")
+    } catch {
+      // Child already exited; nothing to do.
+    }
+
+    state.timeoutSigkillTimer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }, this.forkedChildSigkillGraceMs)
   }
 
   /**
@@ -705,6 +759,7 @@ export default class BackgroundJobsWorker {
     const entry = state.inflight.get(record.jobId)
     if (!entry) return
 
+    if (entry.timeoutTimer) clearTimeout(entry.timeoutTimer)
     state.inflight.delete(record.jobId)
     state.jobsRun += 1
     const resolve = entry.resolve
@@ -789,7 +844,15 @@ export default class BackgroundJobsWorker {
   async _handlePooledChildFailure({child, error}) {
     const state = this.pooledChildStates.get(child)
     if (state?.settling) return
-    if (state) state.settling = true
+    if (state) {
+      state.settling = true
+      // Cancel this child's pending timers before its in-flight set is reported —
+      // the SIGKILL grace from a timeout kill, and every armed per-job backstop.
+      if (state.timeoutSigkillTimer) clearTimeout(state.timeoutSigkillTimer)
+      for (const inflightEntry of state.inflight.values()) {
+        if (inflightEntry.timeoutTimer) clearTimeout(inflightEntry.timeoutTimer)
+      }
+    }
     this.pooledChildren.delete(child)
     this.inflightProcessChildren.delete(child)
 
@@ -908,7 +971,7 @@ export default class BackgroundJobsWorker {
    * @returns {ForkedJobTimeoutState} - Timeout state.
    */
   _armForkedJobTimeout({child}) {
-    const timeoutMs = this._resolveForkedJobTimeoutMs()
+    const timeoutMs = this._resolveJobTimeoutMs()
     /** @type {ForkedJobTimeoutState} */
     const state = {timedOut: false, timeoutMs, timer: null, sigkillTimer: null}
 
@@ -920,12 +983,12 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Resolves the effective forked-job timeout in ms, or null when disabled. The
+   * Resolves the effective wall-clock job timeout in ms (shared by forked and pooled jobs), or null when disabled. The
    * constructor override wins; otherwise the value comes from the background-jobs
    * configuration. A non-positive value disables the backstop.
    * @returns {number | null} - Timeout in ms, or null when disabled.
    */
-  _resolveForkedJobTimeoutMs() {
+  _resolveJobTimeoutMs() {
     const raw = typeof this.jobTimeoutMsOverride === "number"
       ? this.jobTimeoutMsOverride
       : (this.configuration ? this.configuration.getBackgroundJobsConfig().jobTimeoutMs : null)
