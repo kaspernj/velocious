@@ -9,6 +9,28 @@ const configuration = /** @type {any} */ ({
   getQueryLoggingEnabled: () => false
 })
 
+class CheckReadRetryMysqlDriver extends MysqlDriver {
+  attempts = 0
+  reconnectCount = 0
+
+  async reconnect() {
+    this.reconnectCount++
+  }
+
+  async _queryActual() {
+    this.attempts++
+
+    if (this.attempts == 1) {
+      const mysqlError = new Error("Record has changed since last read in table 'background_jobs'")
+      // @ts-expect-error MySQL attaches its symbolic error code at runtime.
+      mysqlError.code = "ER_CHECKREAD"
+      throw new Error("Query failed", {cause: mysqlError})
+    }
+
+    return [{result: 1}]
+  }
+}
+
 describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("connects when the pool is missing", async () => {
     const driver = new MysqlDriver({}, configuration)
@@ -82,32 +104,15 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
   })
 
   it("retries a wrapped ER_CHECKREAD without reconnecting", async () => {
-    const driver = new MysqlDriver({}, configuration)
-    let attempts = 0
-    let reconnectCount = 0
+    const driver = new CheckReadRetryMysqlDriver({}, configuration)
 
     driver.setDesiredSessionTimeZone(null)
-    driver.reconnect = async () => {
-      reconnectCount++
-    }
-    driver._queryActual = async () => {
-      attempts++
-
-      if (attempts == 1) {
-        const mysqlError = new Error("Record has changed since last read in table 'background_jobs'")
-        // @ts-expect-error MySQL attaches its symbolic error code at runtime.
-        mysqlError.code = "ER_CHECKREAD"
-        throw new Error("Query failed", {cause: mysqlError})
-      }
-
-      return [{result: 1}]
-    }
 
     const rows = await driver.query("SELECT 1")
 
     expect(rows).toEqual([{result: 1}])
-    expect(attempts).toEqual(2)
-    expect(reconnectCount).toEqual(0)
+    expect(driver.attempts).toEqual(2)
+    expect(driver.reconnectCount).toEqual(0)
   })
 
   it("raises when a reconnect would bypass an active transaction", async () => {
