@@ -1006,6 +1006,29 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * Ensures velocious' background-jobs schema exists on its configured database
+   * as part of `db:migrate`, so the framework's own tables (background_jobs +
+   * background_job_concurrency, execution_mode etc.) are created deterministically
+   * alongside app migrations and captured in the dumped structure SQL — rather than
+   * only appearing once a runtime store boots. Reuses the store's idempotent
+   * `_ensureSchema`, so it's safe to re-run against DBs that already have it.
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs being migrated.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async ensureFrameworkSchema({dbs}) {
+    const {default: BackgroundJobsStore} = await import("../background-jobs/store.js")
+    const store = new BackgroundJobsStore({configuration: this.getConfiguration()})
+    const databaseIdentifier = store.getDatabaseIdentifier() ?? "default"
+
+    // Reuse the connection db:migrate already holds for this database; opening a
+    // nested checkout would deadlock a database whose pool is capped at one
+    // connection. When the background-jobs database isn't among the migrated set,
+    // this passes undefined and the store checks out its own (that pool is free).
+    await store.ensureSchema(dbs[databaseIdentifier])
+  }
+
+  /**
    * Runs after migrations.
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.

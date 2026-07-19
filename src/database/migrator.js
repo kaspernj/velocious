@@ -204,6 +204,11 @@ export default class VelociousDatabaseMigrator {
 
     if (!environmentHandler || Object.keys(filteredDbs).length == 0) return
 
+    // Ensure velocious' own framework schema (background jobs) before the structure
+    // dump, and unconditionally — the dump is gated to enabled environments but the
+    // framework schema must exist after every migrate so `db:migrate` (and thus
+    // schema:load of the dumped SQL) produces a complete DB in every environment.
+    await environmentHandler.ensureFrameworkSchema({dbs: filteredDbs})
     await environmentHandler.afterMigrations({dbs: filteredDbs})
   }
 

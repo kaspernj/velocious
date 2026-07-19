@@ -509,6 +509,20 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * Ensures velocious' own framework-owned schema (e.g. the background-jobs
+   * tables) exists after app migrations run, so `db:migrate` produces a complete
+   * schema deterministically instead of it only appearing once a runtime store
+   * boots. Runs before the structure dump. No-op by default; the node handler
+   * overrides it.
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs being migrated.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async ensureFrameworkSchema(args) { // eslint-disable-line no-unused-vars
+    return
+  }
+
+  /**
    * Runs require command.
    * @abstract
    * @param {object} args - Options object.
