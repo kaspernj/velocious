@@ -225,17 +225,19 @@ export default class DataCopier {
   }
 
   /**
-   * Streams the source ids for every plan table scoped to `keyValue` in bounded `batchSize`
-   * pages, following parent/child chaining. Each table's ids are read through a real
+   * Streams every plan table's source rows scoped to `keyValue` in bounded `batchSize` batches,
+   * following parent/child chaining. Each table is read through a real
    * {@link import("../drivers/base.js").default#queryStream} cursor, so a large table is never
    * buffered; only the ids of tables that are themselves a parent are retained (to scope their
-   * children). Memory stays bounded to one batch plus the retained parent-table ids.
+   * children). `selectColumns` bounds each row's projection — pass `[idColumn]` for a light
+   * id-only scan, or omit it to stream full rows — and must include the id column for any table
+   * that has children. Memory stays bounded to one batch plus the retained parent-table ids.
    * @param {import("../drivers/base.js").default} db - Source database to stream.
    * @param {string} keyValue - Tenant key selecting the root plan rows.
-   * @param {{batchSize: number}} options - Maximum ids per yielded batch.
-   * @yields {{ids: string[], tableName: string}} - Successive id batches per table.
+   * @param {{batchSize: number, selectColumns?: string[]}} options - Batch size and optional projection.
+   * @yields {{rows: Record<string, unknown>[], tableName: string}} - Successive row batches per table.
    */
-  async *streamPlanSourceIdBatches(db, keyValue, {batchSize}) {
+  async *streamPlanSourceBatches(db, keyValue, {batchSize, selectColumns}) {
     /** @type {Map<string, string[]>} */
     const retainedIdsByTableName = new Map()
     const parentTableNames = this.parentTableNames()
@@ -265,32 +267,32 @@ export default class DataCopier {
       /** @type {string[] | null} */
       const retainedIds = parentTableNames.has(tableConfig.tableName) ? [] : null
       const quotedTable = db.quoteTable(tableConfig.tableName)
-      const quotedId = db.quoteColumn(this.idColumn)
       const quotedScope = db.quoteColumn(scopeColumn)
-      /** @type {string[]} */
+      const selectList = selectColumns
+        ? selectColumns.map((column) => `${quotedTable}.${db.quoteColumn(column)}`).join(", ")
+        : `${quotedTable}.*`
+      /** @type {Record<string, unknown>[]} */
       let batch = []
 
       for (const scopeChunk of chunks(uniqueStrings(scopeValues), this.queryChunkSize)) {
-        const sql = `SELECT ${quotedTable}.${quotedId} FROM ${quotedTable} WHERE ${quotedScope} IN (${this.quotedValuesSql(db, scopeChunk)})`
+        const sql = `SELECT ${selectList} FROM ${quotedTable} WHERE ${quotedScope} IN (${this.quotedValuesSql(db, scopeChunk)})`
 
         for await (const row of db.queryStream(sql)) {
-          const id = String(row[this.idColumn])
-
-          batch.push(id)
+          batch.push(row)
 
           if (retainedIds) {
-            retainedIds.push(id)
+            retainedIds.push(String(row[this.idColumn]))
           }
 
           if (batch.length >= batchSize) {
-            yield {ids: batch, tableName: tableConfig.tableName}
+            yield {rows: batch, tableName: tableConfig.tableName}
             batch = []
           }
         }
       }
 
       if (batch.length > 0) {
-        yield {ids: batch, tableName: tableConfig.tableName}
+        yield {rows: batch, tableName: tableConfig.tableName}
       }
 
       retainedIdsByTableName.set(tableConfig.tableName, retainedIds || [])
@@ -316,28 +318,28 @@ export default class DataCopier {
   }
 
   /**
-   * Streams the source rows for `keyValue` and returns, per table, the ids present in the source
-   * but missing from the target — without ever materialising a whole table. Callers verifying a
-   * tenant already holds every source row (for example before deleting the source copies) treat
-   * an empty result as the go-ahead. Memory stays bounded to one batch of ids plus the retained
-   * parent-table ids, so it is safe on arbitrarily large tables.
+   * Streams the source ids for `keyValue` and returns the first table found to be missing rows in
+   * the target, with that batch's missing ids — stopping at the first shortfall instead of
+   * enumerating every missing row. Callers verifying a tenant already holds every source row (for
+   * example before deleting the source copies) treat an empty result as the go-ahead and any entry
+   * as a hard stop; failing fast keeps memory bounded to a single batch even when the target is
+   * far behind.
    * @param {string} keyValue - Tenant key selecting the source rows to check.
    * @param {{batchSize?: number}} [options] - Streaming batch size.
-   * @returns {Promise<Map<string, string[]>>} - Source ids missing from the target, grouped by table name.
+   * @returns {Promise<Map<string, string[]>>} - The first table missing rows and that batch's missing ids, or empty when the target holds everything.
    */
   async findMissingRowIds(keyValue, {batchSize = DEFAULT_STREAM_BATCH_SIZE} = {}) {
     /** @type {Map<string, string[]>} */
     const missingByTableName = new Map()
 
-    for await (const {ids, tableName} of this.streamPlanSourceIdBatches(this.sourceDb, keyValue, {batchSize})) {
+    for await (const {rows, tableName} of this.streamPlanSourceBatches(this.sourceDb, keyValue, {batchSize, selectColumns: [this.idColumn]})) {
+      const ids = rows.map((row) => String(row[this.idColumn]))
       const existingIds = await this.queryExistingIds({db: this.targetDb, ids, tableName})
       const missingIds = ids.filter((id) => !existingIds.has(id))
 
       if (missingIds.length > 0) {
-        const tableMissing = missingByTableName.get(tableName) || []
-
-        tableMissing.push(...missingIds)
-        missingByTableName.set(tableName, tableMissing)
+        missingByTableName.set(tableName, missingIds)
+        break
       }
     }
 
@@ -345,23 +347,27 @@ export default class DataCopier {
   }
 
   /**
-   * Streams the source rows for `keyValue` and copies into the target only the rows missing
-   * there. Full rows are loaded solely for the (usually few) missing ids, after the id stream
-   * has finished and released its source connection, so a table with large columns is never
-   * fully materialised. Intended for single-table plans whose rows have no plan children.
+   * Streams the source rows for `keyValue` and copies into the target, batch by batch, only the
+   * rows missing there. Because the full rows travel in the stream, each batch's missing rows are
+   * inserted as it arrives — nothing is accumulated, and no second source query runs while the
+   * source connection is held by the stream — so a table with large columns stays bounded to one
+   * batch even when the target is empty. Intended for single-table plans (or plans whose per-table,
+   * parent-first insert order is foreign-key safe).
    * @param {string} keyValue - Tenant key selecting the source rows to reconcile.
-   * @param {{batchSize?: number}} [options] - Streaming batch size for the id scan.
+   * @param {{batchSize?: number}} [options] - Streaming batch size.
    * @returns {Promise<number>} - The number of rows copied into the target.
    */
   async copyMissingRows(keyValue, {batchSize = DEFAULT_STREAM_BATCH_SIZE} = {}) {
-    const missingByTableName = await this.findMissingRowIds(keyValue, {batchSize})
     let copiedCount = 0
 
-    for (const [tableName, missingIds] of missingByTableName) {
-      const missingRows = await this.queryRowsByColumn({columnName: this.idColumn, db: this.sourceDb, tableName, values: missingIds})
+    for await (const {rows, tableName} of this.streamPlanSourceBatches(this.sourceDb, keyValue, {batchSize})) {
+      const existingIds = await this.queryExistingIds({db: this.targetDb, ids: rows.map((row) => String(row[this.idColumn])), tableName})
+      const missingRows = rows.filter((row) => !existingIds.has(String(row[this.idColumn])))
 
-      await this.insertTargetRows(new Map([[tableName, missingRows]]))
-      copiedCount += missingRows.length
+      if (missingRows.length > 0) {
+        await this.insertTargetRows(new Map([[tableName, missingRows]]))
+        copiedCount += missingRows.length
+      }
     }
 
     return copiedCount
