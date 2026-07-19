@@ -101,6 +101,20 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Ensures the background-jobs schema (tables + columns) exists on the configured
+   * database, without initializing the runtime model. Lets `db:migrate` create the
+   * framework's own schema deterministically alongside app migrations — and capture
+   * it in the dumped structure SQL — instead of it only appearing once a store boots.
+   * Idempotent: reuses the same `_ensureSchema` the runtime store uses, which skips
+   * work already applied (tracked in `velocious_internal_migrations`).
+   * @returns {Promise<void>} - Resolves when the schema is present.
+   */
+  async ensureSchema() {
+    this.configuration.setCurrent()
+    await this._ensureSchema()
+  }
+
+  /**
    * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
