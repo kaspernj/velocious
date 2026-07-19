@@ -1,11 +1,52 @@
 // @ts-check
 
 import {describe, expect, it} from "../../../src/testing/test.js"
+import MysqlDriver from "../../../src/database/drivers/mysql/index.js"
+import MysqlTable from "../../../src/database/drivers/mysql/table.js"
 import MigrationsLedger from "../../../src/database/migrations-ledger.js"
 import SchemaCloner from "../../../src/database/tenants/schema-cloner.js"
 import TableData from "../../../src/database/table-data/index.js"
 import TableIndex from "../../../src/database/table-data/table-index.js"
 import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
+
+class SchemaClonerMysqlDriver extends MysqlDriver {
+  /** @type {string[]} */
+  queries = []
+
+  /**
+   * @param {string} tableName - Table name.
+   * @returns {Promise<MysqlTable>} - MySQL table metadata wrapper.
+   */
+  async getTableByNameOrFail(tableName) {
+    return new MysqlTable(this, {table_name: tableName})
+  }
+
+  /**
+   * @param {string} sql - SQL query.
+   * @returns {Promise<Array<Record<string, string | number | null>>>} - Simulated MySQL metadata rows.
+   */
+  async query(sql) {
+    this.queries.push(sql)
+
+    if (sql === "SHOW FULL COLUMNS FROM `source_widgets`") {
+      return [{Comment: "", Default: null, Extra: "auto_increment", Field: "id", Key: "", Null: "NO", Type: "int"}]
+    }
+
+    if (sql === "SHOW FULL COLUMNS FROM `widgets`") {
+      return [{Comment: "", Default: null, Extra: "", Field: "legacy_id", Key: "", Null: "NO", Type: "int"}]
+    }
+
+    if (sql.includes("INFORMATION_SCHEMA.STATISTICS") && sql.includes("TABLE_NAME = 'source_widgets'")) {
+      return [{COLUMN_NAME: "id", INDEX_NAME: "index_widgets_on_id", NON_UNIQUE: 0, SEQ_IN_INDEX: 1, index_name: "index_widgets_on_id"}]
+    }
+
+    if (sql.includes("INFORMATION_SCHEMA.STATISTICS") && sql.includes("TABLE_NAME = 'widgets'")) {
+      return [{COLUMN_NAME: "legacy_id", INDEX_NAME: "index_widgets_on_id", NON_UNIQUE: 0, SEQ_IN_INDEX: 1, index_name: "index_widgets_on_id"}]
+    }
+
+    return []
+  }
+}
 
 // The per-driver DDL/introspection the cloner orchestrates (createTable,
 // alterTableSQLs, createIndexSQLs, getColumns, getIndexes) is matrix-tested by the
@@ -34,6 +75,19 @@ describe("SchemaCloner", () => {
       await cleanup()
     }
   }
+
+  it("adds a missing auto-increment column and its separate unique index atomically", async () => {
+    const driver = new SchemaClonerMysqlDriver({type: "mysql"})
+    const cloner = new SchemaCloner({sourceDb: driver, targetDb: driver})
+    const sourceTable = await driver.getTableByNameOrFail("source_widgets")
+
+    await cloner.ensureTargetColumns({sourceTable, tableName: "widgets"})
+
+    expect(driver.queries.filter((sql) => sql.startsWith("ALTER TABLE") || sql.startsWith("DROP INDEX"))).toEqual([
+      "DROP INDEX `index_widgets_on_id` ON `widgets`",
+      "ALTER TABLE `widgets` ADD COLUMN `id` INTEGER AUTO_INCREMENT NOT NULL, ADD UNIQUE INDEX `index_widgets_on_id` (`id`)"
+    ])
+  })
 
   it("clones a missing table's columns and indexes into the target and baselines the ledger", async () => {
     await withCloner(async ({cloner, targetDb}) => {
