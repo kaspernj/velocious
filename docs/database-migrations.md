@@ -54,6 +54,22 @@ await this.removeIndex("tasks", "index_tasks_slug_unique")
 
 Use the columns form for indexes created by `addIndex(...)` without an explicit name so SQLite and the other drivers drop their own generated names correctly.
 
+## Guarding schema changes in rerunnable migrations
+
+A migration that must be rerunnable — for example a data backfill or repair that may run against a partially-patched schema — can guard each change with the schema-inspection helpers so it stays idempotent:
+
+* `tableExists(tableName)` — whether a table exists.
+* `columnExists(tableName, columnName)` — whether a column exists.
+* `indexExists(tableName, indexName)` — whether a named index exists. A missing table resolves to `false` rather than throwing, so it is safe to call before the table has been created.
+
+```js
+if (!await this.indexExists("tasks", "index_tasks_slug_unique")) {
+  await this.addIndex("tasks", ["slug"], {name: "index_tasks_slug_unique", unique: true})
+}
+```
+
+Prefer a plain forward migration when the schema state is known — reach for these guards only when a migration genuinely needs to be rerunnable, so real schema drift still fails loudly instead of being silently skipped.
+
 ## Datetime Storage
 
 Velocious stores persisted `Date` values as UTC instants. Runtime-local timezone and `timezoneOffsetMinutes` are not applied when records are inserted, updated, queried, or read back from storage.

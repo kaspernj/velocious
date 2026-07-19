@@ -1102,6 +1102,8 @@ export default class CreateEvents extends Migration {
 }
 ```
 
+Migrations that must be rerunnable can guard changes with `tableExists(...)`, `columnExists(table, column)` and `indexExists(table, index)` — a missing table yields `false` rather than throwing. See [docs/database-migrations.md](docs/database-migrations.md#guarding-schema-changes-in-rerunnable-migrations).
+
 ## Run migrations from the command line
 
 ```bash
