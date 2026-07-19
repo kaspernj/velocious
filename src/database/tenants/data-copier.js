@@ -130,6 +130,35 @@ export default class DataCopier {
    * @returns {Promise<Map<string, Record<string, unknown>[]>>} - Loaded rows grouped by table name.
    */
   async loadRows(db, keyValue) {
+    return (await this.traversePlan(db, keyValue)).rowsByTableName
+  }
+
+  /**
+   * Loads only the ids for `keyValue` for every table in the plan from `db`, using the same
+   * parent/child traversal as {@link DataCopier#loadRows} but selecting just the id column.
+   * Callers that only need to compare row membership — for example verifying a tenant already
+   * holds every default row before a cleanup delete — should use this instead of loadRows so
+   * they never materialise full rows; for large tenants that is the difference between a few
+   * kilobytes of ids and gigabytes of row data.
+   * @param {import("../drivers/base.js").default} db - Source or target database to traverse.
+   * @param {string} keyValue - Tenant key selecting the root plan rows.
+   * @returns {Promise<Map<string, string[]>>} - Loaded ids grouped by table name.
+   */
+  async loadRowIds(db, keyValue) {
+    return (await this.traversePlan(db, keyValue, [this.idColumn])).idsByTableName
+  }
+
+  /**
+   * Traverses the table plan for `keyValue`, querying each table by its tenant key column or
+   * (for child tables) by the ids already selected for its parent, and returns both the ids
+   * and the loaded rows grouped by table name. `selectColumns` bounds the columns each query
+   * selects; pass `[idColumn]` for an id-only traversal, or omit it to load full rows.
+   * @param {import("../drivers/base.js").default} db - Source or target database to traverse.
+   * @param {string} keyValue - Tenant key selecting the root plan rows.
+   * @param {string[]} [selectColumns] - Columns to select; defaults to every column.
+   * @returns {Promise<{idsByTableName: Map<string, string[]>, rowsByTableName: Map<string, Record<string, unknown>[]>}>} - Ids and rows grouped by table name.
+   */
+  async traversePlan(db, keyValue, selectColumns) {
     /** @type {Map<string, string[]>} */
     const idsByTableName = new Map()
     /** @type {Map<string, Record<string, unknown>[]>} */
@@ -142,6 +171,7 @@ export default class DataCopier {
         rows = await this.queryRowsByColumn({
           columnName: tableConfig.keyColumn,
           db,
+          selectColumns,
           tableName: tableConfig.tableName,
           values: [keyValue]
         })
@@ -157,6 +187,7 @@ export default class DataCopier {
         rows = await this.queryRowsByColumn({
           columnName: tableConfig.parentColumn,
           db,
+          selectColumns,
           tableName: tableConfig.tableName,
           values: idsByTableName.get(tableConfig.parentTableName) || []
         })
@@ -170,15 +201,16 @@ export default class DataCopier {
       rowsByTableName.set(tableConfig.tableName, rows)
     }
 
-    return rowsByTableName
+    return {idsByTableName, rowsByTableName}
   }
 
   /**
-   * Selects all rows of `tableName` in `db` whose `columnName` is in `values`, chunked.
-   * @param {{columnName: string, db: import("../drivers/base.js").default, tableName: string, values: string[]}} args - Table, column, database, and values for the chunked lookup.
+   * Selects `tableName` rows in `db` whose `columnName` is in `values`, chunked. `selectColumns`
+   * bounds the projection and defaults to every column.
+   * @param {{columnName: string, db: import("../drivers/base.js").default, selectColumns?: string[], tableName: string, values: string[]}} args - Table, column, projection, database, and values for the chunked lookup.
    * @returns {Promise<Record<string, unknown>[]>} - Rows matching the supplied column values.
    */
-  async queryRowsByColumn({columnName, db, tableName, values}) {
+  async queryRowsByColumn({columnName, db, selectColumns, tableName, values}) {
     const normalizedValues = uniqueStrings(values)
 
     if (normalizedValues.length <= 0) {
@@ -188,9 +220,12 @@ export default class DataCopier {
     const rows = []
     const quotedTable = db.quoteTable(tableName)
     const quotedColumn = db.quoteColumn(columnName)
+    const selectList = selectColumns
+      ? selectColumns.map((column) => `${quotedTable}.${db.quoteColumn(column)}`).join(", ")
+      : `${quotedTable}.*`
 
     for (const valuesChunk of chunks(normalizedValues, this.queryChunkSize)) {
-      const sql = `SELECT ${quotedTable}.* FROM ${quotedTable} WHERE ${quotedColumn} IN (${this.quotedValuesSql(db, valuesChunk)})`
+      const sql = `SELECT ${selectList} FROM ${quotedTable} WHERE ${quotedColumn} IN (${this.quotedValuesSql(db, valuesChunk)})`
 
       rows.push(...await this.executeQuietQuery(db, sql))
     }
