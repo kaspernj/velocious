@@ -320,19 +320,32 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
-    const errorCode = /** @type {?} */ (error).code
-    const message = error.message || ""
-    const shouldRetry = (
-      errorCode == "ECONNREFUSED" ||
-      message.includes("ECONNREFUSED") ||
-      message.includes("connect ECONNREFUSED") ||
-      message.includes("PROTOCOL_CONNECTION_LOST") ||
-      message.includes("Connection lost")
-    )
+    /** @type {Error | undefined} */
+    let currentError = error
+    let shouldReconnect = false
+
+    while (currentError) {
+      const errorCode = "code" in currentError && typeof currentError.code == "string" ? currentError.code : undefined
+      const message = currentError.message || ""
+
+      if (errorCode == "ER_CHECKREAD" || message.includes("Record has changed since last read")) {
+        return {retry: true, reconnect: false, waitMs: 50}
+      }
+
+      shouldReconnect ||= (
+        errorCode == "ECONNREFUSED" ||
+        message.includes("ECONNREFUSED") ||
+        message.includes("connect ECONNREFUSED") ||
+        message.includes("PROTOCOL_CONNECTION_LOST") ||
+        message.includes("Connection lost")
+      )
+
+      currentError = currentError.cause instanceof Error ? currentError.cause : undefined
+    }
 
     return {
-      retry: shouldRetry,
-      reconnect: shouldRetry,
+      retry: shouldReconnect,
+      reconnect: shouldReconnect,
       waitMs: 50
     }
   }

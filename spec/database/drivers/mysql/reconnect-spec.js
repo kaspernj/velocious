@@ -81,6 +81,35 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
     expect(closeCount).toEqual(2)
   })
 
+  it("retries a wrapped ER_CHECKREAD without reconnecting", async () => {
+    const driver = new MysqlDriver({}, configuration)
+    let attempts = 0
+    let reconnectCount = 0
+
+    driver.setDesiredSessionTimeZone(null)
+    driver.reconnect = async () => {
+      reconnectCount++
+    }
+    driver._queryActual = async () => {
+      attempts++
+
+      if (attempts == 1) {
+        const mysqlError = new Error("Record has changed since last read in table 'background_jobs'")
+        // @ts-expect-error MySQL attaches its symbolic error code at runtime.
+        mysqlError.code = "ER_CHECKREAD"
+        throw new Error("Query failed", {cause: mysqlError})
+      }
+
+      return [{result: 1}]
+    }
+
+    const rows = await driver.query("SELECT 1")
+
+    expect(rows).toEqual([{result: 1}])
+    expect(attempts).toEqual(2)
+    expect(reconnectCount).toEqual(0)
+  })
+
   it("raises when a reconnect would bypass an active transaction", async () => {
     const driver = new MysqlDriver({}, configuration)
     let didReconnect = false
