@@ -1011,4 +1011,11 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(error).toBeInstanceOf(Error)
     expect(error?.message).toEqual("Invalid background job executionMode: bad-mode")
   })
+
+  it("rejects the removed `forked` option instead of silently defaulting to pooled", async () => {
+    const store = await createClearedStore()
+
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: /** @type {any} */ ({forked: false})})).toThrow(/`forked` option was removed/)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: /** @type {any} */ ({forked: true})})).toThrow(/`forked` option was removed/)
+  })
 })

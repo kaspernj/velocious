@@ -1562,6 +1562,14 @@ export default class BackgroundJobsStore {
       return this._normalizeExecutionModeName(executionMode)
     }
 
+    // The `forked` option alias was removed. Reject it loudly instead of silently
+    // defaulting to pooled, which would turn an explicitly inline (`forked: false`)
+    // or one-shot forked (`forked: true`) job into a pooled child-runner job — a
+    // silent semantic change for any not-yet-migrated caller.
+    if (options && "forked" in options) {
+      throw new Error("The background job `forked` option was removed; pass `executionMode` (\"inline\", \"forked\", \"pooled\", or \"spawned\") instead")
+    }
+
     return DEFAULT_EXECUTION_MODE
   }
 
