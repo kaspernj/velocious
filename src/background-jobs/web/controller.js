@@ -196,7 +196,6 @@ export default class VelociousBackgroundJobsWebController extends Controller {
       createdAtMs: job.createdAtMs,
       executionMode: job.executionMode,
       failedAtMs: job.failedAtMs,
-      forked: job.forked,
       handedOffAtMs: job.handedOffAtMs,
       id: job.id,
       jobName: job.jobName,

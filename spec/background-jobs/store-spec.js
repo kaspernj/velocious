@@ -38,7 +38,6 @@ async function createOrphanedJob({maxRetries, store}) {
     jobName: "TestJob",
     args: [],
     options: {
-      forked: false,
       maxRetries
     }
   })
@@ -88,7 +87,6 @@ function activeConcurrencyJob() {
     jobName: "TestJob",
     args: [],
     executionMode: "inline",
-    forked: false,
     status: "handed_off",
     attempts: 0,
     maxRetries: 0,
@@ -364,7 +362,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
   it("defaults an unspecified queue to \"default\"", async () => {
     const store = await createClearedStore()
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {}})
     const row = await getJobOrFail({jobId, store})
 
     expect(row.queue).toEqual("default")
@@ -387,7 +385,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
   it("reconciles queue caps against the persisted backlog on startup", async () => {
     dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     const store = await createClearedStore()
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, queue: "builds"}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
 
     // No cap configured yet, so the queued job carries no concurrency key.
     expect((await getJobOrFail({jobId, store})).concurrencyKey).toEqual(null)
@@ -415,7 +413,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
   it("coalesces deduplicateWhileQueued enqueues onto a still-queued job", async () => {
     const store = await createClearedStore()
-    const options = {concurrencyKey: "recurring-key", maxConcurrency: 1, deduplicateWhileQueued: true, forked: false}
+    const options = {concurrencyKey: "recurring-key", maxConcurrency: 1, deduplicateWhileQueued: true}
 
     const firstId = await store.enqueue({jobName: "TestJob", args: [], options})
     const secondId = await store.enqueue({jobName: "TestJob", args: [], options})
@@ -556,7 +554,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
   it("fences stale completion and failure reports after a handoff is requeued", async () => {
     const store = await createClearedStore()
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {}})
     const firstHandoff = await store.markHandedOff({jobId, workerId: "shared-worker-id"})
 
     if (!firstHandoff) throw new Error("Expected the first handoff to be claimed")
@@ -596,7 +594,6 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       jobName: "TestJob",
       args: [],
       options: {
-        forked: false,
         maxRetries: 1
       }
     })
@@ -647,7 +644,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
   it("reclaims handed-off jobs whose handoff_id is null (older-velocious legacy rows)", async () => {
     const store = await createClearedStore()
 
-    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, maxRetries: 1}})
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {maxRetries: 1}})
     await store.markHandedOff({jobId, workerId: "worker-1"})
 
     // Simulate a row handed off by an older velocious that never populated
@@ -673,7 +670,6 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       job_name: "TestJob",
       args_json: "[]",
       execution_mode: "forked",
-      forked: true,
       max_retries: 10,
       attempts: 0,
       status: "handed_off",
@@ -724,17 +720,17 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
   it("prunes completed rows past the retention window and keeps recent and non-terminal rows", async () => {
     const store = await createClearedStore()
 
-    const oldCompletedId = await store.enqueue({jobName: "TestJob", args: ["old"], options: {forked: false}})
+    const oldCompletedId = await store.enqueue({jobName: "TestJob", args: ["old"], options: {}})
     const oldHandoff = await store.markHandedOff({jobId: oldCompletedId, workerId: "w"})
     if (!oldHandoff) throw new Error("Expected the old job to be handed off")
     await store.markCompleted({jobId: oldCompletedId, workerId: "w", ...oldHandoff})
 
-    const recentCompletedId = await store.enqueue({jobName: "TestJob", args: ["recent"], options: {forked: false}})
+    const recentCompletedId = await store.enqueue({jobName: "TestJob", args: ["recent"], options: {}})
     const recentHandoff = await store.markHandedOff({jobId: recentCompletedId, workerId: "w"})
     if (!recentHandoff) throw new Error("Expected the recent job to be handed off")
     await store.markCompleted({jobId: recentCompletedId, workerId: "w", ...recentHandoff})
 
-    const queuedId = await store.enqueue({jobName: "TestJob", args: ["queued"], options: {forked: false}})
+    const queuedId = await store.enqueue({jobName: "TestJob", args: ["queued"], options: {}})
 
     // Age the old row's completion 10 days into the past.
     await store._withDb(async (db) => {
@@ -754,7 +750,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
     const orphaned = await createOrphanedJob({maxRetries: 0, store})
 
-    const failedId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: false, maxRetries: 0}})
+    const failedId = await store.enqueue({jobName: "TestJob", args: [], options: {maxRetries: 0}})
     const failedHandoff = await store.markHandedOff({jobId: failedId, workerId: "w"})
     if (!failedHandoff) throw new Error("Expected the failing job to be handed off")
     await store.markFailed({jobId: failedId, error: "boom", workerId: "w", ...failedHandoff})
@@ -777,10 +773,10 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     const store = await createClearedStore()
 
     // Job 1: immediately eligible — should NOT come back from nextScheduledJob.
-    await store.enqueue({jobName: "TestJob", args: ["now"], options: {forked: false}})
+    await store.enqueue({jobName: "TestJob", args: ["now"], options: {}})
 
     // Job 2: build a future-scheduled job by re-queueing a failed job with backoff.
-    const futureJobId = await store.enqueue({jobName: "TestJob", args: ["later"], options: {forked: false, maxRetries: 5}})
+    const futureJobId = await store.enqueue({jobName: "TestJob", args: ["later"], options: {maxRetries: 5}})
     const handoff = await store.markHandedOff({jobId: futureJobId, workerId: "worker-x"})
     if (!handoff) throw new Error("Expected the future job to be handed off")
     await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-x", ...handoff})
@@ -798,12 +794,12 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     const laterJobId = await store.enqueue({
       jobName: "TestJob",
       args: ["later"],
-      options: {forked: false, scheduledAtMs: laterScheduledAtMs}
+      options: {scheduledAtMs: laterScheduledAtMs}
     })
     const soonerJobId = await store.enqueue({
       jobName: "TestJob",
       args: ["sooner"],
-      options: {forked: false, scheduledAtMs: soonerScheduledAtMs}
+      options: {scheduledAtMs: soonerScheduledAtMs}
     })
 
     expect((await getJobOrFail({jobId: laterJobId, store})).scheduledAtMs).toEqual(laterScheduledAtMs)
@@ -821,71 +817,46 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
   it("returns null from nextScheduledJob when no future-scheduled jobs exist", async () => {
     const store = await createClearedStore()
 
-    await store.enqueue({jobName: "TestJob", args: [], options: {forked: false}})
+    await store.enqueue({jobName: "TestJob", args: [], options: {}})
 
     const next = await store.nextScheduledJob()
 
     expect(next).toBeNull()
   })
 
-  it("stores explicit execution modes and keeps forked as a compatibility flag", async () => {
+  it("stores explicit execution modes", async () => {
     const store = await createClearedStore()
 
-    const forkedJobId = await store.enqueue({
-      jobName: "TestJob",
-      args: [],
-      options: {executionMode: "forked"}
-    })
-    const spawnedJobId = await store.enqueue({
-      jobName: "TestJob",
-      args: [],
-      options: {executionMode: "spawned"}
-    })
-    const inlineJobId = await store.enqueue({
-      jobName: "TestJob",
-      args: [],
-      options: {forked: false}
-    })
+    const forkedJobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "forked"}})
+    const spawnedJobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "spawned"}})
+    const inlineJobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
     const pooledJobId = await store.enqueue({jobName: "TestJob", args: []})
-    const aliasedForkedJobId = await store.enqueue({jobName: "TestJob", args: [], options: {forked: true}})
 
-    const forkedJob = await getJobOrFail({jobId: forkedJobId, store})
-    const spawnedJob = await getJobOrFail({jobId: spawnedJobId, store})
-    const inlineJob = await getJobOrFail({jobId: inlineJobId, store})
-    const pooledJob = await getJobOrFail({jobId: pooledJobId, store})
-    const aliasedForkedJob = await getJobOrFail({jobId: aliasedForkedJobId, store})
-
-    expect(forkedJob.executionMode).toEqual("forked")
-    expect(forkedJob.forked).toEqual(true)
-    expect(spawnedJob.executionMode).toEqual("spawned")
-    expect(spawnedJob.forked).toEqual(true)
-    expect(inlineJob.executionMode).toEqual("inline")
-    expect(inlineJob.forked).toEqual(false)
-    expect(pooledJob.executionMode).toEqual("pooled")
-    expect(pooledJob.forked).toEqual(true)
-    expect(aliasedForkedJob.executionMode).toEqual("forked")
+    expect((await getJobOrFail({jobId: forkedJobId, store})).executionMode).toEqual("forked")
+    expect((await getJobOrFail({jobId: spawnedJobId, store})).executionMode).toEqual("spawned")
+    expect((await getJobOrFail({jobId: inlineJobId, store})).executionMode).toEqual("inline")
+    expect((await getJobOrFail({jobId: pooledJobId, store})).executionMode).toEqual("pooled")
   })
 
-  it("persists pooled defaults in the old execution-mode vocabulary while upgraded stores read pooled", async () => {
+  it("persists pooled jobs as execution_mode \"pooled\" with no handoff marker", async () => {
     const store = await createClearedStore()
     const pooledJobId = await store.enqueue({jobName: "TestJob", args: []})
-    const legacyAcceptedExecutionModes = ["inline", "forked", "spawned"]
     const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
 
-    await pool.withConnection({name: "Background jobs verify rolling-safe pooled row"}, async (db) => {
+    await pool.withConnection({name: "Background jobs verify pooled row"}, async (db) => {
       const rows = await db
         .newQuery()
         .from("background_jobs")
         .where({id: pooledJobId})
         .results()
-      const persistedExecutionMode = String(rows[0]?.execution_mode)
 
-      expect(legacyAcceptedExecutionModes.includes(persistedExecutionMode)).toEqual(true)
-      expect(persistedExecutionMode).toEqual("forked")
+      // execution_mode is the single source of truth: pooled persists directly,
+      // with no legacy forked vocabulary and no queued handoff marker.
+      expect(String(rows[0]?.execution_mode)).toEqual("pooled")
+      expect(rows[0]?.handoff_id ?? null).toEqual(null)
     })
 
-    const upgradedJob = await getJobOrFail({jobId: pooledJobId, store})
-    expect(upgradedJob.executionMode).toEqual("pooled")
+    expect((await getJobOrFail({jobId: pooledJobId, store})).executionMode).toEqual("pooled")
 
     const nextForked = await store.nextAvailableJob({executionMode: "forked"})
     const nextPooled = await store.nextAvailableJob({executionMode: "pooled"})

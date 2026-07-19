@@ -22,7 +22,7 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
     try {
       jobId = await DbQueryJob.performLaterWithOptions({
         args: [outputPath],
-        options: {forked: false}
+        options: {executionMode: "inline"}
       })
 
       await waitForJobCompleted({jobId, store, timeoutSeconds: 5})
