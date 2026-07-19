@@ -113,7 +113,11 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
   async ensureSchema(db) {
-    this.configuration.setCurrent()
+    // When a connection is handed in (the db:migrate path), the caller already owns
+    // the active configuration + connection context; calling setCurrent() here would
+    // clobber it (e.g. the browser test runner juggles multiple configurations).
+    if (!db) this.configuration.setCurrent()
+
     await this._ensureSchema(db)
   }
 
