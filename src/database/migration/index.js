@@ -469,6 +469,26 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * Checks whether an index with the given name exists on a table.
+   * @param {string} tableName - Table name.
+   * @param {string} indexName - Index name to look for.
+   * @returns {Promise<boolean>} - Whether the index exists on the table.
+   */
+  async indexExists(tableName, indexName) {
+    const table = await this.getDriver().getTableByName(tableName, {throwError: false})
+
+    if (table) {
+      for (const index of await table.getIndexes()) {
+        if (index.getName() == indexName) {
+          return true
+        }
+      }
+    }
+
+    return false
+  }
+
+  /**
    * Sets up the database schema for a gap-less positional list. Adds the
    * position column (INT NOT NULL) if absent and creates a UNIQUE index on
    * (scope, position). This is the schema-side counterpart of
