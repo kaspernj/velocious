@@ -2,6 +2,7 @@
 
 const DEFAULT_INSERT_CHUNK_SIZE = 100
 const DEFAULT_QUERY_CHUNK_SIZE = 500
+const DEFAULT_STREAM_BATCH_SIZE = 1000
 
 /**
  * Splits an array into chunks of at most `chunkSize` items.
@@ -202,6 +203,168 @@ export default class DataCopier {
     }
 
     return {idsByTableName, rowsByTableName}
+  }
+
+  /**
+   * The plan tables referenced as a parent by some child entry. Their ids must be retained
+   * while streaming so their children can be scoped; leaf tables — typically the high-volume
+   * ones — are never in this set and so are never accumulated in memory.
+   * @returns {Set<string>} - Table names that are a parent of another plan entry.
+   */
+  parentTableNames() {
+    /** @type {Set<string>} */
+    const names = new Set()
+
+    for (const tableConfig of this.tablePlan) {
+      if (tableConfig.parentTableName) {
+        names.add(tableConfig.parentTableName)
+      }
+    }
+
+    return names
+  }
+
+  /**
+   * Streams the source ids for every plan table scoped to `keyValue` in bounded `batchSize`
+   * pages, following parent/child chaining. Each table's ids are read through a real
+   * {@link import("../drivers/base.js").default#queryStream} cursor, so a large table is never
+   * buffered; only the ids of tables that are themselves a parent are retained (to scope their
+   * children). Memory stays bounded to one batch plus the retained parent-table ids.
+   * @param {import("../drivers/base.js").default} db - Source database to stream.
+   * @param {string} keyValue - Tenant key selecting the root plan rows.
+   * @param {{batchSize: number}} options - Maximum ids per yielded batch.
+   * @yields {{ids: string[], tableName: string}} - Successive id batches per table.
+   */
+  async *streamPlanSourceIdBatches(db, keyValue, {batchSize}) {
+    /** @type {Map<string, string[]>} */
+    const retainedIdsByTableName = new Map()
+    const parentTableNames = this.parentTableNames()
+
+    for (const tableConfig of this.tablePlan) {
+      /** @type {string} */
+      let scopeColumn
+      /** @type {string[]} */
+      let scopeValues
+
+      if (tableConfig.keyColumn) {
+        scopeColumn = tableConfig.keyColumn
+        scopeValues = [keyValue]
+      } else {
+        if (!tableConfig.parentColumn || !tableConfig.parentTableName) {
+          throw new Error(`Expected keyColumn or parentTableName+parentColumn for table ${tableConfig.tableName} in the tenant table plan.`)
+        }
+
+        if (!retainedIdsByTableName.has(tableConfig.parentTableName)) {
+          throw new Error(`Tenant table plan entry ${tableConfig.tableName} references parent table ${tableConfig.parentTableName}, which has not been streamed; parent tables must appear before their children in the plan.`)
+        }
+
+        scopeColumn = tableConfig.parentColumn
+        scopeValues = retainedIdsByTableName.get(tableConfig.parentTableName) || []
+      }
+
+      /** @type {string[] | null} */
+      const retainedIds = parentTableNames.has(tableConfig.tableName) ? [] : null
+      const quotedTable = db.quoteTable(tableConfig.tableName)
+      const quotedId = db.quoteColumn(this.idColumn)
+      const quotedScope = db.quoteColumn(scopeColumn)
+      /** @type {string[]} */
+      let batch = []
+
+      for (const scopeChunk of chunks(uniqueStrings(scopeValues), this.queryChunkSize)) {
+        const sql = `SELECT ${quotedTable}.${quotedId} FROM ${quotedTable} WHERE ${quotedScope} IN (${this.quotedValuesSql(db, scopeChunk)})`
+
+        for await (const row of db.queryStream(sql)) {
+          const id = String(row[this.idColumn])
+
+          batch.push(id)
+
+          if (retainedIds) {
+            retainedIds.push(id)
+          }
+
+          if (batch.length >= batchSize) {
+            yield {ids: batch, tableName: tableConfig.tableName}
+            batch = []
+          }
+        }
+      }
+
+      if (batch.length > 0) {
+        yield {ids: batch, tableName: tableConfig.tableName}
+      }
+
+      retainedIdsByTableName.set(tableConfig.tableName, retainedIds || [])
+    }
+  }
+
+  /**
+   * Returns which of `ids` currently exist in `tableName` in `db`. `ids` is one already-bounded
+   * batch, so it is probed with a single `IN (...)` lookup.
+   * @param {{db: import("../drivers/base.js").default, ids: string[], tableName: string}} args - Database, ids to probe, and table.
+   * @returns {Promise<Set<string>>} - The subset of `ids` present in the table.
+   */
+  async queryExistingIds({db, ids, tableName}) {
+    if (ids.length <= 0) {
+      return new Set()
+    }
+
+    const quotedTable = db.quoteTable(tableName)
+    const quotedId = db.quoteColumn(this.idColumn)
+    const rows = await this.executeQuietQuery(db, `SELECT ${quotedTable}.${quotedId} FROM ${quotedTable} WHERE ${quotedId} IN (${this.quotedValuesSql(db, ids)})`)
+
+    return new Set(rows.map((row) => String(row[this.idColumn])))
+  }
+
+  /**
+   * Streams the source rows for `keyValue` and returns, per table, the ids present in the source
+   * but missing from the target — without ever materialising a whole table. Callers verifying a
+   * tenant already holds every source row (for example before deleting the source copies) treat
+   * an empty result as the go-ahead. Memory stays bounded to one batch of ids plus the retained
+   * parent-table ids, so it is safe on arbitrarily large tables.
+   * @param {string} keyValue - Tenant key selecting the source rows to check.
+   * @param {{batchSize?: number}} [options] - Streaming batch size.
+   * @returns {Promise<Map<string, string[]>>} - Source ids missing from the target, grouped by table name.
+   */
+  async findMissingRowIds(keyValue, {batchSize = DEFAULT_STREAM_BATCH_SIZE} = {}) {
+    /** @type {Map<string, string[]>} */
+    const missingByTableName = new Map()
+
+    for await (const {ids, tableName} of this.streamPlanSourceIdBatches(this.sourceDb, keyValue, {batchSize})) {
+      const existingIds = await this.queryExistingIds({db: this.targetDb, ids, tableName})
+      const missingIds = ids.filter((id) => !existingIds.has(id))
+
+      if (missingIds.length > 0) {
+        const tableMissing = missingByTableName.get(tableName) || []
+
+        tableMissing.push(...missingIds)
+        missingByTableName.set(tableName, tableMissing)
+      }
+    }
+
+    return missingByTableName
+  }
+
+  /**
+   * Streams the source rows for `keyValue` and copies into the target only the rows missing
+   * there. Full rows are loaded solely for the (usually few) missing ids, after the id stream
+   * has finished and released its source connection, so a table with large columns is never
+   * fully materialised. Intended for single-table plans whose rows have no plan children.
+   * @param {string} keyValue - Tenant key selecting the source rows to reconcile.
+   * @param {{batchSize?: number}} [options] - Streaming batch size for the id scan.
+   * @returns {Promise<number>} - The number of rows copied into the target.
+   */
+  async copyMissingRows(keyValue, {batchSize = DEFAULT_STREAM_BATCH_SIZE} = {}) {
+    const missingByTableName = await this.findMissingRowIds(keyValue, {batchSize})
+    let copiedCount = 0
+
+    for (const [tableName, missingIds] of missingByTableName) {
+      const missingRows = await this.queryRowsByColumn({columnName: this.idColumn, db: this.sourceDb, tableName, values: missingIds})
+
+      await this.insertTargetRows(new Map([[tableName, missingRows]]))
+      copiedCount += missingRows.length
+    }
+
+    return copiedCount
   }
 
   /**

@@ -1015,6 +1015,23 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Streams the rows of `sql` one at a time instead of buffering the whole result set, so a
+   * caller can process an arbitrarily large result with bounded memory. This base implementation
+   * falls back to a buffered {@link query} and yields its rows; drivers backed by a cursor-capable
+   * client (the MySQL driver) override it with true server-side streaming.
+   * @param {string} sql - SQL string to stream.
+   * @param {QueryOptions} [options] - Query options, as for {@link query}.
+   * @yields {Record<string, unknown>} - The result rows, one at a time.
+   */
+  async *queryStream(sql, options = {}) {
+    const rows = await this.query(sql, options)
+
+    for (const row of Array.isArray(rows) ? rows : []) {
+      yield row
+    }
+  }
+
+  /**
    * Runs query.
    * @param {string} sql - SQL string.
    * @param {QueryOptions} [options] - Query options.

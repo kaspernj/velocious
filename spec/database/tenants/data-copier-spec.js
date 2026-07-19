@@ -107,6 +107,53 @@ describe("DataCopier", () => {
     })
   })
 
+  it("findMissingRowIds returns empty when the target already holds every source row", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+
+      await copier.copy("acct-a")
+
+      const missing = await copier.findMissingRowIds("acct-a", {batchSize: 1})
+
+      expect(missing.size).toEqual(0)
+    })
+  })
+
+  it("findMissingRowIds streams and reports source ids missing from the target, including chained children", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      // Target has the parent gizmo and one of its parts, but is missing the second part.
+      await targetDb.query(targetDb.insertSql({columns: ["id", "account_id", "name"], tableName: "gizmos", rows: [["g1", "acct-a", "Alpha"]]}))
+      await targetDb.query(targetDb.insertSql({columns: ["id", "gizmo_id", "label"], tableName: "gizmo_parts", rows: [["p1", "g1", "A-part"]]}))
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+      const missing = await copier.findMissingRowIds("acct-a", {batchSize: 1})
+
+      expect(missing.has("gizmos")).toEqual(false)
+      expect(missing.get("gizmo_parts")).toEqual(["p2"])
+    })
+  })
+
+  it("copyMissingRows streams and copies only the rows missing from the target", async () => {
+    await withDatabases(async ({sourceDb, targetDb}) => {
+      await seedSource(sourceDb)
+
+      await targetDb.query(targetDb.insertSql({columns: ["id", "account_id", "name"], tableName: "gizmos", rows: [["g1", "acct-a", "Alpha"]]}))
+      await targetDb.query(targetDb.insertSql({columns: ["id", "gizmo_id", "label"], tableName: "gizmo_parts", rows: [["p1", "g1", "A-part"]]}))
+
+      const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+      const copiedCount = await copier.copyMissingRows("acct-a", {batchSize: 1})
+
+      const gizmoParts = await targetDb.query("SELECT id FROM gizmo_parts ORDER BY id")
+
+      expect(copiedCount).toEqual(1)
+      expect(gizmoParts.map((row) => row.id)).toEqual(["p1", "p2"])
+    })
+  })
+
   it("deleteTenantRows removes only the keyed tenant's rows from the target and returns them", async () => {
     await withDatabases(async ({sourceDb, targetDb}) => {
       await seedSource(targetDb)

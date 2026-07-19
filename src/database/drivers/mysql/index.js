@@ -14,6 +14,7 @@ import Options from "./options.js"
 import mysql from "mysql"
 import query from "./query.js"
 import QueryParser from "./query-parser.js"
+import streamQuery from "./query-stream.js"
 import RemoveIndex from "./sql/remove-index.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
@@ -369,6 +370,20 @@ export default class VelociousDatabaseDriversMysql extends Base{
         throw new Error(`Query failed: ${error}`, {cause: error})
       }
     }
+  }
+
+  /**
+   * Streams the rows of `sql` from a dedicated pooled connection using the MySQL cursor, so a
+   * large result set is read incrementally instead of being buffered. Overrides the base
+   * buffered fallback with true server-side streaming.
+   * @param {string} sql - SQL string to stream.
+   * @yields {Record<string, unknown>} - The result rows, one at a time.
+   */
+  async *queryStream(sql) {
+    if (!this.pool) await this.connect()
+    if (!this.pool) throw new Error("MySQL pool failed to initialize")
+
+    yield* streamQuery(this.pool, sql)
   }
 
   /**
