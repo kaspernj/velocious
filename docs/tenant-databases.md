@@ -152,6 +152,28 @@ await Tenant.drop({identifier: "projectTenant", tenant: {slug: "alpha"}})
 
 Provisioning a tenant database from the default/template database is mechanism the framework also provides: `SchemaCloner` clones table structure and baselines the `schema_migrations` ledger, and `DataCopier` copies a tenant's owned rows following a `TenantTablePlan`. Call these from your provider's `createDatabase`/migration hooks to materialize a new tenant. When an existing tenant table is missing an auto-increment column backed by a separate source unique index, the cloner adds the column and index in the same schema alteration so MySQL-compatible databases accept the definition.
 
+### Moving rows between databases
+
+`DataCopier.move(keyValue, {transformRow})` re-homes the selected row graph instead of retaining the source copy. It writes and verifies the target in one transaction before starting a separate source-delete transaction. A failed target write therefore leaves the source untouched; if the target committed but the source delete failed, retrying replaces the same target row IDs and attempts the source delete again. A retry after the source is already gone is a no-op and never deletes the target.
+
+The optional `transformRow` callback receives a shallow clone plus its table name. Use it for target-only ownership fields when a row becomes tenant-owned during the move; it must preserve the configured id column. Source and target must be different database connections.
+
+```js
+import DataCopier from "velocious/build/src/database/tenants/data-copier.js"
+
+const copier = new DataCopier({
+  sourceDb: defaultDb,
+  targetDb: projectTenantDb,
+  tablePlan: [{keyColumn: "id", tableName: "webhook_deliveries"}]
+})
+
+await copier.move(webhookDeliveryId, {
+  transformRow: ({row}) => ({...row, project_id: projectId})
+})
+```
+
+The target commit and source delete cannot share one transaction across independent databases. Callers that need retry routing after the source disappears must persist that routing separately, such as in their job arguments or global locator table.
+
 Because `listTenants` runs every time, tenant databases are dynamic:
 
 - newly created tenants are included in the next `db:tenants:create/check/migrate` run;
