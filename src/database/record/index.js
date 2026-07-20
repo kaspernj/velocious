@@ -630,6 +630,31 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns this model's state machine definition, or null when it declares none.
+   * `Model.stateMachine(...)` overrides this on classes that declare a machine.
+   * @returns {import("./state-machine.js").StateMachineDefinition | null} - The state machine definition, or null when none is declared.
+   */
+  static getStateMachineDefinition() {
+    return null
+  }
+
+  /**
+   * Returns this model's state column, or null when it declares no state machine.
+   * @returns {string | null} - The state column name, or null when no state machine is declared.
+   */
+  static getStateMachineColumn() {
+    return null
+  }
+
+  /**
+   * Returns this model's declared state names (empty when it has no state machine).
+   * @returns {string[]} - The declared state names, or an empty array when no state machine is declared.
+   */
+  static getStateMachineStateNames() {
+    return []
+  }
+
+  /**
    * Maintains a counter column on a `belongsTo` parent as the sum of a per-record
    * magnitude, kept current by atomic increments diffed on every create/update/
    * destroy (and moved between parents when the foreign key changes). See
