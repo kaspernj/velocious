@@ -47,6 +47,7 @@
  * @typedef {object} RetryableDatabaseErrorResult
  * @property {boolean} retry - Whether the error should be retried.
  * @property {boolean} reconnect - Whether to reconnect before retrying.
+ * @property {boolean} [deadlock] - Whether the error is a transaction deadlock/lock-wait-timeout that should retry the whole transaction.
  * @property {number} [maxTries] - Override the max retry attempts.
  * @property {number} [waitMs] - Wait time before retrying in milliseconds.
  */
@@ -851,11 +852,50 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * Runs transaction.
+   * Runs a callback inside a database transaction (or a savepoint when already inside one).
+   * The outermost transaction retries the whole callback on a deadlock / lock-wait-timeout,
+   * because such errors roll the entire transaction back and the standard recovery is to
+   * restart it. Nested savepoints let the deadlock bubble up to this outer retry.
    * @param {() => Promise<void>} callback - Callback function.
-   * @returns {Promise<?>} - Resolves with the transaction.
+   * @returns {Promise<?>} - Resolves with the transaction result.
    */
   async transaction(callback) {
+    if (this._transactionsCount > 0) {
+      return await this._runTransactionAttempt(callback)
+    }
+
+    const maxAttempts = 5
+    let attempt = 0
+
+    while (true) {
+      attempt++
+
+      try {
+        return await this._runTransactionAttempt(callback)
+      } catch (error) {
+        const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
+
+        if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
+          const baseWaitMs = typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50
+
+          this.logger.warn(`Retrying transaction after deadlock (attempt ${attempt}/${maxAttempts})`)
+          await wait(baseWaitMs * attempt)
+          continue
+        }
+
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Runs a single transaction attempt: starts a transaction (or a savepoint when nested), runs
+   * `callback`, and commits — rolling back on error. {@link transaction} wraps this with deadlock
+   * retry at the outermost level.
+   * @param {() => Promise<void>} callback - Callback function.
+   * @returns {Promise<?>} - Resolves with the transaction result.
+   */
+  async _runTransactionAttempt(callback) {
     const savePointName = this.generateSavePointName()
     /**
      * Callback frame.
@@ -919,7 +959,11 @@ export default class VelociousDatabaseDriversBase {
         }
       }
 
-      if (transactionStarted && !transactionRolledBack) {
+      // Only roll back if a transaction is still open. A nested savepoint whose rollback failed
+      // falls back to rolling back the whole transaction (above), which already closed it and
+      // dropped the count to 0; rolling back again here would issue a second ROLLBACK and drive
+      // `_transactionsCount` below zero, which would then defeat the outermost deadlock-retry guard.
+      if (transactionStarted && !transactionRolledBack && this._transactionsCount > 0) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
       }
