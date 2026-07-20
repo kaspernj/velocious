@@ -175,7 +175,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/user.js").default | undefined>}
    */
-  creatingUserOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("creatingUser", {preloadTranslations: true})) }
+  creatingUserOrLoad() { return /** @type {Promise<import("../models/user.js").default | undefined>} */ (this.relationshipOrLoad("creatingUser")) }
 
   /**
    * @abstract
@@ -289,7 +289,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
-  projectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("projectDetail", {preloadTranslations: true})) }
+  projectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("projectDetail")) }
 
   /**
    * @abstract
@@ -319,7 +319,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project-detail.js").default | undefined>}
    */
-  activeProjectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("activeProjectDetail", {preloadTranslations: true})) }
+  activeProjectDetailOrLoad() { return /** @type {Promise<import("../models/project-detail.js").default | undefined>} */ (this.relationshipOrLoad("activeProjectDetail")) }
 
   /**
    * @abstract
@@ -349,7 +349,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/task.js").default | undefined>}
    */
-  reviewTaskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("reviewTask", {preloadTranslations: true})) }
+  reviewTaskOrLoad() { return /** @type {Promise<import("../models/task.js").default | undefined>} */ (this.relationshipOrLoad("reviewTask")) }
 
   /**
    * @abstract
@@ -407,7 +407,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
    */
-  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction", {preloadTranslations: true})) }
+  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
 
   /**
    * @abstract
@@ -521,7 +521,7 @@ export default class ProjectBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../model-bases/project-translation.js").default | undefined>}
    */
-  currentTranslationOrLoad() { return /** @type {Promise<import("../model-bases/project-translation.js").default | undefined>} */ (this.relationshipOrLoad("currentTranslation", {preloadTranslations: true})) }
+  currentTranslationOrLoad() { return /** @type {Promise<import("../model-bases/project-translation.js").default | undefined>} */ (this.relationshipOrLoad("currentTranslation")) }
 
   /**
    * @abstract
