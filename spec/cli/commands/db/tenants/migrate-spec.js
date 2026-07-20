@@ -86,6 +86,12 @@ import Migration from ${JSON.stringify(migrationModuleUrl)}
 
 class CreateTenantWidgets extends Migration {
   async change() {
+    const currentIdentifiers = Object.keys(this.configuration.getCurrentConnections()).sort()
+
+    if (JSON.stringify(currentIdentifiers) !== JSON.stringify(["projectTenant"])) {
+      throw new Error("Expected only projectTenant during migration but got: " + currentIdentifiers.join(", "))
+    }
+
     await this.createTable("tenant_widgets", (table) => {
       table.string("name", {null: false})
     })

@@ -161,7 +161,7 @@ export default class ServerSequenceAllocator {
    * @returns {Promise<Result>} Callback result.
    */
   async _withDb(callback) {
-    return await this._getConfiguration().ensureConnections({name: "Server sequence allocator"}, async (dbs) => {
+    return await this._getConfiguration().ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Server sequence allocator"}, async (dbs) => {
       const db = dbs[this.databaseIdentifier]
 
       if (!db) throw new Error(`No database connection available for identifier: ${this.databaseIdentifier}`)

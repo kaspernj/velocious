@@ -3205,7 +3205,10 @@ class VelociousDatabaseRecord {
     // first initialization would resolve metadata from the ambient tenant's
     // database, that must happen under the requested tenant. The finders inside
     // `callback` call ensureInitialized() themselves, now within this scope.
-    return await configuration.runWithTenant(tenant, () => configuration.ensureConnections({name: `usingTenant: ${this.getModelName()}`}, callback))
+    return await configuration.runWithTenant(tenant, () => configuration.ensureConnections({
+      databaseIdentifiers: [this.getDatabaseIdentifier()],
+      name: `usingTenant: ${this.getModelName()}`
+    }, callback))
   }
 
   /**
@@ -3521,7 +3524,7 @@ class VelociousDatabaseRecord {
             throw new Error(`Tenant database identifier ${identifier} is inactive while checking dependent ${instanceRelationship.getRelationship().getRelationshipName()}`)
           }
 
-          return await configuration.ensureConnections({name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
+          return await configuration.ensureConnections({databaseIdentifiers: [identifier], name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
             return await instanceRelationship.query().count()
           })
         })
@@ -3555,7 +3558,7 @@ class VelociousDatabaseRecord {
           throw new Error(`Tenant database identifier ${identifier} is inactive while checking dependent ${instanceRelationship.getRelationship().getRelationshipName()}`)
         }
 
-        return await configuration.ensureConnections({name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
+        return await configuration.ensureConnections({databaseIdentifiers: [identifier], name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
           return await instanceRelationship.query().count()
         })
       })

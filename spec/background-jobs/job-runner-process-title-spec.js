@@ -11,6 +11,17 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import runJobPayload from "../../src/background-jobs/job-runner.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
+class ConnectionCountingSqliteDriver extends SqliteDriver {
+  /** @type {number} */
+  static connectionAttempts = 0
+
+  /** @returns {Promise<void>} - Resolves after connecting. */
+  async connect() {
+    ConnectionCountingSqliteDriver.connectionAttempts++
+    await super.connect()
+  }
+}
+
 /** @returns {string} - Repository root. */
 function repoRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
@@ -36,17 +47,19 @@ async function createTempProjectDir() {
  * @param {object} args - Options.
  * @param {string} args.className - Job class name.
  * @param {string} args.fileName - Job file name.
+ * @param {string[]} [args.databaseIdentifiers] - Optional static database identifiers to declare.
  * @param {string} [args.processTitle] - Optional static processTitle to declare.
  * @returns {Promise<void>}
  */
-async function writeTitleJob(directory, {className, fileName, processTitle}) {
+async function writeTitleJob(directory, {className, databaseIdentifiers, fileName, processTitle}) {
   const jobPath = pathToFileURL(path.join(repoRoot(), "src", "background-jobs", "job.js")).href
+  const databaseIdentifiersLine = databaseIdentifiers ? `  static databaseIdentifiers = ${JSON.stringify(databaseIdentifiers)}\n` : ""
   const staticLine = processTitle ? `  static processTitle = ${JSON.stringify(processTitle)}\n` : ""
   const contents = `import fs from "fs/promises"
 import VelociousJob from ${JSON.stringify(jobPath)}
 
 export default class ${className} extends VelociousJob {
-${staticLine}  async perform(outputPath) {
+${databaseIdentifiersLine}${staticLine}  async perform(outputPath) {
     await fs.writeFile(outputPath, process.title)
   }
 }
@@ -58,10 +71,11 @@ ${staticLine}  async perform(outputPath) {
 /**
  * @param {object} args - Options.
  * @param {string} args.directory - App directory.
+ * @param {boolean} [args.includeSecondary] - Whether to configure a counted secondary database.
  * @param {string} args.name - Database name.
  * @returns {Configuration}
  */
-function createConfiguration({directory, name}) {
+function createConfiguration({directory, includeSecondary = false, name}) {
   return new Configuration({
     database: {
       test: {
@@ -71,7 +85,16 @@ function createConfiguration({directory, name}) {
           type: "sqlite",
           name,
           migrations: false
-        }
+        },
+        ...(includeSecondary ? {
+          secondary: {
+            driver: ConnectionCountingSqliteDriver,
+            poolType: SingleMultiUsePool,
+            type: "sqlite",
+            name: `${name}-secondary`,
+            migrations: false
+          }
+        } : {})
       }
     },
     directory,
@@ -157,6 +180,75 @@ describe("Background jobs - runner process title", {databaseCleaning: {transacti
       expect(process.title).toEqual(callerOwnedTitle)
     } finally {
       process.title = baseTitle
+      previousConfiguration?.setCurrent()
+      await configuration.disconnectBeacon()
+      await configuration.closeDatabaseConnections()
+      await cleanup()
+    }
+  })
+
+  it("checks out only the database identifiers declared by the job", async () => {
+    const {cleanup, directory} = await createTempProjectDir()
+    await writeTitleJob(directory, {
+      className: "SelectiveConnectionsJob",
+      databaseIdentifiers: ["default"],
+      fileName: "selective-connections-job.js"
+    })
+
+    /** @type {Configuration | undefined} */
+    let previousConfiguration
+
+    try {
+      previousConfiguration = Configuration.current()
+    } catch (error) {
+      if (!(error instanceof CurrentConfigurationNotSetError)) throw error
+    }
+
+    const configuration = createConfiguration({directory, includeSecondary: true, name: "job-runner-selective-connections"})
+    const out = path.join(directory, "selective.txt")
+
+    ConnectionCountingSqliteDriver.connectionAttempts = 0
+
+    try {
+      configuration.setCurrent()
+      await runJobPayload({jobName: "SelectiveConnectionsJob", args: [out]}, {closeConnections: false})
+
+      expect(ConnectionCountingSqliteDriver.connectionAttempts).toEqual(0)
+    } finally {
+      previousConfiguration?.setCurrent()
+      await configuration.disconnectBeacon()
+      await configuration.closeDatabaseConnections()
+      await cleanup()
+    }
+  })
+
+  it("retains all active database connections for jobs without a declaration", async () => {
+    const {cleanup, directory} = await createTempProjectDir()
+    await writeTitleJob(directory, {
+      className: "DefaultConnectionsJob",
+      fileName: "default-connections-job.js"
+    })
+
+    /** @type {Configuration | undefined} */
+    let previousConfiguration
+
+    try {
+      previousConfiguration = Configuration.current()
+    } catch (error) {
+      if (!(error instanceof CurrentConfigurationNotSetError)) throw error
+    }
+
+    const configuration = createConfiguration({directory, includeSecondary: true, name: "job-runner-default-connections"})
+    const out = path.join(directory, "default.txt")
+
+    ConnectionCountingSqliteDriver.connectionAttempts = 0
+
+    try {
+      configuration.setCurrent()
+      await runJobPayload({jobName: "DefaultConnectionsJob", args: [out]}, {closeConnections: false})
+
+      expect(ConnectionCountingSqliteDriver.connectionAttempts).toEqual(1)
+    } finally {
       previousConfiguration?.setCurrent()
       await configuration.disconnectBeacon()
       await configuration.closeDatabaseConnections()

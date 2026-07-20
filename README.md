@@ -2033,6 +2033,8 @@ import VelociousJob from "velocious/build/src/background-jobs/job.js"
 
 /** @augments {VelociousJob<[string, string]>} */
 export default class MyJob extends VelociousJob {
+  static databaseIdentifiers = ["default"]
+
   /**
    * @param {string} arg1
    * @param {string} arg2
@@ -2050,6 +2052,8 @@ lets a type-checked codebase declare `perform`'s parameters as required and type
 Argument-less jobs use a bare `extends VelociousJob` with `async perform()` — the
 default empty-tuple type argument keeps that working unchanged. Plain (unchecked)
 JavaScript can ignore the annotation entirely.
+
+Set `static databaseIdentifiers` when a job only needs specific configured databases. Velocious checks out only those connections around `perform` in every execution mode. Use `[]` for a job that needs no ambient database connection. Leaving the property undefined preserves the existing behavior of checking out every active database. See [Background Jobs](docs/background-jobs.md#database-connection-scopes).
 
 Queue a job:
 

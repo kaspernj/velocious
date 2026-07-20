@@ -412,7 +412,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<?>} - Callback result.
    */
   async _withDb(callback) {
-    return await this.configuration.ensureConnections({name: "Websocket event log store"}, async (dbs) => {
+    return await this.configuration.ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Websocket event log store"}, async (dbs) => {
       const db = dbs[this.databaseIdentifier]
 
       if (!db) throw new Error(`No database connection available for identifier: ${this.databaseIdentifier}`)

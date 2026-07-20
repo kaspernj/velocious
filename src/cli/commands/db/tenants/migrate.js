@@ -22,20 +22,26 @@ export default class DbTenantsMigrate extends BaseCommand {
         databaseIdentifiers: [helper.identifier]
       })
 
-      await this.getConfiguration().ensureConnections({name: `DB tenants migrate: ${helper.identifier}`}, async () => {
-        await migrator.prepare()
-        const migrationsApplied = await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
+      let migrationsApplied = 0
 
-        if (typeof helper.provider.afterMigrateTenant === "function") {
-          await helper.provider.afterMigrateTenant({
+      await this.getConfiguration().ensureConnections({databaseIdentifiers: [helper.identifier], name: `DB tenants migrate: ${helper.identifier}`}, async () => {
+        await migrator.prepare()
+        migrationsApplied = await migrator.migrateFiles(migrations, digg(this.getEnvironmentHandler(), "requireMigration"))
+      })
+
+      const afterMigrateTenant = helper.provider.afterMigrateTenant
+
+      if (typeof afterMigrateTenant === "function") {
+        await this.getConfiguration().ensureConnections({name: `DB tenants after migrate: ${helper.identifier}`}, async () => {
+          await afterMigrateTenant({
             configuration: this.getConfiguration(),
             databaseConfiguration,
             identifier: helper.identifier,
             migrationsApplied,
             tenant
           })
-        }
-      })
+        })
+      }
     })
 
     if (this.args.testing) {

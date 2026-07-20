@@ -28,6 +28,8 @@ await configuration.ensureConnections({databaseIdentifiers: ["default"], name: "
 
 When a current connection scope already exists, `ensureConnections` reuses the requested connections, keeps the existing checkout name, and omits unrequested connections from the callback map. Without `databaseIdentifiers`, both methods retain their existing behavior of including every active configured database identifier.
 
+Framework persistence stores that already own one database identifier, such as the sync and websocket replay stores, request only that identifier. Background jobs can declare their ambient scope with `static databaseIdentifiers`; see [Background Jobs](background-jobs.md#database-connection-scopes).
+
 `AsyncTrackedMultiConnection` pools default to a maximum of `10` live database connections per configured pool. Configure `database.<environment>.<identifier>.pool.max` when a process needs a different cap. Set `pool.max` to `null` only for deliberately unbounded pools; leaving the value out keeps the default cap and protects long-running processes from exhausting the database server.
 
 When every allowed connection is checked out, additional checkouts wait for a compatible connection to be checked in or for capacity to be freed. Waiting checkouts time out after `10000` ms by default. Configure `database.<environment>.<identifier>.pool.checkoutTimeoutMillis` to change that wait, or set it to `null` to wait indefinitely.
