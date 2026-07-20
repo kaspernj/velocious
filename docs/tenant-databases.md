@@ -156,7 +156,7 @@ Provisioning a tenant database from the default/template database is mechanism t
 
 `DataCopier.move(keyValue, {transformRow})` re-homes the selected row graph instead of retaining the source copy. It writes and verifies the target in one transaction before starting a separate source-delete transaction. A failed target write therefore leaves the source untouched; if the target committed but the source delete failed, retrying replaces the same target row IDs and attempts the source delete again. A retry after the source is already gone is a no-op and never deletes the target.
 
-The optional `transformRow` callback receives a shallow clone plus its table name. Use it for target-only ownership fields when a row becomes tenant-owned during the move; it must preserve the configured id column. Source and target must be different database connections.
+The optional `transformRow` callback receives a shallow clone plus its table name. Use it for target-only ownership fields when a row becomes tenant-owned during the move; it must preserve the configured id column. Source and target must resolve to different physical databases, even when they are checked out through different configured identifiers.
 
 ```js
 import DataCopier from "velocious/build/src/database/tenants/data-copier.js"

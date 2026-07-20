@@ -168,12 +168,41 @@ describe("DataCopier", () => {
 
       const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb: sourceDb})
 
-      await expect(async () => await copier.move("acct-a")).toThrow("DataCopier move requires different source and target database connections.")
+      await expect(async () => await copier.move("acct-a")).toThrow("DataCopier move requires different physical databases.")
 
       const sourceGizmos = await sourceDb.query("SELECT id FROM gizmos ORDER BY id")
 
       expect(sourceGizmos.map((row) => row.id)).toEqual(["g1", "g2"])
     })
+  })
+
+  it("rejects moving rows when distinct connections use the same physical database", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("data-copier-same-database")
+    const databaseConfiguration = configuration.getDatabaseConfiguration()
+
+    databaseConfiguration.analytics.name = databaseConfiguration.default.name
+
+    try {
+      await configuration.ensureConnections(async (dbs) => {
+        const sourceDb = dbs.default
+        const targetDb = dbs.analytics
+
+        expect(sourceDb === targetDb).toBe(false)
+
+        await createGizmoTables(sourceDb)
+        await seedSource(sourceDb)
+
+        const copier = new DataCopier({sourceDb, tablePlan: TABLE_PLAN, targetDb})
+
+        await expect(async () => await copier.move("acct-a")).toThrow("DataCopier move requires different physical databases.")
+
+        const sourceGizmos = await sourceDb.query("SELECT id FROM gizmos ORDER BY id")
+
+        expect(sourceGizmos.map((row) => row.id)).toEqual(["g1", "g2"])
+      })
+    } finally {
+      await cleanup()
+    }
   })
 
   it("loadRowIds returns only the keyed tenant's ids per table, following the child traversal", async () => {

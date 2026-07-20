@@ -2338,6 +2338,6 @@ At runtime, the apartment-style `Tenant` façade (`velocious/build/src/tenants/t
 
 `SchemaCloner` adds a missing auto-increment column and its separate source unique index in one schema alteration, including on MySQL/MariaDB where an auto-increment column must be keyed when it is created.
 
-`DataCopier.move(...)` safely re-homes selected rows between different database connections: the target write and verification commit before the source delete, target-only row transformations are supported, and retries after the source is gone preserve the target.
+`DataCopier.move(...)` safely re-homes selected rows between different physical databases: the target write and verification commit before the source delete, target-only row transformations are supported, and retries after the source is gone preserve the target.
 
 See [docs/tenant-databases.md](docs/tenant-databases.md) for the full configuration and migration pattern.

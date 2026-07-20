@@ -1,5 +1,7 @@
 // @ts-check
 
+import {POOL_CONFIGURATION_KEY} from "../pool/base.js"
+
 const DEFAULT_INSERT_CHUNK_SIZE = 100
 const DEFAULT_QUERY_CHUNK_SIZE = 500
 const DEFAULT_STREAM_BATCH_SIZE = 1000
@@ -108,8 +110,16 @@ export default class DataCopier {
    * @returns {Promise<Map<string, Record<string, unknown>[]>>} - Rows written to the target, grouped by table name.
    */
   async move(keyValue, {transformRow} = {}) {
-    if (this.sourceDb === this.targetDb) {
-      throw new Error("DataCopier move requires different source and target database connections.")
+    const sourceDbWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (this.sourceDb)
+    const targetDbWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (this.targetDb)
+    const sourceReuseKey = sourceDbWithPoolKey[POOL_CONFIGURATION_KEY]
+    const targetReuseKey = targetDbWithPoolKey[POOL_CONFIGURATION_KEY]
+    const sameResolvedDatabase = this.sourceDb.configuration === this.targetDb.configuration
+      && sourceReuseKey !== undefined
+      && sourceReuseKey === targetReuseKey
+
+    if (this.sourceDb === this.targetDb || sameResolvedDatabase) {
+      throw new Error("DataCopier move requires different physical databases.")
     }
 
     const sourceRowsByTableName = await this.loadRows(this.sourceDb, keyValue)
