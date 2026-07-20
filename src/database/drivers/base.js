@@ -122,6 +122,7 @@ import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
+import {optionalPositiveInteger} from "typanic"
 
 /**
  * Runs now ms.
@@ -864,7 +865,10 @@ export default class VelociousDatabaseDriversBase {
       return await this._runTransactionAttempt(callback)
     }
 
-    const maxAttempts = 5
+    const args = this.getArgs()
+    const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
+    const deadlockBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs") ?? 50
+    const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
     let attempt = 0
 
     while (true) {
@@ -876,16 +880,35 @@ export default class VelociousDatabaseDriversBase {
         const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
 
         if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
-          const baseWaitMs = typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50
+          const baseWaitMs = typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : deadlockBaseWaitMs
+
+          // Full-jitter exponential backoff: wait a uniform-random duration in
+          // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
+          // contention persists, and the jitter de-correlates transactions that deadlocked in
+          // lockstep so they stop re-colliding on the same wait (the linear `base * attempt`
+          // this replaces had every victim retry after an identical delay). `attempt` is
+          // 1-based here, so 2^(attempt-1) is 1, 2, 4, ... The cap keeps the tail sub-second.
+          const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
+          const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
 
           this.logger.warn(`Retrying transaction after deadlock (attempt ${attempt}/${maxAttempts})`)
-          await wait(baseWaitMs * attempt)
+          await this._waitMs(jitteredWaitMs)
           continue
         }
 
         throw error
       }
     }
+  }
+
+  /**
+   * Waits `ms` milliseconds. Isolated in its own method so tests can observe (and skip) the
+   * deadlock-retry backoff without a real timer.
+   * @param {number} ms - Milliseconds to wait.
+   * @returns {Promise<void>} - Resolves after the delay.
+   */
+  async _waitMs(ms) {
+    await wait(ms)
   }
 
   /**
