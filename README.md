@@ -31,7 +31,7 @@
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 * Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
-* Named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
+* Selective named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
 

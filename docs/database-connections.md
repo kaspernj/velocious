@@ -10,15 +10,23 @@ await configuration.withConnections({name: "report export"}, async (dbs) => {
 
 The `name` option labels the active checkout. It is intended for debugging connection usage, especially code paths that hold onto connections longer than expected or fail to release them.
 
-`configuration.ensureConnections` accepts the same option when it needs to open a new scope:
+Use `databaseIdentifiers` when a scope only needs specific configured databases. Velocious checks out only those pools and passes only those connections to the callback:
 
 ```js
-await configuration.ensureConnections({name: "invoice cleanup"}, async (dbs) => {
+await configuration.withConnections({databaseIdentifiers: ["default"], name: "report export"}, async (dbs) => {
   await dbs.default.query("SELECT 1")
 })
 ```
 
-When a current connection scope already exists, `ensureConnections` reuses it and keeps the existing checkout name.
+`configuration.ensureConnections` accepts the same option when it needs to open a new scope:
+
+```js
+await configuration.ensureConnections({databaseIdentifiers: ["default"], name: "invoice cleanup"}, async (dbs) => {
+  await dbs.default.query("SELECT 1")
+})
+```
+
+When a current connection scope already exists, `ensureConnections` reuses the requested connections, keeps the existing checkout name, and omits unrequested connections from the callback map. Without `databaseIdentifiers`, both methods retain their existing behavior of including every active configured database identifier.
 
 `AsyncTrackedMultiConnection` pools default to a maximum of `10` live database connections per configured pool. Configure `database.<environment>.<identifier>.pool.max` when a process needs a different cap. Set `pool.max` to `null` only for deliberately unbounded pools; leaving the value out keeps the default cap and protects long-running processes from exhausting the database server.
 
