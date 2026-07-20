@@ -14,6 +14,7 @@ import Options from "./options.js"
 import mysql from "mysql"
 import query from "./query.js"
 import QueryParser from "./query-parser.js"
+import streamQuery from "./query-stream.js"
 import RemoveIndex from "./sql/remove-index.js"
 import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
@@ -62,7 +63,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * Runs close.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async close() {
+  async _close() {
     await this.pool?.end()
     this.pool = undefined
     this.resetCurrentSessionTimeZone()
@@ -320,19 +321,45 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
-    const errorCode = /** @type {?} */ (error).code
-    const message = error.message || ""
-    const shouldRetry = (
-      errorCode == "ECONNREFUSED" ||
-      message.includes("ECONNREFUSED") ||
-      message.includes("connect ECONNREFUSED") ||
-      message.includes("PROTOCOL_CONNECTION_LOST") ||
-      message.includes("Connection lost")
-    )
+    /** @type {Error | undefined} */
+    let currentError = error
+    let shouldReconnect = false
+
+    while (currentError) {
+      const errorCode = "code" in currentError && typeof currentError.code == "string" ? currentError.code : undefined
+      const message = currentError.message || ""
+
+      if (errorCode == "ER_CHECKREAD" || message.includes("Record has changed since last read")) {
+        return {retry: true, reconnect: false, waitMs: 50}
+      }
+
+      // A deadlock or lock-wait-timeout aborts the whole transaction; it must be retried at the
+      // transaction level (re-running the callback), not the query level, so flag it as such and
+      // keep `retry` false so an in-transaction query does not retry against the dead transaction.
+      if (
+        errorCode == "ER_LOCK_DEADLOCK" ||
+        errorCode == "ER_LOCK_WAIT_TIMEOUT" ||
+        message.includes("ER_LOCK_DEADLOCK") ||
+        message.includes("Deadlock found") ||
+        message.includes("Lock wait timeout exceeded")
+      ) {
+        return {retry: false, reconnect: false, deadlock: true, waitMs: 50}
+      }
+
+      shouldReconnect ||= (
+        errorCode == "ECONNREFUSED" ||
+        message.includes("ECONNREFUSED") ||
+        message.includes("connect ECONNREFUSED") ||
+        message.includes("PROTOCOL_CONNECTION_LOST") ||
+        message.includes("Connection lost")
+      )
+
+      currentError = currentError.cause instanceof Error ? currentError.cause : undefined
+    }
 
     return {
-      retry: shouldRetry,
-      reconnect: shouldRetry,
+      retry: shouldReconnect,
+      reconnect: shouldReconnect,
       waitMs: 50
     }
   }
@@ -356,6 +383,20 @@ export default class VelociousDatabaseDriversMysql extends Base{
         throw new Error(`Query failed: ${error}`, {cause: error})
       }
     }
+  }
+
+  /**
+   * Streams the rows of `sql` from a dedicated pooled connection using the MySQL cursor, so a
+   * large result set is read incrementally instead of being buffered. Overrides the base
+   * buffered fallback with true server-side streaming.
+   * @param {string} sql - SQL string to stream.
+   * @yields {Record<string, unknown>} - The result rows, one at a time.
+   */
+  async *queryStream(sql) {
+    if (!this.pool) await this.connect()
+    if (!this.pool) throw new Error("MySQL pool failed to initialize")
+
+    yield* streamQuery(this.pool, sql)
   }
 
   /**
@@ -533,7 +574,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks for `MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS`.
    * @returns {Promise<boolean>} - True if acquired, false if the timeout elapsed.
    */
-  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const timeoutSeconds = typeof timeoutMs === "number" && timeoutMs >= 0
       ? Math.ceil(timeoutMs / 1000)
       : MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS
@@ -552,7 +593,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
-  async tryAcquireAdvisoryLock(name) {
+  async _tryAcquireAdvisoryLock(name) {
     const rows = await this.query(`SELECT GET_LOCK(${this.quote(name)}, 0) AS velocious_advisory_lock_result`)
     const result = rows?.[0]?.velocious_advisory_lock_result
 
@@ -568,8 +609,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
-  async releaseAdvisoryLock(name) {
-    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`)
+  async _releaseAdvisoryLock(name) {
+    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`, {retry: false})
     const result = rows?.[0]?.velocious_advisory_lock_result
 
     return Number(result) === 1

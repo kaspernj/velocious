@@ -47,6 +47,7 @@
  * @typedef {object} RetryableDatabaseErrorResult
  * @property {boolean} retry - Whether the error should be retried.
  * @property {boolean} reconnect - Whether to reconnect before retrying.
+ * @property {boolean} [deadlock] - Whether the error is a transaction deadlock/lock-wait-timeout that should retry the whole transaction.
  * @property {number} [maxTries] - Override the max retry attempts.
  * @property {number} [waitMs] - Wait time before retrying in milliseconds.
  */
@@ -56,6 +57,7 @@
  * @property {string} [logName] - Query log subject.
  * @property {boolean} [logQuery] - Whether to log the query.
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
+ * @property {boolean} [retry] - Whether retryable errors may retry the query; defaults to true.
  * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
@@ -121,6 +123,7 @@ import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
+import {optionalPositiveInteger} from "typanic"
 
 /**
  * Runs now ms.
@@ -168,6 +171,8 @@ export default class VelociousDatabaseDriversBase {
    * Active query.
    * @type {ActiveQueryState | null} */
   _activeQuery = null
+  /** @type {Map<string, number>} */
+  _heldAdvisoryLocks = new Map()
 
   /**
    * Runs constructor.
@@ -237,10 +242,40 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * Optional close hook for database drivers.
-   * @returns {Promise<void>} - Resolves when complete.
+   * Releases tracked advisory locks and closes the physical database connection.
+   * @returns {Promise<void>} - Resolves when cleanup and close complete.
    */
   async close() {
+    /** @type {Error | undefined} */
+    let advisoryLockError
+
+    try {
+      await this.releaseHeldAdvisoryLocks()
+    } catch (error) {
+      advisoryLockError = error instanceof Error ? error : new Error("Failed to release held advisory locks", {cause: error})
+    }
+
+    try {
+      await this._close()
+      this._heldAdvisoryLocks.clear()
+    } catch (error) {
+      const closeError = error instanceof Error ? error : new Error("Failed to close database connection", {cause: error})
+
+      if (advisoryLockError) {
+        throw new AggregateError([advisoryLockError, closeError], "Failed to release advisory locks and close database connection", {cause: error})
+      }
+
+      throw closeError
+    }
+
+    if (advisoryLockError) throw advisoryLockError
+  }
+
+  /**
+   * Driver-specific physical close hook.
+   * @returns {Promise<void>} - Resolves when the underlying connection closes.
+   */
+  async _close() {
     // No-op by default
   }
 
@@ -851,11 +886,75 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * Runs transaction.
+   * Runs a callback inside a database transaction (or a savepoint when already inside one).
+   * The outermost transaction retries the whole callback on a deadlock / lock-wait-timeout,
+   * because such errors roll the entire transaction back and the standard recovery is to
+   * restart it. Nested savepoints let the deadlock bubble up to this outer retry.
    * @param {() => Promise<void>} callback - Callback function.
-   * @returns {Promise<?>} - Resolves with the transaction.
+   * @returns {Promise<?>} - Resolves with the transaction result.
    */
   async transaction(callback) {
+    if (this._transactionsCount > 0) {
+      return await this._runTransactionAttempt(callback)
+    }
+
+    const args = this.getArgs()
+    const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
+    const configuredBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs")
+    const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
+    let attempt = 0
+
+    while (true) {
+      attempt++
+
+      try {
+        return await this._runTransactionAttempt(callback)
+      } catch (error) {
+        const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
+
+        if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
+          // An explicitly-configured base wins so the tuning knob is effective even on drivers
+          // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
+          // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
+          const baseWaitMs = configuredBaseWaitMs ?? (typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50)
+
+          // Full-jitter exponential backoff: wait a uniform-random duration in
+          // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
+          // contention persists, and the jitter de-correlates transactions that deadlocked in
+          // lockstep so they stop re-colliding on the same wait (the linear `base * attempt`
+          // this replaces had every victim retry after an identical delay). `attempt` is
+          // 1-based here, so 2^(attempt-1) is 1, 2, 4, ... The cap keeps the tail sub-second.
+          const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
+          const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
+
+          this.logger.warn(`Retrying transaction after deadlock (attempt ${attempt}/${maxAttempts})`)
+          await this._waitMs(jitteredWaitMs)
+          continue
+        }
+
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Waits `ms` milliseconds. Isolated in its own method so tests can observe (and skip) the
+   * deadlock-retry backoff without a real timer.
+   * @param {number} ms - Milliseconds to wait.
+   * @returns {Promise<void>} - Resolves after the delay.
+   */
+  async _waitMs(ms) {
+    await wait(ms)
+  }
+
+  /**
+   * Runs a single transaction attempt: starts a transaction (or a savepoint when nested), runs
+   * `callback`, and commits — rolling back on error. {@link transaction} wraps this with deadlock
+   * retry at the outermost level.
+   * @param {() => Promise<void>} callback - Callback function.
+   * @returns {Promise<?>} - Resolves with the transaction result.
+   */
+  async _runTransactionAttempt(callback) {
     const savePointName = this.generateSavePointName()
     /**
      * Callback frame.
@@ -919,7 +1018,11 @@ export default class VelociousDatabaseDriversBase {
         }
       }
 
-      if (transactionStarted && !transactionRolledBack) {
+      // Only roll back if a transaction is still open. A nested savepoint whose rollback failed
+      // falls back to rolling back the whole transaction (above), which already closed it and
+      // dropped the count to 0; rolling back again here would issue a second ROLLBACK and drive
+      // `_transactionsCount` below zero, which would then defeat the outermost deadlock-retry guard.
+      if (transactionStarted && !transactionRolledBack && this._transactionsCount > 0) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
       }
@@ -1015,6 +1118,23 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Streams the rows of `sql` one at a time instead of buffering the whole result set, so a
+   * caller can process an arbitrarily large result with bounded memory. This base implementation
+   * falls back to a buffered {@link query} and yields its rows; drivers backed by a cursor-capable
+   * client (the MySQL driver) override it with true server-side streaming.
+   * @param {string} sql - SQL string to stream.
+   * @param {QueryOptions} [options] - Query options, as for {@link query}.
+   * @yields {Record<string, unknown>} - The result rows, one at a time.
+   */
+  async *queryStream(sql, options = {}) {
+    const rows = await this.query(sql, options)
+
+    for (const row of Array.isArray(rows) ? rows : []) {
+      yield row
+    }
+  }
+
+  /**
    * Runs query.
    * @param {string} sql - SQL string.
    * @param {QueryOptions} [options] - Query options.
@@ -1040,7 +1160,7 @@ export default class VelociousDatabaseDriversBase {
 
         const retryInfo = this.retryableDatabaseError(error)
 
-        if (tries < maxTries && retryInfo.retry) {
+        if (options.retry !== false && tries < maxTries && retryInfo.retry) {
           if (retryInfo.reconnect) {
             if (this._transactionsCount > 0) {
               throw new Error(`Cannot reconnect while a transaction is active (${this._transactionsCount}). Original error: ${error.message}`, {cause: error})
@@ -1686,33 +1806,124 @@ export default class VelociousDatabaseDriversBase {
    * table locks; they are purely cooperative between callers that use the
    * same name and let you serialize functionality without blocking readers
    * or writers that do not participate in the same lock.
-   * @abstract
    * @param {string} name - Lock name.
-   * @param {{timeoutMs?: number | null}} [_args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
    * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
    */
-  acquireAdvisoryLock(name, _args = {}) {
-    throw new Error(`'acquireAdvisoryLock' not implemented for ${this.constructor.name}`)
+  async acquireAdvisoryLock(name, args = {}) {
+    const acquired = await this._acquireAdvisoryLock(name, args)
+
+    if (acquired) this._trackAdvisoryLock(name)
+
+    return acquired
+  }
+
+  /**
+   * Driver-specific blocking advisory-lock acquisition hook.
+   * @abstract
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [_args] - Lock timeout options.
+   * @returns {Promise<boolean>} - Whether the lock was acquired.
+   */
+  _acquireAdvisoryLock(name, _args = {}) {
+    throw new Error(`'_acquireAdvisoryLock' not implemented for ${this.constructor.name}`)
   }
 
   /**
    * Attempts to acquire a named advisory lock without blocking.
-   * @abstract
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - Resolves to true if the lock was acquired, false if it was already held.
    */
-  tryAcquireAdvisoryLock(name) { // eslint-disable-line no-unused-vars
-    throw new Error(`'tryAcquireAdvisoryLock' not implemented for ${this.constructor.name}`)
+  async tryAcquireAdvisoryLock(name) {
+    const acquired = await this._tryAcquireAdvisoryLock(name)
+
+    if (acquired) this._trackAdvisoryLock(name)
+
+    return acquired
+  }
+
+  /**
+   * Driver-specific non-blocking advisory-lock acquisition hook.
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the lock was acquired.
+   */
+  _tryAcquireAdvisoryLock(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'_tryAcquireAdvisoryLock' not implemented for ${this.constructor.name}`)
   }
 
   /**
    * Releases a named advisory lock previously acquired on this connection.
-   * @abstract
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - Resolves to true if the lock was held by this session and has now been released.
    */
-  releaseAdvisoryLock(name) { // eslint-disable-line no-unused-vars
-    throw new Error(`'releaseAdvisoryLock' not implemented for ${this.constructor.name}`)
+  async releaseAdvisoryLock(name) {
+    const released = await this._releaseAdvisoryLock(name)
+
+    if (released) {
+      this._untrackAdvisoryLock(name)
+    } else {
+      this._heldAdvisoryLocks.delete(name)
+    }
+
+    return released
+  }
+
+  /**
+   * Driver-specific advisory-lock release hook.
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the lock was released.
+   */
+  _releaseAdvisoryLock(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'_releaseAdvisoryLock' not implemented for ${this.constructor.name}`)
+  }
+
+  /**
+   * Releases every advisory lock still tracked on this connection.
+   * @returns {Promise<void>} - Resolves when every tracked lock is released.
+   */
+  async releaseHeldAdvisoryLocks() {
+    /** @type {Error[]} */
+    const errors = []
+
+    for (const name of [...this._heldAdvisoryLocks.keys()]) {
+      while (this._heldAdvisoryLocks.has(name)) {
+        try {
+          await this.releaseAdvisoryLock(name)
+        } catch (error) {
+          errors.push(error instanceof Error ? error : new Error(`Failed to release advisory lock ${JSON.stringify(name)}`, {cause: error}))
+          break
+        }
+      }
+    }
+
+    if (errors.length == 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to release held advisory locks")
+  }
+
+  /**
+   * Records one successful acquisition, including re-entrant acquisitions.
+   * @param {string} name - Lock name.
+   * @returns {void}
+   */
+  _trackAdvisoryLock(name) {
+    this._heldAdvisoryLocks.set(name, (this._heldAdvisoryLocks.get(name) || 0) + 1)
+  }
+
+  /**
+   * Removes one successful acquisition from the connection registry.
+   * @param {string} name - Lock name.
+   * @returns {void}
+   */
+  _untrackAdvisoryLock(name) {
+    const remainingCount = (this._heldAdvisoryLocks.get(name) || 0) - 1
+
+    if (remainingCount > 0) {
+      this._heldAdvisoryLocks.set(name, remainingCount)
+    } else {
+      this._heldAdvisoryLocks.delete(name)
+    }
   }
 
   /**

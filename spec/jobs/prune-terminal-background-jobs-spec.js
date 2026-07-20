@@ -8,6 +8,7 @@ describe("PruneTerminalBackgroundJobsJob", {databaseCleaning: {truncate: true}},
   it("uses a reserved job name that an app job cannot shadow via the class name", () => {
     expect(PruneTerminalBackgroundJobsJob.jobName()).toEqual("velocious:prune-terminal-background-jobs")
     expect(PruneTerminalBackgroundJobsJob.jobName()).not.toEqual(PruneTerminalBackgroundJobsJob.name)
+    expect(PruneTerminalBackgroundJobsJob.databaseIdentifiers).toEqual([])
   })
 
   it("returns a schedule configuration when retention is enabled", () => {

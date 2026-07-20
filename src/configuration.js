@@ -8,6 +8,7 @@
 /**
  * WithConnectionsOptionsType type.
  * @typedef {object} WithConnectionsOptionsType
+ * @property {string[]} [databaseIdentifiers] - Database identifiers to include in the connection scope.
  * @property {string} [name] - Human-readable name for the checked-out database connections.
  */
 
@@ -48,16 +49,17 @@ function currentWorkingDirectory() {
  * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
  * @param {WithConnectionsCallbackType<T> | undefined} callback - Callback function.
  * @param {string} defaultName - Default checkout name.
- * @returns {{name: string, callback: WithConnectionsCallbackType<T> | undefined}} Resolved checkout name and callback.
+ * @returns {{databaseIdentifiers: string[] | undefined, name: string, callback: WithConnectionsCallbackType<T> | undefined}} Resolved checkout options and callback.
  */
 function resolveWithConnectionsArgs(optionsOrCallback, callback, defaultName) {
   if (typeof optionsOrCallback == "function") {
     const actualCallback = /** @type {WithConnectionsCallbackType<T>} */ (optionsOrCallback)
 
-    return {name: defaultName, callback: actualCallback}
+    return {databaseIdentifiers: undefined, name: defaultName, callback: actualCallback}
   }
 
   return {
+    databaseIdentifiers: optionsOrCallback.databaseIdentifiers,
     name: optionsOrCallback.name || defaultName,
     callback
   }
@@ -2802,7 +2804,11 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnections(optionsOrCallback, callback) {
-    const {name, callback: actualWithConnectionsCallback} = resolveWithConnectionsArgs(optionsOrCallback, callback, "Configuration.withConnections")
+    const {
+      callback: actualWithConnectionsCallback,
+      databaseIdentifiers,
+      name
+    } = resolveWithConnectionsArgs(optionsOrCallback, callback, "Configuration.withConnections")
 
     if (!actualWithConnectionsCallback) throw new Error("withConnections requires a callback")
 
@@ -2814,7 +2820,7 @@ export default class VelociousConfiguration {
     return await this.withDatabaseIdentifierConnections({
       callback: actualWithConnectionsCallback,
       dbs,
-      identifiers: this.getDatabaseIdentifiers(),
+      identifiers: databaseIdentifiers ?? this.getDatabaseIdentifiers(),
       name,
       stackLabel: "withConnections"
     })
@@ -2858,15 +2864,16 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get current connections.
+   * @param {string[]} [databaseIdentifiers] - Database identifiers to include.
    * @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key
    */
-  getCurrentConnections() {
+  getCurrentConnections(databaseIdentifiers = this.getDatabaseIdentifiers()) {
     /**
      * Dbs.
      * @type {{[key: string]: import("./database/drivers/base.js").default}} */
     const dbs = {}
 
-    for (const identifier of this.getDatabaseIdentifiers()) {
+    for (const identifier of databaseIdentifiers) {
       try {
         const pool = this.getDatabasePool(identifier)
         const currentConnection = pool.getCurrentContextConnection ? pool.getCurrentContextConnection() : pool.getCurrentConnection()
@@ -2950,12 +2957,17 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async ensureConnections(optionsOrCallback, callback) {
-    const {name, callback: actualWithConnectionsCallback} = resolveWithConnectionsArgs(optionsOrCallback, callback, "Configuration.ensureConnections")
+    const {
+      callback: actualWithConnectionsCallback,
+      databaseIdentifiers,
+      name
+    } = resolveWithConnectionsArgs(optionsOrCallback, callback, "Configuration.ensureConnections")
 
     if (!actualWithConnectionsCallback) throw new Error("ensureConnections requires a callback")
 
-    const dbs = this.getCurrentConnections()
-    const missingIdentifiers = this.getDatabaseIdentifiers().filter((identifier) => {
+    const requestedIdentifiers = databaseIdentifiers ?? this.getDatabaseIdentifiers()
+    const dbs = this.getCurrentConnections(requestedIdentifiers)
+    const missingIdentifiers = requestedIdentifiers.filter((identifier) => {
       if (!dbs[identifier]) return true
 
       return !this.getDatabasePool(identifier).hasCurrentConnectionContext()

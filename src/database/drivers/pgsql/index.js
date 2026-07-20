@@ -60,7 +60,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return connectArgs
   }
 
-  async close() {
+  async _close() {
     await this.connection?.end()
     this.connection = undefined
     this._transactionsCount = 0
@@ -411,7 +411,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
    */
-  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const key = this.advisoryLockKey(name)
 
     if (typeof timeoutMs !== "number" || timeoutMs < 0) {
@@ -423,7 +423,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     const pollIntervalMs = 50
 
     while (true) {
-      if (await this.tryAcquireAdvisoryLock(name)) return true
+      if (await this._tryAcquireAdvisoryLock(name)) return true
       if (Date.now() >= deadline) return false
 
       const remaining = deadline - Date.now()
@@ -437,7 +437,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
-  async tryAcquireAdvisoryLock(name) {
+  async _tryAcquireAdvisoryLock(name) {
     const key = this.advisoryLockKey(name)
     const rows = await this.query(`SELECT pg_try_advisory_lock(${key}) AS velocious_advisory_lock_result`)
     const result = rows?.[0]?.velocious_advisory_lock_result
@@ -450,7 +450,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
-  async releaseAdvisoryLock(name) {
+  async _releaseAdvisoryLock(name) {
     const key = this.advisoryLockKey(name)
     const rows = await this.query(`SELECT pg_advisory_unlock(${key}) AS velocious_advisory_lock_result`)
     const result = rows?.[0]?.velocious_advisory_lock_result

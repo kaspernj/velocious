@@ -48,7 +48,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     }
   }
 
-  async close() {
+  async _close() {
     await this.getConnection().close()
   }
 

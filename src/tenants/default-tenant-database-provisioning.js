@@ -64,13 +64,13 @@ function maintenanceConnection(databaseConfiguration, configuration) {
 
 /**
  * Creates the tenant database for one tenant.
- * @param {{configuration: import("../configuration.js").default, databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}} args - Provisioning arguments.
+ * @param {{configuration: import("../configuration.js").default, databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, identifier?: string, tenant: ?}} args - Provisioning arguments.
  * @returns {Promise<void>} - Resolves once the tenant database exists.
  */
-export async function createTenantDatabase({configuration, databaseConfiguration, tenant}) {
+export async function createTenantDatabase({configuration, databaseConfiguration, identifier, tenant}) {
   if (fileBackedDriver(databaseConfiguration)) {
     await configuration.runWithTenant(tenant, async () => {
-      await configuration.ensureConnections(async () => {})
+      await configuration.ensureConnections({databaseIdentifiers: identifier ? [identifier] : undefined, name: "Create file-backed tenant database"}, async () => {})
     })
 
     return

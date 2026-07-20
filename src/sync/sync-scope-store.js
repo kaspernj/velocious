@@ -263,7 +263,7 @@ export default class SyncScopeStore {
    * @returns {Promise<Result>} Callback result.
    */
   async _withDb(callback) {
-    return await this.configuration.ensureConnections({name: "Sync scope store"}, async (dbs) => {
+    return await this.configuration.ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Sync scope store"}, async (dbs) => {
       const db = dbs[this.databaseIdentifier]
 
       if (!db) throw new Error(`No database connection available for identifier: ${this.databaseIdentifier}`)

@@ -144,12 +144,18 @@ export default class BackgroundJobsStore {
     let resultJobId = jobId
 
     await this._withDb(async (db) => {
-      if (options?.deduplicateWhileQueued && concurrency?.concurrencyKey) {
+      if (options?.deduplicateWhileQueued) {
+        // Dedupe on the job's identity (name + args + queue), NOT its concurrency key, so a job
+        // keeps whatever concurrency it resolves to. Only an existing job scheduled no later than
+        // this enqueue can cover it; a retry backed off into the future must not suppress earlier
+        // work. Ordering returns the earliest covering job when several queued rows already exist.
         const existing = await db
           .newQuery()
           .from(JOBS_TABLE)
           .select("id")
-          .where({status: "queued", concurrency_key: concurrency.concurrencyKey})
+          .where({status: "queued", job_name: jobName, args_json: argsJson, queue})
+          .where(`scheduled_at_ms <= ${db.quote(scheduledAtMs)}`)
+          .order("scheduled_at_ms ASC")
           .limit(1)
           .results()
 
@@ -472,6 +478,7 @@ export default class BackgroundJobsStore {
       if (!job) return false
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
 
+      await this._lockConcurrencyRow(db, job.concurrencyKey)
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
@@ -500,6 +507,7 @@ export default class BackgroundJobsStore {
     await this._withDb(async (db) => await db.transaction(async () => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || job.handoffId !== handoffId || job.status !== "handed_off") return
+      await this._lockConcurrencyRow(db, job.concurrencyKey)
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
@@ -719,6 +727,9 @@ export default class BackgroundJobsStore {
     return await this._withDb(async (db) => await this._transactionResult(db, async () => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || (job.status !== "queued" && job.status !== "handed_off")) return false
+      // Only a handed_off job holds a concurrency reservation, so only that case touches the
+      // shared counter row and needs the concurrency-then-job lock ordering.
+      if (job.status === "handed_off") await this._lockConcurrencyRow(db, job.concurrencyKey)
       const affectedRows = await this._updateAffectedRows(db, {tableName: JOBS_TABLE, data: {status: "cancelled"}, conditions: {id: job.id, status: job.status}})
       if (affectedRows !== 1) return false
       if (job.status === "handed_off") await this._releaseConcurrency(db, job.concurrencyKey)
@@ -1194,6 +1205,7 @@ export default class BackgroundJobsStore {
       shouldRetry
     })
 
+    await this._lockConcurrencyRow(db, job.concurrencyKey)
     const affectedRows = await this._updateAffectedRows(db, {
       tableName: JOBS_TABLE,
       data: update,
@@ -1467,6 +1479,28 @@ export default class BackgroundJobsStore {
     }
     const configured = /** @type {{max_concurrency?: number | string}} */ (rows[0])
     if (this._normalizeNumber(configured.max_concurrency) !== maxConcurrency) throw new Error(`Conflicting maxConcurrency for background job concurrencyKey: ${concurrencyKey}`)
+  }
+
+  /**
+   * Locks the concurrency counter row so a job-release transaction acquires it *before* the job
+   * row. {@link markHandedOff} reserves capacity (locking the counter row) before it updates the
+   * job, so it locks concurrency-then-job; the release paths update the job before releasing
+   * capacity, which is job-then-concurrency. Those opposite orders on the same shared counter row
+   * are what deadlock (AB-BA) under a draining worker. Taking this lock first gives every
+   * transaction a single concurrency-then-job order and removes the cycle.
+   *
+   * Uses a value-preserving `UPDATE` rather than `SELECT ... FOR UPDATE` so it stays portable
+   * across drivers without row-level locking reads (e.g. SQLite); on row-locking engines the
+   * matched row is write-locked for the rest of the transaction even though its value is unchanged.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string | null} concurrencyKey - Concurrency key.
+   * @returns {Promise<void>} - Resolves when the counter row is locked.
+   */
+  async _lockConcurrencyRow(db, concurrencyKey) {
+    if (!concurrencyKey) return
+    const table = db.quoteTable(CONCURRENCY_TABLE)
+    const count = db.quoteColumn("active_count")
+    await db.query(`UPDATE ${table} SET ${count} = ${count} WHERE ${db.quoteColumn("concurrency_key")} = ${db.quote(concurrencyKey)}`)
   }
 
   /**

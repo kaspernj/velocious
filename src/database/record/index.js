@@ -630,6 +630,31 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns this model's state machine definition, or null when it declares none.
+   * `Model.stateMachine(...)` overrides this on classes that declare a machine.
+   * @returns {import("./state-machine.js").StateMachineDefinition | null} - The state machine definition, or null when none is declared.
+   */
+  static getStateMachineDefinition() {
+    return null
+  }
+
+  /**
+   * Returns this model's state column, or null when it declares no state machine.
+   * @returns {string | null} - The state column name, or null when no state machine is declared.
+   */
+  static getStateMachineColumn() {
+    return null
+  }
+
+  /**
+   * Returns this model's declared state names (empty when it has no state machine).
+   * @returns {string[]} - The declared state names, or an empty array when no state machine is declared.
+   */
+  static getStateMachineStateNames() {
+    return []
+  }
+
+  /**
    * Maintains a counter column on a `belongsTo` parent as the sum of a per-record
    * magnitude, kept current by atomic increments diffed on every create/update/
    * destroy (and moved between parents when the foreign key changes). See
@@ -3143,6 +3168,50 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns a scope whose eager finders run against an explicit `tenant` (and
+   * therefore its database) instead of whatever tenant is ambient in
+   * `Current.tenant()`. Use it to read a model that may live in a specific
+   * tenant or in the default database from another tenant context — for example
+   * `GithubWebhook.usingTenant(tenant).findBy({id})` — without depending on
+   * which tenant happens to be active. The target tenant's connections are
+   * ensured for the duration of each query.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {?} tenant - Tenant descriptor to scope the queries to (as accepted by `configuration.runWithTenant`).
+   * @returns {{find: (recordId: ?) => Promise<InstanceType<MC> | null>, findBy: (conditions: {[key: string]: string | number}) => Promise<InstanceType<MC> | null>, findByOrFail: (conditions: {[key: string]: string | number}) => Promise<InstanceType<MC>>}} - Eager finders scoped to the given tenant.
+   */
+  static usingTenant(tenant) {
+    const ModelClass = this
+
+    return {
+      find: (recordId) => ModelClass._runUsingTenant(tenant, () => ModelClass.find(recordId)),
+      findBy: (conditions) => ModelClass._runUsingTenant(tenant, () => ModelClass.findBy(conditions)),
+      findByOrFail: (conditions) => ModelClass._runUsingTenant(tenant, () => ModelClass.findByOrFail(conditions))
+    }
+  }
+
+  /**
+   * Runs `callback` with the tenant switched to `tenant` and that tenant's
+   * connections ensured. Backs `usingTenant`.
+   * @template T
+   * @param {?} tenant - Tenant descriptor.
+   * @param {() => Promise<T>} callback - Query to run under the tenant.
+   * @returns {Promise<T>} - Resolves with the callback's result.
+   */
+  static async _runUsingTenant(tenant, callback) {
+    const configuration = this._getConfiguration()
+
+    // Do NOT ensureInitialized() out here: for a tenant-switched model whose
+    // first initialization would resolve metadata from the ambient tenant's
+    // database, that must happen under the requested tenant. The finders inside
+    // `callback` call ensureInitialized() themselves, now within this scope.
+    return await configuration.runWithTenant(tenant, () => configuration.ensureConnections({
+      databaseIdentifiers: [this.getDatabaseIdentifier()],
+      name: `usingTenant: ${this.getModelName()}`
+    }, callback))
+  }
+
+  /**
    * Runs find or create by.
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
@@ -3455,7 +3524,7 @@ class VelociousDatabaseRecord {
             throw new Error(`Tenant database identifier ${identifier} is inactive while checking dependent ${instanceRelationship.getRelationship().getRelationshipName()}`)
           }
 
-          return await configuration.ensureConnections({name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
+          return await configuration.ensureConnections({databaseIdentifiers: [identifier], name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
             return await instanceRelationship.query().count()
           })
         })
@@ -3489,7 +3558,7 @@ class VelociousDatabaseRecord {
           throw new Error(`Tenant database identifier ${identifier} is inactive while checking dependent ${instanceRelationship.getRelationship().getRelationshipName()}`)
         }
 
-        return await configuration.ensureConnections({name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
+        return await configuration.ensureConnections({databaseIdentifiers: [identifier], name: `Dependent restrict count: ${TargetModelClass.getModelName()}`}, async () => {
           return await instanceRelationship.query().count()
         })
       })

@@ -105,7 +105,7 @@ export default async function runJobPayload(payload, {closeConnections = true, m
 
   try {
     try {
-      await configuration.withConnections({name: `Background job runner: ${payload.jobName}`}, async () => {
+      await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job runner: ${payload.jobName}`}, async () => {
         await perform.apply(jobInstance, payload.args || [])
       })
     } catch (error) {

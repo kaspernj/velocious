@@ -11,8 +11,13 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
 
     const originalWithConnections = dummyConfiguration.withConnections.bind(dummyConfiguration)
     let withConnectionsCallsAfterStart = 0
+    /** @type {Array<string> | undefined} */
+    let requestedDatabaseIdentifiers
     dummyConfiguration.withConnections = async (...args) => {
       withConnectionsCallsAfterStart++
+      const options = /** @type {{databaseIdentifiers?: string[]} | undefined} */ (args[0])
+
+      requestedDatabaseIdentifiers = options?.databaseIdentifiers
 
       return await originalWithConnections(...args)
     }
@@ -31,6 +36,7 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
     }
 
     expect(withConnectionsCallsAfterStart).toBeGreaterThan(0)
+    expect(requestedDatabaseIdentifiers).toEqual(["default"])
 
     const result = await waitForOutputJson({outputPath})
 

@@ -3,7 +3,16 @@
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
+  activeCheckoutCount = 0
   suppressedConnectionContextCount = 0
+
+  /**
+   * Checkout names of the currently-active nested checkouts, innermost last. The
+   * shared connection carries a single checkout name, so nesting requires restoring
+   * the enclosing scope's name when an inner checkout checks in.
+   * @type {Array<string | undefined>}
+   */
+  checkoutNameStack = []
 
   /**
    * Runs checkin.
@@ -11,7 +20,41 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async checkin(connection) {
-    await connection.clearConnectionCheckoutName()
+    if (this.connection === connection && this.activeCheckoutCount > 0) {
+      this.activeCheckoutCount--
+      this.checkoutNameStack.pop()
+
+      // A nested checkout is checking in while an outer one is still active: restore
+      // the enclosing scope's checkout name instead of leaving this inner name (or
+      // clearing it) on the shared connection.
+      if (this.activeCheckoutCount > 0) {
+        await connection.setConnectionCheckoutName(this.checkoutNameStack[this.checkoutNameStack.length - 1])
+
+        return
+      }
+    }
+
+    try {
+      await connection.releaseHeldAdvisoryLocks()
+      await connection.clearConnectionCheckoutName()
+    } catch (error) {
+      if (this.connection === connection) {
+        this.activeCheckoutCount = 0
+        this.checkoutNameStack = []
+        this.connection = undefined
+      }
+
+      try {
+        await connection.close()
+      } catch (closeError) {
+        const cleanupError = error instanceof Error ? error : new Error("Failed to clean checked-in database connection", {cause: error})
+        const connectionCloseError = closeError instanceof Error ? closeError : new Error("Failed to close database connection after check-in cleanup failed", {cause: closeError})
+
+        throw new AggregateError([cleanupError, connectionCloseError], "Failed to clean and close checked-in database connection", {cause: closeError})
+      }
+
+      throw error
+    }
   }
 
   /**
@@ -23,6 +66,8 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     if (this.connection && !this.connectionMatchesCurrentConfiguration(this.connection)) {
       const previousConnection = this.connection
 
+      this.activeCheckoutCount = 0
+      this.checkoutNameStack = []
       this.connection = undefined
 
       await previousConnection.close()
@@ -32,7 +77,9 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       this.connection = await this.spawnConnection()
     }
 
+    this.checkoutNameStack.push(options.name)
     await this.connection.setConnectionCheckoutName(options.name)
+    this.activeCheckoutCount++
 
     return this.connection
   }
@@ -103,6 +150,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
     const connection = this.connection
 
+    this.activeCheckoutCount = 0
     this.connection = undefined
 
     await connection.close()

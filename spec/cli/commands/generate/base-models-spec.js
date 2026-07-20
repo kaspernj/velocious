@@ -207,4 +207,65 @@ describe("Cli - generate - base-models", () => {
     `
     await expectSourceTypechecks(sourceText, "velocious-resource-class-type-check-", ({diagnostic, sourcePath}) => diagnostic.file?.fileName === sourcePath)
   })
+
+  it("generates typed state-machine event methods in base models", {tags: ["mssql"]}, async () => {
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:base-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const projectDetailBasePath = `${dummyDirectory()}/src/model-bases/project-detail.js`
+    const contents = await fs.readFile(projectDetailBasePath, "utf8")
+
+    // Four methods per event; archiveNow (multi-word) pins the `charAt(0).toUpperCase()` capitalization.
+    const expectedMethodLines = [
+      "  publish() { throw new Error(\"Not implemented\") }",
+      "  publishAndSave() { throw new Error(\"Not implemented\") }",
+      "  canPublish() { throw new Error(\"Not implemented\") }",
+      "  canPublishAsync() { throw new Error(\"Not implemented\") }",
+      "  archiveNow() { throw new Error(\"Not implemented\") }",
+      "  archiveNowAndSave() { throw new Error(\"Not implemented\") }",
+      "  canArchiveNow() { throw new Error(\"Not implemented\") }",
+      "  canArchiveNowAsync() { throw new Error(\"Not implemented\") }"
+    ]
+
+    for (const line of expectedMethodLines) {
+      expect(contents).toContain(line)
+    }
+
+    // The `retry-draft` event is not a valid JS identifier, so it must be skipped
+    // (emitting `retry-draft() {}` would make the base model unparseable).
+    expect(contents).not.toContain("retry-draft")
+    expect(contents).not.toContain("Retry-draft")
+
+    // The emitted JSDoc must typecheck: each method resolves on the model with the right
+    // return type (void / Promise<void> / boolean / Promise<boolean>).
+    const sourceText = `
+      import ProjectDetail from "${dummyDirectory()}/src/models/project-detail.js"
+
+      async function check() {
+        const projectDetail = new ProjectDetail()
+
+        projectDetail.publish()
+        await projectDetail.publishAndSave()
+
+        /** @type {boolean} */
+        const canPublish = projectDetail.canPublish()
+        /** @type {boolean} */
+        const canArchiveNow = await projectDetail.canArchiveNowAsync()
+
+        void canPublish
+        void canArchiveNow
+      }
+
+      check()
+    `
+
+    await expectSourceTypechecks(sourceText, "velocious-state-machine-methods-type-check-", ({diagnostic, sourcePath}) => diagnostic.file?.fileName === sourcePath)
+  })
 })

@@ -420,7 +420,7 @@ export default class ServerChangeFeedStore {
    * @returns {Promise<?>} - Callback result.
    */
   async _withDb(callback) {
-    return await this.configuration.ensureConnections({name: "Server change-feed store"}, async (dbs) => {
+    return await this.configuration.ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Server change-feed store"}, async (dbs) => {
       const db = dbs[this.databaseIdentifier]
 
       if (!db) throw new Error(`No database connection available for identifier: ${this.databaseIdentifier}`)

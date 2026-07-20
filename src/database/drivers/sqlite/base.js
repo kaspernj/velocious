@@ -385,7 +385,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
    */
-  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
 
     while (state.ownersByName.has(name)) {
@@ -445,7 +445,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
-  async tryAcquireAdvisoryLock(name) {
+  async _tryAcquireAdvisoryLock(name) {
     const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
 
     if (state.ownersByName.has(name)) return false
@@ -464,7 +464,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this driver and has now been released.
    */
-  async releaseAdvisoryLock(name) {
+  async _releaseAdvisoryLock(name) {
     const state = VelociousDatabaseDriversSqliteBase._advisoryLockState
     const owner = state.ownersByName.get(name)
 

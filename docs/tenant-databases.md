@@ -193,3 +193,18 @@ The same provider list is used when a non-tenant model destroys with `dependent:
 If lifecycle commands need to include tenants whose databases are not readable yet, add `listRestrictTenants`. Dependent restrict checks use `listRestrictTenants` when present and otherwise fall back to `listTenants`.
 
 If the targeted identifier is disabled with `VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS`, tenant lifecycle commands fail fast instead of silently skipping the tenant connection.
+
+## Reading a model in a specific tenant or the default database
+
+Some models can live in more than one database — a per-tenant row in a project's tenant database, or a shared row in the default database (for example a model the tenant table-plan marks `allowDefaultDatabase`). A plain `Model.findBy(...)` resolves its database from the ambient `Current.tenant()`, so code running inside one tenant cannot see a row that lives in another tenant or the default database, and it cannot rely on whichever tenant happens to be active.
+
+`Model.usingTenant(tenant)` returns a scope whose eager finders run against an explicit tenant (and therefore its database), ensuring that tenant's connections for the duration of each query:
+
+```js
+// Look in a specific project tenant first, then fall back to the default database —
+// two databases at most, never a scan across every tenant.
+const inTenant = await GithubWebhook.usingTenant(projectTenant).findBy({id})
+const webhook = inTenant || await GithubWebhook.usingTenant(defaultTenant).findBy({id})
+```
+
+`usingTenant(tenant)` supports `find`, `findBy`, and `findByOrFail`. The `tenant` argument is any descriptor accepted by `configuration.runWithTenant(...)`; pass a descriptor whose `databaseIdentifiers` is empty to target the default database. First-time initialization for a tenant-switched model happens inside the requested tenant, so a model whose table only exists in the tenant database initializes from the correct schema.

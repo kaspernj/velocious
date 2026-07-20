@@ -12,6 +12,18 @@ Set the runtime explicitly with `executionMode` — `"pooled"` (default), `"inli
 
 For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-background-job-enqueue.md). Recurring schedules use the separate `scheduledBackgroundJobs` configuration described in the [README](../README.md#scheduled-jobs).
 
+## Database connection scopes
+
+By default, a job receives the existing Velocious behavior: every active configured database is checked out for the duration of `perform`. Jobs that need a known subset should declare it on the job class:
+
+```js
+export default class RefreshAccountJob extends VelociousJob {
+  static databaseIdentifiers = ["default"]
+}
+```
+
+The declaration applies to inline, forked, spawned, and pooled execution. Use `[]` for jobs that do not query through the ambient connection scope or that establish narrower scopes themselves. Leaving `databaseIdentifiers` undefined preserves all-database behavior for compatibility.
+
 ## Durable concurrency limits
 
 Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `performLaterWithOptions`). The key is an opaque, non-empty string shared by jobs that use the same limit, and the cap is a positive integer. Omitting both preserves unlimited behavior. Once a key is registered, every enqueue for that key must use the same cap; a conflicting cap is rejected.
@@ -47,6 +59,10 @@ Each capped queue is enforced through the same durable per-key concurrency mecha
 Unlike Sidekiq's strict queue ordering, priority **composes with the per-queue caps**: a higher-priority queue that is already at its `maxConcurrent` is skipped, and dispatch falls through to the next eligible lower-priority job. So a busy high-priority queue can't block everything behind it — it only wins while it has spare capacity. Priorities may be any number (negative sinks a queue below the default), and jobs within the same priority keep FIFO (`scheduled_at`, then `created_at`) order. Priority ordering applies only to the dispatch decision; it does not reorder future-scheduled jobs, which stay strictly time-ordered.
 
 The cap-fallthrough guarantee is a property of the **queue-derived** cap. A job that supplies its own explicit `concurrencyKey`/`maxConcurrency` bypasses the queue cap entirely — an explicit key always wins (see above) — so it is bounded only by that explicit key, not by `queues[name].maxConcurrent`. Such a job is therefore never held back by the queue's cap; priority just orders it normally against the rest. If you want a job to be bounded by both a queue cap and a finer-grained key, model the finer-grained limit as its own queue rather than an explicit `concurrencyKey`.
+
+## Enqueue deduplication
+
+`deduplicateWhileQueued: true` coalesces an enqueue by job identity: job name, serialized arguments, and queue. It returns the earliest identical queued job only when that job is scheduled no later than the new enqueue. This preserves one queued copy for repeated immediate or recurring triggers, but a failed job whose retry is backed off into the future cannot block fresh immediate work.
 
 ## Retention (pruning old job rows)
 

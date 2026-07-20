@@ -133,6 +133,41 @@ describe("DatabaseRecord tenant database switching", {databaseCleaning: {transac
     }
   })
 
+  it("runs eager finders against an explicit tenant via usingTenant", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-using-tenant")
+    let previousConfiguration
+
+    try {
+      try {
+        previousConfiguration = Current.configuration()
+      } catch {
+        // Ignore missing current configuration.
+      }
+
+      configuration.setCurrent()
+      await initializeTenantAnalyticsRecord(configuration)
+      await createTenantAnalyticsRecordTable(configuration, {slug: "alpha"})
+
+      // Create a record in the alpha tenant (the analytics database).
+      const created = await configuration.runWithTenant({slug: "alpha"}, async () => {
+        return await configuration.ensureConnections(async () => await TenantAnalyticsRecord.create({name: "Alpha only"}))
+      })
+
+      // With no ambient tenant, usingTenant({slug: "alpha"}) resolves the alpha
+      // tenant's database and finds the record.
+      const foundByFindBy = await TenantAnalyticsRecord.usingTenant({slug: "alpha"}).findBy({id: created.id()})
+
+      expect(foundByFindBy?.readAttribute("name")).toEqual("Alpha only")
+
+      const foundByFind = await TenantAnalyticsRecord.usingTenant({slug: "alpha"}).find(created.id())
+
+      expect(foundByFind?.readAttribute("name")).toEqual("Alpha only")
+    } finally {
+      previousConfiguration?.setCurrent()
+      await cleanup()
+    }
+  })
+
   it("throws when the current tenant does not resolve a database identifier", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-record-tenant-missing-scope")
     let previousConfiguration

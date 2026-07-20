@@ -4,8 +4,9 @@
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
+* Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
-* Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
+* Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Controllers and views for HTTP endpoints
@@ -31,7 +32,7 @@
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 * Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
-* Named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
+* Selective named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
 
@@ -2033,6 +2034,8 @@ import VelociousJob from "velocious/build/src/background-jobs/job.js"
 
 /** @augments {VelociousJob<[string, string]>} */
 export default class MyJob extends VelociousJob {
+  static databaseIdentifiers = ["default"]
+
   /**
    * @param {string} arg1
    * @param {string} arg2
@@ -2050,6 +2053,8 @@ lets a type-checked codebase declare `perform`'s parameters as required and type
 Argument-less jobs use a bare `extends VelociousJob` with `async perform()` — the
 default empty-tuple type argument keeps that working unchanged. Plain (unchecked)
 JavaScript can ignore the annotation entirely.
+
+Set `static databaseIdentifiers` when a job only needs specific configured databases. Velocious checks out only those connections around `perform` in every execution mode. Use `[]` for a job that needs no ambient database connection. Leaving the property undefined preserves the existing behavior of checking out every active database. See [Background Jobs](docs/background-jobs.md#database-connection-scopes).
 
 Queue a job:
 
@@ -2076,6 +2081,8 @@ await MyJob.performLaterWithOptions({
 ```
 
 Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
+
+Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
 
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.
 

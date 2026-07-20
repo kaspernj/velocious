@@ -148,7 +148,9 @@ export default class AdvisoryLockRunner {
     try {
       return await callback(connection)
     } finally {
-      if (!connection.getArgs().getConnection) {
+      if (connection.getArgs().getConnection) {
+        await connection.releaseHeldAdvisoryLocks()
+      } else {
         await connection.close()
       }
     }

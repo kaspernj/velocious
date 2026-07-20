@@ -29,6 +29,22 @@ async function getJobOrFail({jobId, store}) {
 
 /**
  * @param {object} args - Options.
+ * @param {BackgroundJobsStore} args.store - Background jobs store.
+ * @param {string} args.concurrencyKey - Concurrency key.
+ * @returns {Promise<number>} - The persisted `active_count` for the key (0 when the row is absent).
+ */
+async function readActiveCount({store, concurrencyKey}) {
+  const rows = await store._withDb(async (db) =>
+    await db.newQuery().from("background_job_concurrency").where({concurrency_key: concurrencyKey}).results()
+  )
+
+  if (rows.length === 0) return 0
+
+  return Number(/** @type {{active_count: number | string}} */ (rows[0]).active_count)
+}
+
+/**
+ * @param {object} args - Options.
  * @param {number} args.maxRetries - Job max retries.
  * @param {BackgroundJobsStore} args.store - Background jobs store.
  * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow>} - Orphaned job row.
@@ -434,6 +450,51 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(thirdId).not.toEqual(firstId)
   })
 
+  it("does not let a future retry deduplicate an earlier enqueue", async () => {
+    const store = await createClearedStore()
+    const options = {deduplicateWhileQueued: true}
+    const futureId = await store.enqueue({jobName: "TestJob", args: ["planner"], options: {...options, maxRetries: 1}})
+    const handoff = await store.markHandedOff({jobId: futureId, workerId: "planner-worker"})
+
+    if (!handoff) throw new Error("Expected the planner job to be handed off")
+
+    await store.markFailed({jobId: futureId, error: "planner failed", workerId: "planner-worker", ...handoff})
+
+    const futureRetry = await getJobOrFail({jobId: futureId, store})
+
+    expect(futureRetry.scheduledAtMs).toBeGreaterThan(Date.now())
+
+    const immediateId = await store.enqueue({jobName: "TestJob", args: ["planner"], options})
+    const duplicateImmediateId = await store.enqueue({jobName: "TestJob", args: ["planner"], options})
+
+    expect(immediateId).not.toEqual(futureId)
+    expect(duplicateImmediateId).toEqual(immediateId)
+
+    const rows = await store._withDb(async (db) =>
+      await db.newQuery().from("background_jobs").where({job_name: "TestJob"}).results()
+    )
+
+    expect(rows.length).toEqual(2)
+  })
+
+  it("dedupes by job identity, not concurrency key, so different jobs on a shared key are not coalesced", async () => {
+    const store = await createClearedStore()
+    // Two different jobs deliberately share a concurrency key (a queue-derived cap would look like
+    // this). They must NOT coalesce onto each other — dedup is by job identity, so both keep the
+    // shared cap.
+    const sharedKeyOptions = {concurrencyKey: "shared-key", maxConcurrency: 5, deduplicateWhileQueued: true}
+    const firstId = await store.enqueue({jobName: "JobA", args: [], options: sharedKeyOptions})
+    const secondId = await store.enqueue({jobName: "JobB", args: [], options: sharedKeyOptions})
+
+    expect(secondId).not.toEqual(firstId)
+
+    // And dedup still works with no explicit concurrency key at all: same job + args coalesces.
+    const thirdId = await store.enqueue({jobName: "JobC", args: [1], options: {deduplicateWhileQueued: true}})
+    const fourthId = await store.enqueue({jobName: "JobC", args: [1], options: {deduplicateWhileQueued: true}})
+
+    expect(fourthId).toEqual(thirdId)
+  })
+
   it("releases a concurrency reservation when a competing queued claim loses", async () => {
     let activeCount = 0
     const db = {
@@ -585,6 +646,50 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.handoffId).toEqual(secondHandoff.handoffId)
     expect(job.attempts).toEqual(0)
     expect(job.lastError).toBeNull()
+  })
+
+  it("keeps the concurrency counter consistent across every release path", async () => {
+    // Regression for the deadlock lock-ordering fix: each release path now locks the shared
+    // concurrency-counter row before the job row (matching markHandedOff's concurrency-then-job
+    // order). Reordering the lock acquisition must stay counter-neutral — active_count must still
+    // equal the number of jobs currently holding a reservation, regardless of which release path
+    // (complete / fail / return-to-queue / cancel) ran.
+    const store = await createClearedStore()
+    const concurrencyKey = "release-order"
+    const maxConcurrency = 8
+
+    /** @type {string[]} */
+    const jobIds = []
+
+    for (let index = 0; index < 6; index++) {
+      jobIds.push(await store.enqueue({jobName: "TestJob", args: [String(index)], options: {concurrencyKey, maxConcurrency}}))
+    }
+
+    /** @type {Record<string, {handoffId: string, handedOffAtMs: number, workerId: string}>} */
+    const handoffs = {}
+
+    for (const jobId of jobIds) {
+      const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+      if (!handoff) throw new Error(`Expected the job to be handed off: ${jobId}`)
+
+      handoffs[jobId] = {handoffId: handoff.handoffId, handedOffAtMs: handoff.handedOffAtMs, workerId: "worker-1"}
+    }
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(6)
+
+    // Drive four of the six jobs out through each distinct release path; leave two reserved.
+    await store.markCompleted({jobId: jobIds[0], ...handoffs[jobIds[0]]})
+    await store.markFailed({jobId: jobIds[1], error: "boom", ...handoffs[jobIds[1]]})
+    await store.markReturnedToQueue({jobId: jobIds[2], handoffId: handoffs[jobIds[2]].handoffId})
+    await store.cancel(jobIds[3])
+
+    const handedOffJobs = await store._withDb(async (db) =>
+      await db.newQuery().from("background_jobs").where({concurrency_key: concurrencyKey, status: "handed_off"}).results()
+    )
+
+    expect(handedOffJobs.length).toEqual(2)
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(2)
   })
 
   it("requeues failed jobs and honors max retries", async () => {

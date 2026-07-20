@@ -216,6 +216,8 @@ describe("Record - advisory lock hold timeout", () => {
         return true
       },
 
+      async releaseHeldAdvisoryLocks() {},
+
       async tryAcquireAdvisoryLock(name) {
         events.push(`lock acquire ${name}`)
 
