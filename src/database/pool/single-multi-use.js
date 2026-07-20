@@ -7,6 +7,14 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   suppressedConnectionContextCount = 0
 
   /**
+   * Checkout names of the currently-active nested checkouts, innermost last. The
+   * shared connection carries a single checkout name, so nesting requires restoring
+   * the enclosing scope's name when an inner checkout checks in.
+   * @type {Array<string | undefined>}
+   */
+  checkoutNameStack = []
+
+  /**
    * Runs checkin.
    * @param {import("../drivers/base.js").default} connection - Connection.
    * @returns {Promise<void>} - Resolves when complete.
@@ -14,8 +22,16 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   async checkin(connection) {
     if (this.connection === connection && this.activeCheckoutCount > 0) {
       this.activeCheckoutCount--
+      this.checkoutNameStack.pop()
 
-      if (this.activeCheckoutCount > 0) return
+      // A nested checkout is checking in while an outer one is still active: restore
+      // the enclosing scope's checkout name instead of leaving this inner name (or
+      // clearing it) on the shared connection.
+      if (this.activeCheckoutCount > 0) {
+        await connection.setConnectionCheckoutName(this.checkoutNameStack[this.checkoutNameStack.length - 1])
+
+        return
+      }
     }
 
     try {
@@ -24,6 +40,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     } catch (error) {
       if (this.connection === connection) {
         this.activeCheckoutCount = 0
+        this.checkoutNameStack = []
         this.connection = undefined
       }
 
@@ -50,6 +67,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       const previousConnection = this.connection
 
       this.activeCheckoutCount = 0
+      this.checkoutNameStack = []
       this.connection = undefined
 
       await previousConnection.close()
@@ -59,6 +77,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       this.connection = await this.spawnConnection()
     }
 
+    this.checkoutNameStack.push(options.name)
     await this.connection.setConnectionCheckoutName(options.name)
     this.activeCheckoutCount++
 
