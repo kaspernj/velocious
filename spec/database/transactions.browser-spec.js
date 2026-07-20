@@ -177,4 +177,54 @@ describe("database - transactions", {tags: ["dummy"]}, () => {
       expect(caught instanceof Error && caught.message).toEqual("ALWAYS_DEADLOCK")
     })
   })
+
+  it("retries when a deadlock rolls back a nested savepoint via the full-rollback fallback", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const db = dbs.default
+      const project = await Project.create()
+      const originalRetryable = db.retryableDatabaseError.bind(db)
+      const originalRollbackSavePoint = db.rollbackSavePoint.bind(db)
+
+      let outerAttempts = 0
+
+      db.retryableDatabaseError = (/** @type {Error} */ error) => {
+        if (error instanceof Error && error.message.includes("NESTED_DEADLOCK")) {
+          return {retry: false, reconnect: false, deadlock: true, waitMs: 1}
+        }
+
+        return originalRetryable(error)
+      }
+
+      // Force the inner savepoint rollback to fail on the first attempt, exercising the
+      // full-transaction rollback fallback that the outer catch must not double-roll-back.
+      db.rollbackSavePoint = async (/** @type {string} */ name) => {
+        if (outerAttempts == 1) throw new Error("ER_SP_DOES_NOT_EXIST: SAVEPOINT does not exist")
+
+        return originalRollbackSavePoint(name)
+      }
+
+      try {
+        await db.transaction(async () => {
+          outerAttempts++
+          await Task.create({name: `Outer ${outerAttempts}`, project})
+
+          await db.transaction(async () => {
+            if (outerAttempts == 1) throw new Error("NESTED_DEADLOCK")
+
+            await Task.create({name: `Inner ${outerAttempts}`, project})
+          })
+        })
+      } finally {
+        db.retryableDatabaseError = originalRetryable
+        db.rollbackSavePoint = originalRollbackSavePoint
+      }
+
+      const names = (await Task.where({projectId: project.id()}).toArray()).map((task) => task.name()).sort()
+
+      expect(outerAttempts).toEqual(2)
+      expect(db._transactionsCount).toBe(0)
+      // The first (deadlocked) attempt rolled back entirely; only the retry's rows persisted.
+      expect(names).toEqual(["Inner 2", "Outer 2"])
+    })
+  })
 })

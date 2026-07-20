@@ -959,7 +959,11 @@ export default class VelociousDatabaseDriversBase {
         }
       }
 
-      if (transactionStarted && !transactionRolledBack) {
+      // Only roll back if a transaction is still open. A nested savepoint whose rollback failed
+      // falls back to rolling back the whole transaction (above), which already closed it and
+      // dropped the count to 0; rolling back again here would issue a second ROLLBACK and drive
+      // `_transactionsCount` below zero, which would then defeat the outermost deadlock-retry guard.
+      if (transactionStarted && !transactionRolledBack && this._transactionsCount > 0) {
         this.logger.debug("Rollback transaction")
         await this.rollbackTransaction()
       }
