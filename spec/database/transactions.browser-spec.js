@@ -150,12 +150,17 @@ describe("database - transactions", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("gives up and rethrows after exhausting deadlock retries", async () => {
+  it("gives up and rethrows after exhausting the configured deadlock retries", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const db = dbs.default
       const originalRetryable = db.retryableDatabaseError.bind(db)
+      const originalGetArgs = db.getArgs.bind(db)
+      const originalWaitMs = db._waitMs.bind(db)
 
-      db.retryableDatabaseError = () => ({retry: false, reconnect: false, deadlock: true, waitMs: 1})
+      db.retryableDatabaseError = () => ({retry: false, reconnect: false, deadlock: true})
+      // Pin the retry budget so the assertion is against a controlled value, not the default.
+      db.getArgs = () => ({...originalGetArgs(), deadlockMaxRetries: 3})
+      db._waitMs = async () => {}
 
       let attempts = 0
       /** @type {unknown} */
@@ -171,10 +176,90 @@ describe("database - transactions", {tags: ["dummy"]}, () => {
         caught = error
       } finally {
         db.retryableDatabaseError = originalRetryable
+        db.getArgs = originalGetArgs
+        db._waitMs = originalWaitMs
       }
 
-      expect(attempts).toEqual(5)
+      expect(attempts).toEqual(3)
       expect(caught instanceof Error && caught.message).toEqual("ALWAYS_DEADLOCK")
+    })
+  })
+
+  it("backs off with capped full-jitter exponential delays between deadlock retries", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const db = dbs.default
+      const originalRetryable = db.retryableDatabaseError.bind(db)
+      const originalGetArgs = db.getArgs.bind(db)
+      const originalWaitMs = db._waitMs.bind(db)
+      const originalRandom = Math.random
+      /** @type {number[]} */
+      const waits = []
+
+      db.retryableDatabaseError = (/** @type {Error} */ error) =>
+        error instanceof Error && error.message.includes("SIMULATED_DEADLOCK")
+          ? {retry: false, reconnect: false, deadlock: true}
+          : originalRetryable(error)
+      db.getArgs = () => ({...originalGetArgs(), deadlockBaseWaitMs: 100, deadlockMaxWaitMs: 1000, deadlockMaxRetries: 8})
+      db._waitMs = async (/** @type {number} */ ms) => { waits.push(ms) }
+      // Fix the jitter fraction so the delays are deterministic; full jitter picks in [0, ceiling].
+      Math.random = () => 0.5
+
+      let attempts = 0
+
+      try {
+        await db.transaction(async () => {
+          attempts++
+          if (attempts <= 5) throw new Error("SIMULATED_DEADLOCK")
+        })
+      } finally {
+        db.retryableDatabaseError = originalRetryable
+        db.getArgs = originalGetArgs
+        db._waitMs = originalWaitMs
+        Math.random = originalRandom
+      }
+
+      expect(attempts).toEqual(6)
+      // Ceilings double until the cap: min(100 * 2^(n-1), 1000) = 100,200,400,800,1000 for
+      // attempts 1..5. Full jitter with Math.random()==0.5 yields floor(0.5 * (ceiling + 1)).
+      // The old linear `base * attempt` would have been [100,200,300,400,500] with no jitter.
+      expect(waits).toEqual([50, 100, 200, 400, 500])
+    })
+  })
+
+  it("can back off with zero delay when the jitter resolves to its lower bound", async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const db = dbs.default
+      const originalRetryable = db.retryableDatabaseError.bind(db)
+      const originalGetArgs = db.getArgs.bind(db)
+      const originalWaitMs = db._waitMs.bind(db)
+      const originalRandom = Math.random
+      /** @type {number[]} */
+      const waits = []
+
+      db.retryableDatabaseError = (/** @type {Error} */ error) =>
+        error instanceof Error && error.message.includes("SIMULATED_DEADLOCK")
+          ? {retry: false, reconnect: false, deadlock: true}
+          : originalRetryable(error)
+      db.getArgs = () => ({...originalGetArgs(), deadlockBaseWaitMs: 100, deadlockMaxWaitMs: 1000, deadlockMaxRetries: 8})
+      db._waitMs = async (/** @type {number} */ ms) => { waits.push(ms) }
+      Math.random = () => 0
+
+      let attempts = 0
+
+      try {
+        await db.transaction(async () => {
+          attempts++
+          if (attempts <= 3) throw new Error("SIMULATED_DEADLOCK")
+        })
+      } finally {
+        db.retryableDatabaseError = originalRetryable
+        db.getArgs = originalGetArgs
+        db._waitMs = originalWaitMs
+        Math.random = originalRandom
+      }
+
+      expect(attempts).toEqual(4)
+      expect(waits).toEqual([0, 0, 0])
     })
   })
 

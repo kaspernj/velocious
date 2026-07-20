@@ -64,6 +64,9 @@
  * @property {string} [databaseCharset] - Default character set applied by `db:create` via mysql/mariadb `CREATE DATABASE ... CHARACTER SET`. Distinct from `charset`, which is the client connection charset forwarded to the mysql2 driver.
  * @property {string} [databaseCollation] - Default collation applied by `db:create` via mysql/mariadb `CREATE DATABASE ... COLLATE`.
  * @property {string} [database] - Database name for this connection.
+ * @property {number} [deadlockMaxRetries] - Maximum attempts for the outermost transaction when it keeps hitting deadlocks. Defaults to 8.
+ * @property {number} [deadlockBaseWaitMs] - Base delay (ms) for the deadlock retry backoff; the per-attempt ceiling doubles from here. Defaults to 50.
+ * @property {number} [deadlockMaxWaitMs] - Cap (ms) on the deadlock retry backoff ceiling so the jittered wait stays bounded. Defaults to 1000.
  * @property {typeof import("./database/drivers/base.js").default} [driver] - Driver class to use for this database.
  * @property {typeof import("./database/pool/base.js").default} [poolType] - Pool class to use for this database.
  * @property {function() : ?} [getConnection] - Custom connection factory override.
