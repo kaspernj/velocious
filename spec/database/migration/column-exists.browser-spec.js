@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import {describe, it} from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration", {tags: ["dummy"]}, () => {
+describe("database - migration - columnExists", {tags: ["dummy"]}, () => {
   it("checks if a column exists", async () => {
     const configuration = Configuration.current()
     await configuration.ensureConnections(async (dbs) => {
