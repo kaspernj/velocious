@@ -1,0 +1,1 @@
+`deduplicateWhileQueued` now preserves schedule ordering: future retry rows no longer suppress an identical job that needs to run sooner, while equal or later enqueues still coalesce onto the earliest queued job.

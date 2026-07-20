@@ -450,6 +450,33 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(thirdId).not.toEqual(firstId)
   })
 
+  it("does not let a future retry deduplicate an earlier enqueue", async () => {
+    const store = await createClearedStore()
+    const options = {deduplicateWhileQueued: true}
+    const futureId = await store.enqueue({jobName: "TestJob", args: ["planner"], options: {...options, maxRetries: 1}})
+    const handoff = await store.markHandedOff({jobId: futureId, workerId: "planner-worker"})
+
+    if (!handoff) throw new Error("Expected the planner job to be handed off")
+
+    await store.markFailed({jobId: futureId, error: "planner failed", workerId: "planner-worker", ...handoff})
+
+    const futureRetry = await getJobOrFail({jobId: futureId, store})
+
+    expect(futureRetry.scheduledAtMs).toBeGreaterThan(Date.now())
+
+    const immediateId = await store.enqueue({jobName: "TestJob", args: ["planner"], options})
+    const duplicateImmediateId = await store.enqueue({jobName: "TestJob", args: ["planner"], options})
+
+    expect(immediateId).not.toEqual(futureId)
+    expect(duplicateImmediateId).toEqual(immediateId)
+
+    const rows = await store._withDb(async (db) =>
+      await db.newQuery().from("background_jobs").where({job_name: "TestJob"}).results()
+    )
+
+    expect(rows.length).toEqual(2)
+  })
+
   it("dedupes by job identity, not concurrency key, so different jobs on a shared key are not coalesced", async () => {
     const store = await createClearedStore()
     // Two different jobs deliberately share a concurrency key (a queue-derived cap would look like
