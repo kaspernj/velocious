@@ -26,7 +26,12 @@ describe("connection checkout names", () => {
         expect(checkedOutConnection._connectionCheckoutName).toBe("configuration spec checkout")
       })
 
-      expect(checkedOutConnection?._connectionCheckoutName).toBeUndefined()
+      // The inner scope's name must not linger once it exits. On a per-checkout pool
+      // this is a separate connection that is fully cleared (undefined); on a shared-
+      // connection pool (SingleMultiUse) the connection returns to the enclosing
+      // scope's name ("Test runner suite" from the test runner) rather than being
+      // wrongly blanked. Either way the inner name must be gone.
+      expect(checkedOutConnection?._connectionCheckoutName).not.toBe("configuration spec checkout")
     }, {fresh: true})
   })
 

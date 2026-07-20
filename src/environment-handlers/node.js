@@ -1020,12 +1020,24 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     const {default: BackgroundJobsStore} = await import("../background-jobs/store.js")
     const store = new BackgroundJobsStore({configuration: this.getConfiguration()})
     const databaseIdentifier = store.getDatabaseIdentifier() ?? "default"
+    const frameworkDb = dbs[databaseIdentifier]
+
+    // Only ensure the framework schema when the background-jobs database is actually
+    // part of this migrate operation. When it isn't among the migrated set — e.g.
+    // `db:tenants:migrate <tenant>`, which migrates only tenant databases — the
+    // framework store lives elsewhere (typically the default DB) and was already
+    // ensured by the plain `db:migrate` that precedes it. Reaching into it here would
+    // open a fresh connection to that shared database and re-run the concurrency
+    // reconcile UPDATEs; under `db:tenants:migrate --parallel N` that happens once per
+    // tenant worker, and the concurrent auto-committed UPDATEs on the shared
+    // background_jobs / background_job_concurrency rows InnoDB-deadlock
+    // (ER_LOCK_DEADLOCK). So skip when the framework DB isn't in this set; the runtime
+    // store still creates it lazily if a plain migrate never ran.
+    if (!frameworkDb) return
 
     // Reuse the connection db:migrate already holds for this database; opening a
-    // nested checkout would deadlock a database whose pool is capped at one
-    // connection. When the background-jobs database isn't among the migrated set,
-    // this passes undefined and the store checks out its own (that pool is free).
-    await store.ensureSchema(dbs[databaseIdentifier])
+    // nested checkout would deadlock a database whose pool is capped at one connection.
+    await store.ensureSchema(frameworkDb)
   }
 
   /**
