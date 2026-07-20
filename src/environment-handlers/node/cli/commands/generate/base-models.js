@@ -410,6 +410,16 @@ export default class DbGenerateModel extends BaseCommand {
 
       if (stateMachineDefinition) {
         for (const eventName of Object.keys(stateMachineDefinition.events)) {
+          // `stateMachine()` installs event methods with `proto[eventName]`, so it accepts
+          // event keys that aren't valid JavaScript identifiers (e.g. "retry-build"). Those
+          // can't be written as class methods without producing an unparseable file, so skip
+          // them here — they still work at runtime via bracket access, just untyped.
+          if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(eventName)) {
+            console.warn(`Skipping generated state-machine methods for event '${eventName}' on '${modelClass.name}': the event name is not a valid JavaScript identifier.`)
+
+            continue
+          }
+
           const capitalizedEvent = eventName.charAt(0).toUpperCase() + eventName.slice(1)
 
           if (methodsCount > 0) {

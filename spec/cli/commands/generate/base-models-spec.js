@@ -238,6 +238,11 @@ describe("Cli - generate - base-models", () => {
       expect(contents).toContain(line)
     }
 
+    // The `retry-draft` event is not a valid JS identifier, so it must be skipped
+    // (emitting `retry-draft() {}` would make the base model unparseable).
+    expect(contents).not.toContain("retry-draft")
+    expect(contents).not.toContain("Retry-draft")
+
     // The emitted JSDoc must typecheck: each method resolves on the model with the right
     // return type (void / Promise<void> / boolean / Promise<boolean>).
     const sourceText = `

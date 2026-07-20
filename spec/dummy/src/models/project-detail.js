@@ -16,7 +16,10 @@ ProjectDetail.stateMachine({
   states: {draft: {}, published: {}, archived: {}},
   events: {
     publish: {from: "draft", to: "published"},
-    archiveNow: {from: ["draft", "published"], to: "archived"}
+    archiveNow: {from: ["draft", "published"], to: "archived"},
+    // Not a valid JavaScript identifier: works at runtime (bracket access) but the
+    // generator must skip it rather than emit an unparseable `retry-draft()` method.
+    "retry-draft": {from: "archived", to: "draft"}
   }
 })
 
