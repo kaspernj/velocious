@@ -55,6 +55,20 @@ const SORTABLE_COLUMNS = {
   scheduledAtMs: "scheduled_at_ms"
 }
 
+/**
+ * Serializes concurrent `_applySchema` runs within THIS process, keyed by database
+ * identifier. Two stores that share one connection (SingleMultiUse / SQLite)
+ * otherwise interleave the multi-step table rebuild and corrupt it (the jobs table
+ * is left as its `*_velocious_rebuild` temp). A DB advisory lock can't fix that: on
+ * a session-scoped / re-entrant driver (MySQL `GET_LOCK`) a second acquire on the
+ * same session succeeds immediately so both callers proceed, and taking it on a
+ * separate connection blocks cross-session forever. An in-process promise-chain
+ * mutex serializes same-process callers with neither hazard. Cross-process schema
+ * races stay covered by the per-step advisory locks + rechecks inside the steps.
+ * @type {Map<string, Promise<void>>}
+ */
+const schemaApplyChains = new Map()
+
 export default class BackgroundJobsStore {
   /**
    * Runs constructor.
@@ -804,51 +818,58 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
   async _applySchema(db) {
-    // Serialize the entire schema apply under one advisory lock. The individual
-    // steps below each take their own per-column/per-migration lock, but those are
-    // DIFFERENT lock names, so two concurrent callers (e.g. two stores sharing one
-    // connection, or two processes) could each hold a different step lock while both
-    // rebuild the jobs table. On SQLite/MSSQL an add-column is a create-copy-drop-
-    // rename rebuild, so overlapping rebuilds race: one leaves the table as its
-    // `*_velocious_rebuild` temp and the other's "no such table" surfaces later. A
-    // single outer lock makes the whole apply mutually exclusive; the second caller
-    // then re-checks and finds every step already done.
-    const schemaLockName = `${MIGRATION_SCOPE}:schema`
-    const acquired = await db.acquireAdvisoryLock(schemaLockName)
+    // Serialize concurrent schema applies within this process, keyed by database
+    // identifier (see `schemaApplyChains`). The per-step locks inside the steps use
+    // DIFFERENT lock names, so two concurrent callers could otherwise each hold a
+    // different step lock while both rebuild the jobs table — and on SQLite/MSSQL an
+    // add-column is a create-copy-drop-rename rebuild, so overlapping rebuilds
+    // corrupt it. This mutex makes the whole apply mutually exclusive per process;
+    // the second caller then re-checks and finds every step already done.
+    const identifier = this.getDatabaseIdentifier() ?? "default"
+    const previous = schemaApplyChains.get(identifier) ?? Promise.resolve()
+    const run = previous.then(() => this._applySchemaSteps(db), () => this._applySchemaSteps(db))
 
-    if (!acquired) throw new Error("Failed to acquire background jobs schema lock")
+    // Keep the chain alive regardless of this run's outcome so one failed apply does
+    // not wedge later callers; this run still propagates its own result/error.
+    schemaApplyChains.set(identifier, run.then(() => {}, () => {}))
 
-    try {
-      await this._ensureMigrationsTable(db)
+    return await run
+  }
 
-      const alreadyApplied = await this._hasMigration(db)
+  /**
+   * Creates or upgrades the background-jobs tables, columns and concurrency rows on
+   * the given connection. Serialized per process by {@link BackgroundJobsStore#_applySchema}.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the schema is present.
+   */
+  async _applySchemaSteps(db) {
+    await this._ensureMigrationsTable(db)
 
-      // Even when the migration row is present, the jobs table itself can have
-      // been dropped underneath us by a transaction rollback in another caller
-      // (DDL is transactional on SQLite/MSSQL). Verify the table physically
-      // exists and recreate it when missing rather than trusting the migration
-      // row alone, otherwise later callers fail with "no such table".
-      if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
-        await this._ensureJobsTableColumns(db)
-        await this._ensureConcurrencyTable(db)
-        await this._reconcileQueueConcurrency(db)
-        await this._reconcileConcurrency(db)
+    const alreadyApplied = await this._hasMigration(db)
 
-        return
-      }
-
-      await this._applyMigrations(db)
+    // Even when the migration row is present, the jobs table itself can have
+    // been dropped underneath us by a transaction rollback in another caller
+    // (DDL is transactional on SQLite/MSSQL). Verify the table physically
+    // exists and recreate it when missing rather than trusting the migration
+    // row alone, otherwise later callers fail with "no such table".
+    if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
       await this._ensureJobsTableColumns(db)
       await this._ensureConcurrencyTable(db)
       await this._reconcileQueueConcurrency(db)
       await this._reconcileConcurrency(db)
 
-      if (alreadyApplied) return
-
-      await this._recordMigration(db, MIGRATION_VERSION)
-    } finally {
-      await db.releaseAdvisoryLock(schemaLockName)
+      return
     }
+
+    await this._applyMigrations(db)
+    await this._ensureJobsTableColumns(db)
+    await this._ensureConcurrencyTable(db)
+    await this._reconcileQueueConcurrency(db)
+    await this._reconcileConcurrency(db)
+
+    if (alreadyApplied) return
+
+    await this._recordMigration(db, MIGRATION_VERSION)
   }
 
   /**
