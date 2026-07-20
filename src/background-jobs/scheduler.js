@@ -3,8 +3,6 @@
 import Logger from "../logger.js"
 import {nextCronFireDate, parseCronExpression} from "./cron-expression.js"
 
-const SCHEDULED_CONCURRENCY_KEY_PREFIX = "scheduled:"
-
 const DURATION_MULTIPLIERS = {
   d: 24 * 60 * 60 * 1000,
   day: 24 * 60 * 60 * 1000,
@@ -263,38 +261,20 @@ export default class BackgroundJobsScheduler {
    */
   async enqueueScheduledJob({jobConfiguration, jobKey}) {
     try {
+      // De-duplicate scheduled enqueues by default: a periodic job still pending from an earlier
+      // tick is not enqueued again, which is what let the background_jobs table fill with thousands
+      // of identical scheduled jobs when the queue backed up. Dedup is by job identity (see the
+      // store), so the job keeps its queue-derived concurrency cap. A schedule can opt out with
+      // `deduplicateWhileQueued: false`.
       await this.enqueueJob({
         args: Array.isArray(jobConfiguration.args) ? jobConfiguration.args : [],
         jobClass: jobConfiguration.class,
         jobKey,
-        options: this._scheduledEnqueueOptions({jobConfiguration, jobKey})
+        options: {deduplicateWhileQueued: true, ...(jobConfiguration.options || {})}
       })
     } catch (error) {
       await this.logger.error(() => ["Failed to enqueue scheduled background job", {jobKey, jobName: jobConfiguration.class.jobName()}, error])
     }
-  }
-
-  /**
-   * Builds the enqueue options for a scheduled job so it de-duplicates while queued: a periodic
-   * job still pending from an earlier tick is never enqueued again, which is what let the
-   * background_jobs table fill with thousands of identical scheduled jobs when the queue backed up.
-   * Deduplication keys on the job's concurrency key; a schedule that does not declare one gets a
-   * per-schedule singleton key (derived from its jobKey, maxConcurrency 1) so both the dedup and
-   * the concurrency cap are scoped to that single schedule. A schedule opts out with
-   * `deduplicateWhileQueued: false`, or picks its own concurrency by declaring a concurrencyKey.
-   * @param {{jobConfiguration: import("../configuration-types.js").ScheduledBackgroundJobConfiguration, jobKey: string}} args - Schedule configuration and its key.
-   * @returns {import("./types.js").BackgroundJobOptions} - Enqueue options with dedup applied.
-   */
-  _scheduledEnqueueOptions({jobConfiguration, jobKey}) {
-    /** @type {import("./types.js").BackgroundJobOptions} */
-    const options = {deduplicateWhileQueued: true, ...(jobConfiguration.options || {})}
-
-    if (!options.concurrencyKey) {
-      options.concurrencyKey = `${SCHEDULED_CONCURRENCY_KEY_PREFIX}${jobKey}`
-      options.maxConcurrency = 1
-    }
-
-    return options
   }
 
   /**

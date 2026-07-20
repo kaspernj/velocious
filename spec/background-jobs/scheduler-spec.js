@@ -95,12 +95,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
         args: ["hello", "/tmp/out.json"],
         jobClass: TestJob,
         jobKey: "scheduledTestJob",
-        options: {
-          concurrencyKey: "scheduled:scheduledTestJob",
-          deduplicateWhileQueued: true,
-          executionMode: "inline",
-          maxConcurrency: 1
-        }
+        options: {deduplicateWhileQueued: true, executionMode: "inline"}
       }])
 
       await intervalCallbacks[intervalCallbacks.length - 1]?.()
@@ -179,12 +174,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
         args: ["cron"],
         jobClass: TestJob,
         jobKey: "cronTestJob",
-        options: {
-          concurrencyKey: "scheduled:cronTestJob",
-          deduplicateWhileQueued: true,
-          executionMode: "inline",
-          maxConcurrency: 1
-        }
+        options: {deduplicateWhileQueued: true, executionMode: "inline"}
       }])
 
       // After firing, the cron path uses setTimeout again (NOT
@@ -330,7 +320,7 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
     expect(error?.message).toEqual('Scheduled background job missingScheduleJob must define either "every" or "cron".')
   })
 
-  it("de-duplicates scheduled jobs with a per-schedule concurrency key by default", async () => {
+  it("de-duplicates scheduled jobs by default without overriding their concurrency", async () => {
     /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobOptions>} */
     const enqueued = []
     const scheduler = new BackgroundJobsScheduler({
@@ -348,11 +338,12 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
 
     expect(enqueued.length).toEqual(1)
     expect(enqueued[0].deduplicateWhileQueued).toEqual(true)
-    expect(enqueued[0].concurrencyKey).toEqual("scheduled:scheduledTestJob")
-    expect(enqueued[0].maxConcurrency).toEqual(1)
+    // No concurrencyKey is injected, so the job keeps its (e.g. queue-derived) concurrency cap.
+    expect(enqueued[0].concurrencyKey).toBe(undefined)
+    expect(enqueued[0].maxConcurrency).toBe(undefined)
   })
 
-  it("keeps an explicit concurrencyKey and honours a deduplicateWhileQueued opt-out", async () => {
+  it("honours a deduplicateWhileQueued opt-out and preserves declared options", async () => {
     /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobOptions>} */
     const enqueued = []
     const scheduler = new BackgroundJobsScheduler({
@@ -371,8 +362,8 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
       jobKey: "scheduledTestJob"
     })
 
+    expect(enqueued[0].deduplicateWhileQueued).toEqual(false)
     expect(enqueued[0].concurrencyKey).toEqual("custom-key")
     expect(enqueued[0].maxConcurrency).toEqual(3)
-    expect(enqueued[0].deduplicateWhileQueued).toEqual(false)
   })
 })
