@@ -867,7 +867,7 @@ export default class VelociousDatabaseDriversBase {
 
     const args = this.getArgs()
     const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
-    const deadlockBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs") ?? 50
+    const configuredBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs")
     const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
     let attempt = 0
 
@@ -880,7 +880,10 @@ export default class VelociousDatabaseDriversBase {
         const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
 
         if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
-          const baseWaitMs = typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : deadlockBaseWaitMs
+          // An explicitly-configured base wins so the tuning knob is effective even on drivers
+          // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
+          // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
+          const baseWaitMs = configuredBaseWaitMs ?? (typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50)
 
           // Full-jitter exponential backoff: wait a uniform-random duration in
           // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
