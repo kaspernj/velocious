@@ -54,6 +54,8 @@ const isBusy = await Account.hasAdvisoryLock("sync-account-42")
 
 Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. Calls without a positive `holdTimeoutMs` acquire and release the advisory lock on the caller's existing database connection/context to avoid extra connection overhead. Calls with a positive `holdTimeoutMs` acquire and release the advisory lock through a dedicated lock connection; the callback keeps using the caller's existing database connection/context. When `holdTimeoutMs` fires, the dedicated lock connection releases the advisory lock before `AdvisoryLockHoldTimeoutError` is thrown.
 
+Each database connection also keeps a counted registry of advisory locks it successfully acquires. Before a checked-out connection returns to its pool, Velocious releases every lock still in that registry so an abandoned critical section cannot leak a session lock into the next checkout. Closing a connection performs the same cleanup before closing the physical database session, including the dedicated connection used by positive `holdTimeoutMs` calls. Cleanup preserves re-entrant acquisition counts and attempts every tracked lock; release failures are surfaced rather than silently leaving a reusable connection poisoned.
+
 ## Scope
 
 Database advisory locks are **per session/connection**. Velocious uses the caller connection for ordinary advisory-lock calls and owns a separate lock connection for calls with a positive `holdTimeoutMs`:

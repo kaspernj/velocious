@@ -63,7 +63,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * Runs close.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async close() {
+  async _close() {
     await this.pool?.end()
     this.pool = undefined
     this.resetCurrentSessionTimeZone()
@@ -574,7 +574,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks for `MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS`.
    * @returns {Promise<boolean>} - True if acquired, false if the timeout elapsed.
    */
-  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const timeoutSeconds = typeof timeoutMs === "number" && timeoutMs >= 0
       ? Math.ceil(timeoutMs / 1000)
       : MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS
@@ -593,7 +593,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
-  async tryAcquireAdvisoryLock(name) {
+  async _tryAcquireAdvisoryLock(name) {
     const rows = await this.query(`SELECT GET_LOCK(${this.quote(name)}, 0) AS velocious_advisory_lock_result`)
     const result = rows?.[0]?.velocious_advisory_lock_result
 
@@ -609,8 +609,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
-  async releaseAdvisoryLock(name) {
-    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`)
+  async _releaseAdvisoryLock(name) {
+    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`, {retry: false})
     const result = rows?.[0]?.velocious_advisory_lock_result
 
     return Number(result) === 1

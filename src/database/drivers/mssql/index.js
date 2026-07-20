@@ -47,7 +47,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
     }
   }
 
-  async close() {
+  async _close() {
     if (!this.connection) return
 
     const connection = this.connection
@@ -616,7 +616,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
    */
-  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const timeoutValue = typeof timeoutMs === "number" && timeoutMs >= 0 ? Math.ceil(timeoutMs) : -1
     const rows = await this.query(
       `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_getapplock @Resource = ${this.quote(name)}, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = ${timeoutValue}; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
@@ -634,8 +634,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
    */
-  async tryAcquireAdvisoryLock(name) {
-    return await this.acquireAdvisoryLock(name, {timeoutMs: 0})
+  async _tryAcquireAdvisoryLock(name) {
+    return await this._acquireAdvisoryLock(name, {timeoutMs: 0})
   }
 
   /**
@@ -643,7 +643,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
-  async releaseAdvisoryLock(name) {
+  async _releaseAdvisoryLock(name) {
     const rows = await this.query(
       `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_releaseapplock @Resource = ${this.quote(name)}, @LockOwner = 'Session'; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
     )

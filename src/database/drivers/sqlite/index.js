@@ -62,7 +62,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     return `VelociousDatabaseDriversSqlite---${args.name}`
   }
 
-  async close() {
+  async _close() {
     await this.connection?.close()
     this.connection = undefined
   }
@@ -105,10 +105,10 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
    * @returns {Promise<boolean>} - Whether the advisory lock was acquired.
    */
-  async acquireAdvisoryLock(name, {timeoutMs} = {}) {
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const deadline = typeof timeoutMs === "number" && timeoutMs >= 0 ? Date.now() + timeoutMs : null
     const remainingForInProcess = deadline !== null ? Math.max(0, deadline - Date.now()) : null
-    const inProcessAcquired = await super.acquireAdvisoryLock(name, {timeoutMs: remainingForInProcess})
+    const inProcessAcquired = await super._acquireAdvisoryLock(name, {timeoutMs: remainingForInProcess})
 
     if (!inProcessAcquired) return false
 
@@ -117,11 +117,11 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
       const fileAcquired = await this._acquireAdvisoryLockFile(name, {timeoutMs: remainingForFile})
 
       if (!fileAcquired) {
-        await super.releaseAdvisoryLock(name)
+        await super._releaseAdvisoryLock(name)
         return false
       }
     } catch (error) {
-      await super.releaseAdvisoryLock(name)
+      await super._releaseAdvisoryLock(name)
       throw error
     }
 
@@ -133,8 +133,8 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - Whether the advisory lock was acquired immediately.
    */
-  async tryAcquireAdvisoryLock(name) {
-    const inProcessAcquired = await super.tryAcquireAdvisoryLock(name)
+  async _tryAcquireAdvisoryLock(name) {
+    const inProcessAcquired = await super._tryAcquireAdvisoryLock(name)
 
     if (!inProcessAcquired) return false
 
@@ -142,11 +142,11 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
       const fileAcquired = await this._tryAcquireAdvisoryLockFile(name)
 
       if (!fileAcquired) {
-        await super.releaseAdvisoryLock(name)
+        await super._releaseAdvisoryLock(name)
         return false
       }
     } catch (error) {
-      await super.releaseAdvisoryLock(name)
+      await super._releaseAdvisoryLock(name)
       throw error
     }
 
@@ -163,8 +163,8 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - Whether the advisory lock was released.
    */
-  async releaseAdvisoryLock(name) {
-    const inProcessReleased = await super.releaseAdvisoryLock(name)
+  async _releaseAdvisoryLock(name) {
+    const inProcessReleased = await super._releaseAdvisoryLock(name)
 
     if (inProcessReleased) {
       await this._releaseAdvisoryLockFile(name)
