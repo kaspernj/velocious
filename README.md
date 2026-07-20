@@ -2077,6 +2077,8 @@ await MyJob.performLaterWithOptions({
 
 Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
 
+Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
+
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.
 
 Inline jobs share the worker process and run concurrently up to `maxConcurrentInlineJobs`, so a single slow inline job no longer blocks the queue. A single worker can also override the configured cap explicitly:

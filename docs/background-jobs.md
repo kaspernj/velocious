@@ -48,6 +48,10 @@ Unlike Sidekiq's strict queue ordering, priority **composes with the per-queue c
 
 The cap-fallthrough guarantee is a property of the **queue-derived** cap. A job that supplies its own explicit `concurrencyKey`/`maxConcurrency` bypasses the queue cap entirely — an explicit key always wins (see above) — so it is bounded only by that explicit key, not by `queues[name].maxConcurrent`. Such a job is therefore never held back by the queue's cap; priority just orders it normally against the rest. If you want a job to be bounded by both a queue cap and a finer-grained key, model the finer-grained limit as its own queue rather than an explicit `concurrencyKey`.
 
+## Enqueue deduplication
+
+`deduplicateWhileQueued: true` coalesces an enqueue by job identity: job name, serialized arguments, and queue. It returns the earliest identical queued job only when that job is scheduled no later than the new enqueue. This preserves one queued copy for repeated immediate or recurring triggers, but a failed job whose retry is backed off into the future cannot block fresh immediate work.
+
 ## Retention (pruning old job rows)
 
 Terminal job rows are not deleted automatically unless retention is configured — a busy application otherwise accumulates `completed` (and `failed`/`orphaned`) rows indefinitely, bloating the table and its indexes and eventually slowing dispatch. Configure retention under `backgroundJobs.retention`:

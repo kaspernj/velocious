@@ -146,14 +146,16 @@ export default class BackgroundJobsStore {
     await this._withDb(async (db) => {
       if (options?.deduplicateWhileQueued) {
         // Dedupe on the job's identity (name + args + queue), NOT its concurrency key, so a job
-        // keeps whatever concurrency it resolves to — in particular a scheduled job that relies on
-        // its queue-derived `queue:<name>` cap still participates in that cluster-wide cap instead
-        // of being pulled onto a private per-job key.
+        // keeps whatever concurrency it resolves to. Only an existing job scheduled no later than
+        // this enqueue can cover it; a retry backed off into the future must not suppress earlier
+        // work. Ordering returns the earliest covering job when several queued rows already exist.
         const existing = await db
           .newQuery()
           .from(JOBS_TABLE)
           .select("id")
           .where({status: "queued", job_name: jobName, args_json: argsJson, queue})
+          .where(`scheduled_at_ms <= ${db.quote(scheduledAtMs)}`)
+          .order("scheduled_at_ms ASC")
           .limit(1)
           .results()
 
