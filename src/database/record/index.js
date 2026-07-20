@@ -3168,6 +3168,45 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns a scope whose eager finders run against an explicit `tenant` (and
+   * therefore its database) instead of whatever tenant is ambient in
+   * `Current.tenant()`. Use it to read a model that may live in a specific
+   * tenant or in the default database from another tenant context — for example
+   * `GithubWebhook.usingTenant(tenant).findBy({id})` — without depending on
+   * which tenant happens to be active. The target tenant's connections are
+   * ensured for the duration of each query.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @this {MC}
+   * @param {?} tenant - Tenant descriptor to scope the queries to (as accepted by `configuration.runWithTenant`).
+   * @returns {{find: (recordId: ?) => Promise<InstanceType<MC> | null>, findBy: (conditions: {[key: string]: string | number}) => Promise<InstanceType<MC> | null>, findByOrFail: (conditions: {[key: string]: string | number}) => Promise<InstanceType<MC>>}} - Eager finders scoped to the given tenant.
+   */
+  static usingTenant(tenant) {
+    const ModelClass = this
+
+    return {
+      find: (recordId) => ModelClass._runUsingTenant(tenant, () => ModelClass.find(recordId)),
+      findBy: (conditions) => ModelClass._runUsingTenant(tenant, () => ModelClass.findBy(conditions)),
+      findByOrFail: (conditions) => ModelClass._runUsingTenant(tenant, () => ModelClass.findByOrFail(conditions))
+    }
+  }
+
+  /**
+   * Runs `callback` with the tenant switched to `tenant` and that tenant's
+   * connections ensured. Backs `usingTenant`.
+   * @template T
+   * @param {?} tenant - Tenant descriptor.
+   * @param {() => Promise<T>} callback - Query to run under the tenant.
+   * @returns {Promise<T>} - Resolves with the callback's result.
+   */
+  static async _runUsingTenant(tenant, callback) {
+    await this.ensureInitialized()
+
+    const configuration = this._getConfiguration()
+
+    return await configuration.runWithTenant(tenant, () => configuration.ensureConnections({name: `usingTenant: ${this.getModelName()}`}, callback))
+  }
+
+  /**
    * Runs find or create by.
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
