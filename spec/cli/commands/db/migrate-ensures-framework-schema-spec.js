@@ -63,21 +63,13 @@ describe("Cli - Commands - db:migrate framework schema", () => {
 
       await handler.ensureFrameworkSchema({dbs: {projectTenant: dbs.default}})
 
-      const backgroundJobsTableAfterSkip = await dbs.default.getTableByName("background_jobs")
-
-      if (backgroundJobsTableAfterSkip) throw new Error("ensureFrameworkSchema reconciled the framework DB even though it wasn't in the migrated set")
-
-      expect(Boolean(backgroundJobsTableAfterSkip)).toEqual(false)
+      expect(await dbs.default.tableExists("background_jobs")).toEqual(false)
 
       // With the framework DB present in the set it still creates the schema, and this
       // restores it so later specs sharing this database keep working.
       await handler.ensureFrameworkSchema({dbs: {default: dbs.default}})
 
-      const restoredBackgroundJobsTable = await dbs.default.getTableByName("background_jobs")
-
-      if (!restoredBackgroundJobsTable) throw new Error("ensureFrameworkSchema didn't recreate the framework schema when its DB was in the set")
-
-      expect(restoredBackgroundJobsTable.getName()).toEqual("background_jobs")
+      expect(await dbs.default.tableExists("background_jobs")).toEqual(true)
     })
   })
 })
