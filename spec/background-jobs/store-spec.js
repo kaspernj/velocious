@@ -434,6 +434,24 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(thirdId).not.toEqual(firstId)
   })
 
+  it("dedupes by job identity, not concurrency key, so different jobs on a shared key are not coalesced", async () => {
+    const store = await createClearedStore()
+    // Two different jobs deliberately share a concurrency key (a queue-derived cap would look like
+    // this). They must NOT coalesce onto each other — dedup is by job identity, so both keep the
+    // shared cap.
+    const sharedKeyOptions = {concurrencyKey: "shared-key", maxConcurrency: 5, deduplicateWhileQueued: true}
+    const firstId = await store.enqueue({jobName: "JobA", args: [], options: sharedKeyOptions})
+    const secondId = await store.enqueue({jobName: "JobB", args: [], options: sharedKeyOptions})
+
+    expect(secondId).not.toEqual(firstId)
+
+    // And dedup still works with no explicit concurrency key at all: same job + args coalesces.
+    const thirdId = await store.enqueue({jobName: "JobC", args: [1], options: {deduplicateWhileQueued: true}})
+    const fourthId = await store.enqueue({jobName: "JobC", args: [1], options: {deduplicateWhileQueued: true}})
+
+    expect(fourthId).toEqual(thirdId)
+  })
+
   it("releases a concurrency reservation when a competing queued claim loses", async () => {
     let activeCount = 0
     const db = {

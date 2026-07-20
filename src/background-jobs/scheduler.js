@@ -261,11 +261,16 @@ export default class BackgroundJobsScheduler {
    */
   async enqueueScheduledJob({jobConfiguration, jobKey}) {
     try {
+      // De-duplicate scheduled enqueues by default: a periodic job still pending from an earlier
+      // tick is not enqueued again, which is what let the background_jobs table fill with thousands
+      // of identical scheduled jobs when the queue backed up. Dedup is by job identity (see the
+      // store), so the job keeps its queue-derived concurrency cap. A schedule can opt out with
+      // `deduplicateWhileQueued: false`.
       await this.enqueueJob({
         args: Array.isArray(jobConfiguration.args) ? jobConfiguration.args : [],
         jobClass: jobConfiguration.class,
         jobKey,
-        options: jobConfiguration.options || {}
+        options: {deduplicateWhileQueued: true, ...(jobConfiguration.options || {})}
       })
     } catch (error) {
       await this.logger.error(() => ["Failed to enqueue scheduled background job", {jobKey, jobName: jobConfiguration.class.jobName()}, error])
