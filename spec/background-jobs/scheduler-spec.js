@@ -95,7 +95,12 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
         args: ["hello", "/tmp/out.json"],
         jobClass: TestJob,
         jobKey: "scheduledTestJob",
-        options: {executionMode: "inline"}
+        options: {
+          concurrencyKey: "scheduled:scheduledTestJob",
+          deduplicateWhileQueued: true,
+          executionMode: "inline",
+          maxConcurrency: 1
+        }
       }])
 
       await intervalCallbacks[intervalCallbacks.length - 1]?.()
@@ -174,7 +179,12 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
         args: ["cron"],
         jobClass: TestJob,
         jobKey: "cronTestJob",
-        options: {executionMode: "inline"}
+        options: {
+          concurrencyKey: "scheduled:cronTestJob",
+          deduplicateWhileQueued: true,
+          executionMode: "inline",
+          maxConcurrency: 1
+        }
       }])
 
       // After firing, the cron path uses setTimeout again (NOT
@@ -318,5 +328,51 @@ describe("Background jobs - scheduler", {databaseCleaning: {truncate: true}}, ()
 
     expect(error).toBeTruthy()
     expect(error?.message).toEqual('Scheduled background job missingScheduleJob must define either "every" or "cron".')
+  })
+
+  it("de-duplicates scheduled jobs with a per-schedule concurrency key by default", async () => {
+    /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobOptions>} */
+    const enqueued = []
+    const scheduler = new BackgroundJobsScheduler({
+      configuration: {
+        async getScheduledBackgroundJobsConfig() {
+          return {jobs: {}}
+        }
+      },
+      enqueueJob: async ({options}) => {
+        enqueued.push(options)
+      }
+    })
+
+    await scheduler.enqueueScheduledJob({jobConfiguration: {class: TestJob}, jobKey: "scheduledTestJob"})
+
+    expect(enqueued.length).toEqual(1)
+    expect(enqueued[0].deduplicateWhileQueued).toEqual(true)
+    expect(enqueued[0].concurrencyKey).toEqual("scheduled:scheduledTestJob")
+    expect(enqueued[0].maxConcurrency).toEqual(1)
+  })
+
+  it("keeps an explicit concurrencyKey and honours a deduplicateWhileQueued opt-out", async () => {
+    /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobOptions>} */
+    const enqueued = []
+    const scheduler = new BackgroundJobsScheduler({
+      configuration: {
+        async getScheduledBackgroundJobsConfig() {
+          return {jobs: {}}
+        }
+      },
+      enqueueJob: async ({options}) => {
+        enqueued.push(options)
+      }
+    })
+
+    await scheduler.enqueueScheduledJob({
+      jobConfiguration: {class: TestJob, options: {concurrencyKey: "custom-key", maxConcurrency: 3, deduplicateWhileQueued: false}},
+      jobKey: "scheduledTestJob"
+    })
+
+    expect(enqueued[0].concurrencyKey).toEqual("custom-key")
+    expect(enqueued[0].maxConcurrency).toEqual(3)
+    expect(enqueued[0].deduplicateWhileQueued).toEqual(false)
   })
 })
