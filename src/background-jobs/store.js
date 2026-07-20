@@ -804,33 +804,51 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
   async _applySchema(db) {
-    await this._ensureMigrationsTable(db)
+    // Serialize the entire schema apply under one advisory lock. The individual
+    // steps below each take their own per-column/per-migration lock, but those are
+    // DIFFERENT lock names, so two concurrent callers (e.g. two stores sharing one
+    // connection, or two processes) could each hold a different step lock while both
+    // rebuild the jobs table. On SQLite/MSSQL an add-column is a create-copy-drop-
+    // rename rebuild, so overlapping rebuilds race: one leaves the table as its
+    // `*_velocious_rebuild` temp and the other's "no such table" surfaces later. A
+    // single outer lock makes the whole apply mutually exclusive; the second caller
+    // then re-checks and finds every step already done.
+    const schemaLockName = `${MIGRATION_SCOPE}:schema`
+    const acquired = await db.acquireAdvisoryLock(schemaLockName)
 
-    const alreadyApplied = await this._hasMigration(db)
+    if (!acquired) throw new Error("Failed to acquire background jobs schema lock")
 
-    // Even when the migration row is present, the jobs table itself can have
-    // been dropped underneath us by a transaction rollback in another caller
-    // (DDL is transactional on SQLite/MSSQL). Verify the table physically
-    // exists and recreate it when missing rather than trusting the migration
-    // row alone, otherwise later callers fail with "no such table".
-    if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
+    try {
+      await this._ensureMigrationsTable(db)
+
+      const alreadyApplied = await this._hasMigration(db)
+
+      // Even when the migration row is present, the jobs table itself can have
+      // been dropped underneath us by a transaction rollback in another caller
+      // (DDL is transactional on SQLite/MSSQL). Verify the table physically
+      // exists and recreate it when missing rather than trusting the migration
+      // row alone, otherwise later callers fail with "no such table".
+      if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
+        await this._ensureJobsTableColumns(db)
+        await this._ensureConcurrencyTable(db)
+        await this._reconcileQueueConcurrency(db)
+        await this._reconcileConcurrency(db)
+
+        return
+      }
+
+      await this._applyMigrations(db)
       await this._ensureJobsTableColumns(db)
       await this._ensureConcurrencyTable(db)
       await this._reconcileQueueConcurrency(db)
       await this._reconcileConcurrency(db)
 
-      return
+      if (alreadyApplied) return
+
+      await this._recordMigration(db, MIGRATION_VERSION)
+    } finally {
+      await db.releaseAdvisoryLock(schemaLockName)
     }
-
-    await this._applyMigrations(db)
-    await this._ensureJobsTableColumns(db)
-    await this._ensureConcurrencyTable(db)
-    await this._reconcileQueueConcurrency(db)
-    await this._reconcileConcurrency(db)
-
-    if (alreadyApplied) return
-
-    await this._recordMigration(db, MIGRATION_VERSION)
   }
 
   /**
