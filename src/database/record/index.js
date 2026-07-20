@@ -3199,10 +3199,12 @@ class VelociousDatabaseRecord {
    * @returns {Promise<T>} - Resolves with the callback's result.
    */
   static async _runUsingTenant(tenant, callback) {
-    await this.ensureInitialized()
-
     const configuration = this._getConfiguration()
 
+    // Do NOT ensureInitialized() out here: for a tenant-switched model whose
+    // first initialization would resolve metadata from the ambient tenant's
+    // database, that must happen under the requested tenant. The finders inside
+    // `callback` call ensureInitialized() themselves, now within this scope.
     return await configuration.runWithTenant(tenant, () => configuration.ensureConnections({name: `usingTenant: ${this.getModelName()}`}, callback))
   }
 
