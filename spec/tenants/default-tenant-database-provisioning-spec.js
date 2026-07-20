@@ -30,6 +30,27 @@ class FakeDriver {
 const mysqlConfig = () => /** @type {any} */ ({type: "mysql", driver: FakeDriver, database: "tenant_db", useDatabase: "maintenance_db"})
 
 describe("default tenant database provisioning", () => {
+  it("opens only the requested database for file-backed tenant provisioning", async () => {
+    /** @type {string[] | undefined} */
+    let requestedDatabaseIdentifiers
+    const configuration = {
+      ensureConnections: async (options, callback) => {
+        requestedDatabaseIdentifiers = options.databaseIdentifiers
+        await callback({})
+      },
+      runWithTenant: async (_tenant, callback) => await callback()
+    }
+
+    await createTenantDatabase({
+      configuration: /** @type {any} */ (configuration),
+      databaseConfiguration: /** @type {any} */ ({type: "sqlite", driver: FakeDriver, database: "tenant_db"}),
+      identifier: "projectTenant",
+      tenant: {}
+    })
+
+    expect(requestedDatabaseIdentifiers).toEqual(["projectTenant"])
+  })
+
   it("creates a server tenant database through the maintenance connection and the driver's createDatabaseSql", async () => {
     FakeDriver.instances = []
 

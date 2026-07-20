@@ -1,0 +1,1 @@
+Allow `withConnections`, `ensureConnections`, and background jobs to select the database identifiers their scope checks out, and narrow framework-owned single-database stores and tenant migration work to avoid holding unrelated connections.

@@ -1,7 +1,7 @@
 // @ts-check
 
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
-import dummyConfiguration from "../dummy/src/config/configuration.js"
+import Configuration from "../../src/configuration.js"
 
 /**
  * A two-party rendezvous: both callers block until both have arrived, then both proceed. Used to
@@ -45,12 +45,11 @@ async function readActiveCount({store, concurrencyKey}) {
 
 describe("background jobs store - concurrency counter deadlocks", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
   it("absorbs an AB-BA deadlock on the concurrency counter and keeps the counter consistent", async () => {
-    dummyConfiguration.setCurrent()
-
-    const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+    const configuration = Configuration.current()
+    const store = new BackgroundJobsStore({configuration})
     await store.clearAll()
 
-    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+    const pool = configuration.getDatabasePool(store.getDatabaseIdentifier())
     const engineType = await pool.withConnection({name: "deadlock engine probe"}, async (db) => db.getArgs().type)
 
     // A real row-level deadlock needs an engine with row locking and two independent connections.

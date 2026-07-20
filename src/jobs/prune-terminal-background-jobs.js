@@ -13,6 +13,9 @@ import VelociousJob from "../background-jobs/job.js"
  * @augments {VelociousJob<[]>}
  */
 export default class PruneTerminalBackgroundJobsJob extends VelociousJob {
+  /** @type {string[]} */
+  static databaseIdentifiers = []
+
   /**
    * Reserved job name that an application job cannot shadow. The registry loads
    * app `src/jobs` first and skips duplicate built-in names, so if this used the

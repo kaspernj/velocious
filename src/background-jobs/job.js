@@ -14,6 +14,15 @@ import BackgroundJobsClient from "./client.js"
  */
 export default class VelociousJob {
   /**
+   * Database identifiers checked out while this job performs. Set an explicit
+   * list to avoid holding unrelated configured database connections, or `[]`
+   * when the job establishes any connections it needs itself. Left undefined,
+   * jobs retain the existing behavior of checking out every active database.
+   * @type {string[] | undefined}
+   */
+  static databaseIdentifiers = undefined
+
+  /**
    * Queue this job class runs on. Subclasses set e.g. `static queue = "builds"`
    * to route onto a queue with its own cluster-wide concurrency cap (configured
    * via `backgroundJobs.queues`). The `{queue}` enqueue option overrides it.

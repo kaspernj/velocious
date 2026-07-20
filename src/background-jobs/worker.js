@@ -886,7 +886,7 @@ export default class BackgroundJobsWorker {
      * @type {(...args: Array<?>) => Promise<void>} */
     const perform = jobInstance.perform
 
-    await configuration.withConnections({name: `Background job worker inline: ${payload.jobName}`}, async () => {
+    await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job worker inline: ${payload.jobName}`}, async () => {
       await perform.apply(jobInstance, payload.args || [])
     })
   }

@@ -24,7 +24,7 @@ export default class DbTenantsCheck extends BaseCommand {
         })
       }
 
-      await this.getConfiguration().ensureConnections({name: `DB tenants check: ${helper.identifier}`}, async (dbs) => {
+      await this.getConfiguration().ensureConnections({databaseIdentifiers: [helper.identifier], name: `DB tenants check: ${helper.identifier}`}, async (dbs) => {
         const db = dbs[helper.identifier]
 
         if (!db) throw new Error(`Tenant database identifier ${helper.identifier} did not open a connection`)

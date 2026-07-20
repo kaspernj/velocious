@@ -3,6 +3,8 @@ import fs from "fs/promises"
 import User from "../models/user.js"
 
 export default class DbQueryJob extends VelociousJob {
+  static databaseIdentifiers = ["default"]
+
   async perform(outputPath) {
     const users = await User.all().toArray()
 

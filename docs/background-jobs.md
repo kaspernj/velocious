@@ -12,6 +12,18 @@ Set the runtime explicitly with `executionMode` — `"pooled"` (default), `"inli
 
 For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-background-job-enqueue.md). Recurring schedules use the separate `scheduledBackgroundJobs` configuration described in the [README](../README.md#scheduled-jobs).
 
+## Database connection scopes
+
+By default, a job receives the existing Velocious behavior: every active configured database is checked out for the duration of `perform`. Jobs that need a known subset should declare it on the job class:
+
+```js
+export default class RefreshAccountJob extends VelociousJob {
+  static databaseIdentifiers = ["default"]
+}
+```
+
+The declaration applies to inline, forked, spawned, and pooled execution. Use `[]` for jobs that do not query through the ambient connection scope or that establish narrower scopes themselves. Leaving `databaseIdentifiers` undefined preserves all-database behavior for compatibility.
+
 ## Durable concurrency limits
 
 Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `performLaterWithOptions`). The key is an opaque, non-empty string shared by jobs that use the same limit, and the cap is a positive integer. Omitting both preserves unlimited behavior. Once a key is registered, every enqueue for that key must use the same cap; a conflicting cap is rejected.
