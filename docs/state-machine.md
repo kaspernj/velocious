@@ -57,6 +57,30 @@ The `stateMachine()` call adds the following to the model class:
 
 Every event in the definition gets its own set of these four methods.
 
+### Generated base-model typing
+
+Running `velocious generate:base-models` reads the model's state machine and emits
+JSDoc-typed stubs for all four per-event methods into the generated base model
+(`src/model-bases/<model>.js`):
+
+```js
+/** @abstract @returns {void} */
+queue() { throw new Error("Not implemented") }
+/** @abstract @returns {Promise<void>} */
+queueAndSave() { throw new Error("Not implemented") }
+/** @abstract @returns {boolean} */
+canQueue() { throw new Error("Not implemented") }
+/** @abstract @returns {Promise<boolean>} */
+canQueueAsync() { throw new Error("Not implemented") }
+```
+
+Because your model `extends <Model>Base`, the real methods `stateMachine()` registers
+on the model's prototype at runtime shadow these stubs — so call sites like
+`build.queue()` or `build.canQueue()` typecheck without any hand-written boilerplate on
+the model. Event names that aren't valid JavaScript identifiers (e.g. `"retry-build"`)
+are skipped by the generator; they still work at runtime via bracket access but are not
+emitted as typed methods.
+
 ### Static methods
 
 | Method | Description |

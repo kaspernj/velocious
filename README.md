@@ -5,7 +5,7 @@
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
-* Declarative state machines for models (see [docs/state-machine.md](docs/state-machine.md))
+* Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Controllers and views for HTTP endpoints
