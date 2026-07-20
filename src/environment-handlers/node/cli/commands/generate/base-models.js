@@ -399,6 +399,54 @@ export default class DbGenerateModel extends BaseCommand {
         methodsCount++
       }
 
+      // State-machine event methods. `Model.stateMachine(...)` registers these on the model's
+      // own prototype at runtime; those override the stubs below (declared on the base class),
+      // so these throwing stubs never execute. They exist only so call sites typecheck without
+      // the consumer hand-writing boilerplate. Guarded on the own `_stateMachineDefinition`
+      // property so a subclass without its own machine doesn't re-emit the parent's events.
+      const stateMachineDefinition = Object.prototype.hasOwnProperty.call(modelClass, "_stateMachineDefinition")
+        ? modelClass.getStateMachineDefinition()
+        : null
+
+      if (stateMachineDefinition) {
+        for (const eventName of Object.keys(stateMachineDefinition.events)) {
+          const capitalizedEvent = eventName.charAt(0).toUpperCase() + eventName.slice(1)
+
+          if (methodsCount > 0) {
+            fileContent += "\n"
+          }
+
+          fileContent += "  /**\n"
+          fileContent += "   * @abstract\n"
+          fileContent += "   * @returns {void}\n"
+          fileContent += "   */\n"
+          fileContent += `  ${eventName}() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @abstract\n"
+          fileContent += "   * @returns {Promise<void>}\n"
+          fileContent += "   */\n"
+          fileContent += `  ${eventName}AndSave() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @abstract\n"
+          fileContent += "   * @returns {boolean}\n"
+          fileContent += "   */\n"
+          fileContent += `  can${capitalizedEvent}() { throw new Error("Not implemented") }\n`
+
+          fileContent += "\n"
+          fileContent += "  /**\n"
+          fileContent += "   * @abstract\n"
+          fileContent += "   * @returns {Promise<boolean>}\n"
+          fileContent += "   */\n"
+          fileContent += `  can${capitalizedEvent}Async() { throw new Error("Not implemented") }\n`
+
+          methodsCount++
+        }
+      }
+
       fileContent += "}\n"
 
         await fs.writeFile(modelPath, fileContent)

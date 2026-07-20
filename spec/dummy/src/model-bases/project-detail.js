@@ -147,4 +147,52 @@ export default class ProjectDetailBase extends DatabaseRecord {
    * @returns {void}
    */
   setProject(newModel) { void newModel; throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {void}
+   */
+  publish() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  publishAndSave() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {boolean}
+   */
+  canPublish() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {Promise<boolean>}
+   */
+  canPublishAsync() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {void}
+   */
+  archiveNow() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {Promise<void>}
+   */
+  archiveNowAndSave() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {boolean}
+   */
+  canArchiveNow() { throw new Error("Not implemented") }
+
+  /**
+   * @abstract
+   * @returns {Promise<boolean>}
+   */
+  canArchiveNowAsync() { throw new Error("Not implemented") }
 }
