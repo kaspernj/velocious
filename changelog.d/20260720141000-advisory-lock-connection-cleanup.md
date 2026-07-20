@@ -1,0 +1,1 @@
+Database connections now track acquired advisory locks and release any leftovers before pool check-in or close, preventing abandoned caller and dedicated lock connections from retaining session locks.

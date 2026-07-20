@@ -64,7 +64,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     return connectArgs
   }
 
-  async close() {
+  async _close() {
     await this.connection.closeAsync()
     this.connection = undefined
   }

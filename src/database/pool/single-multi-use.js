@@ -3,6 +3,7 @@
 import BasePool from "./base.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
+  activeCheckoutCount = 0
   suppressedConnectionContextCount = 0
 
   /**
@@ -11,7 +12,32 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async checkin(connection) {
-    await connection.clearConnectionCheckoutName()
+    if (this.connection === connection && this.activeCheckoutCount > 0) {
+      this.activeCheckoutCount--
+
+      if (this.activeCheckoutCount > 0) return
+    }
+
+    try {
+      await connection.releaseHeldAdvisoryLocks()
+      await connection.clearConnectionCheckoutName()
+    } catch (error) {
+      if (this.connection === connection) {
+        this.activeCheckoutCount = 0
+        this.connection = undefined
+      }
+
+      try {
+        await connection.close()
+      } catch (closeError) {
+        const cleanupError = error instanceof Error ? error : new Error("Failed to clean checked-in database connection", {cause: error})
+        const connectionCloseError = closeError instanceof Error ? closeError : new Error("Failed to close database connection after check-in cleanup failed", {cause: closeError})
+
+        throw new AggregateError([cleanupError, connectionCloseError], "Failed to clean and close checked-in database connection", {cause: closeError})
+      }
+
+      throw error
+    }
   }
 
   /**
@@ -23,6 +49,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     if (this.connection && !this.connectionMatchesCurrentConfiguration(this.connection)) {
       const previousConnection = this.connection
 
+      this.activeCheckoutCount = 0
       this.connection = undefined
 
       await previousConnection.close()
@@ -33,6 +60,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     }
 
     await this.connection.setConnectionCheckoutName(options.name)
+    this.activeCheckoutCount++
 
     return this.connection
   }
@@ -103,6 +131,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
     const connection = this.connection
 
+    this.activeCheckoutCount = 0
     this.connection = undefined
 
     await connection.close()

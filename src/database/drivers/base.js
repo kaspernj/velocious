@@ -170,6 +170,8 @@ export default class VelociousDatabaseDriversBase {
    * Active query.
    * @type {ActiveQueryState | null} */
   _activeQuery = null
+  /** @type {Map<string, number>} */
+  _heldAdvisoryLocks = new Map()
 
   /**
    * Runs constructor.
@@ -239,10 +241,40 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
-   * Optional close hook for database drivers.
-   * @returns {Promise<void>} - Resolves when complete.
+   * Releases tracked advisory locks and closes the physical database connection.
+   * @returns {Promise<void>} - Resolves when cleanup and close complete.
    */
   async close() {
+    /** @type {Error | undefined} */
+    let advisoryLockError
+
+    try {
+      await this.releaseHeldAdvisoryLocks()
+    } catch (error) {
+      advisoryLockError = error instanceof Error ? error : new Error("Failed to release held advisory locks", {cause: error})
+    }
+
+    try {
+      await this._close()
+      this._heldAdvisoryLocks.clear()
+    } catch (error) {
+      const closeError = error instanceof Error ? error : new Error("Failed to close database connection", {cause: error})
+
+      if (advisoryLockError) {
+        throw new AggregateError([advisoryLockError, closeError], "Failed to release advisory locks and close database connection", {cause: error})
+      }
+
+      throw closeError
+    }
+
+    if (advisoryLockError) throw advisoryLockError
+  }
+
+  /**
+   * Driver-specific physical close hook.
+   * @returns {Promise<void>} - Resolves when the underlying connection closes.
+   */
+  async _close() {
     // No-op by default
   }
 
@@ -1773,33 +1805,124 @@ export default class VelociousDatabaseDriversBase {
    * table locks; they are purely cooperative between callers that use the
    * same name and let you serialize functionality without blocking readers
    * or writers that do not participate in the same lock.
-   * @abstract
    * @param {string} name - Lock name.
-   * @param {{timeoutMs?: number | null}} [_args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
    * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
    */
-  acquireAdvisoryLock(name, _args = {}) {
-    throw new Error(`'acquireAdvisoryLock' not implemented for ${this.constructor.name}`)
+  async acquireAdvisoryLock(name, args = {}) {
+    const acquired = await this._acquireAdvisoryLock(name, args)
+
+    if (acquired) this._trackAdvisoryLock(name)
+
+    return acquired
+  }
+
+  /**
+   * Driver-specific blocking advisory-lock acquisition hook.
+   * @abstract
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [_args] - Lock timeout options.
+   * @returns {Promise<boolean>} - Whether the lock was acquired.
+   */
+  _acquireAdvisoryLock(name, _args = {}) {
+    throw new Error(`'_acquireAdvisoryLock' not implemented for ${this.constructor.name}`)
   }
 
   /**
    * Attempts to acquire a named advisory lock without blocking.
-   * @abstract
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - Resolves to true if the lock was acquired, false if it was already held.
    */
-  tryAcquireAdvisoryLock(name) { // eslint-disable-line no-unused-vars
-    throw new Error(`'tryAcquireAdvisoryLock' not implemented for ${this.constructor.name}`)
+  async tryAcquireAdvisoryLock(name) {
+    const acquired = await this._tryAcquireAdvisoryLock(name)
+
+    if (acquired) this._trackAdvisoryLock(name)
+
+    return acquired
+  }
+
+  /**
+   * Driver-specific non-blocking advisory-lock acquisition hook.
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the lock was acquired.
+   */
+  _tryAcquireAdvisoryLock(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'_tryAcquireAdvisoryLock' not implemented for ${this.constructor.name}`)
   }
 
   /**
    * Releases a named advisory lock previously acquired on this connection.
-   * @abstract
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - Resolves to true if the lock was held by this session and has now been released.
    */
-  releaseAdvisoryLock(name) { // eslint-disable-line no-unused-vars
-    throw new Error(`'releaseAdvisoryLock' not implemented for ${this.constructor.name}`)
+  async releaseAdvisoryLock(name) {
+    const released = await this._releaseAdvisoryLock(name)
+
+    if (released) {
+      this._untrackAdvisoryLock(name)
+    } else {
+      this._heldAdvisoryLocks.delete(name)
+    }
+
+    return released
+  }
+
+  /**
+   * Driver-specific advisory-lock release hook.
+   * @abstract
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the lock was released.
+   */
+  _releaseAdvisoryLock(name) { // eslint-disable-line no-unused-vars
+    throw new Error(`'_releaseAdvisoryLock' not implemented for ${this.constructor.name}`)
+  }
+
+  /**
+   * Releases every advisory lock still tracked on this connection.
+   * @returns {Promise<void>} - Resolves when every tracked lock is released.
+   */
+  async releaseHeldAdvisoryLocks() {
+    /** @type {Error[]} */
+    const errors = []
+
+    for (const name of [...this._heldAdvisoryLocks.keys()]) {
+      while (this._heldAdvisoryLocks.has(name)) {
+        try {
+          await this.releaseAdvisoryLock(name)
+        } catch (error) {
+          errors.push(error instanceof Error ? error : new Error(`Failed to release advisory lock ${JSON.stringify(name)}`, {cause: error}))
+          break
+        }
+      }
+    }
+
+    if (errors.length == 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to release held advisory locks")
+  }
+
+  /**
+   * Records one successful acquisition, including re-entrant acquisitions.
+   * @param {string} name - Lock name.
+   * @returns {void}
+   */
+  _trackAdvisoryLock(name) {
+    this._heldAdvisoryLocks.set(name, (this._heldAdvisoryLocks.get(name) || 0) + 1)
+  }
+
+  /**
+   * Removes one successful acquisition from the connection registry.
+   * @param {string} name - Lock name.
+   * @returns {void}
+   */
+  _untrackAdvisoryLock(name) {
+    const remainingCount = (this._heldAdvisoryLocks.get(name) || 0) - 1
+
+    if (remainingCount > 0) {
+      this._heldAdvisoryLocks.set(name, remainingCount)
+    } else {
+      this._heldAdvisoryLocks.delete(name)
+    }
   }
 
   /**

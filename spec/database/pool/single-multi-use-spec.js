@@ -6,6 +6,35 @@ import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import SingleMultiUsePool from "../../../src/database/pool/single-multi-use.js"
 
 describe("SingleMultiUsePool context handling", () => {
+  it("releases held advisory locks only after the shared connection's final check-in", async () => {
+    const lockName = "single-multi-use-final-checkin"
+
+    await Dummy.run(async () => {
+      const pool = new SingleMultiUsePool({configuration: dummyConfiguration, identifier: "default"})
+      const firstCheckout = await pool.checkout()
+      const secondCheckout = await pool.checkout()
+      const probeConnection = await pool.spawnConnection()
+
+      try {
+        expect(firstCheckout).toBe(secondCheckout)
+        expect(await firstCheckout.tryAcquireAdvisoryLock(lockName)).toBe(true)
+
+        await pool.checkin(firstCheckout)
+
+        expect(await probeConnection.tryAcquireAdvisoryLock(lockName)).toBe(false)
+
+        await pool.checkin(secondCheckout)
+
+        expect(await probeConnection.tryAcquireAdvisoryLock(lockName)).toBe(true)
+      } finally {
+        await firstCheckout.releaseAdvisoryLock(lockName)
+        await probeConnection.releaseAdvisoryLock(lockName)
+        await probeConnection.close()
+        await pool.closeAll()
+      }
+    })
+  })
+
   it("suppresses the shared current connection across async callbacks", async () => {
     await Dummy.run(async () => {
       const pool = dummyConfiguration.getDatabasePool("default")
