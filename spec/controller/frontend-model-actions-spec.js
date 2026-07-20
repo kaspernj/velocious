@@ -1539,7 +1539,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.model.id).toBeDefined()
 
       const persisted = await Task.find(payload.model.id)
-      const project = await persisted.projectOrLoad()
+      const project = await persisted.relationshipOrLoad("project", {preloadTranslations: true})
 
       expect(persisted.name()).toEqual("Nested belongs-to task")
       expect(project.name()).toEqual("Nested belongs-to project")
