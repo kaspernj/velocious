@@ -1,5 +1,7 @@
 // @ts-check
 
+import {POOL_CONFIGURATION_KEY} from "../pool/base.js"
+
 const DEFAULT_INSERT_CHUNK_SIZE = 100
 const DEFAULT_QUERY_CHUNK_SIZE = 500
 const DEFAULT_STREAM_BATCH_SIZE = 1000
@@ -93,6 +95,56 @@ export default class DataCopier {
     })
 
     return sourceRowsByTableName
+  }
+
+  /**
+   * Moves every plan table's rows for `keyValue` from the source into the target. The target
+   * write commits before the source delete begins, so a target failure leaves the source
+   * untouched and a source-delete failure can be retried safely. When the source no longer has
+   * matching rows, the method returns the empty traversal without changing the target.
+   *
+   * `transformRow` can change target-only values such as a tenant ownership column. It receives
+   * a shallow clone and must preserve the configured id column so retries address the same rows.
+   * @param {string} keyValue - Tenant key selecting the rows to move.
+   * @param {{transformRow?: (args: {row: Record<string, unknown>, tableName: string}) => Record<string, unknown>}} [options] - Optional target-row transformation.
+   * @returns {Promise<Map<string, Record<string, unknown>[]>>} - Rows written to the target, grouped by table name.
+   */
+  async move(keyValue, {transformRow} = {}) {
+    const sourceDbWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (this.sourceDb)
+    const targetDbWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (this.targetDb)
+    const sourceReuseKey = sourceDbWithPoolKey[POOL_CONFIGURATION_KEY]
+    const targetReuseKey = targetDbWithPoolKey[POOL_CONFIGURATION_KEY]
+    const sameResolvedDatabase = this.sourceDb.configuration === this.targetDb.configuration
+      && sourceReuseKey !== undefined
+      && sourceReuseKey === targetReuseKey
+
+    if (this.sourceDb === this.targetDb || sameResolvedDatabase) {
+      throw new Error("DataCopier move requires different physical databases.")
+    }
+
+    const sourceRowsByTableName = await this.loadRows(this.sourceDb, keyValue)
+
+    if (!this.rowsByTableNameHasRows(sourceRowsByTableName)) {
+      return sourceRowsByTableName
+    }
+
+    const targetRowsByTableName = this.transformRows({rowsByTableName: sourceRowsByTableName, transformRow})
+
+    await this.targetDb.withDisabledForeignKeys(async () => {
+      await this.targetDb.transaction(async () => {
+        await this.deleteRows({db: this.targetDb, rowsByTableName: sourceRowsByTableName})
+        await this.insertRows({db: this.targetDb, rowsByTableName: targetRowsByTableName})
+        await this.assertRowsExist({db: this.targetDb, rowsByTableName: targetRowsByTableName})
+      })
+    })
+
+    await this.sourceDb.withDisabledForeignKeys(async () => {
+      await this.sourceDb.transaction(async () => {
+        await this.deleteRows({db: this.sourceDb, rowsByTableName: sourceRowsByTableName})
+      })
+    })
+
+    return targetRowsByTableName
   }
 
   /**
@@ -409,6 +461,15 @@ export default class DataCopier {
    * @returns {Promise<void>}
    */
   async deleteTargetRows(rowsByTableName) {
+    await this.deleteRows({db: this.targetDb, rowsByTableName})
+  }
+
+  /**
+   * Deletes the supplied rows from `db`, children before parents.
+   * @param {{db: import("../drivers/base.js").default, rowsByTableName: Map<string, Record<string, unknown>[]>}} args - Database and rows to delete.
+   * @returns {Promise<void>}
+   */
+  async deleteRows({db, rowsByTableName}) {
     for (const tableConfig of [...this.tablePlan].reverse()) {
       const rowIds = uniqueStrings((rowsByTableName.get(tableConfig.tableName) || []).map((row) => row[this.idColumn]))
 
@@ -416,13 +477,13 @@ export default class DataCopier {
         continue
       }
 
-      const quotedTable = this.targetDb.quoteTable(tableConfig.tableName)
-      const quotedIdColumn = this.targetDb.quoteColumn(this.idColumn)
+      const quotedTable = db.quoteTable(tableConfig.tableName)
+      const quotedIdColumn = db.quoteColumn(this.idColumn)
 
       for (const rowIdsChunk of chunks(rowIds, this.queryChunkSize)) {
         await this.executeQuietQuery(
-          this.targetDb,
-          `DELETE FROM ${quotedTable} WHERE ${quotedIdColumn} IN (${this.quotedValuesSql(this.targetDb, rowIdsChunk)})`
+          db,
+          `DELETE FROM ${quotedTable} WHERE ${quotedIdColumn} IN (${this.quotedValuesSql(db, rowIdsChunk)})`
         )
       }
     }
@@ -435,6 +496,15 @@ export default class DataCopier {
    * @returns {Promise<void>}
    */
   async insertTargetRows(rowsByTableName) {
+    await this.insertRows({db: this.targetDb, rowsByTableName})
+  }
+
+  /**
+   * Inserts the supplied rows into `db`, parents before children.
+   * @param {{db: import("../drivers/base.js").default, rowsByTableName: Map<string, Record<string, unknown>[]>}} args - Database and rows to insert.
+   * @returns {Promise<void>}
+   */
+  async insertRows({db, rowsByTableName}) {
     for (const tableConfig of this.tablePlan) {
       const rows = rowsByTableName.get(tableConfig.tableName) || []
 
@@ -450,10 +520,69 @@ export default class DataCopier {
       for (const rowsChunk of insertChunks) {
         await this.insertRowsQuietly({
           columns,
-          db: this.targetDb,
+          db,
           rows: rowsChunk.map((row) => columns.map((column) => row[column])),
           tableName: tableConfig.tableName
         })
+      }
+    }
+  }
+
+  /**
+   * Returns whether any table in the loaded traversal contains rows.
+   * @param {Map<string, Record<string, unknown>[]>} rowsByTableName - Rows grouped by table name.
+   * @returns {boolean} - Whether any table contains rows.
+   */
+  rowsByTableNameHasRows(rowsByTableName) {
+    for (const rows of rowsByTableName.values()) {
+      if (rows.length > 0) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * Clones source rows and applies the optional target-only transformation.
+   * @param {{rowsByTableName: Map<string, Record<string, unknown>[]>, transformRow?: (args: {row: Record<string, unknown>, tableName: string}) => Record<string, unknown>}} args - Source rows and optional transformation.
+   * @returns {Map<string, Record<string, unknown>[]>} - Cloned rows prepared for the target.
+   */
+  transformRows({rowsByTableName, transformRow}) {
+    const transformedRowsByTableName = new Map()
+
+    for (const tableConfig of this.tablePlan) {
+      const sourceRows = rowsByTableName.get(tableConfig.tableName) || []
+      const transformedRows = sourceRows.map((sourceRow) => {
+        const transformedRow = transformRow
+          ? transformRow({row: {...sourceRow}, tableName: tableConfig.tableName})
+          : {...sourceRow}
+
+        if (String(transformedRow[this.idColumn]) !== String(sourceRow[this.idColumn])) {
+          throw new Error(`DataCopier move transform must preserve ${this.idColumn} for table ${tableConfig.tableName}.`)
+        }
+
+        return transformedRow
+      })
+
+      transformedRowsByTableName.set(tableConfig.tableName, transformedRows)
+    }
+
+    return transformedRowsByTableName
+  }
+
+  /**
+   * Verifies that every supplied row id exists in `db`.
+   * @param {{db: import("../drivers/base.js").default, rowsByTableName: Map<string, Record<string, unknown>[]>}} args - Database and rows to verify.
+   * @returns {Promise<void>}
+   */
+  async assertRowsExist({db, rowsByTableName}) {
+    for (const tableConfig of this.tablePlan) {
+      const expectedIds = uniqueStrings((rowsByTableName.get(tableConfig.tableName) || []).map((row) => row[this.idColumn]))
+      const existingIds = await this.queryExistingIds({db, ids: expectedIds, tableName: tableConfig.tableName})
+
+      if (existingIds.size !== expectedIds.length) {
+        throw new Error(`DataCopier move target verification failed for table ${tableConfig.tableName}.`)
       }
     }
   }
