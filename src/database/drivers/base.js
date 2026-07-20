@@ -57,6 +57,7 @@
  * @property {string} [logName] - Query log subject.
  * @property {boolean} [logQuery] - Whether to log the query.
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
+ * @property {boolean} [retry] - Whether retryable errors may retry the query; defaults to true.
  * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
@@ -1159,7 +1160,7 @@ export default class VelociousDatabaseDriversBase {
 
         const retryInfo = this.retryableDatabaseError(error)
 
-        if (tries < maxTries && retryInfo.retry) {
+        if (options.retry !== false && tries < maxTries && retryInfo.retry) {
           if (retryInfo.reconnect) {
             if (this._transactionsCount > 0) {
               throw new Error(`Cannot reconnect while a transaction is active (${this._transactionsCount}). Original error: ${error.message}`, {cause: error})

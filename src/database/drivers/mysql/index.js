@@ -610,7 +610,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
   async _releaseAdvisoryLock(name) {
-    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`)
+    const rows = await this.query(`SELECT RELEASE_LOCK(${this.quote(name)}) AS velocious_advisory_lock_result`, {retry: false})
     const result = rows?.[0]?.velocious_advisory_lock_result
 
     return Number(result) === 1
