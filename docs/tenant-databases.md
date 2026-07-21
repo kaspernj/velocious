@@ -100,6 +100,8 @@ npx velocious db:tenants:migrate projectTenant --parallel
 npx velocious db:tenants:migrate projectTenant --parallel 20
 ```
 
+The lifecycle commands print the tenant count and parallelism when they start, report each completed tenant, and finish with a processed count. While work is still running, they also print a heartbeat every 30 seconds with completed and active tenant counts so long deploy steps remain visibly alive.
+
 `afterMigrateTenant` runs inside the tenant command's active connection scope after generic migrations finish for that tenant. Hooks can read `configuration.getCurrentConnections()` or run model/database queries against both the default database and the active tenant database without opening another connection scope.
 
 The hook receives `migrationsApplied`, the number of migrations actually applied to that tenant during this run (0 when the tenant was already up to date, because already-run migrations are skipped). Use it to make the hook proportional to pending work — for example, return early when `migrationsApplied === 0` so a no-op `db:tenants:migrate` (such as one run on every deploy) does not repeat expensive per-tenant schema reconciliation across every tenant.
