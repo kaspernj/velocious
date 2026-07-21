@@ -13,6 +13,16 @@ import path from "path"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import TenantDatabaseCommandHelper from "../../src/cli/tenant-database-command-helper.js"
 
+class TenantRecord {
+  /** @param {string} id - Tenant identifier. */
+  constructor(id) {
+    this._id = id
+  }
+
+  /** @returns {string} - Tenant identifier. */
+  id() { return this._id }
+}
+
 describe("TenantDatabaseCommandHelper", () => {
   it("reports tenant progress and emits heartbeats while work is active", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenant-progress-"))
@@ -45,15 +55,15 @@ describe("TenantDatabaseCommandHelper", () => {
       locales: ["en"],
       tenantDatabaseProviders: {
         projectTenant: {
-          listTenants: async () => [{slug: "alpha"}, {slug: "beta"}]
+          listTenants: async () => [new TenantRecord("alpha"), new TenantRecord("beta")]
         }
       },
       tenantDatabaseResolver: ({identifier, tenant}) => {
-        const tenantObject = /** @type {{slug?: string}} */ (tenant)
+        const tenantRecord = /** @type {TenantRecord} */ (tenant)
 
-        if (identifier != "projectTenant" || !tenantObject.slug) return
+        if (identifier != "projectTenant") return
 
-        return {name: `velocious-cli-tenant-progress-${tenantObject.slug}`}
+        return {name: `velocious-cli-tenant-progress-${tenantRecord.id()}`}
       }
     })
     const cli = new Cli({

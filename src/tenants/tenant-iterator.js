@@ -101,9 +101,14 @@ export default class TenantIterator {
     if (tenant && typeof tenant === "object") {
       const tenantObject = /** @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
 
-      if (tenantObject.slug) return String(tenantObject.slug)
-      if (tenantObject.name) return String(tenantObject.name)
-      if (tenantObject.id) return String(tenantObject.id)
+      for (const attributeName of /** @type {Array<"slug" | "name" | "id">} */ (["slug", "name", "id"])) {
+        const attributeOrAccessor = tenantObject[attributeName]
+        const attributeValue = typeof attributeOrAccessor === "function"
+          ? attributeOrAccessor.call(tenant)
+          : attributeOrAccessor
+
+        if (attributeValue) return String(attributeValue)
+      }
     }
 
     return JSON.stringify(tenant)
