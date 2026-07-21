@@ -61,6 +61,22 @@ describe("StructureSqlLoader", () => {
     })
   })
 
+  it("invalidates cached schema metadata after loading via the native exec path", {databaseCleaning: {transaction: false}}, async () => {
+    await withFreshDatabase(async (dbs) => {
+      // Read schema metadata first so the pre-load (empty) table list is cached.
+      expect(await dbs.default.tableExists("tasks")).toEqual(false)
+
+      await new StructureSqlLoader().load({
+        db: dbs.default,
+        structureSql: "CREATE TABLE `tasks` (`id` INTEGER PRIMARY KEY NOT NULL);"
+      })
+
+      // The native exec path mutates the schema outside Base#query; without the
+      // loader clearing the cache this would still report the stale empty schema.
+      expect(await dbs.default.tableExists("tasks")).toEqual(true)
+    })
+  })
+
   it("preserves inserted rows from the dump", {databaseCleaning: {transaction: false}}, async () => {
     await withFreshDatabase(async (dbs) => {
       await new StructureSqlLoader().load({

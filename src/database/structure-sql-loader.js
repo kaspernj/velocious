@@ -40,6 +40,13 @@ export default class StructureSqlLoader {
       }
     } finally {
       await db.enableForeignKeys()
+
+      // The native `exec` path mutates the schema outside `Base#query`, so the
+      // usual post-DDL schema-cache invalidation never runs. Clear it here so a
+      // caller that read schema metadata before provisioning (e.g. an empty table
+      // list) does not keep seeing the pre-load schema afterwards. Harmless for the
+      // per-statement path, which already invalidates as each DDL statement runs.
+      db.clearSchemaCache()
     }
   }
 
