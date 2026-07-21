@@ -1,6 +1,6 @@
 // @ts-check
 
-import timeout from "awaitery/build/timeout.js"
+import timeout, {TimeoutError} from "awaitery/build/timeout.js"
 
 /**
  * Thrown when an advisory lock could not be acquired before `timeoutMs` elapsed.
@@ -191,7 +191,7 @@ export default class AdvisoryLockRunner {
         }
       })
     } catch (error) {
-      if (!callbackSettled) {
+      if (!callbackSettled || error instanceof TimeoutError) {
         throw new AdvisoryLockHoldTimeoutError(`Advisory lock ${JSON.stringify(name)} held longer than ${holdTimeoutMs}ms`, {name})
       }
 
