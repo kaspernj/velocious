@@ -33,6 +33,35 @@ describe("waitForEvent", () => {
     expect(await promise).toEqual({id: 2})
   })
 
+  it("rejects immediately with the filter's error instead of waiting for the timeout when the filter throws", async () => {
+    const emitter = new EventEmitter()
+    const filterError = new Error("bad event shape")
+    // A long timeout would make this test slow if the throw were swallowed and the
+    // waiter left pending — it must reject on the throwing emission instead.
+    const promise = waitForEvent(emitter, "job", {
+      timeoutMs: 5000,
+      filter: (job) => {
+        if (job === undefined) throw filterError
+
+        return job.id === 2
+      }
+    })
+
+    emitter.emit("job", undefined)
+
+    /** @type {unknown} */
+    let rejected
+
+    try {
+      await promise
+    } catch (error) {
+      rejected = error
+    }
+
+    expect(rejected).toEqual(filterError)
+    expect(emitter.listenerCount("job")).toEqual(0)
+  })
+
   it("rejects after the timeout when the event never fires", async () => {
     const emitter = new EventEmitter()
     /** @type {unknown} */

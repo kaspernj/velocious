@@ -34,12 +34,28 @@ export default function waitForEvent(emitter, eventName, options = {}) {
     let timer
 
     /**
-     * Resolves the wait when a matching event fires, removing itself first.
+     * Resolves the wait when a matching event fires, removing itself first. A filter
+     * that throws (e.g. it assumes an event shape an intermediate emission doesn't
+     * have) rejects immediately rather than leaving the waiter pending until timeout.
      * @param {...?} args - Emitted arguments.
      * @returns {void}
      */
     const listener = (...args) => {
-      if (filter && !filter(...args)) return
+      if (filter) {
+        let matched
+
+        try {
+          matched = filter(...args)
+        } catch (error) {
+          clearTimeout(timer)
+          emitter.off(eventName, listener)
+          reject(error)
+
+          return
+        }
+
+        if (!matched) return
+      }
 
       clearTimeout(timer)
       emitter.off(eventName, listener)
