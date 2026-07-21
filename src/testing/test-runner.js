@@ -237,6 +237,8 @@ export default class TestRunner {
     this._failedTestDetails = []
     /** @type {{fullDescription: string, filePath: string, line: number} | null} */
     this._lastTestContext = null
+    /** @type {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} */
+    this._testDurations = []
   }
 
   /**
@@ -697,6 +699,17 @@ export default class TestRunner {
   }
 
   /**
+   * Returns the tests recorded during the run, slowest first.
+   * @param {number} [limit] - Maximum number of tests to return (0 returns all).
+   * @returns {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} - Slowest tests, slowest first.
+   */
+  getSlowestTests(limit = 10) {
+    const sorted = [...this._testDurations].sort((testA, testB) => testB.durationMs - testA.durationMs)
+
+    return limit > 0 ? sorted.slice(0, limit) : sorted
+  }
+
+  /**
    * Runs prepare.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -706,6 +719,7 @@ export default class TestRunner {
     this._successfulTests = 0
     this._testsCount = 0
     this._failedTestDetails = []
+    this._testDurations = []
     await this.importTestFiles()
     await this.analyzeTests(tests)
     this._onlyFocussed = this.anyTestsFocussed
@@ -939,6 +953,8 @@ export default class TestRunner {
         const attemptConsoleOutputs = []
 
         console.log(`${leftPadding}it ${testDescription}`)
+
+        const testStartMs = Date.now()
 
         while (true) {
           let shouldRetry = false
@@ -1180,6 +1196,13 @@ export default class TestRunner {
 
           break
         }
+
+        this._testDurations.push({
+          fullDescription: this.buildFullDescription(descriptions, testDescription),
+          filePath: testData.filePath ?? "<unknown>",
+          line: testData.line ?? 0,
+          durationMs: Date.now() - testStartMs
+        })
       }
 
       for (const subDescription in tests.subs) {

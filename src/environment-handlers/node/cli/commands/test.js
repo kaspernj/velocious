@@ -86,6 +86,26 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       process.exit(1)
     }
 
+    // Report the slowest tests so suite hotspots are visible every run. Defaults to
+    // the top 10; tune with VELOCIOUS_SLOW_TEST_COUNT (0 disables). Skipped for
+    // single-test runs where it would just be noise.
+    const rawSlowTestCount = process.env.VELOCIOUS_SLOW_TEST_COUNT
+    const slowTestCount = rawSlowTestCount === undefined ? 10 : Math.max(0, Math.floor(Number(rawSlowTestCount)) || 0)
+
+    if (slowTestCount > 0 && executedTests > 1) {
+      const slowestTests = testRunner.getSlowestTests(slowTestCount)
+
+      if (slowestTests.length > 0) {
+        console.log(picocolors.cyan(`\nSlowest ${slowestTests.length} tests:`))
+
+        for (const slowTest of slowestTests) {
+          const location = slowTest.filePath && slowTest.line ? ` (${slowTest.filePath}:${slowTest.line})` : ""
+
+          console.log(picocolors.cyan(`  ${String(slowTest.durationMs).padStart(6)}ms  ${slowTest.fullDescription}${location}`))
+        }
+      }
+    }
+
     if (testRunner.isFailed()) {
       await testRunner.persistFailedTestConsoleOutputsToAssets()
       const failedTests = testRunner.getFailedTestDetails()
