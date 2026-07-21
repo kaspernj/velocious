@@ -161,4 +161,30 @@ describe("Record - advisory locks", {tags: ["dummy"]}, () => {
       expect(await Task.hasAdvisoryLock(lockName)).toBe(false)
     })
   })
+
+  it("resolves releaseAdvisoryLock to false when this session does not hold the lock", async () => {
+    await Configuration.current().ensureConnections(async () => {
+      const lockName = "velocious-advisory-test-release-unheld"
+
+      // Use a sibling driver so the assertions exercise the driver's real
+      // release path (SQL Server's `sp_releaseapplock`, MySQL's
+      // `RELEASE_LOCK`, PostgreSQL's `pg_advisory_unlock`, the SQLite
+      // emulation) rather than any test-connection sharing.
+      await withSecondConnection(async (connection) => {
+        // Never acquired: releasing must resolve false, not throw. On SQL
+        // Server this is where `sp_releaseapplock` raises the "not currently
+        // held" error the driver has to translate.
+        expect(await connection.releaseAdvisoryLock(lockName)).toBe(false)
+
+        // Acquire once, release once (true), release again (false). The
+        // second release reproduces the shared-connection cleanup case where
+        // the final check-in already auto-released the lock.
+        expect(await connection.tryAcquireAdvisoryLock(lockName)).toBe(true)
+        expect(await connection.releaseAdvisoryLock(lockName)).toBe(true)
+        expect(await connection.releaseAdvisoryLock(lockName)).toBe(false)
+      })
+
+      expect(await Task.hasAdvisoryLock(lockName)).toBe(false)
+    })
+  })
 })
