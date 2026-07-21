@@ -55,6 +55,20 @@ const SORTABLE_COLUMNS = {
   scheduledAtMs: "scheduled_at_ms"
 }
 
+/**
+ * Serializes concurrent `_applySchema` runs within THIS process, keyed by database
+ * identifier. Two stores that share one connection (SingleMultiUse / SQLite)
+ * otherwise interleave the multi-step table rebuild and corrupt it (the jobs table
+ * is left as its `*_velocious_rebuild` temp). A DB advisory lock can't fix that: on
+ * a session-scoped / re-entrant driver (MySQL `GET_LOCK`) a second acquire on the
+ * same session succeeds immediately so both callers proceed, and taking it on a
+ * separate connection blocks cross-session forever. An in-process promise-chain
+ * mutex serializes same-process callers with neither hazard. Cross-process schema
+ * races stay covered by the per-step advisory locks + rechecks inside the steps.
+ * @type {Map<string, Promise<void>>}
+ */
+const schemaApplyChains = new Map()
+
 export default class BackgroundJobsStore {
   /**
    * Runs constructor.
@@ -804,6 +818,31 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
   async _applySchema(db) {
+    // Serialize concurrent schema applies within this process, keyed by database
+    // identifier (see `schemaApplyChains`). The per-step locks inside the steps use
+    // DIFFERENT lock names, so two concurrent callers could otherwise each hold a
+    // different step lock while both rebuild the jobs table — and on SQLite/MSSQL an
+    // add-column is a create-copy-drop-rename rebuild, so overlapping rebuilds
+    // corrupt it. This mutex makes the whole apply mutually exclusive per process;
+    // the second caller then re-checks and finds every step already done.
+    const identifier = this.getDatabaseIdentifier() ?? "default"
+    const previous = schemaApplyChains.get(identifier) ?? Promise.resolve()
+    const run = previous.then(() => this._applySchemaSteps(db), () => this._applySchemaSteps(db))
+
+    // Keep the chain alive regardless of this run's outcome so one failed apply does
+    // not wedge later callers; this run still propagates its own result/error.
+    schemaApplyChains.set(identifier, run.then(() => {}, () => {}))
+
+    return await run
+  }
+
+  /**
+   * Creates or upgrades the background-jobs tables, columns and concurrency rows on
+   * the given connection. Serialized per process by {@link BackgroundJobsStore#_applySchema}.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the schema is present.
+   */
+  async _applySchemaSteps(db) {
     await this._ensureMigrationsTable(db)
 
     const alreadyApplied = await this._hasMigration(db)
