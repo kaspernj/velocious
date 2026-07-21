@@ -7,7 +7,7 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import waitForEvent from "../../src/testing/wait-for-event.js"
 
 describe("BackgroundJobsStatusReporter timeout", () => {
-  it("times out a stalled report and destroys the pending socket", async () => {
+  it("times out a stalled report and forcibly destroys (rather than gracefully closing) the pending socket", async () => {
     // A server that accepts the connection and consumes incoming data but never
     // replies, so the reporter's request stalls waiting for a "job-updated".
     const server = net.createServer((socket) => {
@@ -59,7 +59,20 @@ describe("BackgroundJobsStatusReporter timeout", () => {
       // The timeout must surface as the public TimeoutError from awaitery.
       expect(reportError).toBeInstanceOf(TimeoutError)
 
-      // The pending socket must have been destroyed, not left alive.
+      // Test-only white-box assertion: read the JsonSocket wrapper's own call
+      // counters directly (the underscore fields are internal, not public API). These
+      // are incremented inside the actual JsonSocket.destroy()/close() bodies, so they
+      // are direct evidence of which teardown method ran — not a self-reported flag
+      // that a regression could keep truthful while calling the wrong method. The abort
+      // path must have forcibly destroyed the socket exactly once and never gracefully
+      // closed it; a server-side "close" watcher alone could not rule the latter out
+      // because with allowHalfOpen=false a graceful end() ALSO surfaces as a server "close".
+      const jsonSocket = reporter._lastRequest?._jsonSocket
+
+      expect(jsonSocket?._destroyCallCount).toEqual(1)
+      expect(jsonSocket?._closeCallCount).toEqual(0)
+
+      // The real stalled socket must actually be torn down (integration assertion).
       await serverSocketClosed
     } finally {
       // Destroy the accepted socket if a failed assertion left it open, otherwise

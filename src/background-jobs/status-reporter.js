@@ -22,6 +22,13 @@ export default class BackgroundJobsStatusReporter {
     this.host = host
     this.port = port
     this.attemptTimeoutMs = attemptTimeoutMs
+    /**
+     * Internal test-only observability state — NOT public API. References the most
+     * recent socket request so the timeout spec can inspect how its socket was torn
+     * down. Do not expose or depend on this outside tests.
+     * @type {BackgroundJobsSocketRequest | undefined}
+     */
+    this._lastRequest = undefined
     this.logger = new Logger(this)
   }
 
@@ -43,6 +50,8 @@ export default class BackgroundJobsStatusReporter {
 
     await timeout({timeout: this.attemptTimeoutMs}, async ({control}) => {
       const request = new BackgroundJobsSocketRequest({host, port, role: "reporter"})
+
+      this._lastRequest = request
 
       await request.run({
         signal: control.signal,
