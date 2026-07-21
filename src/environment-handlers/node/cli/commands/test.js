@@ -89,8 +89,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     // Report the slowest tests so suite hotspots are visible every run. Defaults to
     // the top 10; tune with VELOCIOUS_SLOW_TEST_COUNT (0 disables). Skipped for
     // single-test runs where it would just be noise.
-    const rawSlowTestCount = process.env.VELOCIOUS_SLOW_TEST_COUNT
-    const slowTestCount = rawSlowTestCount === undefined ? 10 : Math.max(0, Math.floor(Number(rawSlowTestCount)) || 0)
+    const slowTestCount = resolveSlowTestCount(process.env.VELOCIOUS_SLOW_TEST_COUNT)
 
     if (slowTestCount > 0 && executedTests > 1) {
       const slowestTests = testRunner.getSlowestTests(slowTestCount)
@@ -135,4 +134,17 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       process.exit(0)
     }
   }
+}
+
+/**
+ * Resolves how many slowest tests to report from the `VELOCIOUS_SLOW_TEST_COUNT`
+ * env value: defaults to 10 when unset; 0 (or an unparseable value) disables the
+ * report; otherwise the floored, non-negative integer.
+ * @param {string | undefined} rawEnvValue - Raw env value.
+ * @returns {number} - Number of slowest tests to report (0 disables).
+ */
+export function resolveSlowTestCount(rawEnvValue) {
+  if (rawEnvValue === undefined) return 10
+
+  return Math.max(0, Math.floor(Number(rawEnvValue)) || 0)
 }
