@@ -29,3 +29,20 @@ run. Each line shows the duration, full description and `file:line`.
 
 `TestRunner#getSlowestTests(limit = 10)` exposes the same data programmatically
 (slowest first; `limit` of `0` returns every recorded test).
+
+## Avoiding fixed sleeps
+Never `await wait(<fixed ms>)` to let something async settle — it is both slow and
+flaky (too short and it races, too long and it wastes wall-clock). Wait for the real
+signal or condition instead:
+
+- **Event-driven (a discrete signal):** `waitForEvent(emitter, eventName, {timeoutMs,
+  filter})` from `velocious/build/src/testing/test.js` resolves the instant the event
+  fires (optionally only when `filter` matches the emitted arguments) and rejects on
+  timeout. It always removes its listener. Use it for a background job finishing, a
+  model lifecycle event, a websocket message, etc.
+- **Condition polling (no discrete event):** awaitery's `waitFor(callback, {timeout,
+  wait})` retries `callback` until it stops throwing (default 5s timeout, 50ms
+  interval). Use it when there is no event to hook, e.g. `await waitFor(() =>
+  expect(rows.length).toEqual(3))`.
+- **System/browser tests:** wait for the expected element to appear rather than
+  sleeping before interacting with it.

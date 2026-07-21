@@ -4,6 +4,7 @@ import path from "path"
 import {fileURLToPath} from "url"
 import EventEmitter from "../utils/event-emitter.js"
 import Expect from "./expect.js"
+import waitForEvent from "./wait-for-event.js"
 import {arrayContaining, objectContaining} from "./expect-utils.js"
 
 /**
@@ -351,7 +352,7 @@ globalThis.fit = fit
 globalThis.testEvents = testEvents
 globalThis.configureTests = configureTests
 
-export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests}
+export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests, waitForEvent}
 /**
  * VelociousTestConfig type.
  * @typedef {object} VelociousTestConfig

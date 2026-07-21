@@ -141,6 +141,19 @@ Slowest 10 tests:
 
 The report is skipped for single-test runs. See [docs/testing-guidelines.md](docs/testing-guidelines.md).
 
+Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`.
+
+```js
+import {waitForEvent} from "velocious/build/src/testing/test.js"
+import waitFor from "awaitery/build/wait-for.js"
+
+// Event-driven: resolves as soon as the matching event fires (no polling latency).
+const {result} = await waitForEvent(jobRunner, "jobFinished", {filter: (event) => event.jobId === jobId})
+
+// Condition polling: retries the callback until it stops throwing.
+await waitFor(() => expect(await Message.count()).toEqual(1))
+```
+
 Velocious captures console output emitted while each test executes, but does not print passing-test output by default. When a test fails, Velocious prints a truncated `Console output:` block for that failed test and saves the full captured log under `tmp/screenshots` next to failure screenshots/browser logs/HTML. Each failed test summary prints the saved console log path.
 
 Configure console output behavior in your testing config file.
