@@ -93,4 +93,14 @@ export default class JsonSocket extends EventEmitter {
   close() {
     this.socket.end()
   }
+
+  /**
+   * Forcibly destroys the underlying socket. Unlike {@link close}, which
+   * half-closes gracefully via `end()`, this tears the connection down
+   * immediately so a stalled/aborted request does not leave the socket alive.
+   * @returns {void}
+   */
+  destroy() {
+    this.socket.destroy()
+  }
 }
