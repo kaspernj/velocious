@@ -104,3 +104,15 @@ When a fresh database is created from a structure file via `db:schema:load`, tho
 Without the embedded ledger rows, loading a structure dump would produce a database with all the post-migration tables but an empty `schema_migrations` table. The next `db:migrate` would then attempt to re-run every migration, causing duplicate-table errors or migration-version conflicts against the already-present schema.
 
 For this reason checked-in structure files are expected to contain `schema_migrations` row data as part of their normal output. The migration ledger rows serve as the authoritative record of which migrations the snapshot represents, and should be committed to version control alongside the DDL.
+
+### Loading a structure dump programmatically
+
+`db:schema:load` delegates to `StructureSqlLoader`, which is reusable for provisioning a database from a structure dump outside the CLI — for example creating a tenant or test database:
+
+```js
+import StructureSqlLoader from "velocious/build/src/database/structure-sql-loader.js"
+
+await new StructureSqlLoader().load({db, structureSql})
+```
+
+`load({db, structureSql})` splits the dump into statements, disables foreign keys around the load (so tables can be created regardless of the order they reference each other), and executes the whole dump through the driver's native multi-statement `exec` in a single round-trip when the driver supports it (falling back to per-statement execution otherwise). Loading a structure dump this way is much faster than creating or altering tables one at a time, so it is the preferred way to materialize a schema for a tenant or test database.

@@ -1187,6 +1187,16 @@ npx velocious db:schema:load
 
 `db:schema:load` reads `db/structure-<identifier>.sql` for each configured database identifier and executes those statements against the current connections. Because the structure file includes the migration ledger rows, a load marks every listed version as already applied. The next `db:migrate` sees those versions and skips them, so migrations whose schema changes are already part of the loaded structure do not run again.
 
+The same load logic is available programmatically for provisioning a database from a structure dump (for example a tenant or test database) in one pass — much faster than materializing a schema table by table:
+
+```js
+import StructureSqlLoader from "velocious/build/src/database/structure-sql-loader.js"
+
+await new StructureSqlLoader().load({db, structureSql})
+```
+
+`load({db, structureSql})` disables foreign keys around the load (so the order tables reference each other in the dump does not matter) and uses the driver's native multi-statement `exec` in a single round-trip when available. See [docs/database-migrations.md](docs/database-migrations.md).
+
 ## Schema metadata cache
 
 Velocious caches schema metadata on each database driver instance so repeated model initialization, table lookups, column introspection, and structure SQL generation can reuse the same database results. The cache is cleared automatically after schema-changing SQL runs through Velocious, such as migrations, `createTable`, `dropTable`, `renameColumn`, `ALTER TABLE`, `CREATE INDEX`, and `COMMENT ON`. See [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md) for details.
