@@ -119,6 +119,28 @@ it("retries a flaky check", {retry: 2}, async () => {})
 })
 ```
 
+Velocious prints the slowest tests after every run so suite hotspots are easy to spot. Each line shows the duration, full description and `file:line`.
+
+```bash
+# Default: the 10 slowest tests are printed after the run summary.
+npx velocious test
+
+# Report the 25 slowest tests instead.
+VELOCIOUS_SLOW_TEST_COUNT=25 npx velocious test
+
+# Disable the report.
+VELOCIOUS_SLOW_TEST_COUNT=0 npx velocious test
+```
+
+```
+Slowest 10 tests:
+    1145ms  Background jobs - store backfills execution modes for legacy queued jobs (spec/background-jobs/store-spec.js:984)
+     913ms  Background jobs - store prunes completed rows past the retention window (spec/background-jobs/store-spec.js:825)
+    ...
+```
+
+The report is skipped for single-test runs. See [docs/testing-guidelines.md](docs/testing-guidelines.md).
+
 Velocious captures console output emitted while each test executes, but does not print passing-test output by default. When a test fails, Velocious prints a truncated `Console output:` block for that failed test and saves the full captured log under `tmp/screenshots` next to failure screenshots/browser logs/HTML. Each failed test summary prints the saved console log path.
 
 Configure console output behavior in your testing config file.
