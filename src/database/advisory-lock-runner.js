@@ -67,9 +67,12 @@ export default class AdvisoryLockRunner {
 
   /**
    * Runs a callback after acquiring the advisory lock, waiting up to `timeoutMs`.
+   * When a `holdTimeoutMs` is set the callback receives a `TimeoutControl` from
+   * awaitery for cooperative cancellation (`control.check()`, `control.signal`,
+   * `control.timedOut`, `control.remaining()`).
    * @template T
    * @param {string} name - Lock name.
-   * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {(control?: import("awaitery/build/timeout.js").TimeoutControl) => Promise<T>} callback - Callback to invoke while the lock is held.
    * @param {{timeoutMs?: number | null, holdTimeoutMs?: number | null}} [args] - Lock and hold timeout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
@@ -87,9 +90,11 @@ export default class AdvisoryLockRunner {
 
   /**
    * Runs a callback only if the advisory lock can be acquired immediately.
+   * When a `holdTimeoutMs` is set the callback receives a `TimeoutControl` from
+   * awaitery for cooperative cancellation.
    * @template T
    * @param {string} name - Lock name.
-   * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {(control?: import("awaitery/build/timeout.js").TimeoutControl) => Promise<T>} callback - Callback to invoke while the lock is held.
    * @param {{holdTimeoutMs?: number | null}} [args] - Hold timeout options.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
@@ -108,7 +113,7 @@ export default class AdvisoryLockRunner {
   /**
    * Runs the lock holder callback and releases the lock from its owning connection.
    * @template T
-   * @param {{callback: () => Promise<T>, connection: import("./drivers/base.js").default, holdTimeoutMs?: number | null, name: string}} args - Locked callback args.
+   * @param {{callback: (control?: import("awaitery/build/timeout.js").TimeoutControl) => Promise<T>, connection: import("./drivers/base.js").default, holdTimeoutMs?: number | null, name: string}} args - Locked callback args.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async runLockedCallback({callback, connection, holdTimeoutMs, name}) {
@@ -160,9 +165,13 @@ export default class AdvisoryLockRunner {
    * Runs `callback`, rejecting with `AdvisoryLockHoldTimeoutError` if it has
    * not settled within `holdTimeoutMs`. The callback is not cancelled; callers
    * use a dedicated advisory-lock connection so the lock can still be released.
+   *
+   * The callback receives a `TimeoutControl` from awaitery, enabling cooperative
+   * cancellation via `control.check()`, `control.signal`, `control.timedOut`,
+   * and `control.remaining()`.
    * @template T
    * @param {string} name - Lock name (for the error message).
-   * @param {() => Promise<T>} callback - Callback holding the lock.
+   * @param {(control?: import("awaitery/build/timeout.js").TimeoutControl) => Promise<T>} callback - Callback holding the lock.
    * @param {number | null} [holdTimeoutMs] - Max hold time; falsy disables the timeout.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
@@ -174,9 +183,9 @@ export default class AdvisoryLockRunner {
     let callbackSettled = false
 
     try {
-      return await timeout({timeout: holdTimeoutMs}, async () => {
+      return await timeout({timeout: holdTimeoutMs}, async (control) => {
         try {
-          return await callback()
+          return await callback(control)
         } finally {
           callbackSettled = true
         }
