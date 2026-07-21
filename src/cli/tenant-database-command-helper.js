@@ -2,19 +2,25 @@
 
 import TenantIterator from "../tenants/tenant-iterator.js"
 
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000
+
 export default class TenantDatabaseCommandHelper {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("./base-command.js").default} args.command - CLI command instance.
+   * @param {number} [args.heartbeatIntervalMs] - Interval between progress heartbeats.
    * @param {string | undefined} args.identifier - Tenant database identifier.
+   * @param {(message: string) => void} [args.output] - Progress output handler.
    */
-  constructor({command, identifier}) {
+  constructor({command, heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS, identifier, output = console.log}) {
     if (!identifier) throw new Error("Missing tenant database identifier argument")
 
     this.command = command
     this.configuration = command.getConfiguration()
+    this.heartbeatIntervalMs = heartbeatIntervalMs
     this.identifier = identifier
+    this.output = output
     this.provider = this.configuration.getTenantDatabaseProvider(identifier)
   }
 
@@ -78,13 +84,42 @@ export default class TenantDatabaseCommandHelper {
    */
   async eachTenant(callback) {
     const tenants = await this.listTenants()
+    const commandName = this.command.processArgs?.[0] || "db:tenants"
+    const parallelCount = this.parallelCount()
+    const progressPrefix = `${commandName} ${this.identifier}`
+    let activeTenantCount = 0
+    let completedTenantCount = 0
     const iterator = new TenantIterator({
       configuration: this.configuration,
       identifier: this.identifier,
-      parallelCount: this.parallelCount()
+      parallelCount
     })
+    const progressHeartbeat = setInterval(() => {
+      this.output(`${progressPrefix}: heartbeat: ${completedTenantCount}/${tenants.length} completed, ${activeTenantCount} active`)
+    }, this.heartbeatIntervalMs)
 
-    return await iterator.run(tenants, callback)
+    progressHeartbeat.unref()
+    this.output(`${progressPrefix}: processing ${tenants.length} tenant(s) with parallelism ${parallelCount}`)
+
+    try {
+      const processedTenantCount = await iterator.run(tenants, async (args) => {
+        activeTenantCount++
+
+        try {
+          await callback(args)
+          completedTenantCount++
+          this.output(`${progressPrefix}: completed ${TenantIterator.tenantLabel(args.tenant)} (${completedTenantCount}/${tenants.length})`)
+        } finally {
+          activeTenantCount--
+        }
+      })
+
+      this.output(`${progressPrefix}: finished ${processedTenantCount}/${tenants.length} tenant(s)`)
+
+      return processedTenantCount
+    } finally {
+      clearInterval(progressHeartbeat)
+    }
   }
 
   /**
