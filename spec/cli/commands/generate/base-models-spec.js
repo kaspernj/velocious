@@ -1,3 +1,5 @@
+// @ts-check
+
 import {describe, expect, it} from "../../../../src/testing/test.js"
 import Cli from "../../../../src/cli/index.js"
 import dummyConfiguration from "../../../dummy/src/config/configuration.js"
@@ -120,6 +122,8 @@ describe("Cli - generate - base-models", () => {
     expect(taskContents).not.toContain("_writeAttributesType")
     expect(taskContents).not.toContain("@returns {Promise<DatabaseRecord>} - Persisted record.")
     expect(taskContents).not.toContain("@param {Record<string, ?>} [attributes] - Attributes for the new record.")
+    expect(taskContents).toContain('this.relationshipOrLoad("project"))')
+    expect(taskContents).not.toContain('this.relationshipOrLoad("project", {preloadTranslations: true})')
   })
 
   it("keeps generated backend write attributes on inherited create and update", {tags: ["mssql"]}, async () => {

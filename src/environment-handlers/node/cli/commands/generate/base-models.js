@@ -1,3 +1,5 @@
+// @ts-check
+
 import BaseCommand from "../../../../../cli/base-command.js"
 import deburrColumnName from "../../../../../utils/deburr-column-name.js"
 import fileExists from "../../../../../utils/file-exists.js"
@@ -339,7 +341,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "  /**\n"
           fileContent += `   * @returns {Promise<import("${modelFilePath}").default | undefined>}\n`
           fileContent += "   */\n"
-          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}", {preloadTranslations: true})) }\n`
+          fileContent += `  ${relationship.getRelationshipName()}OrLoad() { return /** @type {Promise<import("${modelFilePath}").default | undefined>} */ (this.relationshipOrLoad("${relationship.getRelationshipName()}")) }\n`
 
           fileContent += "\n"
           fileContent += "  /**\n"

@@ -138,7 +138,7 @@ export default class UserBase extends DatabaseRecord {
   /**
    * @returns {Promise<import("../models/project.js").default | undefined>}
    */
-  createdProjectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("createdProject", {preloadTranslations: true})) }
+  createdProjectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("createdProject")) }
 
   /**
    * @abstract
