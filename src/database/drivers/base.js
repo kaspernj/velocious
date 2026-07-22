@@ -584,6 +584,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Executes a whole multi-statement structure SQL script in a single round-trip when
+   * the driver supports it, running on this connection (so the caller's foreign-key
+   * handling applies). Returns true if it ran the whole script; false when the caller
+   * should run the statements individually. The base driver has no batch path.
+   * @param {string} _structureSql - Full multi-statement structure SQL.
+   * @returns {Promise<boolean>} - Whether the script was executed as one batch.
+   */
+  async execStructureScript(_structureSql) {
+    return false
+  }
+
+  /**
    * Runs get table by name.
    * @param {string} name - Name.
    * @param {object} [args] - Options object.

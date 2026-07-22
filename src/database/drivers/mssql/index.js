@@ -23,6 +23,17 @@ import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
 import UUID from "pure-uuid"
 
+/**
+ * SQL Server error number raised by `sp_releaseapplock` when the current
+ * session does not hold the requested application lock. Releasing a lock the
+ * session no longer holds is a normal race (a shared connection's final
+ * check-in may already have auto-released it), which the cross-driver
+ * `releaseAdvisoryLock` contract models by resolving to `false`. We translate
+ * this specific error into that result rather than letting it escape.
+ * @type {number}
+ */
+const APPLOCK_NOT_HELD_ERROR_NUMBER = 1223
+
 export default class VelociousDatabaseDriversMssql extends Base{
   async connect() {
     const args = this.getArgs()
@@ -640,16 +651,54 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   /**
    * Runs release advisory lock.
+   *
+   * `sp_releaseapplock` returns 0 when the lock was released, but SQL Server
+   * raises error {@link APPLOCK_NOT_HELD_ERROR_NUMBER} instead of returning a
+   * failure code when the session does not currently hold the lock. That
+   * error aborts the batch before the trailing `SELECT` can run, so we catch
+   * it and resolve to `false` to honor the cross-driver contract for an
+   * already-unheld lock.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if the lock was held by this session and has now been released.
    */
   async _releaseAdvisoryLock(name) {
-    const rows = await this.query(
-      `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_releaseapplock @Resource = ${this.quote(name)}, @LockOwner = 'Session'; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
-    )
+    let rows
+
+    try {
+      rows = await this.query(
+        `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_releaseapplock @Resource = ${this.quote(name)}, @LockOwner = 'Session'; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
+      )
+    } catch (error) {
+      if (this._isApplockNotHeldError(error)) return false
+
+      throw error
+    }
+
     const result = Number(rows?.[0]?.velocious_advisory_lock_result)
 
     return result === 0
+  }
+
+  /**
+   * Detects the SQL Server "application lock is not currently held" error
+   * raised by `sp_releaseapplock`. It walks the wrapped-error cause chain
+   * because `query` re-wraps the driver's `RequestError` in a plain `Error`,
+   * and matches on the stable numeric error number rather than the message.
+   * @param {unknown} error - Error thrown while releasing the lock.
+   * @returns {boolean} - True if the error means the lock was not held by this session.
+   */
+  _isApplockNotHeldError(error) {
+    let current = error
+
+    while (current instanceof Error) {
+      const errorNumber = /** @type {{number?: unknown}} */ (current).number
+
+      if (typeof errorNumber === "number" && errorNumber === APPLOCK_NOT_HELD_ERROR_NUMBER) return true
+
+      current = current.cause
+    }
+
+    return false
   }
 
   /**

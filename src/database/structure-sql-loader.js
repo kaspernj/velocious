@@ -31,17 +31,23 @@ export default class StructureSqlLoader {
     await db.disableForeignKeys()
 
     try {
-      if (executableConnection) {
-        await executableConnection.exec(structureSql)
-      } else {
-        for (const statement of statements) {
-          await db.query(statement)
+      // Prefer a single round-trip for the whole dump: a driver-native multi-statement
+      // batch (e.g. MySQL with `multipleStatements`) first, then a native `exec`
+      // connection (e.g. SQLite), and finally per-statement execution. Running the
+      // whole dump at once is far faster than issuing every CREATE separately.
+      if (!await db.execStructureScript(structureSql)) {
+        if (executableConnection) {
+          await executableConnection.exec(structureSql)
+        } else {
+          for (const statement of statements) {
+            await db.query(statement)
+          }
         }
       }
     } finally {
       await db.enableForeignKeys()
 
-      // The native `exec` path mutates the schema outside `Base#query`, so the
+      // The batch / native `exec` paths mutate the schema outside `Base#query`, so the
       // usual post-DDL schema-cache invalidation never runs. Clear it here so a
       // caller that read schema metadata before provisioning (e.g. an empty table
       // list) does not keep seeing the pre-load schema afterwards. Harmless for the

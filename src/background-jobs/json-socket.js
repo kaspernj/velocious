@@ -44,6 +44,19 @@ export default class JsonSocket extends EventEmitter {
      * the main's liveness sweep to drop a wedged/silent worker.
      * @type {number | undefined} */
     this.lastSeenAt = undefined
+    /**
+     * Internal test-only observability counter — NOT public API. Number of times
+     * `destroy()` has run, incremented immediately before the raw socket
+     * `destroy()` call so specs can assert the actual teardown method that ran
+     * rather than a self-reported flag. Do not read or depend on this outside tests.
+     * @type {number} */
+    this._destroyCallCount = 0
+    /**
+     * Internal test-only observability counter — NOT public API. Number of times
+     * `close()` has run, incremented immediately before the raw socket `end()`
+     * call. Do not read or depend on this outside tests.
+     * @type {number} */
+    this._closeCallCount = 0
     this.buffer = ""
     this.socket.setEncoding("utf8")
     this.socket.on("data", (chunk) => this._onData(String(chunk)))
@@ -91,6 +104,18 @@ export default class JsonSocket extends EventEmitter {
    * @returns {void}
    */
   close() {
+    this._closeCallCount++
     this.socket.end()
+  }
+
+  /**
+   * Forcibly destroys the underlying socket. Unlike {@link close}, which
+   * half-closes gracefully via `end()`, this tears the connection down
+   * immediately so a stalled/aborted request does not leave the socket alive.
+   * @returns {void}
+   */
+  destroy() {
+    this._destroyCallCount++
+    this.socket.destroy()
   }
 }

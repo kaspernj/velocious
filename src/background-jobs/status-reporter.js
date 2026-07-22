@@ -15,11 +15,20 @@ export default class BackgroundJobsStatusReporter {
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.host] - Host.
    * @param {number} [args.port] - Port.
+   * @param {number} [args.attemptTimeoutMs] - Per-attempt socket-request timeout in milliseconds (default: 5000).
    */
-  constructor({configuration, host, port}) {
+  constructor({configuration, host, port, attemptTimeoutMs = 5000}) {
     this.configuration = configuration
     this.host = host
     this.port = port
+    this.attemptTimeoutMs = attemptTimeoutMs
+    /**
+     * Internal test-only observability state — NOT public API. References the most
+     * recent socket request so the timeout spec can inspect how its socket was torn
+     * down. Do not expose or depend on this outside tests.
+     * @type {BackgroundJobsSocketRequest | undefined}
+     */
+    this._lastRequest = undefined
     this.logger = new Logger(this)
   }
 
@@ -39,10 +48,13 @@ export default class BackgroundJobsStatusReporter {
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
 
-    await timeout({timeout: 5000}, async () => {
+    await timeout({timeout: this.attemptTimeoutMs}, async ({control}) => {
       const request = new BackgroundJobsSocketRequest({host, port, role: "reporter"})
 
+      this._lastRequest = request
+
       await request.run({
+        signal: control.signal,
         onConnect: (jsonSocket) => {
           jsonSocket.send({
             type: status === "completed" ? "job-complete" : "job-failed",
