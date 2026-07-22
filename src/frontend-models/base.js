@@ -9,6 +9,7 @@ import {normalizeDateStringForWrite} from "../database/datetime-storage.js"
 import {registerFrontendModel, resolveFrontendModelClass} from "./model-registry.js"
 import {validateFrontendModelResourceCommandName, validateFrontendModelResourcePath} from "./resource-config-validation.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import runWithTransportDeadline from "./transport-deadline.js"
 import {REQUEST_TIME_ZONE_HEADER, validateTimeZone} from "../time-zone.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
@@ -112,8 +113,10 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. This should be the shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`).
  * @property {boolean} [shared] - Deprecated shared-endpoint flag retained for compatibility. Frontend-model CRUD/custom commands use the shared frontend-model API envelope by default.
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
- * @property {{post: (path: string, body?: ?, options?: {headers?: Record<string, string>}) => Promise<{json: () => ?}>, subscribe: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions.
+ * @property {{post: (path: string, body?: ?, options?: {headers?: Record<string, string>, signal?: AbortSignal}) => Promise<{json: () => ?}>, subscribe: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions. Its `post` receives the bounded-deadline `signal` and should forward it into the underlying transport so the deadline can abort the live request and its response-body read.
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
+ * @property {number | (() => number | undefined | null)} [timeout] - Bounded deadline in milliseconds covering connection, response headers, and response-body consumption for each frontend-model API request. On expiry the live fetch/adapter request is aborted (built on awaitery's `timeout`) and awaitery's `TimeoutError` is thrown, so callers can classify a timeout via `error instanceof TimeoutError`. Pass a function to resolve it per request. Falsy/absent means no deadline.
+ * @property {AbortSignal | (() => AbortSignal | undefined | null)} [signal] - Optional caller/session AbortSignal composed with the deadline. Aborting it cancels the live request (for example on session shutdown or offline transition); the resulting abort error stays distinguishable from a timeout. Pass a function to resolve the current signal per request.
  * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
  * @property {string | (() => string | null | undefined)} [timeZone] - IANA timezone sent with every frontend-model API request for timezone-less datetime parsing.
  * @property {{actorDeviceId: string, actorUserId: string, clientMutationId?: () => string, enabled?: boolean, mutationLog: import("../sync/local-mutation-log.js").default, now?: () => Date, offlineGrant: {id: string}}} [offlineSync] - Offline mutation queue configuration.
@@ -1754,6 +1757,34 @@ function frontendModelRequestHeaders(timeZone = frontendModelTransportTimeZone()
 }
 
 /**
+ * Resolves the configured bounded transport deadline in milliseconds.
+ * @returns {number | undefined} - Configured deadline, or undefined when no deadline is set.
+ */
+function frontendModelTransportTimeoutMs() {
+  const configuredTimeout = typeof frontendModelTransportConfig.timeout === "function"
+    ? frontendModelTransportConfig.timeout()
+    : frontendModelTransportConfig.timeout
+
+  if (typeof configuredTimeout !== "number" || !(configuredTimeout > 0)) {
+    return undefined
+  }
+
+  return configuredTimeout
+}
+
+/**
+ * Resolves the configured caller/session AbortSignal composed with the deadline.
+ * @returns {AbortSignal | undefined} - Configured caller signal, or undefined when none is set.
+ */
+function frontendModelTransportSignal() {
+  const configuredSignal = typeof frontendModelTransportConfig.signal === "function"
+    ? frontendModelTransportConfig.signal()
+    : frontendModelTransportConfig.signal
+
+  return configuredSignal || undefined
+}
+
+/**
  * Runs perform shared frontend model api request.
  * @param {Record<string, ?>} requestPayload - Shared request payload.
  * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
@@ -1765,35 +1796,46 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
   const url = frontendModelApiUrl()
   const mergedHeaders = frontendModelRequestHeaders(timeZone)
 
-  if (websocketClient) {
-    const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
-      headers: mergedHeaders
-    })
-    const responseJson = response.json()
+  return await runWithTransportDeadline(
+    {
+      errorMessage: "Shared frontend model API request timed out",
+      signal: frontendModelTransportSignal(),
+      timeoutMs: frontendModelTransportTimeoutMs()
+    },
+    async (signal) => {
+      if (websocketClient) {
+        const response = await websocketClient.post(frontendModelTransportPath(url), serializedRequestPayload, {
+          headers: mergedHeaders,
+          signal
+        })
+        const responseJson = response.json()
 
-    return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(responseJson))
-  }
+        return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(responseJson))
+      }
 
-  const response = await fetch(url, {
-    body: JSON.stringify(serializedRequestPayload),
-    credentials: "include",
-    headers: mergedHeaders,
-    method: "POST"
-  })
+      const response = await fetch(url, {
+        body: JSON.stringify(serializedRequestPayload),
+        credentials: "include",
+        headers: mergedHeaders,
+        method: "POST",
+        signal
+      })
 
-  const responseText = await response.text()
+      const responseText = await response.text()
 
-  if (!response.ok) {
-    throwFrontendModelHttpError({
-      commandLabel: "shared frontend model API",
-      response,
-      responseText
-    })
-  }
+      if (!response.ok) {
+        throwFrontendModelHttpError({
+          commandLabel: "shared frontend model API",
+          response,
+          responseText
+        })
+      }
 
-  const json = responseText.length > 0 ? JSON.parse(responseText) : {}
+      const json = responseText.length > 0 ? JSON.parse(responseText) : {}
 
-  return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
+      return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
+    }
+  )
 }
 
 /**
@@ -2860,6 +2902,14 @@ export default class FrontendModelBase {
 
     if (Object.prototype.hasOwnProperty.call(config, "requestHeaders")) {
       frontendModelTransportConfig.requestHeaders = config.requestHeaders
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "timeout")) {
+      frontendModelTransportConfig.timeout = config.timeout
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "signal")) {
+      frontendModelTransportConfig.signal = config.signal
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "timeZone")) {
@@ -4428,34 +4478,42 @@ export default class FrontendModelBase {
       return decodedBatchResponse
     }
 
-    return await trackFrontendModelTransportRequest(async () => {
-      const directResponse = await fetch(url, {
-        body: JSON.stringify(serializedPayload),
-        credentials: "include",
-        headers: frontendModelRequestHeaders(timeZone),
-        method: "POST"
-      })
-
-      const directResponseText = await directResponse.text()
-
-      if (!directResponse.ok) {
-        throwFrontendModelHttpError({
-          commandLabel: `${this.name}#${commandType}`,
-          response: directResponse,
-          responseText: directResponseText
+    return await trackFrontendModelTransportRequest(async () => runWithTransportDeadline(
+      {
+        errorMessage: `${this.name}#${commandType} request timed out`,
+        signal: frontendModelTransportSignal(),
+        timeoutMs: frontendModelTransportTimeoutMs()
+      },
+      async (signal) => {
+        const directResponse = await fetch(url, {
+          body: JSON.stringify(serializedPayload),
+          credentials: "include",
+          headers: frontendModelRequestHeaders(timeZone),
+          method: "POST",
+          signal
         })
+
+        const directResponseText = await directResponse.text()
+
+        if (!directResponse.ok) {
+          throwFrontendModelHttpError({
+            commandLabel: `${this.name}#${commandType}`,
+            response: directResponse,
+            responseText: directResponseText
+          })
+        }
+
+        const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
+        const decodedDirectResponse = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(directJson))
+
+        this.throwOnErrorFrontendModelResponse({
+          commandType,
+          response: decodedDirectResponse
+        })
+
+        return decodedDirectResponse
       }
-
-      const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
-      const decodedDirectResponse = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(directJson))
-
-      this.throwOnErrorFrontendModelResponse({
-        commandType,
-        response: decodedDirectResponse
-      })
-
-      return decodedDirectResponse
-    })
+    ))
   }
 
   /**
