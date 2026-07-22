@@ -269,7 +269,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
 class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Comment
 
-    static attributes = ["id", "body"]
+    static attributes = ["id", "body", {name: "requestBaseUrl", selectedByDefault: false}]
 
   static builtInCollectionCommands = ["index"]
 
@@ -278,6 +278,21 @@ class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
   /** @returns {Array<string>} - Permit spec for Comment writes. */
   permittedParams() {
     return ["body"]
+  }
+
+  /**
+   * Controller-dependent virtual attribute mirroring an app resource that signs a
+   * download URL against the request. It reaches for the controller via
+   * `controllerInstance()`, which throws "requires a controller instance." unless the
+   * serialization resource has a controller — the exact gap that broke preloaded
+   * relationships until the controller was propagated to them.
+   * @param {import("../models/comment.js").default} model - Comment model instance.
+   * @returns {string} - The request base URL.
+   */
+  requestBaseUrlAttribute(model) {
+    void model
+
+    return this.controllerInstance().request().baseURL()
   }
 }
 
