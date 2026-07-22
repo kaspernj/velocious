@@ -628,6 +628,7 @@ Available transport options:
 
 - `url` (can also be a relative path like `"/frontend-models"` on web)
 - `timeZone` (an IANA timezone string or a function returning one). Browser clients auto-detect this when it is not configured. Frontend-model datetime strings without an explicit timezone are interpreted in this request timezone and stored/queried as UTC instants.
+- `timeout` (milliseconds or a function returning milliseconds) bounds each request, while `signal` (an `AbortSignal` or a function returning one) supports caller cancellation. See [docs/frontend-models.md](docs/frontend-models.md#core-transport) for timeout and cancellation behavior.
 
 Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle needs to wait for queued, scheduled, and active frontend-model transport requests to finish before resetting state.
 
