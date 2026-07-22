@@ -1192,7 +1192,11 @@ export default class BackgroundJobsWorker {
     if (!this.statusReporter) return
 
     try {
-      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId})
+      // Retry a transient persist failure (`job-update-error`): the worker is
+      // long-lived and cannot exit to trigger orphan reclaim, so dropping the
+      // completion here would strand the job in `handed_off` forever — fatal for a
+      // `max_concurrency: 1` job (a stranded row blocks every future run).
+      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId, retryPersistErrors: true})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }
