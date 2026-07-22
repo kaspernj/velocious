@@ -44,6 +44,30 @@ describe("Factory - registry lifecycle", () => {
     await expect(async () => await registry.attributesFor("widget")).toThrow(/No factory/)
   })
 
+  it("reset drops event handlers and restarts invocation correlation ids", async () => {
+    const registry = createFactoryRegistry()
+    /** @type {string[]} */
+    const invocationIds = []
+
+    registry.define(({factory}) => factory("widget", ModelDouble, ({attribute}) => attribute("name", "Widget")))
+    registry.on("start", ({invocationId}) => invocationIds.push(invocationId))
+
+    await registry.attributesFor("widget")
+    registry.reset()
+    registry.define(({factory}) => factory("widget", ModelDouble, ({attribute}) => attribute("name", "Reset widget")))
+    await registry.attributesFor("widget")
+
+    expect(invocationIds).toEqual(["factory-invocation-1"])
+
+    /** @type {string[]} */
+    const resetInvocationIds = []
+
+    registry.on("start", ({invocationId}) => resetInvocationIds.push(invocationId))
+    await registry.attributesFor("widget")
+
+    expect(resetInvocationIds).toEqual(["factory-invocation-2"])
+  })
+
   it("rewindSequences resets counters while leaving definitions intact", async () => {
     const registry = createFactoryRegistry()
 
@@ -99,5 +123,19 @@ describe("Factory - registry lifecycle", () => {
     })
 
     await expect(async () => await registry.attributesFor("widget")).toThrow(/setup-time only/)
+  })
+
+  it("unwinds the active evaluation count when a start listener throws", async () => {
+    const registry = createFactoryRegistry()
+    const throwingListener = () => { throw new Error("listener boom") }
+
+    registry.on("start", throwingListener)
+
+    await expect(async () => await registry.attributesFor("missing")).toThrow("listener boom")
+    registry.off("start", throwingListener)
+
+    registry.define(({factory}) => factory("widget", ModelDouble, ({attribute}) => attribute("name", "Widget")))
+
+    expect((await registry.attributesFor("widget")).name).toEqual("Widget")
   })
 })

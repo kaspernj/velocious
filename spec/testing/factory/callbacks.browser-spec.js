@@ -56,6 +56,24 @@ describe("Factory - callbacks", {tags: ["dummy"]}, () => {
     expect(order).toEqual(["afterBuild", "beforeCreate", "afterCreate"])
   })
 
+  it("exposes evaluated transients to beforeAll and beforeBuild callbacks", async () => {
+    /** @type {string[]} */
+    const seen = []
+
+    registry.define(({factory}) => {
+      factory("task", Task, ({attribute, before, transient}) => {
+        attribute("name", "Transient callback task")
+        transient("flag", "ready")
+        before("all", ({context}) => seen.push(`all:${context.flag}`))
+        before("build", ({context}) => seen.push(`build:${context.flag}`))
+      })
+    })
+
+    await registry.build("task")
+
+    expect(seen).toEqual(["all:ready", "build:ready"])
+  })
+
   it("runs a callback reached through multiple composed traits exactly once", async () => {
     let count = 0
 
@@ -108,6 +126,28 @@ describe("Factory - callbacks", {tags: ["dummy"]}, () => {
     expect(caught.message).toEqual("primary failure")
     expect(caught.factoryCleanupErrors).toHaveLength(1)
     expect(caught.factoryCleanupErrors[0].message).toEqual("cleanup failure")
+  })
+
+  it("never masks a frozen primary error with an afterAll cleanup failure", async () => {
+    const primaryError = Object.freeze(new Error("frozen primary"))
+
+    registry.define(({factory}) => {
+      factory("task", Task, ({after, attribute, before}) => {
+        attribute("name", "Frozen failure task")
+        before("build", () => { throw primaryError })
+        after("all", () => { throw new Error("cleanup failure") })
+      })
+    })
+
+    let caught
+
+    try {
+      await registry.build("task")
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBe(primaryError)
   })
 
   it("runs afterAll after a successful build", async () => {

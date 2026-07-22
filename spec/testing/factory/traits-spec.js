@@ -90,4 +90,22 @@ describe("Factory - traits", () => {
 
     expect(await registry.attributesFor("archivedWidget")).toEqual({name: "Widget", active: true})
   })
+
+  it("inherits parent-local traits while resolving inclusions in their declaring-factory scope", async () => {
+    const registry = createFactoryRegistry()
+
+    registry.define(({factory}) => {
+      factory("widget", ModelDouble, ({factory: childFactory, trait}) => {
+        trait("colored", ({attribute}) => attribute("color", "parent"))
+        trait("decorated", ({trait: include}) => include("colored"))
+
+        childFactory("specialWidget", ({trait: childTrait}) => {
+          childTrait("colored", ({attribute}) => attribute("color", "child"))
+        })
+      })
+    })
+
+    expect((await registry.attributesFor("specialWidget", "colored")).color).toEqual("child")
+    expect((await registry.attributesFor("specialWidget", "decorated")).color).toEqual("parent")
+  })
 })

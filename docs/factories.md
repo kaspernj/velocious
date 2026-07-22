@@ -139,8 +139,8 @@ All lazy functions and callbacks may return Promises. Lazy values (including `fa
 ## Strategies
 
 Every strategy returns a Promise, even when all attributes are synchronous. Invocation is
-`strategy(factoryName, ...traitNames, overrides?)` — the final plain object is always the
-overrides.
+`strategy(factoryName, ...traitNames, overrides?)` — traits must precede the optional single
+final overrides object. Strings after overrides and multiple override objects are rejected.
 
 ```js
 const builtProject = await Factory.build("project")                 // constructs, persists nothing
@@ -178,13 +178,20 @@ factory("task", Task, ({association, attribute}) => {
 
 - The association factory name defaults to the relationship name; override it with
   `{factory: "…"}`.
-- Association strategy follows the **parent strategy** by default (`build` → build,
-  `create` → create), or set `{strategy: "build" | "create"}` explicitly.
+- Associations are **built into the parent's graph** by default. `build` returns that unsaved
+  graph; `create` persists only the root and lets native Velocious autosave order its loaded
+  `belongsTo`, `hasOne`, and `hasMany` records. Set `{strategy: "create"}` explicitly only
+  when an association must be persisted independently before it is wired to the parent.
 - An explicit **object or `null` override** suppresses nested factory execution and is
   assigned directly, e.g. `Factory.create("task", {project: existingProject})` reuses the
   passed record and `{project: null}` clears it. Custom foreign/primary keys, scoped, and
   `belongsTo`/`hasOne`/`hasMany` relationships are wired through relationship reflection —
   never guessed names like `projectId`.
+- A call-site override for a `belongsTo` foreign key suppresses that declared association,
+  including when relationship metadata maps a custom column such as
+  `creating_user_reference` to `creatingUserReference`. If both the association object and
+  its foreign key are explicitly supplied, the association object is authoritative and its
+  generated setter determines the key.
 - Only **declared** associations are constructed; the factory never fabricates
   required-looking relationships. Polymorphic/through relationships that can't be resolved
   safely require explicit factory/class information.
@@ -245,6 +252,9 @@ factory("user", User, ({attribute, initializeWith, toCreate, skipCreate}) => {
 
 Undeclared call-site override keys remain assignable when the model contract accepts them
 (they flow through the model's normal setters).
+`initializeWith` does not relax the model contract: the factory must still declare an
+initialized backend `DatabaseRecord` class, and the callback must return an instance of
+that class.
 
 ## Sequences
 
@@ -330,6 +340,10 @@ For attributes/associations the **last applicable declaration wins**, applied in
 An explicit override suppresses the original lazy thunk entirely, and an override for an
 association or transient keeps that slot's nature (associations/transients stay omitted from
 `attributesFor`).
+
+Factory-local traits are inherited by child factories. Trait inclusions resolve in the scope
+of the factory that declared the including trait, so a child's same-named local trait cannot
+change the meaning of a parent trait.
 
 ## Concurrency
 

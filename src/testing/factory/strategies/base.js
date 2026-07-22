@@ -107,10 +107,10 @@ export default class BaseStrategy {
    * @returns {void}
    */
   _attachCleanupFailure(primaryError, cleanupError) {
-    if (primaryError && typeof primaryError === "object") {
-      if (!Array.isArray(primaryError.factoryCleanupErrors)) primaryError.factoryCleanupErrors = []
-      primaryError.factoryCleanupErrors.push(cleanupError)
-    }
+    if (!primaryError || typeof primaryError !== "object" || !Object.isExtensible(primaryError)) return
+
+    if (!Array.isArray(primaryError.factoryCleanupErrors)) primaryError.factoryCleanupErrors = []
+    primaryError.factoryCleanupErrors.push(cleanupError)
   }
 
   /**
@@ -124,11 +124,11 @@ export default class BaseStrategy {
    * @returns {Promise<?>} - The constructed record.
    */
   async _constructRecord(plan, publicAttributes, context, transients) {
-    if (plan.initializeWith) {
-      return await this._constructWithInitializer(plan, publicAttributes, context, transients)
-    }
-
     const ModelClass = assertModelClass(plan.modelClass, plan.factoryName)
+
+    if (plan.initializeWith) {
+      return await this._constructWithInitializer(plan, ModelClass, publicAttributes, context, transients)
+    }
 
     return new ModelClass(publicAttributes)
   }
@@ -138,12 +138,13 @@ export default class BaseStrategy {
    * the constructor consumed through its `get(name)` accessor and assigning only
    * the remaining public attributes afterwards.
    * @param {import("../factory-runner.js").CompiledPlan} plan - Compiled plan.
+   * @param {new (attributes?: Record<string, ?>) => import("../../../database/record/index.js").default} ModelClass - Validated declared model class.
    * @param {Record<string, ?>} publicAttributes - Evaluated public attributes.
    * @param {EvaluationContext} context - Evaluation context.
    * @param {Record<string, ?>} transients - Evaluated transients.
    * @returns {Promise<?>} - The constructed record.
    */
-  async _constructWithInitializer(plan, publicAttributes, context, transients) {
+  async _constructWithInitializer(plan, ModelClass, publicAttributes, context, transients) {
     /** @type {Set<string>} */
     const consumed = new Set()
     const get = (/** @type {string} */ name) => {
@@ -154,8 +155,8 @@ export default class BaseStrategy {
     const initializeWith = /** @type {import("../declarations.js").InitializeWithDeclaration["fn"]} */ (plan.initializeWith)
     const record = await initializeWith({attributes: {...publicAttributes}, get, context: this._callbackContext(context, transients)})
 
-    if (!record || (typeof record !== "object" && typeof record !== "function")) {
-      throw new ModelContractError(`Factory "${plan.factoryName}" initializeWith must return a record instance, got: ${String(record)}`)
+    if (!(record instanceof ModelClass)) {
+      throw new ModelContractError(`Factory "${plan.factoryName}" initializeWith must return an instance of ${ModelClass.name}, got: ${String(record)}`)
     }
 
     /** @type {Record<string, ?>} */

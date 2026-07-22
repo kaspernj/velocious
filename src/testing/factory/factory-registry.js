@@ -21,14 +21,16 @@ function normalizeInvocationArgs(args) {
   const traits = []
   /** @type {Record<string, ?>} */
   let overrides = {}
+  let sawOverrides = false
 
   for (const arg of args) {
-    if (typeof arg === "string") {
+    if (typeof arg === "string" && !sawOverrides) {
       traits.push(arg)
-    } else if (isPlainObject(arg)) {
+    } else if (isPlainObject(arg) && !sawOverrides) {
       overrides = arg
+      sawOverrides = true
     } else if (arg !== undefined) {
-      throw new TypeError(`Invalid factory invocation argument: ${String(arg)}. Expected trait names then an overrides object.`)
+      throw new TypeError(`Invalid factory invocation argument: ${String(arg)}. Expected trait names then a single final overrides object.`)
     }
   }
 
@@ -316,6 +318,7 @@ export default class FactoryRegistry {
     this._sequences.clear()
     this._factorySequences.clear()
     this._globalDeclarations = []
+    this._events = new FactoryEventEmitter()
   }
 
   /**
@@ -354,9 +357,9 @@ export default class FactoryRegistry {
     const invocationId = this._events.nextInvocationId()
     const startedAt = Date.now()
 
-    this._events.emit("start", {invocationId, factory: factoryName, strategy, traits})
-
     try {
+      this._events.emit("start", {invocationId, factory: factoryName, strategy, traits})
+
       const plan = this._runner.compile(factoryName, traits, overrides)
       const result = await this._strategies[strategy].run({registry: this, plan})
 

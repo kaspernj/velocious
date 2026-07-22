@@ -40,6 +40,16 @@ describe("Factory - public API", () => {
     expect(attributes).toEqual({name: "Explicit", state: "archived", flag: true})
   })
 
+  it("rejects traits after overrides and multiple override objects", async () => {
+    Factory.define(({factory, trait}) => {
+      trait("archived", ({attribute}) => attribute("state", "archived"))
+      factory("project", ModelDouble, ({attribute}) => attribute("name", "Project"))
+    })
+
+    await expect(async () => await Factory.attributesFor("project", {name: "Explicit"}, "archived")).toThrow(/Expected trait names then a single final overrides object/)
+    await expect(async () => await Factory.attributesFor("project", {name: "First"}, {name: "Second"})).toThrow(/Expected trait names then a single final overrides object/)
+  })
+
   it("produces attributesForList and attributesForPair", async () => {
     Factory.define(({factory, sequence}) => {
       sequence("n")

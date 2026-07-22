@@ -24,12 +24,12 @@ export default class CreateStrategy extends BaseStrategy {
     const state = () => ({record: runState.record, transients: runState.transients, strategy: "create"})
 
     return await this._runWithAfterAll(context, plan, state, async () => {
+      runState.transients = await context.resolveTransients()
+
       await this._runCallbacks(context, plan, "beforeAll", state())
       await this._runCallbacks(context, plan, "beforeBuild", state())
 
       const {publicAttributes, transients, associations} = await context.resolveForConstruction()
-
-      runState.transients = transients
 
       const record = await this._constructRecord(plan, publicAttributes, context, transients)
 

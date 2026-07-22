@@ -88,6 +88,20 @@ describe("Factory - model integration", {tags: ["dummy"]}, () => {
     await expect(async () => await registry.build("bad")).toThrow(/not a supported Velocious backend record/)
   })
 
+  it("does not let initializeWith bypass the declared backend model contract", async () => {
+    const registry = createFactoryRegistry()
+
+    class NotAModel {}
+
+    registry.define(({factory: defineFactory}) => {
+      defineFactory("badClass", NotAModel, ({initializeWith}) => initializeWith(() => ({})))
+      defineFactory("badRecord", Task, ({initializeWith}) => initializeWith(() => ({})))
+    })
+
+    await expect(async () => await registry.build("badClass")).toThrow(/not a supported Velocious backend record/)
+    await expect(async () => await registry.build("badRecord")).toThrow(/initializeWith must return an instance of Task/)
+  })
+
   it("rejects an uninitialized backend model class with a model-contract error", async () => {
     const registry = createFactoryRegistry()
 

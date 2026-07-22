@@ -102,7 +102,7 @@ export default class EvaluationContext {
     if (this.strategy === "attributesFor") return null
 
     const declaration = /** @type {import("./association-declaration.js").default} */ (slot.value)
-    const associationStrategy = declaration.strategy || this.strategy
+    const associationStrategy = declaration.strategy || (this.strategy === "create" ? "build" : this.strategy)
 
     return await this.registry._runFactory({
       factoryName: declaration.factory,
@@ -132,7 +132,9 @@ export default class EvaluationContext {
       else if (arg && typeof arg === "object") overrides = arg
     }
 
-    return this.registry._runFactory({factoryName, traits, overrides, strategy: this.strategy})
+    const associationStrategy = this.strategy === "create" ? "build" : this.strategy
+
+    return this.registry._runFactory({factoryName, traits, overrides, strategy: associationStrategy})
   }
 
   /**
@@ -152,6 +154,21 @@ export default class EvaluationContext {
     }
 
     return attributes
+  }
+
+  /**
+   * Resolves every transient before callbacks that expose them as plain properties.
+   * @returns {Promise<Record<string, ?>>} - Evaluated transient values.
+   */
+  async resolveTransients() {
+    /** @type {Record<string, ?>} */
+    const transients = {}
+
+    for (const [name, slot] of this.plan.resolved) {
+      if (slot.slotKind === "transient") transients[name] = await this._get(name, [])
+    }
+
+    return transients
   }
 
   /**

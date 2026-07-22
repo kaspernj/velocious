@@ -1,5 +1,6 @@
 // @ts-check
 
+import DatabaseRecord from "../../database/record/index.js"
 import {FactoryCycleError, UndefinedFactoryError, UndefinedTraitError} from "./errors.js"
 
 /**
@@ -59,7 +60,7 @@ export default class FactoryRunner {
     }
 
     for (const factoryDefinition of chain) {
-      this._expandFactoryDeclarations(factoryDefinition, target, flattened)
+      this._expandFactoryDeclarations(factoryDefinition, factoryDefinition, flattened)
     }
 
     for (const traitName of requestedTraits) {
@@ -153,7 +154,9 @@ export default class FactoryRunner {
       throw new FactoryCycleError(`Trait inclusion cycle detected: ${[...activePath, traitName].join(" -> ")}`)
     }
 
-    const trait = scope.localTraits.get(traitName) || this.registry._globalTraits.get(traitName)
+    const localTrait = this._resolveLocalTrait(traitName, scope)
+    const trait = localTrait?.trait || this.registry._globalTraits.get(traitName)
+    const inclusionScope = localTrait?.scope || scope
 
     if (!trait) {
       throw new UndefinedTraitError(`No trait registered called "${traitName}" for factory "${scope.name}"`)
@@ -161,11 +164,32 @@ export default class FactoryRunner {
 
     for (const declaration of trait.declarations) {
       if (declaration.kind === "traitInclude") {
-        this._expandTrait(declaration.name, scope, out, [...activePath, traitName])
+        this._expandTrait(declaration.name, inclusionScope, out, [...activePath, traitName])
       } else {
         out.push({decl: declaration})
       }
     }
+  }
+
+  /**
+   * Resolves a local trait from the current factory upward through its parents.
+   * @param {string} traitName - Trait name to resolve.
+   * @param {import("./factory-definition.js").default} scope - Declaring/requesting factory scope.
+   * @returns {{trait: import("./trait-definition.js").default, scope: import("./factory-definition.js").default} | undefined} - Nearest local trait and its declaring scope, if any.
+   */
+  _resolveLocalTrait(traitName, scope) {
+    /** @type {import("./factory-definition.js").default | undefined} */
+    let current = scope
+
+    while (current) {
+      const trait = current.localTraits.get(traitName)
+
+      if (trait) return {trait, scope: current}
+
+      current = current.parentName ? this._resolveFactory(current.parentName) : undefined
+    }
+
+    return undefined
   }
 
   /**
@@ -220,6 +244,8 @@ export default class FactoryRunner {
       resolved.set(key, {slotKind: prior ? prior.slotKind : "attribute", value: overrides[key], isOverride: true})
     }
 
+    this._arbitrateAssociationOverrides(resolved, overrides, modelClass)
+
     return {
       factoryName: target.name,
       factoryDefinition: target,
@@ -230,6 +256,41 @@ export default class FactoryRunner {
       initializeWith,
       toCreate,
       skipCreate
+    }
+  }
+
+  /**
+   * Applies belongs-to override precedence using the declared model relationship's
+   * real foreign-key metadata. An explicit association object wins over its key;
+   * otherwise an explicit key suppresses the factory-declared association.
+   * @param {Map<string, Slot>} resolved - Folded slots.
+   * @param {Record<string, ?>} overrides - Call-site overrides.
+   * @param {(new (attributes?: Record<string, ?>) => ?) | null} modelClass - Resolved model class.
+   * @returns {void}
+   */
+  _arbitrateAssociationOverrides(resolved, overrides, modelClass) {
+    if (typeof modelClass !== "function" || !(modelClass.prototype instanceof DatabaseRecord)) return
+
+    const backendModelClass = /** @type {typeof DatabaseRecord} */ (modelClass)
+    const columnToAttribute = backendModelClass.getColumnNameToAttributeNameMap()
+
+    for (const [name, slot] of [...resolved]) {
+      if (slot.slotKind !== "association") continue
+
+      const relationship = backendModelClass.getRelationshipByName(name)
+
+      if (relationship.getType() !== "belongsTo") continue
+
+      const foreignKeyColumn = relationship.getForeignKey()
+      const foreignKeyAttribute = columnToAttribute[foreignKeyColumn] || foreignKeyColumn
+
+      if (!Object.hasOwn(overrides, foreignKeyAttribute)) continue
+
+      if (slot.isOverride) {
+        resolved.delete(foreignKeyAttribute)
+      } else {
+        resolved.delete(name)
+      }
     }
   }
 }
