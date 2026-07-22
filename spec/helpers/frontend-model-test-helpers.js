@@ -148,7 +148,7 @@ export function stubFrontendModelFetchWith(responders) {
 
 /** @returns {void} */
 export function resetFrontendModelTransport() {
-  FrontendModelBase.configureTransport({offlineSync: undefined, shared: undefined, url: undefined, websocketClient: undefined})
+  FrontendModelBase.configureTransport({offlineSync: undefined, shared: undefined, signal: undefined, timeout: undefined, url: undefined, websocketClient: undefined})
 }
 
 /**
