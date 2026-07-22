@@ -431,6 +431,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
    */
   async execStructureScript(structureSql) {
     if (!this.getArgs().multipleStatements) return false
+
+    // The batched pool call below bypasses Base#query, so re-run the same read-only
+    // write guard the per-statement path applies before executing the dump.
+    this._assertWritableQuery(structureSql)
+
     if (!this.pool) await this.connect()
     if (!this.pool) throw new Error("MySQL pool failed to initialize")
 
