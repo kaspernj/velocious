@@ -115,4 +115,14 @@ import StructureSqlLoader from "velocious/build/src/database/structure-sql-loade
 await new StructureSqlLoader().load({db, structureSql})
 ```
 
-`load({db, structureSql})` splits the dump into statements, disables foreign keys around the load (so tables can be created regardless of the order they reference each other), and executes the whole dump through the driver's native multi-statement `exec` in a single round-trip when the driver supports it (falling back to per-statement execution otherwise). Loading a structure dump this way is much faster than creating or altering tables one at a time, so it is the preferred way to materialize a schema for a tenant or test database.
+`load({db, structureSql})` splits the dump into statements, disables foreign keys around the load (so tables can be created regardless of the order they reference each other), and runs the whole dump in a **single round-trip** when the driver offers a multi-statement batch — SQLite's native `exec`, or MySQL when the connection is configured with `multipleStatements: true` — falling back to per-statement execution otherwise. Loading a structure dump this way is much faster than creating or altering tables one at a time, so it is the preferred way to materialize a schema for a tenant or test database.
+
+MySQL multi-statement batching is **opt-in** — ordinary queries otherwise reject stacked statements — so enable it on the database whose schema you load from dumps:
+
+```js
+database: {
+  test: {
+    default: {driver: MysqlDriver, type: "mysql", multipleStatements: true /* ... */}
+  }
+}
+```
