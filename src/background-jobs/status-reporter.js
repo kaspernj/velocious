@@ -100,8 +100,18 @@ export default class BackgroundJobsStatusReporter {
         await this.report({jobId, status, error, handoffId, handedOffAtMs, workerId})
         return
       } catch (error) {
-        if (error instanceof BackgroundJobUpdateError) throw error
-
+        // A `BackgroundJobUpdateError` (main answered `job-update-error`) is retried,
+        // not given up on: the completion/failure of a job is durable terminal state
+        // that MUST be persisted, and dropping it strands the row in `handed_off`
+        // forever (which, for a max_concurrency=1 job like the build planner, then
+        // blocks every future run of that job). Main only sends `job-update-error`
+        // when `store.markCompleted`/`markFailed` THROWS — i.e. a transient DB error
+        // (deadlock, connection reset, lock-wait timeout, or main's cold connection
+        // pool right after a deploy restart). Every logical rejection (job gone,
+        // stale handoff lease, already terminal) instead returns and answers
+        // `job-updated`, so an update error is always the retryable, transient kind.
+        // Bounded by `maxDurationMs` below so a genuinely unrecoverable DB does not
+        // loop unboundedly.
         attempt += 1
         const delaySeconds = Math.min(30, 0.5 * attempt)
 
