@@ -3,6 +3,7 @@
 ## Preferred strategy
 - Prefer end-to-end/browser integration tests over stub-only tests for frontend-model behavior.
 - Validate actual browser-to-backend HTTP behavior using Velocious browser test runner.
+- Use the [Factory framework](factories.md) to build/create test data instead of repeating direct `Model.create(...)` setup; cover its persistence/association behavior with real dummy-app models in `*.browser-spec.js` files.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.

@@ -19,6 +19,7 @@
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
+* Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, and linting (see [docs/factories.md](docs/factories.md))
 * Per-row association counts via `.withCount(...)` on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
