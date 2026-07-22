@@ -190,6 +190,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
     if ("username" in args) connectArgs["user"] = args["username"]
     if ("charset" in args) connectArgs["charset"] = args["charset"]
+    // Opt-in only. Lets a whole structure SQL dump run in one round-trip via
+    // {@link execStructureScript}; off by default so ordinary queries keep rejecting
+    // stacked statements.
+    if ("multipleStatements" in args) connectArgs["multipleStatements"] = Boolean(digg(args, "multipleStatements"))
 
     return connectArgs
   }
@@ -415,6 +419,31 @@ export default class VelociousDatabaseDriversMysql extends Base{
         else resolve("affectedRows" in result ? result.affectedRows : 0)
       })
     })
+  }
+
+  /**
+   * Executes a full multi-statement structure SQL script in one round-trip when the
+   * connection was configured with `multipleStatements: true`. Runs on the pooled
+   * connection so the caller's `SET FOREIGN_KEY_CHECKS = 0` applies. Returns false so
+   * the caller runs statements individually when multi-statement queries are off.
+   * @param {string} structureSql - Full multi-statement structure SQL.
+   * @returns {Promise<boolean>} - Whether the script was executed as one batch.
+   */
+  async execStructureScript(structureSql) {
+    if (!this.getArgs().multipleStatements) return false
+    if (!this.pool) await this.connect()
+    if (!this.pool) throw new Error("MySQL pool failed to initialize")
+
+    const pool = this.pool
+
+    await new Promise((resolve, reject) => {
+      pool.query(structureSql, (error) => {
+        if (error) reject(error)
+        else resolve(undefined)
+      })
+    })
+
+    return true
   }
 
   /**

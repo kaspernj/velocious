@@ -100,4 +100,38 @@ describe("StructureSqlLoader", () => {
       expect(await dbs.default.tableExists("tasks")).toEqual(false)
     })
   })
+
+  it("uses the driver's single-round-trip batch and skips per-statement execution when execStructureScript returns true", async () => {
+    const calls = {batchedSql: /** @type {string[]} */ ([]), queries: 0, fkDisabled: false, fkEnabled: false, cacheCleared: false}
+    const db = /** @type {any} */ ({
+      async disableForeignKeys() { calls.fkDisabled = true },
+      async enableForeignKeys() { calls.fkEnabled = true },
+      clearSchemaCache() { calls.cacheCleared = true },
+      async execStructureScript(/** @type {string} */ sql) { calls.batchedSql.push(sql); return true },
+      async query() { calls.queries++ }
+    })
+
+    await new StructureSqlLoader().load({db, structureSql: "CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);"})
+
+    expect(calls.batchedSql.length).toEqual(1)
+    expect(calls.queries).toEqual(0)
+    expect(calls.fkDisabled).toEqual(true)
+    expect(calls.fkEnabled).toEqual(true)
+    expect(calls.cacheCleared).toEqual(true)
+  })
+
+  it("falls back to per-statement execution when the driver has no batch and no native exec", async () => {
+    const executed = /** @type {string[]} */ ([])
+    const db = /** @type {any} */ ({
+      async disableForeignKeys() {},
+      async enableForeignKeys() {},
+      clearSchemaCache() {},
+      async execStructureScript() { return false },
+      async query(/** @type {string} */ sql) { executed.push(sql) }
+    })
+
+    await new StructureSqlLoader().load({db, structureSql: "CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);"})
+
+    expect(executed.length).toEqual(2)
+  })
 })

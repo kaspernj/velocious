@@ -72,6 +72,7 @@
  * @property {function() : ?} [getConnection] - Custom connection factory override.
  * @property {string} [host] - Database host.
  * @property {boolean} [migrations] - Whether migrations are enabled for this database.
+ * @property {boolean} [multipleStatements] - (MySQL) Opt in to multi-statement queries so a whole structure SQL dump loads in one round-trip via `StructureSqlLoader`. Off by default; ordinary queries otherwise reject stacked statements.
  * @property {string} [password] - Password for the database user.
  * @property {number} [port] - Database port.
  * @property {string} [primaryKeyType] - Default type for implicit migration primary keys and references. Defaults to `uuid`.
