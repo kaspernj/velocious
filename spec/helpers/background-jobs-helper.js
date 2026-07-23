@@ -29,6 +29,36 @@ export async function startBackgroundJobs({workerOptions = {}} = {}) {
   })
   await worker.start()
 
+  let connectionsClosed = false
+  let mainStopped = false
+  let workerStopped = false
+  const originalMainStop = main.stop.bind(main)
+  const originalWorkerStop = worker.stop.bind(worker)
+
+  const closeConnectionsWhenStopped = async () => {
+    if (connectionsClosed || !mainStopped || !workerStopped) return
+
+    connectionsClosed = true
+    await dummyConfiguration.closeDatabaseConnections()
+  }
+
+  main.stop = async () => {
+    try {
+      await originalMainStop()
+    } finally {
+      mainStopped = true
+      await closeConnectionsWhenStopped()
+    }
+  }
+  worker.stop = async () => {
+    try {
+      await originalWorkerStop()
+    } finally {
+      workerStopped = true
+      await closeConnectionsWhenStopped()
+    }
+  }
+
   return {main, store, worker}
 }
 
