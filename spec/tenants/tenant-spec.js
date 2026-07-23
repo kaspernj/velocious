@@ -114,6 +114,32 @@ describe("Tenant", () => {
     })
   })
 
+  it("initializes a translated tenant model from the tenant connection", async () => {
+    await withConfiguration({listTenants: () => []}, async ({configuration}) => {
+      class TranslatedTenantRecord extends DatabaseRecord {}
+
+      TranslatedTenantRecord.setTableName("translated_tenant_records")
+      TranslatedTenantRecord.translates("name")
+      TranslatedTenantRecord.switchesTenantDatabase("projectTenant")
+      TranslatedTenantRecord.registerRecordClass({configuration})
+
+      const TranslationClass = TranslatedTenantRecord.getTranslationClass()
+
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await configuration.ensureConnections(async (connections) => {
+          await connections.projectTenant.query("CREATE TABLE translated_tenant_records(id integer PRIMARY KEY AUTOINCREMENT)")
+          await connections.projectTenant.query("CREATE TABLE translated_tenant_record_translations(id integer PRIMARY KEY AUTOINCREMENT, translated_tenant_record_id integer, locale varchar(255), name varchar(255))")
+        })
+      })
+
+      await Tenant.with({slug: "alpha"}, async () => {
+        expect(TranslatedTenantRecord.isInitialized()).toEqual(true)
+        expect(TranslationClass.isInitialized()).toEqual(true)
+        expect(TranslationClass.getDatabaseIdentifier()).toEqual("projectTenant")
+      })
+    })
+  })
+
   it("leaves a tenant model deferred when its optional table is absent", async () => {
     await withConfiguration({listTenants: () => []}, async ({configuration}) => {
       class MissingTenantRecord extends DatabaseRecord {}

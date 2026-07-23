@@ -35,7 +35,9 @@ in-progress initialization promise, so synchronous query builders such as
 Tenant entry checks for the model's base table and any declared translation table
 before initializing it. A model whose optional table is absent remains deferred,
 so entering a tenant does not fail because of an unused optional integration.
-Actual connection or metadata initialization failures still propagate.
+Generated translation classes inherit their translated model's tenant database
+resolver, so both metadata sets load from the same tenant connection. Actual
+connection or metadata initialization failures still propagate.
 
 `configuration.runWithTenant(...)` only changes the async tenant context. Use the
 `Tenant` facade when callback code needs checked-out connections and ready tenant
