@@ -1,0 +1,3 @@
+# Changelog
+
+- Add real in-flight query cancellation to the MySQL/MariaDB driver: `query(sql, {signal})` runs on a dedicated pooled connection and, when the `AbortSignal` fires, issues `KILL QUERY` to release the statement's server-side resources immediately, destroys the client connection (discarding it from the pool), and rejects with a new `QueryAbortedError`. The retry loop treats `QueryAbortedError` as terminal so a deliberately-cancelled query is never re-run. Lets callers (e.g. a scheduler deadline) truly abort a blocked query instead of only suppressing later work while it keeps holding connections/locks.
