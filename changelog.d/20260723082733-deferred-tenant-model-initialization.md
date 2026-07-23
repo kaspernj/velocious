@@ -1,1 +1,1 @@
-Initialize existing deferred tenant model metadata before `Tenant.with` and `Tenant.each` runtime callbacks, sharing in-progress initialization across concurrent tenant entries.
+Initialize existing deferred tenant model metadata before `Tenant.with` and `Tenant.each` runtime callbacks, sharing in-progress initialization across concurrent tenant entries. Dummy test configurations now read the shared MSSQL credential from `MSSQL_SA_PASSWORD` instead of hardcoding it.

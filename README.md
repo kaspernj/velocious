@@ -75,6 +75,11 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 
 # Testing
 
+The dummy database configurations require `MSSQL_SA_PASSWORD` whenever they include
+the shared MSSQL test database. Set it in the local process environment rather than
+writing the password into `spec/dummy/src/config/configuration*.js`. TensorBuzz CI
+provides one shared test value to both the build and MSSQL service environments.
+
 Tag tests to filter runs.
 
 ```js

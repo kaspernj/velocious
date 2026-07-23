@@ -10,6 +10,7 @@ import fs from "fs/promises"
 import isFrontendModelAbilityRequest from "./frontend-model-ability-request.js"
 import InitializerFromRequireContext from "../../../../src/database/initializer-from-require-context.js"
 import MssqlDriver from "../../../../src/database/drivers/mssql/index.js"
+import mssqlTestPassword from "./mssql-test-password.js"
 import NodeEnvironmentHandler from "../../../../src/environment-handlers/node.js"
 import installSqlJsWasmRoute from "../../../../src/plugins/sqljs-wasm-route.js"
 import path from "path"
@@ -93,7 +94,7 @@ const configuration = new Configuration({
         migrations: true,
         sqlConfig: {
           user: "sa",
-          password: "Super-Secret-Password",
+          password: mssqlTestPassword(),
           database: "velocious_test",
           server: "mssql",
           options: {
@@ -112,7 +113,7 @@ const configuration = new Configuration({
         migrations: true,
         sqlConfig: {
           user: "sa",
-          password: "Super-Secret-Password",
+          password: mssqlTestPassword(),
           database: "velocious_test",
           server: "mssql",
           options: {

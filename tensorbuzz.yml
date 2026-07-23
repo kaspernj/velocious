@@ -8,6 +8,7 @@ before_script:
   - git clean -fdx spec/dummy/db
   - scripts/tensorbuzz-retry npm install
 environment:
+  MSSQL_SA_PASSWORD: &mssql_sa_password Super-Secret-Password
   NODE_ENV: test
   VELOCIOUS_TEST_DIR: /home/build/project/spec
 builds:
@@ -52,7 +53,7 @@ builds:
           ACCEPT_EULA: Y
           MSSQL_MEMORY_LIMIT_MB: "2048"
           MSSQL_PID: Express
-          MSSQL_SA_PASSWORD: Super-Secret-Password
+          MSSQL_SA_PASSWORD: *mssql_sa_password
         healthcheck:
           test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $MSSQL_SA_PASSWORD -C -Q \"SELECT 1\" -b -o /dev/null || exit 1"]
           interval: 10s
