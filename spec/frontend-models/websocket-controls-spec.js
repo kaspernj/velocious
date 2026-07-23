@@ -4,6 +4,7 @@ import wait from "awaitery/build/wait.js"
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
+import VelociousWebsocketClient from "../../src/http-client/websocket-client.js"
 import {resetFrontendModelTransport} from "../helpers/frontend-model-test-helpers.js"
 
 /**
@@ -210,6 +211,78 @@ describe("frontend-models - WebSocket controls", () => {
       expect(ControlledWebSocket.instances[1].readyState).toEqual(ControlledWebSocket.CLOSED)
     } finally {
       await FrontendModelBase.disconnectWebsocket()
+      globalThis.WebSocket = OriginalWebSocket
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("drains an automatic reconnect already checking online when the session aborts", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+    const controller = new AbortController()
+    /** @type {(isOnline: boolean) => void} */
+    let notifyNetworkChange = () => {}
+    /** @type {() => void} */
+    let releaseOnlineCheck = () => {}
+    /** @type {() => void} */
+    let resolveOnlineCheckStarted = () => {}
+    let isOnline = true
+    let deferOnlineCheck = false
+    const onlineCheckStarted = new Promise((resolve) => { resolveOnlineCheckStarted = resolve })
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.instances = []
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+
+    const client = new VelociousWebsocketClient({
+      autoReconnect: true,
+      networkMonitor: {
+        getIsOnline: () => {
+          if (!deferOnlineCheck) return isOnline
+
+          resolveOnlineCheckStarted()
+
+          return new Promise((resolve) => {
+            releaseOnlineCheck = () => resolve(true)
+          })
+        },
+        subscribe: (callback) => {
+          notifyNetworkChange = callback
+
+          return () => { notifyNetworkChange = () => {} }
+        }
+      },
+      reconnectDelays: [0],
+      url: "ws://example.test/websocket"
+    })
+    /** @type {Promise<void>} */
+    let teardown = Promise.resolve()
+    controller.signal.addEventListener("abort", () => {
+      teardown = client.disconnectAndStopReconnect()
+    }, {once: true})
+
+    try {
+      await client.connect()
+      isOnline = false
+      notifyNetworkChange(false)
+      await Promise.resolve()
+      deferOnlineCheck = true
+      notifyNetworkChange(true)
+      await onlineCheckStarted
+
+      controller.abort(new Error("session ended"))
+      releaseOnlineCheck()
+      await teardown
+
+      expect(ControlledWebSocket.instances.length).toEqual(1)
+      expect(ControlledWebSocket.instances[0].readyState).toEqual(ControlledWebSocket.CLOSED)
+      expect(client.isOpen()).toBe(false)
+      expect(client.autoReconnect).toBe(false)
+      expect(client.reconnectTimer).toEqual(null)
+      expect(client.runningReconnectTasks.size).toEqual(0)
+      expect(client._waitingForOnline).toBe(false)
+    } finally {
+      releaseOnlineCheck()
+      await client.disconnectAndStopReconnect()
       globalThis.WebSocket = OriginalWebSocket
       resetFrontendModelTransport()
     }
