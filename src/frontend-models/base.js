@@ -318,7 +318,7 @@ function resolveInternalWebsocketClient() {
     url: resolvedUrl
   })
   internalWebsocketClient = client
-  client.onReconnect = flushBufferedOutgoingEventsAfterReconnect
+  client.onReconnect = async () => await flushBufferedOutgoingEventsAfterReconnect(client)
 
   bindInternalWebsocketClientSignal(frontendModelTransportSignal())
 
@@ -327,9 +327,10 @@ function resolveInternalWebsocketClient() {
 
 /**
  * Runs flush buffered outgoing events after reconnect.
+ * @param {VelociousWebsocketClient} client - Reconnected client that owns this flush.
  * @returns {Promise<void>} */
-async function flushBufferedOutgoingEventsAfterReconnect() {
-  if (!internalWebsocketClient) return
+async function flushBufferedOutgoingEventsAfterReconnect(client) {
+  if (internalWebsocketClient !== client) return
 
   const events = drainBufferedOutgoingEvents()
   const sessionSignal = frontendModelTransportSignal()
@@ -342,12 +343,17 @@ async function flushBufferedOutgoingEventsAfterReconnect() {
     },
     async (signal) => {
       for (let index = 0; index < events.length; index += 1) {
+        if (internalWebsocketClient !== client) return
+
         try {
-          await internalWebsocketClient?.post(events[index].customPath, events[index].payload, {signal})
+          await client.post(events[index].customPath, events[index].payload, {signal})
+
+          if (internalWebsocketClient !== client) return
         } catch {
+          if (internalWebsocketClient !== client) return
           if (sessionSignal?.aborted) return
 
-          const socketOpen = internalWebsocketClient?.socket?.readyState === internalWebsocketClient?.socket?.OPEN
+          const socketOpen = client.socket?.readyState === client.socket?.OPEN
 
           if (socketOpen) continue
 

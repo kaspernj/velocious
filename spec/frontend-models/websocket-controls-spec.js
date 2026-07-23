@@ -5,6 +5,7 @@ import wait from "awaitery/build/wait.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
 import VelociousWebsocketClient from "../../src/http-client/websocket-client.js"
+import {bufferedOutgoingEventCount, bufferOutgoingEvent, clearBufferedOutgoingEvents} from "../../src/frontend-models/outgoing-event-buffer.js"
 import {resetFrontendModelTransport} from "../helpers/frontend-model-test-helpers.js"
 
 /**
@@ -62,12 +63,21 @@ function buildControlledClient({connectDelayMs = 0, readyDelayMs = 0, initiallyO
 class ControlledWebSocket {
   static autoOpen = true
   static deferNextClose = false
+  static deferSessionResume = false
   /** @type {ControlledWebSocket[]} */
   static instances = []
   /** @type {(socket: ControlledWebSocket) => void} */
   static onCreate = () => {}
+  /** @type {(message: Record<string, ?>) => void} */
+  static onRequest = () => {}
+  /** @type {() => void} */
+  static onSessionResumePending = () => {}
   /** @type {(() => void) | null} */
   static pendingClose = null
+  /** @type {(() => void) | null} */
+  static pendingSessionResume = null
+  /** @type {Array<Record<string, ?>>} */
+  static sentMessages = []
   static CONNECTING = 0
   static OPEN = 1
   static CLOSING = 2
@@ -136,10 +146,26 @@ class ControlledWebSocket {
   send(payload) {
     const message = JSON.parse(payload)
 
+    ControlledWebSocket.sentMessages.push(message)
+
     if (message.type === "session-resume") {
-      queueMicrotask(() => {
+      const finishSessionResume = () => {
         this.dispatch("message", new MessageEvent("message", {
           data: JSON.stringify({sessionId: message.sessionId, type: "session-resumed"})
+        }))
+      }
+
+      if (ControlledWebSocket.deferSessionResume) {
+        ControlledWebSocket.pendingSessionResume = finishSessionResume
+        ControlledWebSocket.onSessionResumePending()
+      } else {
+        queueMicrotask(finishSessionResume)
+      }
+    } else if (message.type === "request") {
+      ControlledWebSocket.onRequest(message)
+      queueMicrotask(() => {
+        this.dispatch("message", new MessageEvent("message", {
+          data: JSON.stringify({body: {ok: true}, id: message.id, status: 200, type: "response"})
         }))
       })
     }
@@ -151,6 +177,14 @@ class ControlledWebSocket {
 
     ControlledWebSocket.pendingClose = null
     finishClose?.()
+  }
+
+  /** @returns {void} */
+  static finishPendingSessionResume() {
+    const finishSessionResume = ControlledWebSocket.pendingSessionResume
+
+    ControlledWebSocket.pendingSessionResume = null
+    finishSessionResume?.()
   }
 }
 
@@ -319,6 +353,108 @@ describe("frontend-models - WebSocket controls", () => {
       sessionBController.abort(new Error("test cleanup"))
       await FrontendModelBase.disconnectWebsocket()
       ControlledWebSocket.onCreate = () => {}
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
+      globalThis.WebSocket = OriginalWebSocket
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("keeps a stale session reconnect from flushing the replacement session buffer", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    const sessionAController = new AbortController()
+    const sessionBController = new AbortController()
+    let sessionController = sessionAController
+    /** @type {Array<() => void>} */
+    const reconnectCallbacks = []
+    /** @type {() => void} */
+    let resolveReconnectScheduled = () => {}
+    let reconnectScheduled = new Promise((resolve) => { resolveReconnectScheduled = resolve })
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.deferNextClose = false
+    ControlledWebSocket.deferSessionResume = false
+    ControlledWebSocket.instances = []
+    ControlledWebSocket.onCreate = () => {}
+    ControlledWebSocket.onRequest = () => {}
+    ControlledWebSocket.onSessionResumePending = () => {}
+    ControlledWebSocket.pendingClose = null
+    ControlledWebSocket.pendingSessionResume = null
+    ControlledWebSocket.sentMessages = []
+    clearBufferedOutgoingEvents()
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+    globalThis.setTimeout = (callback) => {
+      reconnectCallbacks.push(() => callback())
+      resolveReconnectScheduled()
+
+      return /** @type {ReturnType<typeof setTimeout>} */ ({})
+    }
+    globalThis.clearTimeout = () => {}
+    FrontendModelBase.configureTransport({
+      signal: () => sessionController.signal,
+      websocketUrl: "ws://example.test/websocket"
+    })
+
+    try {
+      await FrontendModelBase.connectWebsocket()
+      await FrontendModelBase.dropWebsocket()
+      await reconnectScheduled
+
+      ControlledWebSocket.deferSessionResume = true
+      const sessionAResumePending = new Promise((resolve) => {
+        ControlledWebSocket.onSessionResumePending = () => resolve(undefined)
+      })
+      const sessionAReconnectCreated = new Promise((resolve) => {
+        ControlledWebSocket.onCreate = () => resolve(undefined)
+      })
+      expect(reconnectCallbacks.length).toEqual(1)
+      reconnectCallbacks.shift()?.()
+      await sessionAReconnectCreated
+      await sessionAResumePending
+
+      ControlledWebSocket.finishPendingSessionResume()
+      sessionAController.abort(new Error("session A ended"))
+      sessionController = sessionBController
+      const sessionBConnect = FrontendModelBase.connectWebsocket()
+
+      bufferOutgoingEvent({customPath: "/owned-by-b", payload: {owner: "b"}})
+      await sessionBConnect
+      expect(bufferedOutgoingEventCount()).toEqual(1)
+      expect(ControlledWebSocket.sentMessages.filter((message) => message.path === "/owned-by-b").length).toEqual(0)
+
+      reconnectScheduled = new Promise((resolve) => { resolveReconnectScheduled = resolve })
+      ControlledWebSocket.deferSessionResume = false
+      await FrontendModelBase.dropWebsocket()
+      await reconnectScheduled
+      const sessionBReconnectCreated = new Promise((resolve) => {
+        ControlledWebSocket.onCreate = () => resolve(undefined)
+      })
+      /** @type {() => void} */
+      let resolveSessionBRequest = () => {}
+      const sessionBRequest = new Promise((resolve) => { resolveSessionBRequest = resolve })
+      ControlledWebSocket.onRequest = (message) => {
+        if (message.path === "/owned-by-b") resolveSessionBRequest()
+      }
+      expect(reconnectCallbacks.length).toEqual(1)
+      reconnectCallbacks.shift()?.()
+
+      await sessionBReconnectCreated
+      await sessionBRequest
+      expect(bufferedOutgoingEventCount()).toEqual(0)
+      expect(ControlledWebSocket.sentMessages.filter((message) => message.path === "/owned-by-b").length).toEqual(1)
+    } finally {
+      ControlledWebSocket.finishPendingSessionResume()
+      ControlledWebSocket.finishPendingClose()
+      ControlledWebSocket.deferNextClose = false
+      ControlledWebSocket.deferSessionResume = false
+      sessionBController.abort(new Error("test cleanup"))
+      await FrontendModelBase.disconnectWebsocket()
+      clearBufferedOutgoingEvents()
+      ControlledWebSocket.onCreate = () => {}
+      ControlledWebSocket.onRequest = () => {}
+      ControlledWebSocket.onSessionResumePending = () => {}
       globalThis.setTimeout = originalSetTimeout
       globalThis.clearTimeout = originalClearTimeout
       globalThis.WebSocket = OriginalWebSocket
