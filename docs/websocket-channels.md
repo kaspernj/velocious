@@ -95,18 +95,20 @@ await subscription.ready           // resolves once the server sends channel-sub
 subscription.close()                // client-initiated unsubscribe
 ```
 
-Frontend-model applications can connect and wait for readiness in one bounded operation:
+Frontend-model channel subscriptions retain SnapReq's synchronous handle contract and can queue while the socket connects:
 
 ```js
-const subscription = await Task.subscribeWebsocketChannel("GameChat", {
+const subscription = Task.subscribeWebsocketChannel("GameChat", {
   params: {gameId: "abc"},
   timeoutMs: 10_000,
   signal: sessionController.signal,
   onMessage: (body) => console.log(body)
 })
+
+await subscription.ready
 ```
 
-`FrontendModelBase.openWebsocketConnection(...)` accepts the same `timeoutMs` and `signal` controls. The timeout is one total startup budget shared by socket connection and server-confirmed handle readiness; time spent connecting is deducted before readiness begins. These controls are transport metadata and are never included in `params`. A startup timeout or abort closes a partially created handle, and caller abort reasons are preserved. The deadline is removed after readiness, so it never expires a healthy long-lived handle. A transport-level session signal additionally stops reconnects and buffered replay work when the session ends.
+`FrontendModelBase.connectWebsocket({timeoutMs, signal})` composes per-call controls with the configured transport deadline and session signal; the shorter timeout wins and abort reasons are preserved. `subscribeWebsocketChannel(...)` starts its queued connection and server-confirmed readiness against that same timeout value, returns the genuine SnapReq handle immediately, and exposes completion through `handle.ready`. `openWebsocketConnection(...)` also returns the genuine handle synchronously and retains its historical requirement that the socket already be connected, so call `await FrontendModelBase.connectWebsocket(...)` first when using the internally owned client. Startup controls are transport metadata and are never included in `params`. A transport-level session signal stops managed retry timers, reconnects, and buffered replay work when the session ends. Explicit disconnect disposes the owned client so a later connect installs fresh session cancellation.
 
 Subscription handle exposes:
 - `subscriptionId: string`
