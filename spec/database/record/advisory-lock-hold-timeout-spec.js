@@ -161,7 +161,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`pool ${identifier}`)
 
         return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
-      }
+      },
+      registerAdvisoryLockConnection() {},
+      unregisterAdvisoryLockConnection() {}
     }
     class DedicatedConnectionRecord extends VelociousDatabaseRecord {
       static async ensureInitialized() {}
@@ -236,7 +238,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`pool ${identifier}`)
 
         return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
-      }
+      },
+      registerAdvisoryLockConnection() {},
+      unregisterAdvisoryLockConnection() {}
     }
     class ExternallyOwnedConnectionRecord extends VelociousDatabaseRecord {
       static async ensureInitialized() {}
@@ -308,7 +312,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`pool ${identifier}`)
 
         return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
-      }
+      },
+      registerAdvisoryLockConnection() {},
+      unregisterAdvisoryLockConnection() {}
     }
     class DedicatedConnectionRecord extends VelociousDatabaseRecord {
       static async ensureInitialized() {}

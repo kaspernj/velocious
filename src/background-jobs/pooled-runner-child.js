@@ -1,11 +1,29 @@
 // @ts-check
 
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
+import { closeRunnerConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
 
 const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
 
 setRunnerProcessTitle()
+
+let shuttingDown = false
+
+/**
+ * Closes the runner's connections — releasing any advisory lock a killed-mid-pass
+ * job still holds — before exiting, instead of leaving a half-open session that
+ * keeps the lock until the DB server's `wait_timeout`.
+ * @param {number} exitCode - Process exit code.
+ * @returns {Promise<void>}
+ */
+async function shutdownRunner(exitCode) {
+  if (shuttingDown) return
+  shuttingDown = true
+
+  await closeRunnerConnections(currentConfigurationOrNull())
+  process.exit(exitCode)
+}
 
 /**
  * Ids of jobs currently running in this child. A pooled child runs up to
@@ -111,5 +129,5 @@ function handleMessage(message) {
 }
 
 process.on("message", (message) => handleMessage(message))
-process.once("disconnect", () => process.exit(0))
-for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => process.exit(1))
+process.once("disconnect", () => void shutdownRunner(0))
+for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => void shutdownRunner(1))

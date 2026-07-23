@@ -119,6 +119,15 @@ export default class VelociousConfiguration {
    * Close database connections promise.
    * @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
+
+  /**
+   * Dedicated advisory-lock connections currently holding a lock. These are spawned
+   * outside the pools' tracked sets (so a hold-timeout lock survives pool checkouts),
+   * so `closeDatabaseConnections` would otherwise walk past them; tracking them here
+   * lets a shutdown close them and release the lock instead of orphaning it.
+   * @type {Set<import("./database/drivers/base.js").default>} */
+  _advisoryLockConnections = new Set()
+
   /**
    * Runs current.
    * @returns {VelociousConfiguration} - The current.
@@ -2987,6 +2996,46 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Registers a dedicated connection that currently holds an advisory lock, so a
+   * shutdown can close it and release the lock. See `_advisoryLockConnections`.
+   * @param {import("./database/drivers/base.js").default} connection - The dedicated lock connection.
+   * @returns {void}
+   */
+  registerAdvisoryLockConnection(connection) {
+    this._advisoryLockConnections.add(connection)
+  }
+
+  /**
+   * Unregisters a dedicated advisory-lock connection once its lock scope ends and the
+   * connection has been (or is about to be) closed by its owner.
+   * @param {import("./database/drivers/base.js").default} connection - The dedicated lock connection.
+   * @returns {void}
+   */
+  unregisterAdvisoryLockConnection(connection) {
+    this._advisoryLockConnections.delete(connection)
+  }
+
+  /**
+   * Closes every registered dedicated advisory-lock connection, ending its session so
+   * the DB server releases the lock. Best-effort per connection: a connection that is
+   * already closing/closed must not stop the others (the caller is shutting down).
+   * @returns {Promise<void>} - Resolves once all have been closed.
+   */
+  async _closeAdvisoryLockConnections() {
+    const connections = [...this._advisoryLockConnections]
+
+    this._advisoryLockConnections.clear()
+
+    for (const connection of connections) {
+      try {
+        await connection.close()
+      } catch (error) {
+        console.error("Failed to close a dedicated advisory-lock connection on shutdown:", error)
+      }
+    }
+  }
+
+  /**
    * Closes active database connections and clears global connections.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -3000,6 +3049,11 @@ export default class VelociousConfiguration {
     const constructors = new Set()
 
     this._closeDatabaseConnectionsPromise = (async () => {
+      // Close dedicated advisory-lock connections first: they are spawned outside the
+      // pools' tracked sets, so `pool.closeAll()` would not reach them and a lock held
+      // by a runner torn down mid-pass would leak until the DB server's `wait_timeout`.
+      await this._closeAdvisoryLockConnections()
+
       for (const pool of Object.values(this.databasePools)) {
         if (!pool) continue
 

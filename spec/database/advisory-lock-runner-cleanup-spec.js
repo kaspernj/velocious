@@ -129,6 +129,37 @@ describe("AdvisoryLockRunner connection cleanup", () => {
     }, [runnerLockName, leftoverLockName])
   })
 
+  it("releases a lock held on a dedicated runner connection when the configuration's connections are closed on shutdown", async () => {
+    const runnerLockName = "runner-shutdown-lock"
+
+    await withAdvisoryLockPool(async ({configuration, pool}) => {
+      const runner = new AdvisoryLockRunner({
+        configuration,
+        connectionProvider: () => {
+          throw new Error("The dedicated runner must not use the caller connection")
+        },
+        databaseIdentifier: "default"
+      })
+
+      await runner.withAdvisoryLockOrFail(runnerLockName, async () => {
+        // The lock is held on the dedicated connection, which lives outside the pool's
+        // tracked sets. A shutdown closes the configuration's connections while the pass
+        // is still running (as when a runner is torn down mid-pass); that must reach the
+        // dedicated connection and release the lock, not orphan it until wait_timeout.
+        await configuration.closeDatabaseConnections()
+
+        const probeConnection = await pool.spawnConnection()
+
+        try {
+          expect(await probeConnection.tryAcquireAdvisoryLock(runnerLockName)).toBe(true)
+        } finally {
+          await probeConnection.releaseAdvisoryLock(runnerLockName)
+          await probeConnection.close()
+        }
+      }, {holdTimeoutMs: 1000})
+    }, [runnerLockName])
+  })
+
   it("releases leftover locks when the dedicated runner connection closes", async () => {
     const runnerLockName = "runner-dedicated-lock"
     const leftoverLockName = "runner-dedicated-leftover-lock"
