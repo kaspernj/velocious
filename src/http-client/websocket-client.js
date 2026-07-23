@@ -23,5 +23,53 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
       url: args.url ?? DEFAULT_URL,
       deserialize: args.deserialize ?? deserializeFrontendModelTransportValue
     })
+    this.reconnectGeneration = 0
+    /** @type {Set<Promise<void>>} */
+    this.runningReconnectTasks = new Set()
+  }
+
+  /**
+   * Ignores an online result resolved after reconnect teardown began.
+   * @returns {Promise<boolean>} - Whether this client generation is online.
+   */
+  async _isOnline() {
+    const generation = this.reconnectGeneration
+    const isOnline = await super._isOnline()
+
+    return generation === this.reconnectGeneration && isOnline
+  }
+
+  /**
+   * Tracks automatic reconnect work so teardown can drain stale attempts.
+   * @returns {Promise<void>} - Resolves after the reconnect attempt settles.
+   */
+  async _attemptReconnect() {
+    const reconnectTask = super._attemptReconnect()
+
+    this.runningReconnectTasks.add(reconnectTask)
+
+    try {
+      await reconnectTask
+    } finally {
+      this.runningReconnectTasks.delete(reconnectTask)
+    }
+  }
+
+  /**
+   * Stops reconnect, drains work that already passed SnapReq's reconnect guard,
+   * and clears state changed by a stale attempt while it settled.
+   * @returns {Promise<void>} - Resolves once no reconnect can resurrect a socket.
+   */
+  async disconnectAndStopReconnect() {
+    this.reconnectGeneration += 1
+    await super.disconnectAndStopReconnect()
+
+    if (this.runningReconnectTasks.size === 0) return
+
+    while (this.runningReconnectTasks.size > 0) {
+      await Promise.all(this.runningReconnectTasks)
+    }
+
+    await super.disconnectAndStopReconnect()
   }
 }

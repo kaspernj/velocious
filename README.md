@@ -10,7 +10,7 @@
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Controllers and views for HTTP endpoints
-* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses (see [docs/frontend-models.md](docs/frontend-models.md))
+* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md) and [docs/websocket-channels.md](docs/websocket-channels.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))
 * Declarative client sync scopes with per-scope cursors, automatic mutation tracking, realtime delivery, and `sync`/`pull` progress reporting for "X of Y" import screens (see [docs/sync-client.md](docs/sync-client.md))
 * Reactive `useLiveQuery(Model.where(...))` queries that stay current from committed local model changes across local writes, pulls, and realtime (see [docs/live-queries.md](docs/live-queries.md))
@@ -2143,6 +2143,11 @@ Inline jobs share the worker process and run concurrently up to `maxConcurrentIn
 ```js
 new BackgroundJobsWorker({configuration, maxConcurrentInlineJobs: 8})
 ```
+
+Standalone background-jobs main and worker processes close their configuration's
+database pools during `stop()`. Embedded/test callers that share externally owned
+pools can pass `closeDatabaseConnectionsOnStop: false` to `BackgroundJobsMain` or
+`BackgroundJobsWorker`; sockets and Beacon still shut down normally.
 
 ## Scheduled jobs
 
