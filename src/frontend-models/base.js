@@ -154,6 +154,8 @@ let frontendModelIdleResolvers = []
  * Internal websocket client.
  * @type {VelociousWebsocketClient | null} */
 let internalWebsocketClient = null
+/** @type {AbortSignal | null} */
+let internalWebsocketClientSignal = null
 /** @type {(() => void) | null} */
 let internalWebsocketClientSignalCleanup = null
 
@@ -163,12 +165,39 @@ let internalWebsocketClientSignalCleanup = null
  */
 function resetInternalWebsocketClient() {
   internalWebsocketClientSignalCleanup?.()
+  internalWebsocketClientSignal = null
   internalWebsocketClientSignalCleanup = null
 
   const client = internalWebsocketClient
 
   internalWebsocketClient = null
   if (client) void client.disconnectAndStopReconnect()
+}
+
+/**
+ * Binds the owned WebSocket client lifetime to the current session signal.
+ * @param {AbortSignal | undefined} sessionSignal - Current session signal.
+ * @returns {void}
+ */
+function bindInternalWebsocketClientSignal(sessionSignal) {
+  if (internalWebsocketClientSignal === sessionSignal) return
+
+  internalWebsocketClientSignalCleanup?.()
+  internalWebsocketClientSignal = sessionSignal || null
+  internalWebsocketClientSignalCleanup = null
+
+  if (!sessionSignal || !internalWebsocketClient) return
+
+  const client = internalWebsocketClient
+  const onSessionAbort = () => {
+    clearBufferedOutgoingEvents()
+    void client.disconnectAndStopReconnect()
+  }
+
+  sessionSignal.addEventListener("abort", onSessionAbort, {once: true})
+  internalWebsocketClientSignalCleanup = () => sessionSignal.removeEventListener("abort", onSessionAbort)
+
+  if (sessionSignal.aborted) onSessionAbort()
 }
 
 /**
@@ -253,7 +282,11 @@ async function trackFrontendModelTransportRequest(callback) {
  * @returns {VelociousWebsocketClient | null} Websocket client or null.
  */
 function resolveInternalWebsocketClient() {
-  if (internalWebsocketClient) return internalWebsocketClient
+  if (internalWebsocketClient) {
+    bindInternalWebsocketClientSignal(frontendModelTransportSignal())
+
+    return internalWebsocketClient
+  }
 
   const websocketUrl = frontendModelTransportConfig.websocketUrl
 
@@ -271,20 +304,7 @@ function resolveInternalWebsocketClient() {
   })
   internalWebsocketClient.onReconnect = flushBufferedOutgoingEventsAfterReconnect
 
-  const sessionSignal = frontendModelTransportSignal()
-
-  if (sessionSignal) {
-    const client = internalWebsocketClient
-    const onSessionAbort = () => {
-      clearBufferedOutgoingEvents()
-      void client.disconnectAndStopReconnect()
-    }
-
-    sessionSignal.addEventListener("abort", onSessionAbort, {once: true})
-    internalWebsocketClientSignalCleanup = () => sessionSignal.removeEventListener("abort", onSessionAbort)
-
-    if (sessionSignal.aborted) onSessionAbort()
-  }
+  bindInternalWebsocketClientSignal(frontendModelTransportSignal())
 
   return internalWebsocketClient
 }
@@ -3024,6 +3044,7 @@ export default class FrontendModelBase {
 
     internalWebsocketClient = null
     internalWebsocketClientSignalCleanup?.()
+    internalWebsocketClientSignal = null
     internalWebsocketClientSignalCleanup = null
     await client.disconnectAndStopReconnect()
   }

@@ -114,8 +114,18 @@ class ControlledWebSocket {
     this.dispatch("close", new Event("close"))
   }
 
-  /** @returns {void} */
-  send() {}
+  /** @param {string} payload - Serialized websocket payload. @returns {void} */
+  send(payload) {
+    const message = JSON.parse(payload)
+
+    if (message.type === "session-resume") {
+      queueMicrotask(() => {
+        this.dispatch("message", new MessageEvent("message", {
+          data: JSON.stringify({sessionId: message.sessionId, type: "session-resumed"})
+        }))
+      })
+    }
+  }
 }
 
 describe("frontend-models - WebSocket controls", () => {
@@ -162,6 +172,40 @@ describe("frontend-models - WebSocket controls", () => {
       expect(ControlledWebSocket.instances.length).toEqual(2)
 
       controller.abort(new Error("signed out"))
+      await wait(0)
+      expect(ControlledWebSocket.instances[1].readyState).toEqual(ControlledWebSocket.CLOSED)
+    } finally {
+      await FrontendModelBase.disconnectWebsocket()
+      globalThis.WebSocket = OriginalWebSocket
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("rebinds a cached client when a signal provider returns a new session signal", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+    const sessionAController = new AbortController()
+    const sessionBController = new AbortController()
+    let sessionController = sessionAController
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.instances = []
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+    FrontendModelBase.configureTransport({
+      signal: () => sessionController.signal,
+      websocketUrl: "ws://example.test/websocket"
+    })
+
+    try {
+      await FrontendModelBase.connectWebsocket()
+      sessionAController.abort(new Error("session A ended"))
+      await wait(0)
+      expect(ControlledWebSocket.instances[0].readyState).toEqual(ControlledWebSocket.CLOSED)
+
+      sessionController = sessionBController
+      await FrontendModelBase.connectWebsocket()
+      expect(ControlledWebSocket.instances.length).toEqual(2)
+
+      sessionBController.abort(new Error("session B ended"))
       await wait(0)
       expect(ControlledWebSocket.instances[1].readyState).toEqual(ControlledWebSocket.CLOSED)
     } finally {
