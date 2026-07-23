@@ -13,6 +13,7 @@ import Insert from "./sql/insert.js"
 import Options from "./options.js"
 import mysql from "mysql"
 import query from "./query.js"
+import QueryAbortedError from "../../query-aborted-error.js"
 import QueryParser from "./query-parser.js"
 import streamQuery from "./query-stream.js"
 import RemoveIndex from "./sql/remove-index.js"
@@ -371,15 +372,20 @@ export default class VelociousDatabaseDriversMysql extends Base{
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
+   * @param {import("../base.js").QueryOptions} [options] - Query options (carries the optional abort signal).
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
-  async _queryActual(sql) {
+  async _queryActual(sql, options = {}) {
     if (!this.pool) await this.connect()
     if (!this.pool) throw new Error("MySQL pool failed to initialize")
 
     try {
-      return await query(this.pool, sql)
+      return await query(this.pool, sql, {signal: options.signal})
     } catch (error) {
+      // Preserve an abort as-is so the retry loop can recognise it as terminal
+      // (wrapping it in a plain Error would lose the QueryAbortedError type).
+      if (error instanceof QueryAbortedError) throw error
+
       // Re-throw to un-corrupt stacktrace
       if (error instanceof Error) {
         throw new Error(`Query failed: ${error.message}`, {cause: error})
