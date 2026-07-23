@@ -11,19 +11,21 @@ import TenantIterator from "./tenant-iterator.js"
  * class is the single discoverable home for switching into a tenant's context, reading the
  * current one, iterating every tenant of a database identifier, and dropping a tenant's
  * database. Switching delegates to {@link Current} (which owns the async-context tenant
- * state) and additionally runs the callback inside `ensureConnections`, so entering a tenant
+ * state) and additionally runs the callback inside `ensureConnections`, initializing registered
+ * tenant-switched models whose tables exist before the callback runs. Entering a tenant therefore
  * makes its database immediately queryable — the apartment-style "switch" semantics — without
- * the caller establishing connections itself; iteration and drop drive the app's tenant
- * database provider hooks.
+ * the caller establishing connections or model metadata itself; iteration and drop drive the
+ * app's tenant database provider hooks.
  */
 export default class Tenant {
   /**
    * Runs `callback` with `tenant` as the current tenant, restoring the previous tenant after.
    * The callback runs inside `ensureConnections`, so every database identifier the tenant
    * activates (the global database plus the tenant's database) has a checked-out connection
-   * available for the callback's duration: switching into a tenant makes it queryable without
-   * the caller wiring up connections. Already-checked-out connections are reused, so nesting
-   * `Tenant.with` calls does not open redundant connections. The callback receives the active
+   * available for the callback's duration. Registered tenant-switched models whose tables exist
+   * are initialized before the callback runs, so switching into a tenant makes it queryable
+   * without the caller wiring up connections or model metadata. Already-checked-out connections
+   * and in-progress model initialization promises are reused. The callback receives the active
    * connections keyed by identifier, the same as `ensureConnections`.
    * @template T
    * @param {object} tenant Descriptor understood by the app's tenantDatabaseResolver.
@@ -33,7 +35,41 @@ export default class Tenant {
   static async with(tenant, callback) {
     const configuration = Current.configuration()
 
-    return await Current.withTenant(tenant, async () => await configuration.ensureConnections(callback))
+    return await Current.withTenant(tenant, async () => await configuration.ensureConnections(async (connections) => {
+      await this._ensureCurrentTenantModelsInitialized(configuration)
+
+      return await callback(connections)
+    }))
+  }
+
+  /**
+   * Initializes registered tenant-switched models whose tables exist in the
+   * current tenant before runtime callbacks can build synchronous query scopes.
+   * Models for absent optional tables remain deferred until they are used.
+   * @param {import("../configuration.js").default} configuration - Current configuration.
+   * @returns {Promise<void>} - Resolves when available tenant models are initialized.
+   */
+  static async _ensureCurrentTenantModelsInitialized(configuration) {
+    for (const modelClass of Object.values(configuration.getModelClasses())) {
+      if (modelClass.isInitialized() || !modelClass.hasTenantDatabaseIdentifierResolver()) continue
+
+      const databaseIdentifier = modelClass.getTenantDatabaseIdentifier()
+
+      if (!databaseIdentifier || !configuration.isDatabaseIdentifierActive(databaseIdentifier)) continue
+
+      const connection = modelClass.connection()
+      const table = await connection.getTableByName(modelClass.tableName(), {throwError: false})
+
+      if (!table) continue
+
+      if (Object.keys(modelClass.getTranslationsMap()).length > 0) {
+        const translationsTable = await connection.getTableByName(modelClass.getTranslationsTableName(), {throwError: false})
+
+        if (!translationsTable) continue
+      }
+
+      await modelClass.ensureInitialized({configuration})
+    }
   }
 
   /**
@@ -47,9 +83,10 @@ export default class Tenant {
   /**
    * Lists the tenants for a database identifier through the provider and runs `callback`
    * within each tenant's context, optionally filtered and several at a time. Like
-   * {@link Tenant.with}, the callback runs inside `ensureConnections` so each tenant's
-   * database is queryable without the caller wiring up connections. Returns how many tenants
-   * the callback ran for (after filtering).
+   * {@link Tenant.with}, the callback runs inside `ensureConnections` after available
+   * tenant-switched models are initialized, so each tenant's database is queryable without the
+   * caller wiring up connections or model metadata. Returns how many tenants the callback ran
+   * for (after filtering).
    * @param {{identifier: string, callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, parallel?: number, filter?: (tenant: ?) => boolean, configuration?: import("../configuration.js").default}} args - Tenant database identifier, per-tenant operation, filtering, and concurrency settings.
    * @returns {Promise<number>} - Number of processed tenants.
    */
@@ -71,7 +108,10 @@ export default class Tenant {
     // their callbacks, such as create, before the tenant database exists) while runtime
     // iteration here gets the tenant's connections established the same way Tenant.with does.
     return await iterator.run(tenants, async (callbackArgs) => {
-      await configuration.ensureConnections({name: `Tenant.each: ${identifier}`}, async () => await callback(callbackArgs))
+      await configuration.ensureConnections({name: `Tenant.each: ${identifier}`}, async () => {
+        await this._ensureCurrentTenantModelsInitialized(configuration)
+        await callback(callbackArgs)
+      })
     })
   }
 
