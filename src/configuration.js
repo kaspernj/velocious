@@ -119,6 +119,15 @@ export default class VelociousConfiguration {
    * Close database connections promise.
    * @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
+
+  /**
+   * Dedicated advisory-lock connections currently holding a lock. These are spawned
+   * outside the pools' tracked sets (so a hold-timeout lock survives pool checkouts),
+   * so `closeDatabaseConnections` would otherwise walk past them; tracking them here
+   * lets a shutdown close them and release the lock instead of orphaning it.
+   * @type {Set<import("./database/drivers/base.js").default>} */
+  _advisoryLockConnections = new Set()
+
   /**
    * Runs current.
    * @returns {VelociousConfiguration} - The current.
@@ -2987,6 +2996,53 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Registers a dedicated connection that currently holds an advisory lock, so a
+   * shutdown can close it and release the lock. See `_advisoryLockConnections`.
+   * @param {import("./database/drivers/base.js").default} connection - The dedicated lock connection.
+   * @returns {void}
+   */
+  registerAdvisoryLockConnection(connection) {
+    this._advisoryLockConnections.add(connection)
+  }
+
+  /**
+   * Unregisters a dedicated advisory-lock connection once its lock scope ends and the
+   * connection has been (or is about to be) closed by its owner.
+   * @param {import("./database/drivers/base.js").default} connection - The dedicated lock connection.
+   * @returns {void}
+   */
+  unregisterAdvisoryLockConnection(connection) {
+    this._advisoryLockConnections.delete(connection)
+  }
+
+  /**
+   * Closes every registered dedicated advisory-lock connection, ending its session so
+   * the DB server releases the lock. Every connection is attempted before any failure
+   * is surfaced, so one stuck close does not leave the others' locks held; a failure is
+   * then thrown (never swallowed), aggregated when more than one connection failed.
+   * @returns {Promise<void>} - Resolves once all have been closed; rejects if any failed.
+   */
+  async _closeAdvisoryLockConnections() {
+    const connections = [...this._advisoryLockConnections]
+
+    this._advisoryLockConnections.clear()
+
+    /** @type {unknown[]} */
+    const errors = []
+
+    for (const connection of connections) {
+      try {
+        await connection.close()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+
+    if (errors.length == 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to close dedicated advisory-lock connections")
+  }
+
+  /**
    * Closes active database connections and clears global connections.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -3000,21 +3056,30 @@ export default class VelociousConfiguration {
     const constructors = new Set()
 
     this._closeDatabaseConnectionsPromise = (async () => {
-      for (const pool of Object.values(this.databasePools)) {
-        if (!pool) continue
+      try {
+        // Close dedicated advisory-lock connections first: they are spawned outside the
+        // pools' tracked sets, so `pool.closeAll()` would not reach them and a lock held
+        // by a runner torn down mid-pass would leak until the DB server's `wait_timeout`.
+        // Still close the pools even if this throws, so a stuck lock connection does not
+        // leave the rest of the connections open.
+        await this._closeAdvisoryLockConnections()
+      } finally {
+        for (const pool of Object.values(this.databasePools)) {
+          if (!pool) continue
 
-        await pool.closeAll()
+          await pool.closeAll()
 
-        const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
-        constructors.add(PoolClass)
+          const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
+          constructors.add(PoolClass)
+        }
+
+        for (const PoolClass of constructors) {
+          PoolClass.clearGlobalConnections(this)
+        }
+
+        // Allow models to be re-initialized after connections are closed.
+        this._modelsInitialized = false
       }
-
-      for (const PoolClass of constructors) {
-        PoolClass.clearGlobalConnections(this)
-      }
-
-      // Allow models to be re-initialized after connections are closed.
-      this._modelsInitialized = false
     })()
 
     try {

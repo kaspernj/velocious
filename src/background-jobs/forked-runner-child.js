@@ -1,6 +1,7 @@
 // @ts-check
 
 import runJobPayload from "./job-runner.js"
+import { closeRunnerConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
 
 // Name the process so `ps`/`top`/`htop` can identify forked job runners at a
@@ -10,6 +11,23 @@ import setRunnerProcessTitle from "./runner-process-title.js"
 setRunnerProcessTitle()
 
 let finishing = false
+let shuttingDown = false
+
+/**
+ * Closes the runner's connections — releasing any advisory lock a killed-mid-job
+ * job still holds — before exiting on shutdown, instead of leaving a half-open
+ * session that keeps the lock until the DB server's `wait_timeout`. Normal
+ * completion (`finish`) already released its locks via the job's own lock scope.
+ * @param {number} exitCode - Process exit code.
+ * @returns {Promise<void>}
+ */
+async function shutdownRunner(exitCode) {
+  if (shuttingDown || finishing) return
+  shuttingDown = true
+
+  await closeRunnerConnections(currentConfigurationOrNull())
+  process.exit(exitCode)
+}
 
 /**
  * Runs is job message.
@@ -82,11 +100,11 @@ async function handleJobMessage(message) {
 }
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
-  process.once(signal, () => process.exit(1))
+  process.once(signal, () => void shutdownRunner(1))
 }
 
 process.once("disconnect", () => {
-  if (!finishing) process.exit(0)
+  if (!finishing) void shutdownRunner(0)
 })
 
 process.once("message", (message) => {
