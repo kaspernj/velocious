@@ -219,12 +219,15 @@ class Comment extends FrontendModelBase {
   static resourceConfig() {
     return {
       abilities: ["read"],
-      attributes: ["id", "body"],
+      attributes: ["id", "body", "requestBaseUrl"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
       primaryKey: "id"
     }
   }
+
+  /** @returns {string} */
+  requestBaseUrl() { return this.readAttribute("requestBaseUrl") }
 }
 
 FrontendModelBase.registerModel(Comment)
@@ -1284,6 +1287,33 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         await expect(async () => {
           tasks[0].primaryInteraction()
         }).toThrow(/Task#primaryInteraction hasn't been preloaded/)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("propagates the controller to preloaded relationship serialization so request-scoped attributes serialize", async () => {
+    await Dummy.run(async () => {
+      configureNodeTransport()
+
+      try {
+        const {project} = await seedHttpPreloadModels()
+        // `requestBaseUrl` is a controller-dependent virtual attribute on the Comment
+        // resource. Before the controller was propagated to preloaded-relationship
+        // serialization resources, serializing it threw "requires a controller
+        // instance." and the whole request failed. Selecting it on a preloaded
+        // relationship must now serialize the request base URL.
+        const loadedProject = await Project
+          .select({Comment: ["id", "body", "requestBaseUrl"]})
+          .preload({tasks: ["comments"]})
+          .findBy({id: project.id()})
+        const tasks = loadedProject?.getRelationshipByName("tasks").loaded() || []
+        const comments = tasks[0].getRelationshipByName("comments").loaded()
+
+        expect(comments.length).toEqual(1)
+        expect(typeof comments[0].requestBaseUrl()).toEqual("string")
+        expect(comments[0].requestBaseUrl().length > 0).toEqual(true)
       } finally {
         resetFrontendModelTransport()
       }

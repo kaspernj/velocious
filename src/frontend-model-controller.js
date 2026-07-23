@@ -2826,6 +2826,12 @@ export default class FrontendModelController extends Controller {
       if (resourceClass) {
         return new resourceClass({
           ability: this.currentAbility(),
+          // Propagate the controller so a related/preloaded model's serialization
+          // resource can use request context (e.g. `requestBaseUrl()` for signed
+          // download URLs). Without it, any `<attr>Attribute` method that reaches
+          // for the controller throws "requires a controller instance." when a
+          // relationship is serialized as a preload.
+          controller: this,
           context: this.currentAbility()?.getContext() || {},
           locals: this.currentAbility()?.getLocals() || {},
           modelClass: /** @type {typeof import("./database/record/index.js").default} */ (model.constructor),
