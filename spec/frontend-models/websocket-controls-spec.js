@@ -61,8 +61,13 @@ function buildControlledClient({connectDelayMs = 0, readyDelayMs = 0, initiallyO
 
 class ControlledWebSocket {
   static autoOpen = true
+  static deferNextClose = false
   /** @type {ControlledWebSocket[]} */
   static instances = []
+  /** @type {(socket: ControlledWebSocket) => void} */
+  static onCreate = () => {}
+  /** @type {(() => void) | null} */
+  static pendingClose = null
   static CONNECTING = 0
   static OPEN = 1
   static CLOSING = 2
@@ -77,6 +82,7 @@ class ControlledWebSocket {
     /** @type {Map<string, Set<(event: Event | MessageEvent) => void>>} */
     this.listeners = new Map()
     ControlledWebSocket.instances.push(this)
+    ControlledWebSocket.onCreate(this)
 
     if (ControlledWebSocket.autoOpen) {
       queueMicrotask(() => {
@@ -111,8 +117,19 @@ class ControlledWebSocket {
   close() {
     if (this.readyState === this.CLOSED) return
 
-    this.readyState = this.CLOSED
-    this.dispatch("close", new Event("close"))
+    const finishClose = () => {
+      this.readyState = this.CLOSED
+      this.dispatch("close", new Event("close"))
+    }
+
+    if (ControlledWebSocket.deferNextClose) {
+      ControlledWebSocket.deferNextClose = false
+      this.readyState = this.CLOSING
+      ControlledWebSocket.pendingClose = finishClose
+      return
+    }
+
+    finishClose()
   }
 
   /** @param {string} payload - Serialized websocket payload. @returns {void} */
@@ -126,6 +143,14 @@ class ControlledWebSocket {
         }))
       })
     }
+  }
+
+  /** @returns {void} */
+  static finishPendingClose() {
+    const finishClose = ControlledWebSocket.pendingClose
+
+    ControlledWebSocket.pendingClose = null
+    finishClose?.()
   }
 }
 
@@ -211,6 +236,91 @@ describe("frontend-models - WebSocket controls", () => {
       expect(ControlledWebSocket.instances[1].readyState).toEqual(ControlledWebSocket.CLOSED)
     } finally {
       await FrontendModelBase.disconnectWebsocket()
+      globalThis.WebSocket = OriginalWebSocket
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("isolates an overlapping replacement session and preserves its automatic reconnect", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+    const originalSetTimeout = globalThis.setTimeout
+    const originalClearTimeout = globalThis.clearTimeout
+    const sessionAController = new AbortController()
+    const sessionBController = new AbortController()
+    let sessionController = sessionAController
+    /** @type {(() => void) | null} */
+    let reconnect = null
+    /** @type {() => void} */
+    let resolveReconnectScheduled = () => {}
+    const reconnectScheduled = new Promise((resolve) => { resolveReconnectScheduled = resolve })
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.deferNextClose = false
+    ControlledWebSocket.instances = []
+    ControlledWebSocket.onCreate = () => {}
+    ControlledWebSocket.pendingClose = null
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+    FrontendModelBase.configureTransport({
+      signal: () => sessionController.signal,
+      websocketUrl: "ws://example.test/websocket"
+    })
+
+    try {
+      await FrontendModelBase.connectWebsocket()
+      ControlledWebSocket.deferNextClose = true
+      sessionAController.abort(new Error("session A ended"))
+      expect(ControlledWebSocket.instances[0].readyState).toEqual(ControlledWebSocket.CLOSING)
+      expect(FrontendModelBase.websocketState().hasClient).toBe(false)
+
+      sessionController = sessionBController
+      const replacementCreated = new Promise((resolve) => {
+        ControlledWebSocket.onCreate = () => resolve(undefined)
+      })
+      const replacementConnect = FrontendModelBase.connectWebsocket()
+
+      void replacementConnect.catch(() => {})
+      await replacementCreated
+      await replacementConnect
+      expect(ControlledWebSocket.instances.length).toEqual(2)
+      expect(ControlledWebSocket.instances[1].readyState).toEqual(ControlledWebSocket.OPEN)
+
+      ControlledWebSocket.finishPendingClose()
+      await Promise.resolve()
+      expect(ControlledWebSocket.instances[1].readyState).toEqual(ControlledWebSocket.OPEN)
+      expect(FrontendModelBase.websocketState().isOpen).toBe(true)
+
+      globalThis.setTimeout = (callback) => {
+        reconnect = () => callback()
+        resolveReconnectScheduled()
+
+        return /** @type {ReturnType<typeof setTimeout>} */ ({})
+      }
+      globalThis.clearTimeout = () => {}
+      const reconnectedSocketCreated = new Promise((resolve) => {
+        ControlledWebSocket.onCreate = () => resolve(undefined)
+      })
+
+      await FrontendModelBase.dropWebsocket()
+      await reconnectScheduled
+      reconnect?.()
+      await reconnectedSocketCreated
+      await FrontendModelBase.connectWebsocket()
+
+      expect(ControlledWebSocket.instances.length).toEqual(3)
+      expect(ControlledWebSocket.instances[2].readyState).toEqual(ControlledWebSocket.OPEN)
+
+      sessionBController.abort(new Error("session B ended"))
+      expect(FrontendModelBase.websocketState().hasClient).toBe(false)
+      await Promise.resolve()
+      expect(ControlledWebSocket.instances[2].readyState).toEqual(ControlledWebSocket.CLOSED)
+    } finally {
+      ControlledWebSocket.finishPendingClose()
+      ControlledWebSocket.deferNextClose = false
+      sessionBController.abort(new Error("test cleanup"))
+      await FrontendModelBase.disconnectWebsocket()
+      ControlledWebSocket.onCreate = () => {}
+      globalThis.setTimeout = originalSetTimeout
+      globalThis.clearTimeout = originalClearTimeout
       globalThis.WebSocket = OriginalWebSocket
       resetFrontendModelTransport()
     }

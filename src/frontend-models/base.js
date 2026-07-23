@@ -160,18 +160,30 @@ let internalWebsocketClientSignal = null
 let internalWebsocketClientSignalCleanup = null
 
 /**
+ * Detaches an owned WebSocket client from the shared cache if it is still current.
+ * @param {VelociousWebsocketClient} client - Client whose ownership is ending.
+ * @returns {void}
+ */
+function detachInternalWebsocketClient(client) {
+  if (internalWebsocketClient !== client) return
+
+  internalWebsocketClient = null
+  internalWebsocketClientSignalCleanup?.()
+  internalWebsocketClientSignal = null
+  internalWebsocketClientSignalCleanup = null
+}
+
+/**
  * Disposes the owned WebSocket client before transport/session configuration changes.
  * @returns {void}
  */
 function resetInternalWebsocketClient() {
-  internalWebsocketClientSignalCleanup?.()
-  internalWebsocketClientSignal = null
-  internalWebsocketClientSignalCleanup = null
-
   const client = internalWebsocketClient
 
-  internalWebsocketClient = null
-  if (client) void client.disconnectAndStopReconnect()
+  if (!client) return
+
+  detachInternalWebsocketClient(client)
+  void client.disconnectAndStopReconnect()
 }
 
 /**
@@ -190,6 +202,7 @@ function bindInternalWebsocketClientSignal(sessionSignal) {
 
   const client = internalWebsocketClient
   const onSessionAbort = () => {
+    detachInternalWebsocketClient(client)
     clearBufferedOutgoingEvents()
     void client.disconnectAndStopReconnect()
   }
@@ -283,9 +296,11 @@ async function trackFrontendModelTransportRequest(callback) {
  */
 function resolveInternalWebsocketClient() {
   if (internalWebsocketClient) {
+    const client = internalWebsocketClient
+
     bindInternalWebsocketClientSignal(frontendModelTransportSignal())
 
-    return internalWebsocketClient
+    return client
   }
 
   const websocketUrl = frontendModelTransportConfig.websocketUrl
@@ -297,16 +312,17 @@ function resolveInternalWebsocketClient() {
 
   if (!resolvedUrl) return null
 
-  internalWebsocketClient = new VelociousWebsocketClient({
+  const client = new VelociousWebsocketClient({
     autoReconnect: true,
     sessionStore: frontendModelTransportConfig.sessionStore,
     url: resolvedUrl
   })
-  internalWebsocketClient.onReconnect = flushBufferedOutgoingEventsAfterReconnect
+  internalWebsocketClient = client
+  client.onReconnect = flushBufferedOutgoingEventsAfterReconnect
 
   bindInternalWebsocketClientSignal(frontendModelTransportSignal())
 
-  return internalWebsocketClient
+  return client
 }
 
 /**
@@ -3042,10 +3058,7 @@ export default class FrontendModelBase {
 
     const client = internalWebsocketClient
 
-    internalWebsocketClient = null
-    internalWebsocketClientSignalCleanup?.()
-    internalWebsocketClientSignal = null
-    internalWebsocketClientSignalCleanup = null
+    detachInternalWebsocketClient(client)
     await client.disconnectAndStopReconnect()
   }
 
