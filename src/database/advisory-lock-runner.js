@@ -150,13 +150,22 @@ export default class AdvisoryLockRunner {
   async withDedicatedConnection(callback) {
     const connection = await this.configuration.getDatabasePool(this.databaseIdentifier).spawnConnection()
 
+    // The spawned driver owns its physical connection unless it borrows a shared one
+    // via `getConnection`. An owned connection lives outside the pools' tracked sets,
+    // so register it while the lock is held: a shutdown then closes it (releasing the
+    // lock) instead of orphaning a half-open session until the DB `wait_timeout`.
+    const ownsConnection = !connection.getArgs().getConnection
+
+    if (ownsConnection) this.configuration.registerAdvisoryLockConnection(connection)
+
     try {
       return await callback(connection)
     } finally {
-      if (connection.getArgs().getConnection) {
-        await connection.releaseHeldAdvisoryLocks()
-      } else {
+      if (ownsConnection) {
+        this.configuration.unregisterAdvisoryLockConnection(connection)
         await connection.close()
+      } else {
+        await connection.releaseHeldAdvisoryLocks()
       }
     }
   }

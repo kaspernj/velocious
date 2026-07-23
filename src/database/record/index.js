@@ -1710,6 +1710,12 @@ class VelociousDatabaseRecord {
    */
   static switchesTenantDatabase(databaseIdentifierOrResolver) {
     this._tenantDatabaseIdentifierResolver = databaseIdentifierOrResolver
+
+    if (this._translationClass) {
+      const translatedModelClass = this
+
+      this._translationClass.switchesTenantDatabase(({tenant}) => translatedModelClass.getTenantDatabaseIdentifier(tenant))
+    }
   }
 
   /**
@@ -2813,6 +2819,12 @@ class VelociousDatabaseRecord {
     Object.defineProperty(TranslationClass, "name", {value: className})
     TranslationClass.setTableName(this.getTranslationsTableName())
     TranslationClass.belongsTo(belongsTo)
+
+    if (this.hasTenantDatabaseIdentifierResolver()) {
+      const translatedModelClass = this
+
+      TranslationClass.switchesTenantDatabase(({tenant}) => translatedModelClass.getTenantDatabaseIdentifier(tenant))
+    }
 
     this._translationClass = TranslationClass
 
