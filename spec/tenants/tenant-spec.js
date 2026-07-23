@@ -1,6 +1,7 @@
 // @ts-check
 
 import Current from "../../src/current.js"
+import DatabaseRecord from "../../src/database/record/index.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import Tenant from "../../src/tenants/tenant.js"
 import {createTenantTestConfiguration, seedTenantValue} from "../helpers/tenant-test-helpers.js"
@@ -55,6 +56,104 @@ describe("Tenant", () => {
       })
 
       expect(readValue).toEqual("from-alpha")
+    })
+  })
+
+  it("initializes a deferred tenant model before concurrent callbacks build queries", async () => {
+    await withConfiguration({listTenants: () => []}, async ({configuration}) => {
+      let ensureCalls = 0
+      let initializeCalls = 0
+      /** @type {() => void} */
+      let releaseInitialization = () => {}
+      const initializationGate = new Promise((resolve) => {
+        releaseInitialization = resolve
+      })
+
+      class DeferredTenantRecord extends DatabaseRecord {
+        static async ensureInitialized(args = {}) {
+          ensureCalls += 1
+
+          if (ensureCalls === 2) releaseInitialization()
+
+          await super.ensureInitialized(args)
+        }
+
+        static async initializeRecord(args) {
+          initializeCalls += 1
+          await initializationGate
+          await super.initializeRecord(args)
+        }
+      }
+
+      DeferredTenantRecord.setTableName("deferred_tenant_records")
+      DeferredTenantRecord.switchesTenantDatabase("projectTenant")
+      DeferredTenantRecord.registerRecordClass({configuration})
+
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await configuration.ensureConnections(async (connections) => {
+          await connections.projectTenant.query("CREATE TABLE deferred_tenant_records(id integer PRIMARY KEY AUTOINCREMENT, name varchar(255))")
+          await connections.projectTenant.query("INSERT INTO deferred_tenant_records(name) VALUES ('alpha')")
+        })
+      })
+
+      const loadRecords = async () => await Tenant.with({slug: "alpha"}, async () => {
+        return await DeferredTenantRecord.where({name: "alpha"}).toArray()
+      })
+      const [firstResult, secondResult] = await Promise.allSettled([loadRecords(), loadRecords()])
+
+      if (firstResult.status === "rejected") throw firstResult.reason
+      if (secondResult.status === "rejected") throw secondResult.reason
+
+      const firstRecords = firstResult.value
+      const secondRecords = secondResult.value
+
+      expect(ensureCalls).toEqual(2)
+      expect(initializeCalls).toEqual(1)
+      expect(firstRecords.map((record) => record.readAttribute("name"))).toEqual(["alpha"])
+      expect(secondRecords.map((record) => record.readAttribute("name"))).toEqual(["alpha"])
+    })
+  })
+
+  it("initializes a translated tenant model from the tenant connection", async () => {
+    await withConfiguration({listTenants: () => []}, async ({configuration}) => {
+      class TranslatedTenantRecord extends DatabaseRecord {}
+
+      TranslatedTenantRecord.setTableName("translated_tenant_records")
+      TranslatedTenantRecord.translates("name")
+      TranslatedTenantRecord.switchesTenantDatabase("projectTenant")
+      TranslatedTenantRecord.registerRecordClass({configuration})
+
+      const TranslationClass = TranslatedTenantRecord.getTranslationClass()
+
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await configuration.ensureConnections(async (connections) => {
+          await connections.projectTenant.query("CREATE TABLE translated_tenant_records(id integer PRIMARY KEY AUTOINCREMENT)")
+          await connections.projectTenant.query("CREATE TABLE translated_tenant_record_translations(id integer PRIMARY KEY AUTOINCREMENT, translated_tenant_record_id integer, locale varchar(255), name varchar(255))")
+        })
+      })
+
+      await Tenant.with({slug: "alpha"}, async () => {
+        expect(TranslatedTenantRecord.isInitialized()).toEqual(true)
+        expect(TranslationClass.isInitialized()).toEqual(true)
+        expect(TranslationClass.getDatabaseIdentifier()).toEqual("projectTenant")
+      })
+    })
+  })
+
+  it("leaves a tenant model deferred when its optional table is absent", async () => {
+    await withConfiguration({listTenants: () => []}, async ({configuration}) => {
+      class MissingTenantRecord extends DatabaseRecord {}
+
+      MissingTenantRecord.setTableName("missing_tenant_records")
+      MissingTenantRecord.switchesTenantDatabase("projectTenant")
+      MissingTenantRecord.registerRecordClass({configuration})
+
+      const selected = await Tenant.with({slug: "alpha"}, async (connections) => {
+        return await connections.projectTenant.query("SELECT 1 AS value")
+      })
+
+      expect(selected[0]?.value).toEqual(1)
+      expect(MissingTenantRecord.isInitialized()).toEqual(false)
     })
   })
 
