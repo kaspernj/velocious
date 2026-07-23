@@ -188,8 +188,11 @@ export default class BackgroundJobsWorker {
     this.inflightPooledJobs = new Set()
     /** @type {Set<import("node:child_process").ChildProcess>} */
     this.pooledChildren = new Set()
-    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, retiring: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
+    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
     this.pooledChildStates = new Map()
+    // Monotonic dispatch counter for round-robin child selection: each dispatch stamps
+    // the chosen child, and selection prefers the child dispatched least recently.
+    this._pooledDispatchSeq = 0
   }
 
   /**
@@ -643,17 +646,12 @@ export default class BackgroundJobsWorker {
    * @returns {Promise<void>} - Resolves after the durable report.
    */
   _runPooledJob(payload) {
-    let child
-    for (const candidate of this.pooledChildren) {
-      const state = this.pooledChildStates.get(candidate)
-      if (state && !state.retiring && state.inflight.size < this.pooledRunnerConcurrency) {
-        child = candidate
-        break
-      }
-    }
-    if (!child) child = this._createPooledChild()
+    const child = this._selectPooledChild() || this._createPooledChild()
     const state = this.pooledChildStates.get(child)
     if (!state) throw new Error("Pooled runner state missing")
+
+    // Stamp the round-robin cursor so the next dispatch prefers a different child.
+    state.lastDispatchSeq = ++this._pooledDispatchSeq
 
     return new Promise((resolve) => {
       const timeoutTimer = this._armPooledJobTimeout({child, jobId: payload.id})
@@ -665,6 +663,36 @@ export default class BackgroundJobsWorker {
         void this._handlePooledChildFailure({child, error})
       }
     })
+  }
+
+  /**
+   * Selects a pooled child to run the next job, or undefined when every non-retiring
+   * child is already full (the caller then lazily spawns one). Among children with a
+   * free concurrency slot, picks the one dispatched least recently — a round-robin that
+   * spreads jobs (notably multi-minute RunBuildJobs, each pinning a tenant connection
+   * for its whole run) evenly across children instead of first-fit packing the earliest
+   * one until it is full. A freshly spawned or replacement child therefore takes its
+   * fair share one job at a time as its turn comes up, rather than absorbing a burst to
+   * "catch up" to the others.
+   * @returns {import("node:child_process").ChildProcess | undefined} - The chosen child, or undefined when all non-retiring children are full.
+   */
+  _selectPooledChild() {
+    /** @type {import("node:child_process").ChildProcess | undefined} */
+    let selected
+    let selectedSeq = Infinity
+
+    for (const child of this.pooledChildren) {
+      const state = this.pooledChildStates.get(child)
+
+      if (!state || state.retiring || state.inflight.size >= this.pooledRunnerConcurrency) continue
+
+      if (state.lastDispatchSeq < selectedSeq) {
+        selected = child
+        selectedSeq = state.lastDispatchSeq
+      }
+    }
+
+    return selected
   }
 
   /**
@@ -733,7 +761,7 @@ export default class BackgroundJobsWorker {
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
-    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), retiring: false})
+    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false})
     child.on("message", (message) => this._handlePooledChildMessage({child, message}))
     child.once("exit", (code, signal) => this._handlePooledChildFailure({child, error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)}))
     child.once("error", (error) => this._handlePooledChildFailure({child, error}))
