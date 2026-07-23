@@ -3017,22 +3017,29 @@ export default class VelociousConfiguration {
 
   /**
    * Closes every registered dedicated advisory-lock connection, ending its session so
-   * the DB server releases the lock. Best-effort per connection: a connection that is
-   * already closing/closed must not stop the others (the caller is shutting down).
-   * @returns {Promise<void>} - Resolves once all have been closed.
+   * the DB server releases the lock. Every connection is attempted before any failure
+   * is surfaced, so one stuck close does not leave the others' locks held; a failure is
+   * then thrown (never swallowed), aggregated when more than one connection failed.
+   * @returns {Promise<void>} - Resolves once all have been closed; rejects if any failed.
    */
   async _closeAdvisoryLockConnections() {
     const connections = [...this._advisoryLockConnections]
 
     this._advisoryLockConnections.clear()
 
+    /** @type {unknown[]} */
+    const errors = []
+
     for (const connection of connections) {
       try {
         await connection.close()
       } catch (error) {
-        console.error("Failed to close a dedicated advisory-lock connection on shutdown:", error)
+        errors.push(error)
       }
     }
+
+    if (errors.length == 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to close dedicated advisory-lock connections")
   }
 
   /**
@@ -3049,26 +3056,30 @@ export default class VelociousConfiguration {
     const constructors = new Set()
 
     this._closeDatabaseConnectionsPromise = (async () => {
-      // Close dedicated advisory-lock connections first: they are spawned outside the
-      // pools' tracked sets, so `pool.closeAll()` would not reach them and a lock held
-      // by a runner torn down mid-pass would leak until the DB server's `wait_timeout`.
-      await this._closeAdvisoryLockConnections()
+      try {
+        // Close dedicated advisory-lock connections first: they are spawned outside the
+        // pools' tracked sets, so `pool.closeAll()` would not reach them and a lock held
+        // by a runner torn down mid-pass would leak until the DB server's `wait_timeout`.
+        // Still close the pools even if this throws, so a stuck lock connection does not
+        // leave the rest of the connections open.
+        await this._closeAdvisoryLockConnections()
+      } finally {
+        for (const pool of Object.values(this.databasePools)) {
+          if (!pool) continue
 
-      for (const pool of Object.values(this.databasePools)) {
-        if (!pool) continue
+          await pool.closeAll()
 
-        await pool.closeAll()
+          const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
+          constructors.add(PoolClass)
+        }
 
-        const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
-        constructors.add(PoolClass)
+        for (const PoolClass of constructors) {
+          PoolClass.clearGlobalConnections(this)
+        }
+
+        // Allow models to be re-initialized after connections are closed.
+        this._modelsInitialized = false
       }
-
-      for (const PoolClass of constructors) {
-        PoolClass.clearGlobalConnections(this)
-      }
-
-      // Allow models to be re-initialized after connections are closed.
-      this._modelsInitialized = false
     })()
 
     try {

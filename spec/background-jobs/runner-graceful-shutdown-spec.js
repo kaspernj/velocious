@@ -6,9 +6,11 @@ import {closeRunnerConnections} from "../../src/background-jobs/runner-graceful-
 
 /**
  * A fake configuration that records the framework-close calls a runner makes on
- * shutdown, optionally overriding each to throw or hang.
- * @param {{closeDatabaseConnections?: () => Promise<void>, disconnectBeacon?: () => Promise<void>}} [overrides]
- * @returns {{calls: string[], closeDatabaseConnections: () => Promise<void>, disconnectBeacon: () => Promise<void>}}
+ * shutdown, optionally overriding each to throw or hang. Structurally matches the
+ * `RunnerCloseableConfiguration` contract `closeRunnerConnections` depends on, so no
+ * broad cast is needed to pass it.
+ * @param {{closeDatabaseConnections?: () => Promise<void>, disconnectBeacon?: () => Promise<void>}} [overrides] - Per-call behavior overrides.
+ * @returns {{calls: string[], closeDatabaseConnections: () => Promise<void>, disconnectBeacon: () => Promise<void>}} - The fake configuration.
  */
 function fakeConfiguration(overrides = {}) {
   /** @type {string[]} */
@@ -27,38 +29,66 @@ function fakeConfiguration(overrides = {}) {
   }
 }
 
+/**
+ * Runs `callback` and returns the error it threw, or undefined if it did not throw.
+ * @param {() => Promise<unknown>} callback - Callback expected to reject.
+ * @returns {Promise<unknown>} - The thrown error, or undefined.
+ */
+async function errorFrom(callback) {
+  try {
+    await callback()
+  } catch (error) {
+    return error
+  }
+
+  return undefined
+}
+
 describe("runner graceful shutdown", () => {
-  it("closes database connections (after disconnecting the beacon) so held advisory locks release on shutdown", async () => {
+  it("closes both the beacon and the database connections so held advisory locks release on shutdown", async () => {
     const configuration = fakeConfiguration()
 
-    await closeRunnerConnections(/** @type {any} */ (configuration))
+    await closeRunnerConnections(configuration)
 
-    expect(configuration.calls).toEqual(["disconnectBeacon", "closeDatabaseConnections"])
+    // Order-independent: the two closes run concurrently.
+    expect([...configuration.calls].sort()).toEqual(["closeDatabaseConnections", "disconnectBeacon"])
   })
 
-  it("still closes database connections when disconnecting the beacon fails", async () => {
+  it("still closes the database even when the beacon disconnect hangs, and surfaces the failure", async () => {
+    const configuration = fakeConfiguration({disconnectBeacon: () => new Promise(() => {})})
+
+    // The database close (which releases the locks) must not be skipped because the
+    // beacon disconnect never settles; the hung beacon is surfaced via the bound.
+    const error = await errorFrom(() => closeRunnerConnections(configuration, 20))
+
+    expect(error).toBeInstanceOf(Error)
+    expect(configuration.calls.includes("closeDatabaseConnections")).toBe(true)
+  })
+
+  it("surfaces a beacon disconnect failure instead of swallowing it, while still closing the database", async () => {
     const configuration = fakeConfiguration({disconnectBeacon: async () => { throw new Error("beacon down") }})
 
-    await closeRunnerConnections(/** @type {any} */ (configuration))
+    const error = await errorFrom(() => closeRunnerConnections(configuration))
 
-    expect(configuration.calls).toEqual(["disconnectBeacon", "closeDatabaseConnections"])
+    expect(error).toBeInstanceOf(Error)
+    expect(configuration.calls.includes("closeDatabaseConnections")).toBe(true)
   })
 
-  it("does not throw when the close itself fails (the caller is exiting regardless)", async () => {
+  it("surfaces a database close failure instead of swallowing it", async () => {
     const configuration = fakeConfiguration({closeDatabaseConnections: async () => { throw new Error("close failed") }})
 
-    await closeRunnerConnections(/** @type {any} */ (configuration))
+    const error = await errorFrom(() => closeRunnerConnections(configuration))
 
-    expect(configuration.calls).toEqual(["disconnectBeacon", "closeDatabaseConnections"])
+    expect(error).toBeInstanceOf(Error)
   })
 
-  it("is bounded so a wedged close cannot block the exit", async () => {
+  it("is bounded so a wedged database close cannot block the exit (rejects instead of hanging)", async () => {
     const configuration = fakeConfiguration({closeDatabaseConnections: () => new Promise(() => {})})
 
-    // Completing (rather than hanging on the never-settling close) proves the bound.
-    await closeRunnerConnections(/** @type {any} */ (configuration), 20)
+    // Completing at all (rather than hanging on the never-settling close) proves the bound.
+    const error = await errorFrom(() => closeRunnerConnections(configuration, 20))
 
-    expect(configuration.calls).toEqual(["disconnectBeacon", "closeDatabaseConnections"])
+    expect(error).toBeInstanceOf(Error)
   })
 
   it("is a no-op when no configuration is set", async () => {
