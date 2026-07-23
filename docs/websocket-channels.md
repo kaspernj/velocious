@@ -95,6 +95,19 @@ await subscription.ready           // resolves once the server sends channel-sub
 subscription.close()                // client-initiated unsubscribe
 ```
 
+Frontend-model applications can connect and wait for readiness in one bounded operation:
+
+```js
+const subscription = await Task.subscribeWebsocketChannel("GameChat", {
+  params: {gameId: "abc"},
+  timeoutMs: 10_000,
+  signal: sessionController.signal,
+  onMessage: (body) => console.log(body)
+})
+```
+
+`FrontendModelBase.openWebsocketConnection(...)` accepts the same `timeoutMs` and `signal` controls. The timeout is one total startup budget shared by socket connection and server-confirmed handle readiness; time spent connecting is deducted before readiness begins. These controls are transport metadata and are never included in `params`. A startup timeout or abort closes a partially created handle, and caller abort reasons are preserved. The deadline is removed after readiness, so it never expires a healthy long-lived handle. A transport-level session signal additionally stops reconnects and buffered replay work when the session ends.
+
 Subscription handle exposes:
 - `subscriptionId: string`
 - `lastEventId?: string`
@@ -110,7 +123,7 @@ Client behavior:
 - Queued subscriptions preserve `lastEventId`, so replay checkpoints survive delayed initial connects as well as later reconnects.
 - `connect()` is the normal public entrypoint. By default it enables auto-reconnect, and when a `networkMonitor` is configured it waits for the monitor to report online before opening or re-opening the socket.
 - Callers that need lower-level behavior can still override `connect({autoReconnect: false})` or `connect({waitForOnline: false})`, but those are opt-outs rather than the normal app path.
-- **Connection liveness (opt-in, Node long-lived clients).** The constructor forwards snapreq 0.0.9's liveness options straight through, so a long-lived server-side consumer can keep a socket from silently leaking. All three default off, so browser/Expo usage is unchanged:
+- **Connection liveness (opt-in, Node long-lived clients).** The constructor forwards snapreq 0.0.10's liveness options straight through, so a long-lived server-side consumer can keep a socket from silently leaking. All three default off, so browser/Expo usage is unchanged:
   - `webSocketImplementation` — a `WebSocket` constructor to use instead of the global one. Inject Node's `ws` here to get real protocol ping/pong and an unref-able socket; the browser/undici global exposes neither, so the two options below are no-ops without it.
   - `heartbeatIntervalMs` — when `> 0` (and the implementation supports `.ping()`), send a protocol ping every interval and drop the socket if the peer did not pong since the previous ping, so a client notices a vanished server within ~2× the interval (the ping timer is `unref`'d and never keeps the process alive on its own).
   - `unref` — unref the underlying socket so an idle connection can never pin the Node event loop by itself.

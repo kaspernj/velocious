@@ -1,7 +1,7 @@
 // @ts-check
 
 import * as inflection from "inflection"
-import timeout from "awaitery/build/timeout.js"
+import timeout, {TimeoutError} from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import FrontendModelQuery, {frontendModelEventOptionsPayload} from "./query.js"
 import FrontendModelPreloader from "./preloader.js"
@@ -12,7 +12,7 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
 import runWithTransportDeadline from "./transport-deadline.js"
 import {REQUEST_TIME_ZONE_HEADER, validateTimeZone} from "../time-zone.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
-import {bufferOutgoingEvent, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
+import {bufferOutgoingEvent, clearBufferedOutgoingEvents, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 import {defineModelScope} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
@@ -154,6 +154,64 @@ let frontendModelIdleResolvers = []
  * Internal websocket client.
  * @type {VelociousWebsocketClient | null} */
 let internalWebsocketClient = null
+/** @type {(() => void) | null} */
+let internalWebsocketClientSignalCleanup = null
+
+/**
+ * Disposes the owned WebSocket client before transport/session configuration changes.
+ * @returns {void}
+ */
+function resetInternalWebsocketClient() {
+  internalWebsocketClientSignalCleanup?.()
+  internalWebsocketClientSignalCleanup = null
+
+  const client = internalWebsocketClient
+
+  internalWebsocketClient = null
+  if (client) void client.disconnectAndStopReconnect()
+}
+
+/**
+ * Runs a WebSocket startup sequence under one absolute deadline. Each snapreq
+ * stage receives only the time remaining, so connect and server readiness do
+ * not each restart the caller's full timeout.
+ * @template {{close: () => void, ready: Promise<void>}} T
+ * @param {{connect: (options?: {timeoutMs?: number, signal?: AbortSignal}) => Promise<void>}} client - WebSocket client.
+ * @param {{timeoutMs?: number, signal?: AbortSignal}} controls - Startup controls.
+ * @param {(controls: {timeoutMs?: number, signal?: AbortSignal}) => T} createHandle - Creates the ready-capable handle.
+ * @returns {Promise<T>} - Ready WebSocket handle.
+ */
+async function startFrontendModelWebsocketHandle(client, controls, createHandle) {
+  const deadline = controls.timeoutMs && controls.timeoutMs > 0
+    ? Date.now() + controls.timeoutMs
+    : undefined
+  const remainingTimeoutMs = () => {
+    if (deadline === undefined) return undefined
+
+    const remaining = deadline - Date.now()
+
+    if (remaining <= 0) {
+      throw new TimeoutError("Frontend model WebSocket startup timed out")
+    }
+
+    return remaining
+  }
+  /** @type {T | undefined} */
+  let handle
+
+  try {
+    controls.signal?.throwIfAborted()
+    await client.connect({signal: controls.signal, timeoutMs: remainingTimeoutMs()})
+    controls.signal?.throwIfAborted()
+    handle = createHandle({signal: controls.signal, timeoutMs: remainingTimeoutMs()})
+    await handle.ready
+
+    return handle
+  } catch (error) {
+    handle?.close()
+    throw error
+  }
+}
 
 /**
  * Runs frontend model transport is idle.
@@ -255,6 +313,21 @@ function resolveInternalWebsocketClient() {
   })
   internalWebsocketClient.onReconnect = flushBufferedOutgoingEventsAfterReconnect
 
+  const sessionSignal = frontendModelTransportSignal()
+
+  if (sessionSignal) {
+    const client = internalWebsocketClient
+    const onSessionAbort = () => {
+      clearBufferedOutgoingEvents()
+      void client.disconnectAndStopReconnect()
+    }
+
+    sessionSignal.addEventListener("abort", onSessionAbort, {once: true})
+    internalWebsocketClientSignalCleanup = () => sessionSignal.removeEventListener("abort", onSessionAbort)
+
+    if (sessionSignal.aborted) onSessionAbort()
+  }
+
   return internalWebsocketClient
 }
 
@@ -265,24 +338,34 @@ async function flushBufferedOutgoingEventsAfterReconnect() {
   if (!internalWebsocketClient) return
 
   const events = drainBufferedOutgoingEvents()
+  const sessionSignal = frontendModelTransportSignal()
 
-  for (let index = 0; index < events.length; index += 1) {
-    try {
-      await internalWebsocketClient.post(events[index].customPath, events[index].payload)
-    } catch {
-      const socketOpen = internalWebsocketClient.socket?.readyState === internalWebsocketClient.socket?.OPEN
+  await runWithTransportDeadline(
+    {
+      errorMessage: "Buffered frontend-model WebSocket flush timed out",
+      signal: sessionSignal,
+      timeoutMs: frontendModelTransportTimeoutMs()
+    },
+    async (signal) => {
+      for (let index = 0; index < events.length; index += 1) {
+        try {
+          await internalWebsocketClient?.post(events[index].customPath, events[index].payload, {signal})
+        } catch {
+          if (sessionSignal?.aborted) return
 
-      if (socketOpen) {
-        continue
+          const socketOpen = internalWebsocketClient?.socket?.readyState === internalWebsocketClient?.socket?.OPEN
+
+          if (socketOpen) continue
+
+          for (let remaining = index; remaining < events.length; remaining += 1) {
+            bufferOutgoingEvent(events[remaining])
+          }
+
+          return
+        }
       }
-
-      for (let remaining = index; remaining < events.length; remaining += 1) {
-        bufferOutgoingEvent(events[remaining])
-      }
-
-      return
     }
-  }
+  )
 }
 
 /**
@@ -1785,6 +1868,25 @@ function frontendModelTransportSignal() {
 }
 
 /**
+ * Resolves per-startup controls with the configured session cancellation.
+ * @param {{timeoutMs?: number, signal?: AbortSignal}} controls - Call controls.
+ * @returns {{timeoutMs?: number, signal?: AbortSignal}} - Effective startup controls.
+ */
+function frontendModelWebsocketStartupControls(controls) {
+  const sessionSignal = frontendModelTransportSignal()
+  let signal = controls.signal || sessionSignal
+
+  if (controls.signal && sessionSignal && controls.signal !== sessionSignal) {
+    signal = AbortSignal.any([controls.signal, sessionSignal])
+  }
+
+  return {
+    signal,
+    timeoutMs: controls.timeoutMs === undefined ? frontendModelTransportTimeoutMs() : controls.timeoutMs
+  }
+}
+
+/**
  * Runs perform shared frontend model api request.
  * @param {Record<string, ?>} requestPayload - Shared request payload.
  * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
@@ -2897,7 +2999,7 @@ export default class FrontendModelBase {
     if (Object.prototype.hasOwnProperty.call(config, "websocketUrl")) {
       frontendModelTransportConfig.websocketUrl = config.websocketUrl
       // Reset cached internal client so the new URL takes effect on next subscribe
-      internalWebsocketClient = null
+      resetInternalWebsocketClient()
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "requestHeaders")) {
@@ -2910,6 +3012,7 @@ export default class FrontendModelBase {
 
     if (Object.prototype.hasOwnProperty.call(config, "signal")) {
       frontendModelTransportConfig.signal = config.signal
+      resetInternalWebsocketClient()
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "timeZone")) {
@@ -2923,7 +3026,7 @@ export default class FrontendModelBase {
     if (Object.prototype.hasOwnProperty.call(config, "sessionStore")) {
       frontendModelTransportConfig.sessionStore = config.sessionStore
       // Reset cached internal client so the new sessionStore is picked up.
-      internalWebsocketClient = null
+      resetInternalWebsocketClient()
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "offlineSync")) {
@@ -2953,6 +3056,8 @@ export default class FrontendModelBase {
     if (!internalWebsocketClient) return
 
     await internalWebsocketClient.disconnectAndStopReconnect()
+    internalWebsocketClientSignalCleanup?.()
+    internalWebsocketClientSignalCleanup = null
   }
 
   /**
@@ -3087,7 +3192,7 @@ export default class FrontendModelBase {
       }
 
       lastParamsJson = nextParamsJson
-      connection = FrontendModelBase.openWebsocketConnection(connectionType, {
+      connection = client.openConnection(connectionType, {
         params: nextParams,
         onMessage: options.onMessage,
         onClose: () => {
@@ -3118,34 +3223,46 @@ export default class FrontendModelBase {
    * `openConnection`. Apps use this for per-session state/messaging
    * that doesn't fit the pub/sub Channel model (locale, presence).
    * @param {string} connectionType - Name the server registered the class under.
-   * @param {{params?: Record<string, ?>, onConnect?: () => void, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options and event handlers.
-   * @returns {{ready: Promise<void>, close: () => void}} - Websocket connection handle.
+   * @param {{params?: Record<string, ?>, timeoutMs?: number, signal?: AbortSignal, onConnect?: () => void, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options, startup controls, and event handlers. The timeout covers connect and server-confirmed readiness only; the signal cancels startup without entering the wire payload.
+   * @returns {Promise<{ready: Promise<void>, close: () => void}>} - Ready Websocket connection handle.
    */
-  static openWebsocketConnection(connectionType, options) {
+  static async openWebsocketConnection(connectionType, options = {}) {
     const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.openConnection !== "function") {
       throw new Error("openWebsocketConnection requires configureTransport({websocketUrl})")
     }
 
-    return client.openConnection(connectionType, options || {})
+    const {signal, timeoutMs, ...connectionOptions} = options
+
+    return await startFrontendModelWebsocketHandle(
+      client,
+      frontendModelWebsocketStartupControls({signal, timeoutMs}),
+      (startupControls) => client.openConnection(connectionType, {...connectionOptions, ...startupControls})
+    )
   }
 
   /**
    * Subscribes to a pub/sub `WebsocketChannel`. Thin wrapper around
    * the internal client's `subscribeChannel`.
    * @param {string} channelType - Channel class name registered on the server.
-   * @param {{params?: Record<string, ?>, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel subscription options and event handlers.
-   * @returns {{ready: Promise<void>, close: () => void}} - Websocket channel handle from the configured client.
+   * @param {{params?: Record<string, ?>, timeoutMs?: number, signal?: AbortSignal, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel options, startup controls, and event handlers. The timeout covers connect and server-confirmed readiness only; the signal cancels startup without entering the wire payload.
+   * @returns {Promise<{ready: Promise<void>, close: () => void}>} - Ready Websocket channel handle from the configured client.
    */
-  static subscribeWebsocketChannel(channelType, options) {
+  static async subscribeWebsocketChannel(channelType, options = {}) {
     const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.subscribeChannel !== "function") {
       throw new Error("subscribeWebsocketChannel requires configureTransport({websocketUrl})")
     }
 
-    return client.subscribeChannel(channelType, options || {})
+    const {signal, timeoutMs, ...channelOptions} = options
+
+    return await startFrontendModelWebsocketHandle(
+      client,
+      frontendModelWebsocketStartupControls({signal, timeoutMs}),
+      (startupControls) => client.subscribeChannel(channelType, {...channelOptions, ...startupControls})
+    )
   }
 
   /**
