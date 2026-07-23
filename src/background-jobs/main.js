@@ -60,9 +60,11 @@ export default class BackgroundJobsMain {
    * @param {number} [args.port] - Port.
    * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
    * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
+   * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    */
-  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs}) {
+  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, closeDatabaseConnectionsOnStop = true}) {
     this.configuration = configuration
+    this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
     const config = configuration.getBackgroundJobsConfig()
     this.host = host || config.host
     this.port = typeof port === "number" ? port : config.port
@@ -287,7 +289,7 @@ export default class BackgroundJobsMain {
     try {
       await this._closeServer()
     } finally {
-      await this.configuration.closeDatabaseConnections()
+      if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
     }
   }
 

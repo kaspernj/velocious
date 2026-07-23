@@ -2144,6 +2144,11 @@ Inline jobs share the worker process and run concurrently up to `maxConcurrentIn
 new BackgroundJobsWorker({configuration, maxConcurrentInlineJobs: 8})
 ```
 
+Standalone background-jobs main and worker processes close their configuration's
+database pools during `stop()`. Embedded/test callers that share externally owned
+pools can pass `closeDatabaseConnectionsOnStop: false` to `BackgroundJobsMain` or
+`BackgroundJobsWorker`; sockets and Beacon still shut down normally.
+
 ## Scheduled jobs
 
 Velocious can enqueue recurring jobs from the `background-jobs-main` process. Configure them with `scheduledBackgroundJobs` using Sidekiq Scheduler-style `every` arrays:

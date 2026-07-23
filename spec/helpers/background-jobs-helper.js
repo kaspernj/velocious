@@ -22,7 +22,11 @@ export async function startBackgroundJobs({workerOptions = {}} = {}) {
     port: main.getPort()
   })
 
-  const worker = new BackgroundJobsWorker({configuration: dummyConfiguration, ...workerOptions})
+  const worker = new BackgroundJobsWorker({
+    closeDatabaseConnectionsOnStop: false,
+    configuration: dummyConfiguration,
+    ...workerOptions
+  })
   await worker.start()
 
   return {main, store, worker}
@@ -40,7 +44,12 @@ export async function startBackgroundJobsMain({backgroundJobsConfig} = {}) {
   const store = new BackgroundJobsStore({configuration: dummyConfiguration})
   await store.clearAll()
 
-  const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+  const main = new BackgroundJobsMain({
+    closeDatabaseConnectionsOnStop: false,
+    configuration: dummyConfiguration,
+    host: "127.0.0.1",
+    port: 0
+  })
   await main.start()
 
   return {main, store}

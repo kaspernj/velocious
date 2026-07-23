@@ -1,0 +1,1 @@
+Background job main and worker shutdown can now preserve externally owned database pools with `closeDatabaseConnectionsOnStop: false`, preventing embedded/test lifecycles from closing a caller's active connections.

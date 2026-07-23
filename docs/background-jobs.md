@@ -209,6 +209,13 @@ the acknowledgement is missing or rejected through `job-update-error`, the
 one-shot runner exits as failed and does not reinterpret the transport failure
 as a failed job-performance report.
 
+`BackgroundJobsMain` and `BackgroundJobsWorker` normally own their configuration
+lifetimes and close its database pools on `stop()`. An embedded process or test
+harness that passes a configuration whose pools are owned by its caller must
+construct either service with `closeDatabaseConnectionsOnStop: false`; shutdown
+still disconnects Beacon and closes the service sockets without invalidating
+the caller's active database connections.
+
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 
 - unset, `"indefinite"`, or `"0"` (default): wait for in-flight jobs to finish

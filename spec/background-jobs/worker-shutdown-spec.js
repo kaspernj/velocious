@@ -146,6 +146,23 @@ describe("Background jobs worker - shutdown", () => {
     expect(events).toEqual(["disconnect-beacon", "close-db"])
   })
 
+  it("preserves externally owned database connections on stop", async () => {
+    /** @type {string[]} */
+    const events = []
+    const worker = new BackgroundJobsWorker({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeDatabaseConnections: async () => { events.push("close-db") },
+        disconnectBeacon: async () => { events.push("disconnect-beacon") }
+      })
+    })
+    worker.configuration = await worker.configurationPromise
+
+    await worker.stop()
+
+    expect(events).toEqual(["disconnect-beacon"])
+  })
+
   it("does not make externally terminated forked children look like clean exits", async () => {
     const child = fork(FORKED_RUNNER_ENTRY_PATH, [], {
       execArgv: [],
@@ -475,5 +492,34 @@ describe("Background jobs main - shutdown", () => {
     await main.stop()
 
     expect(events).toEqual(["disconnect-beacon", "close-server", "close-db"])
+  })
+
+  it("preserves externally owned database connections on stop", async () => {
+    /** @type {string[]} */
+    const events = []
+    const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeDatabaseConnections: async () => { events.push("close-db") },
+        disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        getBackgroundJobsConfig: () => ({
+          databaseIdentifier: "default",
+          dispatchStrategy: "beacon",
+          host: "127.0.0.1",
+          pollIntervalMs: 1000,
+          port: 0
+        })
+      })
+    })
+    main.server = /** @type {import("net").Server} */ ({
+      close: (callback) => {
+        events.push("close-server")
+        callback()
+      }
+    })
+
+    await main.stop()
+
+    expect(events).toEqual(["disconnect-beacon", "close-server"])
   })
 })
