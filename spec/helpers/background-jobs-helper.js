@@ -7,6 +7,7 @@ import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 /**
@@ -39,7 +40,16 @@ export async function startBackgroundJobs({workerOptions = {}} = {}) {
     if (connectionsClosed || !mainStopped || !workerStopped) return
 
     connectionsClosed = true
-    await dummyConfiguration.closeDatabaseConnections()
+
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    if (pool instanceof AsyncTrackedMultiConnectionPool) {
+      pool.clearTestSharedConnection()
+      AsyncTrackedMultiConnectionPool.clearGlobalConnections(dummyConfiguration)
+    } else {
+      await dummyConfiguration.closeDatabaseConnections()
+      await dummyConfiguration.initializeModels()
+    }
   }
 
   main.stop = async () => {
@@ -73,6 +83,12 @@ export async function startBackgroundJobsMain({backgroundJobsConfig} = {}) {
 
   const store = new BackgroundJobsStore({configuration: dummyConfiguration})
   await store.clearAll()
+
+  const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+  if (pool instanceof AsyncTrackedMultiConnectionPool) {
+    pool.setTestSharedConnection(pool.getCurrentConnection())
+  }
 
   const main = new BackgroundJobsMain({
     closeDatabaseConnectionsOnStop: false,
