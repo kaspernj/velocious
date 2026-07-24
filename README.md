@@ -59,6 +59,8 @@ npm run test
 npm run test:expo
 ```
 
+Maintainers cutting a package release must follow the [Velocious release runbook](docs/releasing.md); `npm run release:patch` commits, pushes, and publishes rather than acting as a local-only version command.
+
 # Code quality (fallow)
 
 [fallow](https://github.com/fallow-rs/fallow) analyzes the codebase for unused/dead code, duplication, and complexity. CI runs it as a **regression gate**: it fails only on findings beyond the committed baseline in `fallow-baselines/`, so existing backlog never blocks a PR but new issues do.
