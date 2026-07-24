@@ -156,7 +156,7 @@ describe("Database - query - queryData", {databaseCleaning: {transaction: false,
     })
 
     expect(Number(loaded.queryData("overlappingA"))).toEqual(Math.max(task1.id(), task2.id()))
-    expect(Number(loaded.queryData("overlappingB"))).toEqual(task1.id() + task2.id())
+    expect(Number(loaded.queryData("overlappingB"))).toEqual(Number(task1.id()) + Number(task2.id()))
     expect(requestTiming.dbQueryCount).toEqual(4)
   })
 
