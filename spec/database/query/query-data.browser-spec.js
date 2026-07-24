@@ -1,4 +1,6 @@
+import Configuration from "../../../src/configuration.js"
 import Project from "../../dummy/src/models/project.js"
+import RequestTiming from "../../../src/http-server/client/request-timing.js"
 import Task from "../../dummy/src/models/task.js"
 
 // Registrations are module-level side effects, the way dummy models
@@ -15,6 +17,12 @@ Project.queryData("manualTasksCount", ({driver, query}) => {
   query.joins({tasks: true})
   const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
   query.select(`COUNT(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("manualTasksCount")}`)
+})
+
+Project.queryData("manualTasksMaximumId", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`MAX(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("manualTasksMaximumId")}`)
 })
 
 Project.queryData("projectStats", ({driver, query}) => {
@@ -40,6 +48,38 @@ Project.queryData("nullableSum", ({driver, query}) => {
   query.joins({tasks: true})
   const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
   query.select(`SUM(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("nullableSum")}`)
+})
+
+Project.queryData("sharedAliasCount", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`COUNT(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("sharedAlias")}`)
+})
+
+Project.queryData("sharedAliasMaximum", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`MAX(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("sharedAlias")}`)
+})
+
+Project.queryData("overlappingAliasFirst", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`COUNT(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("overlappingA")}`)
+})
+
+Project.queryData("overlappingAliasesMiddle", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  const idColumn = driver.quoteColumn("id")
+  query.select(`MAX(${tasksTable}.${idColumn}) AS ${driver.quoteColumn("overlappingA")}`)
+  query.select(`COUNT(${tasksTable}.${idColumn}) AS ${driver.quoteColumn("overlappingB")}`)
+})
+
+Project.queryData("overlappingAliasLast", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`SUM(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("overlappingB")}`)
 })
 
 describe("Database - query - queryData", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -68,6 +108,56 @@ describe("Database - query - queryData", {databaseCleaning: {transaction: false,
 
     expect(Number(loaded.queryData("statTaskCount"))).toEqual(2)
     expect(Number(loaded.queryData("statMinTaskId"))).toEqual(Math.min(task1.id(), task2.id()))
+  })
+
+  it("uses one aggregate roundtrip for structurally compatible entries", async () => {
+    const project = await Project.create({nameEn: "Compatible", nameDe: "Kompatibel"})
+    const task1 = await Task.create({name: "T1", project})
+    const task2 = await Task.create({name: "T2", project})
+    const requestTiming = new RequestTiming()
+
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()})
+        .queryData(["manualTasksCount", "manualTasksMaximumId"])
+        .toArray()
+    })
+
+    expect(Number(loaded.queryData("manualTasksCount"))).toEqual(2)
+    expect(Number(loaded.queryData("manualTasksMaximumId"))).toEqual(Math.max(task1.id(), task2.id()))
+    expect(requestTiming.dbQueryCount).toEqual(2)
+  })
+
+  it("keeps conflicting aliases separate and preserves later-entry overwrite order", async () => {
+    const project = await Project.create({nameEn: "Aliases", nameDe: "Aliase"})
+    const task1 = await Task.create({name: "T1", project})
+    const task2 = await Task.create({name: "T2", project})
+    const requestTiming = new RequestTiming()
+
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()})
+        .queryData(["sharedAliasCount", "sharedAliasMaximum"])
+        .toArray()
+    })
+
+    expect(Number(loaded.queryData("sharedAlias"))).toEqual(Math.max(task1.id(), task2.id()))
+    expect(requestTiming.dbQueryCount).toEqual(3)
+  })
+
+  it("does not batch an alias across an intervening group that overwrites it", async () => {
+    const project = await Project.create({nameEn: "Overlapping aliases", nameDe: "Überlappende Aliase"})
+    const task1 = await Task.create({name: "T1", project})
+    const task2 = await Task.create({name: "T2", project})
+    const requestTiming = new RequestTiming()
+
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()})
+        .queryData(["overlappingAliasFirst", "overlappingAliasesMiddle", "overlappingAliasLast"])
+        .toArray()
+    })
+
+    expect(Number(loaded.queryData("overlappingA"))).toEqual(Math.max(task1.id(), task2.id()))
+    expect(Number(loaded.queryData("overlappingB"))).toEqual(Number(task1.id()) + Number(task2.id()))
+    expect(requestTiming.dbQueryCount).toEqual(4)
   })
 
   it("runs nested-chain entries and attaches results to the root record", async () => {
