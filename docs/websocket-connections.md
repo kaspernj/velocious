@@ -8,6 +8,8 @@ For the broadcast / pub-sub case, use `WebsocketChannel` instead (documented sep
 
 All messages are JSON objects sent over the shared WebSocket. Connection-related messages use a `type` prefix of `connection-`.
 
+Velocious buffers TCP-fragmented WebSocket input as chunks and assembles each frame once it is complete. A single final client data frame is limited to 16 MiB, matching the existing cap for a fragmented message; a frame declaring a larger payload is rejected before its payload is buffered. Applications that need to send more data should split it at the application level.
+
 ### Client → server
 
 ```json

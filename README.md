@@ -1565,6 +1565,8 @@ database: {
 
 Velocious includes a lightweight websocket entry point for API-style calls and server-side events.
 
+Inbound frames remain ordered when TCP splits a frame across reads. Velocious limits a single final client data frame and a reassembled fragmented message to 16 MiB; larger payloads close the connection. See [WebSocket connections](docs/websocket-connections.md) for wire-protocol details.
+
 ## Connect and call a controller
 
 ```js
