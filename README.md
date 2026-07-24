@@ -26,7 +26,7 @@
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
-* Background jobs with failure events for production reporting (see [docs/background-jobs.md](docs/background-jobs.md))
+* Background jobs with failure events for production reporting and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md) and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))

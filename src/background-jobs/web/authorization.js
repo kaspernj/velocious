@@ -20,7 +20,7 @@ function safeEqual(a, b) {
 
 /**
  * Runs bearer token.
- * @param {import("../../http-server/client/request.js").default} request - Request object.
+ * @param {import("../../http-server/client/request.js").default | import("../../http-server/client/websocket-request.js").default} request - Request object.
  * @returns {string | null} - Bearer token from the Authorization header, if any.
  */
 function bearerToken(request) {
@@ -57,17 +57,18 @@ function isLoopback(remoteAddress) {
  * during development without being exposed to the network.
  * @param {object} args - Options.
  * @param {import("./registry.js").JobsMountOptions} args.options - Mount options.
- * @param {import("../../http-server/client/request.js").default} args.request - Request object.
+ * @param {import("../../http-server/client/request.js").default | import("../../http-server/client/websocket-request.js").default} args.request - Request object.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {import("../../authorization/ability.js").default | undefined} args.ability - Current ability.
+ * @param {string | null} [args.token] - Explicit websocket subscription token.
  * @returns {Promise<boolean>} - Whether the request is authorized.
  */
-export async function authorizeJobsRequest({ability, configuration, options, request}) {
+export async function authorizeJobsRequest({ability, configuration, options, request, token: explicitToken}) {
   const accessTokens = Array.isArray(options.accessTokens)
     ? options.accessTokens.filter((token) => typeof token === "string" && token.length > 0)
     : []
   const authorize = typeof options.authorize === "function" ? options.authorize : null
-  const token = bearerToken(request)
+  const token = explicitToken ?? bearerToken(request)
 
   if (accessTokens.length > 0 && token) {
     for (const accessToken of accessTokens) {
