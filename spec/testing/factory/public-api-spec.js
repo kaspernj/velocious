@@ -1,3 +1,4 @@
+import DatabaseRecord from "../../../src/database/record/index.js"
 import Factory, {createFactoryRegistry} from "../../../src/testing/factory/index.js"
 import {beforeEach, describe, expect, it} from "../../../src/testing/test.js"
 
@@ -64,6 +65,64 @@ describe("Factory - public API", () => {
 
     expect(list.map((entry) => entry.index)).toEqual([1, 2, 3])
     expect(pair).toHaveLength(2)
+  })
+
+  it("compiles a list plan once while keeping evaluation and events per entry", async () => {
+    const registry = createFactoryRegistry()
+    const startedInvocationIds = []
+    const overrides = {name: "Initial"}
+    let compileCount = 0
+    let evaluationCount = 0
+
+    registry.define(({factory, sequence}) => {
+      sequence("n")
+
+      factory("project", ModelDouble, ({attribute}) => {
+        attribute("index", ({generate}) => generate("n"))
+        attribute("evaluation", () => {
+          evaluationCount += 1
+          overrides.name = `Changed ${evaluationCount}`
+
+          return evaluationCount
+        })
+      })
+    })
+
+    const originalCompileTemplate = registry._runner.compileTemplate.bind(registry._runner)
+    registry._runner.compileTemplate = (...args) => {
+      compileCount += 1
+
+      return originalCompileTemplate(...args)
+    }
+    registry.on("start", ({invocationId}) => startedInvocationIds.push(invocationId))
+
+    const list = await registry.attributesForList("project", 3, overrides)
+
+    expect(compileCount).toEqual(1)
+    expect(list.map((entry) => entry.index)).toEqual([1, 2, 3])
+    expect(list.map((entry) => entry.evaluation)).toEqual([1, 2, 3])
+    expect(list.map((entry) => entry.name)).toEqual(["Initial", "Changed 1", "Changed 2"])
+    expect(new Set(startedInvocationIds).size).toEqual(3)
+  })
+
+  it("skips backend relationship metadata when no overrides were passed", async () => {
+    const registry = createFactoryRegistry()
+    let metadataReadCount = 0
+
+    class BackendModelDouble extends DatabaseRecord {
+      static getColumnNameToAttributeNameMap() {
+        metadataReadCount += 1
+
+        return {}
+      }
+    }
+
+    registry.define(({factory}) => {
+      factory("backendProject", BackendModelDouble, ({attribute}) => attribute("name", "Project"))
+    })
+
+    expect(await registry.attributesFor("backendProject")).toEqual({name: "Project"})
+    expect(metadataReadCount).toEqual(0)
   })
 
   it("reset clears definitions on the default singleton", async () => {
