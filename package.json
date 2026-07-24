@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "all-checks": "npm run lint && npm run test",
+    "benchmark:factory-plan-reuse": "node benchmark/factory-plan-reuse.js",
     "benchmark:preloader-id-dedup": "node benchmark/preloader-id-dedup.js",
     "benchmark:mysql-result-row-materialization": "node benchmark/mysql-result-row-materialization.js",
     "build": "node scripts/clean-build.js && npm run compile",
