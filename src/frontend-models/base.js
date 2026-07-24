@@ -353,6 +353,14 @@ async function flushBufferedOutgoingEventsAfterReconnect(client) {
           if (internalWebsocketClient !== client) return
           if (sessionSignal?.aborted) return
 
+          if (signal.aborted) {
+            for (let remaining = index; remaining < events.length; remaining += 1) {
+              bufferOutgoingEvent(events[remaining])
+            }
+
+            return
+          }
+
           const socketOpen = client.socket?.readyState === client.socket?.OPEN
 
           if (socketOpen) continue
@@ -3284,7 +3292,9 @@ export default class FrontendModelBase {
     const startupControls = frontendModelWebsocketStartupControls({signal, timeoutMs})
     const handle = client.subscribeChannel(channelType, {...channelOptions, ...startupControls})
 
-    void client.connect(startupControls).catch(() => handle.close())
+    if (typeof client.connect === "function") {
+      void client.connect(startupControls).catch(() => handle.close())
+    }
 
     return handle
   }
