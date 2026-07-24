@@ -333,17 +333,27 @@ export default class FactoryRegistry {
     const {traits, overrides} = normalizeInvocationArgs(args)
     /** @type {Array<?>} */
     const results = []
+    /** @type {import("./factory-runner.js").CompiledPlan | undefined} */
+    let planTemplate
 
-    for (let index = 0; index < count; index++) {
-      results.push(await this._runFactory({factoryName, traits, overrides, strategy}))
+    this._activeEvaluations += 1
+
+    try {
+      for (let index = 0; index < count; index++) {
+        const invocation = await this._runFactoryInvocation({factoryName, traits, overrides, strategy, planTemplate})
+
+        planTemplate = invocation.planTemplate
+        results.push(invocation.result)
+      }
+    } finally {
+      this._activeEvaluations -= 1
     }
 
     return results
   }
 
   /**
-   * Compiles and runs a factory invocation under a strategy, tracking active
-   * evaluations for the mutation guard.
+   * Compiles and runs a factory invocation under a strategy.
    * @param {object} args - Options.
    * @param {string} args.factoryName - Factory name.
    * @param {string[]} args.traits - Ordered traits.
@@ -351,7 +361,21 @@ export default class FactoryRegistry {
    * @param {"attributesFor" | "build" | "create"} args.strategy - Strategy name.
    * @returns {Promise<?>} - The strategy result.
    */
-  async _runFactory({factoryName, traits, overrides, strategy}) {
+  async _runFactory(args) {
+    return (await this._runFactoryInvocation(args)).result
+  }
+
+  /**
+   * Runs one event-tracked invocation, optionally reusing declaration planning.
+   * @param {object} args - Options.
+   * @param {string} args.factoryName - Factory name.
+   * @param {string[]} args.traits - Ordered traits.
+   * @param {Record<string, ?>} args.overrides - Overrides.
+   * @param {"attributesFor" | "build" | "create"} args.strategy - Strategy name.
+   * @param {import("./factory-runner.js").CompiledPlan} [args.planTemplate] - Reusable declaration plan.
+   * @returns {Promise<{result: ?, planTemplate: import("./factory-runner.js").CompiledPlan}>} - Result and declaration plan.
+   */
+  async _runFactoryInvocation({factoryName, traits, overrides, strategy, planTemplate}) {
     this._activeEvaluations += 1
 
     const invocationId = this._events.nextInvocationId()
@@ -360,12 +384,13 @@ export default class FactoryRegistry {
     try {
       this._events.emit("start", {invocationId, factory: factoryName, strategy, traits})
 
-      const plan = this._runner.compile(factoryName, traits, overrides)
-      const result = await this._strategies[strategy].run({registry: this, plan})
+      const compiledPlanTemplate = planTemplate || this._runner.compileTemplate(factoryName, traits)
+      const compiledPlan = this._runner.applyOverrides(compiledPlanTemplate, overrides)
+      const result = await this._strategies[strategy].run({registry: this, plan: compiledPlan})
 
       this._events.emit("success", {invocationId, factory: factoryName, strategy, traits, durationMs: Date.now() - startedAt})
 
-      return result
+      return {result, planTemplate: compiledPlanTemplate}
     } catch (error) {
       this._events.emit("failure", {invocationId, factory: factoryName, strategy, traits, durationMs: Date.now() - startedAt, error})
 
