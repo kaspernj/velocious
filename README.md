@@ -2147,7 +2147,11 @@ new BackgroundJobsWorker({configuration, maxConcurrentInlineJobs: 8})
 Standalone background-jobs main and worker processes close their configuration's
 database pools during `stop()`. Embedded/test callers that share externally owned
 pools can pass `closeDatabaseConnectionsOnStop: false` to `BackgroundJobsMain` or
-`BackgroundJobsWorker`; sockets and Beacon still shut down normally.
+`BackgroundJobsWorker`; sockets and Beacon still shut down normally. An async
+`onStopped` constructor hook can coordinate externally owned cleanup after that
+shutdown without wrapping the service's `stop()` method. Repeated `stop()` calls
+share one lifecycle and invoke the hook once; dual shutdown/hook failures reject
+with an `AggregateError` ordered with the shutdown failure first.
 
 ## Scheduled jobs
 

@@ -7,6 +7,7 @@ import BackgroundJobsStore from "./store.js"
 import Logger from "../logger.js"
 import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
 import VelociousError from "../velocious-error.js"
+import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 
 /**
  * Channel used by `background-jobs-main` to coordinate dispatch wake-ups
@@ -61,10 +62,12 @@ export default class BackgroundJobsMain {
    * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
    * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
+   * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the main process finishes stopping.
    */
-  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, closeDatabaseConnectionsOnStop = true}) {
+  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, closeDatabaseConnectionsOnStop = true, onStopped}) {
     this.configuration = configuration
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
+    this.onStopped = onStopped
     const config = configuration.getBackgroundJobsConfig()
     this.host = host || config.host
     this.port = typeof port === "number" ? port : config.port
@@ -125,6 +128,8 @@ export default class BackgroundJobsMain {
     this._draining = false
     this._redrainQueued = false
     this._stopped = false
+    /** @type {Promise<void> | undefined} */
+    this.stopPromise = undefined
     /**
      * Narrows the runtime value to the documented type.
      * @type {(() => void) | undefined} */
@@ -145,6 +150,7 @@ export default class BackgroundJobsMain {
    */
   async start() {
     this._stopped = false
+    this.stopPromise = undefined
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-main"})
     await this.configuration.connectBeacon({peerType: "background-jobs-main"})
@@ -216,18 +222,33 @@ export default class BackgroundJobsMain {
    * Runs stop.
    * @returns {Promise<void>} - Resolves when closed.
    */
-  async stop() {
+  stop() {
+    if (!this.stopPromise) this.stopPromise = this._stop()
+
+    return this.stopPromise
+  }
+
+  /**
+   * Runs the main-process shutdown lifecycle once.
+   * @returns {Promise<void>} - Resolves when closed.
+   */
+  async _stop() {
     this._stopped = true
 
-    this._closeWorkers()
-    this._clearTimers()
-    this._disconnectBeaconHandlers()
-    await this.scheduler?.stop()
-    try {
-      await this._drainWorkerHandoffAdoptions()
-    } finally {
-      await this._stopBeaconAndServer()
-    }
+    await shutdownLifecycle({
+      onStopped: this.onStopped,
+      shutdown: async () => {
+        this._closeWorkers()
+        this._clearTimers()
+        this._disconnectBeaconHandlers()
+        await this.scheduler?.stop()
+        try {
+          await this._drainWorkerHandoffAdoptions()
+        } finally {
+          await this._stopBeaconAndServer()
+        }
+      }
+    })
   }
 
   /**

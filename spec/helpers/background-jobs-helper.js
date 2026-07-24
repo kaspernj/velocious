@@ -7,6 +7,7 @@ import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 /**
@@ -15,17 +16,25 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
  * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, worker: BackgroundJobsWorker}>} - Started background job processes.
  */
 export async function startBackgroundJobs({workerOptions = {}} = {}) {
-  const {main, store} = await startBackgroundJobsMain()
+  const {main, store, stopped} = await startBackgroundJobsMain({waitForWorkerStop: true})
 
   dummyConfiguration.setBackgroundJobsConfig({
     host: "127.0.0.1",
     port: main.getPort()
   })
 
+  const {onStopped, ...resolvedWorkerOptions} = workerOptions
   const worker = new BackgroundJobsWorker({
     closeDatabaseConnectionsOnStop: false,
     configuration: dummyConfiguration,
-    ...workerOptions
+    onStopped: async () => {
+      try {
+        await onStopped?.()
+      } finally {
+        await stopped("worker")
+      }
+    },
+    ...resolvedWorkerOptions
   })
   await worker.start()
 
@@ -35,24 +44,50 @@ export async function startBackgroundJobs({workerOptions = {}} = {}) {
 /**
  * @param {object} [args] - Options.
  * @param {import("../../src/configuration-types.js").BackgroundJobsConfiguration} [args.backgroundJobsConfig] - Background jobs config override.
- * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore}>} - Started main process and cleared store.
+ * @param {boolean} [args.waitForWorkerStop] - Wait for the paired worker before closing shared test connections.
+ * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, stopped: (service: string) => Promise<void>}>} - Started main process and cleared store.
  */
-export async function startBackgroundJobsMain({backgroundJobsConfig} = {}) {
+export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop = false} = {}) {
   dummyConfiguration.setCurrent()
   if (backgroundJobsConfig) dummyConfiguration.setBackgroundJobsConfig(backgroundJobsConfig)
 
   const store = new BackgroundJobsStore({configuration: dummyConfiguration})
   await store.clearAll()
 
+  const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+  if (pool instanceof AsyncTrackedMultiConnectionPool) {
+    pool.setTestSharedConnection(pool.getCurrentConnection())
+  }
+
+  const stoppedServices = new Set()
+  if (!waitForWorkerStop) stoppedServices.add("worker")
+  let connectionsClosed = false
+  const stopped = async (service) => {
+    stoppedServices.add(service)
+    if (connectionsClosed || !stoppedServices.has("main") || !stoppedServices.has("worker")) return
+
+    connectionsClosed = true
+
+    if (pool instanceof AsyncTrackedMultiConnectionPool) {
+      pool.clearTestSharedConnection()
+      AsyncTrackedMultiConnectionPool.clearGlobalConnections(dummyConfiguration)
+    } else {
+      await dummyConfiguration.closeDatabaseConnections()
+      await dummyConfiguration.initializeModels()
+    }
+  }
+
   const main = new BackgroundJobsMain({
     closeDatabaseConnectionsOnStop: false,
     configuration: dummyConfiguration,
     host: "127.0.0.1",
+    onStopped: () => stopped("main"),
     port: 0
   })
   await main.start()
 
-  return {main, store}
+  return {main, store, stopped}
 }
 
 /**

@@ -218,7 +218,12 @@ lifetimes and close its database pools on `stop()`. An embedded process or test
 harness that passes a configuration whose pools are owned by its caller must
 construct either service with `closeDatabaseConnectionsOnStop: false`; shutdown
 still disconnects Beacon and closes the service sockets without invalidating
-the caller's active database connections.
+the caller's active database connections. Embedded lifecycle coordinators can
+also pass an async `onStopped` hook; it runs after service-owned shutdown work
+finishes, without replacing or narrowing either service's `stop()` contract.
+Concurrent and repeated `stop()` calls share one lifecycle and invoke the hook
+once. If shutdown and the hook both fail, `stop()` rejects with an
+`AggregateError` whose errors contain the shutdown failure first.
 
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 
