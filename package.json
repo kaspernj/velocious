@@ -19,6 +19,7 @@
     "benchmark:factory-plan-reuse": "node benchmark/factory-plan-reuse.js",
     "benchmark:preloader-id-dedup": "node benchmark/preloader-id-dedup.js",
     "benchmark:mysql-result-row-materialization": "node benchmark/mysql-result-row-materialization.js",
+    "benchmark:query-roundtrip-batching": "node benchmark/query-roundtrip-batching.js",
     "build": "node scripts/clean-build.js && npm run compile",
     "compile": "tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
     "copy:js": "cpy \"index.js\" build && cpy \"bin/**/*.js\" build/bin && cpy \"src/**/*.js\" build --parents",

@@ -111,40 +111,36 @@ export async function runWithCount({models, modelClass, entries}) {
 
   const primaryKey = modelClass.primaryKey()
   const parentIds = models.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
+  const queryGroups = new Map()
 
   for (const entry of entries) {
-    const counts = await countForEntry({entries, entry, modelClass, parentIds})
+    const countQuery = queryForEntry({entry, modelClass, parentIds})
+    const sql = countQuery.toSql()
+    const existingGroup = queryGroups.get(sql)
 
-    for (const model of models) {
-      const modelPrimaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
-      // Tolerate driver differences in numeric return types: SQLite
-      // returns integers as JS numbers, but MySQL's raw driver can
-      // return count primary keys as strings. Try both.
-      const resolvedCount = counts.has(modelPrimaryKeyValue)
-        ? /** @type {number} */ (counts.get(modelPrimaryKeyValue))
-        : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
-
-      // Counts go on the record's dedicated association-count map,
-      // NOT on `_attributes`, so a virtual `tasksCount` can't shadow a
-      // real `tasks_count` column (e.g. a counter_cache) nor leak into
-      // attribute-level serialization / change tracking.
-      model._setAssociationCount(entry.attributeName, resolvedCount)
+    if (existingGroup) {
+      existingGroup.entries.push(entry)
+    } else {
+      queryGroups.set(sql, {countQuery, entries: [entry]})
     }
+  }
+
+  for (const {countQuery, entries: groupedEntries} of queryGroups.values()) {
+    const counts = await executeCountQuery(countQuery)
+
+    for (const entry of groupedEntries) attachCounts({counts, entry, models, primaryKey})
   }
 }
 
 /**
- * Runs count for entry.
+ * Builds the grouped count query for an entry.
  * @param {object} args - Options.
- * @param {WithCountEntry[]} args.entries - All entries, used for error context only.
  * @param {WithCountEntry} args.entry - Entry being evaluated.
  * @param {typeof import("../record/index.js").default} args.modelClass - Parent model class.
  * @param {Array<string | number>} args.parentIds - Primary keys of the loaded parents.
- * @returns {Promise<Map<string | number, number>>} - Map of parent pk → count.
+ * @returns {import("./model-class-query.js").default} - Prepared count query.
  */
-async function countForEntry({entries, entry, modelClass, parentIds}) {
-  void entries
-
+function queryForEntry({entry, modelClass, parentIds}) {
   const relationship = modelClass.getRelationshipByName(entry.relationshipName)
 
   if (!relationship) {
@@ -176,20 +172,33 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
     Object.assign(whereConditions, entry.where)
   }
 
-  const countQuery = targetModelClass
-    .where(whereConditions)
-    .group(foreignKey)
+  const baseQuery = targetModelClass._newQuery()
+  baseQuery._forceQualifyBaseTable = true
+  baseQuery.where(whereConditions)
+
+  const countQuery = relationship.applyScope(baseQuery)
 
   countQuery._preload = {}
-  countQuery._selects = []
+  countQuery.reselect()
 
   const driver = countQuery.driver
-  const quotedTable = driver.quoteTable(targetModelClass.tableName())
+  const quotedTable = driver.quoteTable(countQuery.rootTableReference())
   const quotedFk = driver.quoteColumn(foreignKey)
+  const qualifiedForeignKey = `${quotedTable}.${quotedFk}`
 
-  countQuery.select(`${quotedTable}.${quotedFk} AS parent_id`)
+  countQuery.group(qualifiedForeignKey)
+  countQuery.select(`${qualifiedForeignKey} AS parent_id`)
   countQuery.select("COUNT(*) AS count_value")
 
+  return countQuery
+}
+
+/**
+ * Executes a prepared grouped count query.
+ * @param {import("./model-class-query.js").default} countQuery - Prepared count query.
+ * @returns {Promise<Map<string | number, number>>} - Map of parent pk → count.
+ */
+async function executeCountQuery(countQuery) {
   const rows = /** @type {Array<{parent_id: string | number, count_value: string | number}>} */ (
     await countQuery._executeQuery()
   )
@@ -206,4 +215,31 @@ async function countForEntry({entries, entry, modelClass, parentIds}) {
   }
 
   return counts
+}
+
+/**
+ * Attaches one entry's resolved counts to the loaded models.
+ * @param {object} args - Options.
+ * @param {Map<string | number, number>} args.counts - Counts keyed by parent primary key.
+ * @param {WithCountEntry} args.entry - Entry whose alias receives the counts.
+ * @param {import("../record/index.js").default[]} args.models - Loaded parent records.
+ * @param {string} args.primaryKey - Parent primary key column.
+ * @returns {void}
+ */
+function attachCounts({counts, entry, models, primaryKey}) {
+  for (const model of models) {
+    const modelPrimaryKeyValue = /** @type {string | number} */ (model.readColumn(primaryKey))
+    // Tolerate driver differences in numeric return types: SQLite
+    // returns integers as JS numbers, but MySQL's raw driver can
+    // return count primary keys as strings. Try both.
+    const resolvedCount = counts.has(modelPrimaryKeyValue)
+      ? /** @type {number} */ (counts.get(modelPrimaryKeyValue))
+      : Number(counts.get(String(modelPrimaryKeyValue)) ?? 0)
+
+    // Counts go on the record's dedicated association-count map,
+    // NOT on `_attributes`, so a virtual `tasksCount` can't shadow a
+    // real `tasks_count` column (e.g. a counter_cache) nor leak into
+    // attribute-level serialization / change tracking.
+    model._setAssociationCount(entry.attributeName, resolvedCount)
+  }
 }

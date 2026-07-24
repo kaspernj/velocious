@@ -190,23 +190,47 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
 
   const primaryKey = rootModelClass.primaryKey()
   const rootIds = rootModels.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
+  const preparedEntries = entries.map((entry, entryIndex) => prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass}))
+  /**
+   * Compatible query groups.
+   * @type {Array<{aliases: Set<string>, query: import("./model-class-query.js").default, signature: string}>} */
+  const queryGroups = []
 
-  for (const entry of entries) {
-    await runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels})
+  for (const preparedEntry of preparedEntries) {
+    const compatibleGroup = queryGroups.find((group) => {
+      if (group.signature !== preparedEntry.signature) return false
+
+      return preparedEntry.aliases.every((alias) => !group.aliases.has(alias))
+    })
+
+    if (compatibleGroup) {
+      compatibleGroup.query.select(preparedEntry.query.getSelects().slice(1))
+      for (const alias of preparedEntry.aliases) compatibleGroup.aliases.add(alias)
+    } else {
+      queryGroups.push({
+        aliases: new Set(preparedEntry.aliases),
+        query: preparedEntry.query,
+        signature: preparedEntry.signature
+      })
+    }
+  }
+
+  for (const {query} of queryGroups) {
+    await executeEntryQuery({primaryKey, query, rootModels})
   }
 }
 
 /**
- * Runs run entry.
+ * Prepares one queryData entry and its compatibility metadata.
  * @param {object} args - Options.
  * @param {QueryDataEntry} args.entry - Entry being evaluated.
+ * @param {number} args.entryIndex - Stable position used to isolate opaque projections.
  * @param {string} args.primaryKey - Root model primary key column.
  * @param {Array<string | number>} args.rootIds - Root primary-key values.
  * @param {typeof import("../record/index.js").default} args.rootModelClass - Root model class.
- * @param {import("../record/index.js").default[]} args.rootModels - Loaded root records.
- * @returns {Promise<void>}
+ * @returns {{aliases: string[], query: import("./model-class-query.js").default, signature: string}} - Prepared entry.
  */
-async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}) {
+function prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass}) {
   const targetModelClass = resolveTargetModelClass(rootModelClass, entry.chain)
   const fn = targetModelClass.getQueryDataByName(entry.fnName)
 
@@ -219,7 +243,7 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
 
   // Empty out any defaults the query factory added — queryData runs
   // a bare aggregate, not a full model load.
-  query._selects = []
+  query.reselect()
   query._preload = {}
 
   // Force the root WHERE to qualify by table name so it survives the
@@ -264,6 +288,47 @@ async function runEntry({entry, primaryKey, rootIds, rootModelClass, rootModels}
     tableName: targetTableRef
   })
 
+  const aliases = selectedAliases(query)
+  const signatureQuery = query.clone()
+  signatureQuery.reselect(signatureQuery.getSelects().slice(0, 1))
+
+  return {
+    aliases: aliases || [],
+    query,
+    signature: aliases ? signatureQuery.toSql() : `opaque:${entryIndex}`
+  }
+}
+
+/**
+ * Returns explicit aliases selected after the reserved parent id.
+ * Entries with an opaque select stay isolated by receiving a unique compatibility alias.
+ * @param {import("./model-class-query.js").default} query - Prepared queryData query.
+ * @returns {string[] | null} - Selected aliases, or null for an opaque projection.
+ */
+function selectedAliases(query) {
+  const aliases = []
+
+  for (const select of query.getSelects().slice(1)) {
+    const sql = select.toSql()
+    const match = sql.match(/\sAS\s+([^\s]+)\s*$/iu)
+
+    if (!match) return null
+
+    aliases.push(match[1].replace(/^["[`]|["`\]]$/gu, ""))
+  }
+
+  return aliases
+}
+
+/**
+ * Executes one compatible queryData group and attaches every selected alias.
+ * @param {object} args - Options.
+ * @param {string} args.primaryKey - Root model primary key column.
+ * @param {import("./model-class-query.js").default} args.query - Prepared grouped query.
+ * @param {import("../record/index.js").default[]} args.rootModels - Loaded root records.
+ * @returns {Promise<void>}
+ */
+async function executeEntryQuery({primaryKey, query, rootModels}) {
   const rows = /** @type {Array<Record<string, ?>>} */ (await query._executeQuery())
   const byParent = new Map()
 

@@ -102,14 +102,22 @@ For each leaf entry the runner:
    chain, groups by the root primary key, and pre-selects it as
    `parent_id`.
 3. Invokes the registered fn so it can add its own SELECTs / joins.
-4. Executes the query and maps each row's non-`parent_id` columns
+4. Combines entries only when their rendered joins, predicates, and
+   grouping are identical and all selected aliases are explicit and
+   non-conflicting. Opaque, conflicting, or structurally different
+   entries keep separate queries.
+5. Executes the query and maps each row's non-`parent_id` columns
    onto the matching root record via `record._setQueryData(alias, value)`.
-5. Records without a matching row (or rows where an aggregate
+6. Records without a matching row (or rows where an aggregate
    returned NULL, e.g. `SUM(...)` over zero child rows) keep
    `record.queryData(alias) === null`.
 
-One grouped query runs per entry. Entries are independent — the
-runner makes no attempt to merge selects across different fns.
+Compatible entries share one grouped query. Compatibility is based on
+the fully rendered non-projection SQL, so per-entry relationship
+scopes, join aliases, and predicates remain part of the boundary.
+Execution stays on the caller's existing connection; no parallel
+checkout is introduced, preserving transaction snapshots and
+pool-size-1 behavior.
 
 ## Interaction with other query methods
 
