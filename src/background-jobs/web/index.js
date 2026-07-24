@@ -1,6 +1,7 @@
 // @ts-check
 
 import VelociousBackgroundJobsWebController from "./controller.js"
+import BackgroundJobCountsChannel from "./counts-channel.js"
 import {matchJobsApiPath, normalizeMountPrefix} from "./path-matcher.js"
 import {registerJobsMount} from "./registry.js"
 
@@ -40,6 +41,7 @@ export default class VelociousBackgroundJobsApi {
     const prefix = normalizeMountPrefix(at)
 
     registerJobsMount(configuration, prefix, {accessTokens, allowedOrigins, authorize, databaseIdentifier, redactArgs})
+    BackgroundJobCountsChannel.register(configuration)
 
     configuration.addRouteResolverHook(({currentPath, request}) => {
       const match = matchJobsApiPath({method: request.httpMethod(), path: currentPath, prefix})

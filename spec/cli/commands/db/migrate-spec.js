@@ -42,6 +42,7 @@ describe("Cli - Commands - db:migrate", () => {
     /** @type {string[]} */
     const tablesResult = []
     const internalTables = new Set([
+      "background_job_count_revisions",
       "background_job_concurrency",
       "background_jobs",
       "velocious_attachments",

@@ -23,6 +23,11 @@ const LEGACY_POOLED_HANDOFF_ID_PREFIX = "velocious-pooled:"
 const LEGACY_POOLED_QUEUED_HANDOFF_ID = `${LEGACY_POOLED_HANDOFF_ID_PREFIX}queued`
 const JOBS_TABLE = "background_jobs"
 const CONCURRENCY_TABLE = "background_job_concurrency"
+const COUNTS_REVISION_TABLE = "background_job_count_revisions"
+const COUNTS_REVISION_KEY = "counts"
+export const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts"
+export const BACKGROUND_JOB_COUNT_BUCKETS = ["all", "queued", "handed_off", "completed", "failed", "orphaned"]
+const COUNTED_JOB_STATUSES = BACKGROUND_JOB_COUNT_BUCKETS.slice(1)
 const DEFAULT_MAX_RETRIES = 10
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 /**
@@ -68,6 +73,8 @@ const SORTABLE_COLUMNS = {
  * @type {Map<string, Promise<void>>}
  */
 const schemaApplyChains = new Map()
+/** @type {Map<string, Promise<void>>} */
+const countMutationChains = new Map()
 
 export default class BackgroundJobsStore {
   /**
@@ -157,7 +164,7 @@ export default class BackgroundJobsStore {
     /** @type {string} */
     let resultJobId = jobId
 
-    await this._withDb(async (db) => {
+    await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       if (options?.deduplicateWhileQueued) {
         // Dedupe on the job's identity (name + args + queue), NOT its concurrency key, so a job
         // keeps whatever concurrency it resolves to. Only an existing job scheduled no later than
@@ -205,7 +212,8 @@ export default class BackgroundJobsStore {
           handoff_id: null
         }
       })
-    })
+      await this._recordCountDelta(db, {all: 1, queued: 1})
+    }))
 
     return resultJobId
   }
@@ -382,6 +390,20 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Returns the authoritative dashboard count snapshot and its matching durable
+   * revision. Locking the revision row before counting prevents a writer from
+   * committing between the count query and revision read.
+   * @returns {Promise<{counts: Record<string, number>, revision: number, total: number}>} Snapshot.
+   */
+  async countSnapshot() {
+    await this.ensureReady()
+
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+      return await this._countSnapshotOnLockedConnection(db)
+    }))
+  }
+
+  /**
    * Counts jobs matching the given filters.
    * @param {object} [args] - Options.
    * @param {string} [args.status] - Filter by status.
@@ -448,7 +470,7 @@ export default class BackgroundJobsStore {
 
     const handedOffAtMs = Date.now()
 
-    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const queuedJob = await this._getJobRowById(db, jobId)
       if (!queuedJob || queuedJob.status !== "queued") return null
       if (queuedJob.concurrencyKey && !(await this._reserveConcurrency(db, queuedJob.concurrencyKey))) return null
@@ -470,6 +492,7 @@ export default class BackgroundJobsStore {
         return null
       }
 
+      await this._recordStatusTransition(db, "queued", "handed_off")
       return {handedOffAtMs, handoffId}
     }))
   }
@@ -486,7 +509,7 @@ export default class BackgroundJobsStore {
   async markCompleted({jobId, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return false
@@ -504,6 +527,7 @@ export default class BackgroundJobsStore {
 
       if (affectedRows !== 1) return false
       await this._releaseConcurrency(db, job.concurrencyKey)
+      await this._recordStatusTransition(db, "handed_off", "completed")
       return true
     }))
   }
@@ -518,7 +542,7 @@ export default class BackgroundJobsStore {
   async markReturnedToQueue({jobId, handoffId}) {
     await this.ensureReady()
 
-    await this._withDb(async (db) => await db.transaction(async () => {
+    await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || job.handoffId !== handoffId || job.status !== "handed_off") return
       await this._lockConcurrencyRow(db, job.concurrencyKey)
@@ -533,7 +557,10 @@ export default class BackgroundJobsStore {
         },
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
       })
-      if (affectedRows === 1) await this._releaseConcurrency(db, job.concurrencyKey)
+      if (affectedRows === 1) {
+        await this._releaseConcurrency(db, job.concurrencyKey)
+        await this._recordStatusTransition(db, "handed_off", "queued")
+      }
     }))
   }
 
@@ -582,13 +609,15 @@ export default class BackgroundJobsStore {
   async markFailed({jobId, error, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return null
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return null
 
       const updatedJob = await this._applyFailure({db, job, error, markOrphaned: false})
+
+      if (updatedJob) await this._recordStatusTransition(db, job.status, updatedJob.status)
       return updatedJob
     }))
   }
@@ -602,7 +631,7 @@ export default class BackgroundJobsStore {
   async markOrphanedJobs({orphanedAfterMs = ORPHANED_AFTER_MS} = {}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => {
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const cutoff = Date.now() - orphanedAfterMs
       const query = db
         .newQuery()
@@ -642,8 +671,17 @@ export default class BackgroundJobsStore {
         if (orphanedJob) orphanedJobs.push(orphanedJob)
       }
 
+      const statusCounts = this._statusCounts(orphanedJobs)
+      const deltas = this._emptyCountBuckets()
+
+      for (const [status, count] of Object.entries(statusCounts)) {
+        deltas.handed_off -= count
+        deltas[status] += count
+      }
+      await this._recordCountDelta(db, deltas)
+
       return orphanedJobs
-    })
+    }))
   }
 
   /**
@@ -692,7 +730,7 @@ export default class BackgroundJobsStore {
     let deleted = 0
 
     for (;;) {
-      const removed = await this._withDb(async (db) => {
+      const removed = await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
         const rows = await db
           .newQuery()
           .from(JOBS_TABLE)
@@ -706,10 +744,14 @@ export default class BackgroundJobsStore {
 
         const ids = rows.map((/** @type {Record<string, ?>} */ row) => db.quote(String(row.id))).join(", ")
 
-        await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`)
+        const removed = await db.affectedRows(
+          `DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`
+        )
 
-        return rows.length
-      })
+        await this._recordCountDelta(db, {all: -removed, [status]: -removed})
+
+        return removed
+      }))
 
       deleted += removed
       if (removed < batchSize) break
@@ -725,10 +767,13 @@ export default class BackgroundJobsStore {
   async clearAll() {
     await this.ensureReady()
 
-    await this._withDb(async (db) => {
+    await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+      const snapshot = await this._countSnapshotOnLockedConnection(db)
       await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)}`)
       if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
-    })
+      const deltas = Object.fromEntries(Object.entries(snapshot.counts).map(([key, value]) => [key, -value]))
+      await this._recordCountDelta(db, deltas)
+    }))
   }
 
   /**
@@ -738,7 +783,7 @@ export default class BackgroundJobsStore {
    */
   async cancel(jobId) {
     await this.ensureReady()
-    return await this._withDb(async (db) => await this._transactionResult(db, async () => {
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || (job.status !== "queued" && job.status !== "handed_off")) return false
       // Only a handed_off job holds a concurrency reservation, so only that case touches the
@@ -747,6 +792,7 @@ export default class BackgroundJobsStore {
       const affectedRows = await this._updateAffectedRows(db, {tableName: JOBS_TABLE, data: {status: "cancelled"}, conditions: {id: job.id, status: job.status}})
       if (affectedRows !== 1) return false
       if (job.status === "handed_off") await this._releaseConcurrency(db, job.concurrencyKey)
+      await this._recordStatusTransition(db, job.status, "cancelled")
       return true
     }))
   }
@@ -855,6 +901,7 @@ export default class BackgroundJobsStore {
     if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
       await this._ensureJobsTableColumns(db)
       await this._ensureConcurrencyTable(db)
+      await this._ensureCountRevisionTable(db)
       await this._reconcileQueueConcurrency(db)
       await this._reconcileConcurrency(db)
 
@@ -864,6 +911,7 @@ export default class BackgroundJobsStore {
     await this._applyMigrations(db)
     await this._ensureJobsTableColumns(db)
     await this._ensureConcurrencyTable(db)
+    await this._ensureCountRevisionTable(db)
     await this._reconcileQueueConcurrency(db)
     await this._reconcileConcurrency(db)
 
@@ -1497,6 +1545,173 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Ensures the singleton durable count-revision row exists.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} Resolves when ready.
+   */
+  async _ensureCountRevisionTable(db) {
+    if (!(await db.tableExists(COUNTS_REVISION_TABLE))) {
+      const table = new TableData(COUNTS_REVISION_TABLE, {ifNotExists: true})
+
+      table.string("key", {primaryKey: true})
+      table.bigint("revision", {null: false})
+      await db.createTable(table)
+    }
+
+    const rows = await db.newQuery().from(COUNTS_REVISION_TABLE).where({key: COUNTS_REVISION_KEY}).limit(1).results()
+
+    if (rows.length > 0) return
+
+    try {
+      await db.insert({tableName: COUNTS_REVISION_TABLE, data: {key: COUNTS_REVISION_KEY, revision: 0}})
+    } catch (error) {
+      const racedRows = await db.newQuery().from(COUNTS_REVISION_TABLE).where({key: COUNTS_REVISION_KEY}).limit(1).results()
+
+      if (racedRows.length === 0) throw error
+    }
+  }
+
+  /**
+   * Records one logical count mutation atomically and broadcasts it after commit.
+   * Zero entries are omitted; a wholly zero-net mutation does not consume a revision.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @param {Record<string, number>} requestedDeltas - Signed bucket changes.
+   * @returns {Promise<void>} Resolves when recorded.
+   */
+  async _recordCountDelta(db, requestedDeltas) {
+    /** @type {Record<string, number>} */
+    const deltas = {}
+
+    for (const bucket of BACKGROUND_JOB_COUNT_BUCKETS) {
+      const amount = requestedDeltas[bucket] || 0
+
+      if (!Number.isInteger(amount)) throw new Error(`Invalid background job count delta for ${bucket}: ${amount}`)
+      if (amount !== 0) deltas[bucket] = amount
+    }
+
+    if (Object.keys(deltas).length === 0) return
+
+    const table = db.quoteTable(COUNTS_REVISION_TABLE)
+    const revisionColumn = db.quoteColumn("revision")
+    const affectedRows = await db.affectedRows(
+      `UPDATE ${table} SET ${revisionColumn} = ${revisionColumn} + 1 WHERE ${db.quoteColumn("key")} = ${db.quote(COUNTS_REVISION_KEY)}`
+    )
+
+    if (affectedRows !== 1) throw new Error("Background job count revision row is missing")
+
+    const revision = await this._countRevision(db)
+    const body = {deltas, revision, type: "background-job-count-delta"}
+    const databaseIdentifier = this.getDatabaseIdentifier() || "default"
+
+    await db.afterCommit(() => {
+      this.configuration.broadcastToChannel(BACKGROUND_JOB_COUNTS_CHANNEL, {databaseIdentifier}, body)
+    })
+  }
+
+  /**
+   * Records a transition between persisted statuses.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @param {string} oldStatus - Previous status.
+   * @param {string} newStatus - New status.
+   * @returns {Promise<void>} Resolves when recorded.
+   */
+  async _recordStatusTransition(db, oldStatus, newStatus) {
+    const oldCounted = COUNTED_JOB_STATUSES.includes(oldStatus)
+    const newCounted = COUNTED_JOB_STATUSES.includes(newStatus)
+
+    if (!oldCounted && oldStatus !== "cancelled") throw new Error(`Unknown previous background job status: ${oldStatus}`)
+    if (!newCounted && newStatus !== "cancelled") throw new Error(`Unknown next background job status: ${newStatus}`)
+    if (oldStatus === newStatus) return
+
+    /** @type {Record<string, number>} */
+    const deltas = {}
+
+    if (oldCounted) deltas[oldStatus] = -1
+    if (newCounted) deltas[newStatus] = 1
+    if (oldCounted !== newCounted) deltas.all = newCounted ? 1 : -1
+    await this._recordCountDelta(db, deltas)
+  }
+
+  /**
+   * Reads the locked revision.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<number>} Revision.
+   */
+  async _countRevision(db) {
+    const rows = await db.newQuery().from(COUNTS_REVISION_TABLE).select("revision").where({key: COUNTS_REVISION_KEY}).limit(1).results()
+    const revision = this._normalizeNumber(/** @type {Record<string, ?>} */ (rows[0] || {}).revision)
+
+    if (revision === null || !Number.isSafeInteger(revision) || revision < 0) {
+      throw new Error(`Invalid background job count revision: ${revision}`)
+    }
+
+    return revision
+  }
+
+  /**
+   * Takes a portable write lock on the singleton revision row.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} Resolves when locked.
+   */
+  async _lockCountRevision(db) {
+    const table = db.quoteTable(COUNTS_REVISION_TABLE)
+    const revision = db.quoteColumn("revision")
+
+    await db.query(`UPDATE ${table} SET ${revision} = ${revision} WHERE ${db.quoteColumn("key")} = ${db.quote(COUNTS_REVISION_KEY)}`)
+  }
+
+  /**
+   * Builds zeroed canonical buckets.
+   * @returns {Record<string, number>} Zeroed canonical buckets.
+   */
+  _emptyCountBuckets() {
+    return Object.fromEntries(BACKGROUND_JOB_COUNT_BUCKETS.map((bucket) => [bucket, 0]))
+  }
+
+  /**
+   * Counts normalized rows by canonical status.
+   * @param {import("./types.js").BackgroundJobRow[]} jobs - Jobs.
+   * @returns {Record<string, number>} Counts.
+   */
+  _statusCounts(jobs) {
+    /** @type {Record<string, number>} */
+    const counts = {}
+
+    for (const job of jobs) {
+      if (!COUNTED_JOB_STATUSES.includes(job.status)) throw new Error(`Unknown background job status: ${job.status}`)
+      counts[job.status] = (counts[job.status] || 0) + 1
+    }
+
+    return counts
+  }
+
+  /**
+   * Reads a canonical snapshot after locking the revision row.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @returns {Promise<{counts: Record<string, number>, revision: number, total: number}>} Snapshot.
+   */
+  async _countSnapshotOnLockedConnection(db) {
+    await this._lockCountRevision(db)
+    const rows = await db.newQuery().from(JOBS_TABLE).select("status").select("COUNT(*) AS count").group("status").results()
+    const counts = this._emptyCountBuckets()
+    let total = 0
+
+    for (const row of rows) {
+      const typedRow = /** @type {Record<string, ?>} */ (row)
+      const status = String(typedRow.status)
+      const count = this._normalizeNumber(typedRow.count) || 0
+
+      total += count
+
+      if (!COUNTED_JOB_STATUSES.includes(status)) continue
+      counts[status] = count
+      counts.all += counts[status]
+    }
+
+    return {counts, revision: await this._countRevision(db), total}
+  }
+
+  /**
    * Registers or verifies a stable key configuration.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {object} concurrency - Concurrency configuration.
@@ -1783,6 +1998,37 @@ export default class BackgroundJobsStore {
     })
     if (!completed) throw new Error("Background jobs transaction callback was not invoked")
     return /** @type {T} */ (result)
+  }
+
+  /**
+   * Serializes count-changing transactions sharing a process-local connection.
+   * Database row locking still provides cross-process ordering; this guard
+   * prevents concurrent callers on SQLite's shared connection from attempting
+   * overlapping top-level transactions.
+   * @template T
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {() => Promise<T>} callback - Transaction callback.
+   * @returns {Promise<T>} Callback result.
+   */
+  async _serializedCountMutation(db, callback) {
+    const identifier = this.getDatabaseIdentifier() || "default"
+    const previous = countMutationChains.get(identifier) || Promise.resolve()
+    let resolveRun = () => {}
+    /** @type {Promise<void>} */
+    const run = new Promise((resolve) => {
+      resolveRun = () => resolve(undefined)
+    })
+    const chain = previous.then(() => run)
+
+    countMutationChains.set(identifier, chain)
+    await previous
+
+    try {
+      return await this._transactionResult(db, callback)
+    } finally {
+      resolveRun()
+      if (countMutationChains.get(identifier) === chain) countMutationChains.delete(identifier)
+    }
   }
 
   /**
