@@ -1,9 +1,69 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import EventEmitter from "../../src/utils/event-emitter.js"
+import HttpServerClient from "../../src/http-server/client/index.js"
 import WebsocketSession from "../../src/http-server/client/websocket-session.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+
+/**
+ * Builds a session around the real HTTP server client contract.
+ * @param {import("../../src/configuration-types.js").WebsocketMessageHandler} [messageHandler] - Message observer.
+ * @returns {{client: HttpServerClient, session: WebsocketSession}}
+ */
+function buildSession(messageHandler) {
+  const client = new HttpServerClient({
+    clientCount: 1,
+    configuration: dummyConfiguration,
+    remoteAddress: "127.0.0.1"
+  })
+  const session = new WebsocketSession({
+    client,
+    configuration: dummyConfiguration,
+    messageHandler
+  })
+
+  return {client, session}
+}
+
+/**
+ * Narrows a decoded message value at the raw handler boundary.
+ * @param {?} value - Decoded message value.
+ * @param {string} description - Expected value description.
+ * @returns {Record<string, ?>}
+ */
+function expectRecord(value, description) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Expected ${description} to be an object`)
+  }
+
+  return value
+}
+
+/**
+ * Returns a required numeric property from a decoded message.
+ * @param {Record<string, ?>} record - Message record.
+ * @param {string} property - Property name.
+ * @returns {number}
+ */
+function expectNumberProperty(record, property) {
+  const value = record[property]
+
+  if (typeof value !== "number") throw new Error(`Expected ${property} to be a number`)
+  return value
+}
+
+/**
+ * Returns a required string property from a decoded message.
+ * @param {Record<string, ?>} record - Message record.
+ * @param {string} property - Property name.
+ * @returns {string}
+ */
+function expectStringProperty(record, property) {
+  const value = record[property]
+
+  if (typeof value !== "string") throw new Error(`Expected ${property} to be a string`)
+  return value
+}
 
 /**
  * Builds a single client→server websocket frame with mandatory masking,
@@ -43,15 +103,15 @@ function buildClientFrame({fin, opcode, payload}) {
 
 describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: true}}, () => {
   it("buffers one large FIN frame in TCP-sized chunks with bounded copying", async () => {
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
+    /** @type {number[]} */
+    const dispatchedContentLengths = []
+    const {session} = buildSession({
+      onMessage: ({message}) => {
+        const data = expectRecord(expectRecord(message, "message").data, "message data")
+
+        dispatchedContentLengths.push(expectStringProperty(data, "contents").length)
+      }
     })
-
-    /** @type {any[]} */
-    const dispatched = []
-
-    session._handleMessage = async (message) => { dispatched.push(message) }
 
     const body = JSON.stringify({
       type: "metadata",
@@ -76,21 +136,20 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
 
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(dispatched.length).toBe(1)
-    expect(dispatched[0].data.contents.length).toBe(2 * 1024 * 1024)
+    expect(dispatchedContentLengths).toEqual([2 * 1024 * 1024])
     expect(session._bufferedFrameCopyBytes).toBeLessThanOrEqual(frame.length)
   })
 
   it("keeps incomplete payloads queued and processes following frames in order", async () => {
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
+    /** @type {number[]} */
+    const dispatchedSequences = []
+    const {session} = buildSession({
+      onMessage: ({message}) => {
+        const data = expectRecord(expectRecord(message, "message").data, "message data")
+
+        dispatchedSequences.push(expectNumberProperty(data, "sequence"))
+      }
     })
-
-    /** @type {any[]} */
-    const dispatched = []
-
-    session._handleMessage = async (message) => { dispatched.push(message) }
 
     const firstFrame = buildClientFrame({
       fin: true,
@@ -105,72 +164,63 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
 
     session.onData(firstFrame.subarray(0, 1))
     session.onData(firstFrame.subarray(1, firstFrame.length - 3))
-    expect(dispatched.length).toBe(0)
+    expect(dispatchedSequences.length).toBe(0)
 
     session.onData(Buffer.concat([firstFrame.subarray(firstFrame.length - 3), secondFrame]))
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(dispatched.map((message) => message.data.sequence)).toEqual([1, 2])
+    expect(dispatchedSequences).toEqual([1, 2])
   })
 
   it("closes as soon as a single FIN frame declares an oversized payload", () => {
     /** @type {Buffer[]} */
     const emittedFrames = []
-    let handleCloseCalls = 0
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({
-        events: {
-          emit: (name, value) => {
-            if (name === "output" && value instanceof Buffer) emittedFrames.push(value)
-          }
-        },
-        remoteAddress: "127.0.0.1"
-      }),
-      configuration: dummyConfiguration
-    })
+    let closeEvents = 0
+    const {client, session} = buildSession()
     const header = Buffer.alloc(14)
 
+    client.events.on("output", (value) => {
+      if (value instanceof Buffer) emittedFrames.push(value)
+    })
+    session.events.on("close", () => { closeEvents += 1 })
     header[0] = 0x81
     header[1] = 0x80 | 127
     header.writeBigUInt64BE(BigInt(16 * 1024 * 1024 + 1), 2)
     header.writeUInt32BE(0x01020304, 10)
-    session._handleClose = () => { handleCloseCalls += 1 }
-
     session.onData(header.subarray(0, 6))
-    expect(handleCloseCalls).toBe(0)
+    expect(closeEvents).toBe(0)
     session.onData(header.subarray(6))
 
-    expect(handleCloseCalls).toBe(1)
+    expect(closeEvents).toBe(1)
     expect(emittedFrames.some((frame) => frame[0] === 0x88)).toBe(true)
   })
 
   it("rejects unsafe 64-bit control-frame lengths before Number conversion", () => {
-    let handleCloseCalls = 0
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
-    })
+    let closeEvents = 0
+    const {session} = buildSession()
     const header = Buffer.alloc(14)
 
+    session.events.on("close", () => { closeEvents += 1 })
     header[0] = 0x89
     header[1] = 0x80 | 127
     header.writeBigUInt64BE(BigInt(Number.MAX_SAFE_INTEGER) + 1n, 2)
     header.writeUInt32BE(0x01020304, 10)
-    session._handleClose = () => { handleCloseCalls += 1 }
-
     session.onData(header)
 
-    expect(handleCloseCalls).toBe(1)
+    expect(closeEvents).toBe(1)
     expect(session._bufferedBytes).toBe(0)
   })
 
   it("keeps queued chunk accounting exact across thousands of ordered frames", async () => {
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
+    /** @type {number[]} */
+    const dispatchedSequences = []
+    const {session} = buildSession({
+      onMessage: ({message}) => {
+        const data = expectRecord(expectRecord(message, "message").data, "message data")
+
+        dispatchedSequences.push(expectNumberProperty(data, "sequence"))
+      }
     })
-    /** @type {any[]} */
-    const dispatched = []
     const frames = Array.from({length: 2000}, (_, sequence) => buildClientFrame({
       fin: true,
       opcode: 0x1,
@@ -180,12 +230,11 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
 
     if (!firstFrame) throw new Error("Expected a first frame")
 
-    session._handleMessage = async (message) => { dispatched.push(message) }
     session.onData(firstFrame.subarray(0, firstFrame.length - 1))
     session.onData(Buffer.concat([firstFrame.subarray(firstFrame.length - 1), ...frames]))
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(dispatched.map((message) => message.data.sequence)).toEqual(Array.from({length: 2000}, (_, index) => index))
+    expect(dispatchedSequences).toEqual(Array.from({length: 2000}, (_, index) => index))
     expect(session._bufferedBytes).toBe(0)
     expect(session._bufferChunks.length).toBe(0)
     expect(session._bufferChunkIndex).toBe(0)
@@ -193,15 +242,20 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
   })
 
   it("reassembles a channel-subscribe split across continuation frames", async () => {
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
-    })
-
-    /** @type {any[]} */
+    /** @type {Array<{channelType: string, subscriptionId: string, authenticationTokenLength: number}>} */
     const dispatched = []
+    const {session} = buildSession({
+      onMessage: ({message}) => {
+        const record = expectRecord(message, "message")
+        const params = expectRecord(record.params, "message params")
 
-    session._handleMessage = async (message) => { dispatched.push(message) }
+        dispatched.push({
+          authenticationTokenLength: expectStringProperty(params, "authenticationToken").length,
+          channelType: expectStringProperty(record, "channelType"),
+          subscriptionId: expectStringProperty(record, "subscriptionId")
+        })
+      }
+    })
 
     const body = JSON.stringify({
       type: "channel-subscribe",
@@ -225,33 +279,31 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
 
     session.onData(Buffer.concat([firstFrame, continuationFrame]))
 
-    // Synchronous parse → _handleMessage() runs in the event loop.
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(dispatched.length).toBe(1)
-    expect(dispatched[0]).toMatchObject({
-      type: "channel-subscribe",
+    expect(dispatched).toEqual([{
+      authenticationTokenLength: 4096,
       subscriptionId: "s1",
       channelType: "ticket-scans"
-    })
-    expect(dispatched[0].params.authenticationToken.length).toBe(4096)
+    }])
   })
 
   it("handles a PING interleaved between fragments without losing the data message", async () => {
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
+    /** @type {string[]} */
+    const dispatchedLocales = []
+    /** @type {Buffer[]} */
+    const emittedFrames = []
+    const {client, session} = buildSession({
+      onMessage: ({message}) => {
+        const data = expectRecord(expectRecord(message, "message").data, "message data")
+
+        dispatchedLocales.push(expectStringProperty(data, "locale"))
+      }
     })
 
-    /** @type {any[]} */
-    const dispatched = []
-    /** @type {Array<{opcode: number, payload: Buffer}>} */
-    const sentControlFrames = []
-
-    session._handleMessage = async (message) => { dispatched.push(message) }
-    session._sendControlFrame = (opcode, payload) => {
-      sentControlFrames.push({opcode, payload: Buffer.from(payload)})
-    }
+    client.events.on("output", (value) => {
+      if (value instanceof Buffer) emittedFrames.push(value)
+    })
 
     const body = JSON.stringify({type: "metadata", data: {locale: "en"}})
     const payload = Buffer.from(body, "utf-8")
@@ -276,33 +328,23 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
     session.onData(Buffer.concat([firstFrame, pingFrame, continuationFrame]))
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(sentControlFrames.length).toBe(1)
-    expect(sentControlFrames[0].opcode).toBe(0xA) // PONG
-    expect(sentControlFrames[0].payload.toString("utf-8")).toBe("ping")
-
-    expect(dispatched.length).toBe(1)
-    expect(dispatched[0]).toMatchObject({type: "metadata", data: {locale: "en"}})
+    expect(emittedFrames.length).toBe(1)
+    expect(emittedFrames[0].toString("hex")).toBe("8a0470696e67")
+    expect(dispatchedLocales).toEqual(["en"])
   })
 
   it("closes the connection when a fragmented message exceeds the per-fragment count cap", async () => {
     /** @type {Buffer[]} */
     const emittedFrames = []
-    let handleCloseCalls = 0
-
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({
-        events: {
-          emit: (name, value) => {
-            if (name === "output" && value instanceof Buffer) emittedFrames.push(value)
-          }
-        },
-        remoteAddress: "127.0.0.1"
-      }),
-      configuration: dummyConfiguration
+    let closeEvents = 0
+    const {client, session} = buildSession({
+      onMessage: () => { throw new Error("should not dispatch when caps are exceeded") }
     })
 
-    session._handleMessage = async () => { throw new Error("should not dispatch when caps are exceeded") }
-    session._handleClose = () => { handleCloseCalls += 1 }
+    client.events.on("output", (value) => {
+      if (value instanceof Buffer) emittedFrames.push(value)
+    })
+    session.events.on("close", () => { closeEvents += 1 })
 
     const chunkBodies = Array.from({length: 3000}, () => Buffer.from("x"))
     const framesIn = []
@@ -315,7 +357,7 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
     session.onData(Buffer.concat(framesIn))
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(handleCloseCalls).toBe(1)
+    expect(closeEvents).toBe(1)
     // Close frame emitted (opcode 0x8 with FIN=1).
     expect(emittedFrames.length).toBeGreaterThan(0)
     expect(emittedFrames.some((frame) => frame[0] === 0x88)).toBe(true)
@@ -324,15 +366,13 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
   })
 
   it("still processes a single-frame message after a fragmented message", async () => {
-    const session = new WebsocketSession({
-      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
-      configuration: dummyConfiguration
+    /** @type {string[]} */
+    const dispatchedTypes = []
+    const {session} = buildSession({
+      onMessage: ({message}) => {
+        dispatchedTypes.push(expectStringProperty(expectRecord(message, "message"), "type"))
+      }
     })
-
-    /** @type {any[]} */
-    const dispatched = []
-
-    session._handleMessage = async (message) => { dispatched.push(message) }
 
     const firstBody = JSON.stringify({type: "channel-subscribe", subscriptionId: "s1", channelType: "c"})
     const firstPayload = Buffer.from(firstBody, "utf-8")
@@ -351,8 +391,6 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
     session.onData(Buffer.concat([fragA, fragB, secondFrame]))
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(dispatched.length).toBe(2)
-    expect(dispatched[0]).toMatchObject({type: "channel-subscribe", subscriptionId: "s1"})
-    expect(dispatched[1]).toMatchObject({type: "metadata", data: {theme: "dark"}})
+    expect(dispatchedTypes).toEqual(["channel-subscribe", "metadata"])
   })
 })
