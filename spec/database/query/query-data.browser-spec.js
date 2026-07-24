@@ -62,6 +62,26 @@ Project.queryData("sharedAliasMaximum", ({driver, query}) => {
   query.select(`MAX(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("sharedAlias")}`)
 })
 
+Project.queryData("overlappingAliasFirst", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`COUNT(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("overlappingA")}`)
+})
+
+Project.queryData("overlappingAliasesMiddle", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  const idColumn = driver.quoteColumn("id")
+  query.select(`MAX(${tasksTable}.${idColumn}) AS ${driver.quoteColumn("overlappingA")}`)
+  query.select(`COUNT(${tasksTable}.${idColumn}) AS ${driver.quoteColumn("overlappingB")}`)
+})
+
+Project.queryData("overlappingAliasLast", ({driver, query}) => {
+  query.joins({tasks: true})
+  const tasksTable = driver.quoteTable(query.tableNameFor("tasks"))
+  query.select(`SUM(${tasksTable}.${driver.quoteColumn("id")}) AS ${driver.quoteColumn("overlappingB")}`)
+})
+
 describe("Database - query - queryData", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("attaches a single-column aggregate registered at the root", async () => {
     const project = await Project.create({nameEn: "P", nameDe: "P"})
@@ -121,6 +141,23 @@ describe("Database - query - queryData", {databaseCleaning: {transaction: false,
 
     expect(Number(loaded.queryData("sharedAlias"))).toEqual(Math.max(task1.id(), task2.id()))
     expect(requestTiming.dbQueryCount).toEqual(3)
+  })
+
+  it("does not batch an alias across an intervening group that overwrites it", async () => {
+    const project = await Project.create({nameEn: "Overlapping aliases", nameDe: "Überlappende Aliase"})
+    const task1 = await Task.create({name: "T1", project})
+    const task2 = await Task.create({name: "T2", project})
+    const requestTiming = new RequestTiming()
+
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()})
+        .queryData(["overlappingAliasFirst", "overlappingAliasesMiddle", "overlappingAliasLast"])
+        .toArray()
+    })
+
+    expect(Number(loaded.queryData("overlappingA"))).toEqual(Math.max(task1.id(), task2.id()))
+    expect(Number(loaded.queryData("overlappingB"))).toEqual(task1.id() + task2.id())
+    expect(requestTiming.dbQueryCount).toEqual(4)
   })
 
   it("runs nested-chain entries and attaches results to the root record", async () => {

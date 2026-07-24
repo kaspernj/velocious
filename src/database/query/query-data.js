@@ -197,8 +197,11 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
   const queryGroups = []
 
   for (const preparedEntry of preparedEntries) {
-    const compatibleGroup = queryGroups.find((group) => {
+    const compatibleGroup = queryGroups.find((group, groupIndex) => {
       if (group.signature !== preparedEntry.signature) return false
+      if (queryGroups.slice(groupIndex + 1).some((interveningGroup) => (
+        preparedEntry.aliases.some((alias) => interveningGroup.aliases.has(alias))
+      ))) return false
 
       return preparedEntry.aliases.every((alias) => !group.aliases.has(alias))
     })

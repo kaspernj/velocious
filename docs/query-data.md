@@ -115,7 +115,10 @@ For each leaf entry the runner:
 Compatible entries share one grouped query. Compatibility is based on
 the fully rendered non-projection SQL, so per-entry relationship
 scopes, join aliases, and predicates remain part of the boundary.
-Execution stays on the caller's existing connection; no parallel
+Entries also retain their declared overwrite order: an entry is not
+moved into an earlier compatible batch when doing so would cross an
+intervening batch that writes one of the same aliases. Execution stays
+on the caller's existing connection; no parallel
 checkout is introduced, preserving transaction snapshots and
 pool-size-1 behavior.
 
