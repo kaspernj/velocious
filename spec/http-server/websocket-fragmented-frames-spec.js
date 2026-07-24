@@ -42,6 +42,156 @@ function buildClientFrame({fin, opcode, payload}) {
 }
 
 describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: true}}, () => {
+  it("buffers one large FIN frame in TCP-sized chunks with bounded copying", async () => {
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
+      configuration: dummyConfiguration
+    })
+
+    /** @type {any[]} */
+    const dispatched = []
+
+    session._handleMessage = async (message) => { dispatched.push(message) }
+
+    const body = JSON.stringify({
+      type: "metadata",
+      data: {contents: "x".repeat(2 * 1024 * 1024)}
+    })
+    const frame = buildClientFrame({
+      fin: true,
+      opcode: 0x1,
+      payload: Buffer.from(body, "utf-8")
+    })
+    const tcpChunkSizes = [1, 256]
+    let offset = 0
+    let chunkIndex = 0
+
+    while (offset < frame.length) {
+      const end = Math.min(offset + tcpChunkSizes[chunkIndex % tcpChunkSizes.length], frame.length)
+
+      session.onData(frame.subarray(offset, end))
+      offset = end
+      chunkIndex += 1
+    }
+
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(dispatched.length).toBe(1)
+    expect(dispatched[0].data.contents.length).toBe(2 * 1024 * 1024)
+    expect(session._bufferedFrameCopyBytes).toBeLessThanOrEqual(frame.length)
+  })
+
+  it("keeps incomplete payloads queued and processes following frames in order", async () => {
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
+      configuration: dummyConfiguration
+    })
+
+    /** @type {any[]} */
+    const dispatched = []
+
+    session._handleMessage = async (message) => { dispatched.push(message) }
+
+    const firstFrame = buildClientFrame({
+      fin: true,
+      opcode: 0x1,
+      payload: Buffer.from(JSON.stringify({type: "metadata", data: {sequence: 1}}))
+    })
+    const secondFrame = buildClientFrame({
+      fin: true,
+      opcode: 0x1,
+      payload: Buffer.from(JSON.stringify({type: "metadata", data: {sequence: 2}}))
+    })
+
+    session.onData(firstFrame.subarray(0, 1))
+    session.onData(firstFrame.subarray(1, firstFrame.length - 3))
+    expect(dispatched.length).toBe(0)
+
+    session.onData(Buffer.concat([firstFrame.subarray(firstFrame.length - 3), secondFrame]))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(dispatched.map((message) => message.data.sequence)).toEqual([1, 2])
+  })
+
+  it("closes as soon as a single FIN frame declares an oversized payload", () => {
+    /** @type {Buffer[]} */
+    const emittedFrames = []
+    let handleCloseCalls = 0
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({
+        events: {
+          emit: (name, value) => {
+            if (name === "output" && value instanceof Buffer) emittedFrames.push(value)
+          }
+        },
+        remoteAddress: "127.0.0.1"
+      }),
+      configuration: dummyConfiguration
+    })
+    const header = Buffer.alloc(14)
+
+    header[0] = 0x81
+    header[1] = 0x80 | 127
+    header.writeBigUInt64BE(BigInt(16 * 1024 * 1024 + 1), 2)
+    header.writeUInt32BE(0x01020304, 10)
+    session._handleClose = () => { handleCloseCalls += 1 }
+
+    session.onData(header.subarray(0, 6))
+    expect(handleCloseCalls).toBe(0)
+    session.onData(header.subarray(6))
+
+    expect(handleCloseCalls).toBe(1)
+    expect(emittedFrames.some((frame) => frame[0] === 0x88)).toBe(true)
+  })
+
+  it("rejects unsafe 64-bit control-frame lengths before Number conversion", () => {
+    let handleCloseCalls = 0
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
+      configuration: dummyConfiguration
+    })
+    const header = Buffer.alloc(14)
+
+    header[0] = 0x89
+    header[1] = 0x80 | 127
+    header.writeBigUInt64BE(BigInt(Number.MAX_SAFE_INTEGER) + 1n, 2)
+    header.writeUInt32BE(0x01020304, 10)
+    session._handleClose = () => { handleCloseCalls += 1 }
+
+    session.onData(header)
+
+    expect(handleCloseCalls).toBe(1)
+    expect(session._bufferedBytes).toBe(0)
+  })
+
+  it("keeps queued chunk accounting exact across thousands of ordered frames", async () => {
+    const session = new WebsocketSession({
+      client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
+      configuration: dummyConfiguration
+    })
+    /** @type {any[]} */
+    const dispatched = []
+    const frames = Array.from({length: 2000}, (_, sequence) => buildClientFrame({
+      fin: true,
+      opcode: 0x1,
+      payload: Buffer.from(JSON.stringify({type: "metadata", data: {sequence}}))
+    }))
+    const firstFrame = frames.shift()
+
+    if (!firstFrame) throw new Error("Expected a first frame")
+
+    session._handleMessage = async (message) => { dispatched.push(message) }
+    session.onData(firstFrame.subarray(0, firstFrame.length - 1))
+    session.onData(Buffer.concat([firstFrame.subarray(firstFrame.length - 1), ...frames]))
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(dispatched.map((message) => message.data.sequence)).toEqual(Array.from({length: 2000}, (_, index) => index))
+    expect(session._bufferedBytes).toBe(0)
+    expect(session._bufferChunks.length).toBe(0)
+    expect(session._bufferChunkIndex).toBe(0)
+    expect(session._bufferChunkOffset).toBe(0)
+  })
+
   it("reassembles a channel-subscribe split across continuation frames", async () => {
     const session = new WebsocketSession({
       client: /** @type {any} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
