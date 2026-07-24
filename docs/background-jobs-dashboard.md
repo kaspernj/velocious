@@ -99,8 +99,9 @@ Velocious jobs don't have Sidekiq-style named queues; they have a `job_name`
 `GET /api/stats` returns the canonical buckets `all`, `queued`, `handed_off`,
 `completed`, `failed`, and `orphaned`. Missing statuses are always represented
 as zero. `all` is the sum of those five status buckets; cancelled jobs are not
-visible in this dashboard count universe. `total` remains as a compatibility
-alias for `counts.all`.
+visible in this dashboard count universe. For compatibility, `total` continues
+to count every persisted job row, including cancelled or legacy statuses, and
+can therefore be larger than `counts.all`.
 
 ```json
 {

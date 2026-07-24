@@ -120,7 +120,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
         counts: snapshot.counts,
         generatedAtMs: Date.now(),
         revision: snapshot.revision,
-        total: snapshot.counts.all
+        total: snapshot.total
       }})
     })
   }

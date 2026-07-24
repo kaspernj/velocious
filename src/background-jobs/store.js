@@ -393,7 +393,7 @@ export default class BackgroundJobsStore {
    * Returns the authoritative dashboard count snapshot and its matching durable
    * revision. Locking the revision row before counting prevents a writer from
    * committing between the count query and revision read.
-   * @returns {Promise<{counts: Record<string, number>, revision: number}>} Snapshot.
+   * @returns {Promise<{counts: Record<string, number>, revision: number, total: number}>} Snapshot.
    */
   async countSnapshot() {
     await this.ensureReady()
@@ -744,10 +744,13 @@ export default class BackgroundJobsStore {
 
         const ids = rows.map((/** @type {Record<string, ?>} */ row) => db.quote(String(row.id))).join(", ")
 
-        await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`)
-        await this._recordCountDelta(db, {all: -rows.length, [status]: -rows.length})
+        const removed = await db.affectedRows(
+          `DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`
+        )
 
-        return rows.length
+        await this._recordCountDelta(db, {all: -removed, [status]: -removed})
+
+        return removed
       }))
 
       deleted += removed
@@ -1685,23 +1688,27 @@ export default class BackgroundJobsStore {
   /**
    * Reads a canonical snapshot after locking the revision row.
    * @param {import("../database/drivers/base.js").default} db - Transaction connection.
-   * @returns {Promise<{counts: Record<string, number>, revision: number}>} Snapshot.
+   * @returns {Promise<{counts: Record<string, number>, revision: number, total: number}>} Snapshot.
    */
   async _countSnapshotOnLockedConnection(db) {
     await this._lockCountRevision(db)
     const rows = await db.newQuery().from(JOBS_TABLE).select("status").select("COUNT(*) AS count").group("status").results()
     const counts = this._emptyCountBuckets()
+    let total = 0
 
     for (const row of rows) {
       const typedRow = /** @type {Record<string, ?>} */ (row)
       const status = String(typedRow.status)
+      const count = this._normalizeNumber(typedRow.count) || 0
+
+      total += count
 
       if (!COUNTED_JOB_STATUSES.includes(status)) continue
-      counts[status] = this._normalizeNumber(typedRow.count) || 0
+      counts[status] = count
       counts.all += counts[status]
     }
 
-    return {counts, revision: await this._countRevision(db)}
+    return {counts, revision: await this._countRevision(db), total}
   }
 
   /**
