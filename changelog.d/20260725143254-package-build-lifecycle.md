@@ -1,0 +1,1 @@
+Stop rebuilding Velocious during no-op `npm install` commands. Package builds now run through `dependencies` after dependency-tree changes and through `prepack` when packing or publishing, preserving build output for Git dependency installs.
