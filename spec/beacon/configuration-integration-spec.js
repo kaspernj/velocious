@@ -147,7 +147,7 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
     const publisherConfig = buildConfiguration({beacon: {host: "127.0.0.1", port}})
     const subscriberConfig = buildConfiguration({beacon: {host: "127.0.0.1", port}})
 
-    /** @type {Array<{channel: string, broadcastParams: Record<string, any>, body: any}>} */
+    /** @type {Array<{channel: string, broadcastParams: Record<string, any>, body: any, configuration: Configuration}>} */
     const captured = []
 
     /** @type {any} */
@@ -173,6 +173,7 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
     expect(captured[0].channel).toBe("frontend-models")
     expect(captured[0].broadcastParams).toEqual({model: "Build"})
     expect(captured[0].body).toEqual({action: "update", id: "42"})
+    expect(captured[0].configuration).toBe(subscriberConfig)
 
     await publisherConfig.disconnectBeacon()
     await subscriberConfig.disconnectBeacon()

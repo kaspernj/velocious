@@ -115,6 +115,44 @@ function buildHandlerConfiguration({maxBytes = 16 * 1024 * 1024, maxFrames = 256
 }
 
 describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}}, () => {
+  it("tags only explicitly completed frames across the worker boundary", () => {
+    const {postedMessages, workerThread} = buildWorkerThread()
+
+    workerThread.handleNewClient({clientCount: 99, remoteAddress: "127.0.0.1"})
+    workerThread.clients[99].events.emit("output", "HTTP/1.1 101 Switching Protocols\r\n\r\n")
+    workerThread.clients[99].events.emit("output", Buffer.from([0x81, 0x00]), {websocketFrame: true})
+
+    expect(postedMessages.map(({clientCount, command, websocketFrame}) => ({clientCount, command, websocketFrame}))).toEqual([
+      {clientCount: 99, command: "clientOutput", websocketFrame: false},
+      {clientCount: 99, command: "clientOutput", websocketFrame: true}
+    ])
+    expect(postedMessages[0].output).toEqual("HTTP/1.1 101 Switching Protocols\r\n\r\n")
+    expect(Array.from(postedMessages[1].output)).toEqual([0x81, 0x00])
+  })
+
+  it("excludes the completed HTTP upgrade response from a one-frame WebSocket budget", async () => {
+    const configuration = buildHandlerConfiguration({maxFrames: 1})
+    const handler = new InProcessHandler({configuration, workerCount: 0})
+    const socket = new BlockedWriteSocket()
+    const serverClient = new ServerClient({clientCount: 100, configuration, socket})
+
+    handler.addSocketConnection(serverClient)
+    handler.clients[100].httpClient.websocketSession = /** @type {?} */ ({})
+    handler.clients[100].httpClient.events.emit("output", "HTTP/1.1 101 Switching Protocols\r\n\r\n")
+    handler.clients[100].httpClient.events.emit("output", Buffer.from([0x81, 0x00]), {websocketFrame: true})
+
+    await waitFor(() => expect(socket.writes.length).toEqual(1))
+    expect(socket.writes[0].data.toString()).toEqual("HTTP/1.1 101 Switching Protocols\r\n\r\n")
+    expect(socket.destroyed).toEqual(false)
+    expect(handler.clients[100].deliveryQueue.snapshot().pendingFrames).toEqual(1)
+
+    socket.writes[0].callback()
+    await waitFor(() => expect(socket.writes.length).toEqual(2))
+    socket.writes[1].callback()
+    serverClient.destroy(new Error("Test teardown"))
+    handler.unregisterFromEventsHost()
+  })
+
   it("bounds in-process output retained behind a blocked socket write", async () => {
     const configuration = buildHandlerConfiguration({maxBytes: 6, maxFrames: 2})
     const reportedErrors = []
@@ -124,17 +162,16 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
 
     configuration.getErrorEvents().on("framework-error", ({error}) => reportedErrors.push(error))
     handler.addSocketConnection(serverClient)
-    handler.clients[101].httpClient.websocketSession = /** @type {?} */ ({})
     configuration.getErrorEvents().on("framework-error", () => {
       handler.clients[101]?.httpClient.events.emit("output", "recursive-report-output")
     })
-    handler.clients[101].httpClient.events.emit("output", "abc")
-    handler.clients[101].httpClient.events.emit("output", "def")
+    handler.clients[101].httpClient.events.emit("output", "abc", {websocketFrame: true})
+    handler.clients[101].httpClient.events.emit("output", "def", {websocketFrame: true})
 
     await waitFor(() => expect(socket.writes.length).toEqual(1))
     expect(socket.destroyed).toEqual(false)
 
-    handler.clients[101].httpClient.events.emit("output", "g")
+    handler.clients[101].httpClient.events.emit("output", "g", {websocketFrame: true})
     await waitFor(() => expect(socket.destroyed).toEqual(true))
 
     expect(reportedErrors.length).toEqual(1)
@@ -156,15 +193,15 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     configuration.getErrorEvents().on("framework-error", ({error}) => reportedErrors.push(error))
     handler.clients[102] = client
     handler.clients[103] = isolatedClient
-    handler.onWorkerMessage({clientCount: 102, command: "clientOutput", output: "abc", websocket: true})
-    handler.onWorkerMessage({clientCount: 102, command: "clientOutput", output: "def", websocket: true})
-    handler.onWorkerMessage({clientCount: 103, command: "clientOutput", output: "safe", websocket: true})
+    handler.onWorkerMessage({clientCount: 102, command: "clientOutput", output: "abc", websocketFrame: true})
+    handler.onWorkerMessage({clientCount: 102, command: "clientOutput", output: "def", websocketFrame: true})
+    handler.onWorkerMessage({clientCount: 103, command: "clientOutput", output: "safe", websocketFrame: true})
 
     await waitFor(() => expect(socket.writes.length).toEqual(1))
     await waitFor(() => expect(isolatedSocket.writes.length).toEqual(1))
     expect(socket.destroyed).toEqual(false)
 
-    handler.onWorkerMessage({clientCount: 102, command: "clientOutput", output: "g", websocket: true})
+    handler.onWorkerMessage({clientCount: 102, command: "clientOutput", output: "g", websocketFrame: true})
     await waitFor(() => expect(socket.destroyed).toEqual(true))
 
     expect(isolatedSocket.destroyed).toEqual(false)
@@ -179,9 +216,8 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const serverClient = new ServerClient({clientCount: 104, configuration, socket})
 
     handler.addSocketConnection(serverClient)
-    handler.clients[104].httpClient.websocketSession = /** @type {?} */ ({})
-    handler.clients[104].httpClient.events.emit("output", "abc")
-    handler.clients[104].httpClient.events.emit("output", "def")
+    handler.clients[104].httpClient.events.emit("output", "abc", {websocketFrame: true})
+    handler.clients[104].httpClient.events.emit("output", "def", {websocketFrame: true})
 
     await waitFor(() => expect(socket.writes.length).toEqual(1))
     expect(handler.clients[104].deliveryQueue.snapshot()).toEqual({pendingBytes: 6, pendingFrames: 2})
@@ -597,13 +633,23 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     }
 
     try {
-      websocketEventsHost.broadcastV2({body: {action: "create", id: "1"}, broadcastParams: {model: "Build"}, channel: "frontend-models"})
+      websocketEventsHost.broadcastV2({
+        body: {action: "create", id: "1"},
+        broadcastParams: {model: "Build"},
+        channel: "frontend-models",
+        configuration: handler.configuration
+      })
       await websocketEventsHost.awaitPendingBroadcasts()
 
       expect(sentMessages).toEqual([])
 
       handler.onWorkerMessage({command: "started"})
-      websocketEventsHost.broadcastV2({body: {action: "update", id: "1"}, broadcastParams: {model: "Build"}, channel: "frontend-models"})
+      websocketEventsHost.broadcastV2({
+        body: {action: "update", id: "1"},
+        broadcastParams: {model: "Build"},
+        channel: "frontend-models",
+        configuration: handler.configuration
+      })
       await websocketEventsHost.awaitPendingBroadcasts()
 
       expect(sentMessages).toEqual([{
@@ -616,12 +662,82 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
       }])
 
       handler.onWorkerExit(0)
-      websocketEventsHost.broadcastV2({body: {action: "destroy", id: "1"}, broadcastParams: {model: "Build"}, channel: "frontend-models"})
+      websocketEventsHost.broadcastV2({
+        body: {action: "destroy", id: "1"},
+        broadcastParams: {model: "Build"},
+        channel: "frontend-models",
+        configuration: handler.configuration
+      })
       await websocketEventsHost.awaitPendingBroadcasts()
 
       expect(sentMessages.length).toEqual(1)
     } finally {
       handler.unregisterFromEventsHostIfNeeded()
+      websocketEventsHost.handlers.clear()
+
+      for (const originalHandler of originalHandlers) {
+        websocketEventsHost.handlers.add(originalHandler)
+      }
+    }
+  })
+
+  it("routes worker-originated V2 broadcasts only to workers for the originating configuration", async () => {
+    await websocketEventsHost.awaitPendingBroadcasts()
+
+    const originalHandlers = new Set(websocketEventsHost.handlers)
+    const configurationA = {
+      debug: false,
+      withoutCurrentConnectionContexts: (callback) => callback()
+    }
+    const configurationB = {
+      debug: false,
+      withoutCurrentConnectionContexts: (callback) => callback()
+    }
+    const handlers = [
+      new WorkerHandler({configuration: configurationA, workerCount: 1}),
+      new WorkerHandler({configuration: configurationA, workerCount: 2}),
+      new WorkerHandler({configuration: configurationB, workerCount: 1})
+    ]
+    const sentMessages = handlers.map(() => [])
+
+    websocketEventsHost.handlers.clear()
+
+    try {
+      handlers.forEach((handler, index) => {
+        handler.workerStarted = true
+        handler.worker = {postMessage: (message) => sentMessages[index].push(message)}
+        handler.registerWithEventsHost()
+      })
+
+      handlers[0].onWorkerMessage({
+        body: {configuration: "A"},
+        broadcastParams: {subscription: "shared"},
+        channel: "SharedChannel",
+        command: "websocketV2Broadcast"
+      })
+      await websocketEventsHost.awaitPendingBroadcasts()
+
+      expect(sentMessages.map((messages) => messages.map(({body}) => body))).toEqual([
+        [{configuration: "A"}],
+        [{configuration: "A"}],
+        []
+      ])
+
+      handlers[2].onWorkerMessage({
+        body: {configuration: "B"},
+        broadcastParams: {subscription: "shared"},
+        channel: "SharedChannel",
+        command: "websocketV2Broadcast"
+      })
+      await websocketEventsHost.awaitPendingBroadcasts()
+
+      expect(sentMessages.map((messages) => messages.map(({body}) => body))).toEqual([
+        [{configuration: "A"}],
+        [{configuration: "A"}],
+        [{configuration: "B"}]
+      ])
+    } finally {
+      handlers.forEach((handler) => handler.unregisterFromEventsHostIfNeeded())
       websocketEventsHost.handlers.clear()
 
       for (const originalHandler of originalHandlers) {

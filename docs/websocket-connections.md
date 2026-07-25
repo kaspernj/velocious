@@ -26,7 +26,9 @@ const configuration = new Configuration({
 })
 ```
 
-Byte accounting uses serialized output bytes, not JavaScript string length. Queued and in-flight buffers remain charged until the socket callback settles; socket close, error, or overflow teardown explicitly releases the queue. Limits are per client, so a stalled consumer cannot consume another client's allowance.
+Byte accounting uses serialized output bytes, not JavaScript string length. Only completed WebSocket frame emissions consume the frame and byte limits; the HTTP 101 upgrade response and ordinary HTTP/file output remain ordering-only operations outside that budget. Queued and in-flight frame buffers remain charged until the socket callback settles; socket close, error, or overflow teardown explicitly releases the queue. Limits are per client, so a stalled consumer cannot consume another client's allowance.
+
+V2 channel broadcasts retain their originating configuration identity through host and worker fanout. Delivery and event-log persistence are therefore isolated to that configuration even when multiple applications with identical channel and subscription names share a process. The internal `websocketEventsHost.broadcastV2(...)` transport now requires its `configuration` argument; application-facing `configuration.broadcastToChannel(...)` is unchanged.
 
 ### Client → server
 

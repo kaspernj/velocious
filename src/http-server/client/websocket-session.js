@@ -423,7 +423,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   sendGoodbye(client) {
     const frame = Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, 0x00])
 
-    client.events.emit("output", frame)
+    client.events.emit("output", frame, {websocketFrame: true})
   }
 
   /**
@@ -967,7 +967,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     header[0] = WEBSOCKET_FINAL_FRAME | opcode
     header[1] = payload.length
 
-    this.client.events.emit("output", Buffer.concat([header, payload]))
+    this.client.events.emit("output", Buffer.concat([header, payload]), {websocketFrame: true})
   }
 
   /**
@@ -1012,7 +1012,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     header[0] = WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_TEXT
 
-    this.client.events.emit("output", Buffer.concat([header, payload]))
+    this.client.events.emit("output", Buffer.concat([header, payload]), {websocketFrame: true})
   }
 
   /**

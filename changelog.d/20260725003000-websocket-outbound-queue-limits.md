@@ -1,1 +1,1 @@
-Bound live per-client WebSocket outbound queues by frame count and serialized bytes, reporting and closing slow consumers on overflow.
+Bound live per-client WebSocket outbound queues by explicitly completed frame count and serialized bytes, excluding the HTTP upgrade response, report and close slow consumers on overflow, and isolate V2 broadcast fanout and persistence to the originating configuration.

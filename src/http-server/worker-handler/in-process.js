@@ -69,10 +69,10 @@ export default class VelociousHttpServerInProcessHandler {
       }
     })
 
-    httpClient.events.on("output", (output) => {
+    httpClient.events.on("output", (output, {websocketFrame = false} = {}) => {
       if (output !== null && output !== undefined) {
         const delivery = () => serverClient.send(output)
-        const queued = httpClient.websocketSession
+        const queued = websocketFrame
           ? deliveryQueue.enqueueFrame({
             byteLength: typeof output === "string" ? Buffer.byteLength(output) : output.byteLength,
             delivery
@@ -187,6 +187,14 @@ export default class VelociousHttpServerInProcessHandler {
     if (!this.configuration) return
 
     return this.configuration._broadcastToChannelLocal(channel, broadcastParams, body, {eventId})
+  }
+
+  /**
+   * Gets the configuration-wide V2 broadcast target shared by in-process handlers.
+   * @returns {import("../../configuration.js").default} - Shared configuration target.
+   */
+  websocketV2BroadcastDispatchKey() {
+    return this.configuration
   }
 
   /**

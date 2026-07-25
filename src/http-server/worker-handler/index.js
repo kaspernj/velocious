@@ -188,7 +188,7 @@ export default class VelociousHttpServerWorker {
    * @param {string} [data.filePath] - File path.
    * @param {boolean} [data.sendBody] - Whether to send the file body.
    * @param {number} [data.transferId] - File transfer id.
-   * @param {boolean} [data.websocket] - Whether output belongs to an upgraded WebSocket.
+   * @param {boolean} [data.websocketFrame] - Whether output is a completed WebSocket frame.
    * @param {string} [data.channel] - Channel name.
    * @param {number} [data.requestId] - Debug request id.
    * @param {Record<string, ?>} [data.snapshot] - Worker debug snapshot.
@@ -226,7 +226,7 @@ export default class VelociousHttpServerWorker {
       if (output !== null && output !== undefined) {
         const outputLength = typeof output === "string" ? output.length : output.byteLength
 
-        const delivery = data.websocket === true
+        const delivery = data.websocketFrame === true
           ? this.enqueueClientFrame(client, output)
           : this.enqueueClientControl(client, () => client.send(output))
 
@@ -300,7 +300,12 @@ export default class VelociousHttpServerWorker {
         throw new Error("Worker websocket v2-broadcast channel must be a string")
       }
 
-      websocketEventsHost.broadcastV2({body, broadcastParams: broadcastParams || {}, channel})
+      websocketEventsHost.broadcastV2({
+        body,
+        broadcastParams: broadcastParams || {},
+        channel,
+        configuration: this.configuration
+      })
     } else {
       throw new Error(`Unknown command: ${command}`)
     }
@@ -465,6 +470,14 @@ export default class VelociousHttpServerWorker {
     if (!this.worker || typeof this.worker.postMessage !== "function") return
 
     this.worker.postMessage({body, broadcastParams, channel, command: "websocketV2Broadcast", eventId, createdAt})
+  }
+
+  /**
+   * Gets this worker's isolated V2 broadcast target.
+   * @returns {VelociousHttpServerWorker} - This worker handler.
+   */
+  websocketV2BroadcastDispatchKey() {
+    return this
   }
 
   /**

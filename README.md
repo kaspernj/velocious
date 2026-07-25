@@ -1567,7 +1567,7 @@ Velocious includes a lightweight websocket entry point for API-style calls and s
 
 Inbound frames remain ordered when TCP splits a frame across reads. Velocious limits a single final client data frame and a reassembled fragmented message to 16 MiB; larger payloads close the connection.
 
-Server-to-client WebSocket delivery is bounded independently per client. The defaults retain at most 256 queued/in-flight frames or 16 MiB of serialized output; exact FIFO is preserved below both limits. A slow client that exceeds either limit is reported through the framework error events and deterministically closed without affecting other clients. Configure positive safe integers with `httpServer.websocketOutboundQueue.maxPendingFrames` and `maxPendingBytes`. See [WebSocket connections](docs/websocket-connections.md) for configuration and wire-protocol details.
+Server-to-client WebSocket delivery is bounded independently per client. The defaults retain at most 256 queued/in-flight completed frames or 16 MiB of serialized frame output; the HTTP 101 upgrade response and ordinary HTTP/file output remain outside that budget, while exact FIFO is preserved. A slow client that exceeds either limit is reported through the framework error events and deterministically closed without affecting other clients. V2 channel broadcast delivery and persistence remain isolated to the originating configuration when several applications share a process. Configure positive safe integers with `httpServer.websocketOutboundQueue.maxPendingFrames` and `maxPendingBytes`. See [WebSocket connections](docs/websocket-connections.md) for configuration and wire-protocol details.
 
 ## Connect and call a controller
 

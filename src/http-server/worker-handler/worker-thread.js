@@ -154,8 +154,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       remoteAddress
     })
 
-    client.events.on("output", (output) => {
-      this.parentPort.postMessage({command: "clientOutput", clientCount, output, websocket: Boolean(client.websocketSession)})
+    client.events.on("output", (output, {websocketFrame = false} = {}) => {
+      this.parentPort.postMessage({command: "clientOutput", clientCount, output, websocketFrame})
     })
 
     client.events.on("file", ({filePath, sendBody, settle}) => {

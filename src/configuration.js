@@ -1720,7 +1720,8 @@ export default class VelociousConfiguration {
       websocketEvents.broadcastV2({
         channel: message.channel,
         broadcastParams: message.broadcastParams,
-        body: message.body
+        body: message.body,
+        configuration: this
       })
       return
     }
@@ -2577,7 +2578,7 @@ export default class VelociousConfiguration {
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
-      websocketEvents.broadcastV2({channel: name, broadcastParams, body})
+      websocketEvents.broadcastV2({channel: name, broadcastParams, body, configuration: this})
       return
     }
 

@@ -69,17 +69,26 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @param {string} args.channel - Channel name.
    * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
    * @param {?} args.body - Message body.
+   * @param {import("../configuration.js").default} args.configuration - Originating configuration.
    * @returns {void}
    */
-  broadcastV2({body, broadcastParams, channel}) {
+  broadcastV2({body, broadcastParams, channel, configuration}) {
     // Chain onto publishQueue so persistence completes before
     // the next broadcast — without this, a subscriber that connects
     // immediately after a broadcast could miss the just-persisted
     // event when replaying from lastEventId on a slow DB.
     this._queuePublish(async () => {
-      const persistedEvent = await this._persistV2EventIfNeeded({body, channel})
+      const persistedEvent = await this._persistV2EventIfNeeded({body, channel, configuration})
+      const dispatchedTargets = new Set()
 
       for (const handler of this.handlers) {
+        if (handler.configuration !== configuration) continue
+
+        const dispatchKey = handler.websocketV2BroadcastDispatchKey()
+
+        if (dispatchedTargets.has(dispatchKey)) continue
+
+        dispatchedTargets.add(dispatchKey)
         handler.dispatchWebsocketV2Broadcast({
           body,
           broadcastParams,
@@ -88,18 +97,19 @@ export class VelociousHttpServerWebsocketEventsHost {
           createdAt: persistedEvent?.createdAt
         })
       }
-    }, "Failed to persist/broadcast V2 event")
+    }, "Failed to persist/broadcast V2 event", configuration)
   }
 
   /**
    * Runs queue publish.
    * @param {() => Promise<void>} callback - Publish work to run in order.
    * @param {string} errorMessage - Message logged when publish work fails.
+   * @param {import("../configuration.js").default} [originatingConfiguration] - Configuration whose context owns the work.
    * @returns {void}
    */
-  _queuePublish(callback, errorMessage) {
+  _queuePublish(callback, errorMessage, originatingConfiguration) {
     const handler = this.handlers.values().next().value
-    const configuration = handler?.configuration
+    const configuration = originatingConfiguration || handler?.configuration
 
     this.publishQueue = this.publishQueue
       .then(async () => {
@@ -120,10 +130,11 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @param {object} args - Options.
    * @param {?} args.body - Event body.
    * @param {string} args.channel - Channel name.
+   * @param {import("../configuration.js").default} args.configuration - Originating configuration.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata when storage is enabled.
    */
-  async _persistV2EventIfNeeded({body, channel}) {
-    return await this._persistChannelEventIfNeeded({channel, payload: body})
+  async _persistV2EventIfNeeded({body, channel, configuration}) {
+    return await this._persistChannelEventIfNeeded({channel, payload: body, configuration})
   }
 
   /**
@@ -142,14 +153,16 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
    * @param {?} args.payload - Payload data.
+   * @param {import("../configuration.js").default} [args.configuration] - Configuration owning the event store.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
-  async _persistChannelEventIfNeeded({channel, payload}) {
+  async _persistChannelEventIfNeeded({channel, payload, configuration}) {
     const handler = this.handlers.values().next().value
+    const eventConfiguration = configuration || handler?.configuration
 
-    if (!handler?.configuration) return null
+    if (!eventConfiguration) return null
 
-    const websocketEventLogStore = websocketEventLogStoreForConfiguration(handler.configuration)
+    const websocketEventLogStore = websocketEventLogStoreForConfiguration(eventConfiguration)
     const shouldPersist = await websocketEventLogStore.shouldPersistChannel(channel)
 
     if (!shouldPersist) return null
