@@ -2,6 +2,8 @@
 
 Velocious patch releases use `npm run release:patch`. This is a side-effectful maintainer command: it authenticates with npm, switches to and synchronizes `master`, bumps the patch version without creating a Git tag, builds the package, commits and pushes the version files directly to `master`, and publishes to npm.
 
+Package builds run through the `prepack` lifecycle. Bare `npm install` and `npm ci` commands do not run Velocious's project build; `npm pack`, `npm publish`, and Git dependency installs build the distributable before packaging it.
+
 ## Before running the release
 
 1. Obtain explicit release approval.

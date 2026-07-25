@@ -24,7 +24,6 @@ async function readPackageScripts() {
 function expectNoPosixOnlyCommands(scripts) {
   expect(scripts.build.includes("rm -rf")).toEqual(false)
   expect(scripts.compile.includes("chmod +x build/bin/velocious.js")).toEqual(false)
-  expect(scripts.prepublishOnly.includes("chmod +x build/bin/velocious.js")).toEqual(false)
   expect(scripts.test.includes("VELOCIOUS_TEST_DIR=$(pwd)/..")).toEqual(false)
 }
 
@@ -35,7 +34,14 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     expectNoPosixOnlyCommands(scripts)
     expect(scripts.build).toEqual("node scripts/clean-build.js && npm run compile")
     expect(scripts.compile).toEqual("tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js")
-    expect(scripts.prepublishOnly).toEqual("npm run build && node scripts/ensure-bin-executable.js")
     expect(scripts.test).toEqual("node scripts/run-tests.js")
+  })
+
+  it("builds only when packaging", async () => {
+    const scripts = await readPackageScripts()
+
+    expect(scripts.prepare).toEqual(undefined)
+    expect(scripts.prepublishOnly).toEqual(undefined)
+    expect(scripts.prepack).toEqual("npm run build")
   })
 })
