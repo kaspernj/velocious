@@ -162,8 +162,11 @@ const rows  = await Factory.attributesForList("project", 5)
   but **omits transients and declared associations**, and never initializes the model,
   runs lifecycle callbacks, or builds associations.
 
-List creation is deterministic and sequential. To run independent singular calls
-concurrently, call them yourself with `Promise.all`.
+List creation is deterministic and sequential. A list compiles its merged factory/trait plan
+once, then evaluates every entry in a fresh context so sequences, lazy memoization, callbacks,
+and debug events remain per-entry. To run independent singular calls concurrently, call them
+yourself with `Promise.all`. Contributors can measure inheritance/trait-heavy list planning with
+`npm run benchmark:factory-plan-reuse`.
 
 ## Associations
 

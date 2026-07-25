@@ -8,6 +8,7 @@ import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 import {randomUUID} from "crypto"
 import {fileURLToPath} from "node:url"
+import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
@@ -74,8 +75,9 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
    * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
+   * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs, closeDatabaseConnectionsOnStop = true} = {}) {
+  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -87,6 +89,7 @@ export default class BackgroundJobsWorker {
     this.host = host
     this.port = port
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
+    this.onStopped = onStopped
     /**
      * Constructor override for the inline-job concurrency cap. When unset
      * the cap is read from `configuration.getBackgroundJobsConfig()` in
@@ -138,6 +141,8 @@ export default class BackgroundJobsWorker {
      */
     this.jobTimeoutMsOverride = typeof jobTimeoutMs === "number" ? jobTimeoutMs : undefined
     this.shouldStop = false
+    /** @type {Promise<void> | undefined} */
+    this.stopPromise = undefined
     this.workerId = randomUUID()
     this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
       ? heartbeatIntervalMs
@@ -200,6 +205,8 @@ export default class BackgroundJobsWorker {
    * @returns {Promise<void>} - Resolves when connected.
    */
   async start() {
+    this.shouldStop = false
+    this.stopPromise = undefined
     this.configuration = await this.configurationPromise
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-worker"})
@@ -246,37 +253,53 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.timeoutMs] - Max wait for in-flight jobs (per phase) in ms.
    * @returns {Promise<void>} - Resolves when stopped.
    */
-  async stop({timeoutMs} = {}) {
-    if (this.shouldStop) return
+  stop({timeoutMs} = {}) {
+    if (!this.stopPromise) this.stopPromise = this._stop({timeoutMs})
+
+    return this.stopPromise
+  }
+
+  /**
+   * Runs the worker shutdown lifecycle once.
+   * @param {object} [args] - Options.
+   * @param {number} [args.timeoutMs] - Max wait for in-flight jobs (per phase) in ms.
+   * @returns {Promise<void>} - Resolves when stopped.
+   */
+  async _stop({timeoutMs} = {}) {
     this.shouldStop = true
     this._stopHeartbeat()
 
-    // Announce drain so main stops dispatching but keeps the connection
-    // open until we close it ourselves below.
-    if (this.jsonSocket) {
-      try {
-        this.jsonSocket.send({type: "draining"})
-      } catch {
-        // Socket may already be closing; nothing to do.
-      }
-    }
+    await shutdownLifecycle({
+      onStopped: this.onStopped,
+      shutdown: async () => {
+        // Announce drain so main stops dispatching but keeps the connection
+        // open until we close it ourselves below.
+        if (this.jsonSocket) {
+          try {
+            this.jsonSocket.send({type: "draining"})
+          } catch {
+            // Socket may already be closing; nothing to do.
+          }
+        }
 
-    await this._drainInflight(this.inflightInlineJobs, timeoutMs)
-    await this._drainInflight(this.inflightPooledJobs, timeoutMs)
-    await this._drainInflight(this.inflightProcessJobs, timeoutMs)
-    await this._terminateProcessChildren()
-    // Give in-flight result reports (now decoupled from job slots) a bounded
-    // chance to land before the socket closes.
-    await this._drainInflight(this.inflightReports, timeoutMs)
+        await this._drainInflight(this.inflightInlineJobs, timeoutMs)
+        await this._drainInflight(this.inflightPooledJobs, timeoutMs)
+        await this._drainInflight(this.inflightProcessJobs, timeoutMs)
+        await this._terminateProcessChildren()
+        // Give in-flight result reports (now decoupled from job slots) a bounded
+        // chance to land before the socket closes.
+        await this._drainInflight(this.inflightReports, timeoutMs)
 
-    if (this.jsonSocket) this.jsonSocket.close()
-    if (this.configuration) {
-      try {
-        await this.configuration.disconnectBeacon()
-      } finally {
-        if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
+        if (this.jsonSocket) this.jsonSocket.close()
+        if (!this.configuration) return
+
+        try {
+          await this.configuration.disconnectBeacon()
+        } finally {
+          if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
+        }
       }
-    }
+    })
   }
 
   /**

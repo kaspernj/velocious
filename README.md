@@ -20,13 +20,13 @@
 * Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, and linting (see [docs/factories.md](docs/factories.md))
-* Per-row association counts via `.withCount(...)` on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
-* Consumer-defined per-row SQL aggregates/computations via `.queryData(...)` on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
+* Per-row association counts via `.withCount(...)`, including safe batching of structurally identical aggregates, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
+* Consumer-defined per-row SQL aggregates/computations via `.queryData(...)`, with compatible projections sharing a roundtrip while preserving declared alias-overwrite order, on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
-* Background jobs with failure events for production reporting (see [docs/background-jobs.md](docs/background-jobs.md))
+* Background jobs with failure events for production reporting and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md) and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
@@ -58,6 +58,8 @@ npm run build
 npm run test
 npm run test:expo
 ```
+
+Maintainers cutting a package release must follow the [Velocious release runbook](docs/releasing.md); `npm run release:patch` commits, pushes, and publishes rather than acting as a local-only version command.
 
 # Code quality (fallow)
 
@@ -1565,6 +1567,8 @@ database: {
 
 Velocious includes a lightweight websocket entry point for API-style calls and server-side events.
 
+Inbound frames remain ordered when TCP splits a frame across reads. Velocious limits a single final client data frame and a reassembled fragmented message to 16 MiB; larger payloads close the connection. See [WebSocket connections](docs/websocket-connections.md) for wire-protocol details.
+
 ## Connect and call a controller
 
 ```js
@@ -2147,7 +2151,11 @@ new BackgroundJobsWorker({configuration, maxConcurrentInlineJobs: 8})
 Standalone background-jobs main and worker processes close their configuration's
 database pools during `stop()`. Embedded/test callers that share externally owned
 pools can pass `closeDatabaseConnectionsOnStop: false` to `BackgroundJobsMain` or
-`BackgroundJobsWorker`; sockets and Beacon still shut down normally.
+`BackgroundJobsWorker`; sockets and Beacon still shut down normally. An async
+`onStopped` constructor hook can coordinate externally owned cleanup after that
+shutdown without wrapping the service's `stop()` method. Repeated `stop()` calls
+share one lifecycle and invoke the hook once; dual shutdown/hook failures reject
+with an `AggregateError` ordered with the shutdown failure first.
 
 ## Scheduled jobs
 

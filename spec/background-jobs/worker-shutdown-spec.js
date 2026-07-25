@@ -15,6 +15,35 @@ const VELOCIOUS_CLI_ENTRY_PATH = fileURLToPath(new URL("../../bin/velocious.js",
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 
 /**
+ * @returns {{promise: Promise<void>, resolve: () => void}} - Manually resolved promise.
+ */
+function deferred() {
+  /** @type {() => void} */
+  let resolve = () => {}
+  const promise = new Promise((resolvePromise) => {
+    resolve = () => resolvePromise(undefined)
+  })
+
+  return {promise, resolve}
+}
+
+/**
+ * @param {Promise<void>} promise - Promise expected to reject.
+ * @returns {Promise<Error>} - Captured rejection.
+ */
+async function captureRejection(promise) {
+  try {
+    await promise
+  } catch (error) {
+    if (error instanceof Error) return error
+
+    throw new Error(`Expected an Error rejection but got: ${String(error)}`, {cause: error})
+  }
+
+  throw new Error("Expected promise to reject")
+}
+
+/**
  * @returns {Promise<{cleanup: () => Promise<void>, directory: string}>} - Temporary runner project.
  */
 async function createStalledTeardownProject() {
@@ -161,6 +190,109 @@ describe("Background jobs worker - shutdown", () => {
     await worker.stop()
 
     expect(events).toEqual(["disconnect-beacon"])
+  })
+
+  it("runs the stopped hook after preserving stop options", async () => {
+    /** @type {string[]} */
+    const events = []
+    const worker = new BackgroundJobsWorker({
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => { events.push("disconnect-beacon") }
+      }),
+      closeDatabaseConnectionsOnStop: false,
+      onStopped: () => { events.push("stopped") }
+    })
+    worker.configuration = await worker.configurationPromise
+    worker.inflightInlineJobs.add(new Promise(() => {}))
+
+    await worker.stop({timeoutMs: 0})
+
+    expect(events).toEqual(["disconnect-beacon", "stopped"])
+  })
+
+  it("shares one stop lifecycle across concurrent and repeated callers", async () => {
+    const disconnect = deferred()
+    let stoppedCount = 0
+    const worker = new BackgroundJobsWorker({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => await disconnect.promise
+      }),
+      onStopped: () => { stoppedCount += 1 }
+    })
+    worker.configuration = await worker.configurationPromise
+
+    const firstStop = worker.stop()
+    const concurrentStop = worker.stop({timeoutMs: 0})
+
+    expect(concurrentStop).toBe(firstStop)
+    expect(stoppedCount).toBe(0)
+
+    disconnect.resolve()
+    await Promise.all([firstStop, concurrentStop])
+
+    expect(worker.stop()).toBe(firstStop)
+    await worker.stop()
+    expect(stoppedCount).toBe(1)
+  })
+
+  it("runs the stopped hook after worker shutdown rejects", async () => {
+    const shutdownError = new Error("worker shutdown failed")
+    let stoppedCount = 0
+    const worker = new BackgroundJobsWorker({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => { throw shutdownError }
+      }),
+      onStopped: () => { stoppedCount += 1 }
+    })
+    worker.configuration = await worker.configurationPromise
+
+    expect(await captureRejection(worker.stop())).toBe(shutdownError)
+    expect(stoppedCount).toBe(1)
+    expect(await captureRejection(worker.stop())).toBe(shutdownError)
+    expect(stoppedCount).toBe(1)
+  })
+
+  it("does not swallow a falsy worker shutdown rejection", async () => {
+    let stoppedCount = 0
+    const worker = new BackgroundJobsWorker({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => { throw 0 }
+      }),
+      onStopped: () => { stoppedCount += 1 }
+    })
+    worker.configuration = await worker.configurationPromise
+    let rejection = "did not reject"
+
+    try {
+      await worker.stop()
+    } catch (error) {
+      rejection = error
+    }
+
+    expect(rejection).toBe(0)
+    expect(stoppedCount).toBe(1)
+  })
+
+  it("aggregates worker shutdown and stopped-hook failures in lifecycle order", async () => {
+    const shutdownError = new Error("worker shutdown failed")
+    const hookError = new Error("worker hook failed")
+    const worker = new BackgroundJobsWorker({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => { throw shutdownError }
+      }),
+      onStopped: () => { throw hookError }
+    })
+    worker.configuration = await worker.configurationPromise
+
+    const error = await captureRejection(worker.stop())
+
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(/** @type {AggregateError} */ (error).errors).toEqual([shutdownError, hookError])
+    expect(error.cause).toBe(shutdownError)
   })
 
   it("does not make externally terminated forked children look like clean exits", async () => {
@@ -521,5 +653,115 @@ describe("Background jobs main - shutdown", () => {
     await main.stop()
 
     expect(events).toEqual(["disconnect-beacon", "close-server"])
+  })
+
+  it("runs the stopped hook after shutdown", async () => {
+    /** @type {string[]} */
+    const events = []
+    const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        getBackgroundJobsConfig: () => ({
+          databaseIdentifier: "default",
+          dispatchStrategy: "beacon",
+          host: "127.0.0.1",
+          pollIntervalMs: 1000,
+          port: 0
+        })
+      }),
+      onStopped: () => { events.push("stopped") }
+    })
+
+    await main.stop()
+
+    expect(events).toEqual(["disconnect-beacon", "stopped"])
+  })
+
+  it("shares one main stop lifecycle across concurrent and repeated callers", async () => {
+    const disconnect = deferred()
+    let stoppedCount = 0
+    const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => await disconnect.promise,
+        getBackgroundJobsConfig: () => ({
+          databaseIdentifier: "default",
+          dispatchStrategy: "beacon",
+          host: "127.0.0.1",
+          pollIntervalMs: 1000,
+          port: 0
+        })
+      }),
+      onStopped: () => { stoppedCount += 1 }
+    })
+
+    const firstStop = main.stop()
+    const concurrentStop = main.stop()
+
+    expect(concurrentStop).toBe(firstStop)
+    expect(stoppedCount).toBe(0)
+
+    disconnect.resolve()
+    await Promise.all([firstStop, concurrentStop])
+
+    expect(main.stop()).toBe(firstStop)
+    await main.stop()
+    expect(stoppedCount).toBe(1)
+  })
+
+  it("runs the stopped hook after an earlier main shutdown rejection", async () => {
+    const shutdownError = new Error("main scheduler stop failed")
+    let stoppedCount = 0
+    const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => {},
+        getBackgroundJobsConfig: () => ({
+          databaseIdentifier: "default",
+          dispatchStrategy: "beacon",
+          host: "127.0.0.1",
+          pollIntervalMs: 1000,
+          port: 0
+        })
+      }),
+      onStopped: () => { stoppedCount += 1 }
+    })
+    main.scheduler = /** @type {import("../../src/background-jobs/scheduler.js").default} */ ({
+      stop: async () => { throw shutdownError }
+    })
+
+    expect(await captureRejection(main.stop())).toBe(shutdownError)
+    expect(stoppedCount).toBe(1)
+    expect(await captureRejection(main.stop())).toBe(shutdownError)
+    expect(stoppedCount).toBe(1)
+  })
+
+  it("aggregates main shutdown and stopped-hook failures in lifecycle order", async () => {
+    const shutdownError = new Error("main scheduler stop failed")
+    const hookError = new Error("main hook failed")
+    const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        disconnectBeacon: async () => {},
+        getBackgroundJobsConfig: () => ({
+          databaseIdentifier: "default",
+          dispatchStrategy: "beacon",
+          host: "127.0.0.1",
+          pollIntervalMs: 1000,
+          port: 0
+        })
+      }),
+      onStopped: () => { throw hookError }
+    })
+    main.scheduler = /** @type {import("../../src/background-jobs/scheduler.js").default} */ ({
+      stop: async () => { throw shutdownError }
+    })
+
+    const error = await captureRejection(main.stop())
+
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(/** @type {AggregateError} */ (error).errors).toEqual([shutdownError, hookError])
+    expect(error.cause).toBe(shutdownError)
   })
 })

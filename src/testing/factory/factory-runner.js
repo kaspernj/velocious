@@ -48,6 +48,16 @@ export default class FactoryRunner {
    * @returns {CompiledPlan} - The compiled plan.
    */
   compile(factoryName, requestedTraits, overrides) {
+    return this.applyOverrides(this.compileTemplate(factoryName, requestedTraits), overrides)
+  }
+
+  /**
+   * Compiles inheritance, traits and declarations without call-site overrides.
+   * @param {string} factoryName - Factory to run.
+   * @param {string[]} requestedTraits - Traits requested at the call site, in order.
+   * @returns {CompiledPlan} - Reusable declaration plan.
+   */
+  compileTemplate(factoryName, requestedTraits) {
     const chain = this._resolveChain(factoryName)
     const target = chain[chain.length - 1]
     const modelClass = this._resolveModelClass(chain)
@@ -67,7 +77,31 @@ export default class FactoryRunner {
       this._expandTrait(traitName, target, flattened, [])
     }
 
-    return this._buildPlan({flattened, overrides, modelClass, target, chainNames: chain.map((definition) => definition.name)})
+    return this._buildPlan({flattened, modelClass, target, chainNames: chain.map((definition) => definition.name)})
+  }
+
+  /**
+   * Applies the current call-site overrides without mutating the reusable template.
+   * @param {CompiledPlan} planTemplate - Reusable declaration plan.
+   * @param {Record<string, ?>} overrides - Current call-site overrides.
+   * @returns {CompiledPlan} - Per-invocation plan.
+   */
+  applyOverrides(planTemplate, overrides) {
+    const overrideKeys = Object.keys(overrides)
+
+    if (overrideKeys.length === 0) return planTemplate
+
+    const resolved = new Map(planTemplate.resolved)
+
+    for (const key of overrideKeys) {
+      const prior = resolved.get(key)
+
+      resolved.set(key, {slotKind: prior ? prior.slotKind : "attribute", value: overrides[key], isOverride: true})
+    }
+
+    this._arbitrateAssociationOverrides(resolved, overrides, planTemplate.modelClass)
+
+    return {...planTemplate, resolved}
   }
 
   /**
@@ -193,16 +227,15 @@ export default class FactoryRunner {
   }
 
   /**
-   * Folds flattened declarations plus overrides into a compiled plan.
+   * Folds flattened declarations into a reusable compiled plan.
    * @param {object} args - Options.
    * @param {Array<{decl: import("./declarations.js").Declaration}>} args.flattened - Flattened declarations.
-   * @param {Record<string, ?>} args.overrides - Call-site overrides.
    * @param {(new (attributes?: Record<string, ?>) => ?) | null} args.modelClass - Resolved model class.
    * @param {import("./factory-definition.js").default} args.target - Target factory definition.
    * @param {string[]} args.chainNames - Inheritance chain names.
    * @returns {CompiledPlan} - The compiled plan.
    */
-  _buildPlan({flattened, overrides, modelClass, target, chainNames}) {
+  _buildPlan({flattened, modelClass, target, chainNames}) {
     /** @type {Map<string, Slot>} */
     const resolved = new Map()
     /** @type {Map<string, import("./declarations.js").CallbackDeclaration[]>} */
@@ -238,14 +271,6 @@ export default class FactoryRunner {
       }
     }
 
-    for (const key of Object.keys(overrides)) {
-      const prior = resolved.get(key)
-
-      resolved.set(key, {slotKind: prior ? prior.slotKind : "attribute", value: overrides[key], isOverride: true})
-    }
-
-    this._arbitrateAssociationOverrides(resolved, overrides, modelClass)
-
     return {
       factoryName: target.name,
       factoryDefinition: target,
@@ -269,6 +294,7 @@ export default class FactoryRunner {
    * @returns {void}
    */
   _arbitrateAssociationOverrides(resolved, overrides, modelClass) {
+    if (Object.keys(overrides).length === 0) return
     if (typeof modelClass !== "function" || !(modelClass.prototype instanceof DatabaseRecord)) return
 
     const backendModelClass = /** @type {typeof DatabaseRecord} */ (modelClass)

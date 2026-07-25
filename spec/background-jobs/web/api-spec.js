@@ -122,7 +122,27 @@ describe("Background jobs - web API", {databaseCleaning: {truncate: true}}, () =
       expect(body.counts.queued).toEqual(2)
       expect(body.counts.failed).toEqual(1)
       expect(body.counts.handed_off).toEqual(0)
+      expect(body.counts.all).toEqual(3)
+      expect(body.capabilities.backgroundJobCountDeltas).toEqual(1)
+      expect(Number.isInteger(body.revision)).toEqual(true)
       expect(body.total).toEqual(3)
+    })
+  })
+
+  it("keeps total counting cancelled rows while counts.all excludes them", async () => {
+    await Dummy.run(async () => {
+      await seedJobs()
+      const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+      const cancelledId = await store.enqueue({jobName: "TestJob", args: ["cancelled"]})
+
+      await store.cancel(cancelledId)
+
+      const response = await fetch(`${API_BASE}/stats`, {headers: {Authorization: `Bearer ${TOKEN}`}})
+      const body = await response.json()
+
+      expect(response.status).toEqual(200)
+      expect(body.counts.all).toEqual(3)
+      expect(body.total).toEqual(4)
     })
   })
 

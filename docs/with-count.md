@@ -54,8 +54,8 @@ shorthand for "count this relationship, store under `<name>Count`";
 
 ## How it runs
 
-After the main query's rows come back, Velocious issues one grouped
-count query per requested association:
+After the main query's rows come back, Velocious builds one grouped
+count query per requested entry:
 
 ```sql
 SELECT foo_id AS parent_id, COUNT(*) AS count_value
@@ -65,6 +65,13 @@ WHERE foo_id IN (<loaded parent PKs>)
   [AND <polymorphic type column> = '<parent model name>']
 GROUP BY foo_id
 ```
+
+Entries whose rendered aggregate SQL is identical (for example, two
+aliases for the same relationship and predicate) share that roundtrip.
+Different relationship scopes, joins, polymorphic predicates, or
+`where` clauses remain separate. Relationship declaration scopes are
+applied before compatibility is checked, so batching cannot widen a
+scoped association.
 
 Counts attach to each parent record's `_associationCounts` map via
 `record._setAssociationCount(attributeName, value)`. Reads go through

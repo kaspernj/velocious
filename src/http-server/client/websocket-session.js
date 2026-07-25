@@ -23,6 +23,11 @@ const WEBSOCKET_PAUSED_QUEUE_CAP = 1000
 /** Cap on total bytes buffered for a single fragmented message. */
 const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES = 16 * 1024 * 1024
 
+/** Cap on payload bytes buffered for a single final data frame. */
+const WEBSOCKET_MAX_FINAL_FRAME_BYTES = WEBSOCKET_MAX_FRAGMENTED_MESSAGE_BYTES
+
+const WEBSOCKET_MAX_INBOUND_FRAME_BYTES_BIGINT = BigInt(WEBSOCKET_MAX_FINAL_FRAME_BYTES)
+
 /** Cap on fragment count for a single fragmented message. */
 const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
 
@@ -97,7 +102,12 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @param {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} [args.messageHandlerPromise] - Optional raw message handler promise.
    */
   constructor({client, configuration, upgradeRequest, messageHandler, messageHandlerPromise}) {
-    this.buffer = Buffer.alloc(0)
+    /** @type {Buffer[]} */
+    this._bufferChunks = []
+    this._bufferChunkIndex = 0
+    this._bufferChunkOffset = 0
+    this._bufferedBytes = 0
+    this._bufferedFrameCopyBytes = 0
     this.client = client
     this.configuration = configuration
     this.upgradeRequest = upgradeRequest
@@ -301,7 +311,10 @@ export default class VelociousHttpServerClientWebsocketSession {
     // socket is alive. Mark it here, before `_processBuffer` may return
     // early waiting for the rest of an incomplete frame.
     this._heartbeatAlive = true
-    this.buffer = Buffer.concat([this.buffer, data])
+    if (data.length === 0) return
+
+    this._bufferChunks.push(data)
+    this._bufferedBytes += data.length
     this._processBuffer()
   }
 
@@ -588,9 +601,10 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void} - No return value.
    */
   _processBuffer() {
-    while (this.buffer.length >= 2) {
-      const firstByte = this.buffer[0]
-      const secondByte = this.buffer[1]
+    while (this._bufferedBytes >= 2) {
+      const initialHeader = this._peekBufferedBytes(2)
+      const firstByte = initialHeader[0]
+      const secondByte = initialHeader[1]
       const isFinal = (firstByte & WEBSOCKET_FINAL_FRAME) === WEBSOCKET_FINAL_FRAME
       const opcode = firstByte & 0x0F
       const isMasked = (secondByte & 0x80) === 0x80
@@ -598,12 +612,21 @@ export default class VelociousHttpServerClientWebsocketSession {
       let offset = 2
 
       if (payloadLength === 126) {
-        if (this.buffer.length < offset + 2) return
-        payloadLength = this.buffer.readUInt16BE(offset)
+        if (this._bufferedBytes < offset + 2) return
+        payloadLength = this._peekBufferedBytes(offset + 2).readUInt16BE(offset)
         offset += 2
       } else if (payloadLength === 127) {
-        if (this.buffer.length < offset + 8) return
-        const bigLength = this.buffer.readBigUInt64BE(offset)
+        if (this._bufferedBytes < offset + 8) return
+        const bigLength = this._peekBufferedBytes(offset + 8).readBigUInt64BE(offset)
+
+        if (bigLength > WEBSOCKET_MAX_INBOUND_FRAME_BYTES_BIGINT) {
+          this.logger.warn(() => [
+            "Websocket frame exceeded byte cap; closing connection",
+            {frameBytes: bigLength.toString(), maxBytes: WEBSOCKET_MAX_FINAL_FRAME_BYTES}
+          ])
+          this._closeForInboundLimit()
+          return
+        }
 
         payloadLength = Number(bigLength)
         offset += 8
@@ -611,17 +634,19 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       const maskLength = isMasked ? 4 : 0
 
-      if (this.buffer.length < offset + maskLength + payloadLength) return
+      const frameLength = offset + maskLength + payloadLength
+
+      if (this._bufferedBytes < frameLength) return
+
+      const frame = this._consumeBufferedBytes(frameLength)
 
       /** @type {Buffer} */
-      let payload = this.buffer.slice(offset + maskLength, offset + maskLength + payloadLength)
+      let payload = frame.subarray(offset + maskLength, frameLength)
 
       if (isMasked) {
-        const mask = this.buffer.slice(offset, offset + maskLength)
-        payload = this._unmaskPayload(payload, mask)
+        const mask = frame.subarray(offset, offset + maskLength)
+        this._unmaskPayload(payload, mask)
       }
-
-      this.buffer = this.buffer.slice(offset + maskLength + payloadLength)
 
       // Control frames (opcode >= 0x8) must not be fragmented per
       // RFC 6455 and can arrive interleaved with a fragmented data
@@ -727,6 +752,97 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
+   * Copies the leading buffered bytes without consuming them. Header
+   * inspection is bounded to the websocket header size.
+   * @param {number} byteCount - Number of leading bytes to inspect.
+   * @returns {Buffer} - Copied prefix.
+   */
+  _peekBufferedBytes(byteCount) {
+    const prefix = Buffer.allocUnsafe(byteCount)
+    let copiedBytes = 0
+    let chunkOffset = this._bufferChunkOffset
+
+    for (let chunkIndex = this._bufferChunkIndex; chunkIndex < this._bufferChunks.length; chunkIndex += 1) {
+      const chunk = this._bufferChunks[chunkIndex]
+      const bytesFromChunk = Math.min(chunk.length - chunkOffset, byteCount - copiedBytes)
+
+      chunk.copy(prefix, copiedBytes, chunkOffset, chunkOffset + bytesFromChunk)
+      copiedBytes += bytesFromChunk
+      chunkOffset = 0
+      if (copiedBytes === byteCount) break
+    }
+
+    return prefix
+  }
+
+  /**
+   * Consumes a complete frame from the chunk queue with one bounded copy.
+   * @param {number} byteCount - Complete frame byte count.
+   * @returns {Buffer} - Contiguous frame bytes.
+   */
+  _consumeBufferedBytes(byteCount) {
+    const result = Buffer.allocUnsafe(byteCount)
+    let copiedBytes = 0
+
+    while (copiedBytes < byteCount) {
+      const chunk = this._bufferChunks[this._bufferChunkIndex]
+      const bytesFromChunk = Math.min(chunk.length - this._bufferChunkOffset, byteCount - copiedBytes)
+
+      chunk.copy(
+        result,
+        copiedBytes,
+        this._bufferChunkOffset,
+        this._bufferChunkOffset + bytesFromChunk
+      )
+      copiedBytes += bytesFromChunk
+      this._bufferChunkOffset += bytesFromChunk
+
+      if (this._bufferChunkOffset === chunk.length) {
+        this._bufferChunkIndex += 1
+        this._bufferChunkOffset = 0
+      }
+    }
+
+    if (this._bufferChunkIndex === this._bufferChunks.length) {
+      this._bufferChunks = []
+      this._bufferChunkIndex = 0
+    } else if (
+      this._bufferChunkIndex >= 64 &&
+      this._bufferChunkIndex * 2 >= this._bufferChunks.length
+    ) {
+      this._bufferChunks = this._bufferChunks.slice(this._bufferChunkIndex)
+      this._bufferChunkIndex = 0
+    }
+
+    this._bufferedBytes -= byteCount
+    this._bufferedFrameCopyBytes += byteCount
+
+    return result
+  }
+
+  /**
+   * Drops all incomplete frame chunks.
+   * @returns {void}
+   */
+  _clearBufferedFrameChunks() {
+    this._bufferChunks = []
+    this._bufferChunkIndex = 0
+    this._bufferChunkOffset = 0
+    this._bufferedBytes = 0
+  }
+
+  /**
+   * Closes after an inbound buffering limit and releases all parser-owned input.
+   * @returns {void}
+   */
+  _closeForInboundLimit() {
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this.sendGoodbye(this.client)
+    this._handleClose()
+  }
+
+  /**
    * Appends a continuation-frame payload to the in-progress
    * fragmented message. Returns true when the fragment was accepted
    * and false when the per-message cap was hit and the socket has
@@ -771,10 +887,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
     ])
 
-    this._resetFragmentBuffer()
-    this.buffer = Buffer.alloc(0)
-    this.sendGoodbye(this.client)
-    this._handleClose()
+    this._closeForInboundLimit()
 
     return false
   }
@@ -1702,19 +1815,12 @@ export default class VelociousHttpServerClientWebsocketSession {
    * Runs unmask payload.
    * @param {Buffer} payload - Payload data.
    * @param {Buffer} mask - Mask.
-   * @returns {Buffer} - The unmask payload.
+   * @returns {void} - No return value.
    */
   _unmaskPayload(payload, mask) {
-    /**
-     * Result.
-     * @type {Buffer} */
-    const result = Buffer.alloc(payload.length)
-
     for (let i = 0; i < payload.length; i++) {
-      result[i] = payload[i] ^ mask[i % 4]
+      payload[i] ^= mask[i % 4]
     }
-
-    return result
   }
 
   async _runMessageHandlerOpen() {

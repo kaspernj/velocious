@@ -99,7 +99,11 @@ export default class VelociousBackgroundJobsWebController extends Controller {
    */
   async health() {
     await this._respond(async () => {
-      await this.render({json: {ok: true, service: "velocious-background-jobs"}})
+      await this.render({json: {
+        capabilities: {backgroundJobCountDeltas: 1},
+        ok: true,
+        service: "velocious-background-jobs"
+      }})
     })
   }
 
@@ -109,22 +113,15 @@ export default class VelociousBackgroundJobsWebController extends Controller {
    */
   async stats() {
     await this._respond(async () => {
-      const counts = await this._store().countsByStatus()
-      /**
-       * By status.
-       * @type {Record<string, number>} */
-      const byStatus = {}
-      let total = 0
+      const snapshot = await this._store().countSnapshot()
 
-      for (const status of DASHBOARD_STATUSES) {
-        byStatus[status] = counts[status] || 0
-      }
-
-      for (const value of Object.values(counts)) {
-        total += value
-      }
-
-      await this.render({json: {counts: byStatus, generatedAtMs: Date.now(), total}})
+      await this.render({json: {
+        capabilities: {backgroundJobCountDeltas: 1},
+        counts: snapshot.counts,
+        generatedAtMs: Date.now(),
+        revision: snapshot.revision,
+        total: snapshot.total
+      }})
     })
   }
 

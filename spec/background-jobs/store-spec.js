@@ -94,6 +94,9 @@ class ScriptedBackgroundJobsStore extends BackgroundJobsStore {
   async _getJobRowById() {
     return this.scriptedJob
   }
+
+  /** Count broadcasting is outside these scripted concurrency tests. @returns {Promise<void>} Resolves immediately. */
+  async _recordCountDelta() {}
 }
 
 /** @returns {import("../../src/background-jobs/types.js").BackgroundJobRow} - Active concurrency-limited job. */

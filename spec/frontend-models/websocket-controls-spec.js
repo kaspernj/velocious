@@ -62,6 +62,7 @@ function buildControlledClient({connectDelayMs = 0, readyDelayMs = 0, initiallyO
 
 class ControlledWebSocket {
   static autoOpen = true
+  static autoRespondToRequests = true
   static deferNextClose = false
   static deferSessionResume = false
   /** @type {ControlledWebSocket[]} */
@@ -163,6 +164,8 @@ class ControlledWebSocket {
       }
     } else if (message.type === "request") {
       ControlledWebSocket.onRequest(message)
+      if (!ControlledWebSocket.autoRespondToRequests) return
+
       queueMicrotask(() => {
         this.dispatch("message", new MessageEvent("message", {
           data: JSON.stringify({body: {ok: true}, id: message.id, status: 200, type: "response"})
@@ -462,6 +465,54 @@ describe("frontend-models - WebSocket controls", () => {
     }
   })
 
+  it("re-buffers an ordered reconnect batch when its transport deadline aborts", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.autoRespondToRequests = false
+    ControlledWebSocket.instances = []
+    ControlledWebSocket.sentMessages = []
+    clearBufferedOutgoingEvents()
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+    FrontendModelBase.configureTransport({
+      timeout: 20,
+      websocketUrl: "ws://example.test/websocket"
+    })
+
+    try {
+      await FrontendModelBase.connectWebsocket()
+      bufferOutgoingEvent({customPath: "/events/first", payload: {position: 1}})
+      bufferOutgoingEvent({customPath: "/events/second", payload: {position: 2}})
+      bufferOutgoingEvent({customPath: "/events/third", payload: {position: 3}})
+
+      await FrontendModelBase.dropWebsocket()
+      await wait(1_100)
+
+      expect(bufferedOutgoingEventCount()).toEqual(3)
+
+      ControlledWebSocket.autoRespondToRequests = true
+      await wait(1_100)
+
+      const eventPaths = ControlledWebSocket.sentMessages
+        .filter((message) => message.path?.startsWith("/events/"))
+        .map((message) => message.path)
+
+      expect(eventPaths).toEqual([
+        "/events/first",
+        "/events/first",
+        "/events/second",
+        "/events/third"
+      ])
+      expect(bufferedOutgoingEventCount()).toEqual(0)
+    } finally {
+      ControlledWebSocket.autoRespondToRequests = true
+      await FrontendModelBase.disconnectWebsocket()
+      clearBufferedOutgoingEvents()
+      globalThis.WebSocket = OriginalWebSocket
+      resetFrontendModelTransport()
+    }
+  })
+
   it("drains an automatic reconnect already checking online when the session aborts", async () => {
     const OriginalWebSocket = globalThis.WebSocket
     const controller = new AbortController()
@@ -565,6 +616,26 @@ describe("frontend-models - WebSocket controls", () => {
       expect(fixture.calls.map((call) => call.stage)).toEqual(["subscribe", "connect"])
       expect(fixture.calls[0].options.timeoutMs).toEqual(80)
       expect(fixture.calls[1].options.timeoutMs).toEqual(80)
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("supports an app-owned channel adapter without a connect method", async () => {
+    const fixture = buildControlledClient({initiallyOpen: true})
+
+    delete fixture.client.connect
+    FrontendModelBase.configureTransport({websocketClient: fixture.client})
+
+    try {
+      const handle = FrontendModelBase.subscribeWebsocketChannel("tasks", {
+        params: {projectId: 7}
+      })
+
+      expect(handle.customHandleMethod()).toEqual("preserved")
+      await handle.ready
+      expect(fixture.calls.map((call) => call.stage)).toEqual(["subscribe"])
+      expect(fixture.state.closed).toEqual(0)
     } finally {
       resetFrontendModelTransport()
     }

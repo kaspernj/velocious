@@ -2,6 +2,10 @@
 
 Velocious background jobs are documented in the main README. This page covers behavior that applications usually need when operating background jobs in production.
 
+For the mounted inspection API, authoritative tab-count snapshots, and
+WebSocket/Beacon delta contract, see the
+[background-jobs dashboard](background-jobs-dashboard.md).
+
 ## Execution modes and pooled runners
 
 New enqueues default to `executionMode: "pooled"`. Each worker owns a local pool of warm Node child processes; a child runs up to `pooledRunnerConcurrency` jobs at a time on its own event loop and is reused for sequential jobs. Completion still flows through the runner's durable status reporter, so the main process and database acknowledgement remain authoritative. Pooled capacity is advertised explicitly and is separate from inline and forked/spawned capacity. The `execution_mode` column is the single source of truth for a job's runtime — pooled rows persist as `execution_mode = "pooled"` directly.
@@ -214,7 +218,12 @@ lifetimes and close its database pools on `stop()`. An embedded process or test
 harness that passes a configuration whose pools are owned by its caller must
 construct either service with `closeDatabaseConnectionsOnStop: false`; shutdown
 still disconnects Beacon and closes the service sockets without invalidating
-the caller's active database connections.
+the caller's active database connections. Embedded lifecycle coordinators can
+also pass an async `onStopped` hook; it runs after service-owned shutdown work
+finishes, without replacing or narrowing either service's `stop()` contract.
+Concurrent and repeated `stop()` calls share one lifecycle and invoke the hook
+once. If shutdown and the hook both fail, `stop()` rejects with an
+`AggregateError` whose errors contain the shutdown failure first.
 
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 

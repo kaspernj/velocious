@@ -1,5 +1,8 @@
+import Configuration from "../../../src/configuration.js"
 import Interaction from "../../dummy/src/models/interaction.js"
 import Project from "../../dummy/src/models/project.js"
+import ProjectDetail from "../../dummy/src/models/project-detail.js"
+import RequestTiming from "../../../src/http-server/client/request-timing.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Database - query - withCount", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -47,6 +50,96 @@ describe("Database - query - withCount", {databaseCleaning: {transaction: false,
     }).toArray()
 
     expect(loaded.readCount("doneTasksCount")).toEqual(1)
+  })
+
+  it("uses one aggregate roundtrip for compatible aliases", async () => {
+    const project = await Project.create({nameEn: "Compatible", nameDe: "Kompatibel"})
+
+    await Task.create({name: "Done", project, isDone: true})
+    await Task.create({name: "Open", project, isDone: false})
+
+    const requestTiming = new RequestTiming()
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()}).withCount({
+        completedTasksCount: {relationship: "tasks", where: {isDone: true}},
+        doneTasksCount: {relationship: "tasks", where: {isDone: true}}
+      }).toArray()
+    })
+
+    expect(loaded.readCount("completedTasksCount")).toEqual(1)
+    expect(loaded.readCount("doneTasksCount")).toEqual(1)
+    expect(requestTiming.dbQueryCount).toEqual(2)
+  })
+
+  it("keeps incompatible predicates separate", async () => {
+    const project = await Project.create({nameEn: "Predicates", nameDe: "Prädikate"})
+    const requestTiming = new RequestTiming()
+
+    await Task.create({name: "Done", project, isDone: true})
+    await Task.create({name: "Open", project, isDone: false})
+
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()}).withCount({
+        doneTasksCount: {relationship: "tasks", where: {isDone: true}},
+        openTasksCount: {relationship: "tasks", where: {isDone: false}}
+      }).toArray()
+    })
+
+    expect(loaded.readCount("doneTasksCount")).toEqual(1)
+    expect(loaded.readCount("openTasksCount")).toEqual(1)
+    expect(requestTiming.dbQueryCount).toEqual(3)
+  })
+
+  it("applies relationship scopes before batching aliases", async () => {
+    const project = await Project.create({nameEn: "Scopes", nameDe: "Bereiche"})
+    const requestTiming = new RequestTiming()
+
+    await Task.create({name: "Done", project, isDone: true})
+    await Task.create({name: "Open", project, isDone: false})
+
+    const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project.where({id: project.id()}).withCount({
+        completedTasksCount: {relationship: "doneTasks"},
+        doneTasksCount: {relationship: "doneTasks"}
+      }).toArray()
+    })
+
+    expect(loaded.readCount("completedTasksCount")).toEqual(1)
+    expect(loaded.readCount("doneTasksCount")).toEqual(1)
+    expect(requestTiming.dbQueryCount).toEqual(2)
+  })
+
+  it("qualifies the foreign key when a relationship scope joins a table with the same column", async () => {
+    const project = await Project.create({nameEn: "Joined scope", nameDe: "Verknüpfter Bereich"})
+
+    await ProjectDetail.create({project, note: "Scope join"})
+    await Task.create({name: "Scoped task", project})
+
+    const [loaded] = await Project.where({id: project.id()}).withCount("tasksWithProjectDetails").toArray()
+
+    expect(loaded.readCount("tasksWithProjectDetailsCount")).toEqual(1)
+  })
+
+  it("batches on the transaction's existing connection", async () => {
+    const project = await Project.create({nameEn: "Transaction", nameDe: "Transaktion"})
+    const requestTiming = new RequestTiming()
+
+    await Task.create({name: "Task", project})
+
+    await Project.connection().transaction(async () => {
+      const [loaded] = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+        return await Project.where({id: project.id()}).withCount({
+          firstTasksCount: {relationship: "tasks"},
+          secondTasksCount: {relationship: "tasks"}
+        }).toArray()
+      })
+
+      expect(Project.connection().insideTransaction()).toEqual(true)
+      expect(loaded.readCount("firstTasksCount")).toEqual(1)
+      expect(loaded.readCount("secondTasksCount")).toEqual(1)
+    })
+
+    expect(requestTiming.dbQueryCount).toEqual(2)
   })
 
   it("accepts an array of names as shorthand", async () => {
