@@ -49,9 +49,11 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
       didConnect = true
       driver.pool = {
         escape: (value) => `'${value}'`,
-        query: (sql, callback) => {
-          callback(null, [{result: 1}], [{name: "result"}])
-        }
+        getConnection: (connectionCallback) => connectionCallback(null, {
+          query: (sql, cb) => cb(null, [{result: 1}], [{name: "result"}]),
+          release: () => {},
+          destroy: () => {}
+        })
       }
     }
 
@@ -82,20 +84,24 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
       driver._sessionTimezoneSetToUtc = false
       driver.pool = {
         escape: (value) => `'${value}'`,
-        query: (sql, callback) => {
-          if (sql == "SET time_zone = '+00:00'") {
-            callback(null, [], [])
-            return
-          }
+        getConnection: (connectionCallback) => connectionCallback(null, {
+          query: (sql, cb) => {
+            if (sql == "SET time_zone = '+00:00'") {
+              cb(null, [], [])
+              return
+            }
 
-          attempts++
+            attempts++
 
-          if (attempts < 3) {
-            callback(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
-          } else {
-            callback(null, [{result: 1}], [{name: "result"}])
-          }
-        }
+            if (attempts < 3) {
+              cb(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
+            } else {
+              cb(null, [{result: 1}], [{name: "result"}])
+            }
+          },
+          release: () => {},
+          destroy: () => {}
+        })
       }
     }
 
@@ -150,14 +156,18 @@ describe("Database - drivers - mysql reconnect", {databaseCleaning: {transaction
     driver.connect = async () => {
       driver.pool = {
         escape: (value) => `'${value}'`,
-        query: (sql, callback) => {
-          if (sql == "SET time_zone = '+00:00'") {
-            callback(null, [], [])
-            return
-          }
+        getConnection: (connectionCallback) => connectionCallback(null, {
+          query: (sql, cb) => {
+            if (sql == "SET time_zone = '+00:00'") {
+              cb(null, [], [])
+              return
+            }
 
-          callback(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
-        }
+            cb(new Error("connect ECONNREFUSED 127.0.0.1:3306"))
+          },
+          release: () => {},
+          destroy: () => {}
+        })
       }
     }
 

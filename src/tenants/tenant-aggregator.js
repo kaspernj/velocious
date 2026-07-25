@@ -25,6 +25,7 @@ import Current from "../current.js"
  * @property {(tenant: ?) => boolean} [filter] - Optional filter applied to the resolved tenant list.
  * @property {string[]} [keyColumns] - Columns the aggregate is grouped by (for example `["docker_server_id"]`). Empty means a single grand-total row.
  * @property {Record<string, AggregateSpec>} aggregates - Output column name to aggregate. `"SUM"` is shorthand for `{op: "SUM", column: <output name>}`; use `{op: "COUNT", column: "*"}` for `COUNT(*)`.
+ * @property {AbortSignal} [signal] - Signal passed to each aggregate database query.
  * @property {(context: SubqueryContext) => string} subquery - Builds one tenant's inner `SELECT`, which must select every `keyColumns` entry plus every aggregate source column.
  * @property {import("../configuration.js").default} [configuration] - Configuration to run against. Defaults to the current configuration.
  */
@@ -169,7 +170,7 @@ export default class TenantAggregator {
       return await this._withTenant(firstTenant.tenant, async (connections) => {
         const connection = connections[this.options.identifier]
 
-        return await connection.query(this.buildAggregateSql({connection, entries: group, qualified: true}))
+        return await connection.query(this.buildAggregateSql({connection, entries: group, qualified: true}), {signal: this.options.signal})
       })
     }
 
@@ -180,7 +181,7 @@ export default class TenantAggregator {
       const tenantRows = await this._withTenant(resolvedTenant.tenant, async (connections) => {
         const connection = connections[this.options.identifier]
 
-        return await connection.query(this.buildAggregateSql({connection, entries: [resolvedTenant], qualified: false}))
+        return await connection.query(this.buildAggregateSql({connection, entries: [resolvedTenant], qualified: false}), {signal: this.options.signal})
       })
 
       rows.push(...tenantRows)

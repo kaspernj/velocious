@@ -59,6 +59,7 @@
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
  * @property {boolean} [retry] - Whether retryable errors may retry the query; defaults to true.
  * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
+ * @property {AbortSignal} [signal] - Aborts the in-flight query (destroying its connection) when it fires.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  */
 
@@ -116,6 +117,7 @@ import { formatDateForDatabase } from "../datetime-storage.js"
 import isDate from "../../utils/is-date.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
+import QueryAbortedError from "../query-aborted-error.js"
 import Handler from "../handler.js"
 import Mutex from "epic-locks/build/mutex.js"
 import UUID from "pure-uuid"
@@ -1170,6 +1172,10 @@ export default class VelociousDatabaseDriversBase {
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
+        // A deliberately-aborted query must never be silently re-run — its
+        // connection was destroyed on purpose, so treat it as terminal.
+        if (error instanceof QueryAbortedError) throw error
+
         const retryInfo = this.retryableDatabaseError(error)
 
         if (options.retry !== false && tries < maxTries && retryInfo.retry) {
@@ -1274,7 +1280,7 @@ export default class VelociousDatabaseDriversBase {
     await this.beforeQuery(sql, options)
 
     try {
-      return await this._queryActual(sql)
+      return await this._queryActual(sql, options)
     } finally {
       await this.afterQuery(sql, options)
     }
@@ -1463,9 +1469,10 @@ export default class VelociousDatabaseDriversBase {
    * Runs query actual.
    * @abstract
    * @param {string} sql - SQL string.
+   * @param {QueryOptions} [options] - Query options (carries the optional abort signal).
    * @returns {Promise<QueryResultType>} - Resolves with the query actual.
    */
-  _queryActual(sql) { // eslint-disable-line no-unused-vars
+  _queryActual(sql, options) { // eslint-disable-line no-unused-vars
     throw new Error(`queryActual not implemented`)
   }
 

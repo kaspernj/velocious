@@ -34,6 +34,7 @@
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 * Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
 * Selective named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
+* AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
 

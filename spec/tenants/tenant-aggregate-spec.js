@@ -267,4 +267,40 @@ describe("Tenant.aggregateAcross", () => {
     expect(sql).toContain("SUM(`reserved`) AS `reserved`")
     expect(sql).toContain("GROUP BY `docker_server_id`")
   })
+
+  it("forwards an AbortSignal to the aggregate database query", async () => {
+    const queryOptions = []
+    const options = {
+      quoteColumnName: (/** @type {string} */ name) => `\`${name}\``,
+      quoteDatabaseName: (/** @type {string} */ name) => `\`${name}\``,
+      quoteTableName: (/** @type {string} */ name) => `\`${name}\``
+    }
+    const connection = {
+      options: () => options,
+      query: async (/** @type {string} */ _sql, queryOptionsValue) => {
+        queryOptions.push(queryOptionsValue)
+
+        return []
+      },
+      quote: (/** @type {string} */ value) => `'${value}'`,
+      supportsCrossDatabaseReferences: () => true
+    }
+    const configuration = {
+      ensureConnections: async (callback) => await callback({projectTenant: connection}),
+      resolveDatabaseConfiguration: () => ({database: "tenant_alpha", host: "localhost", type: "mysql", username: "test"}),
+      runWithTenant: async (_tenant, callback) => await callback()
+    }
+    const signal = new AbortController().signal
+
+    await new TenantAggregator({
+      aggregates: {reserved: "SUM"},
+      configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
+      identifier: "projectTenant",
+      signal,
+      subquery: ({table}) => `SELECT estimated_cpu_usage AS reserved FROM ${table("builds")}`,
+      tenants: [{slug: "alpha"}]
+    }).run()
+
+    expect(queryOptions).toEqual([{signal}])
+  })
 })

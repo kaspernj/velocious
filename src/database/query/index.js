@@ -125,6 +125,7 @@ function mergeJoinValue(existing, incoming) {
  * @property {Record<string, string[]>} [preloadSelects] - Attribute names to load for preloaded relationships, keyed by target model name.
  * @property {Record<string, string[]>} [preloadSelectsExtra] - Extra selects to load in addition to the defaults for preloaded relationships, keyed by target model name.
  * @property {Array<import("./select-base.js").default>} [selects] - SELECT clauses for the query.
+ * @property {AbortSignal} [signal] - Signal passed to database query execution.
  * @property {boolean} [distinct] - Whether the query should use DISTINCT.
  * @property {Array<import("./where-base.js").default>} [wheres] - WHERE conditions for the query.
  */
@@ -150,6 +151,7 @@ export default class VelociousDatabaseQuery {
     preloadSelectsExtra = {},
     distinct = false,
     selects = [],
+    signal,
     wheres = []
   }) {
     if (!driver) throw new Error("No driver given to query")
@@ -182,6 +184,7 @@ export default class VelociousDatabaseQuery {
     this._preloadSelectsExtra = preloadSelectsExtra
     this._distinct = distinct
     this._selects = selects
+    this._signal = signal
 
     /**
      * Narrows the runtime value to the documented type.
@@ -213,6 +216,7 @@ export default class VelociousDatabaseQuery {
       preload: {...this._preload},
       distinct: this._distinct,
       selects: [...this._selects],
+      signal: this._signal,
       wheres: [...this._wheres]
     })
 
@@ -482,9 +486,20 @@ export default class VelociousDatabaseQuery {
    */
   async _executeQuery({logName = this.queryLogName("Load")} = {}) {
     const sql = this.toSql()
-    const results = await this.driver.query(sql, {logName})
+    const results = await this.driver.query(sql, {logName, signal: this._signal})
 
     return results
+  }
+
+  /**
+   * Sets the signal used to cancel database execution for this query and its clones.
+   * @param {AbortSignal | undefined} signal - Cancellation signal, or undefined to clear it.
+   * @returns {this} - Query for chaining.
+   */
+  signal(signal) {
+    this._signal = signal
+
+    return this
   }
 
   /**

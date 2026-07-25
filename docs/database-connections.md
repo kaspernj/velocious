@@ -34,6 +34,8 @@ Framework persistence stores that already own one database identifier, such as t
 
 When every allowed connection is checked out, additional checkouts wait for a compatible connection to be checked in or for capacity to be freed. Waiting checkouts time out after `10000` ms by default. Configure `database.<environment>.<identifier>.pool.checkoutTimeoutMillis` to change that wait, or set it to `null` to wait indefinitely.
 
+MySQL/MariaDB callers can cancel queued and in-flight statements with an `AbortSignal`, including ORM model queries and cross-tenant aggregates. See [Database Query Cancellation](database-query-cancellation.md) for the API and driver-specific behavior.
+
 Velocious adds checkout names and active database annotations to SQL comments while a query is executing. This makes active queries easier to identify in process/activity views such as `SHOW FULL PROCESSLIST`, PostgreSQL `pg_stat_activity.query`, and SQL Server request SQL text:
 
 ```sql

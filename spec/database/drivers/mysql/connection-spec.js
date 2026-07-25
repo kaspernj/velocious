@@ -1,4 +1,5 @@
 import DatabaseDriversMysql from "../../../../src/database/drivers/mysql/index.js"
+import QueryAbortedError from "../../../../src/database/query-aborted-error.js"
 import configuration from "../../../dummy/src/config/configuration.js"
 import { digg } from "diggerize"
 
@@ -184,5 +185,78 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
       "SET time_zone = '+00:00'",
       "SELECT retry_me"
     ])
+  })
+
+  it("sets the session time zone again after an aborted query destroys the connection", async () => {
+    const actualQueries = []
+    const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+    let queryStartedResolve
+    const queryStarted = new Promise((resolve) => { queryStartedResolve = resolve })
+
+    mysql.pool = /** @type {import("mysql").Pool} */ ({
+      escape(value) {
+        return `'${value}'`
+      },
+      getConnection(callback) {
+        const connection = {
+          destroy() {},
+          query(sql, queryCallback) {
+            actualQueries.push(sql)
+
+            if (sql == "SELECT abort") {
+              queryStartedResolve()
+            } else {
+              queryCallback(null, [], [])
+            }
+          },
+          release() {}
+        }
+
+        callback(null, connection)
+      }
+    })
+
+    const controller = new AbortController()
+    const abortPromise = mysql.query("SELECT abort", {signal: controller.signal})
+
+    await queryStarted
+    controller.abort()
+
+    let caught
+    try {
+      await abortPromise
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught instanceof QueryAbortedError).toEqual(true)
+    await mysql.query("SELECT after abort")
+    expect(actualQueries).toEqual([
+      "SET time_zone = '+00:00'",
+      "SELECT abort",
+      "SET time_zone = '+00:00'",
+      "SELECT after abort"
+    ])
+  })
+
+  it("keeps confirmed session state when a query is aborted before checkout", async () => {
+    const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+
+    mysql.pool = /** @type {import("mysql").Pool} */ ({
+      getConnection() {
+        throw new Error("A pre-aborted query must not check out a connection")
+      }
+    })
+    mysql._currentSessionTimeZone = "+00:00"
+
+    let caught
+    try {
+      await mysql._queryActual("SELECT pre-aborted", {signal: AbortSignal.abort()})
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught instanceof QueryAbortedError).toEqual(true)
+    expect(mysql.getCurrentSessionTimeZone()).toEqual("+00:00")
   })
 })
