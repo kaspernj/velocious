@@ -1,17 +1,24 @@
 // @ts-check
 
+import {execFile} from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
-import {fileURLToPath} from "node:url"
+import {fileURLToPath, pathToFileURL} from "node:url"
+import {promisify} from "node:util"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+const execFileAsync = promisify(execFile)
+
+/** @returns {string} - Repository directory. */
+function repositoryDirectory() {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+}
 
 /**
  * @returns {Promise<Record<string, string>>} - Package scripts.
  */
 async function readPackageScripts() {
-  const __filename = fileURLToPath(import.meta.url)
-  const __dirname = path.dirname(__filename)
-  const packageJsonPath = path.join(__dirname, "..", "..", "package.json")
+  const packageJsonPath = path.join(repositoryDirectory(), "package.json")
   const packageJson = JSON.parse(await fs.readFile(packageJsonPath, "utf8"))
 
   return packageJson.scripts
@@ -37,11 +44,59 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     expect(scripts.test).toEqual("node scripts/run-tests.js")
   })
 
-  it("builds only when packaging", async () => {
+  it("builds when dependencies change or the package is packed", async () => {
     const scripts = await readPackageScripts()
 
+    expect(scripts.dependencies).toEqual("npm run build")
     expect(scripts.prepare).toEqual(undefined)
     expect(scripts.prepublishOnly).toEqual(undefined)
     expect(scripts.prepack).toEqual("npm run build")
+  })
+
+  it("builds the declared package entry points when installed from Git", async () => {
+    const temporaryDirectory = await fs.mkdtemp(path.join(repositoryDirectory(), "tmp", "git-install-spec-"))
+    const sourceDirectory = path.join(temporaryDirectory, "source")
+    const consumerDirectory = path.join(temporaryDirectory, "consumer")
+    const npmExecutable = process.env.npm_execpath
+
+    if (!npmExecutable) throw new Error("Expected npm_execpath while running the package lifecycle spec")
+
+    try {
+      await execFileAsync("git", ["clone", "--local", "--no-hardlinks", repositoryDirectory(), sourceDirectory])
+      await fs.copyFile(path.join(repositoryDirectory(), "package.json"), path.join(sourceDirectory, "package.json"))
+      await execFileAsync("git", [
+        "-c", "user.name=Velocious test",
+        "-c", "user.email=velocious@example.invalid",
+        "commit", "--all", "--allow-empty", "--message=Use current package lifecycle"
+      ], {cwd: sourceDirectory})
+      await fs.mkdir(consumerDirectory)
+      await fs.writeFile(path.join(consumerDirectory, "package.json"), JSON.stringify({
+        allowScripts: {
+          esbuild: true,
+          sqlite3: true,
+          velocious: true
+        },
+        dependencies: {
+          velocious: `git+${pathToFileURL(sourceDirectory).href}`
+        },
+        name: "velocious-git-install-consumer",
+        private: true,
+        type: "module"
+      }))
+      await execFileAsync(process.execPath, [
+        npmExecutable,
+        "install",
+        "--allow-git=all",
+        "--allow-remote=all",
+        "--no-audit",
+        "--no-fund"
+      ], {cwd: consumerDirectory})
+
+      await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "index.js"))
+      await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "index.d.ts"))
+      await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "bin", "velocious.js"))
+    } finally {
+      await fs.rm(temporaryDirectory, {recursive: true, force: true})
+    }
   })
 })
