@@ -136,7 +136,7 @@ describe("Background jobs - worker pooled job timeout", () => {
   function registerPooledChild(worker, child) {
     worker.pooledChildren.add(/** @type {?} */ (child))
     worker.inflightProcessChildren.add(/** @type {?} */ (child))
-    worker.pooledChildStates.set(/** @type {?} */ (child), {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), retiring: false})
+    worker.pooledChildStates.set(/** @type {?} */ (child), {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false})
     child.once("exit", (/** @type {?} */ code, /** @type {?} */ signal) => {
       void worker._handlePooledChildFailure({child: /** @type {?} */ (child), error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)})
     })

@@ -128,7 +128,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({}))
     const inflight = new Map([["p1", {payload: {id: "p1", jobName: "TestJob"}, resolve: () => {}}]])
     worker.pooledChildren.add(child)
-    worker.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight, retiring: false})
+    worker.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight, lastDispatchSeq: 0, retiring: false})
     /** @type {() => void} */
     let resolvePooled = () => {}
     worker._trackPooledJob(new Promise((resolve) => { resolvePooled = resolve }))
@@ -161,7 +161,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     worker.pooledChildren.add(child)
     worker.inflightProcessChildren.add(child)
     worker.pooledChildStates.set(child, {
-      createdAtMs: Date.now(), jobsRun: 2, retiring: false,
+      createdAtMs: Date.now(), jobsRun: 2, lastDispatchSeq: 0, retiring: false,
       inflight: new Map([["pooled-failed", {payload: {id: "pooled-failed", jobName: "TestJob"}, resolve: () => { resolved = true }}]])
     })
 
@@ -184,7 +184,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     let resolved = false
     worker.pooledChildren.add(child)
     worker.pooledChildStates.set(child, {
-      createdAtMs: Date.now(), jobsRun: 0, retiring: false,
+      createdAtMs: Date.now(), jobsRun: 0, lastDispatchSeq: 0, retiring: false,
       inflight: new Map([["acknowledged-failure", {payload: {id: "acknowledged-failure", jobName: "FailingJob"}, resolve: () => { resolved = true }}]])
     })
 
@@ -210,7 +210,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
       worker.pooledChildren.add(child)
       worker.inflightProcessChildren.add(child)
       worker.pooledChildStates.set(child, {
-        createdAtMs: threshold === "age" ? Date.now() - 20 : Date.now(), jobsRun: 0, retiring: false,
+        createdAtMs: threshold === "age" ? Date.now() - 20 : Date.now(), jobsRun: 0, lastDispatchSeq: 0, retiring: false,
         inflight: new Map([[`threshold-${threshold}`, {payload: {id: `threshold-${threshold}`, jobName: "TestJob"}}]])
       })
 
@@ -230,7 +230,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     const sends = []
     const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({send: (/** @type {{payload: {id: string}}} */ message) => sends.push(message.payload)}))
     worker.pooledChildren.add(child)
-    worker.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), retiring: false})
+    worker.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false})
 
     for (const id of ["a", "b", "c"]) void worker._runPooledJob({id, jobName: "TestJob"})
 
@@ -253,7 +253,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     worker.pooledChildren.add(child)
     worker.inflightProcessChildren.add(child)
     worker.pooledChildStates.set(child, {
-      createdAtMs: Date.now(), jobsRun: 0, retiring: false,
+      createdAtMs: Date.now(), jobsRun: 0, lastDispatchSeq: 0, retiring: false,
       inflight: new Map([
         ["j1", {payload: {id: "j1", jobName: "TestJob"}, resolve: () => {}}],
         ["j2", {payload: {id: "j2", jobName: "TestJob"}, resolve: () => {}}]
@@ -284,7 +284,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     worker.pooledChildren.add(child)
     worker.inflightProcessChildren.add(child)
     worker.pooledChildStates.set(child, {
-      createdAtMs: Date.now(), jobsRun: 0, retiring: false,
+      createdAtMs: Date.now(), jobsRun: 0, lastDispatchSeq: 0, retiring: false,
       inflight: new Map([
         ["c1", {payload: {id: "c1", jobName: "TestJob"}, resolve: () => {}}],
         ["c2", {payload: {id: "c2", jobName: "TestJob"}, resolve: () => {}}]
