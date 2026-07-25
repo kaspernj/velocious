@@ -234,6 +234,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       preloadSelectsExtra: clonePreloadSelectMap(this._preloadSelectsExtra),
       distinct: this._distinct,
       selects: [...this._selects],
+      signal: this._signal,
       wheres: [...this._wheres],
       joinBasePath: [...this._joinBasePath],
       joinTracker: this._joinTracker.clone(),
@@ -373,7 +374,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     ].join(" ")
     const results = /** @type {{count: number}[]} */ (await this.driver.query(
       sql,
-      {logName: this.queryLogName("Count")}
+      {logName: this.queryLogName("Count"), signal: this._signal}
     ))
 
     if (results.length != 1 || !("count" in results[0])) {
@@ -780,7 +781,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       sql = `UPDATE ${driver.quoteTable(tableName)} SET ${setCols}${whereSql}`
     }
 
-    await driver.query(sql, {logName: this.queryLogName("Update All")})
+    await driver.query(sql, {logName: this.queryLogName("Update All"), signal: this._signal})
   }
 
   /**

@@ -1,24 +1,24 @@
 // @ts-check
 
 /**
- * Thrown when an in-flight query is aborted via its `AbortSignal`/deadline. The
- * underlying connection has already been destroyed (never returned to the pool
- * half-drained), so this is a terminal, non-retryable outcome: the `query()`
- * retry loop treats it as non-retryable, so a deliberately-cancelled query is
- * never silently re-run against a fresh connection.
+ * Thrown when a query is aborted via its `AbortSignal`/deadline. This is a
+ * terminal, non-retryable outcome whether cancellation happened before checkout
+ * or after an in-flight connection had to be destroyed.
  */
 export default class QueryAbortedError extends Error {
   /**
    * Runs constructor.
    * @param {object} [args] - Options.
    * @param {unknown} [args.cause] - Error cause.
+   * @param {boolean} [args.connectionDestroyed] - Whether cancellation destroyed an in-flight connection.
    * @param {string} [args.sql] - The SQL that was aborted.
    */
-  constructor({cause, sql} = {}) {
+  constructor({cause, connectionDestroyed = false, sql} = {}) {
     super("Query aborted before it completed", {cause})
 
     this.name = "QueryAbortedError"
     this.code = "VELOCIOUS_QUERY_ABORTED"
+    this.connectionDestroyed = connectionDestroyed
     this.sql = sql
   }
 }

@@ -138,6 +138,47 @@ describe("Database - Drivers - Mysql - Query", {databaseCleaning: {transaction: 
     expect(connection.released).toBe(false)
   })
 
+  it("rejects on abort while waiting for a pool checkout and releases a late connection", async () => {
+    let checkoutCallback
+    const connection = {
+      destroyed: false,
+      queried: false,
+      released: false,
+      query() {
+        connection.queried = true
+      },
+      release() {
+        connection.released = true
+      },
+      destroy() {
+        connection.destroyed = true
+      }
+    }
+    const pool = /** @type {import("mysql").Pool} */ ({
+      getConnection(callback) {
+        checkoutCallback = callback
+      }
+    })
+    const controller = new AbortController()
+    const promise = query(pool, "SELECT queued", {signal: controller.signal})
+
+    controller.abort()
+    const rejectedBeforeCheckout = await Promise.race([
+      promise.then(() => false, (error) => error instanceof QueryAbortedError),
+      new Promise((resolve) => setImmediate(() => resolve(false)))
+    ])
+
+    if (!checkoutCallback) throw new Error("Expected the pool checkout callback to be registered")
+
+    checkoutCallback(null, connection)
+    await promise.catch(() => {})
+
+    expect(rejectedBeforeCheckout).toBe(true)
+    expect(connection.queried).toBe(false)
+    expect(connection.released).toBe(true)
+    expect(connection.destroyed).toBe(false)
+  })
+
   it("throws QueryAbortedError without checking out a connection when the signal is already aborted", async () => {
     let checkedOut = false
     const pool = /** @type {import("mysql").Pool} */ ({

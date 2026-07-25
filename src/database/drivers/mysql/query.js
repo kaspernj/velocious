@@ -4,6 +4,61 @@ import mysql from "mysql"
 import QueryAbortedError from "../../query-aborted-error.js"
 
 /**
+ * Checks out one pool connection while honoring cancellation before checkout completes.
+ * A connection returned after cancellation is released without running the query.
+ * @param {import("mysql").Pool} pool - Pool to check out from.
+ * @param {string} sql - SQL associated with the checkout.
+ * @param {AbortSignal | undefined} signal - Optional cancellation signal.
+ * @returns {Promise<import("mysql").PoolConnection>} - Checked-out connection.
+ */
+function checkoutConnection(pool, sql, signal) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    /** @type {(() => void) | undefined} */
+    let removeAbortListener
+
+    const settle = () => {
+      settled = true
+      if (removeAbortListener) removeAbortListener()
+    }
+
+    const onAbort = () => {
+      if (settled) return
+
+      settle()
+      reject(new QueryAbortedError({sql}))
+    }
+
+    if (signal) {
+      signal.addEventListener("abort", onAbort, {once: true})
+      removeAbortListener = () => signal.removeEventListener("abort", onAbort)
+    }
+
+    if (signal?.aborted) {
+      onAbort()
+
+      return
+    }
+
+    pool.getConnection((error, connection) => {
+      if (settled) {
+        if (connection) connection.release()
+
+        return
+      }
+
+      settle()
+
+      if (error) {
+        reject(error)
+      } else {
+        resolve(connection)
+      }
+    })
+  })
+}
+
+/**
  * Best-effort `KILL QUERY` so the server aborts the running statement — releasing
  * its locks/resources immediately — instead of finishing it after the client
  * socket is destroyed. Destroying the socket alone does not interrupt a
@@ -13,7 +68,7 @@ import QueryAbortedError from "../../query-aborted-error.js"
  * pool is capped at one connection (the one running the aborted query). Any
  * failure is swallowed: the caller still destroys the socket and rejects.
  * @param {import("mysql").Pool} pool - Pool whose connection config seeds the kill connection.
- * @param {number | undefined} threadId - Server thread id of the query to kill.
+ * @param {number | null | undefined} threadId - Server thread id of the query to kill.
  * @returns {Promise<void>} - Resolves once the kill has been attempted.
  */
 function killServerQuery(pool, threadId) {
@@ -61,12 +116,7 @@ function killServerQuery(pool, threadId) {
 export default async function query(pool, sql, {signal} = {}) {
   if (signal?.aborted) throw new QueryAbortedError({sql})
 
-  const connection = await new Promise((resolve, reject) => {
-    pool.getConnection((error, pooledConnection) => {
-      if (error) reject(error)
-      else resolve(pooledConnection)
-    })
-  })
+  const connection = await checkoutConnection(pool, sql, signal)
 
   return await new Promise((resolve, reject) => {
     let settled = false
@@ -82,13 +132,15 @@ export default async function query(pool, sql, {signal} = {}) {
       if (settled) return
 
       settle()
-      // Force the server to abort the running statement (releasing its
-      // locks/resources now, not when it finishes), then destroy the client
-      // socket. Destroy — never release — so a connection still mid-statement is
-      // not returned to the pool; the pool spawns a fresh one on the next
-      // checkout. The kill runs in the background so the caller rejects promptly.
-      void killServerQuery(pool, connection.threadId).finally(() => connection.destroy())
-      reject(new QueryAbortedError({sql}))
+      const threadId = connection.threadId
+
+      // Destroy — never release — so a connection still mid-statement is not
+      // returned to the pool and the pool slot is freed even if the separate
+      // server-side kill attempt stalls. The pool spawns a fresh connection on
+      // the next checkout.
+      connection.destroy()
+      void killServerQuery(pool, threadId)
+      reject(new QueryAbortedError({connectionDestroyed: true, sql}))
     }
 
     if (signal) {

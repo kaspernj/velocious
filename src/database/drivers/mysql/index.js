@@ -384,7 +384,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
     } catch (error) {
       // Preserve an abort as-is so the retry loop can recognise it as terminal
       // (wrapping it in a plain Error would lose the QueryAbortedError type).
-      if (error instanceof QueryAbortedError) throw error
+      if (error instanceof QueryAbortedError) {
+        if (error.connectionDestroyed) this.resetCurrentSessionTimeZone()
+        throw error
+      }
 
       // Re-throw to un-corrupt stacktrace
       if (error instanceof Error) {
