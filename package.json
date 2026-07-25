@@ -20,6 +20,7 @@
     "benchmark:preloader-id-dedup": "node benchmark/preloader-id-dedup.js",
     "benchmark:mysql-result-row-materialization": "node benchmark/mysql-result-row-materialization.js",
     "benchmark:query-roundtrip-batching": "node benchmark/query-roundtrip-batching.js",
+    "benchmark:websocket-outbound-queue": "node benchmark/websocket-outbound-queue.js",
     "benchmark:websocket-frame-buffering": "node benchmark/websocket-frame-buffering.js",
     "build": "node scripts/clean-build.js && npm run compile",
     "compile": "tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",

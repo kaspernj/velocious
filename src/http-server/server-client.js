@@ -77,6 +77,15 @@ export default class ServerClient {
   }
 
   /**
+   * Immediately destroys the socket and all transport-owned write buffers.
+   * @param {Error} error - Destruction reason.
+   * @returns {void}
+   */
+  destroy(error) {
+    if (!this.socket.destroyed) this.socket.destroy(error)
+  }
+
+  /**
    * On socket data.
    * @param {Buffer} chunk - Chunk.
    * @returns {void} - No return value.

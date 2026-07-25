@@ -73,6 +73,22 @@ class SlowFakeSocket extends FakeSocket {
   }
 }
 
+class BlockedWriteSocket extends FakeSocket {
+  /** @type {Array<(error?: Error) => void>} */
+  writeCallbacks = []
+
+  /**
+   * @param {string | Uint8Array} _data - Data payload.
+   * @param {(error?: Error) => void} [callback] - Callback.
+   * @returns {boolean} - False while the write is blocked.
+   */
+  write(_data, callback) {
+    if (callback) this.writeCallbacks.push(callback)
+
+    return false
+  }
+}
+
 /** @returns {Configuration} - Minimal server-client test configuration. */
 function buildConfiguration() {
   return new Configuration({
@@ -89,6 +105,34 @@ function buildConfiguration() {
 }
 
 describe("HttpServer - server client", {databaseCleaning: {transaction: true}}, () => {
+  it("validates WebSocket outbound queue defaults and configured high-water marks", async () => {
+    const defaults = buildConfiguration()
+    const configured = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      httpServer: {websocketOutboundQueue: {maxPendingBytes: 1024, maxPendingFrames: 8}},
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      logging: {console: false, file: false}
+    })
+
+    expect(defaults.getWebsocketOutboundQueueLimits()).toEqual({maxBytes: 16 * 1024 * 1024, maxFrames: 256})
+    expect(configured.getWebsocketOutboundQueueLimits()).toEqual({maxBytes: 1024, maxFrames: 8})
+
+    const invalidValues = [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.POSITIVE_INFINITY]
+    for (const invalidValue of invalidValues) {
+      await expect(() => new Configuration({
+        database: {test: {}},
+        environmentHandler: new EnvironmentHandlerNode(),
+        httpServer: {websocketOutboundQueue: {maxPendingBytes: invalidValue}}
+      })).toThrow(/maxPendingBytes must be a positive safe integer/u)
+    }
+  })
+
   it("handles socket errors without crashing and emits close once", async () => {
     const configuration = buildConfiguration()
     const socket = new FakeSocket()
@@ -115,6 +159,24 @@ describe("HttpServer - server client", {databaseCleaning: {transaction: true}}, 
 
     socket.emitWriteError = true
     await client.send("should-not-hang")
+  })
+
+  it("keeps send pending until the socket write callback settles", async () => {
+    const socket = new BlockedWriteSocket()
+    const client = new ServerClient({clientCount: 7, configuration: buildConfiguration(), socket})
+    let settled = false
+    const sending = client.send("blocked-frame").then(() => {
+      settled = true
+    })
+
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(settled).toEqual(false)
+    expect(socket.writeCallbacks.length).toEqual(1)
+
+    socket.writeCallbacks.shift()?.()
+    await sending
+
+    expect(settled).toEqual(true)
   })
 
   it("resolves end immediately for already closed sockets", async () => {

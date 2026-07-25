@@ -2,6 +2,7 @@
 
 import {ensureError} from "typanic"
 import Logger from "../../logger.js"
+import ClientDeliveryQueue from "../client-delivery-queue.js"
 import {Worker} from "worker_threads"
 import websocketEventsHost from "../websocket-events-host.js"
 
@@ -59,7 +60,7 @@ export default class VelociousHttpServerWorker {
      * @type {Map<number, {resolve: (snapshot: Record<string, ?>) => void}>} */
     this._debugSnapshotRequests = new Map()
 
-    /** @type {Map<number, Promise<void>>} */
+    /** @type {Map<number, ClientDeliveryQueue>} */
     this._clientDeliveryQueues = new Map()
   }
 
@@ -117,6 +118,7 @@ export default class VelociousHttpServerWorker {
     if (!this.clients[clientCount] && !this._clientDeliveryQueues.has(clientCount)) return
 
     delete this.clients[clientCount]
+    this._clientDeliveryQueues.get(clientCount)?.destroy()
     this._clientDeliveryQueues.delete(clientCount)
     this.worker?.postMessage({command: "clientAbort", clientCount})
   }
@@ -163,6 +165,10 @@ export default class VelociousHttpServerWorker {
   _closeAllClients() {
     const clients = Object.values(this.clients)
     this.clients = {}
+    const deliveryQueues = this._clientDeliveryQueues
+    this._clientDeliveryQueues = new Map()
+
+    for (const queue of deliveryQueues.values()) queue.destroy()
 
     for (const client of clients) {
       try {
@@ -182,6 +188,7 @@ export default class VelociousHttpServerWorker {
    * @param {string} [data.filePath] - File path.
    * @param {boolean} [data.sendBody] - Whether to send the file body.
    * @param {number} [data.transferId] - File transfer id.
+   * @param {boolean} [data.websocket] - Whether output belongs to an upgraded WebSocket.
    * @param {string} [data.channel] - Channel name.
    * @param {number} [data.requestId] - Debug request id.
    * @param {Record<string, ?>} [data.snapshot] - Worker debug snapshot.
@@ -219,7 +226,11 @@ export default class VelociousHttpServerWorker {
       if (output !== null && output !== undefined) {
         const outputLength = typeof output === "string" ? output.length : output.byteLength
 
-        void this.enqueueClientDelivery(client.clientCount, () => client.send(output)).then(() => {
+        const delivery = data.websocket === true
+          ? this.enqueueClientFrame(client, output)
+          : this.enqueueClientControl(client, () => client.send(output))
+
+        void delivery.then(() => {
           this.logger.debug(() => ["Client output delivered", {
             clientCount,
             outputLength,
@@ -243,7 +254,7 @@ export default class VelociousHttpServerWorker {
         return
       }
 
-      void this.enqueueClientDelivery(client.clientCount, async () => {
+      void this.enqueueClientControl(client, async () => {
         const result = await client.sendFile(filePath, sendBody !== false)
 
         this.worker?.postMessage({command: "clientFileResult", result, transferId})
@@ -260,7 +271,7 @@ export default class VelociousHttpServerWorker {
         return
       }
 
-      void this.enqueueClientDelivery(client.clientCount, () => client.end())
+      void this.enqueueClientControl(client, () => client.end())
         .finally(() => delete this.clients[client.clientCount])
     } else if (command == "debugSnapshot") {
       const {requestId, snapshot} = data
@@ -297,24 +308,70 @@ export default class VelociousHttpServerWorker {
 
   /**
    * Preserves socket output ordering for one client.
-   * @param {number} clientCount - Client count.
+   * @param {import("../server-client.js").default} client - Client instance.
+   * @param {string | Uint8Array} output - Complete output buffer.
+   * @returns {Promise<void>} - Queued delivery.
+   */
+  enqueueClientFrame(client, output) {
+    const byteLength = typeof output === "string" ? Buffer.byteLength(output) : output.byteLength
+
+    return this._deliveryQueueFor(client).enqueueFrame({
+      byteLength,
+      delivery: () => client.send(output)
+    })
+  }
+
+  /**
+   * Preserves ordering for a delivery that retains no complete output frame.
+   * @param {import("../server-client.js").default} client - Client instance.
    * @param {() => Promise<void>} delivery - Delivery operation.
    * @returns {Promise<void>} - Queued delivery.
    */
-  enqueueClientDelivery(clientCount, delivery) {
-    const previous = this._clientDeliveryQueues.get(clientCount) || Promise.resolve()
-    const queued = previous
-      .catch(() => {})
-      .then(delivery)
+  enqueueClientControl(client, delivery) {
+    return this._deliveryQueueFor(client).enqueueControl(delivery)
+  }
 
-    this._clientDeliveryQueues.set(clientCount, queued)
-    const clearQueue = () => {
-      if (this._clientDeliveryQueues.get(clientCount) === queued) this._clientDeliveryQueues.delete(clientCount)
+  /**
+   * Gets or creates one client's delivery queue.
+   * @param {import("../server-client.js").default} client - Client instance.
+   * @returns {ClientDeliveryQueue} - Client-owned delivery queue.
+   */
+  _deliveryQueueFor(client) {
+    const existing = this._clientDeliveryQueues.get(client.clientCount)
+    if (existing) return existing
+
+    const {maxBytes, maxFrames} = this.configuration.getWebsocketOutboundQueueLimits()
+    const queue = new ClientDeliveryQueue({
+      clientCount: client.clientCount,
+      maxBytes,
+      maxFrames,
+      onOverflow: (error) => {
+        queue.destroy()
+        client.destroy(error)
+        this._reportOutboundQueueOverflow({clientCount: client.clientCount, error})
+      }
+    })
+
+    this._clientDeliveryQueues.set(client.clientCount, queue)
+    return queue
+  }
+
+  /**
+   * Reports a per-client outbound queue overflow.
+   * @param {object} args - Overflow details.
+   * @param {number} args.clientCount - Affected client.
+   * @param {Error} args.error - Overflow error.
+   * @returns {void}
+   */
+  _reportOutboundQueueOverflow({clientCount, error}) {
+    const errorPayload = {
+      context: {clientCount, websocketOutboundQueueOverflow: true, workerCount: this.workerCount},
+      error
     }
+    const errorEvents = this.configuration.getErrorEvents()
 
-    void queued.then(clearQueue, clearQueue)
-
-    return queued
+    errorEvents.emit("framework-error", errorPayload)
+    errorEvents.emit("all-error", {...errorPayload, errorType: "framework-error"})
   }
 
   /**

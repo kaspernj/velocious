@@ -1,6 +1,7 @@
 // @ts-check
 
 import Client from "../client/index.js"
+import ClientDeliveryQueue from "../client-delivery-queue.js"
 import dispatchChannelSubscribers from "./channel-subscriber-dispatch.js"
 import Logger from "../../logger.js"
 import websocketEventsHost from "../websocket-events-host.js"
@@ -23,7 +24,7 @@ export default class VelociousHttpServerInProcessHandler {
 
     /**
      * Narrows the runtime value to the documented type.
-     * @type {Record<number, {httpClient: Client, serverClient: import("../server-client.js").default}>} */
+     * @type {Record<number, {deliveryQueue: ClientDeliveryQueue, httpClient: Client, serverClient: import("../server-client.js").default}>} */
     this.clients = {}
 
     /** @type {Set<Promise<void>>} */
@@ -56,25 +57,36 @@ export default class VelociousHttpServerInProcessHandler {
       remoteAddress: serverClient.remoteAddress
     })
 
-    let deliveryQueue = Promise.resolve()
-    const enqueueDelivery = (/** @type {() => Promise<void>} */ delivery) => {
-      deliveryQueue = deliveryQueue
-        .catch(() => {})
-        .then(delivery)
-
-      return deliveryQueue
-    }
+    const {maxBytes, maxFrames} = this.configuration.getWebsocketOutboundQueueLimits()
+    const deliveryQueue = new ClientDeliveryQueue({
+      clientCount,
+      maxBytes,
+      maxFrames,
+      onOverflow: (error) => {
+        deliveryQueue.destroy()
+        serverClient.destroy(error)
+        this._reportOutboundQueueOverflow({clientCount, error})
+      }
+    })
 
     httpClient.events.on("output", (output) => {
       if (output !== null && output !== undefined) {
-        void enqueueDelivery(() => serverClient.send(output)).catch((error) => {
+        const delivery = () => serverClient.send(output)
+        const queued = httpClient.websocketSession
+          ? deliveryQueue.enqueueFrame({
+            byteLength: typeof output === "string" ? Buffer.byteLength(output) : output.byteLength,
+            delivery
+          })
+          : deliveryQueue.enqueueControl(delivery)
+
+        void queued.catch((error) => {
           this.logger.error(() => ["Failed to deliver client output", {clientCount}, error])
         })
       }
     })
 
     httpClient.events.on("file", ({filePath, sendBody, settle}) => {
-      void enqueueDelivery(async () => {
+      void deliveryQueue.enqueueControl(async () => {
         await settle(await serverClient.sendFile(filePath, sendBody))
       }).catch((error) => {
         this.logger.error(() => ["Failed to deliver file response", {clientCount, filePath}, error])
@@ -83,11 +95,12 @@ export default class VelociousHttpServerInProcessHandler {
     })
 
     httpClient.events.on("close", () => {
-      void enqueueDelivery(() => serverClient.end())
+      void deliveryQueue.enqueueControl(() => serverClient.end())
         .finally(() => delete this.clients[clientCount])
     })
 
     serverClient.events.on("close", () => {
+      deliveryQueue.destroy()
       const cleanup = httpClient.abortPendingFileResponses()
         .catch((error) => {
           this.logger.warn("Failed to abort file responses after client close", error)
@@ -100,7 +113,7 @@ export default class VelociousHttpServerInProcessHandler {
       this.pendingClientCloseCleanups.add(cleanup)
     })
 
-    this.clients[clientCount] = {httpClient, serverClient}
+    this.clients[clientCount] = {deliveryQueue, httpClient, serverClient}
 
     // Create a message-port shim so ServerClient.onSocketData can route data
     // to the in-process HTTP Client without needing a real worker thread.
@@ -116,6 +129,24 @@ export default class VelociousHttpServerInProcessHandler {
 
     serverClient.setWorker(messagePortShim)
     serverClient.listen()
+  }
+
+  /**
+   * Reports a per-client outbound queue overflow.
+   * @param {object} args - Overflow details.
+   * @param {number} args.clientCount - Affected client.
+   * @param {Error} args.error - Overflow error.
+   * @returns {void}
+   */
+  _reportOutboundQueueOverflow({clientCount, error}) {
+    const errorPayload = {
+      context: {clientCount, websocketOutboundQueueOverflow: true, workerCount: this.workerCount},
+      error
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", errorPayload)
+    errorEvents.emit("all-error", {...errorPayload, errorType: "framework-error"})
   }
 
   /**
