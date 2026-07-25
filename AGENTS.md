@@ -121,8 +121,7 @@ For investigation-only tasks, do not push to GitHub unless explicitly asked.
 ## Branches and commits
 When asked to create branches and commit changes, come up with fitting branch names and commit messages. Split commits into smaller commits for each distinct change.
 Never commit or push directly to `master`; always use a feature branch and open a PR.
-- Do not manually bump this package's own `version` in `package.json` (or `spec/dummy/package.json`). The release happens through the release script (`npm run release:patch`), which sets the version at release time. Leave `version` untouched in feature work and PRs — a manual bump conflicts with the release flow.
+- Do not manually bump this package's own `version` in `package.json`. The release happens through the release script (`npm run release:patch`), which sets the version at release time. Leave `version` untouched in feature work and PRs — a manual bump conflicts with the release flow. Follow `docs/releasing.md` for the required clean-master, fresh-install, authentication, side-effect, and public-registry verification gates.
 - In codebases that auto-load model files with a require-context/recursive `src/models` scan, keep `src/models/**` limited to actual model classes; place helper modules under `src/utils`/`src/support` so initialization does not treat them as records.
 - Do not edit generated source files manually; regenerate them with the owning project script/command.
 - In generated frontend models, use direct class import names (for example `import Project from "./project.js"`), not suffixed aliases like `ProjectModel`.
-- When bumping package versions, update both `package.json` and `spec/dummy/package.json`.
