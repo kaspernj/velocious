@@ -8,6 +8,10 @@ export class VelociousHttpServerWebsocketEventsHost {
      * Narrows the runtime value to the documented type.
      * @type {Set<import("./worker-handler/index.js").default>} */
     this.handlers = new Set()
+    /**
+     * Broadcast handlers grouped by the configuration that owns them.
+     * @type {Map<import("../configuration.js").default, Set<import("./worker-handler/index.js").default>>} */
+    this.broadcastHandlersByConfiguration = new Map()
     this.publishQueue = Promise.resolve()
   }
 
@@ -30,8 +34,23 @@ export class VelociousHttpServerWebsocketEventsHost {
    */
   register(handler) {
     this.handlers.add(handler)
+    let configurationHandlers = this.broadcastHandlersByConfiguration.get(handler.configuration)
 
-    return () => this.handlers.delete(handler)
+    if (!configurationHandlers) {
+      configurationHandlers = new Set()
+      this.broadcastHandlersByConfiguration.set(handler.configuration, configurationHandlers)
+    }
+
+    configurationHandlers.add(handler)
+
+    return () => {
+      this.handlers.delete(handler)
+      configurationHandlers.delete(handler)
+
+      if (configurationHandlers.size === 0) {
+        this.broadcastHandlersByConfiguration.delete(handler.configuration)
+      }
+    }
   }
 
   /**
@@ -81,9 +100,7 @@ export class VelociousHttpServerWebsocketEventsHost {
       const persistedEvent = await this._persistV2EventIfNeeded({body, channel, configuration})
       const dispatchedTargets = new Set()
 
-      for (const handler of this.handlers) {
-        if (handler.configuration !== configuration) continue
-
+      for (const handler of this.broadcastHandlersByConfiguration.get(configuration) || []) {
         const dispatchKey = handler.websocketV2BroadcastDispatchKey()
 
         if (dispatchedTargets.has(dispatchKey)) continue

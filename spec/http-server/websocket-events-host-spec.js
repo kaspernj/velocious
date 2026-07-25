@@ -1,9 +1,35 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {VelociousHttpServerWebsocketEventsHost} from "../../src/http-server/websocket-events-host.js"
 
 describe("HttpServer - websocket events host", {databaseCleaning: {transaction: true}}, () => {
+  it("keeps broadcast handlers separate from subscription debug state", () => {
+    const host = new VelociousHttpServerWebsocketEventsHost()
+    const subscription = {debugSnapshot: () => ({topic: "debug"})}
+    const handler = {
+      configuration: dummyConfiguration,
+      dispatchWebsocketV2Broadcast: () => {},
+      websocketV2BroadcastDispatchKey: () => dummyConfiguration
+    }
+
+    dummyConfiguration._registerWebsocketChannelSubscription("RegistrySeparation", /** @type {?} */ (subscription))
+    const unregister = host.register(/** @type {?} */ (handler))
+
+    expect(dummyConfiguration._websocketChannelSubscriptions.get("RegistrySeparation")).toEqual(new Set([subscription]))
+    expect(host.broadcastHandlersByConfiguration.get(dummyConfiguration)).toEqual(new Set([handler]))
+    expect(dummyConfiguration.getLocalDebugSnapshot().websockets.subscriptions.find(({channel}) => channel === "RegistrySeparation")).toEqual({
+      channel: "RegistrySeparation",
+      count: 1,
+      details: [{count: 1, details: {topic: "debug"}}]
+    })
+
+    unregister()
+    dummyConfiguration._unregisterWebsocketChannelSubscription("RegistrySeparation", /** @type {?} */ (subscription))
+    expect(host.broadcastHandlersByConfiguration.has(dummyConfiguration)).toEqual(false)
+  })
+
   it("isolates configuration-local broadcasts and deduplicates shared in-process handlers", async () => {
     const host = new VelociousHttpServerWebsocketEventsHost()
     const configurationA = {
