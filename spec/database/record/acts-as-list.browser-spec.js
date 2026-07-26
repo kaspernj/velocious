@@ -67,6 +67,21 @@ describe("Record - acts as list", {tags: ["dummy"]}, () => {
     expect(allItems.map((item) => item.position())).toEqual([1, 2])
   })
 
+  it("updates unrelated attributes on partially selected persisted records", async () => {
+    const project = await Project.create({name: "List Project Partial Select"})
+    const item = await ActsAsListItem.create({name: "Before", project})
+    const partiallySelected = await ActsAsListItem
+      .where({id: item.id()})
+      .select(["id", "name"])
+      .first()
+
+    if (!partiallySelected) throw new Error("Partially selected acts-as-list item was not found")
+
+    await partiallySelected.update({name: "After"})
+
+    expect((await ActsAsListItem.find(item.id())).name()).toEqual("After")
+  })
+
   it("fails closed when moving a row with a corrupted persisted zero position", async () => {
     const project = await Project.create({name: "List Project Corrupt Zero"})
     const corrupted = await ActsAsListItem.create({name: "Corrupted", project})
@@ -113,6 +128,25 @@ describe("Record - acts as list", {tags: ["dummy"]}, () => {
 
     expect(allItems.map((item) => item.id())).toEqual([corrupted.id(), second.id()])
     expect(allItems.map((item) => item.position())).toEqual([-1, 2])
+  })
+
+  it("fails closed when destroying a row with a corrupted persisted null position", async () => {
+    const project = await Project.create({name: "List Project Corrupt Null"})
+    const corrupted = await ActsAsListItem.create({name: "Corrupted", project})
+    const second = await ActsAsListItem.create({name: "Second", project})
+    const connection = ActsAsListItem.connection()
+
+    await connection.query(
+      `UPDATE ${connection.quoteTable("acts_as_list_items")} SET ${connection.quoteColumn("position")} = NULL WHERE ${connection.quoteColumn("id")} = ${connection.quote(corrupted.id())}`
+    )
+    await corrupted.reload()
+
+    await expect(async () => {
+      await corrupted.destroy()
+    }).toThrowError("Persisted actsAsList position must be a positive integer")
+
+    expect((await ActsAsListItem.find(corrupted.id())).position()).toEqual(null)
+    expect((await ActsAsListItem.find(second.id())).position()).toEqual(2)
   })
 
   it("auto-appends independently within different scopes", async () => {

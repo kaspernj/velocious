@@ -76,13 +76,13 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     const scopeChanged = scopeCol in changes
     const posAssigned = assignedAttributeNames.has(positionColumn)
 
+    if (!posChanged && !scopeChanged) return
+
     assertPositivePosition({
       position: rawAttributes[posColumn],
       positionColumn,
       persisted: true
     })
-
-    if (!posChanged && !scopeChanged) return
 
     const oldPosition = posChanged ? /** @type {number} */ (rawAttributes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
     const newPosition = posChanged ? /** @type {number} */ (changes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
@@ -129,7 +129,13 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
   modelClass.beforeDestroy(async (record) => {
     const position = record.readAttribute(positionColumn)
 
-    if (position == null) return
+    if (position == null) {
+      const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+      const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
+
+      if (posColumn in record._attributes) assertPositivePosition({position, positionColumn, persisted: true})
+      return
+    }
     assertPositivePosition({position, positionColumn, persisted: true})
 
     await moveOutOfWay({record, positionColumn, scope})

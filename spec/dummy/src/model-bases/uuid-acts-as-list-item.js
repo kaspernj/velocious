@@ -15,15 +15,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<UuidActsAsListItemWriteAttributes>} */
 export default class UuidActsAsListItemBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/uuid-acts-as-list-item.js").default}
-   */
+  /** @returns {typeof import("../models/uuid-acts-as-list-item.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/uuid-acts-as-list-item.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -32,14 +28,10 @@ export default class UuidActsAsListItemBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   scopeId() { return this.readAttribute("scopeId") }
 
   /**
@@ -48,14 +40,10 @@ export default class UuidActsAsListItemBase extends DatabaseRecord {
    */
   setScopeId(newValue) { return this._setColumnAttribute("scopeId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasScopeId() { return this._hasAttribute(this.scopeId()) }
 
-  /**
-   * @returns {number | null}
-   */
+  /** @returns {number | null} */
   position() { return this.readAttribute("position") }
 
   /**
@@ -64,14 +52,10 @@ export default class UuidActsAsListItemBase extends DatabaseRecord {
    */
   setPosition(newValue) { return this._setColumnAttribute("position", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasPosition() { return this._hasAttribute(this.position()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   name() { return this.readAttribute("name") }
 
   /**
@@ -80,14 +64,10 @@ export default class UuidActsAsListItemBase extends DatabaseRecord {
    */
   setName(newValue) { return this._setColumnAttribute("name", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasName() { return this._hasAttribute(this.name()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -96,14 +76,10 @@ export default class UuidActsAsListItemBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -112,8 +88,6 @@ export default class UuidActsAsListItemBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 }

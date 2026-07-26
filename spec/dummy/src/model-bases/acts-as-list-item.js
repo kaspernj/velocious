@@ -16,15 +16,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<ActsAsListItemWriteAttributes>} */
 export default class ActsAsListItemBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/acts-as-list-item.js").default}
-   */
+  /** @returns {typeof import("../models/acts-as-list-item.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/acts-as-list-item.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -33,14 +29,10 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   projectId() { return this.readAttribute("projectId") }
 
   /**
@@ -49,14 +41,10 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    */
   setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasProjectId() { return this._hasAttribute(this.projectId()) }
 
-  /**
-   * @returns {number | null}
-   */
+  /** @returns {number | null} */
   position() { return this.readAttribute("position") }
 
   /**
@@ -65,14 +53,10 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    */
   setPosition(newValue) { return this._setColumnAttribute("position", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasPosition() { return this._hasAttribute(this.position()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   name() { return this.readAttribute("name") }
 
   /**
@@ -81,14 +65,10 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    */
   setName(newValue) { return this._setColumnAttribute("name", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasName() { return this._hasAttribute(this.name()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -97,14 +77,10 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -113,9 +89,7 @@ export default class ActsAsListItemBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

@@ -16,15 +16,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<ProjectTranslationWriteAttributes>} */
 export default class ProjectTranslationBase extends DatabaseRecord {
-  /**
-   * @returns {typeof ProjectTranslationBase}
-   */
+  /** @returns {typeof ProjectTranslationBase} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof ProjectTranslationBase} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -33,14 +29,10 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   projectId() { return this.readAttribute("projectId") }
 
   /**
@@ -49,14 +41,10 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    */
   setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasProjectId() { return this._hasAttribute(this.projectId()) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   locale() { return this.readAttribute("locale") }
 
   /**
@@ -65,14 +53,10 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    */
   setLocale(newValue) { return this._setColumnAttribute("locale", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasLocale() { return this._hasAttribute(this.locale()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   name() { return this.readAttribute("name") }
 
   /**
@@ -81,14 +65,10 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    */
   setName(newValue) { return this._setColumnAttribute("name", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasName() { return this._hasAttribute(this.name()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -97,14 +77,10 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -113,9 +89,7 @@ export default class ProjectTranslationBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

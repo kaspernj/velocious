@@ -154,16 +154,12 @@ export default class DbGenerateModel extends BaseCommand {
       // --- getModelClass() override (fixes polymorphic typing in JS/JSDoc) ---
       if (await fileExists(sourceModelFullFilePath)) {
         // Model file exists (e.g. src/models/ticket.js) → return typeof Ticket
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {typeof import("${sourceModelFilePath}").default}\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {typeof import("${sourceModelFilePath}").default} */\n`
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
         fileContent += `  getModelClass() { return /** @type {typeof import("${sourceModelFilePath}").default} */ (this.constructor) }\n\n`
       } else {
         // No model file yet → fall back to typeof TicketBase
-        fileContent += "  /**\n"
-        fileContent += `   * @returns {typeof ${modelNameCamelized}Base}\n`
-        fileContent += "   */\n"
+        fileContent += `  /** @returns {typeof ${modelNameCamelized}Base} */\n`
         fileContent += "  // @ts-ignore - override narrows return type for better IntelliSense in generated model bases\n"
         fileContent += `  getModelClass() { return /** @type {typeof ${modelNameCamelized}Base} */ (this.constructor) }\n\n`
       }
@@ -181,9 +177,7 @@ export default class DbGenerateModel extends BaseCommand {
         }
 
         if (jsdocType) {
-          fileContent += "  /**\n"
-          fileContent += `   * @returns {${jsdocType}${column.getNull() ? " | null" : ""}}\n`
-          fileContent += "   */\n"
+          fileContent += `  /** @returns {${jsdocType}${column.getNull() ? " | null" : ""}} */\n`
         }
 
         fileContent += `  ${camelizedColumnName}() { return this.readAttribute("${camelizedColumnName}") }\n\n`
@@ -199,9 +193,7 @@ export default class DbGenerateModel extends BaseCommand {
 
         fileContent += `  set${camelizedColumnNameBigFirst}(newValue) { return this._setColumnAttribute("${camelizedColumnName}", newValue) }\n\n`
 
-        fileContent += "  /**\n"
-        fileContent += "   * @returns {boolean}\n"
-        fileContent += "   */\n"
+        fileContent += "  /** @returns {boolean} */\n"
         fileContent += `  has${camelizedColumnNameBigFirst}() { return this._hasAttribute(this.${camelizedColumnName}()) }\n`
 
         methodsCount++

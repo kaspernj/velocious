@@ -15,15 +15,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<InteractionWriteAttributes>} */
 export default class InteractionBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/interaction.js").default}
-   */
+  /** @returns {typeof import("../models/interaction.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/interaction.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -32,14 +28,10 @@ export default class InteractionBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   subjectId() { return this.readAttribute("subjectId") }
 
   /**
@@ -48,14 +40,10 @@ export default class InteractionBase extends DatabaseRecord {
    */
   setSubjectId(newValue) { return this._setColumnAttribute("subjectId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasSubjectId() { return this._hasAttribute(this.subjectId()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   subjectType() { return this.readAttribute("subjectType") }
 
   /**
@@ -64,14 +52,10 @@ export default class InteractionBase extends DatabaseRecord {
    */
   setSubjectType(newValue) { return this._setColumnAttribute("subjectType", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasSubjectType() { return this._hasAttribute(this.subjectType()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   kind() { return this.readAttribute("kind") }
 
   /**
@@ -80,14 +64,10 @@ export default class InteractionBase extends DatabaseRecord {
    */
   setKind(newValue) { return this._setColumnAttribute("kind", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasKind() { return this._hasAttribute(this.kind()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -96,14 +76,10 @@ export default class InteractionBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -112,9 +88,7 @@ export default class InteractionBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

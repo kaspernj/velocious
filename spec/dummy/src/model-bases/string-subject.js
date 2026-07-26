@@ -13,15 +13,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<StringSubjectWriteAttributes>} */
 export default class StringSubjectBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/string-subject.js").default}
-   */
+  /** @returns {typeof import("../models/string-subject.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/string-subject.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -30,14 +26,10 @@ export default class StringSubjectBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   name() { return this.readAttribute("name") }
 
   /**
@@ -46,14 +38,10 @@ export default class StringSubjectBase extends DatabaseRecord {
    */
   setName(newValue) { return this._setColumnAttribute("name", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasName() { return this._hasAttribute(this.name()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -62,14 +50,10 @@ export default class StringSubjectBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -78,9 +62,7 @@ export default class StringSubjectBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
