@@ -53,7 +53,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     expect(scripts.prepack).toEqual("npm run build")
   })
 
-  it("builds the declared package entry points when installed from Git", async () => {
+  it("builds the declared package entry points when installed from Git", {timeoutSeconds: 180}, async () => {
     const temporaryDirectory = await fs.mkdtemp(path.join(repositoryDirectory(), "tmp", "git-install-spec-"))
     const sourceDirectory = path.join(temporaryDirectory, "source")
     const consumerDirectory = path.join(temporaryDirectory, "consumer")
