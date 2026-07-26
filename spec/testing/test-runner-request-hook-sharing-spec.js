@@ -31,10 +31,10 @@ describe("TestRunner request hook connection sharing", {
     const idColumn = connection.quoteColumn("id")
     const markerColumn = connection.quoteColumn("creating_user_reference")
     const rows = await connection.query(
-      `SELECT ${idColumn} AS id, ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
+      `SELECT ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
     )
 
-    expect(rows).toEqual([{creating_user_reference: marker, id: markerId}])
+    expect(rows).toEqual([{creating_user_reference: marker}])
   })
 
   it("rolls back before reusing the same marker in the next request hook", async () => {
@@ -43,9 +43,9 @@ describe("TestRunner request hook connection sharing", {
     const idColumn = connection.quoteColumn("id")
     const markerColumn = connection.quoteColumn("creating_user_reference")
     const rows = await connection.query(
-      `SELECT ${idColumn} AS id, ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
+      `SELECT ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
     )
 
-    expect(rows).toEqual([{creating_user_reference: marker, id: markerId}])
+    expect(rows).toEqual([{creating_user_reference: marker}])
   })
 })
