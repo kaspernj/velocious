@@ -2,7 +2,10 @@
 
 import BackgroundJobsStore, {BACKGROUND_JOB_COUNTS_CHANNEL} from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import {describe, expect, it} from "../../src/testing/test.js"
+import {afterEach, describe, expect, it} from "../../src/testing/test.js"
+
+/** @type {Set<import("../../src/http-server/websocket-channel.js").default>} */
+const registeredSubscriptions = new Set()
 
 /**
  * Builds one process-like store over shared prune state. Each store has its own
@@ -93,11 +96,20 @@ async function setupStore() {
   })
 
   dummyConfiguration._registerWebsocketChannelSubscription(BACKGROUND_JOB_COUNTS_CHANNEL, subscription)
+  registeredSubscriptions.add(subscription)
 
   return {events, revision, store}
 }
 
 describe("Background jobs - count deltas", {databaseCleaning: {truncate: true}}, () => {
+  afterEach(() => {
+    for (const subscription of registeredSubscriptions) {
+      dummyConfiguration._unregisterWebsocketChannelSubscription(BACKGROUND_JOB_COUNTS_CHANNEL, subscription)
+    }
+
+    registeredSubscriptions.clear()
+  })
+
   it("returns a canonical snapshot with a durable revision", async () => {
     const {revision, store} = await setupStore()
 
