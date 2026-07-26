@@ -3,6 +3,7 @@ import path from "path"
 import Controller from "../../../../../src/controller.js"
 import MemoryUploadedFile from "../../../../../src/http-server/client/uploaded-file/memory-uploaded-file.js"
 import TemporaryUploadedFile from "../../../../../src/http-server/client/uploaded-file/temporary-uploaded-file.js"
+import Project from "../../models/project.js"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 
@@ -124,22 +125,18 @@ export default class RootController extends Controller {
   }
 
   async testRequestTransactionMarker() {
-    const connection = this.getConfiguration().getDatabasePool("default").getCurrentConnection()
     const marker = this.getParams().marker
-    const projectsTable = connection.quoteTable("projects")
-    const markerColumn = connection.quoteColumn("creating_user_reference")
 
-    await connection.query(
-      `INSERT INTO ${projectsTable} (${markerColumn}) VALUES (${connection.quote(marker)})`
-    )
+    await Project.ensureInitialized()
+    await Project.create({creatingUserReference: marker})
 
-    const rows = await connection.query(
-      `SELECT ${markerColumn} FROM ${projectsTable} WHERE ${markerColumn} = ${connection.quote(marker)}`
-    )
+    const projects = await Project
+      .where({creatingUserReference: marker})
+      .toArray()
 
     await this.render({json: {
       marker,
-      markerCount: rows.length,
+      markerCount: projects.length,
       status: "success"
     }})
   }

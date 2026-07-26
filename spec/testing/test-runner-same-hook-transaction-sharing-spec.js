@@ -1,8 +1,9 @@
 // @ts-check
 
-import {afterAll, beforeAll, beforeEach, describe, expect, it} from "../../src/testing/test.js"
-import {deleteProjectMarker, projectMarkerRows} from "../helpers/project-marker-helper.js"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "../../src/testing/test.js"
+import { deleteProjectMarker, projectMarkerRows } from "../helpers/project-marker-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import Project from "../dummy/src/models/project.js"
 
 const marker = "test-runner-same-hook-transaction-sharing"
 let requestWriteWasVisible = false
@@ -23,8 +24,6 @@ describe("TestRunner same-hook transaction connection sharing", {
     requestWriteWasVisible = false
 
     const connection = dummyConfiguration.getDatabasePool("default").getCurrentConnection()
-    const projectsTable = connection.quoteTable("projects")
-    const markerColumn = connection.quoteColumn("creating_user_reference")
 
     await connection.startTransaction()
 
@@ -42,11 +41,14 @@ describe("TestRunner same-hook transaction connection sharing", {
 
       expect(body).toEqual({marker, markerCount: 1, status: "success"})
 
-      const rows = await connection.query(
-        `SELECT ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${markerColumn} = ${connection.quote(marker)}`
-      )
+      await Project.ensureInitialized()
 
-      expect(rows).toEqual([{creating_user_reference: marker}])
+      const projects = await Project
+        .where({creatingUserReference: marker})
+        .toArray()
+
+      expect(projects).toHaveLength(1)
+      expect(projects[0].creatingUserReference()).toEqual(marker)
       requestWriteWasVisible = true
     } finally {
       if (connection.insideTransaction()) {
@@ -54,7 +56,9 @@ describe("TestRunner same-hook transaction connection sharing", {
       }
     }
 
-    expect(await projectMarkerRows(dummyConfiguration, marker)).toEqual([])
+    const persistedProjects = await projectMarkerRows(dummyConfiguration, marker)
+
+    expect(persistedProjects).toHaveLength(0)
   })
 
   it("keeps the request write in the hook transaction until rollback", () => {

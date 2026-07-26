@@ -1,8 +1,8 @@
 // @ts-check
 
-import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.js"
+import { afterAll, beforeAll, describe, expect, it } from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
-import {deleteProjectMarker, projectMarkerRows} from "../helpers/project-marker-helper.js"
+import { deleteProjectMarker, projectMarkerRows } from "../helpers/project-marker-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 const marker = "test-runner-stale-shared-connection-cleanup"
@@ -56,7 +56,9 @@ describe("TestRunner stale shared connection cleanup", {
       expect(body).toEqual({marker, markerCount: 1, status: "success"})
       await connection.rollbackTransaction()
 
-      expect(await projectMarkerRows(dummyConfiguration, marker)).toEqual([])
+      const persistedProjects = await projectMarkerRows(dummyConfiguration, marker)
+
+      expect(persistedProjects).toHaveLength(0)
     } finally {
       testRunner.clearTestSharedConnections(currentRegistrations)
 

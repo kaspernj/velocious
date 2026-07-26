@@ -1,8 +1,9 @@
 // @ts-check
 
-import {afterAll, beforeAll, beforeEach, describe, expect, it} from "../../src/testing/test.js"
-import {deleteProjectMarker} from "../helpers/project-marker-helper.js"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "../../src/testing/test.js"
+import { deleteProjectMarker } from "../helpers/project-marker-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import Project from "../dummy/src/models/project.js"
 
 const marker = "test-runner-request-hook-sharing"
 
@@ -34,24 +35,24 @@ describe("TestRunner request hook connection sharing", {
   })
 
   it("makes a later request hook write visible through the test transaction", async () => {
-    const connection = dummyConfiguration.getDatabasePool("default").getCurrentConnection()
-    const projectsTable = connection.quoteTable("projects")
-    const markerColumn = connection.quoteColumn("creating_user_reference")
-    const rows = await connection.query(
-      `SELECT ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${markerColumn} = ${connection.quote(marker)}`
-    )
+    await Project.ensureInitialized()
 
-    expect(rows).toEqual([{creating_user_reference: marker}])
+    const projects = await Project
+      .where({creatingUserReference: marker})
+      .toArray()
+
+    expect(projects).toHaveLength(1)
+    expect(projects[0].creatingUserReference()).toEqual(marker)
   })
 
   it("rolls back before reusing the same marker in the next request hook", async () => {
-    const connection = dummyConfiguration.getDatabasePool("default").getCurrentConnection()
-    const projectsTable = connection.quoteTable("projects")
-    const markerColumn = connection.quoteColumn("creating_user_reference")
-    const rows = await connection.query(
-      `SELECT ${markerColumn} AS creating_user_reference FROM ${projectsTable} WHERE ${markerColumn} = ${connection.quote(marker)}`
-    )
+    await Project.ensureInitialized()
 
-    expect(rows).toEqual([{creating_user_reference: marker}])
+    const projects = await Project
+      .where({creatingUserReference: marker})
+      .toArray()
+
+    expect(projects).toHaveLength(1)
+    expect(projects[0].creatingUserReference()).toEqual(marker)
   })
 })
