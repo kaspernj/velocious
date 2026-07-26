@@ -89,13 +89,17 @@ class BlockedWriteSocket extends FakeSocket {
   }
 }
 
-/** @returns {Configuration} - Minimal server-client test configuration. */
-function buildConfiguration() {
+/**
+ * @param {import("../../src/configuration-types.js").HttpServerConfiguration} [httpServer] - HTTP server options.
+ * @returns {Configuration} - Minimal server-client test configuration.
+ */
+function buildConfiguration(httpServer) {
   return new Configuration({
     database: {test: {}},
     directory: process.cwd(),
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
+    httpServer,
     initializeModels: async () => {},
     locale: "en",
     localeFallbacks: {en: ["en"]},
@@ -105,6 +109,50 @@ function buildConfiguration() {
 }
 
 describe("HttpServer - server client", {databaseCleaning: {transaction: true}}, () => {
+  it("validates WebSocket inbound queue defaults and configured high-water marks", () => {
+    const defaults = buildConfiguration()
+    const configured = buildConfiguration({
+      websocketInboundQueue: {
+        maxPendingBytes: 2048,
+        maxPendingMessages: 12
+      }
+    })
+
+    expect(defaults.getWebsocketInboundQueueLimits()).toEqual({
+      maxBytes: 16 * 1024 * 1024,
+      maxMessages: 256
+    })
+    expect(configured.getWebsocketInboundQueueLimits()).toEqual({
+      maxBytes: 2048,
+      maxMessages: 12
+    })
+  })
+
+  it("rejects invalid WebSocket inbound queue high-water marks", async () => {
+    const invalidValues = [
+      0,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.POSITIVE_INFINITY
+    ]
+
+    for (const invalidValue of invalidValues) {
+      await expect(() => buildConfiguration({
+        websocketInboundQueue: {
+          maxPendingBytes: invalidValue,
+          maxPendingMessages: 1
+        }
+      })).toThrow(/httpServer\.websocketInboundQueue\.maxPendingBytes must be a positive safe integer/u)
+      await expect(() => buildConfiguration({
+        websocketInboundQueue: {
+          maxPendingBytes: 1,
+          maxPendingMessages: invalidValue
+        }
+      })).toThrow(/httpServer\.websocketInboundQueue\.maxPendingMessages must be a positive safe integer/u)
+    }
+  })
+
   it("validates WebSocket outbound queue defaults and configured high-water marks", async () => {
     const defaults = buildConfiguration()
     const configured = new Configuration({

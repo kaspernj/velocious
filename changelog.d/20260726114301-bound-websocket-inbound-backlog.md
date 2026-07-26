@@ -1,0 +1,1 @@
+Bound each WebSocket session's serialized inbound message backlog by configurable message and raw payload-byte limits, closing an overloaded peer deterministically without disturbing accepted-message FIFO ordering.

@@ -17,6 +17,10 @@ const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
 
+const WEBSOCKET_CLOSE_POLICY_VIOLATION = 1008
+const WEBSOCKET_INBOUND_BACKLOG_CLOSE_REASON = "Inbound message backlog exceeded"
+const WEBSOCKET_MAX_CLOSE_REASON_BYTES = 123
+
 /** Cap on the paused outbound queue; oldest frames drop on overflow. */
 const WEBSOCKET_PAUSED_QUEUE_CAP = 1000
 
@@ -34,6 +38,19 @@ const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
 /**
  * Defines this typedef.
  * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
+ */
+
+/**
+ * @typedef {object} InboundMessageAdmission
+ * @property {number} byteLength - Exact raw text payload bytes charged to this admission.
+ * @property {number} generation - Accounting generation active when admitted.
+ * @property {boolean} released - Whether this admission has already been released.
+ */
+
+/**
+ * @typedef {object} InboundMessageWork
+ * @property {InboundMessageAdmission} admission - Admission ownership.
+ * @property {WebsocketSessionMessage} message - Decoded client message.
  */
 
 /**
@@ -89,7 +106,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   channelReplayStates = new Map()
   /**
    * Message queue.
-   * @type {WebsocketSessionMessage[]} */
+   * @type {InboundMessageWork[]} */
   messageQueue = []
 
   /**
@@ -115,6 +132,15 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.messageHandlerPromise = messageHandlerPromise
     this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
+    const inboundQueueLimits = this.configuration.getWebsocketInboundQueueLimits()
+
+    this._inboundMaxPendingBytes = inboundQueueLimits.maxBytes
+    this._inboundMaxPendingMessages = inboundQueueLimits.maxMessages
+    this._inboundPendingBytes = 0
+    this._inboundPendingMessages = 0
+    this._inboundAccountingGeneration = 0
+    this._inboundClosed = false
+    this._inboundBacklogOverloaded = false
 
     /**
      * Narrows the runtime value to the documented type.
@@ -283,6 +309,9 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   destroy() {
     this._stopHeartbeat()
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this._abandonInboundMessages()
     this.configuration._websocketSessions.delete(this)
     this._paused = false
     void this._teardownChannel()
@@ -311,7 +340,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     // socket is alive. Mark it here, before `_processBuffer` may return
     // early waiting for the rest of an incomplete frame.
     this._heartbeatAlive = true
-    if (data.length === 0) return
+    if (this._inboundClosed || data.length === 0) return
 
     this._bufferChunks.push(data)
     this._bufferedBytes += data.length
@@ -418,10 +447,30 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Runs send goodbye.
    * @param {import("./index.js").default} client - Client instance.
+   * @param {{code?: number, reason?: string}} [options] - Optional close status.
    * @returns {void} - No return value.
    */
-  sendGoodbye(client) {
-    const frame = Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, 0x00])
+  sendGoodbye(client, {code, reason = ""} = {}) {
+    let payload
+
+    if (code === undefined) {
+      payload = Buffer.alloc(0)
+    } else {
+      const reasonBytes = Buffer.from(reason, "utf-8")
+
+      if (reasonBytes.length > WEBSOCKET_MAX_CLOSE_REASON_BYTES) {
+        throw new RangeError("WebSocket close reason must not exceed 123 UTF-8 bytes")
+      }
+
+      payload = Buffer.allocUnsafe(2 + reasonBytes.length)
+      payload.writeUInt16BE(code, 0)
+      reasonBytes.copy(payload, 2)
+    }
+
+    const frame = Buffer.concat([
+      Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, payload.length]),
+      payload
+    ])
 
     client.events.emit("output", frame, {websocketFrame: true})
   }
@@ -432,15 +481,50 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
+    const admission = this._admitInboundMessage(0)
+
+    if (!admission) return
+    await this._handleMessageWork({admission, message})
+  }
+
+  /**
+   * Appends an admitted message to the per-session FIFO chain.
+   * @param {InboundMessageWork} work - Admitted decoded message.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _handleMessageWork(work) {
     // Serialize per-session: chain onto `_messageChain` so messages
     // are processed one at a time. Without this, fire-and-forget
     // dispatch from `_processBuffer` lets message B read
     // `session.data` before A has finished writing it.
     const previous = this._messageChain
-    const next = previous.then(() => this._dispatchMessage(message))
+    const next = previous.then(() => this._runMessageWork(work))
 
     this._messageChain = next.catch(() => {})
     await next
+  }
+
+  /**
+   * Dispatches or transfers one admitted message while retaining its accounting.
+   * @param {InboundMessageWork} work - Admitted decoded message.
+   * @returns {Promise<void>} - Resolves after dispatch or resolver-queue transfer.
+   */
+  async _runMessageWork(work) {
+    if (this._inboundClosed) {
+      this._releaseInboundAdmission(work.admission)
+      return
+    }
+
+    if (this.pendingMessageHandler) {
+      this.messageQueue.push(work)
+      return
+    }
+
+    try {
+      await this._dispatchMessage(work.message)
+    } finally {
+      this._releaseInboundAdmission(work.admission)
+    }
   }
 
   /**
@@ -467,11 +551,6 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>}
    */
   async _handleMessageInner(message) {
-    if (this.pendingMessageHandler) {
-      this.messageQueue.push(message)
-      return
-    }
-
     // The messageHandler short-circuits default routing only when the
     // app actually declared an `onMessage` hook. Apps that only want
     // session-lifecycle tracking (`onOpen`/`onClose`) still need the
@@ -737,14 +816,22 @@ export default class VelociousHttpServerClientWebsocketSession {
         continue
       }
 
+      const admission = this._admitInboundMessage(finalPayload.length)
+
+      if (!admission) return
+
       try {
         const message = JSON.parse(finalPayload.toString("utf-8"))
 
-        this._handleMessage(message).catch((error) => {
+        this._handleMessageWork({admission, message}).catch((error) => {
           this.logger.error(() => ["Websocket message handler failed", error])
-          this.sendJson({error: error.message, type: "error"})
+          this.sendJson({
+            error: error instanceof Error ? error.message : String(error),
+            type: "error"
+          })
         })
       } catch (error) {
+        this._releaseInboundAdmission(admission)
         this.logger.error(() => ["Failed to parse websocket message", error])
         this.sendJson({error: "Invalid websocket message", type: "error"})
       }
@@ -829,6 +916,85 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._bufferChunkIndex = 0
     this._bufferChunkOffset = 0
     this._bufferedBytes = 0
+  }
+
+  /**
+   * Tentatively admits one complete text message before decoding it.
+   * @param {number} byteLength - Exact complete raw text payload bytes.
+   * @returns {InboundMessageAdmission | null} - Admission ownership, or null after overload/close.
+   */
+  _admitInboundMessage(byteLength) {
+    if (this._inboundClosed) return null
+
+    if (
+      this._inboundPendingMessages + 1 > this._inboundMaxPendingMessages ||
+      this._inboundPendingBytes + byteLength > this._inboundMaxPendingBytes
+    ) {
+      this._closeForInboundBacklog(byteLength)
+      return null
+    }
+
+    this._inboundPendingMessages += 1
+    this._inboundPendingBytes += byteLength
+
+    return {
+      byteLength,
+      generation: this._inboundAccountingGeneration,
+      released: false
+    }
+  }
+
+  /**
+   * Releases one admission exactly once.
+   * @param {InboundMessageAdmission} admission - Admission ownership.
+   * @returns {void}
+   */
+  _releaseInboundAdmission(admission) {
+    if (admission.released) return
+
+    admission.released = true
+    if (admission.generation !== this._inboundAccountingGeneration) return
+
+    this._inboundPendingMessages -= 1
+    this._inboundPendingBytes -= admission.byteLength
+  }
+
+  /**
+   * Abandons all admitted input and invalidates late settlements.
+   * @returns {void}
+   */
+  _abandonInboundMessages() {
+    this._inboundClosed = true
+    this._inboundAccountingGeneration += 1
+    this._inboundPendingBytes = 0
+    this._inboundPendingMessages = 0
+    this.messageQueue = []
+  }
+
+  /**
+   * Permanently closes a session whose next message exceeded its backlog budget.
+   * @param {number} rejectedBytes - Raw payload bytes rejected at admission.
+   * @returns {void}
+   */
+  _closeForInboundBacklog(rejectedBytes) {
+    if (this._inboundBacklogOverloaded || this._inboundClosed) return
+
+    this._inboundBacklogOverloaded = true
+    this.logger.warn(() => [
+      "Inbound websocket message backlog exceeded; closing connection",
+      {
+        maxBytes: this._inboundMaxPendingBytes,
+        maxMessages: this._inboundMaxPendingMessages,
+        pendingBytes: this._inboundPendingBytes,
+        pendingMessages: this._inboundPendingMessages,
+        rejectedBytes
+      }
+    ])
+    this.sendGoodbye(this.client, {
+      code: WEBSOCKET_CLOSE_POLICY_VIOLATION,
+      reason: WEBSOCKET_INBOUND_BACKLOG_CLOSE_REASON
+    })
+    this._handleClose({allowResume: false})
   }
 
   /**
@@ -1082,14 +1248,23 @@ export default class VelociousHttpServerClientWebsocketSession {
     return true
   }
 
-  _handleClose() {
+  /**
+   * Handles socket closure and optionally retains resumable state.
+   * @param {{allowResume?: boolean}} [options] - Closure behavior.
+   * @returns {void}
+   */
+  _handleClose({allowResume = true} = {}) {
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this._abandonInboundMessages()
+
     // If the session has resumable state (live Connection or
     // ChannelV2 subscription), move it into the paused registry
     // instead of tearing down; a new socket presenting the sessionId
     // via `session-resume` within the grace window will reattach.
     const hasResumableState = this._connections.size > 0 || this._channelSubscriptions.size > 0
 
-    if (hasResumableState && !this._paused) {
+    if (allowResume && hasResumableState && !this._paused) {
       // Paused sessions have no live socket to ping; the grace timer
       // owns their eventual teardown from here.
       this._stopHeartbeat()
@@ -1124,6 +1299,9 @@ export default class VelociousHttpServerClientWebsocketSession {
    */
   _finalizeGraceExpiry() {
     this._stopHeartbeat()
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this._abandonInboundMessages()
     this.configuration._websocketSessions.delete(this)
     void this._runMessageHandlerClose()
     void this._teardownChannel()
@@ -1898,8 +2076,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       const handler = await this.messageHandlerPromise
 
       if (handler) {
-        this.pendingMessageHandler = false
         this.messageHandlerPromise = undefined
+        if (this._inboundClosed) {
+          this.pendingMessageHandler = false
+          return
+        }
         // Install handler and drain onOpen before replaying queued
         // messages. setMessageHandler() fires onOpen as fire-and-forget;
         // awaiting _runMessageHandlerOpen() directly here closes the
@@ -1908,16 +2089,38 @@ export default class VelociousHttpServerClientWebsocketSession {
         // state.
         this.messageHandler = handler
         await this._runMessageHandlerOpen()
-        await this._flushQueuedMessages({useHandler: typeof handler.onMessage === "function"})
+        await this._finishMessageHandlerResolution({
+          useHandler: typeof handler.onMessage === "function"
+        })
         return
       }
     } catch (error) {
       this.logger.error(() => ["Websocket message handler resolver failed", error])
     }
 
-    this.pendingMessageHandler = false
     this.messageHandlerPromise = undefined
-    await this._flushQueuedMessages({useHandler: false})
+    await this._finishMessageHandlerResolution({useHandler: false})
+  }
+
+  /**
+   * Inserts resolver completion into the FIFO chain before allowing new dispatch.
+   * @param {{useHandler: boolean}} args - Resolver result.
+   * @returns {Promise<void>} - Resolves after queued messages drain.
+   */
+  async _finishMessageHandlerResolution({useHandler}) {
+    const previous = this._messageChain
+    const drain = previous.then(async () => {
+      this.pendingMessageHandler = false
+      if (this._inboundClosed) {
+        this.messageQueue = []
+        return
+      }
+
+      await this._flushQueuedMessages({useHandler})
+    })
+
+    this._messageChain = drain.catch(() => {})
+    await drain
   }
 
   /**
@@ -1928,14 +2131,29 @@ export default class VelociousHttpServerClientWebsocketSession {
   async _flushQueuedMessages({useHandler}) {
     if (this.messageQueue.length === 0) return
 
-    const queued = this.messageQueue.slice()
+    const queued = this.messageQueue
     this.messageQueue = []
 
-    for (const message of queued) {
-      if (useHandler && this.messageHandler) {
-        await this._runMessageHandlerMessage(message)
-      } else {
-        await this._handleMessage(message)
+    for (const work of queued) {
+      if (this._inboundClosed) {
+        this._releaseInboundAdmission(work.admission)
+        continue
+      }
+
+      try {
+        if (useHandler && this.messageHandler) {
+          await this._runMessageHandlerMessage(work.message)
+        } else {
+          await this._dispatchMessage(work.message)
+        }
+      } catch (error) {
+        this.logger.error(() => ["Websocket message handler failed", error])
+        this.sendJson({
+          error: error instanceof Error ? error.message : String(error),
+          type: "error"
+        })
+      } finally {
+        this._releaseInboundAdmission(work.admission)
       }
     }
   }
