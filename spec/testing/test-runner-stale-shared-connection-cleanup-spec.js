@@ -1,34 +1,32 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
+import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
+import {deleteProjectMarker, projectMarkerRows} from "../helpers/project-marker-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 const marker = "test-runner-stale-shared-connection-cleanup"
-const markerId = 10549
 
 describe("TestRunner stale shared connection cleanup", {
   databaseCleaning: {transaction: false, truncate: false},
   type: "request"
 }, () => {
+  beforeAll(async () => {
+    await deleteProjectMarker(dummyConfiguration, marker)
+  })
+
+  afterAll(async () => {
+    await deleteProjectMarker(dummyConfiguration, marker)
+  })
+
   it("does not let an abandoned lifecycle clear a newer request provider", async () => {
     const pool = dummyConfiguration.getDatabasePool("default")
     const connection = pool.getCurrentConnection()
     const testRunner = new TestRunner({configuration: dummyConfiguration, testFiles: []})
-    const projectsTable = connection.quoteTable("projects")
-    const idColumn = connection.quoteColumn("id")
     /** @type {() => void} */
     let resumeOldCleanup = () => {}
     const oldCleanupSignal = new Promise((resolve) => {
       resumeOldCleanup = resolve
-    })
-
-    await dummyConfiguration.withoutCurrentConnectionContexts(async () => {
-      await dummyConfiguration.withConnections(async (dbs) => {
-        await dbs.default.query(
-          `DELETE FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
-        )
-      })
     })
 
     await connection.startTransaction()
@@ -58,29 +56,13 @@ describe("TestRunner stale shared connection cleanup", {
       expect(body).toEqual({marker, markerCount: 1, status: "success"})
       await connection.rollbackTransaction()
 
-      await dummyConfiguration.withoutCurrentConnectionContexts(async () => {
-        await dummyConfiguration.withConnections(async (dbs) => {
-          const rows = await dbs.default.query(
-            `SELECT ${idColumn} FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
-          )
-
-          expect(rows).toEqual([])
-        })
-      })
+      expect(await projectMarkerRows(dummyConfiguration, marker)).toEqual([])
     } finally {
       testRunner.clearTestSharedConnections(currentRegistrations)
 
       if (connection.insideTransaction()) {
         await connection.rollbackTransaction()
       }
-
-      await dummyConfiguration.withoutCurrentConnectionContexts(async () => {
-        await dummyConfiguration.withConnections(async (dbs) => {
-          await dbs.default.query(
-            `DELETE FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)}`
-          )
-        })
-      })
     }
   })
 })

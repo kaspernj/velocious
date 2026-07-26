@@ -126,17 +126,15 @@ export default class RootController extends Controller {
   async testRequestTransactionMarker() {
     const connection = this.getConfiguration().getDatabasePool("default").getCurrentConnection()
     const marker = this.getParams().marker
-    const markerId = 10549
     const projectsTable = connection.quoteTable("projects")
-    const idColumn = connection.quoteColumn("id")
     const markerColumn = connection.quoteColumn("creating_user_reference")
 
     await connection.query(
-      `INSERT INTO ${projectsTable} (${idColumn}, ${markerColumn}) VALUES (${connection.quote(markerId)}, ${connection.quote(marker)})`
+      `INSERT INTO ${projectsTable} (${markerColumn}) VALUES (${connection.quote(marker)})`
     )
 
     const rows = await connection.query(
-      `SELECT ${idColumn} FROM ${projectsTable} WHERE ${idColumn} = ${connection.quote(markerId)} AND ${markerColumn} = ${connection.quote(marker)}`
+      `SELECT ${markerColumn} FROM ${projectsTable} WHERE ${markerColumn} = ${connection.quote(marker)}`
     )
 
     await this.render({json: {
