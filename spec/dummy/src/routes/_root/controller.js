@@ -3,7 +3,15 @@ import path from "path"
 import Controller from "../../../../../src/controller.js"
 import MemoryUploadedFile from "../../../../../src/http-server/client/uploaded-file/memory-uploaded-file.js"
 import TemporaryUploadedFile from "../../../../../src/http-server/client/uploaded-file/temporary-uploaded-file.js"
+import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
+
+/** @typedef {{connectionId: number, resolve: (connectionIds: number[]) => void}} ConnectionIdentityWaiter */
+/** @type {ConnectionIdentityWaiter[]} */
+const connectionIdentityWaiters = []
+/** @type {WeakMap<import("../../../../../src/database/drivers/base.js").default, number>} */
+const connectionIdentities = new WeakMap()
+let nextConnectionIdentity = 1
 
 export default class RootController extends Controller {
   async missingView() {
@@ -72,6 +80,47 @@ export default class RootController extends Controller {
         status: "success"
       }
     })
+  }
+
+  async concurrentConnectionIdentity() {
+    const connection = this.getConfiguration().getDatabasePool("mssql").getCurrentConnection()
+    let connectionId = connectionIdentities.get(connection)
+
+    if (connectionId === undefined) {
+      connectionId = nextConnectionIdentity++
+      connectionIdentities.set(connection, connectionId)
+    }
+
+    /** @type {ConnectionIdentityWaiter | undefined} */
+    let connectionIdentityWaiter
+
+    try {
+      const connectionIds = await timeout({timeout: 2000}, async () => {
+        return await new Promise((resolve) => {
+          connectionIdentityWaiter = {connectionId, resolve}
+          connectionIdentityWaiters.push(connectionIdentityWaiter)
+
+          if (connectionIdentityWaiters.length == 2) {
+            const completedWaiters = connectionIdentityWaiters.splice(0)
+            const completedConnectionIds = completedWaiters.map((waiter) => waiter.connectionId)
+
+            for (const waiter of completedWaiters) {
+              waiter.resolve(completedConnectionIds)
+            }
+          }
+        })
+      })
+
+      await this.render({json: {connectionId, connectionIds}})
+    } finally {
+      const waiterIndex = connectionIdentityWaiter === undefined
+        ? -1
+        : connectionIdentityWaiters.indexOf(connectionIdentityWaiter)
+
+      if (waiterIndex >= 0) {
+        connectionIdentityWaiters.splice(waiterIndex, 1)
+      }
+    }
   }
 
   async upload() {

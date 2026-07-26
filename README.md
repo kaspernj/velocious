@@ -1873,6 +1873,8 @@ If you are developing on Velocious, you can run the tests with:
 
 Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
 
+Request tests share transaction-active, non-tenant database connections with their in-process HTTP handlers. This makes uncommitted setup visible to handlers while preserving rollback isolation. Without an active transaction, handlers use independent pooled connections, so concurrency and locking tests can opt out of transaction cleanup and exercise production-style connections. Shared connection state is scoped to the test lifecycle and cleared around each test. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
+
 # Writing a request test
 
 First create a test file under something like the following path 'src/routes/accounts/create-test.js' with something like the following content:

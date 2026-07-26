@@ -539,17 +539,18 @@ export default class TestRunner {
   }
 
   /**
-   * Pins each per-test connection as its pool's in-process test shared connection so
-   * HTTP request handlers dispatched during the test (which run in the main thread but
-   * in a fresh async context without the connection pin) resolve to the SAME connection
-   * — and therefore the same open transaction — as the test body. Pools that predate the
-   * shared-connection hook are skipped. Pair with {@link clearTestSharedConnections} in a
-   * finally.
+   * Pins each transactional per-test connection as its pool's in-process test shared
+   * connection so HTTP request handlers dispatched during the test (which run in the
+   * main thread but in a fresh async context without the connection pin) resolve to the
+   * same open transaction as the test body. Non-transactional and tenant-only connections
+   * remain independently pooled. Pair with {@link clearTestSharedConnections} in a finally.
    * @returns {void}
    */
   activateTestSharedConnections() {
     const configuration = this.getConfiguration()
     const currentConnections = configuration.getCurrentConnections()
+
+    this.clearTestSharedConnections()
 
     for (const identifier of Object.keys(currentConnections)) {
       const pool = configuration.getDatabasePool(identifier)
@@ -561,7 +562,12 @@ export default class TestRunner {
       if (pool.getConfiguration().tenantOnly) {
         continue
       }
-      pool.setTestSharedConnection(currentConnections[identifier])
+
+      const connection = currentConnections[identifier]
+
+      if (connection.insideTransaction()) {
+        pool.setTestSharedConnection(connection)
+      }
     }
   }
 
@@ -1002,12 +1008,11 @@ export default class TestRunner {
               // stale async-context pin and force every later test onto a fresh checkout,
               // breaking isolation).
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
-                // Only request-type tests dispatch through the in-process HTTP handler,
-                // so only they need the pinned connection shared with it. Sharing it for
-                // every test would let unrelated specs observe a test shared connection on
-                // pools they inspect directly. Cleared after afterEach either way.
+                // Clear before application hooks so a retry or a prior timed-out lifecycle
+                // cannot expose stale shared state while the next test prepares its
+                // transactions.
                 if (testArgs.type == "request") {
-                  this.activateTestSharedConnections()
+                  this.clearTestSharedConnections()
                 }
 
                 try {
@@ -1015,6 +1020,14 @@ export default class TestRunner {
                     clearDeliveries()
                     for (const beforeEachData of newBeforeEaches) {
                       await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                    }
+
+                    // Application beforeEach hooks decide which databases are
+                    // transactional. Share only those active transactions with
+                    // in-process request handlers; non-transactional databases keep
+                    // production-style independent pool checkouts.
+                    if (testArgs.type == "request") {
+                      this.activateTestSharedConnections()
                     }
 
                     // Record which test is running so an async crash (an unhandled
