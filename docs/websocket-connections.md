@@ -10,6 +10,26 @@ All messages are JSON objects sent over the shared WebSocket. Connection-related
 
 Velocious buffers TCP-fragmented WebSocket input as chunks and assembles each frame once it is complete. A single final client data frame is limited to 16 MiB, matching the existing cap for a fragmented message; a frame declaring a larger payload is rejected before its payload is buffered. Applications that need to send more data should split it at the application level.
 
+Server-to-client frames are also bounded per live client. The delivery queue retains at most 256 complete frames or 16 MiB by default, including the frame currently waiting for its socket write callback. FIFO order is exact while both limits are respected. If either next-frame admission would exceed its high-water mark, Velocious reports a `framework-error` and `all-error` with `context.websocketOutboundQueueOverflow === true`, then destroys only that client. It does not silently discard or coalesce protocol events.
+
+Configure both positive safe-integer limits at the configuration boundary:
+
+```js
+const configuration = new Configuration({
+  // ...
+  httpServer: {
+    websocketOutboundQueue: {
+      maxPendingFrames: 128,
+      maxPendingBytes: 8 * 1024 * 1024
+    }
+  }
+})
+```
+
+Byte accounting uses serialized output bytes, not JavaScript string length. Only completed WebSocket frame emissions consume the frame and byte limits; the HTTP 101 upgrade response and ordinary HTTP/file output remain ordering-only operations outside that budget. Queued and in-flight frame buffers remain charged until the socket callback settles; socket close, error, or overflow teardown explicitly releases the queue. Limits are per client, so a stalled consumer cannot consume another client's allowance.
+
+V2 channel broadcasts retain their originating configuration identity through host and worker fanout. Delivery and event-log persistence are therefore isolated to that configuration even when multiple applications with identical channel and subscription names share a process. The internal `websocketEventsHost.broadcastV2(...)` transport now requires its `configuration` argument; application-facing `configuration.broadcastToChannel(...)` is unchanged.
+
 ### Client → server
 
 ```json
@@ -109,6 +129,6 @@ connection.close()
 
 - Grace-period resumption after WS drop.
 - Message acks / deliverability guarantees.
-- Client-side or server-side outbound queues.
+- Client-side outbound queues.
 - Authorization hooks (`canOpen`) — app enforces via the current-user check inside `onConnect()` for now.
 - Typed `connection-request`/`connection-response` round-trips. Use `sendMessage` + your own correlation id for V1.

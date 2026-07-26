@@ -84,6 +84,24 @@ async function expectRejectedSubscription(subscription) {
 }
 
 describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () => {
+  it("establishes a connection when one completed frame fits the outbound budget", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+      const queueConfiguration = dummyConfiguration.httpServer.websocketOutboundQueue
+      const previousMaxPendingFrames = queueConfiguration.maxPendingFrames
+
+      queueConfiguration.maxPendingFrames = 1
+
+      try {
+        await client.connect()
+        expect(client.isOpen()).toBe(true)
+      } finally {
+        queueConfiguration.maxPendingFrames = previousMaxPendingFrames
+        await client.close()
+      }
+    })
+  })
+
   it("queues channel subscriptions until the network monitor reports online", async () => {
     await Dummy.run(async () => {
       const {client, setOnline} = reconnectingClientWithManualNetwork(false)

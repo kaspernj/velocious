@@ -114,6 +114,25 @@ function resolveBeaconUnreachableReportMs(value) {
   return 30_000
 }
 
+const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_BYTES = 16 * 1024 * 1024
+const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_FRAMES = 256
+
+/**
+ * Validates a positive safe integer configuration value.
+ * @param {?} value - Configured positive safe integer.
+ * @param {string} name - Configuration key.
+ * @param {number} defaultValue - Default value.
+ * @returns {number} - Validated configured or default value.
+ */
+function positiveSafeInteger(value, name, defaultValue) {
+  if (value === undefined) return defaultValue
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError(`${name} must be a positive safe integer`)
+  }
+
+  return value
+}
+
 export default class VelociousConfiguration {
   /**
    * Close database connections promise.
@@ -209,7 +228,15 @@ export default class VelociousConfiguration {
      * @type {Promise<void> | undefined}
      */
     this._initializePromise = undefined
-    this.httpServer = httpServer || {}
+    const websocketOutboundQueue = httpServer?.websocketOutboundQueue
+
+    this.httpServer = {
+      ...(httpServer || {}),
+      websocketOutboundQueue: {
+        maxPendingBytes: positiveSafeInteger(websocketOutboundQueue?.maxPendingBytes, "httpServer.websocketOutboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_BYTES),
+        maxPendingFrames: positiveSafeInteger(websocketOutboundQueue?.maxPendingFrames, "httpServer.websocketOutboundQueue.maxPendingFrames", DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_FRAMES)
+      }
+    }
     /**
      * Stores the http server instance value.
      * @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
@@ -1693,7 +1720,8 @@ export default class VelociousConfiguration {
       websocketEvents.broadcastV2({
         channel: message.channel,
         broadcastParams: message.broadcastParams,
-        body: message.body
+        body: message.body,
+        configuration: this
       })
       return
     }
@@ -2343,6 +2371,19 @@ export default class VelociousConfiguration {
   getWebsocketSessionHeartbeatSeconds() { return this._websocketSessionHeartbeatSeconds }
 
   /**
+   * Gets per-client WebSocket outbound queue limits.
+   * @returns {{maxBytes: number, maxFrames: number}} - Per-client outbound queue high-water marks.
+   */
+  getWebsocketOutboundQueueLimits() {
+    const queue = this.httpServer.websocketOutboundQueue
+
+    return {
+      maxBytes: queue.maxPendingBytes,
+      maxFrames: queue.maxPendingFrames
+    }
+  }
+
+  /**
    * Registers a wrapper invoked around every WS-borne request /
    * connection message / channel dispatch. The wrapper receives the
    * session and a `next` callback; it must call `next()` to run the
@@ -2537,7 +2578,7 @@ export default class VelociousConfiguration {
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
-      websocketEvents.broadcastV2({channel: name, broadcastParams, body})
+      websocketEvents.broadcastV2({channel: name, broadcastParams, body, configuration: this})
       return
     }
 
