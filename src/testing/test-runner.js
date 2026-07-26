@@ -528,18 +528,18 @@ export default class TestRunner {
   }
 
   /**
-   * Pins each transactional per-test connection as its pool's in-process test shared
-   * connection so HTTP request handlers dispatched during the test (which run in the
-   * main thread but in a fresh async context without the connection pin) resolve to the
-   * same open transaction as the test body. Non-transactional and tenant-only connections
-   * remain independently pooled. Pair with {@link clearTestSharedConnections} in a finally.
-   * @returns {void}
+   * Registers each non-tenant per-test connection as a dynamic candidate for in-process
+   * request sharing. The pool evaluates transaction state when each request is dispatched,
+   * so a transaction started or ended during a hook callback takes effect immediately.
+   * Inactive and tenant-only connections remain independently pooled. Pair with
+   * {@link clearTestSharedConnections} in a finally.
+   * @returns {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} - Lifecycle-owned registrations.
    */
   activateTestSharedConnections() {
     const configuration = this.getConfiguration()
     const currentConnections = configuration.getCurrentConnections()
-
-    this.clearTestSharedConnections()
+    /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
+    const registrations = []
 
     for (const identifier of Object.keys(currentConnections)) {
       const pool = configuration.getDatabasePool(identifier)
@@ -554,18 +554,30 @@ export default class TestRunner {
 
       const connection = currentConnections[identifier]
 
-      if (connection.insideTransaction()) {
-        pool.setTestSharedConnection(connection)
-      }
+      const registration = pool.setTestSharedConnectionProvider(() => {
+        return connection.insideTransaction() ? connection : undefined
+      })
+
+      if (registration) registrations.push({pool, registration})
     }
+
+    return registrations
   }
 
   /**
    * Clears the in-process test shared connection on every configured pool. Idempotent and
    * safe to call when none was set.
+   * @param {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} [registrations] - Lifecycle-owned registrations to clear conditionally.
    * @returns {void}
    */
-  clearTestSharedConnections() {
+  clearTestSharedConnections(registrations) {
+    if (registrations) {
+      for (const {pool, registration} of registrations) {
+        pool.clearTestSharedConnection(registration)
+      }
+      return
+    }
+
     const configuration = this.getConfiguration()
 
     for (const identifier of configuration.getDatabaseIdentifiers()) {
@@ -971,6 +983,8 @@ export default class TestRunner {
            * still wait for it to settle after runWithTimeout has abandoned it.
            * @type {Promise<?> | undefined} */
           let testLifecycle
+          /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
+          let testSharedConnectionRegistrations = []
           /**
            * Shared mutable flag so the catch block can suppress the
            * `_successfulTests` increment inside the still-detached lifecycle:
@@ -997,11 +1011,11 @@ export default class TestRunner {
               // stale async-context pin and force every later test onto a fresh checkout,
               // breaking isolation).
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
-                // Clear before application hooks so a retry or a prior timed-out lifecycle
-                // cannot expose stale shared state while the next test prepares its
-                // transactions.
+                // Register dynamic candidates before application hooks so transaction
+                // state changes made during a hook are visible to a request dispatched
+                // by that same callback.
                 if (testArgs.type == "request") {
-                  this.clearTestSharedConnections()
+                  testSharedConnectionRegistrations = this.activateTestSharedConnections()
                 }
 
                 try {
@@ -1009,13 +1023,6 @@ export default class TestRunner {
                     clearDeliveries()
                     for (const beforeEachData of newBeforeEaches) {
                       await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-
-                      // Refresh after every hook so a transaction established by an
-                      // earlier hook is available to later request hooks. This also
-                      // clears slots when a later hook ends a transaction.
-                      if (testArgs.type == "request") {
-                        this.activateTestSharedConnections()
-                      }
                     }
 
                     // Record which test is running so an async crash (an unhandled
@@ -1036,7 +1043,7 @@ export default class TestRunner {
                     }
                   }
                 } finally {
-                  this.clearTestSharedConnections()
+                  this.clearTestSharedConnections(testSharedConnectionRegistrations)
                 }
               })
             })
@@ -1078,7 +1085,7 @@ export default class TestRunner {
               // ensureConnections before activateTestSharedConnections() replaces
               // it. Clear it here so the next test checks out a fresh connection.
               // Idempotent when the lifecycle did settle and already cleared.
-              this.clearTestSharedConnections()
+              this.clearTestSharedConnections(testSharedConnectionRegistrations)
             }
 
             willRetry = retriesUsed < retryCount

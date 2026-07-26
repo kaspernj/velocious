@@ -42,6 +42,18 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   _testSharedConnection = undefined
 
   /**
+   * Dynamically resolves the connection eligible for in-process test request sharing.
+   * @type {(() => import("../drivers/base.js").default | undefined) | undefined}
+   */
+  _testSharedConnectionProvider = undefined
+
+  /**
+   * Identifies the lifecycle that installed the current shared connection or provider.
+   * @type {import("./base.js").TestSharedConnectionRegistration | undefined}
+   */
+  _testSharedConnectionRegistration = undefined
+
+  /**
    * Connections.
    * @type {import("../drivers/base.js").default[]} */
   connections = []
@@ -796,17 +808,44 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * Set a shared connection for test mode so that HTTP handlers running
    * in the same process can reuse the test runner's database connection.
    * @param {import("../drivers/base.js").default} connection - Shared connection.
-   * @returns {void}
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque registration handle.
    */
   setTestSharedConnection(connection) {
+    const registration = {owner: Symbol("test-shared-connection")}
+
     this._testSharedConnection = connection
+    this._testSharedConnectionProvider = undefined
+    this._testSharedConnectionRegistration = registration
+
+    return registration
   }
 
   /**
-   * Runs clear test shared connection.
-   * @returns {void} */
-  clearTestSharedConnection() {
+   * Sets a provider that is evaluated when an in-process test request is dispatched.
+   * @param {() => import("../drivers/base.js").default | undefined} provider - Shared connection provider.
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque registration handle.
+   */
+  setTestSharedConnectionProvider(provider) {
+    const registration = {owner: Symbol("test-shared-connection-provider")}
+
     this._testSharedConnection = undefined
+    this._testSharedConnectionProvider = provider
+    this._testSharedConnectionRegistration = registration
+
+    return registration
+  }
+
+  /**
+   * Clears the current shared connection registration. A supplied stale registration
+   * cannot clear a provider installed by a newer lifecycle.
+   * @param {import("./base.js").TestSharedConnectionRegistration} [registration] - Opaque registration handle to clear conditionally.
+   * @returns {void} */
+  clearTestSharedConnection(registration) {
+    if (registration && registration !== this._testSharedConnectionRegistration) return
+
+    this._testSharedConnection = undefined
+    this._testSharedConnectionProvider = undefined
+    this._testSharedConnectionRegistration = undefined
   }
 
   /**
@@ -820,9 +859,21 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {T} - Callback result.
    */
   runWithTestSharedConnection(callback) {
-    if (!this._testSharedConnection) return callback()
+    const connection = this.testSharedConnection()
 
-    return this.asyncLocalStorage.run(this._testSharedConnection.getIdSeq(), callback)
+    if (!connection) return callback()
+
+    return this.asyncLocalStorage.run(connection.getIdSeq(), callback)
+  }
+
+  /**
+   * Resolves the connection currently eligible for in-process test request sharing.
+   * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
+   */
+  testSharedConnection() {
+    return this._testSharedConnectionProvider
+      ? this._testSharedConnectionProvider()
+      : this._testSharedConnection
   }
 
   /**
@@ -834,7 +885,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const id = this.asyncLocalStorage.getStore()
 
     if (id === SUPPRESSED_CONNECTION_CONTEXT) return undefined
-    if (id === undefined) return this._testSharedConnection
+    if (id === undefined) return this.testSharedConnection()
 
     return this.getCurrentConnection()
   }
@@ -1284,7 +1335,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     this.connections = []
     this.connectionsInUse = {}
-    this._testSharedConnection = undefined
+    this.clearTestSharedConnection()
     this.clearGlobalConnectionForIdentifier()
 
     for (const connection of connections) {

@@ -14,6 +14,10 @@ Request tests share only transaction-active, non-tenant database connections wit
 in-process request handlers. Handlers can therefore see uncommitted test setup while
 transaction rollback still isolates and cleans up the test.
 
+Connection eligibility is evaluated when each request is dispatched. A `beforeEach`
+hook can start a transaction and issue an HTTP request in the same callback; the
+handler immediately reuses that active transaction.
+
 Request tests without an active transaction use independent pooled connections. This
 lets concurrency and locking tests opt out of transaction cleanup and exercise
 production-style connection behavior. Shared connection state is scoped to the test

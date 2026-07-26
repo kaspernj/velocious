@@ -662,6 +662,79 @@ describe("database - pool - async tracked multi connection reuse", () => {
     }
   })
 
+  it("resolves a test shared connection provider at callback dispatch time", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-test-shared-provider")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      const connection = await pool.spawnConnection()
+
+      try {
+        pool.setTestSharedConnectionProvider(() => {
+          return connection.insideTransaction() ? connection : undefined
+        })
+
+        let sharedConnection
+
+        pool.runWithTestSharedConnection(() => {
+          sharedConnection = pool.getCurrentContextConnection()
+        })
+        expect(sharedConnection).toBeUndefined()
+
+        await connection.startTransaction()
+        pool.runWithTestSharedConnection(() => {
+          sharedConnection = pool.getCurrentContextConnection()
+        })
+        expect(sharedConnection).toBe(connection)
+
+        await connection.rollbackTransaction()
+        pool.runWithTestSharedConnection(() => {
+          sharedConnection = pool.getCurrentContextConnection()
+        })
+        expect(sharedConnection).toBeUndefined()
+      } finally {
+        if (connection.insideTransaction()) await connection.rollbackTransaction()
+        await connection.close()
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("clears a test shared connection provider only for its owning registration", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-test-shared-provider-owner")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      const connectionA = await pool.spawnConnection()
+      const connectionB = await pool.spawnConnection()
+
+      try {
+        const registrationA = pool.setTestSharedConnectionProvider(() => connectionA)
+        const registrationB = pool.setTestSharedConnectionProvider(() => connectionB)
+
+        pool.clearTestSharedConnection(registrationA)
+
+        expect(pool.getCurrentContextConnection()).toBe(connectionB)
+
+        pool.clearTestSharedConnection(registrationB)
+
+        expect(pool.getCurrentContextConnection()).toBeUndefined()
+      } finally {
+        await connectionA.close()
+        await connectionB.close()
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("rejects pending checkouts when the pool is closed", async () => {
     await withIsolatedPool(async (pool) => {
       pool.getConfiguration().pool = {max: 1}
