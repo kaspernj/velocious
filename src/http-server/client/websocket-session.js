@@ -1,13 +1,17 @@
 // @ts-check
 
-import {randomUUID} from "node:crypto"
+import { randomUUID } from "node:crypto"
+import { ensureError } from "typanic"
 
-import EventEmitter from "../../utils/event-emitter.js"
+import { ValidationError } from "../../database/record/index.js"
 import Logger from "../../logger.js"
+import EventEmitter from "../../utils/event-emitter.js"
+import isPlainObject from "../../utils/plain-object.js"
+import VelociousError from "../../velocious-error.js"
+import WebsocketChannel from "../websocket-channel.js"
+import { websocketEventLogStoreForConfiguration } from "../websocket-event-log-store.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
-import WebsocketChannel from "../websocket-channel.js"
-import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
 const WEBSOCKET_FINAL_FRAME = 0x80
 const WEBSOCKET_OPCODE_CONTINUATION = 0x0
@@ -439,7 +443,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       await this._registerChannel(channel, tenant)
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-channel-initialize"
+      })
+
       this.logger.error(() => ["Failed to initialize websocket channel", error])
     }
   }
@@ -473,6 +481,46 @@ export default class VelociousHttpServerClientWebsocketSession {
     ])
 
     client.events.emit("output", frame, {websocketFrame: true})
+  }
+
+  /**
+   * Whether a caught dispatch error is an expected client-flow failure.
+   * @param {Error} error - Normalized dispatch error.
+   * @returns {boolean} - Whether framework error reporters should ignore it.
+   */
+  _expectedClientError(error) {
+    if (error instanceof ValidationError) return true
+    if (error instanceof VelociousError && error.safeToExpose) return true
+
+    const annotatedError = /** @type {Error & {errorType?: string, velocious?: Record<string, ?>}} */ (error)
+
+    if (isPlainObject(annotatedError.velocious)) return true
+
+    return typeof annotatedError.errorType === "string" && annotatedError.errorType.length > 0
+  }
+
+  /**
+   * Reports one unexpected WebSocket dispatch failure and returns its normalized Error.
+   * @param {?} caughtError - Caught dispatch failure.
+   * @param {Record<string, ?>} context - Structured dispatch context.
+   * @returns {Error} - Normalized error for existing logs and client responses.
+   */
+  _reportUnexpectedDispatchError(caughtError, context) {
+    const error = ensureError(caughtError)
+
+    if (this._expectedClientError(error)) return error
+
+    const errorPayload = {
+      context,
+      error,
+      request: this.upgradeRequest
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", errorPayload)
+    errorEvents.emit("all-error", {...errorPayload, errorType: "framework-error"})
+
+    return error
   }
 
   /**
@@ -566,7 +614,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (subscribePayload) {
       const {channel, lastEventId, params} = subscribePayload
 
-      if (!channel) throw new Error("channel is required for subscribe")
+      if (!channel) throw VelociousError.safe("channel is required for subscribe")
       const resolver = this.configuration.getWebsocketChannelResolver?.()
 
       if (resolver) {
@@ -638,8 +686,8 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     const {body, headers, id, method, path} = requestPayload
 
-    if (!method) throw new Error("method is required")
-    if (!path) throw new Error("path is required")
+    if (!method) throw VelociousError.safe("method is required")
+    if (!path) throw VelociousError.safe("path is required")
 
     const request = new WebsocketRequest({
       body,
@@ -823,10 +871,15 @@ export default class VelociousHttpServerClientWebsocketSession {
       try {
         const message = JSON.parse(finalPayload.toString("utf-8"))
 
-        this._handleMessageWork({admission, message}).catch((error) => {
+        this._handleMessageWork({admission, message}).catch((caughtError) => {
+          const clientErrorMessage = caughtError instanceof Error ? caughtError.message : String(caughtError)
+          const error = this._reportUnexpectedDispatchError(caughtError, {
+            stage: "websocket-message-dispatch"
+          })
+
           this.logger.error(() => ["Websocket message handler failed", error])
           this.sendJson({
-            error: error instanceof Error ? error.message : String(error),
+            error: clientErrorMessage,
             type: "error"
           })
         })
@@ -1324,7 +1377,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     try {
       return await resolver(this)
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-session-identity-pause"
+      })
+
       this.logger.error(() => ["Websocket session identity resolver failed at pause", error])
       return undefined
     }
@@ -1359,7 +1416,13 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const connection of this._connections.values()) {
       try {
         await connection[callbackName]?.()
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          callbackName,
+          connectionId: connection.connectionId,
+          stage: "websocket-connection-lifecycle"
+        })
+
         this.logger.error(() => [`${callbackName} failed for ${connection.connectionId}`, error])
       }
     }
@@ -1367,7 +1430,13 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const {subscription} of this._channelSubscriptions.values()) {
       try {
         await subscription[callbackName]?.()
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          callbackName,
+          stage: "websocket-channel-lifecycle",
+          subscriptionId: subscription.subscriptionId
+        })
+
         this.logger.error(() => [`${callbackName} failed for channel sub ${subscription.subscriptionId}`, error])
       }
     }
@@ -1408,7 +1477,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       try {
         freshIdentity = await resolver(this)
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          stage: "websocket-session-identity-resume"
+        })
+
         this.logger.error(() => ["Websocket session identity resolver failed at resume", error])
         freshIdentity = undefined
       }
@@ -1474,7 +1547,13 @@ export default class VelociousHttpServerClientWebsocketSession {
         await this._withConnections(async () => {
           await connection.onClose(reason)
         })
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          connectionId: connection.connectionId,
+          reason,
+          stage: "websocket-connection-teardown"
+        })
+
         this.logger.error(() => [`Failed to tear down connection ${connection.connectionId}`, error])
       }
     }
@@ -1525,9 +1604,16 @@ export default class VelociousHttpServerClientWebsocketSession {
       // can never be routed to a partially initialized connection.
       this._connections.set(connectionId, connection)
       this.sendJson({type: "connection-opened", connectionId})
-    } catch (error) {
+    } catch (caughtError) {
+      const clientErrorMessage = caughtError instanceof Error ? caughtError.message : ""
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        connectionId,
+        connectionType,
+        stage: "websocket-connection-open"
+      })
+
       this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to open connection"})
+      this.sendJson({type: "connection-error", connectionId, message: clientErrorMessage || "Failed to open connection"})
     }
   }
 
@@ -1549,9 +1635,15 @@ export default class VelociousHttpServerClientWebsocketSession {
       await this._withConnections(async () => {
         await connection.onMessage(message.body)
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const clientErrorMessage = caughtError instanceof Error ? caughtError.message : ""
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        connectionId,
+        stage: "websocket-connection-message"
+      })
+
       this.logger.error(() => [`Failed to handle connection-message for ${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to handle message"})
+      this.sendJson({type: "connection-error", connectionId, message: clientErrorMessage || "Failed to handle message"})
     }
   }
 
@@ -1576,7 +1668,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       await this._withConnections(async () => {
         await connection.onClose("client_close")
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        connectionId,
+        stage: "websocket-connection-close"
+      })
+
       this.logger.error(() => [`Failed to tear down connection ${connectionId}`, error])
     }
 
@@ -1658,11 +1755,19 @@ export default class VelociousHttpServerClientWebsocketSession {
 
         this.sendJson({type: "channel-subscribed", subscriptionId})
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const clientErrorMessage = caughtError instanceof Error ? caughtError.message : ""
+
       this._channelSubscriptions.delete(subscriptionId)
       this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channelType,
+        stage: "websocket-channel-subscribe",
+        subscriptionId
+      })
+
       this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
-      this.sendJson({type: "channel-error", subscriptionId, message: /** @type {Error} */ (error).message || "Failed to subscribe"})
+      this.sendJson({type: "channel-error", subscriptionId, message: clientErrorMessage || "Failed to subscribe"})
     }
   }
 
@@ -1730,7 +1835,13 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     try {
       await this._withConnections(async () => await entry.subscription.unsubscribed())
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channelType: entry.channelType,
+        stage: "websocket-channel-unsubscribe",
+        subscriptionId
+      })
+
       this.logger.error(() => [`Failed to unsubscribe channel ${entry.channelType}:${subscriptionId}`, error])
     }
 
@@ -1755,7 +1866,13 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       try {
         await this._withConnections(async () => await subscription.unsubscribed())
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          channelType,
+          stage: "websocket-channel-teardown",
+          subscriptionId: subscription.subscriptionId
+        })
+
         this.logger.error(() => [`Failed to tear down channel-v2 ${channelType}:${subscription.subscriptionId}`, error])
       }
     }
@@ -1783,7 +1900,11 @@ export default class VelociousHttpServerClientWebsocketSession {
           await channel?.unsubscribed?.()
         })
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-channel-teardown"
+      })
+
       this.logger.error(() => ["Failed to teardown websocket channel", error])
     }
 
@@ -1882,7 +2003,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       await this._registerChannel(channelInstance, tenant)
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channel,
+        stage: "websocket-channel-subscription"
+      })
+
       this.logger.warn(() => ["Websocket channel subscription failed", error])
       this.sendJson({channel, error: "Subscription rejected", type: "error"})
     }
@@ -2009,7 +2135,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (onOpen) {
         await onOpen({session: this})
       }
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler-open"
+      })
+
       this.logger.error(() => ["Websocket open handler failed", error])
     }
   }
@@ -2027,13 +2157,31 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (onMessage) {
         await onMessage({message, session: this})
       }
-    } catch (error) {
-      this.logger.error(() => ["Websocket message handler failed", error])
+    } catch (caughtError) {
       const handler = this.messageHandler
       const onError = handler ? handler.onError : null
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler"
+      })
 
-      if (onError) {
-        await onError({error: error instanceof Error ? error : new Error(String(error)), session: this})
+      this.logger.error(() => ["Websocket message handler failed", error])
+      if (!onError) return
+
+      try {
+        await onError({error, session: this})
+      } catch (onErrorCaughtError) {
+        const clientErrorMessage = onErrorCaughtError instanceof Error
+          ? onErrorCaughtError.message
+          : String(onErrorCaughtError)
+        const onErrorError = this._reportUnexpectedDispatchError(onErrorCaughtError, {
+          stage: "websocket-message-handler-error"
+        })
+
+        this.logger.error(() => ["Websocket message error handler failed", onErrorError])
+        this.sendJson({
+          error: clientErrorMessage,
+          type: "error"
+        })
       }
     }
   }
@@ -2046,7 +2194,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (onClose) {
         await onClose({session: this})
       }
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler-close"
+      })
+
       this.logger.error(() => ["Websocket close handler failed", error])
     }
   }
@@ -2072,34 +2224,44 @@ export default class VelociousHttpServerClientWebsocketSession {
   async _resolveMessageHandlerPromise() {
     if (!this.messageHandlerPromise) return
 
-    try {
-      const handler = await this.messageHandlerPromise
+    /** @type {import("../../configuration-types.js").WebsocketMessageHandler | void} */
+    let handler
 
-      if (handler) {
-        this.messageHandlerPromise = undefined
-        if (this._inboundClosed) {
-          this.pendingMessageHandler = false
-          return
-        }
-        // Install handler and drain onOpen before replaying queued
-        // messages. setMessageHandler() fires onOpen as fire-and-forget;
-        // awaiting _runMessageHandlerOpen() directly here closes the
-        // race where queued subscribe/connection-* frames would
-        // dispatch while an async onOpen is still setting up session
-        // state.
-        this.messageHandler = handler
-        await this._runMessageHandlerOpen()
-        await this._finishMessageHandlerResolution({
-          useHandler: typeof handler.onMessage === "function"
-        })
-        return
-      }
-    } catch (error) {
+    try {
+      handler = await this.messageHandlerPromise
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler-resolver"
+      })
+
       this.logger.error(() => ["Websocket message handler resolver failed", error])
+      this.messageHandlerPromise = undefined
+      await this._finishMessageHandlerResolution({useHandler: false})
+      return
     }
 
     this.messageHandlerPromise = undefined
-    await this._finishMessageHandlerResolution({useHandler: false})
+    if (!handler) {
+      await this._finishMessageHandlerResolution({useHandler: false})
+      return
+    }
+
+    if (this._inboundClosed) {
+      this.pendingMessageHandler = false
+      return
+    }
+
+    // Install handler and drain onOpen before replaying queued
+    // messages. setMessageHandler() fires onOpen as fire-and-forget;
+    // awaiting _runMessageHandlerOpen() directly here closes the
+    // race where queued subscribe/connection-* frames would
+    // dispatch while an async onOpen is still setting up session
+    // state.
+    this.messageHandler = handler
+    await this._runMessageHandlerOpen()
+    await this._finishMessageHandlerResolution({
+      useHandler: typeof handler.onMessage === "function"
+    })
   }
 
   /**
@@ -2146,10 +2308,15 @@ export default class VelociousHttpServerClientWebsocketSession {
         } else {
           await this._dispatchMessage(work.message)
         }
-      } catch (error) {
+      } catch (caughtError) {
+        const clientErrorMessage = caughtError instanceof Error ? caughtError.message : String(caughtError)
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          stage: "websocket-message-dispatch"
+        })
+
         this.logger.error(() => ["Websocket message handler failed", error])
         this.sendJson({
-          error: error instanceof Error ? error.message : String(error),
+          error: clientErrorMessage,
           type: "error"
         })
       } finally {

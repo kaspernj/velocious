@@ -63,3 +63,39 @@ export function decodeServerCloseFrame(frame) {
     reason: frame.subarray(4, 2 + payloadLength).toString("utf-8")
   }
 }
+
+/**
+ * Decodes one unmasked final server-to-client text frame.
+ * @param {Buffer} frame - Server text frame.
+ * @returns {string} - Decoded UTF-8 payload.
+ */
+export function decodeServerTextFrame(frame) {
+  if (frame[0] !== 0x81) throw new Error("Expected a final WebSocket text frame")
+
+  const payloadLengthMarker = frame[1] & 0x7F
+  let payloadLength
+  let payloadOffset
+
+  if (payloadLengthMarker < 126) {
+    payloadLength = payloadLengthMarker
+    payloadOffset = 2
+  } else if (payloadLengthMarker === 126) {
+    payloadLength = frame.readUInt16BE(2)
+    payloadOffset = 4
+  } else {
+    const bigintPayloadLength = frame.readBigUInt64BE(2)
+
+    if (bigintPayloadLength > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error("Server WebSocket text frame payload exceeds the safe integer range")
+    }
+
+    payloadLength = Number(bigintPayloadLength)
+    payloadOffset = 10
+  }
+
+  if (frame.length !== payloadOffset + payloadLength) {
+    throw new Error("Server WebSocket text frame length does not match its payload")
+  }
+
+  return frame.subarray(payloadOffset).toString("utf-8")
+}

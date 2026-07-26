@@ -4,12 +4,23 @@ import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import HttpServerClient from "../../src/http-server/client/index.js"
 import WebsocketConnection from "../../src/http-server/websocket-connection.js"
+import WebsocketRequest from "../../src/http-server/client/websocket-request.js"
 import WebsocketSession from "../../src/http-server/client/websocket-session.js"
-import {describe, expect, it} from "../../src/testing/test.js"
+import { describe, expect, it } from "../../src/testing/test.js"
+import VelociousError from "../../src/velocious-error.js"
 import {
   buildMaskedClientTextFrame,
-  decodeServerCloseFrame
+  decodeServerCloseFrame,
+  decodeServerTextFrame
 } from "../helpers/websocket-frame.js"
+
+/**
+ * @typedef {object} ErrorEventPayload
+ * @property {Record<string, ?>} context - Structured failure context.
+ * @property {Error} error - Reported error.
+ * @property {string} [errorType] - All-error classification.
+ * @property {WebsocketRequest} [request] - Upgrade request.
+ */
 
 /**
  * @returns {{promise: Promise<void>, resolve: () => void}} - Manually resolved promise.
@@ -53,27 +64,43 @@ function buildConfiguration(limits) {
  * @param {Configuration} args.configuration - Session configuration.
  * @param {import("../../src/configuration-types.js").WebsocketMessageHandler} [args.messageHandler] - Raw handler.
  * @param {Promise<import("../../src/configuration-types.js").WebsocketMessageHandler | void>} [args.messageHandlerPromise] - Deferred raw handler.
- * @returns {{closeFrames: Buffer[], session: WebsocketSession}}
+ * @param {WebsocketRequest} [args.upgradeRequest] - Upgrade request.
+ * @returns {{closeFrames: Buffer[], jsonMessages: Record<string, ?>[], session: WebsocketSession}}
  */
-function buildSession({configuration, messageHandler, messageHandlerPromise}) {
+function buildSession({configuration, messageHandler, messageHandlerPromise, upgradeRequest}) {
   const client = new HttpServerClient({
     clientCount: 1,
     configuration,
     remoteAddress: "127.0.0.1"
   })
   const closeFrames = []
+  /** @type {Record<string, ?>[]} */
+  const jsonMessages = []
   const session = new WebsocketSession({
     client,
     configuration,
     messageHandler,
-    messageHandlerPromise
+    messageHandlerPromise,
+    upgradeRequest
   })
 
   client.events.on("output", (output) => {
-    if (output instanceof Buffer && output[0] === 0x88) closeFrames.push(output)
+    if (!(output instanceof Buffer)) return
+
+    if (output[0] === 0x88) {
+      closeFrames.push(output)
+    } else if (output[0] === 0x81) {
+      const parsed = JSON.parse(decodeServerTextFrame(output))
+
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Expected a JSON object in the server WebSocket text frame")
+      }
+
+      jsonMessages.push(/** @type {Record<string, ?>} */ (parsed))
+    }
   })
 
-  return {closeFrames, session}
+  return {closeFrames, jsonMessages, session}
 }
 
 /**
@@ -297,6 +324,300 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
       reason: "Inbound message backlog exceeded"
     })
     expect(received).toEqual([])
+  })
+
+  it("reports an unexpected built-in dispatch failure once while draining the resolver queue and preserves FIFO", async () => {
+    const configuration = buildConfiguration({
+      maxPendingBytes: 1024 * 1024,
+      maxPendingMessages: 8
+    })
+    const handlerResolver = deferred()
+    const dispatchError = new Error("Queued built-in dispatch exploded")
+    const upgradeRequest = new WebsocketRequest({
+      method: "GET",
+      path: "/websocket",
+      remoteAddress: "127.0.0.1"
+    })
+    /** @type {ErrorEventPayload[]} */
+    const frameworkErrors = []
+    /** @type {ErrorEventPayload[]} */
+    const allErrors = []
+    let wrapperCalls = 0
+
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
+    configuration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))
+    configuration.setWebsocketAroundRequest(async (_session, next) => {
+      const call = wrapperCalls
+
+      wrapperCalls += 1
+      if (call === 0) throw dispatchError
+      await next()
+    })
+
+    const {jsonMessages, session} = buildSession({
+      configuration,
+      messageHandlerPromise: handlerResolver.promise.then(() => ({})),
+      upgradeRequest
+    })
+    const initialization = session.initializeChannel()
+
+    session.onData(Buffer.concat([
+      buildMaskedClientTextFrame(JSON.stringify({data: {sequence: 0}, type: "metadata"})),
+      buildMaskedClientTextFrame(JSON.stringify({data: {sequence: 1}, type: "metadata"})),
+      buildMaskedClientTextFrame(JSON.stringify({data: {sequence: 2}, type: "metadata"}))
+    ]))
+    handlerResolver.resolve()
+    await initialization
+
+    expect(jsonMessages).toEqual([{
+      error: "Queued built-in dispatch exploded",
+      type: "error"
+    }])
+    expect(wrapperCalls).toEqual(3)
+    expect(session.getMetadata()).toEqual({sequence: 2})
+    expect([frameworkErrors.length, allErrors.length]).toEqual([1, 1])
+    expect(frameworkErrors[0].error).toEqual(dispatchError)
+    expect(frameworkErrors[0].context).toMatchObject({stage: "websocket-message-dispatch"})
+    expect(frameworkErrors[0].request).toEqual(upgradeRequest)
+    expect(allErrors[0].error).toEqual(dispatchError)
+    expect(allErrors[0].context).toMatchObject({stage: "websocket-message-dispatch"})
+    expect(allErrors[0].errorType).toEqual("framework-error")
+    expect(allErrors[0].request).toEqual(upgradeRequest)
+  })
+
+  it("does not report an explicit safe error while draining the resolver queue and preserves FIFO", async () => {
+    const configuration = buildConfiguration({
+      maxPendingBytes: 1024 * 1024,
+      maxPendingMessages: 8
+    })
+    const handlerResolver = deferred()
+    const safeError = VelociousError.safe("Queued client-flow rejection")
+    /** @type {ErrorEventPayload[]} */
+    const frameworkErrors = []
+    /** @type {ErrorEventPayload[]} */
+    const allErrors = []
+    let wrapperCalls = 0
+
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
+    configuration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))
+    configuration.setWebsocketAroundRequest(async (_session, next) => {
+      const call = wrapperCalls
+
+      wrapperCalls += 1
+      if (call === 0) throw safeError
+      await next()
+    })
+
+    const {jsonMessages, session} = buildSession({
+      configuration,
+      messageHandlerPromise: handlerResolver.promise.then(() => ({}))
+    })
+    const initialization = session.initializeChannel()
+
+    session.onData(Buffer.concat([
+      buildMaskedClientTextFrame(JSON.stringify({data: {sequence: 0}, type: "metadata"})),
+      buildMaskedClientTextFrame(JSON.stringify({data: {sequence: 1}, type: "metadata"})),
+      buildMaskedClientTextFrame(JSON.stringify({data: {sequence: 2}, type: "metadata"}))
+    ]))
+    handlerResolver.resolve()
+    await initialization
+
+    expect(jsonMessages).toEqual([{
+      error: "Queued client-flow rejection",
+      type: "error"
+    }])
+    expect(wrapperCalls).toEqual(3)
+    expect(session.getMetadata()).toEqual({sequence: 2})
+    expect(frameworkErrors).toEqual([])
+    expect(allErrors).toEqual([])
+  })
+
+  it("reports raw message and error-handler failures separately while preserving recovery", async () => {
+    const configuration = buildConfiguration({
+      maxPendingBytes: 1024 * 1024,
+      maxPendingMessages: 8
+    })
+    const handlerResolver = deferred()
+    const messageError = new Error("Raw message handler exploded")
+    const errorHandlerError = new Error("Raw error handler exploded")
+    const upgradeRequest = new WebsocketRequest({
+      method: "GET",
+      path: "/websocket",
+      remoteAddress: "127.0.0.1"
+    })
+    /** @type {ErrorEventPayload[]} */
+    const frameworkErrors = []
+    /** @type {ErrorEventPayload[]} */
+    const allErrors = []
+    /** @type {Error[]} */
+    const handledErrors = []
+    /** @type {number[]} */
+    const received = []
+
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
+    configuration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))
+    const {jsonMessages, session} = buildSession({
+      configuration,
+      messageHandlerPromise: handlerResolver.promise.then(() => ({
+        onError: async ({error}) => {
+          handledErrors.push(error)
+          throw errorHandlerError
+        },
+        onMessage: async ({message}) => {
+          const sequence = messageSequence(message)
+
+          received.push(sequence)
+          if (sequence === 0) throw messageError
+        }
+      })),
+      upgradeRequest
+    })
+    const initialization = session.initializeChannel()
+
+    session.onData(Buffer.concat([
+      buildMaskedClientTextFrame(JSON.stringify({sequence: 0})),
+      buildMaskedClientTextFrame(JSON.stringify({sequence: 1}))
+    ]))
+    handlerResolver.resolve()
+    await initialization
+
+    expect(jsonMessages).toEqual([{
+      error: "Raw error handler exploded",
+      type: "error"
+    }])
+    expect(received).toEqual([0, 1])
+    expect(handledErrors.length).toEqual(1)
+    expect(handledErrors[0]).toBe(messageError)
+    expect({
+      allErrors: allErrors.map((payload) => ({
+        error: payload.error,
+        errorType: payload.errorType,
+        request: payload.request,
+        stage: payload.context.stage
+      })),
+      frameworkErrors: frameworkErrors.map((payload) => ({
+        error: payload.error,
+        request: payload.request,
+        stage: payload.context.stage
+      }))
+    }).toEqual({
+      allErrors: [
+        {
+          error: messageError,
+          errorType: "framework-error",
+          request: upgradeRequest,
+          stage: "websocket-message-handler"
+        },
+        {
+          error: errorHandlerError,
+          errorType: "framework-error",
+          request: upgradeRequest,
+          stage: "websocket-message-handler-error"
+        }
+      ],
+      frameworkErrors: [
+        {
+          error: messageError,
+          request: upgradeRequest,
+          stage: "websocket-message-handler"
+        },
+        {
+          error: errorHandlerError,
+          request: upgradeRequest,
+          stage: "websocket-message-handler-error"
+        }
+      ]
+    })
+    expect(frameworkErrors[0].error).toBe(messageError)
+    expect(allErrors[0].error).toBe(messageError)
+    expect(frameworkErrors[1].error).toBe(errorHandlerError)
+    expect(allErrors[1].error).toBe(errorHandlerError)
+    expect(frameworkErrors[0].request).toBe(upgradeRequest)
+    expect(allErrors[0].request).toBe(upgradeRequest)
+    expect(frameworkErrors[1].request).toBe(upgradeRequest)
+    expect(allErrors[1].request).toBe(upgradeRequest)
+  })
+
+  it("reports an unexpected queued connection handler failure once and preserves its response and recovery", async () => {
+    const configuration = buildConfiguration({
+      maxPendingBytes: 1024 * 1024,
+      maxPendingMessages: 8
+    })
+    const handlerResolver = deferred()
+    const connectionError = new Error("Queued connection handler exploded")
+    const upgradeRequest = new WebsocketRequest({
+      method: "GET",
+      path: "/websocket",
+      remoteAddress: "127.0.0.1"
+    })
+    /** @type {ErrorEventPayload[]} */
+    const frameworkErrors = []
+    /** @type {ErrorEventPayload[]} */
+    const allErrors = []
+    /** @type {number[]} */
+    const received = []
+
+    class ReviewConnection extends WebsocketConnection {
+      /**
+       * @param {?} body - Decoded connection body.
+       * @returns {void} - No return value.
+       */
+      onMessage(body) {
+        const sequence = messageSequence(body)
+
+        received.push(sequence)
+        if (sequence === 0) throw connectionError
+      }
+    }
+
+    configuration.registerWebsocketConnection("Review", ReviewConnection)
+    configuration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
+    configuration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))
+    const {jsonMessages, session} = buildSession({
+      configuration,
+      messageHandlerPromise: handlerResolver.promise.then(() => ({})),
+      upgradeRequest
+    })
+    const initialization = session.initializeChannel()
+
+    session.onData(Buffer.concat([
+      buildMaskedClientTextFrame(JSON.stringify({
+        connectionId: "review",
+        connectionType: "Review",
+        params: {},
+        type: "connection-open"
+      })),
+      buildMaskedClientTextFrame(JSON.stringify({
+        body: {sequence: 0},
+        connectionId: "review",
+        type: "connection-message"
+      })),
+      buildMaskedClientTextFrame(JSON.stringify({
+        body: {sequence: 1},
+        connectionId: "review",
+        type: "connection-message"
+      }))
+    ]))
+    handlerResolver.resolve()
+    await initialization
+
+    expect(jsonMessages).toEqual([
+      {connectionId: "review", type: "connection-opened"},
+      {
+        connectionId: "review",
+        message: "Queued connection handler exploded",
+        type: "connection-error"
+      }
+    ])
+    expect(received).toEqual([0, 1])
+    expect([frameworkErrors.length, allErrors.length]).toEqual([1, 1])
+    expect(frameworkErrors[0].error).toEqual(connectionError)
+    expect(frameworkErrors[0].context).toMatchObject({stage: "websocket-connection-message"})
+    expect(frameworkErrors[0].request).toEqual(upgradeRequest)
+    expect(allErrors[0].error).toEqual(connectionError)
+    expect(allErrors[0].context).toMatchObject({stage: "websocket-connection-message"})
+    expect(allErrors[0].errorType).toEqual("framework-error")
+    expect(allErrors[0].request).toEqual(upgradeRequest)
   })
 
   it("keeps accepted messages FIFO and recovers after one dispatch rejects", async () => {

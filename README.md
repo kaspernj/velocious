@@ -1712,6 +1712,8 @@ configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
 
 Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` / `errorType`-marked errors keep their expected-error status — none of these reach the error bus.
 
+Unexpected inbound decoded WebSocket dispatch failures emit one `framework-error` and one matching `all-error`. Established expected client-flow errors remain excluded from both events.
+
 ## Use the Websocket client API (HTTP-like)
 
 ```js
