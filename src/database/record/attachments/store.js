@@ -4,11 +4,11 @@ import UUID from "pure-uuid"
 import TableData from "../../table-data/index.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
 
-const ATTACHMENTS_TABLE = "velocious_attachments"
-
 /**
  * AttachmentDriverConstructor type.
  * @typedef {import("../../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor */
+const ATTACHMENTS_TABLE = "velocious_attachments"
+
 /**
  * Stores by configuration.
  * @type {WeakMap<import("../../../configuration.js").default, Map<string, RecordAttachmentsStore>>} */

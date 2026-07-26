@@ -4,8 +4,6 @@ import {optionalBoolean, optionalInteger} from "typanic"
 
 import recordChanges from "../database/record-changes.js"
 
-const syncTaskPromises = new Map()
-
 /** @typedef {import("./sync-api-client-types.js").SyncChangeApplyResult} SyncChangeApplyResult */
 /** @typedef {import("./sync-api-client-types.js").SyncChangeEnvelope} SyncChangeEnvelope */
 /** @typedef {import("./sync-api-client-types.js").SyncChangesRequest} SyncChangesRequest */
@@ -15,6 +13,7 @@ const syncTaskPromises = new Map()
 /** @typedef {import("./sync-api-client-types.js").SyncReplayItem} SyncReplayItem */
 /** @typedef {import("./sync-api-client-types.js").SyncReplayResponse} SyncReplayResponse */
 /** @typedef {import("./sync-api-client-types.js").SyncResourceConfig} SyncResourceConfig */
+const syncTaskPromises = new Map()
 
 /**
  * Generic client-side helper for replaying pending sync envelopes through the

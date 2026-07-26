@@ -4,6 +4,18 @@ import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
 import Response from "../http-server/client/response.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 
+/**
+ * Defines this typedef.
+ * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{headers?: () => Record<string, string | string[] | undefined>, remoteAddress?: () => string | undefined}} FrontendModelWebsocketUpgradeRequest
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{headers: () => Record<string, string | string[] | undefined>, header: (name: string) => string | string[] | undefined, metadata: (key?: string) => Record<string, import("./query.js").FrontendModelTransportValue> | import("./query.js").FrontendModelTransportValue | undefined, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => string | string[] | undefined}} FrontendModelWebsocketSyntheticRequest
+ */
 const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 
 // Mirrors FRONTEND_MODELS_CHANNEL_NAME in ./websocket-publishers.js, duplicated here
@@ -20,19 +32,6 @@ function transportSerializationOptionsForConfiguration(configuration) {
     timeZone: configuration.getEnvironmentHandler().getTimeZone(configuration)
   }
 }
-
-/**
- * Defines this typedef.
- * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
- */
-/**
- * Defines this typedef.
- * @typedef {{headers?: () => Record<string, string | string[] | undefined>, remoteAddress?: () => string | undefined}} FrontendModelWebsocketUpgradeRequest
- */
-/**
- * Defines this typedef.
- * @typedef {{headers: () => Record<string, string | string[] | undefined>, header: (name: string) => string | string[] | undefined, metadata: (key?: string) => Record<string, import("./query.js").FrontendModelTransportValue> | import("./query.js").FrontendModelTransportValue | undefined, path: () => string, httpMethod: () => string, remoteAddress: () => string | undefined, origin: () => string | string[] | undefined}} FrontendModelWebsocketSyntheticRequest
- */
 
 /**
  * Per-session channel subscription for frontend-model lifecycle events.

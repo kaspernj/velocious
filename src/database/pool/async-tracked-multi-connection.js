@@ -3,14 +3,6 @@
 import {AsyncLocalStorage} from "async_hooks"
 import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
 
-export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
-const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
-const CONNECTION_CHECKED_OUT_AT = Symbol("velociousConnectionCheckedOutAt")
-const SUPPRESSED_CONNECTION_CONTEXT = Symbol("velociousSuppressedConnectionContext")
-const DEFAULT_MAX_CONNECTIONS = 10
-const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
-const DEFAULT_CHECKOUT_TIMEOUT_MILLIS = 10000
-
 /**
  * PendingCheckout type.
  * @typedef {object} PendingCheckout
@@ -24,6 +16,13 @@ const DEFAULT_CHECKOUT_TIMEOUT_MILLIS = 10000
  * @property {number | null} timeoutMillis - Milliseconds to wait before rejecting, or null when disabled.
  * @property {ReturnType<typeof setTimeout> | undefined} timeoutTimer - Timer that rejects the pending checkout.
  */
+export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
+const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
+const CONNECTION_CHECKED_OUT_AT = Symbol("velociousConnectionCheckedOutAt")
+const SUPPRESSED_CONNECTION_CONTEXT = Symbol("velociousSuppressedConnectionContext")
+const DEFAULT_MAX_CONNECTIONS = 10
+const DEFAULT_IDLE_TIMEOUT_MILLIS = 5000
+const DEFAULT_CHECKOUT_TIMEOUT_MILLIS = 10000
 
 export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends BasePool {
   /**

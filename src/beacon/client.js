@@ -7,14 +7,13 @@ import timeout from "awaitery/build/timeout.js"
 import JsonSocket from "../background-jobs/json-socket.js"
 import EventEmitter from "../utils/event-emitter.js"
 
-const DEFAULT_RECONNECT_DELAY_MS = 1000
-const MAX_RECONNECT_DELAY_MS = 30_000
-const DEFAULT_CLOSE_TIMEOUT_MS = 1000
-
 /**
  * BeaconBroadcastHandler type.
  * @typedef {function(import("./types.js").BeaconBroadcastMessage): void} BeaconBroadcastHandler
  */
+const DEFAULT_RECONNECT_DELAY_MS = 1000
+const MAX_RECONNECT_DELAY_MS = 30_000
+const DEFAULT_CLOSE_TIMEOUT_MS = 1000
 
 /**
  * BeaconClient connects to a `velocious beacon` daemon and exchanges

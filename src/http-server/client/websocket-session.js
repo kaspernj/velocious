@@ -9,6 +9,10 @@ import WebsocketRequest from "./websocket-request.js"
 import WebsocketChannel from "../websocket-channel.js"
 import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
+/**
+ * Defines this typedef.
+ * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
+ */
 const WEBSOCKET_FINAL_FRAME = 0x80
 const WEBSOCKET_OPCODE_CONTINUATION = 0x0
 const WEBSOCKET_OPCODE_TEXT = 0x1
@@ -30,11 +34,6 @@ const WEBSOCKET_MAX_INBOUND_FRAME_BYTES_BIGINT = BigInt(WEBSOCKET_MAX_FINAL_FRAM
 
 /** Cap on fragment count for a single fragmented message. */
 const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
-
-/**
- * Defines this typedef.
- * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
- */
 
 /**
  * Runs subscribe message.

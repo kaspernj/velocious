@@ -1,19 +1,8 @@
-// @ts-check
-
-const DEFAULT_STORAGE_KEY = "velocious.sync.localMutationLog"
-const PENDING_STATUS_VALUES = /** @type {LocalMutationStatus[]} */ (["pending", "applied-locally", "peer-applied"])
-const PENDING_STATUSES = new Set(PENDING_STATUS_VALUES)
-const MUTATION_STATUSES = new Set([...PENDING_STATUSES, "conflict", "rejected", "synced"])
-const TERMINAL_STATUSES = new Set(["rejected", "synced"])
-/** @type {Map<string, Promise<unknown>>} */
-const STORAGE_KEY_LOCKS = new Map()
-
 /**
  * Local mutation log record query options.
  * @typedef {object} LocalMutationLogRecordsOptions
  * @property {LocalMutationStatus[]} [statuses] - Optional status filter.
  */
-
 /**
  * Local mutation log row-oriented storage adapter.
  *
@@ -28,19 +17,16 @@ const STORAGE_KEY_LOCKS = new Map()
  * @property {(storageKey: string, options?: LocalMutationLogRecordsOptions) => Promise<LocalMutationLogRecord[]> | LocalMutationLogRecord[]} records - Reads log records.
  * @property {(storageKey: string, record: LocalMutationLogRecord) => Promise<void> | void} updateRecord - Replaces one log record.
  */
-
 /**
  * Local sync mutation dependency metadata.
  * @typedef {object} LocalMutationDependency
  * @property {string} clientMutationId - Client mutation id this mutation depends on.
  * @property {string} model - Dependent model/resource name.
  */
-
 /**
  * Local mutation log status.
  * @typedef {"pending" | "applied-locally" | "peer-applied" | "conflict" | "rejected" | "synced"} LocalMutationStatus
  * */
-
 /**
  * Local mutation log record.
  * @typedef {object} LocalMutationLogRecord
@@ -53,6 +39,15 @@ const STORAGE_KEY_LOCKS = new Map()
  * @property {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} [syncResult] - Backend replay/result metadata.
  * @property {string} updatedAt - ISO timestamp when the record was last changed.
  */
+// @ts-check
+
+const DEFAULT_STORAGE_KEY = "velocious.sync.localMutationLog"
+const PENDING_STATUS_VALUES = /** @type {LocalMutationStatus[]} */ (["pending", "applied-locally", "peer-applied"])
+const PENDING_STATUSES = new Set(PENDING_STATUS_VALUES)
+const MUTATION_STATUSES = new Set([...PENDING_STATUSES, "conflict", "rejected", "synced"])
+const TERMINAL_STATUSES = new Set(["rejected", "synced"])
+/** @type {Map<string, Promise<unknown>>} */
+const STORAGE_KEY_LOCKS = new Map()
 
 /** Client-side append-only sync mutation log with pluggable persistent storage. */
 export default class LocalMutationLog {

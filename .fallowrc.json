@@ -3,6 +3,7 @@
   "entry": [
     "index.js",
     "bin/velocious.js",
+    "scripts/prewarm-chromedriver.js",
     "src/cli/**/*.js",
     "src/environment-handlers/**/*.js",
     "src/database/migration/**/*.js",
@@ -44,6 +45,7 @@
     "mysql",
     "node-fetch",
     "pg",
+    "selenium-webdriver",
     "sqlite",
     "sqlite3",
     "system-testing",

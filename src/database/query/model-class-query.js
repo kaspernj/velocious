@@ -22,6 +22,11 @@ import JoinsParser from "../query-parser/joins-parser.js"
 import WhereParser from "../query-parser/where-parser.js"
 
 /**
+ * Defines this typedef.
+ * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[], queryData?: import("./query-data.js").QueryDataEntry[]}} ModelClassQueryArgsType
+ */
+/**
  * Runs unquote sql identifier.
  * @param {string} value - Potentially quoted SQL identifier.
  * @returns {string} - Unquoted identifier.
@@ -165,11 +170,6 @@ function normalizePreloadRecord(preload) {
 /**
  * Defines this typedef.
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
- */
-/**
- * Defines this typedef.
- * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
- * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[], queryData?: import("./query-data.js").QueryDataEntry[]}} ModelClassQueryArgsType
  */
 
 /**
@@ -329,7 +329,6 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     if (this.driver.getType() == "pgsql") sql += "::int"
 
     sql += " AS count"
-
 
     // Clone query and execute count
     const countQuery = this.clone()

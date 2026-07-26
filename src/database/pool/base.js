@@ -4,14 +4,11 @@ import Configuration from "../../configuration.js"
 import Logger from "../../logger.js"
 import baseMethodsForward from "./base-methods-forward.js"
 
-export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
-
 /**
  * ConnectionCheckoutOptions type.
  * @typedef {object} ConnectionCheckoutOptions
  * @property {string} [name] - Human-readable name for the checked-out connection.
  */
-
 /**
  * DatabasePoolPendingCheckoutDebugSnapshot type.
  * @typedef {object} DatabasePoolPendingCheckoutDebugSnapshot
@@ -24,7 +21,6 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {number | null} timeoutMillis - Timeout configured for the checkout, or null when disabled.
  * @property {number} waitingForMs - Milliseconds already spent waiting.
  */
-
 /**
  * DatabasePoolDebugSnapshot type.
  * @typedef {object} DatabasePoolDebugSnapshot
@@ -38,6 +34,7 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
  * @property {string} poolClass - Pool class name.
  */
+export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /**
  * Shared.

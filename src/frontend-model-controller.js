@@ -20,6 +20,55 @@ import isDate from "./utils/is-date.js"
 import isPlainObject from "./utils/plain-object.js"
 import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./utils/ransack.js"
 
+/**
+ * FrontendModelSearch type.
+ * @typedef {object} FrontendModelSearch
+ * @property {string[]} path - Relationship path.
+ * @property {string} column - Column or attribute name.
+ * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
+ * @property {?} value - Search value.
+ */
+/**
+ * FrontendModelSort type.
+ * @typedef {object} FrontendModelSort
+ * @property {string} column - Attribute name to sort by.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
+ */
+/**
+ * FrontendModelGroup type.
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+/**
+ * FrontendModelPluck type.
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
+ * @property {string[]} path - Relationship path from root model.
+ */
+/**
+ * FrontendModelPagination type.
+ * @typedef {object} FrontendModelPagination
+ * @property {number | null} limit - Maximum number of records.
+ * @property {number | null} offset - Number of records to skip.
+ * @property {number | null} page - 1-based page number.
+ * @property {number | null} perPage - Page size.
+ */
+/**
+ * @typedef {import("./configuration-types.js").ClientErrorPayloadContext & {
+ *   action: string,
+ *   expectedError: boolean,
+ *   frontendModelEndpoint: true
+ * }} FrontendModelEndpointErrorContext
+ */
+/**
+ * FrontendModelIndexQueryOptions type.
+ * @typedef {object} FrontendModelIndexQueryOptions
+ * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
+ * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
+ * @property {import("./frontend-model-resource/base-resource.js").default} [resource] - Resource providing query hooks.
+ */
 /** @typedef {import("./database/query/model-class-query.js").default & Record<symbol, Set<string> | undefined>} FrontendModelQueryMetadata */
 
 /**
@@ -113,62 +162,6 @@ function normalizeFrontendModelSelect(select, rootModelName = null) {
 
   return normalized
 }
-
-/**
- * FrontendModelSearch type.
- * @typedef {object} FrontendModelSearch
- * @property {string[]} path - Relationship path.
- * @property {string} column - Column or attribute name.
- * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
- * @property {?} value - Search value.
- */
-
-/**
- * FrontendModelSort type.
- * @typedef {object} FrontendModelSort
- * @property {string} column - Attribute name to sort by.
- * @property {"asc" | "desc"} direction - Sort direction.
- * @property {string[]} path - Relationship path from root model.
- */
-
-/**
- * FrontendModelGroup type.
- * @typedef {object} FrontendModelGroup
- * @property {string} column - Attribute name to group by.
- * @property {string[]} path - Relationship path from root model.
- */
-
-/**
- * FrontendModelPluck type.
- * @typedef {object} FrontendModelPluck
- * @property {string} column - Attribute name to pluck.
- * @property {string[]} path - Relationship path from root model.
- */
-
-/**
- * FrontendModelPagination type.
- * @typedef {object} FrontendModelPagination
- * @property {number | null} limit - Maximum number of records.
- * @property {number | null} offset - Number of records to skip.
- * @property {number | null} page - 1-based page number.
- * @property {number | null} perPage - Page size.
- */
-
-/**
- * @typedef {import("./configuration-types.js").ClientErrorPayloadContext & {
- *   action: string,
- *   expectedError: boolean,
- *   frontendModelEndpoint: true
- * }} FrontendModelEndpointErrorContext
- */
-
-/**
- * FrontendModelIndexQueryOptions type.
- * @typedef {object} FrontendModelIndexQueryOptions
- * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
- * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
- * @property {import("./frontend-model-resource/base-resource.js").default} [resource] - Resource providing query hooks.
- */
 
 const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")

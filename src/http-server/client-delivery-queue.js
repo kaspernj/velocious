@@ -1,3 +1,10 @@
+/**
+ * @typedef {object} DeliveryTask
+ * @property {number} byteLength - Retained complete-buffer bytes.
+ * @property {boolean} countedFrame - Whether this task is an outbound frame.
+ * @property {() => Promise<void>} delivery - Delivery operation.
+ * @property {(error?: Error) => void} settle - Settles the enqueue promise.
+ */
 // @ts-check
 
 export class ClientDeliveryQueueOverflowError extends Error {
@@ -16,14 +23,6 @@ export class ClientDeliveryQueueOverflowError extends Error {
     this.name = "ClientDeliveryQueueOverflowError"
   }
 }
-
-/**
- * @typedef {object} DeliveryTask
- * @property {number} byteLength - Retained complete-buffer bytes.
- * @property {boolean} countedFrame - Whether this task is an outbound frame.
- * @property {() => Promise<void>} delivery - Delivery operation.
- * @property {(error?: Error) => void} settle - Settles the enqueue promise.
- */
 
 export default class ClientDeliveryQueue {
   /**

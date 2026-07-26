@@ -52,6 +52,7 @@ routes.draw((route) => {
   route.get("ping-with-status")
   route.get("ping-no-body")
   route.get("concurrent-connection-identity")
+  route.post("test-request-transaction-marker")
   route.post("current-user/update")
   route.post("current-user/update-password")
   route.get("current-user/update/details")

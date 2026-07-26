@@ -3,6 +3,13 @@
 import UUID from "pure-uuid"
 
 /**
+ * Global audit event bus matching ActiveRecordAuditable::Events.
+ * @typedef {object} AuditEventsType
+ * @property {(type: string, action: string, args: AuditEventPayload) => void} call - Fire all callbacks for a model type + action.
+ * @property {(type: string, action: string, callback: (args: AuditEventPayload) => void) => () => void} connect - Register a callback for a model type + action. Returns an unsubscribe function.
+ * @property {() => void} reset - Clear all registered callbacks.
+ */
+/**
  * AuditChanges type.
  * @typedef {Record<string, ?>} AuditChanges
  */
@@ -63,14 +70,6 @@ const generatedAuditRelationships = new WeakSet()
 
 /** @type {Record<string, Record<string, Array<(args: AuditEventPayload) => void>>>} */
 let globalEventConnections = {}
-
-/**
- * Global audit event bus matching ActiveRecordAuditable::Events.
- * @typedef {object} AuditEventsType
- * @property {(type: string, action: string, args: AuditEventPayload) => void} call - Fire all callbacks for a model type + action.
- * @property {(type: string, action: string, callback: (args: AuditEventPayload) => void) => () => void} connect - Register a callback for a model type + action. Returns an unsubscribe function.
- * @property {() => void} reset - Clear all registered callbacks.
- */
 
 /** @type {AuditEventsType} */
 const AuditEvents = {

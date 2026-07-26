@@ -5,6 +5,13 @@ import FrontendModelBaseResource from "../frontend-model-resource/base-resource.
 import restArgsError from "../utils/rest-args-error.js"
 import {validateFrontendModelResourceCommandName} from "./resource-config-validation.js"
 
+/**
+ * Resolved frontend-model resource registration for a replay resource type.
+ * @typedef {object} FrontendModelResolvedResourceRegistration
+ * @property {string} modelName - Effective frontend model name (modelName override or registry key).
+ * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Registered resource class.
+ * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration.
+ */
 const BASE_FRONTEND_MODEL_ABILITY_ACTIONS = ["create", "destroy", "read", "update"]
 const SHA256_INITIAL_HASH = [
   0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -1026,14 +1033,6 @@ function normalizeFrontendModelResourcePathForMatch(path) {
 
   return withLeadingSlash
 }
-
-/**
- * Resolved frontend-model resource registration for a replay resource type.
- * @typedef {object} FrontendModelResolvedResourceRegistration
- * @property {string} modelName - Effective frontend model name (modelName override or registry key).
- * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Registered resource class.
- * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration.
- */
 
 /**
  * Resolves the registered frontend-model resource class for a resource type

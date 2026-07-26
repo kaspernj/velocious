@@ -24,6 +24,7 @@ builds:
     name: Browser Tests
     script:
       - cp spec/dummy/src/config/configuration.peakflow.sqlite.js spec/dummy/src/config/configuration.js
+      - scripts/tensorbuzz-retry node scripts/prewarm-chromedriver.js
       - npm run test:browser
   mariadb_1:
     depends_on:

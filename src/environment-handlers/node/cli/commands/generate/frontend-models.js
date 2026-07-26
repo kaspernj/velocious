@@ -6,8 +6,6 @@ import * as inflection from "inflection"
 import {frontendModelResourceIsBuiltIn, frontendModelResourcesWithBuiltInsForBackendProject} from "../../../../../frontend-models/built-in-resources.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition} from "../../../../../frontend-models/resource-definition.js"
 
-const FRONTEND_MODELS_REGENERATE_COMMAND = "velocious generate:frontend-models"
-
 /**
  * Attribute metadata used for generated frontend-model JSDoc.
  * @typedef {object} FrontendAttributeConfig
@@ -47,6 +45,7 @@ const FRONTEND_MODELS_REGENERATE_COMMAND = "velocious generate:frontend-models"
  * @property {string | null} sourceFile - Source file that declared the method.
  * @property {string} type - JSDoc parameter type.
  */
+const FRONTEND_MODELS_REGENERATE_COMMAND = "velocious generate:frontend-models"
 
 /** Node CLI command that generates frontend model classes from backend project resource config. */
 export default class DbGenerateFrontendModels extends BaseCommand {
