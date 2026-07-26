@@ -1,17 +1,11 @@
-// @ts-check
-
-const CONFLICT_STRATEGIES = new Set(["optimisticVersion", "serverWins", "lastWriterWins", "fieldThreeWay", "appendOnly"])
-
 /**
  * @typedef {null | string | number | boolean | unknown[] | Record<string, unknown>} SyncJsonValue
  */
-
 /**
  * @typedef {object} SyncConflictRecord
  * @property {Record<string, SyncJsonValue>} attributes - Record attributes.
  * @property {string | number | boolean | null} [version] - Record version value.
  */
-
 /**
  * @typedef {object} SyncConflictResult
  * @property {Record<string, SyncJsonValue>} [attributes] - Attributes to apply when replay may continue.
@@ -19,6 +13,9 @@ const CONFLICT_STRATEGIES = new Set(["optimisticVersion", "serverWins", "lastWri
  * @property {"applied" | "conflict" | "rejected"} status - Conflict decision.
  * @property {string} strategy - Strategy that produced the decision.
  */
+// @ts-check
+
+const CONFLICT_STRATEGIES = new Set(["optimisticVersion", "serverWins", "lastWriterWins", "fieldThreeWay", "appendOnly"])
 
 /**
  * Evaluates a replay mutation against server/base state using a sync conflict strategy.

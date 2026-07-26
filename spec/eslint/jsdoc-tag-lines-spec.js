@@ -1,7 +1,7 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
-import {Linter} from "eslint"
+import { describe, expect, it } from "../../src/testing/test.js"
+import { Linter } from "eslint"
 import jsdocTagLinesPlugin from "eslint-plugin-jsdoc-tag-lines"
 
 /**

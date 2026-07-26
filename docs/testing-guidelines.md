@@ -9,6 +9,20 @@
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
 - If test framework startup fails, backend server must still stop to avoid leaked open handles.
 
+## Request test database connections
+Request tests share only transaction-active, non-tenant database connections with
+in-process request handlers. Handlers can therefore see uncommitted test setup while
+transaction rollback still isolates and cleans up the test.
+
+Connection eligibility is evaluated when each request is dispatched. A `beforeEach`
+hook can start a transaction and issue an HTTP request in the same callback; the
+handler immediately reuses that active transaction.
+
+Request tests without an active transaction use independent pooled connections. This
+lets concurrency and locking tests opt out of transaction cleanup and exercise
+production-style connection behavior. Shared connection state is scoped to the test
+lifecycle and cleared around tests.
+
 ## Coverage focus for frontend models
 - Command URL mapping behavior
 - `findBy` and `findByOrFail` real HTTP flows

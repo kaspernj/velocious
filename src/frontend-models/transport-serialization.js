@@ -4,6 +4,16 @@ import {resolveFrontendModelClass} from "./model-registry.js"
 import isPlainObject from "../utils/plain-object.js"
 import {formatDateInTimeZone, validateTimeZone} from "../time-zone.js"
 
+/**
+ * Frontend model transport serialization options.
+ * @typedef {object} FrontendModelTransportSerializationOptions
+ * @property {string | undefined} [timeZone] - IANA timezone used when serializing Date instants.
+ */
+/**
+ * Normalized frontend model transport serialization options.
+ * @typedef {object} NormalizedFrontendModelTransportSerializationOptions
+ * @property {string | undefined} timeZone - Validated IANA timezone used when serializing Date instants.
+ */
 const TYPE_KEY = "__velocious_type"
 const TYPE_DATE = "date"
 const TYPE_UNDEFINED = "undefined"
@@ -14,18 +24,6 @@ const NUMBER_NAN = "NaN"
 const NUMBER_POSITIVE_INFINITY = "Infinity"
 const NUMBER_NEGATIVE_INFINITY = "-Infinity"
 const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
-
-/**
- * Frontend model transport serialization options.
- * @typedef {object} FrontendModelTransportSerializationOptions
- * @property {string | undefined} [timeZone] - IANA timezone used when serializing Date instants.
- */
-
-/**
- * Normalized frontend model transport serialization options.
- * @typedef {object} NormalizedFrontendModelTransportSerializationOptions
- * @property {string | undefined} timeZone - Validated IANA timezone used when serializing Date instants.
- */
 
 /**
  * Assign a key to a plain object without triggering the `__proto__` setter.

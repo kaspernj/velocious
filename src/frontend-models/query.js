@@ -5,28 +5,6 @@ import {normalizeRansackGroup, parseRansackSort} from "../utils/ransack.js"
 import {isModelScopeDescriptor} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
 
-/** Error raised when a frontend-model query descriptor is malformed. */
-export class FrontendModelQueryError extends Error {
-  /**
-   * Creates a frontend-model query error.
-   * @param {string} message - Error message.
-   */
-  constructor(message) {
-    super(message)
-
-    this.name = "FrontendModelQueryError"
-  }
-}
-
-/**
- * Builds a query descriptor error.
- * @param {string} message - Error message.
- * @returns {FrontendModelQueryError} - Query descriptor error.
- */
-function frontendModelQueryError(message) {
-  return new FrontendModelQueryError(message)
-}
-
 /**
  * FrontendModelSearch type.
  * @typedef {object} FrontendModelSearch
@@ -97,6 +75,46 @@ function frontendModelQueryError(message) {
  * @property {FrontendModelEventFilterPayload | null} eventFilterPayload - Normalized event filter payload, or null when unfiltered.
  * @property {FrontendModelProjectionPayload} projectionPayload - Normalized event serialization projection payload.
  */
+/**
+ * FrontendModelSort type.
+ * @typedef {object} FrontendModelSort
+ * @property {string} column - Attribute name to sort by.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ * @property {string[]} path - Relationship path from root model.
+ */
+/**
+ * FrontendModelGroup type.
+ * @typedef {object} FrontendModelGroup
+ * @property {string} column - Attribute name to group by.
+ * @property {string[]} path - Relationship path from root model.
+ */
+/**
+ * FrontendModelPluck type.
+ * @typedef {object} FrontendModelPluck
+ * @property {string} column - Attribute name to pluck.
+ * @property {string[]} path - Relationship path from root model.
+ */
+/** Error raised when a frontend-model query descriptor is malformed. */
+export class FrontendModelQueryError extends Error {
+  /**
+   * Creates a frontend-model query error.
+   * @param {string} message - Error message.
+   */
+  constructor(message) {
+    super(message)
+
+    this.name = "FrontendModelQueryError"
+  }
+}
+
+/**
+ * Builds a query descriptor error.
+ * @param {string} message - Error message.
+ * @returns {FrontendModelQueryError} - Query descriptor error.
+ */
+function frontendModelQueryError(message) {
+  return new FrontendModelQueryError(message)
+}
 
 /**
  * Runs the normalizePreload helper.
@@ -489,28 +507,6 @@ export function normalizeJoins(joins) {
 
   return normalized
 }
-
-/**
- * FrontendModelSort type.
- * @typedef {object} FrontendModelSort
- * @property {string} column - Attribute name to sort by.
- * @property {"asc" | "desc"} direction - Sort direction.
- * @property {string[]} path - Relationship path from root model.
- */
-
-/**
- * FrontendModelGroup type.
- * @typedef {object} FrontendModelGroup
- * @property {string} column - Attribute name to group by.
- * @property {string[]} path - Relationship path from root model.
- */
-
-/**
- * FrontendModelPluck type.
- * @typedef {object} FrontendModelPluck
- * @property {string} column - Attribute name to pluck.
- * @property {string[]} path - Relationship path from root model.
- */
 
 /**
  * Runs normalize sort direction.

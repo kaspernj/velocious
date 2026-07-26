@@ -1,8 +1,3 @@
-// @ts-check
-
-const OFFLINE_GRANT_SIGNATURE_ALGORITHM = "HS256"
-const OFFLINE_GRANT_SIGNATURE_PREFIX = "hmac-sha256-"
-
 /**
  * Signed offline grant envelope.
  * @typedef {object} SignedOfflineGrant
@@ -11,7 +6,6 @@ const OFFLINE_GRANT_SIGNATURE_PREFIX = "hmac-sha256-"
  * @property {string} keyId - Signing key id.
  * @property {string} signature - Hex HMAC signature with a hmac-sha256 prefix.
  */
-
 /**
  * Backend-issued offline grant payload.
  * @typedef {object} OfflineGrant
@@ -23,7 +17,6 @@ const OFFLINE_GRANT_SIGNATURE_PREFIX = "hmac-sha256-"
  * @property {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} scopes - Materialized grant scopes.
  * @property {string} userId - Actor user id allowed to use the grant.
  */
-
 /**
  * Offline grant signing key.
  * @typedef {object} OfflineGrantSigningKey
@@ -31,6 +24,10 @@ const OFFLINE_GRANT_SIGNATURE_PREFIX = "hmac-sha256-"
  * @property {string} id - Public key id included in signed grant envelopes.
  * @property {string} secret - Private HMAC secret. Never expose this to clients.
  */
+// @ts-check
+
+const OFFLINE_GRANT_SIGNATURE_ALGORITHM = "HS256"
+const OFFLINE_GRANT_SIGNATURE_PREFIX = "hmac-sha256-"
 
 /**
  * Creates a signed offline grant envelope.

@@ -2,9 +2,6 @@
 
 import {createSignedMutation, mutationIdempotencyKey, verifySignedMutation} from "./device-identity.js"
 
-const PEER_MUTATION_BUNDLE_FORMAT = "velocious.sync.peer-mutation-bundle.v1"
-const EXPORTABLE_STATUSES = new Set(["pending", "applied-locally", "conflict"])
-
 /**
  * Peer mutation bundle exported by a device for offline/P2P transfer.
  * @typedef {object} PeerMutationBundle
@@ -12,7 +9,6 @@ const EXPORTABLE_STATUSES = new Set(["pending", "applied-locally", "conflict"])
  * @property {"velocious.sync.peer-mutation-bundle.v1"} format - Bundle format identifier.
  * @property {PeerMutationBundleEntry[]} mutations - Signed mutations in local sequence order.
  */
-
 /**
  * One peer mutation bundle entry.
  * @typedef {object} PeerMutationBundleEntry
@@ -20,6 +16,8 @@ const EXPORTABLE_STATUSES = new Set(["pending", "applied-locally", "conflict"])
  * @property {number} [localSequence] - Exporting device's local mutation sequence.
  * @property {import("./device-identity.js").SignedSyncMutation} signedMutation - Device-signed mutation envelope.
  */
+const PEER_MUTATION_BUNDLE_FORMAT = "velocious.sync.peer-mutation-bundle.v1"
+const EXPORTABLE_STATUSES = new Set(["pending", "applied-locally", "conflict"])
 
 /**
  * Exports local non-terminal mutations as a signed peer-transfer bundle.

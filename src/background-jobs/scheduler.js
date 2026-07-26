@@ -3,6 +3,9 @@
 import Logger from "../logger.js"
 import {nextCronFireDate, parseCronExpression} from "./cron-expression.js"
 
+/**
+ * DurationUnit type.
+ * @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
 const DURATION_MULTIPLIERS = {
   d: 24 * 60 * 60 * 1000,
   day: 24 * 60 * 60 * 1000,
@@ -21,9 +24,6 @@ const DURATION_MULTIPLIERS = {
   week: 7 * 24 * 60 * 60 * 1000,
   weeks: 7 * 24 * 60 * 60 * 1000
 }
-/**
- * DurationUnit type.
- * @typedef {keyof typeof DURATION_MULTIPLIERS} DurationUnit */
 
 /**
  * Runs the parseScheduledDuration helper.

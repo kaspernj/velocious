@@ -1,3 +1,11 @@
+/**
+ * ParsedStackFrame type.
+ * @typedef {object} ParsedStackFrame
+ * @property {string | undefined} methodName - Method/function name from the stack frame.
+ * @property {string} sourcePath - File or URL path from the stack frame.
+ * @property {number} lineNumber - Source line number.
+ * @property {number | undefined} columnNumber - Source column number.
+ */
 // @ts-check
 
 /**
@@ -8,15 +16,6 @@
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
-
-/**
- * ParsedStackFrame type.
- * @typedef {object} ParsedStackFrame
- * @property {string | undefined} methodName - Method/function name from the stack frame.
- * @property {string} sourcePath - File or URL path from the stack frame.
- * @property {number} lineNumber - Source line number.
- * @property {number | undefined} columnNumber - Source column number.
- */
 
 /**
  * Runs normalize path.

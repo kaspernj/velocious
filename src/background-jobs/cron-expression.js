@@ -1,3 +1,15 @@
+/**
+ * ParsedCron type.
+ * @typedef {object} ParsedCron
+ * @property {Set<number>} minute - Allowed minute values (0-59).
+ * @property {Set<number>} hour - Allowed hour values (0-23).
+ * @property {Set<number>} dayOfMonth - Allowed day-of-month values (1-31).
+ * @property {Set<number>} month - Allowed month values (1-12).
+ * @property {Set<number>} dayOfWeek - Allowed day-of-week values (0-6, 0=Sun).
+ * @property {boolean} dayOfMonthRestricted - True when the dayOfMonth field is not `?`.
+ * @property {boolean} dayOfWeekRestricted - True when the dayOfWeek field is not `?`.
+ * @property {string} expression - Original expression for diagnostics.
+ */
 // @ts-check
 
 /**
@@ -35,19 +47,6 @@ const FIELDS = [
   // down to 0 after parsing in `normalizeDayOfWeek` below.
   {name: "dayOfWeek", min: 0, max: 7, names: DAY_NAMES}
 ]
-
-/**
- * ParsedCron type.
- * @typedef {object} ParsedCron
- * @property {Set<number>} minute - Allowed minute values (0-59).
- * @property {Set<number>} hour - Allowed hour values (0-23).
- * @property {Set<number>} dayOfMonth - Allowed day-of-month values (1-31).
- * @property {Set<number>} month - Allowed month values (1-12).
- * @property {Set<number>} dayOfWeek - Allowed day-of-week values (0-6, 0=Sun).
- * @property {boolean} dayOfMonthRestricted - True when the dayOfMonth field is not `?`.
- * @property {boolean} dayOfWeekRestricted - True when the dayOfWeek field is not `?`.
- * @property {string} expression - Original expression for diagnostics.
- */
 
 /**
  * Runs the parseCronExpression helper.

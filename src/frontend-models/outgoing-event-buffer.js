@@ -1,13 +1,12 @@
-// @ts-check
-
-const MAX_BUFFERED_OUTGOING_EVENTS = 50
-
 /**
  * BufferedOutgoingEvent type.
  * @typedef {object} BufferedOutgoingEvent
  * @property {string} customPath - Request path.
  * @property {Record<string, ?>} payload - Command payload.
  */
+// @ts-check
+
+const MAX_BUFFERED_OUTGOING_EVENTS = 50
 
 /**
  * Buffer.

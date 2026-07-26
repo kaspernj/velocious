@@ -4,14 +4,16 @@ import Configuration from "../../configuration.js"
 import Logger from "../../logger.js"
 import baseMethodsForward from "./base-methods-forward.js"
 
-export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
+/**
+ * Opaque ownership handle for an in-process test shared connection registration.
+ * @typedef {{owner: symbol}} TestSharedConnectionRegistration
+ */
 
 /**
  * ConnectionCheckoutOptions type.
  * @typedef {object} ConnectionCheckoutOptions
  * @property {string} [name] - Human-readable name for the checked-out connection.
  */
-
 /**
  * DatabasePoolPendingCheckoutDebugSnapshot type.
  * @typedef {object} DatabasePoolPendingCheckoutDebugSnapshot
@@ -24,7 +26,6 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {number | null} timeoutMillis - Timeout configured for the checkout, or null when disabled.
  * @property {number} waitingForMs - Milliseconds already spent waiting.
  */
-
 /**
  * DatabasePoolDebugSnapshot type.
  * @typedef {object} DatabasePoolDebugSnapshot
@@ -38,6 +39,7 @@ export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
  * @property {string} poolClass - Pool class name.
  */
+export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 
 /**
  * Shared.
@@ -149,15 +151,29 @@ class VelociousDatabasePoolBase {
    * pin (used by the test runner to share one connection with in-process HTTP handlers).
    * Base pools that do not track async context ignore it; async-context pools override.
    * @param {import("../drivers/base.js").default} _connection - Shared connection.
-   * @returns {void}
+   * @returns {TestSharedConnectionRegistration | undefined} - Opaque registration handle when supported.
    */
-  setTestSharedConnection(_connection) {}
+  setTestSharedConnection(_connection) {
+    return undefined
+  }
 
   /**
-   * Clears the shared connection set by {@link setTestSharedConnection}. No-op by default.
+   * Sets a provider that resolves the connection eligible for in-process test request sharing.
+   * Base pools that do not track async context ignore it; async-context pools override.
+   * @param {() => import("../drivers/base.js").default | undefined} _provider - Shared connection provider.
+   * @returns {TestSharedConnectionRegistration | undefined} - Opaque registration handle when supported.
+   */
+  setTestSharedConnectionProvider(_provider) {
+    return undefined
+  }
+
+  /**
+   * Clears the shared connection or provider set for in-process test requests. No-op by default.
+   * When a registration is provided, clears only if it is still the active registration.
+   * @param {TestSharedConnectionRegistration} [_registration] - Opaque handle returned when the shared value was set.
    * @returns {void}
    */
-  clearTestSharedConnection() {}
+  clearTestSharedConnection(_registration) {}
 
   /**
    * Runs a callback inside the test shared connection's context. Base pools that do not

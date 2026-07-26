@@ -4,11 +4,6 @@ import {randomUUID} from "crypto"
 import TableData from "../database/table-data/index.js"
 import Logger from "../logger.js"
 
-const EVENTS_TABLE = "websocket_channel_events"
-const REPLAY_CHANNELS_TABLE = "websocket_replay_channels"
-const DEFAULT_RETENTION_MS = 10 * 60 * 1000
-const stores = new WeakMap()
-
 /**
  * WebsocketEventRow type.
  * @typedef {object} WebsocketEventRow
@@ -18,12 +13,15 @@ const stores = new WeakMap()
  * @property {string} payload_json - Serialized payload.
  * @property {number | string} sequence - Sequence number.
  */
-
 /**
  * WebsocketReplayChannelRow type.
  * @typedef {object} WebsocketReplayChannelRow
  * @property {string} channel - Channel name.
  */
+const EVENTS_TABLE = "websocket_channel_events"
+const REPLAY_CHANNELS_TABLE = "websocket_replay_channels"
+const DEFAULT_RETENTION_MS = 10 * 60 * 1000
+const stores = new WeakMap()
 
 /**
  * Runs the websocketEventLogStoreForConfiguration helper.

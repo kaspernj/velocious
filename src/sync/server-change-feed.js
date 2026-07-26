@@ -4,6 +4,38 @@ import {randomUUID} from "crypto"
 import TableData from "../database/table-data/index.js"
 import stableJsonStringify from "./stable-json.js"
 
+/**
+ * @typedef {object} ServerChangeFeedEntry
+ * @property {string | null} actorDeviceId - Signed mutation actor device id when available.
+ * @property {string | null} actorUserId - Signed mutation actor user id when available.
+ * @property {Record<string, ?> | null} attributes - Serialized mutation attributes.
+ * @property {string} createdAt - Server change creation timestamp.
+ * @property {string} id - Server change id.
+ * @property {string | null} idempotencyKey - Mutation idempotency key when available.
+ * @property {string} model - Frontend model name.
+ * @property {string} operation - Mutation operation.
+ * @property {Record<string, ?> | null} payload - Serialized mutation payload.
+ * @property {string | null} recordId - Changed record id when known.
+ * @property {Record<string, ?> | null} response - Command response payload.
+ * @property {Record<string, ?> | null} scope - Offline grant scope.
+ * @property {number} serverSequence - Monotonic server sequence.
+ */
+/**
+ * @typedef {object} ServerChangeFeedRow
+ * @property {string | null} actor_device_id - Actor device id.
+ * @property {string | null} actor_user_id - Actor user id.
+ * @property {string | null} attributes_json - Attributes JSON.
+ * @property {Date | string} created_at - Creation time.
+ * @property {string} id - Entry id.
+ * @property {string | null} idempotency_key - Mutation idempotency key.
+ * @property {string} model - Frontend model name.
+ * @property {string} operation - Mutation operation.
+ * @property {string | null} payload_json - Mutation payload JSON.
+ * @property {string | null} record_id - Record id.
+ * @property {string | null} response_json - Response JSON.
+ * @property {string | null} scope_json - Scope JSON.
+ * @property {number | string} server_sequence - Server sequence.
+ */
 const DEFAULT_RETENTION_SIZE = 10000
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 1000
@@ -464,37 +496,3 @@ function scopesEqual(changeScope, requestedScope) {
 
   return stableJsonStringify(changeScope || null) === stableJsonStringify(requestedScope)
 }
-
-/**
- * @typedef {object} ServerChangeFeedEntry
- * @property {string | null} actorDeviceId - Signed mutation actor device id when available.
- * @property {string | null} actorUserId - Signed mutation actor user id when available.
- * @property {Record<string, ?> | null} attributes - Serialized mutation attributes.
- * @property {string} createdAt - Server change creation timestamp.
- * @property {string} id - Server change id.
- * @property {string | null} idempotencyKey - Mutation idempotency key when available.
- * @property {string} model - Frontend model name.
- * @property {string} operation - Mutation operation.
- * @property {Record<string, ?> | null} payload - Serialized mutation payload.
- * @property {string | null} recordId - Changed record id when known.
- * @property {Record<string, ?> | null} response - Command response payload.
- * @property {Record<string, ?> | null} scope - Offline grant scope.
- * @property {number} serverSequence - Monotonic server sequence.
- */
-
-/**
- * @typedef {object} ServerChangeFeedRow
- * @property {string | null} actor_device_id - Actor device id.
- * @property {string | null} actor_user_id - Actor user id.
- * @property {string | null} attributes_json - Attributes JSON.
- * @property {Date | string} created_at - Creation time.
- * @property {string} id - Entry id.
- * @property {string | null} idempotency_key - Mutation idempotency key.
- * @property {string} model - Frontend model name.
- * @property {string} operation - Mutation operation.
- * @property {string | null} payload_json - Mutation payload JSON.
- * @property {string | null} record_id - Record id.
- * @property {string | null} response_json - Response JSON.
- * @property {string | null} scope_json - Scope JSON.
- * @property {number | string} server_sequence - Server sequence.
- */

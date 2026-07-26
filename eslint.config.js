@@ -1,9 +1,10 @@
 import js from "@eslint/js"
-import {jsdoc} from 'eslint-plugin-jsdoc'
+import { jsdoc } from "eslint-plugin-jsdoc"
 import jsdocInlineTypeCastsPlugin from "eslint-plugin-jsdoc-inline-type-casts"
 import jsdocTagLinesPlugin from "eslint-plugin-jsdoc-tag-lines"
 import globals from "globals"
-import {defineConfig} from "eslint/config"
+import { defineConfig } from "eslint/config"
+import typedefsFirstRule from "./scripts/eslint-rules/typedefs-first.js"
 
 export default defineConfig([
   {
@@ -12,13 +13,18 @@ export default defineConfig([
   },
   {
     files: ["**/*.{js,mjs,cjs}"],
-    plugins: {js, "jsdoc-inline-type-casts": jsdocInlineTypeCastsPlugin},
+    plugins: {
+      js,
+      "jsdoc-inline-type-casts": jsdocInlineTypeCastsPlugin,
+      local: {rules: {"typedefs-first": typedefsFirstRule}}
+    },
     extends: ["js/recommended"],
     languageOptions: {
       globals: {...globals.browser, ...globals.node}
     },
     rules: {
       "jsdoc-inline-type-casts/jsdoc-inline-type-casts": "error",
+      "local/typedefs-first": "error",
       "no-unused-vars": ["error", {argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_"}]
     }
   },

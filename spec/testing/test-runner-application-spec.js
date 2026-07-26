@@ -1,6 +1,6 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
+import { describe, expect, it } from "../../src/testing/test.js"
 import InProcessHandler from "../../src/http-server/worker-handler/in-process.js"
 
 describe("TestRunner application", {type: "request"}, () => {

@@ -3,6 +3,15 @@
 import UploadedFile from "../../../http-server/client/uploaded-file/uploaded-file.js"
 
 /**
+ * NormalizedAttachmentInput type.
+ * @typedef {object} NormalizedAttachmentInput
+ * @property {number} byteSize - File size in bytes.
+ * @property {Buffer} contentBuffer - Raw content bytes.
+ * @property {string} contentBase64 - Base64 encoded content.
+ * @property {string | null} contentType - Content type.
+ * @property {string} filename - Filename.
+ */
+/**
  * Runs base name.
  * @param {string} value - Path-like value.
  * @returns {string} - Basename-like filename.
@@ -95,16 +104,6 @@ async function uploadedFileBuffer(uploadedFile, environmentHandler) {
 
   throw new Error("Unsupported uploaded file type")
 }
-
-/**
- * NormalizedAttachmentInput type.
- * @typedef {object} NormalizedAttachmentInput
- * @property {number} byteSize - File size in bytes.
- * @property {Buffer} contentBuffer - Raw content bytes.
- * @property {string} contentBase64 - Base64 encoded content.
- * @property {string | null} contentType - Content type.
- * @property {string} filename - Filename.
- */
 
 /**
  * Runs normalize record attachment input.

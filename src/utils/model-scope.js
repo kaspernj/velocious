@@ -1,7 +1,3 @@
-// @ts-check
-
-const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
-
 /**
  * ModelScopeDescriptor type.
  * @typedef {object} ModelScopeDescriptor
@@ -10,6 +6,9 @@ const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
  * @property {typeof import("../database/record/index.js").default | import("../frontend-models/base.js").FrontendModelClass} modelClass - Owning model class.
  * @property {Array<?>} scopeArgs - Scope arguments.
  */
+// @ts-check
+
+const MODEL_SCOPE_DESCRIPTOR_MARKER = "velociousModelScopeDescriptor"
 
 /**
  * Runs the defineModelScope helper.

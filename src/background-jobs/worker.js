@@ -10,6 +10,14 @@ import {randomUUID} from "crypto"
 import {fileURLToPath} from "node:url"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 
+/**
+ * Per-forked-child timeout bookkeeping.
+ * @typedef {object} ForkedJobTimeoutState
+ * @property {boolean} timedOut - Whether the timeout fired and the child was terminated.
+ * @property {number | null} timeoutMs - The armed timeout in ms, or null when disabled.
+ * @property {ReturnType<typeof setTimeout> | null} timer - The pending timeout timer, cleared on exit.
+ * @property {ReturnType<typeof setTimeout> | null} sigkillTimer - The pending SIGKILL grace timer, cleared on exit.
+ */
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 /**
@@ -47,15 +55,6 @@ function positiveInteger(value) {
 function positiveNumber(value) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined
 }
-
-/**
- * Per-forked-child timeout bookkeeping.
- * @typedef {object} ForkedJobTimeoutState
- * @property {boolean} timedOut - Whether the timeout fired and the child was terminated.
- * @property {number | null} timeoutMs - The armed timeout in ms, or null when disabled.
- * @property {ReturnType<typeof setTimeout> | null} timer - The pending timeout timer, cleared on exit.
- * @property {ReturnType<typeof setTimeout> | null} sigkillTimer - The pending SIGKILL grace timer, cleared on exit.
- */
 
 export default class BackgroundJobsWorker {
   /**

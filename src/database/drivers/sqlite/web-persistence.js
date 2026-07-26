@@ -2,9 +2,6 @@
 
 import BetterLocalStorage from "better-localstorage"
 
-const SUPPORT_CHECK_FILE = ".velocious-opfs-support-check"
-const SUPPORT_CHECK_BYTES = new Uint8Array([118, 101, 108, 111, 99, 105, 111, 117, 115])
-
 /**
  * SQLite web persistence adapter.
  * @typedef {object} SqliteWebPersistence
@@ -13,13 +10,14 @@ const SUPPORT_CHECK_BYTES = new Uint8Array([118, 101, 108, 111, 99, 105, 111, 11
  * @property {() => Promise<Uint8Array | undefined>} load - Loads persisted database bytes.
  * @property {(content: Uint8Array) => Promise<void>} save - Saves persisted database bytes.
  */
-
 /**
  * Browser-like environment used for web persistence detection.
  * @typedef {object} SqliteWebPersistenceEnvironment
  * @property {unknown} [indexedDB] - IndexedDB global.
  * @property {unknown} [navigator] - Navigator global.
  */
+const SUPPORT_CHECK_FILE = ".velocious-opfs-support-check"
+const SUPPORT_CHECK_BYTES = new Uint8Array([118, 101, 108, 111, 99, 105, 111, 117, 115])
 
 /**
  * Creates the best SQLite web persistence adapter supported by the current browser.
@@ -296,7 +294,6 @@ class LocalStoragePersistence {
     return this.storage
   }
 }
-
 
 /**
  * Selects the preferred available SQLite web persistence backend.
