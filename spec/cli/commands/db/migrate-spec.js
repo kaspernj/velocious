@@ -78,6 +78,7 @@ describe("Cli - Commands - db:migrate", () => {
         "sync_entries",
         "tasks",
         "users",
+        "uuid_acts_as_list_items",
         "uuid_default_test",
         "uuid_interactions",
         "uuid_items"
@@ -201,6 +202,7 @@ describe("Cli - Commands - db:migrate", () => {
           "sync_entries",
           "tasks",
           "users",
+          "uuid_acts_as_list_items",
           "uuid_interactions",
           "uuid_items"
         ]
@@ -226,7 +228,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20260601052206",
         "20260629160000",
         "20260702150000",
-        "20260706120000"
+        "20260706120000",
+        "20260726132000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
@@ -249,6 +252,7 @@ describe("Cli - Commands - db:migrate", () => {
           "sync_entries",
           "tasks",
           "users",
+          "uuid_acts_as_list_items",
           "uuid_interactions",
           "uuid_items"
         ]
@@ -274,7 +278,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20260601052206",
         "20260629160000",
         "20260702150000",
-        "20260706120000"
+        "20260706120000",
+        "20260726132000"
       ])
     }
   })
