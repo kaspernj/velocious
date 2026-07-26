@@ -2,16 +2,117 @@
 
 import ActsAsListItem from "../../dummy/src/models/acts-as-list-item.js"
 import Project from "../../dummy/src/models/project.js"
+import UuidActsAsListItem from "../../dummy/src/models/uuid-acts-as-list-item.js"
 
 describe("Record - acts as list", {tags: ["dummy"]}, () => {
+  it("reorders and moves UUID-primary-key records", async () => {
+    const first = await UuidActsAsListItem.create({name: "First", scopeId: 1})
+    await UuidActsAsListItem.create({name: "Second", scopeId: 1})
+    const third = await UuidActsAsListItem.create({name: "Third", scopeId: 1})
+    await UuidActsAsListItem.create({name: "Other scope", scopeId: 2})
+
+    await third.update({position: 1})
+    await first.update({position: 1, scopeId: 2})
+
+    const firstScope = await UuidActsAsListItem
+      .where({scopeId: 1})
+      .order("position")
+      .toArray()
+    const secondScope = await UuidActsAsListItem
+      .where({scopeId: 2})
+      .order("position")
+      .toArray()
+
+    expect(firstScope.map((item) => item.name())).toEqual(["Third", "Second"])
+    expect(firstScope.map((item) => item.position())).toEqual([1, 2])
+    expect(secondScope.map((item) => item.name())).toEqual(["First", "Other scope"])
+    expect(secondScope.map((item) => item.position())).toEqual([1, 2])
+  })
+
   it("auto-appends to the end of the list when position is omitted", async () => {
     const project = await Project.create({name: "List Project A"})
 
     const item1 = await ActsAsListItem.create({name: "First", project})
-    const item2 = await ActsAsListItem.create({name: "Second", project})
+    const item2 = await ActsAsListItem.create({name: "Second", position: null, project})
 
     expect(item1.position()).toEqual(1)
     expect(item2.position()).toEqual(2)
+  })
+
+  it("rejects non-positive positions on create and update without shifting rows", async () => {
+    const project = await Project.create({name: "List Project Positive Positions"})
+    const first = await ActsAsListItem.create({name: "First", project})
+    const second = await ActsAsListItem.create({name: "Second", project})
+
+    for (const position of [0, -1]) {
+      await expect(async () => {
+        await ActsAsListItem.create({name: `Invalid ${position}`, project, position})
+      }).toThrowError("Requested actsAsList position must be a positive integer")
+
+      await expect(async () => {
+        await second.update({position})
+      }).toThrowError("Requested actsAsList position must be a positive integer")
+    }
+
+    await expect(async () => {
+      await second.update({position: null})
+    }).toThrowError("Requested actsAsList position must be a positive integer")
+
+    const allItems = await ActsAsListItem
+      .where({projectId: project.id()})
+      .order("position")
+      .toArray()
+
+    expect(allItems.map((item) => item.id())).toEqual([first.id(), second.id()])
+    expect(allItems.map((item) => item.position())).toEqual([1, 2])
+  })
+
+  it("fails closed when moving a row with a corrupted persisted zero position", async () => {
+    const project = await Project.create({name: "List Project Corrupt Zero"})
+    const corrupted = await ActsAsListItem.create({name: "Corrupted", project})
+    const second = await ActsAsListItem.create({name: "Second", project})
+    const connection = ActsAsListItem.connection()
+
+    await connection.query(
+      `UPDATE ${connection.quoteTable("acts_as_list_items")} SET ${connection.quoteColumn("position")} = 0 WHERE ${connection.quoteColumn("id")} = ${connection.quote(corrupted.id())}`
+    )
+    await corrupted.reload()
+
+    await expect(async () => {
+      await corrupted.update({position: 2})
+    }).toThrowError("Persisted actsAsList position must be a positive integer")
+
+    const allItems = await ActsAsListItem
+      .where({projectId: project.id()})
+      .order("position")
+      .toArray()
+
+    expect(allItems.map((item) => item.id())).toEqual([corrupted.id(), second.id()])
+    expect(allItems.map((item) => item.position())).toEqual([0, 2])
+  })
+
+  it("fails closed when destroying a row with a corrupted persisted negative position", async () => {
+    const project = await Project.create({name: "List Project Corrupt Negative"})
+    const corrupted = await ActsAsListItem.create({name: "Corrupted", project})
+    const second = await ActsAsListItem.create({name: "Second", project})
+    const connection = ActsAsListItem.connection()
+
+    await connection.query(
+      `UPDATE ${connection.quoteTable("acts_as_list_items")} SET ${connection.quoteColumn("position")} = -1 WHERE ${connection.quoteColumn("id")} = ${connection.quote(corrupted.id())}`
+    )
+    await corrupted.reload()
+
+    await expect(async () => {
+      await corrupted.destroy()
+    }).toThrowError("Persisted actsAsList position must be a positive integer")
+
+    const allItems = await ActsAsListItem
+      .where({projectId: project.id()})
+      .order("position")
+      .toArray()
+
+    expect(allItems.map((item) => item.id())).toEqual([corrupted.id(), second.id()])
+    expect(allItems.map((item) => item.position())).toEqual([-1, 2])
   })
 
   it("auto-appends independently within different scopes", async () => {
