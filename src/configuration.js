@@ -114,6 +114,8 @@ function resolveBeaconUnreachableReportMs(value) {
   return 30_000
 }
 
+const DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_BYTES = 16 * 1024 * 1024
+const DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES = 256
 const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_BYTES = 16 * 1024 * 1024
 const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_FRAMES = 256
 
@@ -228,10 +230,15 @@ export default class VelociousConfiguration {
      * @type {Promise<void> | undefined}
      */
     this._initializePromise = undefined
+    const websocketInboundQueue = httpServer?.websocketInboundQueue
     const websocketOutboundQueue = httpServer?.websocketOutboundQueue
 
     this.httpServer = {
       ...(httpServer || {}),
+      websocketInboundQueue: {
+        maxPendingBytes: positiveSafeInteger(websocketInboundQueue?.maxPendingBytes, "httpServer.websocketInboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_BYTES),
+        maxPendingMessages: positiveSafeInteger(websocketInboundQueue?.maxPendingMessages, "httpServer.websocketInboundQueue.maxPendingMessages", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES)
+      },
       websocketOutboundQueue: {
         maxPendingBytes: positiveSafeInteger(websocketOutboundQueue?.maxPendingBytes, "httpServer.websocketOutboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_BYTES),
         maxPendingFrames: positiveSafeInteger(websocketOutboundQueue?.maxPendingFrames, "httpServer.websocketOutboundQueue.maxPendingFrames", DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_FRAMES)
@@ -2369,6 +2376,19 @@ export default class VelociousConfiguration {
    * @returns {number} - Interval (seconds) between server→client heartbeat pings; 0 disables reaping.
    */
   getWebsocketSessionHeartbeatSeconds() { return this._websocketSessionHeartbeatSeconds }
+
+  /**
+   * Gets per-session WebSocket inbound message queue limits.
+   * @returns {{maxBytes: number, maxMessages: number}} - Per-session inbound queue high-water marks.
+   */
+  getWebsocketInboundQueueLimits() {
+    const queue = this.httpServer.websocketInboundQueue
+
+    return {
+      maxBytes: queue.maxPendingBytes,
+      maxMessages: queue.maxPendingMessages
+    }
+  }
 
   /**
    * Gets per-client WebSocket outbound queue limits.

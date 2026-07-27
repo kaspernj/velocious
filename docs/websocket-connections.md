@@ -10,14 +10,20 @@ All messages are JSON objects sent over the shared WebSocket. Connection-related
 
 Velocious buffers TCP-fragmented WebSocket input as chunks and assembles each frame once it is complete. A single final client data frame is limited to 16 MiB, matching the existing cap for a fragmented message; a frame declaring a larger payload is rejected before its payload is buffered. Applications that need to send more data should split it at the application level.
 
+Decoded client messages are also bounded per session before they enter authorization, request handling, or the serialized FIFO. By default, the active message plus queued messages retain at most 256 messages or 16 MiB of raw UTF-8 text payload. Exact boundaries are accepted. A next message that would exceed either limit is not decoded or queued; Velocious permanently closes that session with WebSocket status `1008` and reason `Inbound message backlog exceeded`. Previously accepted messages never overtake one another, and a rejected handler does not poison later FIFO work.
+
 Server-to-client frames are also bounded per live client. The delivery queue retains at most 256 complete frames or 16 MiB by default, including the frame currently waiting for its socket write callback. FIFO order is exact while both limits are respected. If either next-frame admission would exceed its high-water mark, Velocious reports a `framework-error` and `all-error` with `context.websocketOutboundQueueOverflow === true`, then destroys only that client. It does not silently discard or coalesce protocol events.
 
-Configure both positive safe-integer limits at the configuration boundary:
+Configure inbound and outbound positive safe-integer limits at the configuration boundary:
 
 ```js
 const configuration = new Configuration({
   // ...
   httpServer: {
+    websocketInboundQueue: {
+      maxPendingMessages: 128,
+      maxPendingBytes: 8 * 1024 * 1024
+    },
     websocketOutboundQueue: {
       maxPendingFrames: 128,
       maxPendingBytes: 8 * 1024 * 1024
@@ -26,7 +32,9 @@ const configuration = new Configuration({
 })
 ```
 
-Byte accounting uses serialized output bytes, not JavaScript string length. Only completed WebSocket frame emissions consume the frame and byte limits; the HTTP 101 upgrade response and ordinary HTTP/file output remain ordering-only operations outside that budget. Queued and in-flight frame buffers remain charged until the socket callback settles; socket close, error, or overflow teardown explicitly releases the queue. Limits are per client, so a stalled consumer cannot consume another client's allowance.
+Inbound byte accounting uses the complete raw text-message payload bytes, not JavaScript string length or reserialized JSON. Binary and control frames do not enter the decoded-message backlog. Invalid JSON releases its tentative admission immediately. Active and queued messages remain charged until dispatch settles; close, error, grace expiry, and overload abandon the queue. Inbound overload is an expected peer-triggered protocol condition, so it is logged and closed without emitting framework error events. Unexpected errors caught while dispatching decoded messages, including resolver-queued built-in and connection handlers, are emitted once as `framework-error` and matching `all-error` events with WebSocket dispatch context. Expected client-flow and malformed peer-message errors are not emitted.
+
+Outbound byte accounting uses serialized output bytes, not JavaScript string length. Only completed WebSocket frame emissions consume the frame and byte limits; the HTTP 101 upgrade response and ordinary HTTP/file output remain ordering-only operations outside that budget. Queued and in-flight frame buffers remain charged until the socket callback settles; socket close, error, or overflow teardown explicitly releases the queue. Limits are per client or session, so a stalled peer cannot consume another peer's allowance.
 
 V2 channel broadcasts retain their originating configuration identity through host and worker fanout. Delivery and event-log persistence are therefore isolated to that configuration even when multiple applications with identical channel and subscription names share a process. The internal `websocketEventsHost.broadcastV2(...)` transport now requires its `configuration` argument; application-facing `configuration.broadcastToChannel(...)` is unchanged.
 

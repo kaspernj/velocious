@@ -255,6 +255,7 @@
  * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
  * @property {number} [maxWorkers] - Backward-compatible alias for workers.
  * @property {number} [port] - Port to bind the HTTP server to.
+ * @property {{maxPendingBytes?: number, maxPendingMessages?: number}} [websocketInboundQueue] - Per-session retained inbound WebSocket message limits.
  * @property {{maxPendingBytes?: number, maxPendingFrames?: number}} [websocketOutboundQueue] - Per-client retained outbound WebSocket frame limits.
  * @property {number} [workers] - Worker handlers to start for the HTTP server.
  */

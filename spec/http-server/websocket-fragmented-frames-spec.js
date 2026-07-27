@@ -4,23 +4,37 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import HttpServerClient from "../../src/http-server/client/index.js"
 import WebsocketSession from "../../src/http-server/client/websocket-session.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import {buildMaskedClientFrame as buildClientFrame} from "../helpers/websocket-frame.js"
 
 /**
  * Builds a session around the real HTTP server client contract.
  * @param {import("../../src/configuration-types.js").WebsocketMessageHandler} [messageHandler] - Message observer.
+ * @param {{maxPendingMessages?: number}} [options] - Session queue overrides.
  * @returns {{client: HttpServerClient, session: WebsocketSession}}
  */
-function buildSession(messageHandler) {
+function buildSession(messageHandler, {maxPendingMessages} = {}) {
   const client = new HttpServerClient({
     clientCount: 1,
     configuration: dummyConfiguration,
     remoteAddress: "127.0.0.1"
   })
-  const session = new WebsocketSession({
-    client,
-    configuration: dummyConfiguration,
-    messageHandler
-  })
+  const inboundQueue = dummyConfiguration.httpServer.websocketInboundQueue
+  const previousMaxPendingMessages = inboundQueue.maxPendingMessages
+  let session
+
+  if (maxPendingMessages !== undefined) {
+    inboundQueue.maxPendingMessages = maxPendingMessages
+  }
+
+  try {
+    session = new WebsocketSession({
+      client,
+      configuration: dummyConfiguration,
+      messageHandler
+    })
+  } finally {
+    inboundQueue.maxPendingMessages = previousMaxPendingMessages
+  }
 
   return {client, session}
 }
@@ -63,42 +77,6 @@ function expectStringProperty(record, property) {
 
   if (typeof value !== "string") throw new Error(`Expected ${property} to be a string`)
   return value
-}
-
-/**
- * Builds a single client→server websocket frame with mandatory masking,
- * matching what a browser produces. Used to drive `_processBuffer` from
- * unit tests without going through a real socket.
- * @param {{fin: boolean, opcode: number, payload: Buffer}} params
- * @returns {Buffer}
- */
-function buildClientFrame({fin, opcode, payload}) {
-  const mask = Buffer.from([0x01, 0x02, 0x03, 0x04])
-  const maskedPayload = Buffer.alloc(payload.length)
-
-  for (let i = 0; i < payload.length; i++) {
-    maskedPayload[i] = payload[i] ^ mask[i % 4]
-  }
-
-  const firstByte = (fin ? 0x80 : 0x00) | (opcode & 0x0F)
-  /** @type {Buffer} */
-  let header
-
-  if (payload.length < 126) {
-    header = Buffer.from([firstByte, 0x80 | payload.length])
-  } else if (payload.length < 65536) {
-    header = Buffer.alloc(4)
-    header[0] = firstByte
-    header[1] = 0x80 | 126
-    header.writeUInt16BE(payload.length, 2)
-  } else {
-    header = Buffer.alloc(10)
-    header[0] = firstByte
-    header[1] = 0x80 | 127
-    header.writeBigUInt64BE(BigInt(payload.length), 2)
-  }
-
-  return Buffer.concat([header, mask, maskedPayload])
 }
 
 describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: true}}, () => {
@@ -220,7 +198,7 @@ describe("WebsocketSession fragmented frames", {databaseCleaning: {transaction: 
 
         dispatchedSequences.push(expectNumberProperty(data, "sequence"))
       }
-    })
+    }, {maxPendingMessages: 2000})
     const frames = Array.from({length: 2000}, (_, sequence) => buildClientFrame({
       fin: true,
       opcode: 0x1,

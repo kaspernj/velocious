@@ -1,18 +1,36 @@
 // @ts-check
 
-import {randomUUID} from "node:crypto"
+import { randomUUID } from "node:crypto"
+import { ensureError } from "typanic"
 
-import EventEmitter from "../../utils/event-emitter.js"
+import { ValidationError } from "../../database/record/index.js"
 import Logger from "../../logger.js"
+import EventEmitter from "../../utils/event-emitter.js"
+import isPlainObject from "../../utils/plain-object.js"
+import VelociousError from "../../velocious-error.js"
+import WebsocketChannel from "../websocket-channel.js"
+import { websocketEventLogStoreForConfiguration } from "../websocket-event-log-store.js"
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
-import WebsocketChannel from "../websocket-channel.js"
-import {websocketEventLogStoreForConfiguration} from "../websocket-event-log-store.js"
 
 /**
  * Defines this typedef.
  * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
  */
+
+/**
+ * @typedef {object} InboundMessageAdmission
+ * @property {number} byteLength - Exact raw text payload bytes charged to this admission.
+ * @property {number} generation - Accounting generation active when admitted.
+ * @property {boolean} released - Whether this admission has already been released.
+ */
+
+/**
+ * @typedef {object} InboundMessageWork
+ * @property {InboundMessageAdmission} admission - Admission ownership.
+ * @property {WebsocketSessionMessage} message - Decoded client message.
+ */
+
 const WEBSOCKET_FINAL_FRAME = 0x80
 const WEBSOCKET_OPCODE_CONTINUATION = 0x0
 const WEBSOCKET_OPCODE_TEXT = 0x1
@@ -20,6 +38,10 @@ const WEBSOCKET_OPCODE_BINARY = 0x2
 const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
+
+const WEBSOCKET_CLOSE_POLICY_VIOLATION = 1008
+const WEBSOCKET_INBOUND_BACKLOG_CLOSE_REASON = "Inbound message backlog exceeded"
+const WEBSOCKET_MAX_CLOSE_REASON_BYTES = 123
 
 /** Cap on the paused outbound queue; oldest frames drop on overflow. */
 const WEBSOCKET_PAUSED_QUEUE_CAP = 1000
@@ -88,7 +110,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   channelReplayStates = new Map()
   /**
    * Message queue.
-   * @type {WebsocketSessionMessage[]} */
+   * @type {InboundMessageWork[]} */
   messageQueue = []
 
   /**
@@ -114,6 +136,15 @@ export default class VelociousHttpServerClientWebsocketSession {
     this.messageHandlerPromise = messageHandlerPromise
     this.pendingMessageHandler = Boolean(messageHandlerPromise)
     this.logger = new Logger(this)
+    const inboundQueueLimits = this.configuration.getWebsocketInboundQueueLimits()
+
+    this._inboundMaxPendingBytes = inboundQueueLimits.maxBytes
+    this._inboundMaxPendingMessages = inboundQueueLimits.maxMessages
+    this._inboundPendingBytes = 0
+    this._inboundPendingMessages = 0
+    this._inboundAccountingGeneration = 0
+    this._inboundClosed = false
+    this._inboundBacklogOverloaded = false
 
     /**
      * Narrows the runtime value to the documented type.
@@ -282,6 +313,9 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   destroy() {
     this._stopHeartbeat()
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this._abandonInboundMessages()
     this.configuration._websocketSessions.delete(this)
     this._paused = false
     void this._teardownChannel()
@@ -310,7 +344,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     // socket is alive. Mark it here, before `_processBuffer` may return
     // early waiting for the rest of an incomplete frame.
     this._heartbeatAlive = true
-    if (data.length === 0) return
+    if (this._inboundClosed || data.length === 0) return
 
     this._bufferChunks.push(data)
     this._bufferedBytes += data.length
@@ -409,7 +443,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       await this._registerChannel(channel, tenant)
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-channel-initialize"
+      })
+
       this.logger.error(() => ["Failed to initialize websocket channel", error])
     }
   }
@@ -417,12 +455,72 @@ export default class VelociousHttpServerClientWebsocketSession {
   /**
    * Runs send goodbye.
    * @param {import("./index.js").default} client - Client instance.
+   * @param {{code?: number, reason?: string}} [options] - Optional close status.
    * @returns {void} - No return value.
    */
-  sendGoodbye(client) {
-    const frame = Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, 0x00])
+  sendGoodbye(client, {code, reason = ""} = {}) {
+    let payload
+
+    if (code === undefined) {
+      payload = Buffer.alloc(0)
+    } else {
+      const reasonBytes = Buffer.from(reason, "utf-8")
+
+      if (reasonBytes.length > WEBSOCKET_MAX_CLOSE_REASON_BYTES) {
+        throw new RangeError("WebSocket close reason must not exceed 123 UTF-8 bytes")
+      }
+
+      payload = Buffer.allocUnsafe(2 + reasonBytes.length)
+      payload.writeUInt16BE(code, 0)
+      reasonBytes.copy(payload, 2)
+    }
+
+    const frame = Buffer.concat([
+      Buffer.from([WEBSOCKET_FINAL_FRAME | WEBSOCKET_OPCODE_CLOSE, payload.length]),
+      payload
+    ])
 
     client.events.emit("output", frame, {websocketFrame: true})
+  }
+
+  /**
+   * Whether a caught dispatch error is an expected client-flow failure.
+   * @param {Error} error - Normalized dispatch error.
+   * @returns {boolean} - Whether framework error reporters should ignore it.
+   */
+  _expectedClientError(error) {
+    if (error instanceof ValidationError) return true
+    if (error instanceof VelociousError && error.safeToExpose) return true
+
+    const annotatedError = /** @type {Error & {errorType?: string, velocious?: Record<string, ?>}} */ (error)
+
+    if (isPlainObject(annotatedError.velocious)) return true
+
+    return typeof annotatedError.errorType === "string" && annotatedError.errorType.length > 0
+  }
+
+  /**
+   * Reports one unexpected WebSocket dispatch failure and returns its normalized Error.
+   * @param {?} caughtError - Caught dispatch failure.
+   * @param {Record<string, ?>} context - Structured dispatch context.
+   * @returns {Error} - Normalized error for existing logs and client responses.
+   */
+  _reportUnexpectedDispatchError(caughtError, context) {
+    const error = ensureError(caughtError)
+
+    if (this._expectedClientError(error)) return error
+
+    const errorPayload = {
+      context,
+      error,
+      request: this.upgradeRequest
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", errorPayload)
+    errorEvents.emit("all-error", {...errorPayload, errorType: "framework-error"})
+
+    return error
   }
 
   /**
@@ -431,15 +529,50 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _handleMessage(message) {
+    const admission = this._admitInboundMessage(0)
+
+    if (!admission) return
+    await this._handleMessageWork({admission, message})
+  }
+
+  /**
+   * Appends an admitted message to the per-session FIFO chain.
+   * @param {InboundMessageWork} work - Admitted decoded message.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _handleMessageWork(work) {
     // Serialize per-session: chain onto `_messageChain` so messages
     // are processed one at a time. Without this, fire-and-forget
     // dispatch from `_processBuffer` lets message B read
     // `session.data` before A has finished writing it.
     const previous = this._messageChain
-    const next = previous.then(() => this._dispatchMessage(message))
+    const next = previous.then(() => this._runMessageWork(work))
 
     this._messageChain = next.catch(() => {})
     await next
+  }
+
+  /**
+   * Dispatches or transfers one admitted message while retaining its accounting.
+   * @param {InboundMessageWork} work - Admitted decoded message.
+   * @returns {Promise<void>} - Resolves after dispatch or resolver-queue transfer.
+   */
+  async _runMessageWork(work) {
+    if (this._inboundClosed) {
+      this._releaseInboundAdmission(work.admission)
+      return
+    }
+
+    if (this.pendingMessageHandler) {
+      this.messageQueue.push(work)
+      return
+    }
+
+    try {
+      await this._dispatchMessage(work.message)
+    } finally {
+      this._releaseInboundAdmission(work.admission)
+    }
   }
 
   /**
@@ -466,11 +599,6 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>}
    */
   async _handleMessageInner(message) {
-    if (this.pendingMessageHandler) {
-      this.messageQueue.push(message)
-      return
-    }
-
     // The messageHandler short-circuits default routing only when the
     // app actually declared an `onMessage` hook. Apps that only want
     // session-lifecycle tracking (`onOpen`/`onClose`) still need the
@@ -486,7 +614,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     if (subscribePayload) {
       const {channel, lastEventId, params} = subscribePayload
 
-      if (!channel) throw new Error("channel is required for subscribe")
+      if (!channel) throw VelociousError.safe("channel is required for subscribe")
       const resolver = this.configuration.getWebsocketChannelResolver?.()
 
       if (resolver) {
@@ -558,8 +686,8 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     const {body, headers, id, method, path} = requestPayload
 
-    if (!method) throw new Error("method is required")
-    if (!path) throw new Error("path is required")
+    if (!method) throw VelociousError.safe("method is required")
+    if (!path) throw VelociousError.safe("path is required")
 
     const request = new WebsocketRequest({
       body,
@@ -736,14 +864,27 @@ export default class VelociousHttpServerClientWebsocketSession {
         continue
       }
 
+      const admission = this._admitInboundMessage(finalPayload.length)
+
+      if (!admission) return
+
       try {
         const message = JSON.parse(finalPayload.toString("utf-8"))
 
-        this._handleMessage(message).catch((error) => {
+        this._handleMessageWork({admission, message}).catch((caughtError) => {
+          const clientErrorMessage = caughtError instanceof Error ? caughtError.message : String(caughtError)
+          const error = this._reportUnexpectedDispatchError(caughtError, {
+            stage: "websocket-message-dispatch"
+          })
+
           this.logger.error(() => ["Websocket message handler failed", error])
-          this.sendJson({error: error.message, type: "error"})
+          this.sendJson({
+            error: clientErrorMessage,
+            type: "error"
+          })
         })
       } catch (error) {
+        this._releaseInboundAdmission(admission)
         this.logger.error(() => ["Failed to parse websocket message", error])
         this.sendJson({error: "Invalid websocket message", type: "error"})
       }
@@ -828,6 +969,85 @@ export default class VelociousHttpServerClientWebsocketSession {
     this._bufferChunkIndex = 0
     this._bufferChunkOffset = 0
     this._bufferedBytes = 0
+  }
+
+  /**
+   * Tentatively admits one complete text message before decoding it.
+   * @param {number} byteLength - Exact complete raw text payload bytes.
+   * @returns {InboundMessageAdmission | null} - Admission ownership, or null after overload/close.
+   */
+  _admitInboundMessage(byteLength) {
+    if (this._inboundClosed) return null
+
+    if (
+      this._inboundPendingMessages + 1 > this._inboundMaxPendingMessages ||
+      this._inboundPendingBytes + byteLength > this._inboundMaxPendingBytes
+    ) {
+      this._closeForInboundBacklog(byteLength)
+      return null
+    }
+
+    this._inboundPendingMessages += 1
+    this._inboundPendingBytes += byteLength
+
+    return {
+      byteLength,
+      generation: this._inboundAccountingGeneration,
+      released: false
+    }
+  }
+
+  /**
+   * Releases one admission exactly once.
+   * @param {InboundMessageAdmission} admission - Admission ownership.
+   * @returns {void}
+   */
+  _releaseInboundAdmission(admission) {
+    if (admission.released) return
+
+    admission.released = true
+    if (admission.generation !== this._inboundAccountingGeneration) return
+
+    this._inboundPendingMessages -= 1
+    this._inboundPendingBytes -= admission.byteLength
+  }
+
+  /**
+   * Abandons all admitted input and invalidates late settlements.
+   * @returns {void}
+   */
+  _abandonInboundMessages() {
+    this._inboundClosed = true
+    this._inboundAccountingGeneration += 1
+    this._inboundPendingBytes = 0
+    this._inboundPendingMessages = 0
+    this.messageQueue = []
+  }
+
+  /**
+   * Permanently closes a session whose next message exceeded its backlog budget.
+   * @param {number} rejectedBytes - Raw payload bytes rejected at admission.
+   * @returns {void}
+   */
+  _closeForInboundBacklog(rejectedBytes) {
+    if (this._inboundBacklogOverloaded || this._inboundClosed) return
+
+    this._inboundBacklogOverloaded = true
+    this.logger.warn(() => [
+      "Inbound websocket message backlog exceeded; closing connection",
+      {
+        maxBytes: this._inboundMaxPendingBytes,
+        maxMessages: this._inboundMaxPendingMessages,
+        pendingBytes: this._inboundPendingBytes,
+        pendingMessages: this._inboundPendingMessages,
+        rejectedBytes
+      }
+    ])
+    this.sendGoodbye(this.client, {
+      code: WEBSOCKET_CLOSE_POLICY_VIOLATION,
+      reason: WEBSOCKET_INBOUND_BACKLOG_CLOSE_REASON
+    })
+    this._handleClose({allowResume: false})
   }
 
   /**
@@ -1081,14 +1301,23 @@ export default class VelociousHttpServerClientWebsocketSession {
     return true
   }
 
-  _handleClose() {
+  /**
+   * Handles socket closure and optionally retains resumable state.
+   * @param {{allowResume?: boolean}} [options] - Closure behavior.
+   * @returns {void}
+   */
+  _handleClose({allowResume = true} = {}) {
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this._abandonInboundMessages()
+
     // If the session has resumable state (live Connection or
     // ChannelV2 subscription), move it into the paused registry
     // instead of tearing down; a new socket presenting the sessionId
     // via `session-resume` within the grace window will reattach.
     const hasResumableState = this._connections.size > 0 || this._channelSubscriptions.size > 0
 
-    if (hasResumableState && !this._paused) {
+    if (allowResume && hasResumableState && !this._paused) {
       // Paused sessions have no live socket to ping; the grace timer
       // owns their eventual teardown from here.
       this._stopHeartbeat()
@@ -1123,6 +1352,9 @@ export default class VelociousHttpServerClientWebsocketSession {
    */
   _finalizeGraceExpiry() {
     this._stopHeartbeat()
+    this._resetFragmentBuffer()
+    this._clearBufferedFrameChunks()
+    this._abandonInboundMessages()
     this.configuration._websocketSessions.delete(this)
     void this._runMessageHandlerClose()
     void this._teardownChannel()
@@ -1145,7 +1377,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     try {
       return await resolver(this)
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-session-identity-pause"
+      })
+
       this.logger.error(() => ["Websocket session identity resolver failed at pause", error])
       return undefined
     }
@@ -1180,7 +1416,13 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const connection of this._connections.values()) {
       try {
         await connection[callbackName]?.()
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          callbackName,
+          connectionId: connection.connectionId,
+          stage: "websocket-connection-lifecycle"
+        })
+
         this.logger.error(() => [`${callbackName} failed for ${connection.connectionId}`, error])
       }
     }
@@ -1188,7 +1430,13 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const {subscription} of this._channelSubscriptions.values()) {
       try {
         await subscription[callbackName]?.()
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          callbackName,
+          stage: "websocket-channel-lifecycle",
+          subscriptionId: subscription.subscriptionId
+        })
+
         this.logger.error(() => [`${callbackName} failed for channel sub ${subscription.subscriptionId}`, error])
       }
     }
@@ -1229,7 +1477,11 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       try {
         freshIdentity = await resolver(this)
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          stage: "websocket-session-identity-resume"
+        })
+
         this.logger.error(() => ["Websocket session identity resolver failed at resume", error])
         freshIdentity = undefined
       }
@@ -1295,7 +1547,13 @@ export default class VelociousHttpServerClientWebsocketSession {
         await this._withConnections(async () => {
           await connection.onClose(reason)
         })
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          connectionId: connection.connectionId,
+          reason,
+          stage: "websocket-connection-teardown"
+        })
+
         this.logger.error(() => [`Failed to tear down connection ${connection.connectionId}`, error])
       }
     }
@@ -1346,9 +1604,16 @@ export default class VelociousHttpServerClientWebsocketSession {
       // can never be routed to a partially initialized connection.
       this._connections.set(connectionId, connection)
       this.sendJson({type: "connection-opened", connectionId})
-    } catch (error) {
+    } catch (caughtError) {
+      const clientErrorMessage = caughtError instanceof Error ? caughtError.message : ""
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        connectionId,
+        connectionType,
+        stage: "websocket-connection-open"
+      })
+
       this.logger.error(() => [`Failed to open connection ${connectionType}:${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to open connection"})
+      this.sendJson({type: "connection-error", connectionId, message: clientErrorMessage || "Failed to open connection"})
     }
   }
 
@@ -1370,9 +1635,15 @@ export default class VelociousHttpServerClientWebsocketSession {
       await this._withConnections(async () => {
         await connection.onMessage(message.body)
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const clientErrorMessage = caughtError instanceof Error ? caughtError.message : ""
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        connectionId,
+        stage: "websocket-connection-message"
+      })
+
       this.logger.error(() => [`Failed to handle connection-message for ${connectionId}`, error])
-      this.sendJson({type: "connection-error", connectionId, message: /** @type {Error} */ (error).message || "Failed to handle message"})
+      this.sendJson({type: "connection-error", connectionId, message: clientErrorMessage || "Failed to handle message"})
     }
   }
 
@@ -1397,7 +1668,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       await this._withConnections(async () => {
         await connection.onClose("client_close")
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        connectionId,
+        stage: "websocket-connection-close"
+      })
+
       this.logger.error(() => [`Failed to tear down connection ${connectionId}`, error])
     }
 
@@ -1479,11 +1755,19 @@ export default class VelociousHttpServerClientWebsocketSession {
 
         this.sendJson({type: "channel-subscribed", subscriptionId})
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const clientErrorMessage = caughtError instanceof Error ? caughtError.message : ""
+
       this._channelSubscriptions.delete(subscriptionId)
       this.configuration._unregisterWebsocketChannelSubscription(channelType, subscription)
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channelType,
+        stage: "websocket-channel-subscribe",
+        subscriptionId
+      })
+
       this.logger.error(() => [`Failed to subscribe channel ${channelType}:${subscriptionId}`, error])
-      this.sendJson({type: "channel-error", subscriptionId, message: /** @type {Error} */ (error).message || "Failed to subscribe"})
+      this.sendJson({type: "channel-error", subscriptionId, message: clientErrorMessage || "Failed to subscribe"})
     }
   }
 
@@ -1551,7 +1835,13 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     try {
       await this._withConnections(async () => await entry.subscription.unsubscribed())
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channelType: entry.channelType,
+        stage: "websocket-channel-unsubscribe",
+        subscriptionId
+      })
+
       this.logger.error(() => [`Failed to unsubscribe channel ${entry.channelType}:${subscriptionId}`, error])
     }
 
@@ -1576,7 +1866,13 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       try {
         await this._withConnections(async () => await subscription.unsubscribed())
-      } catch (error) {
+      } catch (caughtError) {
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          channelType,
+          stage: "websocket-channel-teardown",
+          subscriptionId: subscription.subscriptionId
+        })
+
         this.logger.error(() => [`Failed to tear down channel-v2 ${channelType}:${subscription.subscriptionId}`, error])
       }
     }
@@ -1604,7 +1900,11 @@ export default class VelociousHttpServerClientWebsocketSession {
           await channel?.unsubscribed?.()
         })
       })
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-channel-teardown"
+      })
+
       this.logger.error(() => ["Failed to teardown websocket channel", error])
     }
 
@@ -1703,7 +2003,12 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       await this._registerChannel(channelInstance, tenant)
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channel,
+        stage: "websocket-channel-subscription"
+      })
+
       this.logger.warn(() => ["Websocket channel subscription failed", error])
       this.sendJson({channel, error: "Subscription rejected", type: "error"})
     }
@@ -1830,7 +2135,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (onOpen) {
         await onOpen({session: this})
       }
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler-open"
+      })
+
       this.logger.error(() => ["Websocket open handler failed", error])
     }
   }
@@ -1848,13 +2157,31 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (onMessage) {
         await onMessage({message, session: this})
       }
-    } catch (error) {
-      this.logger.error(() => ["Websocket message handler failed", error])
+    } catch (caughtError) {
       const handler = this.messageHandler
       const onError = handler ? handler.onError : null
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler"
+      })
 
-      if (onError) {
-        await onError({error: error instanceof Error ? error : new Error(String(error)), session: this})
+      this.logger.error(() => ["Websocket message handler failed", error])
+      if (!onError) return
+
+      try {
+        await onError({error, session: this})
+      } catch (onErrorCaughtError) {
+        const clientErrorMessage = onErrorCaughtError instanceof Error
+          ? onErrorCaughtError.message
+          : String(onErrorCaughtError)
+        const onErrorError = this._reportUnexpectedDispatchError(onErrorCaughtError, {
+          stage: "websocket-message-handler-error"
+        })
+
+        this.logger.error(() => ["Websocket message error handler failed", onErrorError])
+        this.sendJson({
+          error: clientErrorMessage,
+          type: "error"
+        })
       }
     }
   }
@@ -1867,7 +2194,11 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (onClose) {
         await onClose({session: this})
       }
-    } catch (error) {
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler-close"
+      })
+
       this.logger.error(() => ["Websocket close handler failed", error])
     }
   }
@@ -1893,30 +2224,65 @@ export default class VelociousHttpServerClientWebsocketSession {
   async _resolveMessageHandlerPromise() {
     if (!this.messageHandlerPromise) return
 
-    try {
-      const handler = await this.messageHandlerPromise
+    /** @type {import("../../configuration-types.js").WebsocketMessageHandler | void} */
+    let handler
 
-      if (handler) {
-        this.pendingMessageHandler = false
-        this.messageHandlerPromise = undefined
-        // Install handler and drain onOpen before replaying queued
-        // messages. setMessageHandler() fires onOpen as fire-and-forget;
-        // awaiting _runMessageHandlerOpen() directly here closes the
-        // race where queued subscribe/connection-* frames would
-        // dispatch while an async onOpen is still setting up session
-        // state.
-        this.messageHandler = handler
-        await this._runMessageHandlerOpen()
-        await this._flushQueuedMessages({useHandler: typeof handler.onMessage === "function"})
-        return
-      }
-    } catch (error) {
+    try {
+      handler = await this.messageHandlerPromise
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        stage: "websocket-message-handler-resolver"
+      })
+
       this.logger.error(() => ["Websocket message handler resolver failed", error])
+      this.messageHandlerPromise = undefined
+      await this._finishMessageHandlerResolution({useHandler: false})
+      return
     }
 
-    this.pendingMessageHandler = false
     this.messageHandlerPromise = undefined
-    await this._flushQueuedMessages({useHandler: false})
+    if (!handler) {
+      await this._finishMessageHandlerResolution({useHandler: false})
+      return
+    }
+
+    if (this._inboundClosed) {
+      this.pendingMessageHandler = false
+      return
+    }
+
+    // Install handler and drain onOpen before replaying queued
+    // messages. setMessageHandler() fires onOpen as fire-and-forget;
+    // awaiting _runMessageHandlerOpen() directly here closes the
+    // race where queued subscribe/connection-* frames would
+    // dispatch while an async onOpen is still setting up session
+    // state.
+    this.messageHandler = handler
+    await this._runMessageHandlerOpen()
+    await this._finishMessageHandlerResolution({
+      useHandler: typeof handler.onMessage === "function"
+    })
+  }
+
+  /**
+   * Inserts resolver completion into the FIFO chain before allowing new dispatch.
+   * @param {{useHandler: boolean}} args - Resolver result.
+   * @returns {Promise<void>} - Resolves after queued messages drain.
+   */
+  async _finishMessageHandlerResolution({useHandler}) {
+    const previous = this._messageChain
+    const drain = previous.then(async () => {
+      this.pendingMessageHandler = false
+      if (this._inboundClosed) {
+        this.messageQueue = []
+        return
+      }
+
+      await this._flushQueuedMessages({useHandler})
+    })
+
+    this._messageChain = drain.catch(() => {})
+    await drain
   }
 
   /**
@@ -1927,14 +2293,34 @@ export default class VelociousHttpServerClientWebsocketSession {
   async _flushQueuedMessages({useHandler}) {
     if (this.messageQueue.length === 0) return
 
-    const queued = this.messageQueue.slice()
+    const queued = this.messageQueue
     this.messageQueue = []
 
-    for (const message of queued) {
-      if (useHandler && this.messageHandler) {
-        await this._runMessageHandlerMessage(message)
-      } else {
-        await this._handleMessage(message)
+    for (const work of queued) {
+      if (this._inboundClosed) {
+        this._releaseInboundAdmission(work.admission)
+        continue
+      }
+
+      try {
+        if (useHandler && this.messageHandler) {
+          await this._runMessageHandlerMessage(work.message)
+        } else {
+          await this._dispatchMessage(work.message)
+        }
+      } catch (caughtError) {
+        const clientErrorMessage = caughtError instanceof Error ? caughtError.message : String(caughtError)
+        const error = this._reportUnexpectedDispatchError(caughtError, {
+          stage: "websocket-message-dispatch"
+        })
+
+        this.logger.error(() => ["Websocket message handler failed", error])
+        this.sendJson({
+          error: clientErrorMessage,
+          type: "error"
+        })
+      } finally {
+        this._releaseInboundAdmission(work.admission)
       }
     }
   }
