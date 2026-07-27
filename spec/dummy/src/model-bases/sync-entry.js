@@ -20,15 +20,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<SyncEntryWriteAttributes>} */
 export default class SyncEntryBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/sync-entry.js").default}
-   */
+  /** @returns {typeof import("../models/sync-entry.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/sync-entry.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -37,14 +33,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   authenticationTokenId() { return this.readAttribute("authenticationTokenId") }
 
   /**
@@ -53,14 +45,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setAuthenticationTokenId(newValue) { return this._setColumnAttribute("authenticationTokenId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasAuthenticationTokenId() { return this._hasAttribute(this.authenticationTokenId()) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   resourceId() { return this.readAttribute("resourceId") }
 
   /**
@@ -69,14 +57,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setResourceId(newValue) { return this._setColumnAttribute("resourceId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasResourceId() { return this._hasAttribute(this.resourceId()) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   resourceType() { return this.readAttribute("resourceType") }
 
   /**
@@ -85,14 +69,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setResourceType(newValue) { return this._setColumnAttribute("resourceType", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasResourceType() { return this._hasAttribute(this.resourceType()) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   syncType() { return this.readAttribute("syncType") }
 
   /**
@@ -101,14 +81,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setSyncType(newValue) { return this._setColumnAttribute("syncType", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasSyncType() { return this._hasAttribute(this.syncType()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   clientUpdatedAt() { return this.readAttribute("clientUpdatedAt") }
 
   /**
@@ -117,14 +93,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setClientUpdatedAt(newValue) { return this._setColumnAttribute("clientUpdatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasClientUpdatedAt() { return this._hasAttribute(this.clientUpdatedAt()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   data() { return this.readAttribute("data") }
 
   /**
@@ -133,14 +105,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setData(newValue) { return this._setColumnAttribute("data", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasData() { return this._hasAttribute(this.data()) }
 
-  /**
-   * @returns {number | null}
-   */
+  /** @returns {number | null} */
   serverSequence() { return this.readAttribute("serverSequence") }
 
   /**
@@ -149,14 +117,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setServerSequence(newValue) { return this._setColumnAttribute("serverSequence", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasServerSequence() { return this._hasAttribute(this.serverSequence()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -165,14 +129,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -181,14 +141,10 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   projectId() { return this.readAttribute("projectId") }
 
   /**
@@ -197,8 +153,6 @@ export default class SyncEntryBase extends DatabaseRecord {
    */
   setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasProjectId() { return this._hasAttribute(this.projectId()) }
 }

@@ -63,28 +63,31 @@ describe("Cli - Commands - db:rollback", () => {
       testing: true
     })
 
-    let defaultSchemaMigrations = [], tablesResult = [], databaseIdentifiers = []
+    let defaultDatabaseType, defaultSchemaMigrations = [], tablesResult = [], databaseIdentifiers = []
 
     await cliRollback.configuration.ensureConnections(async (dbs) => {
       databaseIdentifiers = Object.keys(dbs)
+      defaultDatabaseType = dbs.default.getType()
+      const defaultTables = await dbs.default.getTables()
 
-      for (const dbIdentifier in dbs) {
-        const db = dbs[dbIdentifier]
-        const tables = await db.getTables()
+      for (const table of defaultTables) {
+        tablesResult.push(table.getName())
+      }
 
-        for (const table of tables) {
-          tablesResult.push(table.getName())
-        }
+      const schemaMigrationsResult = await dbs.default.select("schema_migrations")
 
-        const schemaMigrationsResult = await db.select("schema_migrations")
+      for (const schemaMigrationResult of schemaMigrationsResult) {
+        defaultSchemaMigrations.push(schemaMigrationResult.version)
+      }
 
-        for (const schemaMigrationResult of schemaMigrationsResult) {
-          defaultSchemaMigrations.push(schemaMigrationResult.version)
-        }
+      if (dbs.mssql && dbs.default.getType() !== "mssql") {
+        const accountsTable = await dbs.mssql.getTableByName("accounts")
+
+        if (accountsTable) tablesResult.push(accountsTable.getName())
       }
     })
 
-    return {databaseIdentifiers, defaultSchemaMigrations, tablesResult}
+    return {databaseIdentifiers, defaultDatabaseType, defaultSchemaMigrations, tablesResult}
   }
 
   const syncEntriesColumnNames = async (configuration) => {
@@ -119,7 +122,7 @@ describe("Cli - Commands - db:rollback", () => {
       await cliRollback.execute()
     })
 
-    const {databaseIdentifiers, defaultSchemaMigrations, tablesResult} = await getTestData()
+    const {databaseIdentifiers, defaultDatabaseType, defaultSchemaMigrations, tablesResult} = await getTestData()
 
     const filteredTables = tablesResult.filter((tableName) => !internalTables.has(tableName))
     const expectedRolledBackTables = [
@@ -147,7 +150,7 @@ describe("Cli - Commands - db:rollback", () => {
       "20230728075328",
       "20230728075329",
       "20250605133926",
-      ...(databaseIdentifiers.includes("mssql") ? ["20250903112845"] : []),
+      ...(defaultDatabaseType === "mssql" ? ["20250903112845"] : []),
       "20250912183605",
       "20250912183606",
       "20250915085450",
@@ -162,22 +165,23 @@ describe("Cli - Commands - db:rollback", () => {
       "20260418090000",
       "20260601052206",
       "20260629160000",
-      "20260702150000"
+      "20260702150000",
+      "20260706120000"
     ]
 
     expect(uniqunize(filteredTables.sort())).toEqual(expectedRolledBackTables)
 
     expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(expectedRolledBackMigrations)
 
-    // Rolling back one step reverts 20260706120000-add-project-id-to-sync-entries: the table stays, the column goes.
-    expect(await syncEntriesColumnNames(cliRollback.configuration)).not.toContain("project_id")
+    // Rolling back one step removes 20260726132000-create-uuid-acts-as-list-items.
+    expect(await syncEntriesColumnNames(cliRollback.configuration)).toContain("project_id")
 
     await runMigrations()
 
     const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
     const filteredNewTablesResult = newTablesResult.filter((tableName) => !internalTables.has(tableName))
-    const expectedMigratedTables = [...expectedRolledBackTables].sort()
-    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260706120000"].sort()
+    const expectedMigratedTables = [...expectedRolledBackTables, "uuid_acts_as_list_items"].sort()
+    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260726132000"].sort()
 
     expect(uniqunize(filteredNewTablesResult.sort())).toEqual(expectedMigratedTables)
 

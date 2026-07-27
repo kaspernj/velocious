@@ -16,15 +16,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<ProjectDetailWriteAttributes>} */
 export default class ProjectDetailBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/project-detail.js").default}
-   */
+  /** @returns {typeof import("../models/project-detail.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/project-detail.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -33,14 +29,10 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   projectId() { return this.readAttribute("projectId") }
 
   /**
@@ -49,14 +41,10 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasProjectId() { return this._hasAttribute(this.projectId()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   note() { return this.readAttribute("note") }
 
   /**
@@ -65,14 +53,10 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   setNote(newValue) { return this._setColumnAttribute("note", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasNote() { return this._hasAttribute(this.note()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -81,14 +65,10 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -97,14 +77,10 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
-  /**
-   * @returns {boolean | null}
-   */
+  /** @returns {boolean | null} */
   isActive() { return this.readAttribute("isActive") }
 
   /**
@@ -113,9 +89,7 @@ export default class ProjectDetailBase extends DatabaseRecord {
    */
   setIsActive(newValue) { return this._setColumnAttribute("isActive", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasIsActive() { return this._hasAttribute(this.isActive()) }
 
   /**

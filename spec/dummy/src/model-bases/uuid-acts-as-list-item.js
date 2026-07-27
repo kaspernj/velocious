@@ -3,28 +3,27 @@
 import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /**
- * Attributes accepted when creating or updating ActsAsListItem records.
- * @typedef {object} ActsAsListItemWriteAttributes
- * @property {number} [id] - Value for the id attribute.
- * @property {number} [projectId] - Value for the projectId attribute.
+ * Attributes accepted when creating or updating UuidActsAsListItem records.
+ * @typedef {object} UuidActsAsListItemWriteAttributes
+ * @property {string} [id] - Value for the id attribute.
+ * @property {number} [scopeId] - Value for the scopeId attribute.
  * @property {number | null} [position] - Value for the position attribute.
  * @property {string | null} [name] - Value for the name attribute.
  * @property {Date | string | null} [createdAt] - Value for the createdAt attribute.
  * @property {Date | string | null} [updatedAt] - Value for the updatedAt attribute.
- * @property {import("../models/project.js").default} [project] - Related project record.
  */
 
-/** @augments {DatabaseRecord<ActsAsListItemWriteAttributes>} */
-export default class ActsAsListItemBase extends DatabaseRecord {
-  /** @returns {typeof import("../models/acts-as-list-item.js").default} */
+/** @augments {DatabaseRecord<UuidActsAsListItemWriteAttributes>} */
+export default class UuidActsAsListItemBase extends DatabaseRecord {
+  /** @returns {typeof import("../models/uuid-acts-as-list-item.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
-  getModelClass() { return /** @type {typeof import("../models/acts-as-list-item.js").default} */ (this.constructor) }
+  getModelClass() { return /** @type {typeof import("../models/uuid-acts-as-list-item.js").default} */ (this.constructor) }
 
-  /** @returns {number} */
+  /** @returns {string} */
   id() { return this.readAttribute("id") }
 
   /**
-   * @param {number} newValue
+   * @param {string} newValue
    * @returns {void}
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
@@ -33,16 +32,16 @@ export default class ActsAsListItemBase extends DatabaseRecord {
   hasId() { return this._hasAttribute(this.id()) }
 
   /** @returns {number} */
-  projectId() { return this.readAttribute("projectId") }
+  scopeId() { return this.readAttribute("scopeId") }
 
   /**
    * @param {number} newValue
    * @returns {void}
    */
-  setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
+  setScopeId(newValue) { return this._setColumnAttribute("scopeId", newValue) }
 
   /** @returns {boolean} */
-  hasProjectId() { return this._hasAttribute(this.projectId()) }
+  hasScopeId() { return this._hasAttribute(this.scopeId()) }
 
   /** @returns {number | null} */
   position() { return this.readAttribute("position") }
@@ -91,34 +90,4 @@ export default class ActsAsListItemBase extends DatabaseRecord {
 
   /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
-
-  /**
-   * @returns {import("../models/project.js").default}
-   */
-  project() { return /** @type {import("../models/project.js").default} */ (this.getRelationshipByName("project").loaded()) }
-
-  /**
-   * @abstract
-   * @param {Record<string, ?>} [attributes]
-   * @returns {import("../models/project.js").default}
-   */
-  buildProject(attributes) { void attributes; throw new Error("Not implemented") }
-
-  /**
-   * @abstract
-   * @returns {Promise<import("../models/project.js").default | undefined>}
-   */
-  loadProject() { throw new Error("Not implemented") }
-
-  /**
-   * @returns {Promise<import("../models/project.js").default | undefined>}
-   */
-  projectOrLoad() { return /** @type {Promise<import("../models/project.js").default | undefined>} */ (this.relationshipOrLoad("project")) }
-
-  /**
-   * @abstract
-   * @param {import("../models/project.js").default} newModel
-   * @returns {void}
-   */
-  setProject(newModel) { void newModel; throw new Error("Not implemented") }
 }

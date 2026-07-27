@@ -17,15 +17,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<ProjectWriteAttributes>} */
 export default class ProjectBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/project.js").default}
-   */
+  /** @returns {typeof import("../models/project.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/project.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -34,14 +30,10 @@ export default class ProjectBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   creatingUserReference() { return this.readAttribute("creatingUserReference") }
 
   /**
@@ -50,14 +42,10 @@ export default class ProjectBase extends DatabaseRecord {
    */
   setCreatingUserReference(newValue) { return this._setColumnAttribute("creatingUserReference", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatingUserReference() { return this._hasAttribute(this.creatingUserReference()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -66,14 +54,10 @@ export default class ProjectBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -82,14 +66,10 @@ export default class ProjectBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   tasksCount() { return this.readAttribute("tasksCount") }
 
   /**
@@ -98,9 +78,7 @@ export default class ProjectBase extends DatabaseRecord {
    */
   setTasksCount(newValue) { return this._setColumnAttribute("tasksCount", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasTasksCount() { return this._hasAttribute(this.tasksCount()) }
 
   /**
@@ -239,6 +217,34 @@ export default class ProjectBase extends DatabaseRecord {
    * @returns {void}
    */
   setDoneTasks(newModels) { void newModels; throw new Error("Not implemented") }
+
+  /**
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}
+   */
+  tasksWithProjectDetails() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>} */ (this.getRelationshipByName("tasksWithProjectDetails")) }
+
+  /**
+   * @returns {Array<import("../models/task.js").default>}
+   */
+  tasksWithProjectDetailsLoaded() { return /** @type {Array<import("../models/task.js").default>} */ (this.getRelationshipByName("tasksWithProjectDetails").loaded()) }
+
+  /**
+   * @abstract
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  loadTasksWithProjectDetails() { throw new Error("Not implemented") }
+
+  /**
+   * @returns {Promise<Array<import("../models/task.js").default>>}
+   */
+  tasksWithProjectDetailsOrLoad() { return /** @type {Promise<Array<import("../models/task.js").default>>} */ (this.relationshipOrLoad("tasksWithProjectDetails")) }
+
+  /**
+   * @abstract
+   * @param {Array<import("../models/task.js").default>} newModels
+   * @returns {void}
+   */
+  setTasksWithProjectDetails(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
    * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/project.js").default, typeof import("../models/task.js").default>}

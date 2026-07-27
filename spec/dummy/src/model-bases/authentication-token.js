@@ -15,15 +15,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<AuthenticationTokenWriteAttributes>} */
 export default class AuthenticationTokenBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/authentication-token.js").default}
-   */
+  /** @returns {typeof import("../models/authentication-token.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/authentication-token.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -32,14 +28,10 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   userToken() { return this.readAttribute("userToken") }
 
   /**
@@ -48,14 +40,10 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
    */
   setUserToken(newValue) { return this._setColumnAttribute("userToken", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUserToken() { return this._hasAttribute(this.userToken()) }
 
-  /**
-   * @returns {number | null}
-   */
+  /** @returns {number | null} */
   userId() { return this.readAttribute("userId") }
 
   /**
@@ -64,14 +52,10 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
    */
   setUserId(newValue) { return this._setColumnAttribute("userId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUserId() { return this._hasAttribute(this.userId()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -80,14 +64,10 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -96,9 +76,7 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

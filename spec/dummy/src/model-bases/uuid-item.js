@@ -13,15 +13,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<UuidItemWriteAttributes>} */
 export default class UuidItemBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/uuid-item.js").default}
-   */
+  /** @returns {typeof import("../models/uuid-item.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/uuid-item.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -30,14 +26,10 @@ export default class UuidItemBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   title() { return this.readAttribute("title") }
 
   /**
@@ -46,14 +38,10 @@ export default class UuidItemBase extends DatabaseRecord {
    */
   setTitle(newValue) { return this._setColumnAttribute("title", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasTitle() { return this._hasAttribute(this.title()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -62,14 +50,10 @@ export default class UuidItemBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -78,9 +62,7 @@ export default class UuidItemBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

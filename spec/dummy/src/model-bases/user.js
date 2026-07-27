@@ -15,15 +15,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<UserWriteAttributes>} */
 export default class UserBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/user.js").default}
-   */
+  /** @returns {typeof import("../models/user.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/user.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -32,14 +28,10 @@ export default class UserBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   email() { return this.readAttribute("email") }
 
   /**
@@ -48,14 +40,10 @@ export default class UserBase extends DatabaseRecord {
    */
   setEmail(newValue) { return this._setColumnAttribute("email", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasEmail() { return this._hasAttribute(this.email()) }
 
-  /**
-   * @returns {string}
-   */
+  /** @returns {string} */
   encryptedPassword() { return this.readAttribute("encryptedPassword") }
 
   /**
@@ -64,14 +52,10 @@ export default class UserBase extends DatabaseRecord {
    */
   setEncryptedPassword(newValue) { return this._setColumnAttribute("encryptedPassword", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasEncryptedPassword() { return this._hasAttribute(this.encryptedPassword()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   reference() { return this.readAttribute("reference") }
 
   /**
@@ -80,14 +64,10 @@ export default class UserBase extends DatabaseRecord {
    */
   setReference(newValue) { return this._setColumnAttribute("reference", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasReference() { return this._hasAttribute(this.reference()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -96,14 +76,10 @@ export default class UserBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -112,9 +88,7 @@ export default class UserBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

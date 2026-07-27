@@ -17,7 +17,7 @@
 * Server-side sync envelope replay orchestration for app-owned sync receivers (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
 * SQLite web persistence that automatically prefers OPFS, then IndexedDB, and migrates legacy persisted bytes when possible (see [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
-* Gap-less positional lists with automatic reordering via `actsAsList` (see [docs/acts-as-list.md](docs/acts-as-list.md))
+* Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, and linting (see [docs/factories.md](docs/factories.md))
 * Per-row association counts via `.withCount(...)`, including safe batching of structurally identical aggregates, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))

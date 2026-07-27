@@ -3,9 +3,12 @@
 import {outputPathFor, startBackgroundJobs, waitForJobCompleted, waitForOutputJson} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import DbQueryJob from "../dummy/src/jobs/db-query-job.js"
+import User from "../dummy/src/models/user.js"
 
 describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
   it("wraps inline job perform calls in a database connection context", async () => {
+    await User.initializeRecord({configuration: dummyConfiguration})
+
     const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("db-query-job")
 
