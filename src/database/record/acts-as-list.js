@@ -50,6 +50,7 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     const position = record.readAttribute(positionColumn)
 
     if (position != null) {
+      assertPositivePosition({position, positionColumn})
       await shiftPositionsUp({record, positionColumn, scope, fromPosition: position})
     } else {
       const nextPosition = await highestPositionInScope({record, positionColumn, scope})
@@ -77,12 +78,19 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
 
     if (!posChanged && !scopeChanged) return
 
+    assertPositivePosition({
+      position: rawAttributes[posColumn],
+      positionColumn,
+      persisted: true
+    })
+
     const oldPosition = posChanged ? /** @type {number} */ (rawAttributes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
     const newPosition = posChanged ? /** @type {number} */ (changes[posColumn]) : /** @type {number} */ (record.readAttribute(positionColumn))
     const oldScopeValue = scopeChanged ? /** @type {number} */ (rawAttributes[scopeCol]) : /** @type {number} */ (record.readAttribute(scope))
     const newScopeValue = scopeChanged ? /** @type {number} */ (changes[scopeCol]) : /** @type {number} */ (record.readAttribute(scope))
 
-    if (oldPosition == null || newPosition == null) return
+    assertPositivePosition({position: newPosition, positionColumn})
+    if (oldPosition == null) return
     if (newPosition === oldPosition && newScopeValue === oldScopeValue) return
 
     if (scopeChanged && oldScopeValue !== newScopeValue) {
@@ -100,7 +108,7 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
         return
       }
 
-      await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue, targetScopeValue: newScopeValue})
+      await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue})
       setShiftingFlag(record, false)
       await shiftPositionsDown({record, positionColumn, scope, scopeValue: oldScopeValue, fromPosition: oldPosition + 1})
       await shiftPositionsUp({record, positionColumn, scope, scopeValue: newScopeValue, fromPosition: newPosition, excludeRecordId: record.id()})
@@ -121,13 +129,36 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
   modelClass.beforeDestroy(async (record) => {
     const position = record.readAttribute(positionColumn)
 
-    if (position == null) return
+    if (position == null) {
+      const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
+      const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
+
+      if (posColumn in record._attributes) assertPositivePosition({position, positionColumn, persisted: true})
+      return
+    }
+    assertPositivePosition({position, positionColumn, persisted: true})
 
     await moveOutOfWay({record, positionColumn, scope})
     setShiftingFlag(record, false)
 
     await shiftPositionsDown({record, positionColumn, scope, fromPosition: position + 1})
   })
+}
+
+/**
+ * Enforces the public gap-less list position invariant before any shifting.
+ * @param {object} args - Arguments.
+ * @param {number | null | undefined} args.position - Position to validate.
+ * @param {string} args.positionColumn - Position attribute name.
+ * @param {boolean} [args.persisted] - Whether the invalid value came from persisted state.
+ * @returns {void}
+ */
+function assertPositivePosition({position, positionColumn, persisted = false}) {
+  if (typeof position === "number" && Number.isInteger(position) && position > 0) return
+
+  const source = persisted ? "Persisted" : "Requested"
+
+  throw new Error(`${source} actsAsList ${positionColumn} must be a positive integer`)
 }
 
 /**
@@ -380,30 +411,26 @@ function resolveScopeValue(record, scope) {
  * @param {string} args.positionColumn - camelCase position attribute.
  * @param {string} args.scope - camelCase scope attribute.
  * @param {string | number | null} [args.scopeValue] - Scope containing the record before move-out.
- * @param {string | number | null} [args.targetScopeValue] - Temporary scope value to assign.
  * @returns {Promise<void>}
  */
-async function moveOutOfWay({record, positionColumn, scope, scopeValue, targetScopeValue}) {
+async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
   const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
   const connection = modelClass.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
-  const resolvedTargetScopeValue = targetScopeValue != null ? targetScopeValue : resolvedScopeValue
 
   if (resolvedScopeValue == null) return
-  if (resolvedTargetScopeValue == null) return
 
-  const tempPosition = -record.id()
   const positionColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(positionColumn))
   const scopeColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(scope))
   const tableSql = connection.quoteTable(tableName)
-  const pkSql = connection.quoteColumn("id")
+  const pkSql = connection.quoteColumn(modelClass.primaryKey())
 
   setShiftingFlag(record, true)
 
   try {
     await connection.query(
-      `UPDATE ${tableSql} SET ${scopeColumnSql} = ${connection.quote(resolvedTargetScopeValue)}, ${positionColumnSql} = ${connection.quote(tempPosition)} WHERE ${scopeColumnSql} = ${connection.quote(resolvedScopeValue)} AND ${pkSql} = ${connection.quote(record.id())}`
+      `UPDATE ${tableSql} SET ${positionColumnSql} = -${positionColumnSql} WHERE ${scopeColumnSql} = ${connection.quote(resolvedScopeValue)} AND ${pkSql} = ${connection.quote(record.id())}`
     )
   } finally {
     // Don't clear the flag here — the caller will do that after shifts

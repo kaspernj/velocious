@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.563",
+  "version": "1.0.565",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -118,6 +118,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "release-patch": "^1.0.0",
+    "selenium-webdriver": "^4.39.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
     "system-testing": "^1.0.108",

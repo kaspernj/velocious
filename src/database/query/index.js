@@ -15,6 +15,27 @@ import WhereNot from "./where-not.js"
 import WherePlain from "./where-plain.js"
 
 /**
+ * QueryArgsType type.
+ * @typedef {object} QueryArgsType
+ * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Driver instance or factory for query execution.
+ * @property {Array<import("./from-base.js").default>} [froms] - FROM clauses for the query.
+ * @property {string[]} [groups] - GROUP BY columns.
+ * @property {Array<import("./join-base.js").default>} [joins] - JOIN clauses for the query.
+ * @property {import("../handler.js").default} handler - Handler used for executing and transforming results.
+ * @property {number | null} [limit] - LIMIT clause value.
+ * @property {number | null} [offset] - OFFSET clause value.
+ * @property {Array<import("./order-base.js").default>} [orders] - ORDER BY clauses.
+ * @property {number | null} [page] - Page number for pagination.
+ * @property {number} [perPage] - Records per page for pagination.
+ * @property {NestedPreloadRecord} [preload] - Preload graph for related records.
+ * @property {Record<string, string[]>} [preloadSelects] - Attribute names to load for preloaded relationships, keyed by target model name.
+ * @property {Record<string, string[]>} [preloadSelectsExtra] - Extra selects to load in addition to the defaults for preloaded relationships, keyed by target model name.
+ * @property {Array<import("./select-base.js").default>} [selects] - SELECT clauses for the query.
+ * @property {AbortSignal} [signal] - Signal passed to database query execution.
+ * @property {boolean} [distinct] - Whether the query should use DISTINCT.
+ * @property {Array<import("./where-base.js").default>} [wheres] - WHERE conditions for the query.
+ */
+/**
  * OrderArgumentType type.
  * @typedef {{[key: string]: boolean | string | string[] | NestedPreloadRecord }} NestedPreloadRecord
  * @typedef {string | number | import("./order-base.js").default | import("./order-column.js").OrderColumnInput} OrderArgumentType
@@ -107,28 +128,6 @@ function mergeJoinValue(existing, incoming) {
 
   return incoming
 }
-
-/**
- * QueryArgsType type.
- * @typedef {object} QueryArgsType
- * @property {import("../drivers/base.js").default | (() => import("../drivers/base.js").default)} driver - Driver instance or factory for query execution.
- * @property {Array<import("./from-base.js").default>} [froms] - FROM clauses for the query.
- * @property {string[]} [groups] - GROUP BY columns.
- * @property {Array<import("./join-base.js").default>} [joins] - JOIN clauses for the query.
- * @property {import("../handler.js").default} handler - Handler used for executing and transforming results.
- * @property {number | null} [limit] - LIMIT clause value.
- * @property {number | null} [offset] - OFFSET clause value.
- * @property {Array<import("./order-base.js").default>} [orders] - ORDER BY clauses.
- * @property {number | null} [page] - Page number for pagination.
- * @property {number} [perPage] - Records per page for pagination.
- * @property {NestedPreloadRecord} [preload] - Preload graph for related records.
- * @property {Record<string, string[]>} [preloadSelects] - Attribute names to load for preloaded relationships, keyed by target model name.
- * @property {Record<string, string[]>} [preloadSelectsExtra] - Extra selects to load in addition to the defaults for preloaded relationships, keyed by target model name.
- * @property {Array<import("./select-base.js").default>} [selects] - SELECT clauses for the query.
- * @property {AbortSignal} [signal] - Signal passed to database query execution.
- * @property {boolean} [distinct] - Whether the query should use DISTINCT.
- * @property {Array<import("./where-base.js").default>} [wheres] - WHERE conditions for the query.
- */
 
 export default class VelociousDatabaseQuery {
   /**

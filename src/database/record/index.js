@@ -58,6 +58,10 @@ import registerActsAsListCallbacks from "./acts-as-list.js"
 import UUID from "pure-uuid"
 
 /**
+ * Translation record shape used by translated attributes.
+ * @typedef {VelociousDatabaseRecord & {locale: function(): string}} TranslationBase
+ */
+/**
  * AttachmentDriverConstructor type.
  * @typedef {import("../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor
  */
@@ -4451,11 +4455,6 @@ class VelociousDatabaseRecord {
     await this.save()
   }
 }
-
-/**
- * Translation record shape used by translated attributes.
- * @typedef {VelociousDatabaseRecord & {locale: function(): string}} TranslationBase
- */
 
 VelociousDatabaseRecord.registerValidatorType("format", ValidatorsFormat)
 VelociousDatabaseRecord.registerValidatorType("length", ValidatorsLength)

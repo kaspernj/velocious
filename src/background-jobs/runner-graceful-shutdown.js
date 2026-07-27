@@ -4,15 +4,14 @@ import timeout from "awaitery/build/timeout.js"
 
 import Configuration, {CurrentConfigurationNotSetError} from "../configuration.js"
 
-/** Bounded grace for closing framework connections on shutdown before forcing exit. */
-const SHUTDOWN_CLOSE_TIMEOUT_MS = 5000
-
 /**
  * The subset of a configuration a runner closes on shutdown. Typed structurally so
  * the shutdown path stays typechecked without a broad cast, and a future signature
  * drift surfaces at the call sites (and in tests) instead of hiding behind `any`.
  * @typedef {{disconnectBeacon: () => Promise<void>, closeDatabaseConnections: () => Promise<void>}} RunnerCloseableConfiguration
  */
+/** Bounded grace for closing framework connections on shutdown before forcing exit. */
+const SHUTDOWN_CLOSE_TIMEOUT_MS = 5000
 
 /**
  * Gracefully closes a background-job runner's framework connections (beacon +

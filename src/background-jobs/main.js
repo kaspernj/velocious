@@ -10,6 +10,12 @@ import VelociousError from "../velocious-error.js"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 
 /**
+ * WorkerExecutionModeCapability type.
+ * @typedef {object} WorkerExecutionModeCapability
+ * @property {import("./types.js").BackgroundJobExecutionMode} executionMode - Execution mode.
+ * @property {(worker: JsonSocket) => boolean} accepts - Whether the worker accepts this mode.
+ */
+/**
  * Channel used by `background-jobs-main` to coordinate dispatch wake-ups
  * across processes via Beacon. Workers do NOT subscribe to this channel
  * — they already receive job-handoff messages on their JsonSocket to
@@ -28,12 +34,6 @@ const MAX_TIMER_MS = 2_147_483_647 // ~24.8 days
 const WORKER_STALE_TIMEOUT_MS = 60000
 /** How often the main scans workers for staleness. */
 const WORKER_LIVENESS_SWEEP_MS = 15000
-/**
- * WorkerExecutionModeCapability type.
- * @typedef {object} WorkerExecutionModeCapability
- * @property {import("./types.js").BackgroundJobExecutionMode} executionMode - Execution mode.
- * @property {(worker: JsonSocket) => boolean} accepts - Whether the worker accepts this mode.
- */
 /**
  * Worker execution mode capabilities.
  * @type {WorkerExecutionModeCapability[]} */

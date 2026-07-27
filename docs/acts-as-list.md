@@ -51,6 +51,16 @@ database), while `Model.actsAsList` takes camelCase attribute names.
 | Update scope | Moves the record between scopes: closes the gap in the old scope, opens room in the new scope. Without an explicit position, the record is appended to the new scope. |
 | Destroy | Closes the gap by shifting all higher positions down by 1. |
 
+Explicit create and update positions must be positive integers. Omitting the
+position (or passing `null` on create) still appends the record. Velocious also
+rejects moving or destroying a persisted row whose position is already outside
+the `1..n` invariant, before it shifts any surrounding rows.
+
+List reordering works with numeric, string, and UUID primary keys. Velocious
+temporarily moves a row to the negative of its current numeric position within
+the source scope while surrounding rows shift; the temporary position does not
+depend on the primary-key value.
+
 When the scope column is backed by a belongs-to relationship, callers can assign the relationship object instead of the raw foreign key:
 
 ```js
@@ -63,7 +73,10 @@ This is equivalent to assigning `projectId` for list reordering purposes.
 
 Position shifts run as raw SQL UPDATE statements inside the same database
 transaction as the parent `save()` or `destroy()`. The UNIQUE index on
-`(scope, position)` protects integrity.
+`(scope, position)` protects integrity. A cross-scope move stays in its source
+scope at its temporary negative position until the destination rows have
+shifted, so simultaneous arrivals from different scopes do not contend for the
+same temporary destination position.
 
 ## Re-entrancy guards
 

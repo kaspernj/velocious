@@ -4,6 +4,45 @@ import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import {resolveFrontendModelClass} from "../frontend-models/model-registry.js"
 
+/**
+ * RansackPredicate type.
+ * @typedef {"cont" | "end" | "eq" | "gt" | "gteq" | "in" | "lt" | "lteq" | "not_eq" | "not_in" | "null" | "start"} RansackPredicate
+ */
+/**
+ * RansackCombinator type.
+ * @typedef {"and" | "or"} RansackCombinator
+ */
+/**
+ * RansackModelClass type.
+ * @typedef {typeof import("../database/record/index.js").default | import("../frontend-models/base.js").FrontendModelClass} RansackModelClass
+ */
+/**
+ * RansackAttribute type.
+ * @typedef {object} RansackAttribute
+ * @property {string} attributeName - Resolved attribute name.
+ * @property {string[]} path - Resolved relationship path.
+ */
+/**
+ * RansackCondition type.
+ * @typedef {object} RansackCondition
+ * @property {RansackAttribute[]} attributes - Resolved attributes to test.
+ * @property {RansackCombinator} combinator - How multiple attributes are combined.
+ * @property {RansackPredicate} predicate - Parsed Ransack predicate.
+ * @property {?} value - Normalized value.
+ */
+/**
+ * RansackGroup type.
+ * @typedef {object} RansackGroup
+ * @property {RansackCombinator} combinator - How entries inside this group are combined.
+ * @property {RansackCondition[]} conditions - Conditions in this group.
+ * @property {RansackGroup[]} groupings - Nested groups.
+ */
+/**
+ * RansackSort type.
+ * @typedef {object} RansackSort
+ * @property {string} attribute - Resolved attribute name.
+ * @property {"asc" | "desc"} direction - Sort direction.
+ */
 /** Error raised when a Ransack descriptor is malformed. */
 export class RansackQueryError extends Error {
   /**
@@ -25,45 +64,6 @@ export class RansackQueryError extends Error {
 function ransackQueryError(message) {
   return new RansackQueryError(message)
 }
-
-/**
- * RansackPredicate type.
- * @typedef {"cont" | "end" | "eq" | "gt" | "gteq" | "in" | "lt" | "lteq" | "not_eq" | "not_in" | "null" | "start"} RansackPredicate
- */
-
-/**
- * RansackCombinator type.
- * @typedef {"and" | "or"} RansackCombinator
- */
-
-/**
- * RansackModelClass type.
- * @typedef {typeof import("../database/record/index.js").default | import("../frontend-models/base.js").FrontendModelClass} RansackModelClass
- */
-
-/**
- * RansackAttribute type.
- * @typedef {object} RansackAttribute
- * @property {string} attributeName - Resolved attribute name.
- * @property {string[]} path - Resolved relationship path.
- */
-
-/**
- * RansackCondition type.
- * @typedef {object} RansackCondition
- * @property {RansackAttribute[]} attributes - Resolved attributes to test.
- * @property {RansackCombinator} combinator - How multiple attributes are combined.
- * @property {RansackPredicate} predicate - Parsed Ransack predicate.
- * @property {?} value - Normalized value.
- */
-
-/**
- * RansackGroup type.
- * @typedef {object} RansackGroup
- * @property {RansackCombinator} combinator - How entries inside this group are combined.
- * @property {RansackCondition[]} conditions - Conditions in this group.
- * @property {RansackGroup[]} groupings - Nested groups.
- */
 
 const supportedPredicates = [
   "not_in",
@@ -802,13 +802,6 @@ function normalizeRansackArray(value) {
 
   return [value]
 }
-
-/**
- * RansackSort type.
- * @typedef {object} RansackSort
- * @property {string} attribute - Resolved attribute name.
- * @property {"asc" | "desc"} direction - Sort direction.
- */
 
 /**
  * Parses a ransack `s` sort string against model attributes.

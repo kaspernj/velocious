@@ -16,15 +16,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<CommentWriteAttributes>} */
 export default class CommentBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/comment.js").default}
-   */
+  /** @returns {typeof import("../models/comment.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/comment.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -33,14 +29,10 @@ export default class CommentBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   taskId() { return this.readAttribute("taskId") }
 
   /**
@@ -49,14 +41,10 @@ export default class CommentBase extends DatabaseRecord {
    */
   setTaskId(newValue) { return this._setColumnAttribute("taskId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasTaskId() { return this._hasAttribute(this.taskId()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   body() { return this.readAttribute("body") }
 
   /**
@@ -65,14 +53,10 @@ export default class CommentBase extends DatabaseRecord {
    */
   setBody(newValue) { return this._setColumnAttribute("body", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasBody() { return this._hasAttribute(this.body()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -81,14 +65,10 @@ export default class CommentBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -97,9 +77,7 @@ export default class CommentBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**

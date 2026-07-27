@@ -8,6 +8,23 @@ import {ValidationError} from "../database/record/index.js"
 import VelociousError from "../velocious-error.js"
 
 /**
+ * Resolved routed-resource registration for one replay resource type.
+ * @typedef {object} SyncReplayResourceRegistration
+ * @property {string} modelName - Effective frontend model name.
+ * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Routed resource class.
+ * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} resourceConfiguration - Normalized resource configuration when registry-resolved.
+ */
+/**
+ * @typedef {object} SyncReplayMutation
+ * @property {Date} clientUpdatedAt - Client-side mutation timestamp.
+ * @property {Record<string, ?>} data - Parsed mutation payload.
+ * @property {?} id - Client sync row id for per-sync responses.
+ * @property {string} resourceId - Resource id as a string.
+ * @property {string} resourceType - Resource/model name.
+ * @property {string} serializedData - JSON serialized mutation payload.
+ * @property {string} syncType - Sync operation type.
+ */
+/**
  * One declarative broadcast fanned out after a mutation applies.
  * @typedef {object} SyncReplayBroadcast
  * @property {string | ((args: Record<string, ?>) => string)} channel - Channel name or resolver.
@@ -778,22 +795,3 @@ export default class SyncEnvelopeReplayService {
     await deliverDeclaredBroadcasts({args, broadcaster: this.broadcaster, broadcasts: this.broadcasts})
   }
 }
-
-/**
- * Resolved routed-resource registration for one replay resource type.
- * @typedef {object} SyncReplayResourceRegistration
- * @property {string} modelName - Effective frontend model name.
- * @property {import("../configuration-types.js").FrontendModelResourceClassType} resourceClass - Routed resource class.
- * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} resourceConfiguration - Normalized resource configuration when registry-resolved.
- */
-
-/**
- * @typedef {object} SyncReplayMutation
- * @property {Date} clientUpdatedAt - Client-side mutation timestamp.
- * @property {Record<string, ?>} data - Parsed mutation payload.
- * @property {?} id - Client sync row id for per-sync responses.
- * @property {string} resourceId - Resource id as a string.
- * @property {string} resourceType - Resource/model name.
- * @property {string} serializedData - JSON serialized mutation payload.
- * @property {string} syncType - Sync operation type.
- */

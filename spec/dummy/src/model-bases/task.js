@@ -20,15 +20,11 @@ import DatabaseRecord from "../../../../src/database/record/index.js"
 
 /** @augments {DatabaseRecord<TaskWriteAttributes>} */
 export default class TaskBase extends DatabaseRecord {
-  /**
-   * @returns {typeof import("../models/task.js").default}
-   */
+  /** @returns {typeof import("../models/task.js").default} */
   // @ts-ignore - override narrows return type for better IntelliSense in generated model bases
   getModelClass() { return /** @type {typeof import("../models/task.js").default} */ (this.constructor) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   id() { return this.readAttribute("id") }
 
   /**
@@ -37,14 +33,10 @@ export default class TaskBase extends DatabaseRecord {
    */
   setId(newValue) { return this._setColumnAttribute("id", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasId() { return this._hasAttribute(this.id()) }
 
-  /**
-   * @returns {number}
-   */
+  /** @returns {number} */
   projectId() { return this.readAttribute("projectId") }
 
   /**
@@ -53,14 +45,10 @@ export default class TaskBase extends DatabaseRecord {
    */
   setProjectId(newValue) { return this._setColumnAttribute("projectId", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasProjectId() { return this._hasAttribute(this.projectId()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   name() { return this.readAttribute("name") }
 
   /**
@@ -69,14 +57,10 @@ export default class TaskBase extends DatabaseRecord {
    */
   setName(newValue) { return this._setColumnAttribute("name", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasName() { return this._hasAttribute(this.name()) }
 
-  /**
-   * @returns {string | null}
-   */
+  /** @returns {string | null} */
   description() { return this.readAttribute("description") }
 
   /**
@@ -85,14 +69,10 @@ export default class TaskBase extends DatabaseRecord {
    */
   setDescription(newValue) { return this._setColumnAttribute("description", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasDescription() { return this._hasAttribute(this.description()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   createdAt() { return this.readAttribute("createdAt") }
 
   /**
@@ -101,14 +81,10 @@ export default class TaskBase extends DatabaseRecord {
    */
   setCreatedAt(newValue) { return this._setColumnAttribute("createdAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasCreatedAt() { return this._hasAttribute(this.createdAt()) }
 
-  /**
-   * @returns {Date | null}
-   */
+  /** @returns {Date | null} */
   updatedAt() { return this.readAttribute("updatedAt") }
 
   /**
@@ -117,14 +93,10 @@ export default class TaskBase extends DatabaseRecord {
    */
   setUpdatedAt(newValue) { return this._setColumnAttribute("updatedAt", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
-  /**
-   * @returns {boolean | null}
-   */
+  /** @returns {boolean | null} */
   isDone() { return this.readAttribute("isDone") }
 
   /**
@@ -133,9 +105,7 @@ export default class TaskBase extends DatabaseRecord {
    */
   setIsDone(newValue) { return this._setColumnAttribute("isDone", newValue) }
 
-  /**
-   * @returns {boolean}
-   */
+  /** @returns {boolean} */
   hasIsDone() { return this._hasAttribute(this.isDone()) }
 
   /**

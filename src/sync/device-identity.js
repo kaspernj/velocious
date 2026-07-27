@@ -1,13 +1,7 @@
-// @ts-check
-
-const ECDSA_P256_SHA256_ALGORITHM = "ECDSA-P256-SHA256"
-const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
-
 /**
  * JSON Web Key used by the sync signing helpers.
  * @typedef {import("node:crypto").webcrypto.JsonWebKey} SyncJsonWebKey
  */
-
 /**
  * Backend-signed device certificate payload.
  * @typedef {object} DeviceCertificatePayload
@@ -18,7 +12,6 @@ const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
  * @property {string} expiresAt - ISO timestamp after which the certificate is invalid.
  * @property {string} issuedAt - ISO timestamp when the backend issued the certificate.
  */
-
 /**
  * Backend-signed device certificate envelope.
  * @typedef {object} DeviceCertificate
@@ -26,7 +19,6 @@ const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
  * @property {DeviceCertificatePayload} certificate - Certificate payload.
  * @property {string} signature - Backend signature over the certificate payload.
  */
-
 /**
  * Sync mutation payload signed by a device.
  * @typedef {object} SyncMutation
@@ -43,7 +35,6 @@ const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
  * @property {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} [payload] - Domain command payload.
  * @property {string} policyHash - Sync policy hash the mutation was checked against.
  */
-
 /**
  * Device-signed mutation envelope.
  * @typedef {object} SignedSyncMutation
@@ -52,6 +43,10 @@ const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
  * @property {SyncMutation} mutation - Mutation payload.
  * @property {string} signature - Device signature over the mutation envelope.
  */
+// @ts-check
+
+const ECDSA_P256_SHA256_ALGORITHM = "ECDSA-P256-SHA256"
+const ECDSA_P256_SHA256_SIGNATURE_PREFIX = "ecdsa-p256-sha256-"
 
 /**
  * Generates an ECDSA P-256 keypair exported as JWKs.

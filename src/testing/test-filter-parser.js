@@ -1,3 +1,13 @@
+/**
+ * ParseFiltersResult type.
+ * @typedef {object} ParseFiltersResult
+ * @property {string[]} includeTags - Tags to include.
+ * @property {string[]} excludeTags - Tags to exclude.
+ * @property {string[]} examplePatterns - Example name patterns.
+ * @property {string[]} filteredProcessArgs - Remaining process args with filter flags removed.
+ * @property {number | undefined} groups - Total number of groups for test splitting.
+ * @property {number | undefined} groupNumber - Which group to run (1-indexed).
+ */
 // @ts-check
 
 const INCLUDE_TAG_FLAGS = new Set(["--tag", "--include-tag", "-t"])
@@ -49,17 +59,6 @@ export function normalizeExamplePatterns(patterns) {
 
   return normalized
 }
-
-/**
- * ParseFiltersResult type.
- * @typedef {object} ParseFiltersResult
- * @property {string[]} includeTags - Tags to include.
- * @property {string[]} excludeTags - Tags to exclude.
- * @property {string[]} examplePatterns - Example name patterns.
- * @property {string[]} filteredProcessArgs - Remaining process args with filter flags removed.
- * @property {number | undefined} groups - Total number of groups for test splitting.
- * @property {number | undefined} groupNumber - Which group to run (1-indexed).
- */
 
 /**
  * Runs the parseFilters helper.

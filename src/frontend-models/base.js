@@ -18,6 +18,23 @@ import isPlainObject from "../utils/plain-object.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
 
 /**
+ * Frontend model relationship helper type. Returned by `getRelationshipByName`,
+ * which generated models immediately cast to their concrete relationship type
+ * (e.g. `FrontendModelSingularRelationship<Owner, Target, TargetCreateAttributes>`).
+ * The members use `any` type args so that cast is allowed regardless of the
+ * target model's typed-attribute generics — a concrete `FrontendModelBase` member
+ * here makes the cast a non-overlapping (TS2352) error for every typed model.
+ * @typedef {FrontendModelHasManyRelationship<any, any, any> | FrontendModelSingularRelationship<any, any, any>} FrontendModelRelationship
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{callback: (payload: {id: string, model: FrontendModelBase}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
+ */
+/**
+ * Defines this typedef.
+ * @typedef {{callback: (payload: {id: string}) => void}} FrontendModelDestroyEventCallbackEntry
+ */
+/**
  * FrontendModelCommandType type.
  * @typedef {"create" | "find" | "index" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelCommandType */
 /**
@@ -659,16 +676,6 @@ export class FrontendModelHasManyRelationship {
 }
 
 /**
- * Frontend model relationship helper type. Returned by `getRelationshipByName`,
- * which generated models immediately cast to their concrete relationship type
- * (e.g. `FrontendModelSingularRelationship<Owner, Target, TargetCreateAttributes>`).
- * The members use `any` type args so that cast is allowed regardless of the
- * target model's typed-attribute generics — a concrete `FrontendModelBase` member
- * here makes the cast a non-overlapping (TS2352) error for every typed model.
- * @typedef {FrontendModelHasManyRelationship<any, any, any> | FrontendModelSingularRelationship<any, any, any>} FrontendModelRelationship
- */
-
-/**
  * Copies loaded relationship state between helpers of the same relationship shape.
  * @param {object} args - Arguments.
  * @param {FrontendModelRelationship} args.sourceRelationship - Source relationship helper.
@@ -1278,15 +1285,6 @@ function cloneFrontendModelAttributes(value) {
  * Matches the backend `FRONTEND_MODELS_CHANNEL_NAME`.
  */
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
-
-/**
- * Defines this typedef.
- * @typedef {{callback: (payload: {id: string, model: FrontendModelBase}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
- */
-/**
- * Defines this typedef.
- * @typedef {{callback: (payload: {id: string}) => void}} FrontendModelDestroyEventCallbackEntry
- */
 
 /**
  * Runs merge frontend model event preload.

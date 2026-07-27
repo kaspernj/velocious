@@ -13,6 +13,24 @@ import { websocketEventLogStoreForConfiguration } from "../websocket-event-log-s
 import RequestRunner from "./request-runner.js"
 import WebsocketRequest from "./websocket-request.js"
 
+/**
+ * Defines this typedef.
+ * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
+ */
+
+/**
+ * @typedef {object} InboundMessageAdmission
+ * @property {number} byteLength - Exact raw text payload bytes charged to this admission.
+ * @property {number} generation - Accounting generation active when admitted.
+ * @property {boolean} released - Whether this admission has already been released.
+ */
+
+/**
+ * @typedef {object} InboundMessageWork
+ * @property {InboundMessageAdmission} admission - Admission ownership.
+ * @property {WebsocketSessionMessage} message - Decoded client message.
+ */
+
 const WEBSOCKET_FINAL_FRAME = 0x80
 const WEBSOCKET_OPCODE_CONTINUATION = 0x0
 const WEBSOCKET_OPCODE_TEXT = 0x1
@@ -38,24 +56,6 @@ const WEBSOCKET_MAX_INBOUND_FRAME_BYTES_BIGINT = BigInt(WEBSOCKET_MAX_FINAL_FRAM
 
 /** Cap on fragment count for a single fragmented message. */
 const WEBSOCKET_MAX_FRAGMENTED_MESSAGE_FRAGMENTS = 1024
-
-/**
- * Defines this typedef.
- * @typedef {{type: "subscribe", channel: string, lastEventId?: string, params?: Record<string, ?>} | {type: "metadata", data?: Record<string, ?>} | {type?: "request", body?: ?, headers?: Record<string, ?>, id?: string | number | null, method: string, path: string} | Record<string, ?>} WebsocketSessionMessage
- */
-
-/**
- * @typedef {object} InboundMessageAdmission
- * @property {number} byteLength - Exact raw text payload bytes charged to this admission.
- * @property {number} generation - Accounting generation active when admitted.
- * @property {boolean} released - Whether this admission has already been released.
- */
-
-/**
- * @typedef {object} InboundMessageWork
- * @property {InboundMessageAdmission} admission - Admission ownership.
- * @property {WebsocketSessionMessage} message - Decoded client message.
- */
 
 /**
  * Runs subscribe message.

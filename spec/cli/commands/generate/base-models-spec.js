@@ -126,6 +126,25 @@ describe("Cli - generate - base-models", () => {
     expect(taskContents).not.toContain('this.relationshipOrLoad("project", {preloadTranslations: true})')
   })
 
+  it("formats generated single-tag JSDoc blocks on one line", {tags: ["dummy"]}, async () => {
+    const cli = new Cli({
+      configuration: dummyConfiguration,
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:base-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const uuidItemBasePath = `${dummyDirectory()}/src/model-bases/uuid-acts-as-list-item.js`
+    const uuidItemContents = await fs.readFile(uuidItemBasePath, "utf8")
+
+    expect(uuidItemContents).toContain("  /** @returns {string} */\n  id()")
+    expect(uuidItemContents).toContain("  /** @returns {boolean} */\n  hasId()")
+    expect(uuidItemContents).not.toContain("  /**\n   * @returns {string}\n   */\n  id()")
+  })
+
   it("keeps generated backend write attributes on inherited create and update", {tags: ["mssql"]}, async () => {
     const cli = new Cli({
       configuration: dummyConfiguration,

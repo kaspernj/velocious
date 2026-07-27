@@ -13,13 +13,10 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
 /**
  * AuditJson type.
  * @typedef {Record<string, string | number | boolean | null>} AuditJson
  */
-
 /**
  * AuditRow type.
  * @typedef {object} AuditRow
@@ -30,7 +27,6 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
  * @property {AuditJson | null} params
  * @property {string} typeName
  */
-
 /**
  * DedicatedAuditRow type.
  * @typedef {object} DedicatedAuditRow
@@ -39,7 +35,6 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
  * @property {AuditJson | null} params
  * @property {number | string} widgetId
  */
-
 /**
  * AuditScratchContext type.
  * @typedef {object} AuditScratchContext
@@ -47,6 +42,7 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
  * @property {typeof DatabaseRecord} SharedAuditWidget
  * @property {typeof DatabaseRecord} Widget
  */
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /**
  * @param {string | AuditJson | null} value - JSON value from the database.

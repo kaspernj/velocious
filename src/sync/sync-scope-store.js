@@ -6,6 +6,15 @@ import UUID from "pure-uuid"
 import {scopeKey} from "./query-scope.js"
 import stableJsonStringify from "./stable-json.js"
 
+/**
+ * @typedef {object} SyncScopeRow
+ * @property {Record<string, ?>} conditions - Scope attribute conditions.
+ * @property {string | null} cursorPayload - Persisted cursor JSON payload.
+ * @property {string} id - Scope row id.
+ * @property {string | null} resourceType - Scope resource/model name, or null for the all-types (user) scope.
+ * @property {string} scopeDigest - Fixed-size deterministic digest of the canonical scope key.
+ * @property {string} state - Scope state ("active" or "removed").
+ */
 const TABLE_NAME = "velocious_sync_scopes"
 const SCOPE_DIGEST_PREFIX = "velocious-sync-scope:"
 
@@ -18,16 +27,6 @@ const SCOPE_DIGEST_PREFIX = "velocious-sync-scope:"
 function scopeDigestForScope(scope) {
   return new UUID(5, "ns:URL", `${SCOPE_DIGEST_PREFIX}${scopeKey(scope)}`).format()
 }
-
-/**
- * @typedef {object} SyncScopeRow
- * @property {Record<string, ?>} conditions - Scope attribute conditions.
- * @property {string | null} cursorPayload - Persisted cursor JSON payload.
- * @property {string} id - Scope row id.
- * @property {string | null} resourceType - Scope resource/model name, or null for the all-types (user) scope.
- * @property {string} scopeDigest - Fixed-size deterministic digest of the canonical scope key.
- * @property {string} state - Scope state ("active" or "removed").
- */
 
 /**
  * Framework-owned local persistence for declared sync scopes and their cursors.

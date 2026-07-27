@@ -7,8 +7,6 @@ import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
 import VelociousError from "../velocious-error.js"
 
-const QUICK_SEARCH_COLUMN = "quickSearch"
-
 /**
  * Optional client-declared sync scope carried on a changes request.
  * @typedef {object} SerializedChangesScope
@@ -16,6 +14,7 @@ const QUICK_SEARCH_COLUMN = "quickSearch"
  * @property {string | null} resourceType - Client resource/model name the scope was declared for, or null for the all-types (user) scope: one scope covering every resource type this resource authorizes for the caller, so a sync authorizes once however many types it serves.
  * @property {string[] | null} resourceTypes - For the all-types scope, the resource types the client can apply. A cheap delivery/type filter only - it narrows, never widens, what the app's authorization already allows. Null for a type-declared scope.
  */
+const QUICK_SEARCH_COLUMN = "quickSearch"
 
 /**
  * Base resource for Velocious sync endpoints.

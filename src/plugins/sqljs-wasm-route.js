@@ -2,23 +2,21 @@ import {createRequire} from "node:module"
 import path from "node:path"
 import SqlJsWasmRouteController from "./sqljs-wasm-route-controller.js"
 
-const require = createRequire(import.meta.url)
-const sqlJsEntryPath = require.resolve("sql.js")
-const sqlJsDistDirectory = path.dirname(sqlJsEntryPath)
-
 /**
  * InstallSqlJsWasmRouteArgs type.
  * @typedef {object} InstallSqlJsWasmRouteArgs
  * @property {import("../configuration.js").default} configuration - Velocious configuration instance.
  * @property {string} [routePrefix] - Route prefix used for sql.js asset serving.
  */
-
 /**
  * SqlJsLocateFileFromBackendArgs type.
  * @typedef {object} SqlJsLocateFileFromBackendArgs
  * @property {string} backendBaseUrl - Backend base URL (for example `https://api.example.com`).
  * @property {string} [routePrefix] - Route prefix used for sql.js asset serving.
  */
+const require = createRequire(import.meta.url)
+const sqlJsEntryPath = require.resolve("sql.js")
+const sqlJsDistDirectory = path.dirname(sqlJsEntryPath)
 
 /**
  * Runs normalize route prefix.

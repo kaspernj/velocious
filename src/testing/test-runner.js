@@ -14,6 +14,87 @@ import {pathToFileURL} from "url"
 import {clearDeliveries} from "../mailer.js"
 
 /**
+ * ConsoleMethodName type.
+ * @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
+/**
+ * AttemptConsoleOutput type.
+ * @typedef {object} AttemptConsoleOutput
+ * @property {number} attemptNumber - Attempt number.
+ * @property {string} output - Captured console output.
+ */
+/**
+ * TestArgs type.
+ * @typedef {object} TestArgs
+ * @property {Application} [application] - Application instance for integration tests.
+ * @property {RequestClient} [client] - HTTP client for request tests.
+ * @property {object} [databaseCleaning] - Database cleanup options for tests.
+ * @property {boolean} [databaseCleaning.transaction] - Use transactions to rollback between tests.
+ * @property {boolean} [databaseCleaning.truncate] - Truncate tables between tests.
+ * @property {boolean} [databaseCleaning.truncateBefore] - Truncate tables before each test, in addition to the default cleanup.
+ * @property {boolean} [focus] - Whether this test is focused.
+ * @property {() => (void|Promise<void>)} [function] - Test callback function.
+ * @property {number} [retry] - Number of retries when a test fails.
+ * @property {string[] | string} [tags] - Tags for filtering.
+ * @property {number} [timeoutSeconds] - Timeout in seconds for the test.
+ * @property {string} [type] - Test type identifier.
+ */
+/**
+ * TestData type.
+ * @typedef {object} TestData
+ * @property {TestArgs} args - Arguments passed to the test.
+ * @property {string} [filePath] - Source file path.
+ * @property {number} [line] - Source line number.
+ * @property {function(TestArgs) : (void|Promise<void>)} function - Test callback to execute.
+ */
+/**
+ * FailedTestDetail type.
+ * @typedef {object} FailedTestDetail
+ * @property {string} fullDescription - Full test description.
+ * @property {string} [filePath] - Source file path.
+ * @property {number} [line] - Source line number.
+ * @property {?} error - Failure error.
+ * @property {string} [consoleOutput] - Captured console output while test ran.
+ * @property {string} [consoleLogPath] - Saved console log path.
+ */
+/**
+ * ActiveAfterAllScopeEntry type.
+ * @typedef {object} ActiveAfterAllScopeEntry
+ * @property {TestsArgument} tests - Scope test tree.
+ * @property {boolean} afterAllsRun - Whether cleanup hooks have run.
+ */
+/**
+ * Defines this typedef.
+ * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : (void|Promise<void>)} AfterBeforeEachCallbackType
+ */
+/**
+ * AfterBeforeEachCallbackObjectType type.
+ * @typedef {object} AfterBeforeEachCallbackObjectType
+ * @property {AfterBeforeEachCallbackType} callback - Hook callback to execute.
+ */
+/**
+ * Defines this typedef.
+ * @typedef {function({configuration: import("../configuration.js").default}) : (void|Promise<void>)} BeforeAfterAllCallbackType
+ */
+/**
+ * BeforeAfterAllCallbackObjectType type.
+ * @typedef {object} BeforeAfterAllCallbackObjectType
+ * @property {BeforeAfterAllCallbackType} callback - Hook callback to execute.
+ */
+/**
+ * TestsArgument type.
+ * @typedef {object} TestsArgument
+ * @property {Record<string, TestData>} args - Arguments keyed by test description.
+ * @property {boolean} [anyTestsFocussed] - Whether any tests in the tree are focused.
+ * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - After-each hooks for this scope.
+ * @property {BeforeAfterAllCallbackObjectType[]} afterAlls - After-all hooks for this scope.
+ * @property {BeforeAfterAllCallbackObjectType[]} beforeAlls - Before-all hooks for this scope.
+ * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Before-each hooks for this scope.
+ * @property {string} [filePath] - Source file path.
+ * @property {number} [line] - Source line number.
+ * @property {Record<string, TestData>} tests - A unique identifier for the node.
+ * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
+ */
+/**
  * Marks the error thrown by {@link runWithTimeout} so the caller can tell a
  * lifecycle timeout (the promise is still running detached) apart from an
  * ordinary test failure (the promise already settled).
@@ -86,20 +167,9 @@ function awaitSettledOrGrace(lifecycle, graceMs) {
 }
 
 /**
- * ConsoleMethodName type.
- * @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
-
-/**
  * Captured console methods.
  * @type {ConsoleMethodName[]} */
 const CAPTURED_CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"]
-
-/**
- * AttemptConsoleOutput type.
- * @typedef {object} AttemptConsoleOutput
- * @property {number} attemptNumber - Attempt number.
- * @property {string} output - Captured console output.
- */
 
 /**
  * Runs to file slug.
@@ -113,87 +183,6 @@ function toFileSlug(value) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "failed-test"
 }
-
-/**
- * TestArgs type.
- * @typedef {object} TestArgs
- * @property {Application} [application] - Application instance for integration tests.
- * @property {RequestClient} [client] - HTTP client for request tests.
- * @property {object} [databaseCleaning] - Database cleanup options for tests.
- * @property {boolean} [databaseCleaning.transaction] - Use transactions to rollback between tests.
- * @property {boolean} [databaseCleaning.truncate] - Truncate tables between tests.
- * @property {boolean} [databaseCleaning.truncateBefore] - Truncate tables before each test, in addition to the default cleanup.
- * @property {boolean} [focus] - Whether this test is focused.
- * @property {() => (void|Promise<void>)} [function] - Test callback function.
- * @property {number} [retry] - Number of retries when a test fails.
- * @property {string[] | string} [tags] - Tags for filtering.
- * @property {number} [timeoutSeconds] - Timeout in seconds for the test.
- * @property {string} [type] - Test type identifier.
- */
-
-/**
- * TestData type.
- * @typedef {object} TestData
- * @property {TestArgs} args - Arguments passed to the test.
- * @property {string} [filePath] - Source file path.
- * @property {number} [line] - Source line number.
- * @property {function(TestArgs) : (void|Promise<void>)} function - Test callback to execute.
- */
-
-/**
- * FailedTestDetail type.
- * @typedef {object} FailedTestDetail
- * @property {string} fullDescription - Full test description.
- * @property {string} [filePath] - Source file path.
- * @property {number} [line] - Source line number.
- * @property {?} error - Failure error.
- * @property {string} [consoleOutput] - Captured console output while test ran.
- * @property {string} [consoleLogPath] - Saved console log path.
- */
-
-/**
- * ActiveAfterAllScopeEntry type.
- * @typedef {object} ActiveAfterAllScopeEntry
- * @property {TestsArgument} tests - Scope test tree.
- * @property {boolean} afterAllsRun - Whether cleanup hooks have run.
- */
-
-/**
- * Defines this typedef.
- * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : (void|Promise<void>)} AfterBeforeEachCallbackType
- */
-
-/**
- * AfterBeforeEachCallbackObjectType type.
- * @typedef {object} AfterBeforeEachCallbackObjectType
- * @property {AfterBeforeEachCallbackType} callback - Hook callback to execute.
- */
-
-/**
- * Defines this typedef.
- * @typedef {function({configuration: import("../configuration.js").default}) : (void|Promise<void>)} BeforeAfterAllCallbackType
- */
-
-/**
- * BeforeAfterAllCallbackObjectType type.
- * @typedef {object} BeforeAfterAllCallbackObjectType
- * @property {BeforeAfterAllCallbackType} callback - Hook callback to execute.
- */
-
-/**
- * TestsArgument type.
- * @typedef {object} TestsArgument
- * @property {Record<string, TestData>} args - Arguments keyed by test description.
- * @property {boolean} [anyTestsFocussed] - Whether any tests in the tree are focused.
- * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - After-each hooks for this scope.
- * @property {BeforeAfterAllCallbackObjectType[]} afterAlls - After-all hooks for this scope.
- * @property {BeforeAfterAllCallbackObjectType[]} beforeAlls - Before-all hooks for this scope.
- * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Before-each hooks for this scope.
- * @property {string} [filePath] - Source file path.
- * @property {number} [line] - Source line number.
- * @property {Record<string, TestData>} tests - A unique identifier for the node.
- * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
- */
 
 export default class TestRunner {
   /**
@@ -539,17 +528,18 @@ export default class TestRunner {
   }
 
   /**
-   * Pins each per-test connection as its pool's in-process test shared connection so
-   * HTTP request handlers dispatched during the test (which run in the main thread but
-   * in a fresh async context without the connection pin) resolve to the SAME connection
-   * — and therefore the same open transaction — as the test body. Pools that predate the
-   * shared-connection hook are skipped. Pair with {@link clearTestSharedConnections} in a
-   * finally.
-   * @returns {void}
+   * Registers each non-tenant per-test connection as a dynamic candidate for in-process
+   * request sharing. The pool evaluates transaction state when each request is dispatched,
+   * so a transaction started or ended during a hook callback takes effect immediately.
+   * Inactive and tenant-only connections remain independently pooled. Pair with
+   * {@link clearTestSharedConnections} in a finally.
+   * @returns {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} - Lifecycle-owned registrations.
    */
   activateTestSharedConnections() {
     const configuration = this.getConfiguration()
     const currentConnections = configuration.getCurrentConnections()
+    /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
+    const registrations = []
 
     for (const identifier of Object.keys(currentConnections)) {
       const pool = configuration.getDatabasePool(identifier)
@@ -561,16 +551,33 @@ export default class TestRunner {
       if (pool.getConfiguration().tenantOnly) {
         continue
       }
-      pool.setTestSharedConnection(currentConnections[identifier])
+
+      const connection = currentConnections[identifier]
+
+      const registration = pool.setTestSharedConnectionProvider(() => {
+        return connection.insideTransaction() ? connection : undefined
+      })
+
+      if (registration) registrations.push({pool, registration})
     }
+
+    return registrations
   }
 
   /**
    * Clears the in-process test shared connection on every configured pool. Idempotent and
    * safe to call when none was set.
+   * @param {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} [registrations] - Lifecycle-owned registrations to clear conditionally.
    * @returns {void}
    */
-  clearTestSharedConnections() {
+  clearTestSharedConnections(registrations) {
+    if (registrations) {
+      for (const {pool, registration} of registrations) {
+        pool.clearTestSharedConnection(registration)
+      }
+      return
+    }
+
     const configuration = this.getConfiguration()
 
     for (const identifier of configuration.getDatabaseIdentifiers()) {
@@ -976,6 +983,8 @@ export default class TestRunner {
            * still wait for it to settle after runWithTimeout has abandoned it.
            * @type {Promise<?> | undefined} */
           let testLifecycle
+          /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
+          let testSharedConnectionRegistrations = []
           /**
            * Shared mutable flag so the catch block can suppress the
            * `_successfulTests` increment inside the still-detached lifecycle:
@@ -1002,12 +1011,11 @@ export default class TestRunner {
               // stale async-context pin and force every later test onto a fresh checkout,
               // breaking isolation).
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
-                // Only request-type tests dispatch through the in-process HTTP handler,
-                // so only they need the pinned connection shared with it. Sharing it for
-                // every test would let unrelated specs observe a test shared connection on
-                // pools they inspect directly. Cleared after afterEach either way.
+                // Register dynamic candidates before application hooks so transaction
+                // state changes made during a hook are visible to a request dispatched
+                // by that same callback.
                 if (testArgs.type == "request") {
-                  this.activateTestSharedConnections()
+                  testSharedConnectionRegistrations = this.activateTestSharedConnections()
                 }
 
                 try {
@@ -1035,7 +1043,7 @@ export default class TestRunner {
                     }
                   }
                 } finally {
-                  this.clearTestSharedConnections()
+                  this.clearTestSharedConnections(testSharedConnectionRegistrations)
                 }
               })
             })
@@ -1077,7 +1085,7 @@ export default class TestRunner {
               // ensureConnections before activateTestSharedConnections() replaces
               // it. Clear it here so the next test checks out a fresh connection.
               // Idempotent when the lifecycle did settle and already cleared.
-              this.clearTestSharedConnections()
+              this.clearTestSharedConnections(testSharedConnectionRegistrations)
             }
 
             willRetry = retriesUsed < retryCount

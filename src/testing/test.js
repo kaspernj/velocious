@@ -8,6 +8,14 @@ import waitForEvent from "./wait-for-event.js"
 import {arrayContaining, objectContaining} from "./expect-utils.js"
 
 /**
+ * VelociousTestConfig type.
+ * @typedef {object} VelociousTestConfig
+ * @property {"failure" | "live"} consoleOutput - Console output mode.
+ * @property {string[]} excludeTags - Tags excluded by default.
+ * @property {number} defaultTimeoutSeconds - Default timeout in seconds.
+ * @property {number} failedConsoleOutputMaxLines - Maximum failed console lines to print inline.
+ */
+/**
  * Tests.
  * @type {import("./test-runner.js").TestsArgument} */
 const tests = {
@@ -202,7 +210,6 @@ function afterAll(callback) {
   currentTest.afterAlls.push({callback})
 }
 
-
 /**
  * Runs describe.
  * @param {string} description - Description.
@@ -353,11 +360,3 @@ globalThis.testEvents = testEvents
 globalThis.configureTests = configureTests
 
 export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests, waitForEvent}
-/**
- * VelociousTestConfig type.
- * @typedef {object} VelociousTestConfig
- * @property {"failure" | "live"} consoleOutput - Console output mode.
- * @property {string[]} excludeTags - Tags excluded by default.
- * @property {number} defaultTimeoutSeconds - Default timeout in seconds.
- * @property {number} failedConsoleOutputMaxLines - Maximum failed console lines to print inline.
- */
