@@ -886,7 +886,9 @@ class VelociousDatabaseRecord {
       const parentTable = ParentModel.tableName()
       const childTable = ChildModel.tableName()
       const pkColumn = inflection.underscore(primaryKey)
-      const connection = record.connection()
+      const connection = record
+        .queryForModel(ParentModel)
+        .driver
       const quoted = connection.quote(parentId)
 
       const sql = `UPDATE ${connection.quoteTable(parentTable)} SET ${connection.quoteColumn(counterColumn)} = (SELECT COUNT(*) FROM ${connection.quoteTable(childTable)} WHERE ${connection.quoteColumn(fk)} = ${quoted}) WHERE ${connection.quoteColumn(pkColumn)} = ${quoted}`

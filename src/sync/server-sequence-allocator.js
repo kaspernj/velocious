@@ -63,6 +63,33 @@ export default class ServerSequenceAllocator {
   }
 
   /**
+   * Allocates for a record while preserving allocator routing and operation ownership.
+   * @param {import("../database/record/index.js").default} record - Record receiving the sequence.
+   * @returns {Promise<number>} Next sequence value.
+   */
+  async _nextForRecord(record) {
+    const operation = record.databaseOperation()
+
+    if (!operation) return await this.next()
+
+    const ModelClass = record.getModelClass()
+
+    if (this._getConfiguration() !== ModelClass._getConfiguration()) {
+      throw new Error("Server sequence allocator belongs to another Velocious configuration")
+    }
+
+    const modelDatabaseIdentifier = ModelClass.getDatabaseIdentifier()
+
+    if (this.databaseIdentifier !== modelDatabaseIdentifier) {
+      throw new Error(`Server sequence allocator uses database ${JSON.stringify(this.databaseIdentifier)}, not operation model database ${JSON.stringify(modelDatabaseIdentifier)}`)
+    }
+
+    const operationScope = operation.forModel(ModelClass)
+
+    return await this.next({connection: operationScope.driver})
+  }
+
+  /**
    * Ensures the backing table exists.
    * @param {import("../database/drivers/base.js").default} [connection] - Explicit record-owned connection.
    * @returns {Promise<void>} Resolves when ready.
@@ -235,7 +262,7 @@ export function withServerSequence(ModelClass, {allocator, column = "serverSeque
      * @returns {Promise<void>}
      */
     prototype[advanceMethodName] = async function advanceServerSequenceThroughAllocator() {
-      this[setterMethodName](await allocator.next({connection: this.connection()}))
+      this[setterMethodName](await allocator._nextForRecord(this))
     }
   }
 
