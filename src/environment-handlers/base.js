@@ -559,7 +559,7 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {object} _args - Args.
    * @param {string[]} _args.allowedPathPrefixes - Allowed path prefixes.
    * @param {string} _args.inputPath - Input path.
-   * @returns {Promise<{buffer: Buffer, filePath: string}>} - Resolved path and file bytes.
+   * @returns {Promise<import("../database/record/attachments/normalize-input.js").AttachmentPathSource>} - Opened path source.
    */
   async resolveAttachmentInputPath(_args) {
     throw new Error("Attachment path input is not supported in this environment")

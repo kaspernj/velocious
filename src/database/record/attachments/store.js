@@ -156,65 +156,181 @@ export default class RecordAttachmentsStore {
       allowedPathPrefixes,
       environmentHandler: this.configuration.getEnvironmentHandler()
     })
+    /**
+     * Attachment persistence error.
+     * This stays opaque so any JavaScript thrown value is preserved exactly.
+     * @type {unknown} */
+    let persistenceError = null
+    let persistenceFailed = false
+
+    try {
+      const persistenceInput = await this.persistenceInputFor(normalizedInput)
+
+      await this.persistNormalizedAttachment({
+        model,
+        name,
+        normalizedInput: persistenceInput,
+        replace
+      })
+    } catch (error) {
+      persistenceFailed = true
+      persistenceError = error
+    }
+
+    if (normalizedInput.pathSource) {
+      try {
+        await normalizedInput.pathSource.close()
+      } catch (closeError) {
+        if (persistenceFailed) {
+          throw new AggregateError(
+            [persistenceError, closeError],
+            `Attachment persistence and path-source close both failed for ${model.getModelClass().getModelName()}#${String(model.id())} (${name})`,
+            {cause: closeError}
+          )
+        }
+
+        throw closeError
+      }
+    }
+
+    if (persistenceFailed) throw persistenceError
+  }
+
+  /**
+   * Materializes path content once when a legacy schema requires Base64.
+   * @param {import("./normalize-input.js").NormalizedAttachmentInput} normalizedInput - Normalized attachment input.
+   * @returns {Promise<import("./normalize-input.js").NormalizedAttachmentInput>} - Input used by the driver and database.
+   */
+  async persistenceInputFor(normalizedInput) {
+    if (this._contentBase64Nullable || !normalizedInput.pathSource) return normalizedInput
+
+    const contentBuffer = await normalizedInput.pathSource.readBuffer()
+
+    return {
+      ...normalizedInput,
+      contentBase64: contentBuffer.toString("base64"),
+      contentBuffer,
+      pathSource: null
+    }
+  }
+
+  /**
+   * Persists one normalized attachment while its path source remains open.
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Model instance.
+   * @param {string} args.name - Attachment name.
+   * @param {import("./normalize-input.js").NormalizedAttachmentInput} args.normalizedInput - Normalized attachment.
+   * @param {boolean} args.replace - Whether to replace existing attachments.
+   * @returns {Promise<void>} - Resolves after persistence.
+   */
+  async persistNormalizedAttachment({model, name, normalizedInput, replace}) {
     const attachmentDriver = await this.resolveAttachmentDriver({model, name})
     const attachmentDriverName = this._attachmentDriverNameFor({model, name})
     const now = Date.now()
     const recordType = model.getModelClass().getModelName()
     const recordId = String(model.id())
     const attachmentId = generateUUID()
-    const {storageKey} = await attachmentDriver.write({
-      attachmentId,
-      input: normalizedInput,
-      model,
-      name
-    })
+    /**
+     * Written storage key.
+     * @type {string | null} */
+    let storageKey = null
+    let rowPersisted = false
 
-    await this._withDb(async (db) => {
-      if (replace) {
-        const existingRows = await db
-          .newQuery()
-          .from(ATTACHMENTS_TABLE)
-          .where({name, record_id: recordId, record_type: recordType})
-          .results()
+    try {
+      const writeResult = await attachmentDriver.write({
+        attachmentId,
+        input: normalizedInput,
+        model,
+        name
+      })
 
-        for (const existingRow of existingRows) {
-          await this.deleteAttachmentRowStorage({model, name, row: existingRow})
+      storageKey = writeResult.storageKey
+
+      // Current schemas keep content_base64 nullable and avoid duplicating
+      // driver-backed content. Legacy path input was materialized once before
+      // the driver write so this value describes those exact persisted bytes.
+      const databaseContentBase64 = await this.databaseContentBase64For(normalizedInput)
+
+      await this._withDb(async (db) => {
+        if (replace) {
+          const existingRows = await db
+            .newQuery()
+            .from(ATTACHMENTS_TABLE)
+            .where({name, record_id: recordId, record_type: recordType})
+            .results()
+
+          for (const existingRow of existingRows) {
+            await this.deleteAttachmentRowStorage({model, name, row: existingRow})
+          }
+
+          await db.delete({
+            conditions: {name, record_id: recordId, record_type: recordType},
+            tableName: ATTACHMENTS_TABLE
+          })
         }
 
-        await db.delete({
-          conditions: {name, record_id: recordId, record_type: recordType},
+        const position = replace ? 0 : await this._nextPosition({db, name, recordId, recordType})
+        /**
+         * Insert data.
+         * @type {Record<string, ?>} */
+        const insertData = {
+          byte_size: normalizedInput.byteSize,
+          content_base64: databaseContentBase64,
+          content_type: normalizedInput.contentType,
+          created_at_ms: now,
+          filename: normalizedInput.filename,
+          id: attachmentId,
+          name,
+          position,
+          record_id: recordId,
+          record_type: recordType,
+          updated_at_ms: now
+        }
+
+        if (this._driverColumnsAvailable) {
+          insertData.driver = attachmentDriverName
+          insertData.storage_key = storageKey
+        }
+
+        await db.insert({
+          data: insertData,
           tableName: ATTACHMENTS_TABLE
         })
-      }
 
-      const position = replace ? 0 : await this._nextPosition({db, name, recordId, recordType})
-      /**
-       * Insert data.
-       * @type {Record<string, ?>} */
-      const insertData = {
-        byte_size: normalizedInput.byteSize,
-        content_base64: this._contentBase64Nullable ? null : normalizedInput.contentBase64,
-        content_type: normalizedInput.contentType,
-        created_at_ms: now,
-        filename: normalizedInput.filename,
-        id: attachmentId,
-        name,
-        position,
-        record_id: recordId,
-        record_type: recordType,
-        updated_at_ms: now
-      }
-
-      if (this._driverColumnsAvailable) {
-        insertData.driver = attachmentDriverName
-        insertData.storage_key = storageKey
-      }
-
-      await db.insert({
-        data: insertData,
-        tableName: ATTACHMENTS_TABLE
+        rowPersisted = true
       })
-    })
+    } catch (error) {
+      if (!rowPersisted && storageKey && typeof attachmentDriver.delete === "function") {
+        try {
+          await attachmentDriver.delete({
+            model,
+            name,
+            row: {id: attachmentId, storage_key: storageKey},
+            storageKey
+          })
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            `Attachment write finalization and new-storage cleanup both failed for ${recordType}#${recordId} (${name})`,
+            {cause: cleanupError}
+          )
+        }
+      }
+
+      throw error
+    }
+  }
+
+  /**
+   * Resolves the database content_base64 value for current and legacy schemas.
+   * @param {import("./normalize-input.js").NormalizedAttachmentInput} normalizedInput - Normalized attachment input.
+   * @returns {Promise<string | null>} - Nullable or legacy Base64 database value.
+   */
+  async databaseContentBase64For(normalizedInput) {
+    if (this._contentBase64Nullable) return null
+    if (normalizedInput.contentBase64 !== null) return normalizedInput.contentBase64
+
+    throw new Error("Legacy attachment schema requires materialized content bytes")
   }
 
   /**

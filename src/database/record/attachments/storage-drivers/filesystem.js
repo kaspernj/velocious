@@ -1,7 +1,9 @@
 // @ts-check
 
+import { createWriteStream } from "node:fs"
 import fs from "fs/promises"
 import path from "path"
+import { pipeline } from "node:stream/promises"
 
 /**
  * Runs normalize base url.
@@ -52,16 +54,45 @@ export default class FilesystemAttachmentStorageDriver {
    * Runs write.
    * @param {object} args - Options.
    * @param {string} args.attachmentId - Attachment id.
-   * @param {{contentBuffer: Buffer, filename: string}} args.input - Normalized attachment input.
+   * @param {import("../normalize-input.js").NormalizedAttachmentInput} args.input - Normalized attachment input.
    * @returns {Promise<{storageKey: string}>} - Storage key result.
    */
   async write({attachmentId, input}) {
     const normalizedFilename = path.basename(input.filename || "attachment.bin")
     const storageKey = `${attachmentId}-${normalizedFilename}`
     const filePath = path.resolve(this.directory(), storageKey)
+    const temporaryFilePath = `${filePath}.tmp`
 
     await fs.mkdir(path.dirname(filePath), {recursive: true})
-    await fs.writeFile(filePath, input.contentBuffer)
+
+    try {
+      if (input.pathSource) {
+        await pipeline(
+          await input.pathSource.createReadStream(),
+          createWriteStream(temporaryFilePath)
+        )
+      } else if (input.contentBuffer) {
+        await fs.writeFile(temporaryFilePath, input.contentBuffer)
+      } else {
+        throw new Error("Filesystem attachment input has no content")
+      }
+
+      await fs.rename(temporaryFilePath, filePath)
+    } catch (error) {
+      try {
+        await fs.unlink(temporaryFilePath)
+      } catch (cleanupError) {
+        if (!(cleanupError instanceof Error) || !("code" in cleanupError) || cleanupError.code !== "ENOENT") {
+          throw new AggregateError(
+            [error, cleanupError],
+            `Filesystem attachment write and partial-file cleanup both failed for ${storageKey}`,
+            {cause: cleanupError}
+          )
+        }
+      }
+
+      throw error
+    }
 
     return {storageKey}
   }

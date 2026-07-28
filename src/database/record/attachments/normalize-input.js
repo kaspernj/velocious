@@ -3,13 +3,23 @@
 import UploadedFile from "../../../http-server/client/uploaded-file/uploaded-file.js"
 
 /**
+ * AttachmentPathSource type.
+ * @typedef {object} AttachmentPathSource
+ * @property {number} byteSize - Opened file snapshot size.
+ * @property {string} filePath - Validated source path for metadata only.
+ * @property {() => Promise<import("node:stream").Readable>} createReadStream - Creates a bounded snapshot stream.
+ * @property {() => Promise<Buffer>} readBuffer - Reads snapshot bytes for compatibility callers.
+ * @property {() => Promise<void>} close - Closes the owned source.
+ */
+/**
  * NormalizedAttachmentInput type.
  * @typedef {object} NormalizedAttachmentInput
  * @property {number} byteSize - File size in bytes.
- * @property {Buffer} contentBuffer - Raw content bytes.
- * @property {string} contentBase64 - Base64 encoded content.
+ * @property {Buffer | null} contentBuffer - Raw in-memory content bytes.
+ * @property {string | null} contentBase64 - Base64 encoded in-memory content.
  * @property {string | null} contentType - Content type.
  * @property {string} filename - Filename.
+ * @property {AttachmentPathSource | null} pathSource - Environment-owned opened path source.
  */
 /**
  * Runs base name.
@@ -120,8 +130,16 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
   const environmentHandler = args.environmentHandler
   /**
    * Defines buffer.
-   * @type {Buffer} */
-  let buffer
+   * @type {Buffer | null} */
+  let buffer = null
+  /**
+   * Defines byte size.
+   * @type {number | null} */
+  let byteSize = null
+  /**
+   * Defines path source.
+   * @type {AttachmentPathSource | null} */
+  let pathSource = null
   /**
    * Content type.
    * @type {string | null} */
@@ -147,13 +165,15 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     const allowedPathPrefixes = Array.isArray(args.allowedPathPrefixes)
       ? args.allowedPathPrefixes.filter((entry) => typeof entry === "string" && entry.length > 0)
       : []
-    const {buffer: fileBuffer, filePath} = await environmentHandler.resolveAttachmentInputPath({
+    pathSource = await environmentHandler.resolveAttachmentInputPath({
       allowedPathPrefixes,
       inputPath: input.path
     })
 
-    buffer = fileBuffer
-    filename = typeof input.filename === "string" && input.filename.length > 0 ? input.filename : baseName(filePath)
+    byteSize = pathSource.byteSize
+    filename = typeof input.filename === "string" && input.filename.length > 0
+      ? input.filename
+      : baseName(pathSource.filePath)
     contentType = typeof input.contentType === "string" && input.contentType.length > 0 ? input.contentType : null
   } else if (isPlainObject(input) && typeof input.contentBase64 === "string") {
     buffer = Buffer.from(input.contentBase64, "base64")
@@ -184,11 +204,19 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     ? baseName(filename)
     : ""
 
+  if (!buffer && !pathSource) {
+    throw new Error("Attachment input normalization produced no content")
+  }
+
+  if (buffer) byteSize = buffer.length
+  if (byteSize === null) throw new Error("Attachment input normalization produced no byte size")
+
   return {
-    byteSize: buffer.length,
+    byteSize,
     contentBuffer: buffer,
-    contentBase64: buffer.toString("base64"),
+    contentBase64: buffer ? buffer.toString("base64") : null,
     contentType,
-    filename: normalizedFilename || defaultFilename
+    filename: normalizedFilename || defaultFilename,
+    pathSource
   }
 }
