@@ -5,6 +5,51 @@ import Column from "./column.js"
 import ColumnsIndex from "./columns-index.js"
 import {digg} from "diggerize"
 import ForeignKey from "./foreign-key.js"
+import { normalizeIndexMetadataRow } from "../index-metadata.js"
+
+/**
+ * MssqlGroupedIndexDataType type.
+ * @typedef {object} MssqlGroupedIndexDataType
+ * @property {string[]} columnNames - Ordered index column names.
+ * @property {string} index_name - Index name.
+ * @property {boolean} is_primary_key - Whether the index is primary.
+ * @property {boolean} is_unique - Whether the index is unique.
+ * @property {string} table_name - Table name.
+ */
+
+/**
+ * Groups ordered SQL Server index rows into one metadata value per index.
+ * @param {import("../index-metadata.js").IndexMetadataType[]} indexRows - Ordered index metadata rows.
+ * @returns {MssqlGroupedIndexDataType[]} - Grouped index metadata.
+ */
+export function groupMssqlIndexRows(indexRows) {
+  /** @type {Map<string, MssqlGroupedIndexDataType>} */
+  const indexDataByName = new Map()
+  /** @type {MssqlGroupedIndexDataType[]} */
+  const groupedIndexData = []
+
+  for (const indexRow of indexRows) {
+    const existingIndexData = indexDataByName.get(indexRow.index_name)
+
+    if (existingIndexData) {
+      existingIndexData.columnNames.push(indexRow.column_name)
+      continue
+    }
+
+    const indexData = {
+      columnNames: [indexRow.column_name],
+      index_name: indexRow.index_name,
+      is_primary_key: indexRow.is_primary_key,
+      is_unique: indexRow.is_unique,
+      table_name: indexRow.table_name
+    }
+
+    indexDataByName.set(indexRow.index_name, indexData)
+    groupedIndexData.push(indexData)
+  }
+
+  return groupedIndexData
+}
 
 export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   /**
@@ -84,20 +129,18 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
       const options = this.getOptions()
       const sql = `
         SELECT
-          sys.tables.name AS TableName,
-          sys.columns.name AS ColumnName,
+          sys.tables.name AS table_name,
+          sys.columns.name AS column_name,
           sys.indexes.name AS index_name,
-          sys.indexes.type_desc AS IndexType,
-          sys.index_columns.is_included_column AS IsIncludedColumn,
           sys.indexes.is_unique,
-          sys.indexes.is_primary_key,
-          sys.indexes.is_unique_constraint
+          sys.indexes.is_primary_key
         FROM sys.indexes
         INNER JOIN sys.index_columns ON sys.indexes.object_id = sys.index_columns.object_id AND sys.indexes.index_id = sys.index_columns.index_id
         INNER JOIN sys.columns ON sys.index_columns.object_id = sys.columns.object_id AND sys.index_columns.column_id = sys.columns.column_id
         INNER JOIN sys.tables ON sys.indexes.object_id = sys.tables.object_id
         WHERE
-          sys.tables.name = ${options.quote(this.getName())}
+          sys.tables.name = ${options.quote(this.getName())} AND
+          sys.index_columns.is_included_column = 0
         ORDER BY
           sys.indexes.name,
           sys.index_columns.key_ordinal
@@ -105,9 +148,10 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
 
       const rows = await this.getDriver().query(sql)
       const indexes = []
+      const indexRows = rows.map((row) => normalizeIndexMetadataRow(row))
 
-      for (const row of rows) {
-        const index = new ColumnsIndex(this, row)
+      for (const indexData of groupMssqlIndexRows(indexRows)) {
+        const index = new ColumnsIndex(this, indexData)
 
         indexes.push(index)
       }

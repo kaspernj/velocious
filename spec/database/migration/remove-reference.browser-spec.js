@@ -17,7 +17,11 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
       try {
         await dropRemoveReferenceTables(driver, childTableName, parentTableName)
         await migration.createTable(parentTableName, {id: {type: "uuid"}})
-        await migration.createTable(childTableName, {id: {type: "uuid"}})
+        await migration.createTable(childTableName, {id: {type: "uuid"}}, (table) => {
+          table.string("status", {null: false})
+          table.string("category", {null: false})
+        })
+        await migration.addIndex(childTableName, ["status", "category"], {name: "index_remove_reference_enrollments_on_status_and_category"})
         await migration.addReference(childTableName, "member", {foreignKey: true, type: "uuid"})
 
         const tableWithReference = await driver.getTableByNameOrFail(childTableName)
@@ -38,10 +42,13 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
         const remainingMemberIndexes = (await tableWithoutReference.getIndexes())
           .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === "member_id")
         const remainingForeignKeys = await tableWithoutReference.getForeignKeys()
+        const remainingCompositeIndex = (await tableWithoutReference.getIndexes())
+          .find((index) => index.getName() === "index_remove_reference_enrollments_on_status_and_category")
 
         expect(remainingColumnNames).not.toContain("member_id")
         expect(remainingMemberIndexes).toHaveLength(0)
         expect(remainingForeignKeys.map((foreignKey) => foreignKey.getColumnName())).not.toContain("member_id")
+        expect(remainingCompositeIndex?.getColumnNames()).toEqual(["status", "category"])
       } finally {
         await dropRemoveReferenceTables(driver, childTableName, parentTableName)
       }

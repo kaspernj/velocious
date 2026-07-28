@@ -4,6 +4,51 @@ import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ColumnsIndex from "./columns-index.js"
 import ForeignKey from "./foreign-key.js"
+import { normalizeIndexMetadataRow } from "../index-metadata.js"
+
+/**
+ * PgsqlGroupedIndexDataType type.
+ * @typedef {object} PgsqlGroupedIndexDataType
+ * @property {string[]} columnNames - Ordered index column names.
+ * @property {string} index_name - Index name.
+ * @property {boolean} is_primary_key - Whether the index is primary.
+ * @property {boolean} is_unique - Whether the index is unique.
+ * @property {string} table_name - Table name.
+ */
+
+/**
+ * Groups ordered PostgreSQL index rows into one metadata value per index.
+ * @param {import("../index-metadata.js").IndexMetadataType[]} indexRows - Ordered index metadata rows.
+ * @returns {PgsqlGroupedIndexDataType[]} - Grouped index metadata.
+ */
+export function groupPgsqlIndexRows(indexRows) {
+  /** @type {Map<string, PgsqlGroupedIndexDataType>} */
+  const indexDataByName = new Map()
+  /** @type {PgsqlGroupedIndexDataType[]} */
+  const groupedIndexData = []
+
+  for (const indexRow of indexRows) {
+    const existingIndexData = indexDataByName.get(indexRow.index_name)
+
+    if (existingIndexData) {
+      existingIndexData.columnNames.push(indexRow.column_name)
+      continue
+    }
+
+    const indexData = {
+      columnNames: [indexRow.column_name],
+      index_name: indexRow.index_name,
+      is_primary_key: indexRow.is_primary_key,
+      is_unique: indexRow.is_unique,
+      table_name: indexRow.table_name
+    }
+
+    indexDataByName.set(indexRow.index_name, indexData)
+    groupedIndexData.push(indexData)
+  }
+
+  return groupedIndexData
+}
 
 export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
   /**
@@ -100,23 +145,29 @@ export default class VelociousDatabaseDriversPgsqlTable extends BaseTable {
 
       const indexesRows = await this.getDriver().query(`
         SELECT
-          pg_attribute.attname AS column_name,
-          pg_index.indexrelid::regclass as index_name,
-          pg_class.relnamespace::regnamespace as schema_name,
-          pg_class.relname as table_name,
-          pg_index.indisprimary as is_primary_key,
-          pg_index.indisunique as is_unique
+          index_attribute.attname AS column_name,
+          pg_index.indexrelid::regclass AS index_name,
+          pg_class.relname AS table_name,
+          pg_index.indisprimary AS is_primary_key,
+          pg_index.indisunique AS is_unique
         FROM pg_index
         JOIN pg_class ON pg_class.oid = pg_index.indrelid
-        JOIN pg_attribute ON pg_attribute.attrelid = pg_class.oid AND pg_attribute.attnum = ANY(pg_index.indkey)
+        JOIN LATERAL unnest(pg_index.indkey) WITH ORDINALITY AS index_columns(attribute_number, ordinal_position) ON true
+        JOIN pg_attribute AS index_attribute ON index_attribute.attrelid = pg_class.oid AND index_attribute.attnum = index_columns.attribute_number
         WHERE
-          pg_class.relname = ${options.quote(this.getName())}
+          pg_class.relname = ${options.quote(this.getName())} AND
+          index_columns.ordinal_position <= pg_index.indnkeyatts
+        ORDER BY
+          pg_index.indexrelid,
+          index_columns.ordinal_position
       `)
 
       const indexes = []
 
-      for (const indexRow of indexesRows) {
-        const columnsIndex = new ColumnsIndex(this, indexRow)
+      const indexRows = indexesRows.map((indexRow) => normalizeIndexMetadataRow(indexRow))
+
+      for (const indexData of groupPgsqlIndexRows(indexRows)) {
+        const columnsIndex = new ColumnsIndex(this, indexData)
 
         indexes.push(columnsIndex)
       }
