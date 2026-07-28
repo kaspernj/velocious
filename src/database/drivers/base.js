@@ -225,6 +225,34 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Runs remove foreign key.
+   * @param {string} tableName - Table name.
+   * @param {import("./base-foreign-key.js").default} foreignKeyMetadata - Foreign key metadata.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async removeForeignKey(tableName, foreignKeyMetadata) {
+    this._assertNotReadOnly()
+
+    const tableForeignKey = new TableForeignKey({
+      columnName: foreignKeyMetadata.getColumnName(),
+      dropForeignKey: true,
+      name: foreignKeyMetadata.getName(),
+      referencedColumnName: foreignKeyMetadata.getReferencedColumnName(),
+      referencedTableName: foreignKeyMetadata.getReferencedTableName(),
+      tableName
+    })
+    const tableData = new TableData(tableName)
+
+    tableData.addForeignKey(tableForeignKey)
+
+    const alterTableSQLs = await this.alterTableSQLs(tableData)
+
+    for (const alterTableSQL of alterTableSQLs) {
+      await this.query(alterTableSQL)
+    }
+  }
+
+  /**
    * Runs alter table sqls.
    * @abstract
    * @param {import("../table-data/index.js").default} _tableData - Table data.

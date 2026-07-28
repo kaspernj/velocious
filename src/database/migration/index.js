@@ -271,6 +271,57 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * RemoveForeignKeyArgsType type.
+   * @typedef {object} RemoveForeignKeyArgsType
+   * @property {string} [columnName] - Override the derived foreign-key column name.
+   */
+  /**
+   * Runs remove foreign key.
+   * @param {string} tableName - Table the foreign key lives on.
+   * @param {string} referenceName - Singular reference name used to derive the FK column.
+   * @param {RemoveForeignKeyArgsType} [args] - Optional overrides.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async removeForeignKey(tableName, referenceName, args = {}) {
+    const {columnName, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    const resolvedColumnName = columnName || `${inflection.underscore(referenceName)}_id`
+    const driver = this.getDriver()
+    let maximumRemovals = 0
+    let previousMatchingCount = 0
+
+    for (let removalAttempt = 0; ; removalAttempt++) {
+      const table = await driver.getTableByName(tableName)
+
+      if (!table) throw new Error(`Table ${tableName} does not exist`)
+
+      const foreignKeys = await table.getForeignKeys()
+      const matchingForeignKeys = foreignKeys.filter((foreignKey) => foreignKey.getColumnName() == resolvedColumnName)
+
+      if (matchingForeignKeys.length === 0) {
+        if (removalAttempt === 0) throw new Error(`No foreign key on ${tableName}.${resolvedColumnName}`)
+
+        return
+      }
+
+      if (removalAttempt === 0) {
+        maximumRemovals = matchingForeignKeys.length
+      } else if (matchingForeignKeys.length >= previousMatchingCount) {
+        throw new Error(`Foreign key removal did not reduce matches on ${tableName}.${resolvedColumnName}`)
+      }
+
+      if (removalAttempt >= maximumRemovals) {
+        throw new Error(`Foreign key removal exceeded expected matches on ${tableName}.${resolvedColumnName}`)
+      }
+
+      previousMatchingCount = matchingForeignKeys.length
+      await driver.removeForeignKey(tableName, matchingForeignKeys[0])
+    }
+  }
+
+  /**
    * Runs add reference.
    * @param {string} tableName - Table name.
    * @param {string} referenceName - Reference name.
@@ -299,15 +350,53 @@ export default class VelociousDatabaseMigration {
   }
 
   /**
+   * RemoveReferenceArgsType type.
+   * @typedef {object} RemoveReferenceArgsType
+   * @property {string} [columnName] - Override the derived reference column name.
+   * @property {string} [indexName] - Explicit generated index name to remove.
+   */
+  /**
    * Runs remove reference.
    * @param {string} tableName - Table name.
    * @param {string} referenceName - Reference name.
+   * @param {RemoveReferenceArgsType} [args] - Optional overrides.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async removeReference(tableName, referenceName) {
-    const columnName = `${inflection.underscore(referenceName)}_id`
+  async removeReference(tableName, referenceName, args = {}) {
+    const {columnName, indexName, ...restArgs} = args
 
-    this.removeColumn(tableName, columnName)
+    restArgsError(restArgs)
+
+    const resolvedColumnName = columnName || `${inflection.underscore(referenceName)}_id`
+    const driver = this.getDriver()
+    const table = await driver.getTableByName(tableName)
+
+    if (!table) throw new Error(`Table ${tableName} does not exist`)
+
+    const foreignKeys = await table.getForeignKeys()
+
+    for (const foreignKey of foreignKeys) {
+      if (foreignKey.getColumnName() != resolvedColumnName) continue
+
+      await driver.removeForeignKey(tableName, foreignKey)
+    }
+
+    const expectedIndexName = indexName || this._removeIndexName(tableName, [resolvedColumnName])
+    const indexes = await table.getIndexes()
+    const generatedIndex = indexes.find((index) => {
+      const indexColumnNames = index.getColumnNames()
+
+      return !index.isPrimaryKey() &&
+        index.getName() == expectedIndexName &&
+        indexColumnNames.length == 1 &&
+        indexColumnNames[0] == resolvedColumnName
+    })
+
+    if (generatedIndex) {
+      await this.removeIndex(tableName, generatedIndex.getName())
+    }
+
+    await this.removeColumn(tableName, resolvedColumnName)
   }
 
   /**

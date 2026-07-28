@@ -134,6 +134,16 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
     for (const currentForeignKey of currentTableData.getForeignKeys()) {
       const alterForeignKey = alterTableData.getForeignKeys().find((foreignKey) => foreignKey.getName() == currentForeignKey.getName())
+
+      if (alterForeignKey?.getDropForeignKey()) {
+        const targetColumnName = columnRenames.get(currentForeignKey.getColumnName()) || currentForeignKey.getColumnName()
+        const targetColumn = targetTableData.getColumns().find((column) => column.getActualName() == targetColumnName)
+
+        if (targetColumn) targetColumn.setForeignKey(undefined)
+
+        continue
+      }
+
       const finalForeignKey = this._renameForeignKeyColumn(alterForeignKey || currentForeignKey, columnRenames)
 
       seenForeignKeyNames.add(finalForeignKey.getName())
@@ -141,10 +151,13 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
     }
 
     for (const alterForeignKey of alterTableData.getForeignKeys()) {
+      if (alterForeignKey.getDropForeignKey()) continue
       if (seenForeignKeyNames.has(alterForeignKey.getName())) continue
 
       targetTableData.addForeignKey(this._renameForeignKeyColumn(alterForeignKey, columnRenames))
     }
+
+    const targetColumnNames = new Set(targetTableData.getColumns().map((column) => column.getActualName()))
 
     for (const currentIndex of currentTableData.getIndexes()) {
       const renamedColumns = currentIndex.getColumns().map((columnName) => {
@@ -152,6 +165,10 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
         return columnRenames.get(columnName) || columnName
       })
+
+      const indexColumnNames = renamedColumns.map((column) => typeof column == "string" ? column : column.getName())
+
+      if (indexColumnNames.some((columnName) => !targetColumnNames.has(columnName))) continue
 
       targetTableData.addIndex(new TableIndex(renamedColumns, {
         name: currentIndex.getName(),
@@ -177,6 +194,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
 
     return new TableForeignKey({
       columnName: renamed,
+      dropForeignKey: foreignKey.getDropForeignKey(),
       isNewForeignKey: foreignKey.getIsNewForeignKey(),
       name: foreignKey.getName(),
       referencedColumnName: foreignKey.getReferencedColumnName(),
