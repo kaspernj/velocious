@@ -39,10 +39,37 @@ const cli = new Cli({
   processArgs
 })
 
+let commandError
+let commandFailed = false
+
 try {
   await cli.execute()
-} finally {
-  await configuration.closeDatabaseConnections()
+} catch (error) {
+  commandError = error
+  commandFailed = true
+  process.exitCode = 1
 }
+
+let cleanupError
+let cleanupFailed = false
+
+try {
+  await configuration.closeDatabaseConnections()
+} catch (error) {
+  cleanupError = error
+  cleanupFailed = true
+  process.exitCode = 1
+}
+
+if (commandFailed && cleanupFailed) {
+  throw new AggregateError(
+    [commandError, cleanupError],
+    "Velocious CLI command execution and database cleanup both failed",
+    {cause: commandError}
+  )
+}
+
+if (commandFailed) throw commandError
+if (cleanupFailed) throw cleanupError
 
 process.exit(0)

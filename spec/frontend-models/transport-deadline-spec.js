@@ -14,6 +14,7 @@ import {listenOnLocalhost} from "../helpers/local-server-helper.js"
  * @typedef {object} ControlledServer
  * @property {() => Promise<void>} close - Stops the server.
  * @property {number} port - Bound TCP port.
+ * @property {Promise<void>} socketClosed - Resolves when the client socket closes.
  * @property {{requestReceived: boolean, socketClosed: boolean}} state - Observed connection state.
  */
 
@@ -26,6 +27,11 @@ import {listenOnLocalhost} from "../helpers/local-server-helper.js"
  */
 async function startControlledServer(handler) {
   const state = {requestReceived: false, socketClosed: false}
+  /** @type {() => void} */
+  let resolveSocketClosed = () => {}
+  const socketClosed = new Promise((resolve) => {
+    resolveSocketClosed = () => resolve(undefined)
+  })
   const server = http.createServer((req, res) => {
     state.requestReceived = true
     handler(req, res)
@@ -34,6 +40,7 @@ async function startControlledServer(handler) {
   server.on("connection", (socket) => {
     socket.on("close", () => {
       state.socketClosed = true
+      resolveSocketClosed()
     })
   })
 
@@ -46,25 +53,8 @@ async function startControlledServer(handler) {
       server.close(() => resolve(undefined))
     }),
     port,
+    socketClosed,
     state
-  }
-}
-
-/**
- * Polls until the condition holds or the timeout elapses.
- * @param {() => boolean} conditionFn - Condition to await.
- * @param {{timeoutMs?: number}} [options] - Poll options.
- * @returns {Promise<void>} - Resolves once the condition holds.
- */
-async function waitForCondition(conditionFn, {timeoutMs = 1000} = {}) {
-  const start = Date.now()
-
-  while (!conditionFn()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error("Condition was not met within the allotted time")
-    }
-
-    await wait(5)
   }
 }
 
@@ -121,7 +111,7 @@ describe("frontend-models - transport deadline", () => {
         expect(error).toBeInstanceOf(TimeoutError)
         expect(controlled.state.requestReceived).toBeTrue()
 
-        await waitForCondition(() => controlled.state.socketClosed)
+        await controlled.socketClosed
 
         expect(controlled.state.socketClosed).toBeTrue()
       } finally {

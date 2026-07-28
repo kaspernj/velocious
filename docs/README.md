@@ -7,6 +7,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/api-manifest-endpoint.md`: Built-in frontend-model API manifest endpoint — opt-in, token-protectable, returns resource/attribute/command metadata as pretty-printed JSON.
 - `docs/auditing.md`: Built-in lifecycle audit rows, manual audit events, and audit-missing scopes.
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
+- `docs/cli.md`: CLI process exit behavior for successful and rejected commands.
 - `docs/database-migrations.md`: Migration helpers, UTC datetime storage, implicit primary keys, and reference column defaults.
 - `docs/http-server.md`: HTTP server worker configuration and socket distribution behavior.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
