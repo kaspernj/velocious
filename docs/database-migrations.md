@@ -54,6 +54,39 @@ await this.removeIndex("tasks", "index_tasks_slug_unique")
 
 Use the columns form for indexes created by `addIndex(...)` without an explicit name so SQLite and the other drivers drop their own generated names correctly.
 
+## Removing References and Foreign Keys
+
+`await migration.removeReference(tableName, referenceName, args)` reverses an `addReference(...)` change. It awaits each step: removes foreign keys on the reference column, removes the exact generated single-column non-primary index (whether unique or non-unique), then removes the column. It does not remove composite or unrelated indexes. The two-argument form remains valid; `columnName` and `indexName` override the derived column and generated index when needed.
+
+For example, a UUID reference with a foreign key can be added and removed in a reversible migration:
+
+```js
+export default class AddTaskProjectReference extends Migration {
+  async up() {
+    await this.addReference("tasks", "project", {foreignKey: true, type: "uuid"})
+  }
+
+  async down() {
+    await this.removeReference("tasks", "project")
+  }
+}
+```
+
+`await migration.removeForeignKey(tableName, referenceName, {columnName})` removes only matching foreign-key constraints and leaves the column and indexes in place. The column normally derives as `<underscored_reference>_id`; use `columnName` when the schema uses a custom name:
+
+```js
+await this.addIndex("articles", ["writer_id"], {name: "index_articles_on_writer_id"})
+await this.addForeignKey("articles", "author", {
+  columnName: "writer_id",
+  referencedTableName: "writers"
+})
+
+await this.removeForeignKey("articles", "author", {columnName: "writer_id"})
+// `writer_id` and `index_articles_on_writer_id` remain.
+```
+
+Both helpers reject unknown options and discover constraints from real table metadata rather than requiring a constraint-name argument. `removeForeignKey` fails clearly when the table or matching foreign key is absent; `removeReference` tolerates a reference column with no foreign key. On SQLite, schema rebuilds preserve unrelated foreign keys and indexes while omitting removed-column indexes. MySQL/MariaDB remove the foreign key before its supporting index and column; PostgreSQL and MSSQL use the introspected constraint name.
+
 ## Guarding schema changes in rerunnable migrations
 
 A migration that must be rerunnable — for example a data backfill or repair that may run against a partially-patched schema — can guard each change with the schema-inspection helpers so it stays idempotent:

@@ -1148,6 +1148,8 @@ export default class CreateEvents extends Migration {
 }
 ```
 
+To reverse an `addReference("tasks", "project", {foreignKey: true, type: "uuid"})` migration, use `await this.removeReference("tasks", "project")` in `down()`. It removes the generated foreign key, index, and column; see [removing references and foreign keys](docs/database-migrations.md#removing-references-and-foreign-keys) for custom-column and foreign-key-only cases.
+
 Migrations that must be rerunnable can guard changes with `tableExists(...)`, `columnExists(table, column)` and `indexExists(table, index)` — a missing table yields `false` rather than throwing. See [docs/database-migrations.md](docs/database-migrations.md#guarding-schema-changes-in-rerunnable-migrations).
 
 ## Run migrations from the command line
