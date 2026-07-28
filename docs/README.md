@@ -10,6 +10,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
 - `docs/cli.md`: CLI process exit behavior for successful and rejected commands.
 - `docs/database-migrations.md`: Migration helpers, UTC datetime storage, implicit primary keys, and reference column defaults.
+- `docs/operation-scoped-transactions.md`: Explicit singular-database transactions with operation-bound models, records, savepoints, commit callbacks, and pool isolation.
 - `docs/http-server.md`: HTTP server worker configuration and socket distribution behavior.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.

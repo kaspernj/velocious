@@ -52,6 +52,9 @@ class MockBuildBase {
   /** @type {Record<string, ?>} */
   _changes = {}
 
+  /** @type {{forModel: (ModelClass: typeof MockParent) => {driver: ReturnType<typeof createMockDb>}} | undefined} */
+  _databaseOperation = undefined
+
   /** @type {Array<{callback: Function, name: string}>} */
   static _registeredCallbacks = []
 
@@ -60,6 +63,22 @@ class MockBuildBase {
 
   /** @returns {typeof MockBuildBase} */
   getModelClass() { return /** @type {typeof MockBuildBase} */ (this.constructor) }
+
+  /** @returns {typeof this._databaseOperation} */
+  databaseOperation() { return this._databaseOperation }
+
+  /**
+   * Resolves a parent query through operation ownership when present.
+   * @param {typeof MockParent} ModelClass - Parent model class.
+   * @returns {{driver: ReturnType<typeof createMockDb>}} - Fake parent query.
+   */
+  queryForModel(ModelClass) {
+    const databaseOperation = this.databaseOperation()
+
+    if (databaseOperation) return databaseOperation.forModel(ModelClass)
+
+    return {driver: ModelClass.connection()}
+  }
 
   /** @returns {string} */
   static getModelName() { return "Build" }
@@ -241,6 +260,31 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
 
     expect(currentMockDb?.queries).toEqual([
       "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + -1 WHERE `id` = 'srv1'"
+    ])
+  })
+
+  it("routes the parent update through the record operation", async () => {
+    const TestBuild = registeredModelClass()
+    /** @type {Array<typeof MockParent>} */
+    const operationModelClasses = []
+    const build = buildRecord(TestBuild, {
+      attributes: {docker_server_id: "srv1", id: "b1", status: "queued"},
+      changes: {status: "running"}
+    })
+
+    build._databaseOperation = {
+      forModel: (ModelClass) => {
+        operationModelClasses.push(ModelClass)
+
+        return {driver: ModelClass.connection()}
+      }
+    }
+
+    await build.save()
+
+    expect(operationModelClasses).toEqual([MockParent])
+    expect(currentMockDb?.queries).toEqual([
+      "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + 1 WHERE `id` = 'srv1'"
     ])
   })
 })

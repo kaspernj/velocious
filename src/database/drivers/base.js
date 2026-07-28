@@ -61,6 +61,7 @@
  * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
  * @property {AbortSignal} [signal] - Aborts the in-flight query (destroying its connection) when it fires.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
+ * @property {symbol} [operationOwner] - Opaque owner for an operation-leased connection.
  */
 
 /**
@@ -128,6 +129,21 @@ import wait from "awaitery/build/wait.js"
 import {optionalPositiveInteger} from "typanic"
 
 /**
+ * Marks a callback failure that happened after the owning transaction was durably committed.
+ * The public transaction boundary unwraps it before deadlock classification.
+ */
+class VelociousDatabaseAfterCommitCallbackError extends Error {
+  /**
+   * Runs constructor.
+   * @param {?} callbackError - Original callback failure.
+   */
+  constructor(callbackError) {
+    super("Database afterCommit callback failed")
+    this.callbackError = callbackError
+  }
+}
+
+/**
  * Runs now ms.
  * @returns {number} - Current high-resolution-ish timestamp in milliseconds.
  */
@@ -175,6 +191,11 @@ export default class VelociousDatabaseDriversBase {
   _activeQuery = null
   /** @type {Map<string, number>} */
   _heldAdvisoryLocks = new Map()
+  /**
+   * Exclusive operation lease installed by a single-multi-use pool.
+   * @type {import("../operation-lease.js").default | undefined}
+   */
+  _operationLease = undefined
 
   /**
    * Runs constructor.
@@ -489,6 +510,46 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Installs an operation lease atomically with ordinary transaction admission.
+   * @param {import("../operation-lease.js").default} operationLease - Active lease.
+   * @returns {Promise<void>} - Resolves once the lease owns transaction admission.
+   */
+  async setOperationLease(operationLease) {
+    await this._transactionsActionsMutex.sync(async () => {
+      if (this._operationLease) throw new Error("A database operation lease is already active")
+      if (this._transactionsCount > 0) {
+        throw new Error("Cannot start a database operation while an unrelated ordinary transaction is already active")
+      }
+
+      this._operationLease = operationLease
+    })
+  }
+
+  /**
+   * Clears the matching operation lease.
+   * @param {import("../operation-lease.js").default} operationLease - Lease to clear.
+   * @returns {void}
+   */
+  clearOperationLease(operationLease) {
+    if (this._operationLease !== operationLease) {
+      throw new Error("Cannot clear a database operation lease owned by another operation")
+    }
+
+    this._operationLease = undefined
+  }
+
+  /**
+   * Waits for an unrelated operation lease to release.
+   * @param {symbol | undefined} operationOwner - Candidate operation owner.
+   * @returns {Promise<void>}
+   */
+  async _waitForOperationLease(operationOwner) {
+    const operationLease = this._operationLease
+
+    if (operationLease) await operationLease.wait(operationOwner)
+  }
+
+  /**
    * Runs get id seq.
    * @returns {number | undefined} - The id seq.
    */
@@ -739,9 +800,10 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Runs last insert id.
    * @abstract
+   * @param {QueryOptions} [_options] - Query ownership options.
    * @returns {Promise<number>} - Resolves with the last insert id.
    */
-  lastInsertID() {
+  lastInsertID(_options = {}) {
     throw new Error(`${this.constructor.name}#lastInsertID not implemented`)
   }
 
@@ -932,12 +994,16 @@ export default class VelociousDatabaseDriversBase {
    * The outermost transaction retries the whole callback on a deadlock / lock-wait-timeout,
    * because such errors roll the entire transaction back and the standard recovery is to
    * restart it. Nested savepoints let the deadlock bubble up to this outer retry.
-   * @param {() => Promise<void>} callback - Callback function.
-   * @returns {Promise<?>} - Resolves with the transaction result.
+   * @template T
+   * @param {() => Promise<T>} callback - Callback function.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
+   * @returns {Promise<T>} - Resolves with the transaction result.
    */
-  async transaction(callback) {
+  async transaction(callback, options = {}) {
+    await this._waitForOperationLease(options.operationOwner)
+
     if (this._transactionsCount > 0) {
-      return await this._runTransactionAttempt(callback)
+      return await this._runTransactionAttempt(callback, options)
     }
 
     const args = this.getArgs()
@@ -950,8 +1016,10 @@ export default class VelociousDatabaseDriversBase {
       attempt++
 
       try {
-        return await this._runTransactionAttempt(callback)
+        return await this._runTransactionAttempt(callback, options)
       } catch (error) {
+        if (error instanceof VelociousDatabaseAfterCommitCallbackError) throw error.callbackError
+
         const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
 
         if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
@@ -993,10 +1061,12 @@ export default class VelociousDatabaseDriversBase {
    * Runs a single transaction attempt: starts a transaction (or a savepoint when nested), runs
    * `callback`, and commits — rolling back on error. {@link transaction} wraps this with deadlock
    * retry at the outermost level.
-   * @param {() => Promise<void>} callback - Callback function.
+   * @template T
+   * @param {() => Promise<T>} callback - Callback function.
+   * @param {Pick<QueryOptions, "operationOwner">} options - Transaction ownership.
    * @returns {Promise<?>} - Resolves with the transaction result.
    */
-  async _runTransactionAttempt(callback) {
+  async _runTransactionAttempt(callback, options) {
     const savePointName = this.generateSavePointName()
     /**
      * Callback frame.
@@ -1007,14 +1077,19 @@ export default class VelociousDatabaseDriversBase {
 
     this._afterCommitCallbackFrames.push(callbackFrame)
 
-    if (this._transactionsCount == 0) {
-      this.logger.debug("Start transaction")
-      await this.startTransaction()
-      transactionStarted = true
-    } else {
-      this.logger.debug("Start savepoint", savePointName)
-      await this.startSavePoint(savePointName)
-      savePointStarted = true
+    try {
+      if (this._transactionsCount == 0) {
+        this.logger.debug("Start transaction")
+        await this.startTransaction(options)
+        transactionStarted = true
+      } else {
+        this.logger.debug("Start savepoint", savePointName)
+        await this.startSavePoint(savePointName, options)
+        savePointStarted = true
+      }
+    } catch (error) {
+      this._afterCommitCallbackFrames.pop()
+      throw error
     }
 
     let result
@@ -1024,15 +1099,13 @@ export default class VelociousDatabaseDriversBase {
 
       if (savePointStarted) {
         this.logger.debug("Release savepoint", savePointName)
-        await this.releaseSavePoint(savePointName)
+        await this.releaseSavePoint(savePointName, options)
       }
 
       if (transactionStarted) {
         this.logger.debug("Commit transaction")
-        await this.commitTransaction()
+        await this.commitTransaction(options)
       }
-
-      await this._commitAfterCommitCallbackFrame()
     } catch (error) {
       if (error instanceof Error) {
         this.logger.debug("Transaction error", error.message)
@@ -1045,14 +1118,14 @@ export default class VelociousDatabaseDriversBase {
       if (savePointStarted) {
         this.logger.debug("Rollback savepoint", savePointName)
         try {
-          await this.rollbackSavePoint(savePointName)
+          await this.rollbackSavePoint(savePointName, options)
         } catch (savePointError) {
           const message = savePointError instanceof Error ? savePointError.message : `${savePointError}`
 
           // MySQL sometimes drops savepoints unexpectedly; fall back to rolling back the full transaction
           if (message.includes("SAVEPOINT") || message.includes("ER_SP_DOES_NOT_EXIST")) {
             this.logger.debug("Savepoint rollback failed; rolling back entire transaction instead")
-            await this.rollbackTransaction()
+            await this.rollbackTransaction(options)
             transactionRolledBack = true
           } else {
             throw savePointError
@@ -1066,12 +1139,18 @@ export default class VelociousDatabaseDriversBase {
       // `_transactionsCount` below zero, which would then defeat the outermost deadlock-retry guard.
       if (transactionStarted && !transactionRolledBack && this._transactionsCount > 0) {
         this.logger.debug("Rollback transaction")
-        await this.rollbackTransaction()
+        await this.rollbackTransaction(options)
       }
 
       this._afterCommitCallbackFrames.pop()
 
       throw error
+    }
+
+    try {
+      await this._commitAfterCommitCallbackFrame()
+    } catch (error) {
+      throw new VelociousDatabaseAfterCommitCallbackError(error)
     }
 
     return result
@@ -1081,9 +1160,12 @@ export default class VelociousDatabaseDriversBase {
    * Runs a callback after the surrounding transaction commits.
    * If no transaction is active, the callback runs immediately.
    * @param {() => void | Promise<void>} callback - Callback.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Callback ownership.
    * @returns {Promise<void>} - Resolves when the callback has been registered or run.
    */
-  async afterCommit(callback) {
+  async afterCommit(callback, options = {}) {
+    await this._waitForOperationLease(options.operationOwner)
+
     const currentFrame = this._afterCommitCallbackFrames[this._afterCommitCallbackFrames.length - 1]
 
     if (!currentFrame) {
@@ -1102,40 +1184,60 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs start transaction.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async startTransaction() {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._startTransactionAction()
-      this._transactionsCount++
-    })
+  async startTransaction(options = {}) {
+    while (true) {
+      /** @type {import("../operation-lease.js").default | undefined} */
+      let blockingOperationLease
+
+      await this._transactionsActionsMutex.sync(async () => {
+        const operationLease = this._operationLease
+
+        if (operationLease && options.operationOwner !== operationLease.owner) {
+          blockingOperationLease = operationLease
+          return
+        }
+
+        await this._startTransactionAction(options)
+        this._transactionsCount++
+      })
+
+      if (!blockingOperationLease) return
+
+      await blockingOperationLease.wait(options.operationOwner)
+    }
   }
 
   /**
    * Runs start transaction action.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _startTransactionAction() {
-    await this.query("BEGIN TRANSACTION")
+  async _startTransactionAction(options = {}) {
+    await this.query("BEGIN TRANSACTION", options)
   }
 
   /**
    * Runs commit transaction.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async commitTransaction() {
+  async commitTransaction(options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
-      await this._commitTransactionAction()
+      await this._commitTransactionAction(options)
       this._transactionsCount--
     })
   }
 
   /**
    * Runs commit transaction action.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _commitTransactionAction() {
-    await this.query("COMMIT")
+  async _commitTransactionAction(options = {}) {
+    await this.query("COMMIT", options)
   }
 
   /**
@@ -1183,6 +1285,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
   async query(sql, options = {}) {
+    await this._waitForOperationLease(options.operationOwner)
     this._assertWritableQuery(sql)
 
     let tries = 0
@@ -1232,16 +1335,18 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Executes a mutation and returns the number of rows changed by that statement.
    * @param {string} sql - Mutation SQL string.
+   * @param {QueryOptions} [options] - Query ownership options.
    * @returns {Promise<number>} - Affected row count.
    */
-  async affectedRows(sql) {
+  async affectedRows(sql, options = {}) {
+    await this._waitForOperationLease(options.operationOwner)
     this._assertWritableQuery(sql)
-    await this.beforeQuery(sql, {})
+    await this.beforeQuery(sql, options)
 
     try {
       return await this._affectedRowsActual(sql)
     } finally {
-      await this.afterQuery(sql, {})
+      await this.afterQuery(sql, options)
     }
   }
 
@@ -1609,12 +1714,13 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs rollback transaction.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async rollbackTransaction() {
+  async rollbackTransaction(options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
       try {
-        await this._rollbackTransactionAction()
+        await this._rollbackTransactionAction(options)
       } finally {
         this._transactionsCount--
 
@@ -1630,10 +1736,11 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs rollback transaction action.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _rollbackTransactionAction() {
-    await this.query("ROLLBACK")
+  async _rollbackTransactionAction(options = {}) {
+    await this.query("ROLLBACK", options)
   }
 
   /**
@@ -1647,21 +1754,23 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Runs start save point.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async startSavePoint(savePointName) {
+  async startSavePoint(savePointName, options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
-      await this._startSavePointAction(savePointName)
+      await this._startSavePointAction(savePointName, options)
     })
   }
 
   /**
    * Runs start save point action.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _startSavePointAction(savePointName) {
-    await this.query(`SAVEPOINT ${savePointName}`)
+  async _startSavePointAction(savePointName, options = {}) {
+    await this.query(`SAVEPOINT ${savePointName}`, options)
   }
 
   /**
@@ -1691,22 +1800,24 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Runs release save point.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async releaseSavePoint(savePointName) {
+  async releaseSavePoint(savePointName, options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
-      await this._releaseSavePointAction(savePointName)
+      await this._releaseSavePointAction(savePointName, options)
     })
   }
 
   /**
    * Runs release save point action.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _releaseSavePointAction(savePointName) {
+  async _releaseSavePointAction(savePointName, options = {}) {
     try {
-      await this.query(`RELEASE SAVEPOINT ${savePointName}`)
+      await this.query(`RELEASE SAVEPOINT ${savePointName}`, options)
     } catch (error) {
       const message = error instanceof Error ? error.message : `${error}`
 
@@ -1723,21 +1834,23 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Runs rollback save point.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async rollbackSavePoint(savePointName) {
+  async rollbackSavePoint(savePointName, options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
-      await this._rollbackSavePointAction(savePointName)
+      await this._rollbackSavePointAction(savePointName, options)
     })
   }
 
   /**
    * Runs rollback save point action.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _rollbackSavePointAction(savePointName) {
-    await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`)
+  async _rollbackSavePointAction(savePointName, options = {}) {
+    await this.query(`ROLLBACK TO SAVEPOINT ${savePointName}`, options)
   }
 
   /**

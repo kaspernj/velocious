@@ -1,10 +1,12 @@
 // @ts-check
 
 import BasePool from "./base.js"
+import OperationLease from "../operation-lease.js"
 
 export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   activeCheckoutCount = 0
   suppressedConnectionContextCount = 0
+  operationLeaseQueue = Promise.resolve()
 
   /**
    * Checkout names of the currently-active nested checkouts, innermost last. The
@@ -104,6 +106,53 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       return await callback(connection)
     } finally {
       await this.checkin(connection)
+    }
+  }
+
+  /**
+   * Runs an operation under an exclusive FIFO lease on the reusable physical connection.
+   * @template T
+   * @param {import("./base.js").ConnectionCheckoutOptions} options - Checkout options.
+   * @param {(connection: import("../drivers/base.js").default, owner: symbol) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Resolves with the callback result.
+   */
+  async withOperationConnection(options, callback) {
+    const previousLease = this.operationLeaseQueue
+    /**
+     * Resolves this FIFO queue turn.
+     * @type {() => void} */
+    let releaseQueue = () => {}
+    const queueTurn = new Promise((resolve) => {
+      releaseQueue = () => resolve(undefined)
+    })
+
+    this.operationLeaseQueue = previousLease.then(async () => await queueTurn)
+    await previousLease
+
+    const owner = Symbol("single-pool-operation-owner")
+    const operationLease = new OperationLease(owner)
+    /** @type {import("../drivers/base.js").default | undefined} */
+    let connection
+    let operationLeaseInstalled = false
+
+    try {
+      connection = await this.checkout(options)
+      await connection.setOperationLease(operationLease)
+      operationLeaseInstalled = true
+
+      return await callback(connection, owner)
+    } finally {
+      operationLease.release()
+
+      try {
+        if (connection && operationLeaseInstalled) connection.clearOperationLease(operationLease)
+      } finally {
+        try {
+          if (connection) await this.checkin(connection)
+        } finally {
+          releaseQueue()
+        }
+      }
     }
   }
 

@@ -262,8 +262,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     })
   }
 
-  async lastInsertID() {
-    const result = await this.query("SELECT LAST_INSERT_ROWID() AS last_insert_id")
+  async lastInsertID(options = {}) {
+    const result = await this.query("SELECT LAST_INSERT_ROWID() AS last_insert_id", options)
 
     return digg(result, 0, "last_insert_id")
   }

@@ -2,6 +2,7 @@
 
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
+import preloadQueryForModel from "./query-for-model.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasOne {
@@ -87,7 +88,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
     await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
 
     // Load target models to be preloaded on the given models
-    let query = targetModelClass.where(whereArgs)
+    let query = preloadQueryForModel(this.models, targetModelClass).where(whereArgs)
 
     query = this.relationship.applyScope(query)
     query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [foreignKey]})

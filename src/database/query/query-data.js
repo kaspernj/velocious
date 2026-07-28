@@ -190,7 +190,15 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
 
   const primaryKey = rootModelClass.primaryKey()
   const rootIds = rootModels.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
-  const preparedEntries = entries.map((entry, entryIndex) => prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass}))
+  const sourceModel = rootModels[0]
+  const preparedEntries = entries.map((entry, entryIndex) => prepareEntry({
+    entry,
+    entryIndex,
+    primaryKey,
+    rootIds,
+    rootModelClass,
+    sourceModel
+  }))
   /**
    * Compatible query groups.
    * @type {Array<{aliases: Set<string>, query: import("./model-class-query.js").default, signature: string}>} */
@@ -231,9 +239,10 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
  * @param {string} args.primaryKey - Root model primary key column.
  * @param {Array<string | number>} args.rootIds - Root primary-key values.
  * @param {typeof import("../record/index.js").default} args.rootModelClass - Root model class.
+ * @param {import("../record/index.js").default} args.sourceModel - Loaded operation owner.
  * @returns {{aliases: string[], query: import("./model-class-query.js").default, signature: string}} - Prepared entry.
  */
-function prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass}) {
+function prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass, sourceModel}) {
   const targetModelClass = resolveTargetModelClass(rootModelClass, entry.chain)
   const fn = targetModelClass.getQueryDataByName(entry.fnName)
 
@@ -242,7 +251,7 @@ function prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass}) 
       `Declare it with ${targetModelClass.name}.queryData(${JSON.stringify(entry.fnName)}, ({query, tableName}) => query.select(...))`)
   }
 
-  const query = rootModelClass._newQuery()
+  const query = sourceModel.queryForModel(rootModelClass)
 
   // Empty out any defaults the query factory added — queryData runs
   // a bare aggregate, not a full model load.

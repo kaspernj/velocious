@@ -76,6 +76,19 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
     /** @type {Record<string, Array<Function>>} */
     static lifecycleCallbacks = {}
 
+    /** @type {?} */
+    _databaseOperation = undefined
+
+    /** @returns {?} Fake connection running afterCommit callbacks immediately. */
+    connection() {
+      return klass.connection()
+    }
+
+    /** @returns {?} Explicit operation owner, when this fake record is operation-bound. */
+    databaseOperation() {
+      return this._databaseOperation
+    }
+
     /** @returns {string} Stable model name. */
     static getModelName() {
       return modelName
@@ -152,11 +165,13 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
  * @param {?} modelClass - Fake model class.
  * @param {string} id - Record id.
  * @param {Record<string, ?>} attributes - Record attributes.
+ * @param {{databaseOperation?: ?}} [options] - Optional operation owner.
  * @returns {?} Fake record.
  */
-export function buildRecord(modelClass, id, attributes) {
+export function buildRecord(modelClass, id, attributes, {databaseOperation} = {}) {
   const record = Object.create(modelClass.prototype)
 
+  record._databaseOperation = databaseOperation
   record.id = () => id
   record.attributes = () => attributes
   /** @param {string} attributeName - Attribute name. @returns {?} Attribute value. */

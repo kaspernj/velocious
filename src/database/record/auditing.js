@@ -148,18 +148,20 @@ function dedicatedAuditTableName(modelClass) {
  * Resolves audit table data for a model class. Cached per model.
  * Called lazily on first createAudit / withoutAudit / relationship usage.
  * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {import("../drivers/base.js").default} [connection] - Explicit record-owned connection.
  * @returns {Promise<AuditTableData>} Resolved audit table metadata.
  */
-async function resolveAuditTableData(modelClass) {
+async function resolveAuditTableData(modelClass, connection) {
   if (modelClass._auditTableResolved && modelClass._auditTableData) {
     return modelClass._auditTableData
   }
 
-  const tableData = await buildAuditTableData(modelClass)
+  const resolvedConnection = connection || modelClass.connection()
+  const tableData = await buildAuditTableData(modelClass, resolvedConnection)
   const configuration = modelClass._getConfiguration()
 
   tableData.auditClass.registerRecordClass({configuration})
-  await tableData.auditClass.initializeRecord({configuration})
+  await tableData.auditClass.initializeRecord({configuration, connection: resolvedConnection})
 
   modelClass._auditTableData = tableData
   modelClass._auditTableResolved = true
@@ -174,11 +176,12 @@ async function resolveAuditTableData(modelClass) {
  * registered Audit model for shared tables; falls back to a framework-owned
  * dynamic class.
  * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {import("../drivers/base.js").default} connection - Explicit record-owned connection.
  * @returns {Promise<AuditTableData>} Audit table metadata.
  */
-async function buildAuditTableData(modelClass) {
+async function buildAuditTableData(modelClass, connection) {
   const dedicatedTable = dedicatedAuditTableName(modelClass)
-  const dedicatedExists = await dedicatedTableExistsForConnection(modelClass, dedicatedTable)
+  const dedicatedExists = await dedicatedTableExistsForConnection(modelClass, dedicatedTable, connection)
 
   if (dedicatedExists) {
     const auditClass = dedicatedAuditClass(modelClass, dedicatedTable)
@@ -217,9 +220,10 @@ async function buildAuditTableData(modelClass) {
  * Checks whether a dedicated audit table exists for a model's connection.
  * @param {AuditedModelClass} modelClass - Audited model class.
  * @param {string} tableName - Dedicated audit table name to check.
+ * @param {import("../drivers/base.js").default} connection - Explicit record-owned connection.
  * @returns {Promise<boolean>} Whether the table exists.
  */
-async function dedicatedTableExistsForConnection(modelClass, tableName) {
+async function dedicatedTableExistsForConnection(modelClass, tableName, connection) {
   const databaseIdentifier = modelClass.getDatabaseIdentifier()
   const cacheKey = `${databaseIdentifier}:${tableName}`
   const cached = dedicatedTableCache.get(cacheKey)
@@ -228,7 +232,6 @@ async function dedicatedTableExistsForConnection(modelClass, tableName) {
     return cached
   }
 
-  const connection = modelClass.connection()
   const table = await connection.getTableByName(tableName, {throwError: false})
   const exists = Boolean(table)
 
@@ -546,11 +549,11 @@ async function createAudit(record, args) {
 async function createAuditWithCurrentConnection(record, args, modelClass) {
   if (!record.isPersisted()) throw new Error(`Cannot audit unpersisted ${modelClass.getModelName()} record`)
 
-  const tableData = await resolveAuditTableData(modelClass)
+  const db = record.connection()
+  const tableData = await resolveAuditTableData(modelClass, db)
   const action = normalizeAction(args.action)
   const auditedChanges = args.auditedChanges === undefined ? null : args.auditedChanges
   const params = args.params === undefined ? null : args.params
-  const db = modelClass.connection()
   const currentDate = new Date()
 
   const auditActionId = await findOrCreateLookupId({

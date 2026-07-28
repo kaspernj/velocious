@@ -203,10 +203,14 @@ export default class SyncPublisher {
         sync_type: syncType,
         ...scopeValues.columns
       }
+      const databaseOperation = record.databaseOperation()
+      const operationScope = databaseOperation
+        ? databaseOperation.forModel(this.config.syncModel)
+        : this.config.syncModel
 
-      await resourceConfig.modelClass.connection().afterCommit(async () => {
+      await record.connection().afterCommit(async () => {
         try {
-          const syncRow = await this.upsertPublishedSyncRow(attributes)
+          const syncRow = await this.upsertPublishedSyncRow(attributes, operationScope)
 
           await this.broadcaster()({
             body: {
@@ -273,10 +277,11 @@ export default class SyncPublisher {
    * change back to), so repeated server changes to one resource reuse and
    * re-sequence one feed row.
    * @param {Record<string, ?>} attributes - Snapshotted sync row attributes.
+   * @param {?} syncModel - Operation-bound or static Sync model interface.
    * @returns {Promise<?>} Upserted sync row.
    */
-  async upsertPublishedSyncRow(attributes) {
-    const existingSync = await this.config.syncModel
+  async upsertPublishedSyncRow(attributes, syncModel = this.config.syncModel) {
+    const existingSync = await syncModel
       .where({
         [this.config.actorForeignKeyColumn]: null,
         resource_id: attributes.resource_id,
@@ -284,7 +289,7 @@ export default class SyncPublisher {
       })
       .first()
 
-    return await upsertSyncRow({attributes, existingSync, syncModel: this.config.syncModel})
+    return await upsertSyncRow({attributes, existingSync, syncModel})
   }
 
   /**

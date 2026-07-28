@@ -463,8 +463,8 @@ export default class VelociousDatabaseDriversMssql extends Base{
     })
   }
 
-  async lastInsertID() {
-    const result = await this.query("SELECT SCOPE_IDENTITY() AS last_insert_id")
+  async lastInsertID(options = {}) {
+    const result = await this.query("SELECT SCOPE_IDENTITY() AS last_insert_id", options)
     const lastInsertID = digg(result, 0, "last_insert_id")
 
     if (lastInsertID === null) throw new Error("Couldn't get the last inserted ID")
@@ -534,29 +534,32 @@ export default class VelociousDatabaseDriversMssql extends Base{
   /**
    * Runs start save point action.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _startSavePointAction(savePointName) {
-    await this.query(`SAVE TRANSACTION [${savePointName}]`)
+  async _startSavePointAction(savePointName, options = {}) {
+    await this.query(`SAVE TRANSACTION [${savePointName}]`, options)
   }
 
   /**
    * Runs release save point action.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [_options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _releaseSavePointAction(savePointName) { // eslint-disable-line no-unused-vars
+  async _releaseSavePointAction(savePointName, _options = {}) {
     // Do nothing in MS-SQL.
   }
 
   /**
    * Runs rollback save point action.
    * @param {string} savePointName - Save point name.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _rollbackSavePointAction(savePointName) {
+  async _rollbackSavePointAction(savePointName, options = {}) {
     try {
-      await this.query(`ROLLBACK TRANSACTION [${savePointName}]`)
+      await this.query(`ROLLBACK TRANSACTION [${savePointName}]`, options)
     } catch (error) {
       const message = error instanceof Error ? error.message : `${error}`
 

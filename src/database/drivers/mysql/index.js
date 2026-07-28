@@ -403,9 +403,12 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * large result set is read incrementally instead of being buffered. Overrides the base
    * buffered fallback with true server-side streaming.
    * @param {string} sql - SQL string to stream.
+   * @param {import("../base.js").QueryOptions} [options] - Query ownership options.
    * @yields {Record<string, unknown>} - The result rows, one at a time.
    */
-  async *queryStream(sql) {
+  async *queryStream(sql, options = {}) {
+    await this._waitForOperationLease(options.operationOwner)
+
     if (!this.pool) await this.connect()
     if (!this.pool) throw new Error("MySQL pool failed to initialize")
 
@@ -554,10 +557,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   /**
    * Runs last insert id.
+   * @param {import("../base.js").QueryOptions} [options] - Query ownership options.
    * @returns {Promise<number>} - Resolves with the last insert id.
    */
-  async lastInsertID() {
-    const result = await this.query("SELECT LAST_INSERT_ID() AS last_insert_id")
+  async lastInsertID(options = {}) {
+    const result = await this.query("SELECT LAST_INSERT_ID() AS last_insert_id", options)
 
     return digg(result, 0, "last_insert_id")
   }
@@ -574,10 +578,11 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   /**
    * Runs start transaction action.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _startTransactionAction() {
-    await this.query("START TRANSACTION")
+  async _startTransactionAction(options = {}) {
+    await this.query("START TRANSACTION", options)
   }
 
   /**

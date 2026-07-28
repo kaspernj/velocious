@@ -1,6 +1,7 @@
 // @ts-check
 
 import debounce from "debounce"
+import Mutex from "epic-locks/build/mutex.js"
 import queryWeb from "./query.web.js"
 
 export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
@@ -12,6 +13,9 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
    */
   constructor(driver, connection, persistence) {
     this.connection = connection
+    this.databaseSaveDeferred = false
+    this.databaseSaveMutex = new Mutex()
+    this.databaseTransactionStarting = false
     this.driver = driver
     this.persistence = persistence
   }
@@ -28,6 +32,54 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   async flushDatabaseSave() {
     this.saveDatabaseDebounce.clear()
     await this.saveDatabase()
+  }
+
+  /**
+   * Flushes only when a mutation save is pending or was deferred by a transaction.
+   * @returns {Promise<void>} - Resolves when pending database bytes are stored.
+   */
+  async flushPendingDatabaseSave() {
+    if (!this.saveDatabaseDebounce.isPending && !this.databaseSaveDeferred) return
+
+    await this.flushDatabaseSave()
+  }
+
+  /**
+   * Drains active and queued persistence before atomically starting an outer transaction.
+   * @param {() => Promise<void>} callback - Starts the SQL transaction.
+   * @returns {Promise<void>} - Resolves after BEGIN succeeds.
+   */
+  async withTransactionStart(callback) {
+    if (this.saveDatabaseDebounce.isPending) {
+      this.saveDatabaseDebounce.clear()
+      this.databaseSaveDeferred = true
+    }
+
+    await this.databaseSaveMutex.sync(async () => {
+      if (this.databaseSaveDeferred) {
+        this.databaseSaveDeferred = false
+        const databaseContent = this.connection.export()
+
+        await this.persistence.save(databaseContent)
+      }
+
+      this.databaseTransactionStarting = true
+
+      try {
+        await callback()
+      } catch (error) {
+        this.databaseTransactionStarting = false
+        throw error
+      }
+    })
+  }
+
+  /**
+   * Marks successful outer transaction admission complete after driver state is updated.
+   * @returns {void}
+   */
+  completeTransactionStart() {
+    this.databaseTransactionStarting = false
   }
 
   /**
@@ -59,9 +111,17 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   }
 
   saveDatabase = async () => {
-    const databaseContent = this.connection.export()
+    await this.databaseSaveMutex.sync(async () => {
+      if (this.driver.insideTransaction() || this.databaseTransactionStarting) {
+        this.databaseSaveDeferred = true
+        return
+      }
 
-    await this.persistence.save(databaseContent)
+      this.databaseSaveDeferred = false
+      const databaseContent = this.connection.export()
+
+      await this.persistence.save(databaseContent)
+    })
   }
 
   saveDatabaseDebounce = debounce(this.saveDatabase, 500)

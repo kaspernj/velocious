@@ -88,9 +88,10 @@ export default class RecordAttachmentsStore {
 
   /**
    * Runs ensure ready.
+   * @param {import("../index.js").default} [model] - Operation-owning model.
    * @returns {Promise<void>} - Resolves when schema is ready.
    */
-  async ensureReady() {
+  async ensureReady(model) {
     if (this._readyPromise) {
       await this._readyPromise
       return
@@ -124,7 +125,7 @@ export default class RecordAttachmentsStore {
         await db.createTable(table)
         this._driverColumnsAvailable = true
         this._contentBase64Nullable = true
-      })
+      }, model)
     })()
 
     try {
@@ -144,7 +145,7 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async attach({input, model, name, replace}) {
-    await this.ensureReady()
+    await this.ensureReady(model)
     const attachmentsConfiguration = this.configuration.getAttachmentsConfiguration?.() || {}
     const allowPathInput = attachmentsConfiguration.allowPathInput === true
     const allowedPathPrefixes = Array.isArray(attachmentsConfiguration.allowedPathPrefixes)
@@ -298,7 +299,7 @@ export default class RecordAttachmentsStore {
         })
 
         rowPersisted = true
-      })
+      }, model)
     } catch (error) {
       if (!rowPersisted && storageKey && typeof attachmentDriver.delete === "function") {
         try {
@@ -435,7 +436,7 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<Record<string, ?> | null>} - Attachment row.
    */
   async findOne({id, model, name}) {
-    await this.ensureReady()
+    await this.ensureReady(model)
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
@@ -455,7 +456,7 @@ export default class RecordAttachmentsStore {
       const rows = await query.results()
 
       return rows[0] || null
-    })
+    }, model)
   }
 
   /**
@@ -466,7 +467,7 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<Array<Record<string, ?>>>} - Attachment rows.
    */
   async findMany({model, name}) {
-    await this.ensureReady()
+    await this.ensureReady(model)
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
@@ -479,7 +480,7 @@ export default class RecordAttachmentsStore {
         .order("created_at_ms ASC")
 
       return await query.results()
-    })
+    }, model)
   }
 
   /**
@@ -517,7 +518,7 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<number>} - Number of attachments purged.
    */
   async purgeAll({model, name}) {
-    await this.ensureReady()
+    await this.ensureReady(model)
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
@@ -549,7 +550,7 @@ export default class RecordAttachmentsStore {
       }
 
       return rows.length
-    })
+    }, model)
   }
 
   /**
@@ -732,9 +733,12 @@ export default class RecordAttachmentsStore {
    * Runs with db.
    * @template T
    * @param {(db: import("../../../database/drivers/base.js").default) => Promise<T>} callback - Callback.
+   * @param {import("../index.js").default} [model] - Operation-owning model.
    * @returns {Promise<T>} - Callback result.
    */
-  async _withDb(callback) {
+  async _withDb(callback, model) {
+    if (model && model.databaseOperation()) return await callback(model.connection())
+
     const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
     /**
      * Defines result.

@@ -204,9 +204,11 @@ async function incrementParentCounter(record, definition, parentId, amount) {
     throw new Error(`magnitudeCounterCache on ${modelClass.getModelName()} could not resolve the "${definition.belongsTo}" parent model class`)
   }
 
-  // Update through the PARENT model's connection: the row being modified belongs
-  // to the parent, which may live on a different database/tenant than the child.
-  const db = parentModelClass.connection()
+  // Resolve through the record so an operation both owns the parent write and
+  // rejects a relationship whose parent routes to another database.
+  const db = record
+    .queryForModel(parentModelClass)
+    .driver
   const counterColumnSql = db.quoteColumn(definition.counterColumn)
   const truncatedAmount = Math.trunc(amount)
 
