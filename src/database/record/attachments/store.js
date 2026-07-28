@@ -164,7 +164,14 @@ export default class RecordAttachmentsStore {
     let persistenceFailed = false
 
     try {
-      await this.persistNormalizedAttachment({model, name, normalizedInput, replace})
+      const persistenceInput = await this.persistenceInputFor(normalizedInput)
+
+      await this.persistNormalizedAttachment({
+        model,
+        name,
+        normalizedInput: persistenceInput,
+        replace
+      })
     } catch (error) {
       persistenceFailed = true
       persistenceError = error
@@ -187,6 +194,24 @@ export default class RecordAttachmentsStore {
     }
 
     if (persistenceFailed) throw persistenceError
+  }
+
+  /**
+   * Materializes path content once when a legacy schema requires Base64.
+   * @param {import("./normalize-input.js").NormalizedAttachmentInput} normalizedInput - Normalized attachment input.
+   * @returns {Promise<import("./normalize-input.js").NormalizedAttachmentInput>} - Input used by the driver and database.
+   */
+  async persistenceInputFor(normalizedInput) {
+    if (this._contentBase64Nullable || !normalizedInput.pathSource) return normalizedInput
+
+    const contentBuffer = await normalizedInput.pathSource.readBuffer()
+
+    return {
+      ...normalizedInput,
+      contentBase64: contentBuffer.toString("base64"),
+      contentBuffer,
+      pathSource: null
+    }
   }
 
   /**
@@ -222,8 +247,8 @@ export default class RecordAttachmentsStore {
       storageKey = writeResult.storageKey
 
       // Current schemas keep content_base64 nullable and avoid duplicating
-      // driver-backed content. Old non-null schemas still require the original
-      // Base64 value, but path input is only materialized after storage succeeds.
+      // driver-backed content. Legacy path input was materialized once before
+      // the driver write so this value describes those exact persisted bytes.
       const databaseContentBase64 = await this.databaseContentBase64For(normalizedInput)
 
       await this._withDb(async (db) => {
@@ -305,13 +330,7 @@ export default class RecordAttachmentsStore {
     if (this._contentBase64Nullable) return null
     if (normalizedInput.contentBase64 !== null) return normalizedInput.contentBase64
 
-    if (!normalizedInput.pathSource) {
-      throw new Error("Legacy attachment schema requires content bytes")
-    }
-
-    const contentBuffer = await normalizedInput.pathSource.readBuffer()
-
-    return contentBuffer.toString("base64")
+    throw new Error("Legacy attachment schema requires materialized content bytes")
   }
 
   /**

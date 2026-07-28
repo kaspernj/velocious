@@ -50,13 +50,14 @@ non-regular files, and records the opened-handle byte size. It does not call
 the source identity before driver selection, so replacing the pathname does not
 change the bytes later persisted.
 
-For a path input, the filesystem driver pipelines the source's bounded Node
-read stream into a temporary destination and renames it only after the copy
-completes. Pipeline backpressure bounds memory use, and a failed source or
-destination removes the temporary output. The S3 driver sends the same kind of
-Node `Readable` as `PutObjectCommand.Body`, sends the opened-handle stat size as
-`ContentLength`, and destroys the stream after success or failure. Neither
-driver creates a whole-file Buffer or Base64 string before persistence.
+For a path input on the current nullable schema, the filesystem driver pipelines
+the source's bounded Node read stream into a temporary destination and renames
+it only after the copy completes. Pipeline backpressure bounds memory use, and
+a failed source or destination removes the temporary output. The S3 driver
+sends the same kind of Node `Readable` as `PutObjectCommand.Body`, sends the
+opened-handle stat size as `ContentLength`, and destroys the stream after
+success or failure. Neither driver creates a whole-file Buffer or Base64 string
+on that current-schema path.
 
 Reads must produce exactly the stat snapshot size. Truncation is rejected;
 bytes appended after normalization are ignored. Changes made through the same
@@ -92,11 +93,20 @@ after persistence. These capabilities travel with normalized input, so a
 preconstructed driver configured with `{instance: driver}` does not need
 configuration injection to read a path source.
 
+The legacy non-null `content_base64` schema is the storage-driver input
+exception. Before calling any driver, the store reads the opened snapshot
+exactly once and derives one Buffer and Base64 string from it. Filesystem and S3
+receive that Buffer, native receives that Base64 string, and the database row
+receives the same Base64 string. The original `pathSource` remains store-owned
+and is still closed after persistence.
+
 The built-in native driver is the compatibility exception. Its public
 `write({contentBase64, ...})` callback contract is unchanged, so it calls
 `pathSource.readBuffer()` and Base64-encodes path input inside that driver after
-selection. This is the only built-in path flow that whole-file buffers.
-In-memory native input passes its existing Base64 string through unchanged.
+selection on current nullable schemas. Legacy path input is already materialized
+by the store and follows the same callback contract without a second source
+read. In-memory native input passes its existing Base64 string through
+unchanged.
 
 ## Persistence and failure ordering
 
@@ -113,9 +123,11 @@ check-in fails.
 
 Current attachment schemas keep `content_base64` nullable and store `null` for
 driver-backed content. An older schema where that column is non-null preserves
-its legacy behavior: in-memory Base64 is reused, while path content is read from
-the same opened source and encoded only after the filesystem/S3 write succeeds.
-No schema change is required for streaming path persistence.
+its legacy behavior: in-memory Base64 is reused, while path content is
+materialized from the opened source once before driver persistence. That same
+snapshot supplies both backing storage and the required database Base64, so a
+same-inode modification between persistence phases cannot make them disagree.
+No schema change is required for current-schema streaming path persistence.
 
 `purgeAll()` validates that every selected driver supports deletion before
 deleting any backing object or row. It then deletes each snapshotted object and

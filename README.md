@@ -617,14 +617,19 @@ inputs are only accepted when the path resolves inside one of the allowed
 prefixes and the once-opened handle identifies a regular file. Its exact byte
 size comes from that handle's stat snapshot. The filesystem driver copies it
 with a bounded, backpressured stream and the S3 driver sends a Node `Readable`;
-neither driver first materializes the whole file as a Buffer or Base64 value.
-Path replacement cannot switch the opened source, truncation is rejected,
-later appends are ignored, and the source is closed after persistence.
+on current nullable schemas neither driver first materializes the whole file as
+a Buffer or Base64 value. Legacy schemas with a non-null `content_base64`
+column instead materialize the opened snapshot once before driver persistence
+and reuse those exact bytes for storage and the database Base64. Path
+replacement cannot switch the opened source, truncation is rejected, later
+appends are ignored, and the source is closed after persistence.
 
 The native driver's documented `write({contentBase64, ...})` callback remains
 source-compatible. For path input only, that driver reads and Base64-encodes the
-opened source after driver selection. Existing Buffer, string, browser, and
-`UploadedFile` inputs keep their in-memory behavior. See
+opened source after driver selection on current schemas; legacy path input
+arrives pre-materialized with the same Base64 written to the database. Existing
+Buffer, string, browser, and `UploadedFile` inputs keep their in-memory
+behavior. See
 [docs/attachments.md](docs/attachments.md#normalized-storage-driver-input) for
 the normalized input passed to custom drivers.
 
