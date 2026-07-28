@@ -37,6 +37,7 @@
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
+* Backend record attachments with filesystem, S3, native callback, and bounded Node path-input persistence (see [docs/attachments.md](docs/attachments.md))
 
 # Setup
 
@@ -521,6 +522,9 @@ Task.hasOneAttachment("descriptionFile")
 Task.hasOneAttachment("archivedPdf", {driver: "s3"})
 ```
 
+See [Backend record attachments](docs/attachments.md) for the complete input,
+storage-driver, lifecycle, and path-security contracts.
+
 You can also pass a driver class or instance directly on the attachment:
 
 ```js
@@ -537,6 +541,10 @@ Then use them from backend records:
 await task.descriptionFile().attach({
   content: "my file content",
   filename: "file.doc"
+})
+await task.archivedPdf().attach({
+  path: "/var/app/uploads/archive.pdf",
+  contentType: "application/pdf"
 })
 const descriptionFileUrl = await task.descriptionFile().url()
 await task.update({
@@ -605,7 +613,20 @@ new Configuration({
 ```
 
 Then `{path: "..."}`
-inputs are only accepted when the file resolves inside one of the allowed prefixes.
+inputs are only accepted when the path resolves inside one of the allowed
+prefixes and the once-opened handle identifies a regular file. Its exact byte
+size comes from that handle's stat snapshot. The filesystem driver copies it
+with a bounded, backpressured stream and the S3 driver sends a Node `Readable`;
+neither driver first materializes the whole file as a Buffer or Base64 value.
+Path replacement cannot switch the opened source, truncation is rejected,
+later appends are ignored, and the source is closed after persistence.
+
+The native driver's documented `write({contentBase64, ...})` callback remains
+source-compatible. For path input only, that driver reads and Base64-encodes the
+opened source after driver selection. Existing Buffer, string, browser, and
+`UploadedFile` inputs keep their in-memory behavior. See
+[docs/attachments.md](docs/attachments.md#normalized-storage-driver-input) for
+the normalized input passed to custom drivers.
 
 For frontend models, configure `resourceConfig().attachments` and use:
 

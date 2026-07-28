@@ -5,6 +5,7 @@ This folder contains implementation learnings and practical guidance discovered 
 ## Index
 - `docs/advisory-locks.md`: Cooperative, connection-scoped advisory lock helpers on every record class.
 - `docs/api-manifest-endpoint.md`: Built-in frontend-model API manifest endpoint — opt-in, token-protectable, returns resource/attribute/command metadata as pretty-printed JSON.
+- `docs/attachments.md`: Backend record attachment inputs, storage drivers, path allowlisting/streaming, and persistence lifecycle.
 - `docs/auditing.md`: Built-in lifecycle audit rows, manual audit events, and audit-missing scopes.
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
 - `docs/cli.md`: CLI process exit behavior for successful and rejected commands.

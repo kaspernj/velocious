@@ -167,20 +167,40 @@ export default class S3AttachmentStorageDriver {
    * Runs write.
    * @param {object} args - Write args.
    * @param {string} args.attachmentId - Attachment id.
-   * @param {{contentBuffer: Buffer, contentType: string | null, filename: string}} args.input - Normalized attachment input.
+   * @param {import("../normalize-input.js").NormalizedAttachmentInput} args.input - Normalized attachment input.
    * @returns {Promise<{storageKey: string}>} - Storage key.
    */
   async write({attachmentId, input}) {
     const {PutObjectCommand} = await this.s3Runtime()
     const client = await this.client()
     const storageKey = `${attachmentId}-${input.filename}`
+    /**
+     * S3 request body.
+     * @type {Buffer | import("node:stream").Readable | null} */
+    let body = input.contentBuffer
+    /**
+     * Path input stream.
+     * @type {import("node:stream").Readable | null} */
+    let pathInputStream = null
 
-    await client.send(new PutObjectCommand({
-      Body: input.contentBuffer,
-      Bucket: this.bucket(),
-      ContentType: input.contentType || undefined,
-      Key: storageKey
-    }))
+    if (input.pathSource) {
+      pathInputStream = await input.pathSource.createReadStream()
+      body = pathInputStream
+    }
+
+    if (!body) throw new Error("S3 attachment input has no content")
+
+    try {
+      await client.send(new PutObjectCommand({
+        Body: body,
+        Bucket: this.bucket(),
+        ContentLength: input.byteSize,
+        ContentType: input.contentType || undefined,
+        Key: storageKey
+      }))
+    } finally {
+      if (pathInputStream) pathInputStream.destroy()
+    }
 
     return {storageKey}
   }

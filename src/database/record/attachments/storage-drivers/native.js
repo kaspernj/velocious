@@ -47,7 +47,7 @@ export default class NativeAttachmentStorageDriver {
    * Runs write.
    * @param {object} args - Write args.
    * @param {string} args.attachmentId - Attachment id.
-   * @param {{contentBase64: string, contentType: string | null, filename: string}} args.input - Normalized attachment input.
+   * @param {import("../normalize-input.js").NormalizedAttachmentInput} args.input - Normalized attachment input.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
    * @returns {Promise<{storageKey: string}>} - Storage key result.
@@ -57,10 +57,25 @@ export default class NativeAttachmentStorageDriver {
       throwMissingMethod({driverName: this.name, methodName: "write"})
     }
 
+    let contentBase64 = input.contentBase64
+
+    if (input.pathSource) {
+      // Native write callbacks have always received Base64. Path input is
+      // intentionally buffered here, after driver selection, to preserve that
+      // public callback contract without forcing filesystem/S3 to buffer.
+      const contentBuffer = await input.pathSource.readBuffer()
+
+      contentBase64 = contentBuffer.toString("base64")
+    }
+
+    if (contentBase64 === null) {
+      throw new Error(`Attachment storage driver "${this.name}" input has no content`)
+    }
+
     const result = await this.options.write({
       attachmentId,
       attachmentName: name,
-      contentBase64: input.contentBase64,
+      contentBase64,
       contentType: input.contentType,
       filename: input.filename,
       model

@@ -35,6 +35,7 @@ import requireContext from "require-context"
 import InitializerFromRequireContext from "../database/initializer-from-require-context.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
+import AttachmentPathSource from "./node/attachment-path-source.js"
 
 /**
  * Defines this typedef.
@@ -227,7 +228,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @param {object} args - Args.
    * @param {string[]} args.allowedPathPrefixes - Allowed path prefixes.
    * @param {string} args.inputPath - Input path.
-   * @returns {Promise<{buffer: Buffer, filePath: string}>} - Resolved path and bytes.
+   * @returns {Promise<AttachmentPathSource>} - Opened regular-file path source.
    */
   async resolveAttachmentInputPath({allowedPathPrefixes, inputPath}) {
     const filePath = path.resolve(inputPath)
@@ -239,9 +240,33 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       throw new Error("Attachment path is outside allowed directories")
     }
 
-    const buffer = await this.readAttachmentInputFile(filePath)
+    const fileHandle = await fs.open(filePath, "r")
 
-    return {buffer, filePath}
+    try {
+      const fileStats = await fileHandle.stat()
+
+      if (!fileStats.isFile()) {
+        throw new Error("Attachment path must reference a regular file")
+      }
+
+      return new AttachmentPathSource({
+        byteSize: fileStats.size,
+        fileHandle,
+        filePath
+      })
+    } catch (error) {
+      try {
+        await fileHandle.close()
+      } catch (closeError) {
+        throw new AggregateError(
+          [error, closeError],
+          `Attachment path validation and source close both failed for ${filePath}`,
+          {cause: closeError}
+        )
+      }
+
+      throw error
+    }
   }
 
   /**
