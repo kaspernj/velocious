@@ -104,13 +104,15 @@ export default class VelociousDatabaseDriversBaseTable {
     }
 
     for (const foreignKey of await this.getForeignKeys()) {
-      tableData.addForeignKey(foreignKey.getTableDataForeignKey())
+      const tableDataForeignKey = foreignKey.getTableDataForeignKey()
+
+      tableData.addForeignKey(tableDataForeignKey)
 
       const tableDataColumn = tableDataColumns.find((tableDataColumn) => tableDataColumn.getName() == foreignKey.getColumnName())
 
       if (!tableDataColumn) throw new Error(`Couldn't find table data column for foreign key: ${foreignKey.getColumnName()}`)
 
-      tableDataColumn.setForeignKey(foreignKey)
+      tableDataColumn.setForeignKey(tableDataForeignKey)
     }
 
     for (const index of await this.getIndexes()) {
@@ -153,4 +155,3 @@ export default class VelociousDatabaseDriversBaseTable {
     return await this.getDriver().query(sql)
   }
 }
-

@@ -64,9 +64,15 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     // SQLite's ALTER TABLE does not support adding constraints; the SQLite driver overrides
     // alterTableSQLs entirely (via TableRebuilder) so this base path is never invoked there.
     for (const foreignKey of tableData.getForeignKeys()) {
-      if (!foreignKey.getIsNewForeignKey()) continue
+      if (!foreignKey.getIsNewForeignKey() && !foreignKey.getDropForeignKey()) continue
 
       if (actionCount > 0) sql += ", "
+
+      if (foreignKey.getDropForeignKey()) {
+        sql += this.getDropForeignKeySQL(foreignKey)
+        actionCount++
+        continue
+      }
 
       sql += "ADD"
 
@@ -100,5 +106,18 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     }
 
     return sqls
+  }
+
+  /**
+   * Runs get drop foreign key sql.
+   * @param {import("../table-data/table-foreign-key.js").default} foreignKey - Foreign key to drop.
+   * @returns {string} - SQL fragment that removes the foreign key.
+   */
+  getDropForeignKeySQL(foreignKey) {
+    const name = foreignKey.getName()
+
+    if (!name) throw new Error(`Cannot remove unnamed foreign key on ${foreignKey.getTableName()}.${foreignKey.getColumnName()}`)
+
+    return `DROP CONSTRAINT ${this.getOptions().quoteIndexName(name)}`
   }
 }

@@ -7,16 +7,18 @@ export default class TableForeignKey {
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.columnName - Column name.
+   * @param {boolean} [args.dropForeignKey] - Whether to drop this foreign key.
    * @param {boolean} [args.isNewForeignKey] - Whether is new foreign key.
    * @param {string} [args.name] - Name.
    * @param {string} args.tableName - Table name.
    * @param {string} args.referencedColumnName - Referenced column name.
    * @param {string} args.referencedTableName - Referenced table name.
    */
-  constructor({columnName, isNewForeignKey, name, tableName, referencedColumnName, referencedTableName, ...restArgs}) {
+  constructor({columnName, dropForeignKey, isNewForeignKey, name, tableName, referencedColumnName, referencedTableName, ...restArgs}) {
     restArgsError(restArgs)
 
     this._columnName = columnName
+    this._dropForeignKey = dropForeignKey
     this._isNewForeignKey = isNewForeignKey
     this._name = name
     this._tableName = tableName
@@ -29,6 +31,12 @@ export default class TableForeignKey {
    * @returns {string} - The column name.
    */
   getColumnName() { return this._columnName }
+
+  /**
+   * Runs get drop foreign key.
+   * @returns {boolean} - Whether this foreign key should be dropped.
+   */
+  getDropForeignKey() { return this._dropForeignKey || false }
 
   /**
    * Runs get is new foreign key.

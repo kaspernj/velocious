@@ -57,7 +57,7 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
       const childTableName = "remove_reference_drafts"
 
       try {
-        await driver.dropTable(childTableName, {cascade: true, ifExists: true})
+        await dropRemoveReferenceTables(driver, childTableName)
         await migration.createTable(childTableName, {id: {type: "uuid"}})
         await migration.addReference(childTableName, "member", {type: "uuid"})
 
@@ -78,7 +78,42 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
         expect((await tableWithoutReference.getColumns()).map((column) => column.getName())).not.toContain("member_id")
         expect(remainingMemberIndexes).toHaveLength(0)
       } finally {
-        await driver.dropTable(childTableName, {cascade: true, ifExists: true})
+        await dropRemoveReferenceTables(driver, childTableName)
+      }
+    })
+  })
+
+  it("removes a reference column and its unique index when no foreign key was added", async () => {
+    const configuration = Configuration.current()
+
+    await configuration.ensureConnections(async (dbs) => {
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+      const childTableName = "remove_reference_unique_drafts"
+
+      try {
+        await dropRemoveReferenceTables(driver, childTableName)
+        await migration.createTable(childTableName, {id: {type: "uuid"}})
+        await migration.addReference(childTableName, "member", {type: "uuid", unique: true})
+
+        const tableWithReference = await driver.getTableByNameOrFail(childTableName)
+        const memberIndexes = (await tableWithReference.getIndexes())
+          .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === "member_id")
+
+        expect((await tableWithReference.getColumns()).map((column) => column.getName())).toContain("member_id")
+        expect(memberIndexes).toHaveLength(1)
+        expect(memberIndexes[0].isUnique()).toBe(true)
+
+        await migration.removeReference(childTableName, "member")
+
+        const tableWithoutReference = await driver.getTableByNameOrFail(childTableName)
+        const remainingMemberIndexes = (await tableWithoutReference.getIndexes())
+          .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === "member_id")
+
+        expect((await tableWithoutReference.getColumns()).map((column) => column.getName())).not.toContain("member_id")
+        expect(remainingMemberIndexes).toHaveLength(0)
+      } finally {
+        await dropRemoveReferenceTables(driver, childTableName)
       }
     })
   })
@@ -87,10 +122,11 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
 /**
  * @param {import("../../../src/database/drivers/base.js").default} driver - Database driver.
  * @param {string} childTableName - Child table name.
- * @param {string} parentTableName - Parent table name.
+ * @param {string | undefined} [parentTableName] - Parent table name.
  * @returns {Promise<void>}
  */
 async function dropRemoveReferenceTables(driver, childTableName, parentTableName) {
+  await driver.dropTable(`${childTableName}_velocious_rebuild`, {cascade: true, ifExists: true})
   await driver.dropTable(childTableName, {cascade: true, ifExists: true})
-  await driver.dropTable(parentTableName, {cascade: true, ifExists: true})
+  if (parentTableName) await driver.dropTable(parentTableName, {cascade: true, ifExists: true})
 }

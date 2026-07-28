@@ -57,6 +57,7 @@ describe("database - migration - removeForeignKey", {tags: ["dummy"]}, () => {
  * @returns {Promise<void>}
  */
 async function dropRemoveForeignKeyTables(driver, childTableName, parentTableName) {
+  await driver.dropTable(`${childTableName}_velocious_rebuild`, {cascade: true, ifExists: true})
   await driver.dropTable(childTableName, {cascade: true, ifExists: true})
   await driver.dropTable(parentTableName, {cascade: true, ifExists: true})
 }

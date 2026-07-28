@@ -5,6 +5,19 @@ import TableColumn from "../../../table-data/table-column.js"
 
 export default class VelociousDatabaseConnectionDriversMysqlSqlAlterTable extends AlterTableBase {
   /**
+   * Runs get drop foreign key sql.
+   * @param {import("../../../table-data/table-foreign-key.js").default} foreignKey - Foreign key to drop.
+   * @returns {string} - SQL fragment that removes the foreign key.
+   */
+  getDropForeignKeySQL(foreignKey) {
+    const name = foreignKey.getName()
+
+    if (!name) throw new Error(`Cannot remove unnamed foreign key on ${foreignKey.getTableName()}.${foreignKey.getColumnName()}`)
+
+    return `DROP FOREIGN KEY ${this.getOptions().quoteIndexName(name)}`
+  }
+
+  /**
    * Builds MySQL ALTER TABLE statements, adding indexes atomically with columns.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */

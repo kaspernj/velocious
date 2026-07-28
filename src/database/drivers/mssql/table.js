@@ -43,7 +43,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
     return await this.getDriver()._cachedTableSchemaMetadata(this.getName(), "foreignKeys", async () => {
       const sql = `
         SELECT
-            fk.name AS ForeignKeyName,
+            fk.name AS CONSTRAINT_NAME,
             tp.name AS ParentTable,
             ref.name AS ReferencedTable,
             cp.name AS ParentColumn,
@@ -63,7 +63,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
             ON fkc.referenced_object_id = cref.object_id
             AND fkc.referenced_column_id = cref.column_id
         WHERE tp.name = ${this.driver.quote(this.getName())}
-        ORDER BY ForeignKeyName, ParentTable, ReferencedTable;
+        ORDER BY CONSTRAINT_NAME, ParentTable, ReferencedTable;
       `
 
       const foreignKeyRows = await this.driver.query(sql)
