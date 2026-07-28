@@ -152,13 +152,16 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
  * @param {?} modelClass - Fake model class.
  * @param {string} id - Record id.
  * @param {Record<string, ?>} attributes - Record attributes.
+ * @param {{databaseOperation?: ?}} [options] - Optional operation owner.
  * @returns {?} Fake record.
  */
-export function buildRecord(modelClass, id, attributes) {
+export function buildRecord(modelClass, id, attributes, {databaseOperation} = {}) {
   const record = Object.create(modelClass.prototype)
 
   record.id = () => id
   record.attributes = () => attributes
+  record.connection = () => modelClass.connection()
+  record.databaseOperation = () => databaseOperation
   /** @param {string} attributeName - Attribute name. @returns {?} Attribute value. */
   record.readAttribute = (attributeName) => attributes[attributeName]
 

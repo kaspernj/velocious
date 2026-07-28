@@ -29,8 +29,9 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
     if (!targetModelClass) throw new Error("Can't build a new record without a taget model class")
 
-    const newInstance = /** @type {InstanceType<TMC>} */ (new targetModelClass(data))
-
+    const newInstance = this.getModel().bindRelatedRecord(
+      /** @type {InstanceType<TMC>} */ (new targetModelClass(data))
+    )
 
     // Add it to the loaded models of this relationship
     if (this._loaded === undefined) {
@@ -196,13 +197,14 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       )
       const targetTable = TargetModelClass.tableName()
       const throughTable = throughModelClass.tableName()
-      const driver = TargetModelClass.connection()
+      const baseQuery = this.getModel().queryForModel(TargetModelClass)
+      const driver = baseQuery.driver
       const parentPrimaryKey = this.getPrimaryKey()
       const parentId = /** @type {string | number} */ (this.getModel().readColumn(parentPrimaryKey))
       const joinSql = `LEFT JOIN ${driver.quoteTable(throughTable)} ON ${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughPrimaryKey)} = ${driver.quoteTable(targetTable)}.${driver.quoteColumn(targetForeignKey)}`
       const whereSql = `${driver.quoteTable(throughTable)}.${driver.quoteColumn(throughForeignKey)} = ${driver.options().quote(parentId)}`
 
-      const query = TargetModelClass.joins(joinSql).where(whereSql)
+      const query = baseQuery.joins(joinSql).where(whereSql)
 
       return this.applyScope(query)
     }
@@ -224,7 +226,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       whereArgs[typeColumn] = this.getModel().getModelClass().getModelName()
     }
 
-    const query = TargetModelClass.where(whereArgs)
+    const query = this.getModel().queryForModel(TargetModelClass).where(whereArgs)
 
     return this.applyScope(query)
   }

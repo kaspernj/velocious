@@ -220,13 +220,17 @@ export default class SyncClient {
         resource: record
       })
       const syncType = this.defaultSyncType({operation, record, resourceConfig})
+      const databaseOperation = record.databaseOperation()
+      const operationScope = databaseOperation
+        ? databaseOperation.forModel(this.config.syncModel)
+        : this.config.syncModel
 
-      await resourceConfig.modelClass.connection().afterCommit(async () => {
+      await record.connection().afterCommit(async () => {
         try {
           await SyncApiClient.queueLocalSync({
             data,
             resource: record,
-            syncModel: this.config.syncModel,
+            syncModel: operationScope,
             syncType
           })
         } catch (error) {

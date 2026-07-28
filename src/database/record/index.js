@@ -445,6 +445,11 @@ class VelociousDatabaseRecord {
   __connection = undefined
 
   /**
+   * Explicit operation owning this record's database work.
+   * @type {import("../operation.js").default | undefined} */
+  _databaseOperation = undefined
+
+  /**
    * Instance relationships.
    * @type {Record<string, import("./instance-relationships/base.js").default>} */
   _instanceRelationships = {}
@@ -863,9 +868,10 @@ class VelociousDatabaseRecord {
      * single UPDATE ... SET col = (SELECT COUNT(*)) so concurrent
      * creates/destroys cannot race into a stale count.
      * @param {number | string | null} parentId - Parent primary-key value.
+     * @param {VelociousDatabaseRecord} record - Child record owning the connection.
      * @returns {Promise<void>} - Resolves when the counter cache has been synced.
      */
-    async function syncCounter(parentId) {
+    async function syncCounter(parentId, record) {
       if (!parentId) return
 
       const relationship = ChildModel.getRelationshipByName(relationshipName)
@@ -880,7 +886,7 @@ class VelociousDatabaseRecord {
       const parentTable = ParentModel.tableName()
       const childTable = ChildModel.tableName()
       const pkColumn = inflection.underscore(primaryKey)
-      const connection = ParentModel.connection()
+      const connection = record.connection()
       const quoted = connection.quote(parentId)
 
       const sql = `UPDATE ${connection.quoteTable(parentTable)} SET ${connection.quoteColumn(counterColumn)} = (SELECT COUNT(*) FROM ${connection.quoteTable(childTable)} WHERE ${connection.quoteColumn(fk)} = ${quoted}) WHERE ${connection.quoteColumn(pkColumn)} = ${quoted}`
@@ -901,11 +907,11 @@ class VelociousDatabaseRecord {
     }
 
     ChildModel.afterCreate(async (record) => {
-      await syncCounter(readFkAttribute(record))
+      await syncCounter(readFkAttribute(record), record)
     })
 
     ChildModel.afterDestroy(async (record) => {
-      await syncCounter(readFkAttribute(record))
+      await syncCounter(readFkAttribute(record), record)
     })
 
     ChildModel.beforeSave(async (record) => {
@@ -932,8 +938,8 @@ class VelociousDatabaseRecord {
 
       if (previousParentId !== undefined) {
         delete model[prevKey]
-        await syncCounter(previousParentId)
-        await syncCounter(readFkAttribute(model))
+        await syncCounter(previousParentId, record)
+        await syncCounter(readFkAttribute(model), record)
       }
     })
   }
@@ -1452,15 +1458,16 @@ class VelociousDatabaseRecord {
    * Runs initialize record.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("../drivers/base.js").default} [args.connection] - Explicit metadata connection.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  static async initializeRecord({configuration, ...restArgs}) {
+  static async initializeRecord({configuration, connection: explicitConnection, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
     this.registerRecordClass({configuration})
-    const connection = this.connection({enforceTenantDatabaseScope: false})
+    const connection = explicitConnection || this.connection({enforceTenantDatabaseScope: false})
 
     this._databaseType = connection.getType()
 
@@ -2427,7 +2434,7 @@ class VelociousDatabaseRecord {
       await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
-      await this.getModelClass().transaction(async () => {
+      const saveInTransaction = async () => {
         await this._runLifecycleCallbacks("beforeSave")
 
         // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
@@ -2454,7 +2461,13 @@ class VelociousDatabaseRecord {
         await this._autoSaveAttachments()
         await this._runLifecycleCallbacks("afterSave")
         await this._emitRecordChangeAfterCommit(isNewRecord ? "create" : "update")
-      })
+      }
+
+      if (this._databaseOperation) {
+        await this._databaseOperation.transaction(saveInTransaction)
+      } else {
+        await this.getModelClass().transaction(saveInTransaction)
+      }
     })
 
     this._assignedAttributeNames = undefined
@@ -2481,6 +2494,7 @@ class VelociousDatabaseRecord {
       if (model) {
         if (model instanceof VelociousDatabaseRecord) {
           if (model.isChanged()) {
+            this.bindRelatedRecord(model)
             await model.save()
 
             const foreignKey = this._relationshipForeignKeyAttribute(instanceRelationship)
@@ -2539,6 +2553,7 @@ class VelociousDatabaseRecord {
 
       if (loaded) {
         for (const model of loaded) {
+          this.bindRelatedRecord(model)
           const foreignKey = model._relationshipForeignKeyAttribute(instanceRelationship)
 
           model.setAttribute(foreignKey, this.id())
@@ -2592,6 +2607,7 @@ class VelociousDatabaseRecord {
       }
 
       for (const model of loaded) {
+        this.bindRelatedRecord(model)
         const foreignKey = model._relationshipForeignKeyAttribute(instanceRelationship)
 
         model.setAttribute(foreignKey, this.id())
@@ -3021,15 +3037,18 @@ class VelociousDatabaseRecord {
    * Runs new query.
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
+   * @param {{driver?: import("../drivers/base.js").default | (() => import("../drivers/base.js").default), operation?: import("../operation.js").default}} [args] - Explicit query ownership.
    * @returns {ModelClassQuery<MC>} - The new query.
    */
-  static _newQuery() {
+  static _newQuery({driver = () => this.connection(), operation, ...restArgs} = {}) {
+    restArgsError(restArgs)
     this._assertHasBeenInitialized()
     const handler = new Handler()
     const query = new ModelClassQuery({
-      driver: () => this.connection(),
+      driver,
       handler,
-      modelClass: this
+      modelClass: this,
+      operation
     })
 
     return query.from(new FromTable(this.tableName()))
@@ -3417,6 +3436,53 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Binds future query, lifecycle, relationship, and persistence work to an operation.
+   * @param {import("../operation.js").default} operation - Owning operation.
+   * @returns {this} - Bound record.
+   */
+  bindDatabaseOperation(operation) {
+    if (this._databaseOperation && this._databaseOperation !== operation) {
+      throw new Error("Record is already bound to another database operation")
+    }
+
+    this._databaseOperation = operation
+
+    return this
+  }
+
+  /**
+   * Returns the explicit operation owning this record, if any.
+   * @returns {import("../operation.js").default | undefined} - Owning operation.
+   */
+  databaseOperation() {
+    return this._databaseOperation
+  }
+
+  /**
+   * Binds a related record to the same operation as this record.
+   * @template {VelociousDatabaseRecord} Model
+   * @param {Model} record - Related record.
+   * @returns {Model} - Related record.
+   */
+  bindRelatedRecord(record) {
+    if (this._databaseOperation) this._databaseOperation.bindRecord(record)
+
+    return record
+  }
+
+  /**
+   * Builds a model query preserving this record's operation ownership.
+   * @template {typeof VelociousDatabaseRecord} MC
+   * @param {MC} ModelClass - Target model class.
+   * @returns {ModelClassQuery<MC>} - Target query.
+   */
+  queryForModel(ModelClass) {
+    if (this._databaseOperation) return this._databaseOperation.forModel(ModelClass)
+
+    return ModelClass._newQuery()
+  }
+
+  /**
    * Runs load existing record.
    * @param {object} attributes - Attributes.
    * @returns {void} - No return value.
@@ -3473,9 +3539,18 @@ class VelociousDatabaseRecord {
    * @returns {import("../drivers/base.js").default} - The connection.
    */
   _connection() {
+    if (this._databaseOperation) return this._databaseOperation.connection()
     if (this.__connection) return this.__connection
 
     return this.getModelClass().connection()
+  }
+
+  /**
+   * Returns the connection that owns this record's database work.
+   * @returns {import("../drivers/base.js").default} - Connection.
+   */
+  connection() {
+    return this._connection()
   }
 
   /**
@@ -4374,7 +4449,11 @@ class VelociousDatabaseRecord {
 
     whereObject[primaryKey] = id
 
-    const query = /** @type {import("../query/model-class-query.js").default<MC>} */ (this.getModelClass().where(whereObject))
+    const query = /** @type {import("../query/model-class-query.js").default<MC>} */ (
+      this
+        .queryForModel(this.getModelClass())
+        .where(whereObject)
+    )
     const reloadedModel = await query.first()
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)

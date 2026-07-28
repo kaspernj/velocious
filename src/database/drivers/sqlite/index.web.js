@@ -65,6 +65,80 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   }
 
   /**
+   * Starts an outer transaction after draining SQL.js persistence admission.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
+   * @returns {Promise<void>} - Resolves when the transaction starts.
+   */
+  async startTransaction(options = {}) {
+    if (!this.args?.getConnection) {
+      if (!this._connection) throw new Error("SQLite web connection has not been initialized")
+
+      try {
+        await super.startTransaction(options)
+      } finally {
+        this._connection.completeTransactionStart()
+      }
+
+      return
+    }
+
+    await super.startTransaction(options)
+  }
+
+  /**
+   * Coordinates SQL BEGIN with active and queued persistence exports.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
+   * @returns {Promise<void>} - Resolves when the transaction starts.
+   */
+  async _startTransactionAction(options = {}) {
+    if (!this.args?.getConnection) {
+      if (!this._connection) throw new Error("SQLite web connection has not been initialized")
+
+      await this._connection.withTransactionStart(async () => {
+        await super._startTransactionAction(options)
+      })
+
+      return
+    }
+
+    await super._startTransactionAction(options)
+  }
+
+  /**
+   * Commits and persists bytes after the outermost SQL.js transaction closes.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
+   * @returns {Promise<void>} - Resolves when committed bytes are persisted.
+   */
+  async commitTransaction(options = {}) {
+    const outermostTransaction = this._transactionsCount === 1
+
+    await super.commitTransaction(options)
+
+    if (outermostTransaction && !this.args?.getConnection) {
+      if (!this._connection) throw new Error("SQLite web connection has not been initialized")
+
+      await this._connection.flushPendingDatabaseSave()
+    }
+  }
+
+  /**
+   * Rolls back and persists bytes after the outermost SQL.js transaction closes.
+   * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
+   * @returns {Promise<void>} - Resolves when rolled-back bytes are persisted.
+   */
+  async rollbackTransaction(options = {}) {
+    const outermostTransaction = this._transactionsCount === 1
+
+    await super.rollbackTransaction(options)
+
+    if (outermostTransaction && !this.args?.getConnection) {
+      if (!this._connection) throw new Error("SQLite web connection has not been initialized")
+
+      await this._connection.flushPendingDatabaseSave()
+    }
+  }
+
+  /**
    * Runs get connection.
    * @returns {ConnectionSqlJs | SqliteWebConnection} - The connection.
    */

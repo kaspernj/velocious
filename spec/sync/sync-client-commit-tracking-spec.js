@@ -1,7 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import {buildConfiguration, buildFakeSyncModel, buildTransport} from "./sync-client-fakes.js"
+import { buildConfiguration, buildFakeSyncModel, buildRecord, buildTransport } from "./sync-client-fakes.js"
 import Project from "../dummy/src/models/project.js"
 import SyncClient from "../../src/sync/sync-client.js"
 import Task from "../dummy/src/models/task.js"
@@ -114,5 +114,31 @@ describe("sync client - commit tracking", {databaseCleaning: {transaction: false
     } finally {
       client.stop()
     }
+  })
+
+  it("queues through the operation-bound sync model for operation-owned records", async () => {
+    const {client, syncModel} = buildTaskTrackingHarness()
+    const operationSyncModel = buildFakeSyncModel()
+    const resourceConfig = client.config.resources.Task
+
+    if (!resourceConfig) throw new Error("Task sync resource config was not built")
+
+    const record = buildRecord(Task, "0f8fad5b-d9cb-469f-a165-70867728950e", {
+      id: "0f8fad5b-d9cb-469f-a165-70867728950e",
+      name: "Operation-owned tracked task"
+    }, {
+      databaseOperation: {
+        forModel: (ModelClass) => {
+          expect(ModelClass).toEqual(syncModel)
+          return operationSyncModel
+        }
+      }
+    })
+    const callback = client.trackedMutationCallback({operation: "create", resourceConfig})
+
+    await callback(record)
+
+    expect(syncModel.rows).toHaveLength(0)
+    expect(operationSyncModel.rows).toHaveLength(1)
   })
 })

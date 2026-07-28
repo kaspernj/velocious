@@ -111,10 +111,11 @@ export async function runWithCount({models, modelClass, entries}) {
 
   const primaryKey = modelClass.primaryKey()
   const parentIds = models.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
+  const sourceModel = models[0]
   const queryGroups = new Map()
 
   for (const entry of entries) {
-    const countQuery = queryForEntry({entry, modelClass, parentIds})
+    const countQuery = queryForEntry({entry, modelClass, parentIds, sourceModel})
     const sql = countQuery.toSql()
     const existingGroup = queryGroups.get(sql)
 
@@ -138,9 +139,10 @@ export async function runWithCount({models, modelClass, entries}) {
  * @param {WithCountEntry} args.entry - Entry being evaluated.
  * @param {typeof import("../record/index.js").default} args.modelClass - Parent model class.
  * @param {Array<string | number>} args.parentIds - Primary keys of the loaded parents.
+ * @param {import("../record/index.js").default} args.sourceModel - Loaded operation owner.
  * @returns {import("./model-class-query.js").default} - Prepared count query.
  */
-function queryForEntry({entry, modelClass, parentIds}) {
+function queryForEntry({entry, modelClass, parentIds, sourceModel}) {
   const relationship = modelClass.getRelationshipByName(entry.relationshipName)
 
   if (!relationship) {
@@ -172,7 +174,7 @@ function queryForEntry({entry, modelClass, parentIds}) {
     Object.assign(whereConditions, entry.where)
   }
 
-  const baseQuery = targetModelClass._newQuery()
+  const baseQuery = sourceModel.queryForModel(targetModelClass)
   baseQuery._forceQualifyBaseTable = true
   baseQuery.where(whereConditions)
 

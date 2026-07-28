@@ -15,7 +15,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   async validate({model, attributeName}) {
     const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
 
-    const connection = modelClass.connection()
+    const connection = model.connection()
     const tableName = modelClass._getTable().getName()
     const attributeValue = /** @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
@@ -49,7 +49,8 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       whereArgs[scopeUnderscore] = /** @type {string | number} */ (scopeValue)
     }
 
-    let existingRecordQuery = modelClass
+    let existingRecordQuery = model
+      .queryForModel(modelClass)
       .select(modelClass.primaryKey())
       .where(whereArgs)
 

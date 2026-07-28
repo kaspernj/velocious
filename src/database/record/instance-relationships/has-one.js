@@ -32,7 +32,9 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
 
-    const newInstance = /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    const newInstance = this.getModel().bindRelatedRecord(
+      /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    )
 
     this._loaded = newInstance
 
@@ -64,7 +66,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     whereArgs[foreignKey] = primaryModelID
 
-    let query = TargetModelClass.where(whereArgs)
+    let query = this.getModel().queryForModel(TargetModelClass).where(whereArgs)
 
     query = this.applyScope(query)
 

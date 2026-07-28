@@ -34,6 +34,7 @@
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 * Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
 * Selective named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
+* Explicit singular-database operation transactions whose model scopes preserve ownership through records, relationships, lifecycle work, nested savepoints, and commit callbacks (see [docs/operation-scoped-transactions.md](docs/operation-scoped-transactions.md))
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
@@ -50,6 +51,25 @@ npx velocious init
 ```
 
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
+
+# Operation-scoped transactions
+
+Use `configuration.withTransaction` for an atomic unit of model work on one database:
+
+```js
+await configuration.withTransaction({databaseIdentifier: "default", name: "accept ticket"}, async (operation) => {
+  const ticket = await operation.forModel(Ticket).find(ticketId)
+
+  ticket.setAccepted(true)
+  await ticket.save()
+
+  await operation.afterCommit(async () => {
+    await publishAcceptedTicket(ticket.id())
+  })
+})
+```
+
+Use operation-bound model scopes and their loaded records throughout the callback. `operation.transaction` adds a nested savepoint, and `operation.connection()` is the deliberate escape hatch for owned raw SQL. Cross-database models, same-identifier tenant switches to another physical database, and operation handles used after the callback are rejected. On shared SQLite/SQL.js pools, unrelated work waits for the operation lease, while admission during an already-open ordinary transaction is rejected. See [operation-scoped transactions](docs/operation-scoped-transactions.md) for pool behavior, after-commit failure semantics, and migration guidance.
 
 # Development
 

@@ -2,6 +2,7 @@
 
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
+import preloadQueryForModel from "./query-for-model.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 /**
@@ -155,7 +156,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     }
 
     // Step 1: Query the through table to build parent→target ID mapping
-    const throughModels = await throughModelClass
+    const throughModels = await preloadQueryForModel(modelsToLoad, throughModelClass)
       .where({[throughForeignKey]: [...modelsPrimaryKeyValues]})
       .toArray()
 
@@ -186,7 +187,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     let targetModels = []
 
     if (allTargetIds.size > 0) {
-      let query = targetModelClass.where({[targetForeignKey]: [...allTargetIds]})
+      let query = preloadQueryForModel(modelsToLoad, targetModelClass).where({[targetForeignKey]: [...allTargetIds]})
 
       query = this.relationship.applyScope(query)
       query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [targetForeignKey]})
@@ -299,7 +300,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
 
-    let query = targetModelClass.where(whereArgs)
+    let query = preloadQueryForModel(modelsToLoad, targetModelClass).where(whereArgs)
 
     query = this.relationship.applyScope(query)
     query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [foreignKey]})

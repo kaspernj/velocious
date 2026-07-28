@@ -16,6 +16,7 @@ import {digg} from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
+import DatabaseOperation from "./database/operation.js"
 import {initializeAuditedModelRelationships} from "./database/record/auditing.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
@@ -2893,6 +2894,41 @@ export default class VelociousConfiguration {
       identifiers: databaseIdentifiers ?? this.getDatabaseIdentifiers(),
       name,
       stackLabel: "withConnections"
+    })
+  }
+
+  /**
+   * Runs explicit model work in a transaction pinned to one database connection.
+   * @template T
+   * @param {{databaseIdentifier: string, name?: string}} options - Operation options.
+   * @param {(operation: DatabaseOperation) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Resolves with the callback result.
+   */
+  async withTransaction({databaseIdentifier, name = "Configuration.withTransaction", ...restArgs}, callback) {
+    restArgsError(restArgs)
+
+    if (!databaseIdentifier) throw new Error("Configuration.withTransaction requires a databaseIdentifier")
+    if (typeof callback != "function") throw new Error("Configuration.withTransaction requires a callback")
+    if (!this.getDatabaseIdentifiers().includes(databaseIdentifier)) {
+      throw new Error(`Unknown or inactive database identifier: ${databaseIdentifier}`)
+    }
+
+    const pool = this.getDatabasePool(databaseIdentifier)
+
+    return await pool.withOperationConnection({name}, async (connection, owner) => {
+      const operation = new DatabaseOperation({
+        configuration: this,
+        configurationReuseKey: pool.getConnectionConfigurationReuseKey(connection),
+        connection,
+        databaseIdentifier,
+        owner
+      })
+
+      try {
+        return await operation.transaction(async () => await callback(operation))
+      } finally {
+        operation.complete()
+      }
     })
   }
 

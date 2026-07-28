@@ -49,12 +49,13 @@ export default class ServerSequenceAllocator {
    * parallel `next()` calls - including calls from other allocator instances
    * sharing the same table and connection - cannot interleave their insert
    * and last-insert-id reads and hand out duplicate sequences.
+   * @param {{connection?: import("../database/drivers/base.js").default}} [options] - Explicit record-owned connection.
    * @returns {Promise<number>} Next sequence value.
    */
-  async next() {
+  async next({connection} = {}) {
     const queueKey = `${this.databaseIdentifier}::${this.tableName}`
     const previousAllocation = allocationQueues.get(queueKey) ?? Promise.resolve()
-    const allocation = previousAllocation.then(() => this._allocateNext())
+    const allocation = previousAllocation.then(() => this._allocateNext(connection))
 
     allocationQueues.set(queueKey, allocation.then(() => undefined, () => undefined))
 
@@ -63,9 +64,10 @@ export default class ServerSequenceAllocator {
 
   /**
    * Ensures the backing table exists.
+   * @param {import("../database/drivers/base.js").default} [connection] - Explicit record-owned connection.
    * @returns {Promise<void>} Resolves when ready.
    */
-  async ensureReady() {
+  async ensureReady(connection) {
     if (this._isReady) return
 
     if (this._usesMemoryStorage()) {
@@ -85,7 +87,7 @@ export default class ServerSequenceAllocator {
       // cache readiness when the table was not created inside an active
       // transaction; otherwise the next allocation re-verifies the table.
       if (!created || !db.insideTransaction()) this._isReady = true
-    })
+    }, connection)
 
     try {
       await this._readyPromise
@@ -96,10 +98,11 @@ export default class ServerSequenceAllocator {
 
   /**
    * Allocates one sequence value after queueing.
+   * @param {import("../database/drivers/base.js").default} [connection] - Explicit record-owned connection.
    * @returns {Promise<number>} Allocated sequence value.
    */
-  async _allocateNext() {
-    await this.ensureReady()
+  async _allocateNext(connection) {
+    await this.ensureReady(connection)
 
     if (this._usesMemoryStorage()) {
       return ++this._memorySequence
@@ -123,7 +126,7 @@ export default class ServerSequenceAllocator {
       if (insertedId !== undefined && insertedId !== null) return Number(insertedId)
 
       return Number(await db.lastInsertID())
-    })
+    }, connection)
   }
 
   /**
@@ -158,9 +161,12 @@ export default class ServerSequenceAllocator {
    * Runs a callback with a database connection.
    * @template Result
    * @param {(db: import("../database/drivers/base.js").default) => Promise<Result>} callback - Database callback.
+   * @param {import("../database/drivers/base.js").default} [connection] - Explicit record-owned connection.
    * @returns {Promise<Result>} Callback result.
    */
-  async _withDb(callback) {
+  async _withDb(callback, connection) {
+    if (connection) return await callback(connection)
+
     return await this._getConfiguration().ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Server sequence allocator"}, async (dbs) => {
       const db = dbs[this.databaseIdentifier]
 
@@ -225,11 +231,11 @@ export function withServerSequence(ModelClass, {allocator, column = "serverSeque
   if (typeof prototype[advanceMethodName] != "function") {
     /**
      * Assigns the next server-side sequence.
-     * @this {Record<string, ?>}
+     * @this {import("../database/record/index.js").default & Record<string, ?>}
      * @returns {Promise<void>}
      */
     prototype[advanceMethodName] = async function advanceServerSequenceThroughAllocator() {
-      this[setterMethodName](await allocator.next())
+      this[setterMethodName](await allocator.next({connection: this.connection()}))
     }
   }
 

@@ -24,7 +24,7 @@ import WhereParser from "../query-parser/where-parser.js"
 /**
  * Defines this typedef.
  * @template {typeof import("../record/index.js").default} [MC=typeof import("../record/index.js").default]
- * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[], queryData?: import("./query-data.js").QueryDataEntry[]}} ModelClassQueryArgsType
+ * @typedef {import("./index.js").QueryArgsType & {modelClass: MC, joinBasePath?: string[], joinTracker?: import("./join-tracker.js").default, forceQualifyBaseTable?: boolean, withCount?: import("./with-count.js").WithCountEntry[], queryData?: import("./query-data.js").QueryDataEntry[], operation?: import("../operation.js").default}} ModelClassQueryArgsType
  */
 /**
  * Runs unquote sql identifier.
@@ -200,6 +200,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     this._joinBasePath = args.joinBasePath || []
     this._joinTracker = args.joinTracker || new JoinTracker({modelClass: this.modelClass})
     this._forceQualifyBaseTable = Boolean(args.forceQualifyBaseTable)
+    this._operation = args.operation
 
     /**
      * Narrows the runtime value to the documented type.
@@ -240,7 +241,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       joinTracker: this._joinTracker.clone(),
       forceQualifyBaseTable: this._forceQualifyBaseTable,
       withCount: [...this._withCount],
-      queryData: [...this._queryData]
+      queryData: [...this._queryData],
+      operation: this._operation
     }))
 
     // @ts-expect-error
@@ -723,7 +725,11 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {VelociousDatabaseQueryModelClassQuery<MC>} - The scoped join query.
    */
   buildJoinScopeQuery(targetModelClass, joinPath) {
-    const scopedQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (targetModelClass._newQuery())
+    const scopedQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (
+      this._operation
+        ? this._operation.forModel(targetModelClass)
+        : targetModelClass._newQuery()
+    )
 
     scopedQuery._joinTracker = this._joinTracker
     scopedQuery._joinBasePath = joinPath
@@ -864,14 +870,40 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     if (record) return record
 
-    const ModelClass = this.getModelClass()
-    const newRecord = /** @type {InstanceType<MC>} */ (new ModelClass(conditions))
+    const newRecord = this.build(conditions)
 
     if (callback) {
       callback(newRecord)
     }
 
     return newRecord
+  }
+
+  /**
+   * Builds a record owned by the query's operation, when present.
+   * @param {Record<string, ?>} [attributes] - Initial attributes.
+   * @returns {InstanceType<MC>} - Built record.
+   */
+  build(attributes = {}) {
+    const ModelClass = this.getModelClass()
+    const record = /** @type {InstanceType<MC>} */ (new ModelClass(attributes))
+
+    if (this._operation) this._operation.bindRecord(record)
+
+    return record
+  }
+
+  /**
+   * Creates a record owned by the query's operation, when present.
+   * @param {Record<string, ?>} [attributes] - Initial attributes.
+   * @returns {Promise<InstanceType<MC>>} - Created record.
+   */
+  async create(attributes = {}) {
+    const record = this.build(attributes)
+
+    await record.save()
+
+    return record
   }
 
   /**
@@ -917,8 +949,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const results = await this.results()
 
     for (const result of results) {
-      const ModelClass = this.getModelClass()
-      const model = /** @type {InstanceType<MC>} */ (new ModelClass())
+      const model = this.build()
 
       model.loadExistingRecord(result)
       models.push(model)

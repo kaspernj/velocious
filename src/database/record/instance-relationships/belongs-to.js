@@ -27,7 +27,9 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model")
 
-    const newInstance = /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    const newInstance = this.getModel().bindRelatedRecord(
+      /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    )
 
     this._loaded = newInstance
 
@@ -85,7 +87,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
     whereArgs[primaryKey] = foreignModelID
 
-    const query = this.applyScope(TargetModelClass.where(whereArgs))
+    const query = this.applyScope(this.getModel().queryForModel(TargetModelClass).where(whereArgs))
 
     const foreignModel = await query.first()
 

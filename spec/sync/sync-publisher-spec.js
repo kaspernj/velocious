@@ -194,6 +194,46 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
     }
   })
 
+  it("keeps sync-row persistence operation-owned for operation-scoped saves", async () => {
+    const {broadcasts, publisher, restore} = buildUuidItemPublishHarness()
+
+    await publisher.start()
+
+    try {
+      await dummyConfiguration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
+        await operation.forModel(UuidItem).create({
+          id: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+          title: "Operation-published"
+        })
+      })
+
+      expect(await SyncEntry.where({
+        resource_id: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+        resource_type: "UuidItem"
+      }).toArray()).toHaveLength(1)
+      expect(broadcasts).toHaveLength(1)
+
+      await expect(async () => {
+        await dummyConfiguration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
+          await operation.forModel(UuidItem).create({
+            id: "2d3e4f5a-6b7c-4d8e-9f0a-2b3c4d5e6f7a",
+            title: "Operation-rolled-back"
+          })
+
+          throw new Error("ROLLBACK_PUBLISHED_OPERATION")
+        })
+      }).toThrowError("ROLLBACK_PUBLISHED_OPERATION")
+
+      expect(await SyncEntry.where({
+        resource_id: "2d3e4f5a-6b7c-4d8e-9f0a-2b3c4d5e6f7a",
+        resource_type: "UuidItem"
+      }).toArray()).toHaveLength(0)
+      expect(broadcasts).toHaveLength(1)
+    } finally {
+      restore()
+    }
+  })
+
   it("publishes the payload committed by the save even when an afterSave hook assigns unsaved drift", async () => {
     const {broadcasts, publisher, restore} = buildUuidItemPublishHarness()
 

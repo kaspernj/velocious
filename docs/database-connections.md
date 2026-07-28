@@ -8,6 +8,8 @@ await configuration.withConnections({name: "report export"}, async (dbs) => {
 })
 ```
 
+For an atomic, singular-database unit of model work with explicit connection ownership, use [`configuration.withTransaction`](operation-scoped-transactions.md). Operation scopes propagate through records, relationships, lifecycle work, and framework publication paths; they also isolate unrelated work on shared SQLite/SQL.js pools.
+
 The `name` option labels the active checkout. It is intended for debugging connection usage, especially code paths that hold onto connections longer than expected or fail to release them.
 
 Use `databaseIdentifiers` when a scope only needs specific configured databases. Velocious checks out only those pools and passes only those connections to the callback:

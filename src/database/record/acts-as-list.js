@@ -173,7 +173,7 @@ function assertPositivePosition({position, positionColumn, persisted = false}) {
  */
 async function placeMovedRecord({record, positionColumn, scope, scopeValue, position}) {
   const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
-  const connection = modelClass.connection()
+  const connection = record.connection()
   const tableSql = connection.quoteTable(modelClass._getTable().getName())
   const scopeCol = modelClass.getColumnNameForAttributeName(scope)
   const posCol = modelClass.getColumnNameForAttributeName(positionColumn)
@@ -224,7 +224,7 @@ function clearBelongsToChangeForScope(record) {
  */
 async function shiftPositionsUp({record, positionColumn, scope, fromPosition, toPosition, scopeValue, excludeRecordId}) {
   const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
-  const connection = modelClass.connection()
+  const connection = record.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
   const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
@@ -239,7 +239,8 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in descending order so we bump the highest first
-  let query = modelClass
+  let query = record
+    .queryForModel(modelClass)
     .select(modelClass.primaryKey())
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
@@ -289,7 +290,7 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
  */
 async function shiftPositionsDown({record, positionColumn, scope, fromPosition, toPosition, scopeValue}) {
   const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
-  const connection = modelClass.connection()
+  const connection = record.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
   const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
@@ -304,7 +305,8 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in ascending order so we shift the lowest gap first
-  let query = modelClass
+  let query = record
+    .queryForModel(modelClass)
     .select(modelClass.primaryKey())
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
@@ -345,7 +347,7 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
  */
 async function highestPositionInScope({record, positionColumn, scope, scopeValue}) {
   const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
-  const connection = modelClass.connection()
+  const connection = record.connection()
   const scopeColumnName = modelClass.getColumnNameForAttributeName(scope)
   const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
@@ -353,7 +355,8 @@ async function highestPositionInScope({record, positionColumn, scope, scopeValue
 
   if (resolvedScopeValue == null) return 0
 
-  const rows = await modelClass
+  const rows = await record
+    .queryForModel(modelClass)
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
     .order(`${positionColumnSql} DESC`)
@@ -415,7 +418,7 @@ function resolveScopeValue(record, scope) {
  */
 async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
   const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
-  const connection = modelClass.connection()
+  const connection = record.connection()
   const tableName = modelClass._getTable().getName()
   const resolvedScopeValue = scopeValue != null ? scopeValue : resolveScopeValue(record, scope)
 

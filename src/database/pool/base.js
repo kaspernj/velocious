@@ -241,9 +241,21 @@ class VelociousDatabasePoolBase {
    * @returns {boolean} - Whether connection matches current resolved configuration.
    */
   connectionMatchesCurrentConfiguration(connection) {
-    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    return this.getConnectionConfigurationReuseKey(connection) === this.getConfigurationReuseKey()
+  }
 
-    return connectionWithPoolKey[POOL_CONFIGURATION_KEY] === this.getConfigurationReuseKey()
+  /**
+   * Returns the resolved database configuration key stamped on a connection at checkout.
+   * @param {import("../drivers/base.js").default} connection - Checked-out connection.
+   * @returns {string} - Connection configuration reuse key.
+   */
+  getConnectionConfigurationReuseKey(connection) {
+    const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    const reuseKey = connectionWithPoolKey[POOL_CONFIGURATION_KEY]
+
+    if (!reuseKey) throw new Error("Database connection is missing its configuration reuse key")
+
+    return reuseKey
   }
 
   /**
@@ -355,6 +367,19 @@ class VelociousDatabasePoolBase {
    */
   withConnection(_optionsOrCallback, _callback) {
     throw new Error("'withConnection' not implemented")
+  }
+
+  /**
+   * Runs an operation on a freshly checked-out connection.
+   * @template T
+   * @param {ConnectionCheckoutOptions} options - Checkout options.
+   * @param {(connection: import("../drivers/base.js").default, owner: symbol) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Resolves with the callback result.
+   */
+  async withOperationConnection(options, callback) {
+    const owner = Symbol("database-operation-owner")
+
+    return await this.withConnection(options, async (connection) => await callback(connection, owner))
   }
 
   /**

@@ -326,8 +326,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     })
   }
 
-  async lastInsertID() {
-    const result = await this.query("SELECT LASTVAL() AS last_insert_id")
+  async lastInsertID(options = {}) {
+    const result = await this.query("SELECT LASTVAL() AS last_insert_id", options)
 
     return digg(result, 0, "last_insert_id")
   }
@@ -338,8 +338,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return this._options
   }
 
-  async _startTransactionAction() {
-    await this.query("START TRANSACTION")
+  async _startTransactionAction(options = {}) {
+    await this.query("START TRANSACTION", options)
   }
 
   /**

@@ -145,7 +145,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
       if (action !== "create" && action !== "update") return
 
-      void model.getModelClass().connection().afterCommit(async () => {
+      void model.connection().afterCommit(async () => {
         broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
           action,
           id: model.id(),
@@ -156,7 +156,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     })
 
     modelClass.afterDestroy((model) => {
-      void model.getModelClass().connection().afterCommit(async () => {
+      void model.connection().afterCommit(async () => {
         broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
           action: "destroy",
           id: model.id()
