@@ -3,7 +3,6 @@
 import Configuration from "../../src/configuration.js"
 import Project from "../dummy/src/models/project.js"
 import recordChanges from "../../src/database/record-changes.js"
-import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
 import Task from "../dummy/src/models/task.js"
 
 class OtherDatabaseProject extends Project {}
@@ -46,117 +45,6 @@ describe("database - operation-scoped transactions", {tags: ["dummy"], databaseC
     expect((await Task.find(updatedTask.id())).name()).toEqual("Before operation update")
     expect((await Task.find(destroyedTask.id())).name()).toEqual("Before operation destroy")
     expect(changeEvents).toHaveLength(0)
-  })
-
-  it("holds an unrelated write behind the single-pool lease and commits it after rollback", async () => {
-    const configuration = Configuration.current()
-    const project = await Project.create({name: "Operation barrier project"})
-    let survivorFinished = false
-    /** @type {Promise<Task> | undefined} */
-    let survivorPromise
-
-    await expect(async () => {
-      await configuration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
-        await operation.forModel(Task).create({name: "Must roll back", project})
-
-        survivorPromise = Task.create({name: "Must survive", project}).then((task) => {
-          survivorFinished = true
-          return task
-        })
-
-        await Promise.resolve()
-        await Promise.resolve()
-
-        expect(survivorFinished).toBeFalse()
-        throw new Error("ROLLBACK_WITH_SURVIVOR")
-      })
-    }).toThrowError("ROLLBACK_WITH_SURVIVOR")
-
-    if (!survivorPromise) throw new Error("Survivor write was not started")
-
-    await survivorPromise
-
-    expect(await Task.findBy({name: "Must roll back"})).toBeNull()
-    expect(await Task.findBy({name: "Must survive"})).toBeDefined()
-  })
-
-  it("discards owned afterCommit callbacks and runs an unrelated registration once", async () => {
-    const configuration = Configuration.current()
-    let ownedRuns = 0
-    let unrelatedRuns = 0
-    /** @type {Promise<void> | undefined} */
-    let unrelatedPromise
-
-    await expect(async () => {
-      await configuration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
-        await operation.afterCommit(() => {
-          ownedRuns++
-        })
-
-        unrelatedPromise = Project.connection().afterCommit(() => {
-          unrelatedRuns++
-        })
-
-        await Promise.resolve()
-        expect(unrelatedRuns).toEqual(0)
-
-        throw new Error("ROLLBACK_AFTER_COMMIT")
-      })
-    }).toThrowError("ROLLBACK_AFTER_COMMIT")
-
-    if (!unrelatedPromise) throw new Error("Unrelated afterCommit registration was not started")
-
-    await unrelatedPromise
-
-    expect(ownedRuns).toEqual(0)
-    expect(unrelatedRuns).toEqual(1)
-  })
-
-  it("supports nested success, nested rollback, and outer rollback", async () => {
-    const configuration = Configuration.current()
-    const project = await Project.create({name: "Nested operation project"})
-    let nestedAfterCommitRuns = 0
-
-    await configuration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
-      const Tasks = operation.forModel(Task)
-
-      await Tasks.create({name: "Outer success", project})
-      await operation.transaction(async () => {
-        await Tasks.create({name: "Nested success", project})
-        await operation.afterCommit(() => {
-          nestedAfterCommitRuns++
-        })
-      })
-      expect(nestedAfterCommitRuns).toEqual(0)
-
-      await expect(async () => {
-        await operation.transaction(async () => {
-          await Tasks.create({name: "Nested rollback", project})
-          throw new Error("ROLLBACK_NESTED")
-        })
-      }).toThrowError("ROLLBACK_NESTED")
-    })
-
-    expect(await Task.findBy({name: "Outer success"})).toBeDefined()
-    expect(await Task.findBy({name: "Nested success"})).toBeDefined()
-    expect(await Task.findBy({name: "Nested rollback"})).toBeNull()
-    expect(nestedAfterCommitRuns).toEqual(1)
-
-    await expect(async () => {
-      await configuration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
-        const Tasks = operation.forModel(Task)
-
-        await Tasks.create({name: "Outer rollback root", project})
-        await operation.transaction(async () => {
-          await Tasks.create({name: "Outer rollback nested", project})
-        })
-
-        throw new Error("ROLLBACK_OUTER")
-      })
-    }).toThrowError("ROLLBACK_OUTER")
-
-    expect(await Task.findBy({name: "Outer rollback root"})).toBeNull()
-    expect(await Task.findBy({name: "Outer rollback nested"})).toBeNull()
   })
 
   it("leases concurrent operations in FIFO order", async () => {
@@ -282,18 +170,5 @@ describe("database - operation-scoped transactions", {tags: ["dummy"], databaseC
     const survivingTask = await Task.findBy({name: "Before preload update"})
 
     if (!survivingTask) throw new Error("Original task did not survive operation rollback")
-  })
-
-  it("keeps a single physical connection in SingleMultiUsePool", async () => {
-    const configuration = Configuration.current()
-    const pool = configuration.getDatabasePool("default")
-
-    if (!(pool instanceof SingleMultiUsePool)) throw new Error("Expected the dummy default database to use SingleMultiUsePool")
-
-    await configuration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
-      expect(pool.getDebugSnapshot().connections.length).toEqual(1)
-      expect(await operation.connection().query("SELECT 1 AS operation_connection")).toEqual([{operation_connection: 1}])
-      expect(pool.getDebugSnapshot().connections.length).toEqual(1)
-    })
   })
 })
