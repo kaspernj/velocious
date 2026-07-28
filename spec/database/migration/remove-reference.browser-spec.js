@@ -13,6 +13,8 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
       const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
       const parentTableName = "remove_reference_members"
       const childTableName = "remove_reference_enrollments"
+      const referenceName = "removeReferenceMember"
+      const referenceColumnName = "remove_reference_member_id"
 
       try {
         await dropRemoveReferenceTables(driver, childTableName, parentTableName)
@@ -22,32 +24,32 @@ describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
           table.string("category", {null: false})
         })
         await migration.addIndex(childTableName, ["status", "category"], {name: "index_remove_reference_enrollments_on_status_and_category"})
-        await migration.addReference(childTableName, "member", {foreignKey: true, type: "uuid"})
+        await migration.addReference(childTableName, referenceName, {foreignKey: true, type: "uuid"})
 
         const tableWithReference = await driver.getTableByNameOrFail(childTableName)
         const columnNames = (await tableWithReference.getColumns()).map((column) => column.getName())
         const memberIndexes = (await tableWithReference.getIndexes())
-          .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === "member_id")
+          .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === referenceColumnName)
         const foreignKeys = await tableWithReference.getForeignKeys()
 
-        expect(columnNames).toContain("member_id")
+        expect(columnNames).toContain(referenceColumnName)
         expect(memberIndexes).toHaveLength(1)
         expect(memberIndexes[0].isUnique()).toBe(false)
-        expect(foreignKeys.map((foreignKey) => foreignKey.getColumnName())).toContain("member_id")
+        expect(foreignKeys.map((foreignKey) => foreignKey.getColumnName())).toContain(referenceColumnName)
 
-        await migration.removeReference(childTableName, "member")
+        await migration.removeReference(childTableName, referenceName)
 
         const tableWithoutReference = await driver.getTableByNameOrFail(childTableName)
         const remainingColumnNames = (await tableWithoutReference.getColumns()).map((column) => column.getName())
         const remainingMemberIndexes = (await tableWithoutReference.getIndexes())
-          .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === "member_id")
+          .filter((index) => index.getColumnNames().length === 1 && index.getColumnNames()[0] === referenceColumnName)
         const remainingForeignKeys = await tableWithoutReference.getForeignKeys()
         const remainingCompositeIndex = (await tableWithoutReference.getIndexes())
           .find((index) => index.getName() === "index_remove_reference_enrollments_on_status_and_category")
 
-        expect(remainingColumnNames).not.toContain("member_id")
+        expect(remainingColumnNames).not.toContain(referenceColumnName)
         expect(remainingMemberIndexes).toHaveLength(0)
-        expect(remainingForeignKeys.map((foreignKey) => foreignKey.getColumnName())).not.toContain("member_id")
+        expect(remainingForeignKeys.map((foreignKey) => foreignKey.getColumnName())).not.toContain(referenceColumnName)
         expect(remainingCompositeIndex?.getColumnNames()).toEqual(["status", "category"])
       } finally {
         await dropRemoveReferenceTables(driver, childTableName, parentTableName)

@@ -289,19 +289,35 @@ export default class VelociousDatabaseMigration {
 
     const resolvedColumnName = columnName || `${inflection.underscore(referenceName)}_id`
     const driver = this.getDriver()
-    const table = await driver.getTableByName(tableName)
+    let maximumRemovals = 0
+    let previousMatchingCount = 0
 
-    if (!table) throw new Error(`Table ${tableName} does not exist`)
+    for (let removalAttempt = 0; ; removalAttempt++) {
+      const table = await driver.getTableByName(tableName)
 
-    const foreignKeys = await table.getForeignKeys()
-    const matchingForeignKeys = foreignKeys.filter((foreignKey) => foreignKey.getColumnName() == resolvedColumnName)
+      if (!table) throw new Error(`Table ${tableName} does not exist`)
 
-    if (matchingForeignKeys.length === 0) {
-      throw new Error(`No foreign key on ${tableName}.${resolvedColumnName}`)
-    }
+      const foreignKeys = await table.getForeignKeys()
+      const matchingForeignKeys = foreignKeys.filter((foreignKey) => foreignKey.getColumnName() == resolvedColumnName)
 
-    for (const foreignKey of matchingForeignKeys) {
-      await driver.removeForeignKey(tableName, foreignKey)
+      if (matchingForeignKeys.length === 0) {
+        if (removalAttempt === 0) throw new Error(`No foreign key on ${tableName}.${resolvedColumnName}`)
+
+        return
+      }
+
+      if (removalAttempt === 0) {
+        maximumRemovals = matchingForeignKeys.length
+      } else if (matchingForeignKeys.length >= previousMatchingCount) {
+        throw new Error(`Foreign key removal did not reduce matches on ${tableName}.${resolvedColumnName}`)
+      }
+
+      if (removalAttempt >= maximumRemovals) {
+        throw new Error(`Foreign key removal exceeded expected matches on ${tableName}.${resolvedColumnName}`)
+      }
+
+      previousMatchingCount = matchingForeignKeys.length
+      await driver.removeForeignKey(tableName, matchingForeignKeys[0])
     }
   }
 

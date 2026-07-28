@@ -157,7 +157,7 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
       targetTableData.addForeignKey(this._renameForeignKeyColumn(alterForeignKey, columnRenames))
     }
 
-    const targetColumnNames = new Set(targetTableData.getColumns().map((column) => column.getName()))
+    const targetColumnNames = new Set(targetTableData.getColumns().map((column) => column.getActualName()))
 
     for (const currentIndex of currentTableData.getIndexes()) {
       const renamedColumns = currentIndex.getColumns().map((columnName) => {
