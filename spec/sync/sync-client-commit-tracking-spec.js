@@ -128,6 +128,7 @@ describe("sync client - commit tracking", {databaseCleaning: {transaction: false
       name: "Operation-owned tracked task"
     }, {
       databaseOperation: {
+        connection: () => Task.connection(),
         forModel: (ModelClass) => {
           expect(ModelClass).toEqual(syncModel)
           return operationSyncModel

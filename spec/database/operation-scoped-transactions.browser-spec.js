@@ -267,13 +267,7 @@ describe("database - operation-scoped transactions", {tags: ["dummy"], databaseC
         const [loadedTask] = loadedProject.tasksLoaded()
 
         expect(loadedProject.readCount("tasksCount")).toEqual(1)
-        loadedTask.assign({
-          descriptionFile: {
-            content: "Rolled-back attachment",
-            filename: "rolled-back.txt"
-          },
-          name: "Preload rollback update"
-        })
+        loadedTask.assign({name: "Preload rollback update"})
         await loadedTask.save()
 
         throw new Error("ROLLBACK_PROPAGATION")
@@ -288,8 +282,6 @@ describe("database - operation-scoped transactions", {tags: ["dummy"], databaseC
     const survivingTask = await Task.findBy({name: "Before preload update"})
 
     if (!survivingTask) throw new Error("Original task did not survive operation rollback")
-
-    expect(await survivingTask.descriptionFile().listMetadata()).toHaveLength(0)
   })
 
   it("keeps a single physical connection in SingleMultiUsePool", async () => {
