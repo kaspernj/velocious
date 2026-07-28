@@ -1180,6 +1180,8 @@ Evaluate inline JavaScript (Rails-style runner) with initialized app/database co
 npx velocious runner "const users = await db.query('SELECT COUNT(*) AS count FROM users'); console.log(users[0].count)"
 ```
 
+Successful CLI commands exit with status `0`. If command execution rejects, Velocious marks the process failed before rethrowing the original error and running final database cleanup. The failure therefore remains nonzero even when application code installs an `uncaughtException` listener that reports and consumes the error. See [CLI process exit behavior](docs/cli.md#process-exit-behavior).
+
 By default, migrations write `db/structure-<identifier>.sql` files for each database in non-test environments. Test skips these automatic writes unless you explicitly opt in. Configure allow/deny lists in your configuration:
 
 ```js

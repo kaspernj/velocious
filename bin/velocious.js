@@ -41,6 +41,9 @@ const cli = new Cli({
 
 try {
   await cli.execute()
+} catch (error) {
+  process.exitCode = 1
+  throw error
 } finally {
   await configuration.closeDatabaseConnections()
 }
