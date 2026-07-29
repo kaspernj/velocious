@@ -88,6 +88,17 @@ export default class VelociousDatabaseOperationConnection {
   }
 
   /**
+   * Registers an operation-owned before-commit guard.
+   * @param {() => void | Promise<void>} callback - Guard callback.
+   * @returns {Promise<void>} - Resolves after registration.
+   */
+  async beforeCommit(callback) {
+    this._operation.assertActive()
+
+    await this._physicalConnection.beforeCommit(callback, {operationOwner: this._owner})
+  }
+
+  /**
    * Registers an operation-owned after-commit callback.
    * @param {() => void | Promise<void>} callback - Callback.
    * @returns {Promise<void>} - Resolves after registration or execution.

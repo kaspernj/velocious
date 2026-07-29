@@ -43,6 +43,12 @@
  * @typedef {Array<QueryRowType>} QueryResultType
  */
 /**
+ * TransactionCallbackFrame type.
+ * @typedef {object} TransactionCallbackFrame
+ * @property {Array<() => void | Promise<void>>} afterCommitCallbacks - Callbacks to merge or run after commit.
+ * @property {Array<() => void | Promise<void>>} beforeCommitCallbacks - Guards to run before this frame completes.
+ */
+/**
  * RetryableDatabaseErrorResult type.
  * @typedef {object} RetryableDatabaseErrorResult
  * @property {boolean} retry - Whether the error should be retried.
@@ -171,8 +177,8 @@ export default class VelociousDatabaseDriversBase {
   idSeq = undefined
   /**
    * Narrows the runtime value to the documented type.
-   * @type {Array<Array<() => void | Promise<void>>>} */
-  _afterCommitCallbackFrames
+   * @type {TransactionCallbackFrame[]} */
+  _transactionCallbackFrames
   /**
    * Narrows the runtime value to the documented type.
    * @type {Map<string, Promise<?>>} */
@@ -207,7 +213,7 @@ export default class VelociousDatabaseDriversBase {
     this.configuration = configuration
     this.mutex = new Mutex() // Can be used to lock this instance for exclusive use
     this.logger = new Logger(this)
-    this._afterCommitCallbackFrames = []
+    this._transactionCallbackFrames = []
     this._transactionsCount = 0
     this._transactionsActionsMutex = new Mutex()
     this._schemaCache = new Map()
@@ -1068,14 +1074,15 @@ export default class VelociousDatabaseDriversBase {
    */
   async _runTransactionAttempt(callback, options) {
     const savePointName = this.generateSavePointName()
-    /**
-     * Callback frame.
-     * @type {Array<() => void | Promise<void>>} */
-    const callbackFrame = []
+    /** @type {TransactionCallbackFrame} */
+    const callbackFrame = {
+      afterCommitCallbacks: [],
+      beforeCommitCallbacks: []
+    }
     let transactionStarted = false
     let savePointStarted = false
 
-    this._afterCommitCallbackFrames.push(callbackFrame)
+    this._transactionCallbackFrames.push(callbackFrame)
 
     try {
       if (this._transactionsCount == 0) {
@@ -1088,7 +1095,7 @@ export default class VelociousDatabaseDriversBase {
         savePointStarted = true
       }
     } catch (error) {
-      this._afterCommitCallbackFrames.pop()
+      this._transactionCallbackFrames.pop()
       throw error
     }
 
@@ -1096,6 +1103,7 @@ export default class VelociousDatabaseDriversBase {
 
     try {
       result = await callback()
+      await this._runBeforeCommitCallbacks(callbackFrame)
 
       if (savePointStarted) {
         this.logger.debug("Release savepoint", savePointName)
@@ -1113,47 +1121,66 @@ export default class VelociousDatabaseDriversBase {
         this.logger.debug("Transaction error", error)
       }
 
-      let transactionRolledBack = false
+      try {
+        let transactionRolledBack = false
 
-      if (savePointStarted) {
-        this.logger.debug("Rollback savepoint", savePointName)
-        try {
-          await this.rollbackSavePoint(savePointName, options)
-        } catch (savePointError) {
-          const message = savePointError instanceof Error ? savePointError.message : `${savePointError}`
+        if (savePointStarted) {
+          this.logger.debug("Rollback savepoint", savePointName)
+          try {
+            await this.rollbackSavePoint(savePointName, options)
+          } catch (savePointError) {
+            const message = savePointError instanceof Error ? savePointError.message : `${savePointError}`
 
-          // MySQL sometimes drops savepoints unexpectedly; fall back to rolling back the full transaction
-          if (message.includes("SAVEPOINT") || message.includes("ER_SP_DOES_NOT_EXIST")) {
-            this.logger.debug("Savepoint rollback failed; rolling back entire transaction instead")
-            await this.rollbackTransaction(options)
-            transactionRolledBack = true
-          } else {
-            throw savePointError
+            // MySQL sometimes drops savepoints unexpectedly; fall back to rolling back the full transaction
+            if (message.includes("SAVEPOINT") || message.includes("ER_SP_DOES_NOT_EXIST")) {
+              this.logger.debug("Savepoint rollback failed; rolling back entire transaction instead")
+              await this.rollbackTransaction(options)
+              transactionRolledBack = true
+            } else {
+              throw savePointError
+            }
           }
         }
-      }
 
-      // Only roll back if a transaction is still open. A nested savepoint whose rollback failed
-      // falls back to rolling back the whole transaction (above), which already closed it and
-      // dropped the count to 0; rolling back again here would issue a second ROLLBACK and drive
-      // `_transactionsCount` below zero, which would then defeat the outermost deadlock-retry guard.
-      if (transactionStarted && !transactionRolledBack && this._transactionsCount > 0) {
-        this.logger.debug("Rollback transaction")
-        await this.rollbackTransaction(options)
+        // Only roll back if a transaction is still open. A nested savepoint whose rollback failed
+        // falls back to rolling back the whole transaction (above), which already closed it and
+        // dropped the count to 0; rolling back again here would issue a second ROLLBACK and drive
+        // `_transactionsCount` below zero, which would then defeat the outermost deadlock-retry guard.
+        if (transactionStarted && !transactionRolledBack && this._transactionsCount > 0) {
+          this.logger.debug("Rollback transaction")
+          await this.rollbackTransaction(options)
+        }
+      } finally {
+        this._transactionCallbackFrames.pop()
       }
-
-      this._afterCommitCallbackFrames.pop()
 
       throw error
     }
 
     try {
-      await this._commitAfterCommitCallbackFrame()
+      await this._commitTransactionCallbackFrame()
     } catch (error) {
       throw new VelociousDatabaseAfterCommitCallbackError(error)
     }
 
     return result
+  }
+
+  /**
+   * Registers a guard to run after the current transaction callback succeeds and before its
+   * outer commit or nested savepoint release.
+   * @param {() => void | Promise<void>} callback - Guard callback.
+   * @param {Pick<QueryOptions, "operationOwner">} [options] - Callback ownership.
+   * @returns {Promise<void>} - Resolves when the guard has been registered.
+   */
+  async beforeCommit(callback, options = {}) {
+    await this._waitForOperationLease(options.operationOwner)
+
+    const currentFrame = this._transactionCallbackFrames[this._transactionCallbackFrames.length - 1]
+
+    if (!currentFrame) throw new Error("beforeCommit requires an active transaction")
+
+    currentFrame.beforeCommitCallbacks.push(callback)
   }
 
   /**
@@ -1166,14 +1193,14 @@ export default class VelociousDatabaseDriversBase {
   async afterCommit(callback, options = {}) {
     await this._waitForOperationLease(options.operationOwner)
 
-    const currentFrame = this._afterCommitCallbackFrames[this._afterCommitCallbackFrames.length - 1]
+    const currentFrame = this._transactionCallbackFrames[this._transactionCallbackFrames.length - 1]
 
     if (!currentFrame) {
       await callback()
       return
     }
 
-    currentFrame.push(callback)
+    currentFrame.afterCommitCallbacks.push(callback)
   }
 
   /**
@@ -1241,22 +1268,33 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Runs every guard registered to the transaction frame.
+   * @param {TransactionCallbackFrame} callbackFrame - Frame whose guards are completing.
+   * @returns {Promise<void>} - Resolves when every guard accepts the commit.
+   */
+  async _runBeforeCommitCallbacks(callbackFrame) {
+    for (const callback of callbackFrame.beforeCommitCallbacks) {
+      await callback()
+    }
+  }
+
+  /**
    * Merges committed callbacks into the parent transaction frame or runs them when the outermost commit completes.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _commitAfterCommitCallbackFrame() {
-    const committedCallbacks = this._afterCommitCallbackFrames.pop()
+  async _commitTransactionCallbackFrame() {
+    const committedFrame = this._transactionCallbackFrames.pop()
 
-    if (!committedCallbacks || committedCallbacks.length === 0) return
+    if (!committedFrame || committedFrame.afterCommitCallbacks.length === 0) return
 
-    const parentFrame = this._afterCommitCallbackFrames[this._afterCommitCallbackFrames.length - 1]
+    const parentFrame = this._transactionCallbackFrames[this._transactionCallbackFrames.length - 1]
 
     if (parentFrame) {
-      parentFrame.push(...committedCallbacks)
+      parentFrame.afterCommitCallbacks.push(...committedFrame.afterCommitCallbacks)
       return
     }
 
-    for (const callback of committedCallbacks) {
+    for (const callback of committedFrame.afterCommitCallbacks) {
       await callback()
     }
   }
