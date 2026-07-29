@@ -13,6 +13,16 @@ const result = await configuration.withTransaction({
   ticket.setAccepted(true)
   await ticket.save()
 
+  await operation.beforeCommit(async ({operation: guardedOperation}) => {
+    const currentTicket = await guardedOperation
+      .forModel(Ticket)
+      .findByOrFail({id: ticket.id()})
+
+    if (!currentTicket.acceptanceStillOwnedBy(workerId)) {
+      throw new Error("Ticket acceptance ownership changed")
+    }
+  })
+
   await operation.afterCommit(async () => {
     await cacheAcceptedTicket(ticket.id())
   })
@@ -62,11 +72,39 @@ await operation.forModel(Task).create({name: "Import"})
 await Task.create({name: "Import"})
 ```
 
-The operation, its query scopes, its connection, and its records are valid for database work only until `withTransaction` resolves or rejects. This includes an operation-owned `afterCommit` callback, which runs before `withTransaction` settles. Retain scalar results such as IDs, not the operation handle. In-memory attributes can still be read from a returned record, but reloading or persisting that operation-bound record after completion raises. Query the model normally after success when a longer-lived record is needed.
+The operation, its query scopes, its connection, and its records are valid for database work only until `withTransaction` resolves or rejects. This includes an operation-owned `beforeCommit` guard and `afterCommit` callback, which run before `withTransaction` settles. Retain scalar results such as IDs, not the operation handle. In-memory attributes can still be read from a returned record, but reloading or persisting that operation-bound record after completion raises. Query the model normally after success when a longer-lived record is needed.
 
-## Nested work and commit callbacks
+## Pre-commit guards, nested work, and commit callbacks
+
+`operation.beforeCommit(callback)` registers an operation-owned guard on the current transaction or savepoint frame. The callback receives an object containing the same active `operation`, so it can re-read operation-owned model state without switching connections:
+
+```js
+await configuration.withTransaction({databaseIdentifier: "default"}, async (operation) => {
+  const ScannerDevices = operation.forModel(ScannerDevice)
+  const scannerDevice = await ScannerDevices.findByOrFail({id: scannerDeviceId})
+
+  scannerDevice.setStatus("reported")
+  await scannerDevice.save()
+
+  await operation.beforeCommit(async ({operation: guardedOperation}) => {
+    const currentScannerDevice = await guardedOperation
+      .forModel(ScannerDevice)
+      .findByOrFail({id: scannerDeviceId})
+
+    if (!currentScannerDevice.statusReportOwnedBy(reportToken)) {
+      throw scannerStatusInvalidatedError
+    }
+  })
+})
+```
+
+Velocious runs the guard after that frame's transaction callback resolves successfully and immediately before the outer `COMMIT` or nested savepoint release. If the guard throws or rejects, the existing rollback path rolls back the frame, discards its `afterCommit` callbacks, and propagates the guard error. A transaction callback that rejects never runs its guards. Each registered guard runs once for each successful callback attempt; if an outer deadlock retry reruns the transaction callback, that callback registers a fresh guard for the new attempt.
+
+Always await `beforeCommit` registration inside the transaction callback. Registration requires an active transaction frame and an active operation handle, and therefore cannot move the check past durability. The guard keeps the operation's pinned connection, tenant configuration, and exclusive shared-pool lease. Start model work through the callback's `operation`; unrelated Single-pool work continues waiting until the operation commits or rolls back.
 
 `operation.transaction(callback)` creates a savepoint on the same connection. A rejected nested callback rolls back to its savepoint; a successful nested callback remains part of the outer transaction and is still rolled back if the outer callback rejects.
+
+Each nested frame owns its guards. A successful nested callback runs its guards before releasing its savepoint. A rejected nested guard rolls back only that savepoint under the same semantics as a rejected nested transaction callback.
 
 `operation.afterCommit(callback)` attaches the callback to the current operation transaction/savepoint frame:
 
@@ -76,7 +114,7 @@ The operation, its query scopes, its connection, and its records are valid for d
 - a callback failure rejects `withTransaction`, but the database is already committed and cannot be rolled back;
 - a deadlock-shaped callback failure is surfaced without retrying the already durable operation.
 
-The framework cannot roll back arbitrary memory or external effects. Update caches, publish external messages, or make irreversible state visible only in `operation.afterCommit`, or after `withTransaction` resolves successfully. An after-commit callback that needs database models must keep using `operation.forModel(...)` or an operation-bound record.
+Use `beforeCommit` for final operation-owned validity or ownership checks that must still be able to roll back database writes. The framework cannot roll back arbitrary memory or external effects. Update caches, publish external messages, or make irreversible state visible only in `operation.afterCommit`, or after `withTransaction` resolves successfully. An after-commit callback that needs database models must keep using `operation.forModel(...)` or an operation-bound record.
 
 ## Raw SQL
 
@@ -124,8 +162,9 @@ For consumers such as ticket-app #10495:
 1. Wrap the singular-database unit of work in `configuration.withTransaction({databaseIdentifier}, callback)`.
 2. Replace static model entry points inside the callback with scopes created by `operation.forModel`.
 3. Keep using records and relationships loaded from those scopes; they propagate ownership.
-4. Move cache publication and other irreversible effects into `operation.afterCommit`, or perform them after the outer promise resolves.
-5. Return IDs or plain result data. Do not retain and reuse the operation, its connection, its scopes, or operation-bound records for later database work.
-6. Split cross-database changes into explicit separate operations with application-level compensation; one operation intentionally rejects them.
+4. Register final ownership or validity checks with `operation.beforeCommit(async ({operation}) => ...)` when they must run after the main callback but still be able to abort the commit.
+5. Move cache publication and other irreversible effects into `operation.afterCommit`, or perform them after the outer promise resolves.
+6. Return IDs or plain result data. Do not retain and reuse the operation, its connection, its scopes, or operation-bound records for later database work.
+7. Split cross-database changes into explicit separate operations with application-level compensation; one operation intentionally rejects them.
 
 See [Database Connections](database-connections.md) for ordinary non-transactional connection scopes and pool diagnostics.

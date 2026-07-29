@@ -86,6 +86,16 @@ export default class VelociousDatabaseOperation {
   }
 
   /**
+   * Registers a guard owned by the current transaction/savepoint frame.
+   * @param {(context: {operation: VelociousDatabaseOperation}) => void | Promise<void>} callback - Guard callback.
+   * @returns {Promise<void>} - Resolves after registration.
+   */
+  async beforeCommit(callback) {
+    this.assertActive()
+    await this.connection().beforeCommit(() => callback({operation: this}))
+  }
+
+  /**
    * Runs a nested operation transaction/savepoint.
    * @template T
    * @param {() => Promise<T>} callback - Callback.
