@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/build
+**/coverage
+**/tmp
+**/log
+*.pem
+*.key

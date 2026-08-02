@@ -2,6 +2,7 @@
 dist
 db/structure-default.sql
 node_modules
+/.env
 /.fallow
 spec/dummy/db/*.sqlite
 spec/dummy/src/config/configuration.js

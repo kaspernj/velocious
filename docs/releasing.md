@@ -10,7 +10,7 @@ Package builds run through the `prepack` and `dependencies` lifecycles. A no-op 
 2. Confirm the intended feature/fix PR is merged and all required checks are green at its current head.
 3. Start from a clean checkout whose `master` exactly matches `origin/master`.
 4. Inspect the installed `release-patch` implementation before use when its dependency version changes; do not assume its side effects are unchanged.
-5. In the same project Docker environment that will run the release, install the lockfile dependencies from scratch with `npm ci`. `release-patch` does not install dependencies, so a persistent container's existing `node_modules` is not fresh-install proof.
+5. In the same project [Docker development environment](docker-development-environment.md) that will run the release, install the lockfile dependencies from scratch with `npm ci`. `release-patch` does not install dependencies, so a persistent container's existing `node_modules` is not fresh-install proof.
 6. Verify npm authentication with the same temporary npm configuration that publication will use. Never place registry tokens in the repository or print them in logs.
 
 Do not manually change the Velocious version before running the helper. `release-patch` updates both `package.json` and `package-lock.json` and creates the `chore: bump patch version` commit.
