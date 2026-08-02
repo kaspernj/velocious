@@ -4,6 +4,7 @@
     "index.js",
     "bin/velocious.js",
     "scripts/prewarm-chromedriver.js",
+    "scripts/verify-docker-dev-environment.js",
     "src/cli/**/*.js",
     "src/environment-handlers/**/*.js",
     "src/database/migration/**/*.js",

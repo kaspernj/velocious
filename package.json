@@ -39,6 +39,7 @@
     "test:expo": "npm run build && npm ci --prefix examples/expo && npm run export --prefix examples/expo && npm run test:dist --prefix examples/expo",
     "typecheck": "tsc --noEmit",
     "velocious": "asd",
+    "verify:docker-dev-environment": "node scripts/verify-docker-dev-environment.js",
     "watch": "tsc -w",
     "watch:ejs": "chokidar \"src/**/*.ejs\" -c \"npm run copy:ejs\""
   },
