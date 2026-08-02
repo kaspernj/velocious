@@ -100,6 +100,17 @@ function containsAptPackage(content, packageName) {
 }
 
 /**
+ * Joins backslash line continuations so per-instruction checks see each
+ * logical Dockerfile instruction as a single line.
+ *
+ * @param {string} content - The Dockerfile content.
+ * @returns {string[]} - The logical lines.
+ */
+function dockerfileLogicalLines(content) {
+  return content.replace(/\\\r?\n[ \t]*/g, " ").split("\n")
+}
+
+/**
  * Verifies canonical artifact names at the repository root.
  *
  * @param {string[]} entries - Root directory entries.
@@ -158,7 +169,7 @@ function verifyDockerfile(content) {
     problems.push("Dockerfile must not install project dependencies: npm ci is forbidden")
   }
 
-  for (const line of content.split("\n")) {
+  for (const line of dockerfileLogicalLines(content)) {
     if (/npm\s+install/iu.test(line) && !line.includes("--global")) {
       problems.push(`Dockerfile must not install project dependencies: npm install without --global: ${line.trim()}`)
     }
@@ -469,6 +480,11 @@ function negativeProbes(contents) {
       name: "Dockerfile standalone project npm ci regression",
       problems: verifyDockerfile(`${contents.dockerfile}\nRUN npm ci\n`),
       expected: "npm ci"
+    },
+    {
+      name: "Dockerfile multiline project npm install regression",
+      problems: verifyDockerfile(`${contents.dockerfile}\nRUN npm \\\n  install left-pad\n`),
+      expected: "npm install"
     },
     {
       name: "Dockerfile unapproved base digest regression",
