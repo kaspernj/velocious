@@ -7,7 +7,6 @@ import SyncPublisher from "../../src/sync/sync-publisher.js"
 import SyncResourceBase from "../../src/sync/sync-resource-base.js"
 import SyncWebsocketChannel from "../../src/sync/sync-websocket-channel.js"
 import UuidItem from "../dummy/src/models/uuid-item.js"
-import {VELOCIOUS_SYNC_CHANNEL} from "../../src/sync/sync-channel-name.js"
 
 const UUID_ITEM_ID = "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c"
 
@@ -132,12 +131,13 @@ describe("sync publisher - websocket user-scope delivery over a real database", 
 
     const resource = /** @type {RecordingUserScopeResource} */ (channel._resource)
 
-    const previousWebsocketEvents = dummyConfiguration.getWebsocketEvents()
+    const {publisher, restore} = buildPublisher({
+      broadcaster: async ({body, params}) => {
+        if (!channel.matches(params)) return
 
-    dummyConfiguration.setWebsocketEvents(undefined)
-    dummyConfiguration._registerWebsocketChannelSubscription(VELOCIOUS_SYNC_CHANNEL, channel)
-
-    const {publisher, restore} = buildPublisher()
+        await channel.deliverBroadcast(body)
+      }
+    })
 
     await publisher.start()
 
@@ -175,8 +175,6 @@ describe("sync publisher - websocket user-scope delivery over a real database", 
       expect(deliveredEntry.syncType).toEqual("update")
     } finally {
       restore()
-      dummyConfiguration._unregisterWebsocketChannelSubscription(VELOCIOUS_SYNC_CHANNEL, channel)
-      dummyConfiguration.setWebsocketEvents(previousWebsocketEvents)
     }
   })
 })
