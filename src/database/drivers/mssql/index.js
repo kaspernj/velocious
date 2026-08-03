@@ -367,13 +367,30 @@ export default class VelociousDatabaseDriversMssql extends Base{
   /**
    * Runs the callback with IDENTITY_INSERT enabled for the table so an explicit
    * primary-key value (client-generated offline-sync ids) can be inserted into
-   * an IDENTITY column. The setting is session-scoped and always reverted,
-   * even when the insert fails.
+   * an IDENTITY column. The setting is session-scoped and node-mssql pool-backed
+   * requests may use a different physical session per query, so without an
+   * active transaction the whole ON/callback/OFF sequence is pinned through the
+   * native transaction path; an active transaction is reused as-is. The setting
+   * is always reverted, even when the callback fails.
    * @param {string} tableName - Table name being inserted into.
    * @param {() => Promise<?>} callback - Insert work.
    * @returns {Promise<?>} - The callback result.
    */
   async withExplicitPrimaryKeyInsert(tableName, callback) {
+    if (this._transactionsCount > 0) {
+      return await this._withExplicitPrimaryKeyInsertOnCurrentSession(tableName, callback)
+    }
+
+    return await this.transaction(async () => await this._withExplicitPrimaryKeyInsertOnCurrentSession(tableName, callback))
+  }
+
+  /**
+   * Runs the ON/callback/OFF sequence on the current transaction-bound session.
+   * @param {string} tableName - Table name being inserted into.
+   * @param {() => Promise<?>} callback - Insert work.
+   * @returns {Promise<?>} - The callback result.
+   */
+  async _withExplicitPrimaryKeyInsertOnCurrentSession(tableName, callback) {
     await this.query(`SET IDENTITY_INSERT ${this.quoteTable(tableName)} ON`)
 
     try {
