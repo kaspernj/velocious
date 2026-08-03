@@ -4248,15 +4248,21 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _createNewRecord() {
-    if (!this.getModelClass().connection()["insertSql"]) {
-      throw new Error(`No insertSql on ${this.getModelClass().connection().constructor.name}`)
+    // Resolve the connection once and pin the whole insert path to it: a pool
+    // can resolve a different current connection across the awaits below, and
+    // the identity-insert wrapper is only effective on the exact session that
+    // ran SET IDENTITY_INSERT.
+    const connection = this._connection()
+
+    if (!connection["insertSql"]) {
+      throw new Error(`No insertSql on ${connection.constructor.name}`)
     }
 
     const data = Object.assign({}, this._belongsToChanges(), this.rawAttributes())
     const primaryKey = this.getModelClass().primaryKey()
     const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
-    const driverSupportsDefaultUUID = typeof this._connection().supportsDefaultPrimaryKeyUUID == "function" && this._connection().supportsDefaultPrimaryKeyUUID()
+    const driverSupportsDefaultUUID = typeof connection.supportsDefaultPrimaryKeyUUID == "function" && connection.supportsDefaultPrimaryKeyUUID()
     const isUUIDPrimaryKey = primaryKeyType?.includes("uuid")
     const shouldAssignUUIDPrimaryKey = isUUIDPrimaryKey && !driverSupportsDefaultUUID
     this._setDefaultTimestampValues(data)
@@ -4270,22 +4276,22 @@ class VelociousDatabaseRecord {
 
     this._normalizeDateValuesForWrite(data)
 
-    const sql = this._connection().insertSql({
+    const sql = connection.insertSql({
       returnLastInsertedColumnNames: columnNames,
       tableName: this._tableName(),
       data
     })
-    const runInsert = async () => await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
+    const runInsert = async () => await connection.query(sql, {logName: `${this.getModelClass().name} Create`})
     // MSSQL rejects SET IDENTITY_INSERT on tables without an identity column, so
     // only wraps explicit primary-key inserts when the column actually is one.
     const requiresIdentityInsert = hasUserProvidedPrimaryKey &&
       primaryKeyColumn?.getAutoIncrement() === true &&
-      this._connection().requiresIdentityInsertForExplicitPrimaryKey()
+      connection.requiresIdentityInsertForExplicitPrimaryKey()
     const insertResult = requiresIdentityInsert
-      ? await this._connection().withExplicitPrimaryKeyInsert(this._tableName(), runInsert)
+      ? await connection.withExplicitPrimaryKeyInsert(this._tableName(), runInsert)
       : await runInsert()
 
-    await this._applyInsertResult({data, insertResult, primaryKey})
+    await this._applyInsertResult({connection, data, insertResult, primaryKey})
     this.setIsNewRecord(false)
 
     this._markLoadedRelationshipsPreloadedAfterCreate()
@@ -4311,10 +4317,10 @@ class VelociousDatabaseRecord {
 
   /**
    * Applies the database insert response to this record.
-   * @param {{data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string}} options - Inserted data, connection result, and primary key column name.
+   * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _applyInsertResult({data, insertResult, primaryKey}) {
+  async _applyInsertResult({connection, data, insertResult, primaryKey}) {
     if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
       this._changes = {}
@@ -4330,7 +4336,7 @@ class VelociousDatabaseRecord {
         return
       }
 
-      const id = await this._connection().lastInsertID()
+      const id = await connection.lastInsertID()
 
       await this._reloadWithId(id)
     }

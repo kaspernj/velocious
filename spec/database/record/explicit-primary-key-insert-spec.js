@@ -68,4 +68,64 @@ describe("Database - record - explicit primary key insert", {databaseCleaning: {
     ])
     expect(queries.some((query) => query.startsWith("INSERT INTO"))).toBeTrue()
   })
+
+  it("runs the insert on the same connection that enabled identity insert", async () => {
+    /**
+     * Builds a minimal identity-insert connection recording onto the given log.
+     * @param {string[]} queries - Query log.
+     * @returns {Record<string, ?>} Fake connection.
+     */
+    const buildConnection = (queries) => ({
+      insertSql: () => "INSERT INTO [tasks] ([id]) VALUES (123456)",
+      query: async (/** @type {string} */ sql) => {
+        queries.push(sql)
+
+        return [{id: 123456}]
+      },
+      requiresIdentityInsertForExplicitPrimaryKey: () => true,
+      supportsDefaultPrimaryKeyUUID: () => true,
+      withExplicitPrimaryKeyInsert: async (/** @type {string} */ tableName, /** @type {() => Promise<?>} */ callback) => {
+        queries.push(`SET IDENTITY_INSERT [${tableName}] ON`)
+        const result = await callback()
+
+        queries.push(`SET IDENTITY_INSERT [${tableName}] OFF`)
+
+        return result
+      }
+    })
+
+    /** @type {string[]} */
+    const connAQueries = []
+    /** @type {string[]} */
+    const connBQueries = []
+    const connA = buildConnection(connAQueries)
+    const connB = buildConnection(connBQueries)
+
+    // A pool can resolve a different current connection across the awaits of
+    // the insert path: the early resolutions serve the insertSql build and the
+    // wrapper receiver, the post-await resolution serves the insert query.
+    let resolutions = 0
+    const originalConnection = Task.connection
+
+    Task.connection = /** @type {typeof Task.connection} */ (/** @type {?} */ (() => {
+      resolutions++
+
+      return resolutions <= 6 ? connA : connB
+    }))
+
+    const task = new Task({id: 123456, name: "Explicit identity key"})
+
+    try {
+      await task._createNewRecord()
+    } finally {
+      Task.connection = originalConnection
+    }
+
+    expect(connBQueries).toEqual([])
+    expect(connAQueries).toEqual([
+      "SET IDENTITY_INSERT [tasks] ON",
+      "INSERT INTO [tasks] ([id]) VALUES (123456)",
+      "SET IDENTITY_INSERT [tasks] OFF"
+    ])
+  })
 })
