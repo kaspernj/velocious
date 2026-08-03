@@ -210,6 +210,8 @@ Supported strategies for backend replay:
 - `optimisticVersion` (default when `strategy` is omitted): if the mutation's `baseVersion` does not match the server's current `versionAttribute`, the sync returns `syncState: "conflict"` with a structured `conflict` payload. The suggested resolution is `"manual"`.
 - `serverWins`: the same version check runs, but the suggested resolution is `"keep_server"`.
 
+For either strategy, `serverModel` is an intentionally partial authoritative snapshot: it includes the record identity, the configured version, and the current serialized server value for each affected field that is both permitted by `writableAttributes` and declared readable in the resource's `attributes`. Values follow the normal resource `<attribute>Attribute(model)` serializer or model accessor contract. Unaffected fields, writable-but-hidden fields, unpermitted model fields, and resource-private fields are omitted. A `serverWins` peer can therefore merge the returned readable fields into its local record for `keep_server` convergence without fetching them again.
+
 Unsupported strategies (`fieldThreeWay`, `lastWriterWins`, `appendOnly`, and unknown values) are rejected at construction time because the backend replay path does not have the client's base snapshot.
 
 A conflict is only evaluated when all of the following are true:
@@ -233,7 +235,7 @@ When a conflict is detected, the per-sync response is:
     baseRecord: null,
     baseVersion: "2026-07-03T10:00:00.000Z",
     localMutation: {...},
-    serverModel: {id: "...", updatedAt: "2026-07-04T10:00:00.000Z"},
+    serverModel: {id: "...", title: "Authoritative server title", updatedAt: "2026-07-04T10:00:00.000Z"},
     serverVersion: "2026-07-04T10:00:00.000Z",
     suggestedResolution: "manual", // or "keep_server" for serverWins
     versionAttribute: "updatedAt"

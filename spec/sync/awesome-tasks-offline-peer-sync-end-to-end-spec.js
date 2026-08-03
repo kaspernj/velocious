@@ -287,7 +287,7 @@ describe("AwesomeTasks offline peer sync end-to-end", {databaseCleaning: {transa
 
   it("surfaces a structured conflict when a peer mutation has a stale base version", async () => {
     const project = await Project.create({name: "Conflict project"})
-    const task = await Task.create({name: "Original task", projectId: project.id()})
+    const task = await Task.create({description: "Private server detail", name: "Original task", projectId: project.id()})
     const backendKeys = await generateSyncSigningKeyPair()
     const signingKey = {current: true, id: "shared-key", secret: "super-secret-key"}
     const deviceAFixtures = await buildDeviceFixtures({actorDeviceId: "device-a", actorUserId: "user-1", backendKeys, grantId: "grant-a", projectId: project.id(), signingKey})
@@ -370,17 +370,34 @@ describe("AwesomeTasks offline peer sync end-to-end", {databaseCleaning: {transa
       fixtures: deviceBFixtures,
       signedMutations: [{signedMutation: recordB.signedMutation, signedOfflineGrant: deviceBFixtures.signedOfflineGrant}]
     })
+    const conflict = secondReplay.syncs[0].conflict
 
     expect(secondReplay.syncs[0].syncState).toEqual("conflict")
-    expect(secondReplay.syncs[0].conflict.localMutation.clientMutationId).toEqual("mutation-b")
-    expect(secondReplay.syncs[0].conflict.baseVersion).toEqual(baseVersion)
-    expect(secondReplay.syncs[0].conflict.serverVersion).not.toEqual(baseVersion)
-    expect(secondReplay.syncs[0].conflict.affectedFields).toEqual(["name"])
+    expect(conflict.localMutation.clientMutationId).toEqual("mutation-b")
+    expect(conflict.baseVersion).toEqual(baseVersion)
+    expect(conflict.serverVersion).not.toEqual(baseVersion)
+    expect(conflict.affectedFields).toEqual(["name"])
+    expect(conflict.suggestedResolution).toEqual("keep_server")
+    expect(conflict.serverModel.id).toEqual(task.id())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
+    expect(conflict.serverModel.name).toEqual("A's edit")
+    expect(conflict.serverModel.description).toEqual(undefined)
+    expect(conflict.serverModel.projectId).toEqual(undefined)
+    expect(Object.keys(conflict.serverModel).sort()).toEqual(["id", "name", "updatedAt"])
 
-    // Convergence: authoritative state is A's edit; B's conflicting mutation is not applied.
-    const convergedTask = await Task.findByOrFail({id: task.id()})
+    // Device B can apply keep_server directly from the conflict response. This
+    // is deliberately the final backend interaction in the example: no read is
+    // needed to obtain the authoritative affected value.
+    const localTask = {description: "Private local detail", id: task.id(), name: "B's edit", updatedAt: baseVersion}
 
-    expect(convergedTask.name()).toEqual("A's edit")
+    Object.assign(localTask, conflict.serverModel)
+
+    expect(localTask).toEqual({
+      description: "Private local detail",
+      id: task.id(),
+      name: "A's edit",
+      updatedAt: conflict.serverVersion
+    })
   })
 
   it("serializes concurrent signed replays from the same base version so exactly one applies and the other conflicts", async () => {
