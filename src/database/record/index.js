@@ -4276,7 +4276,12 @@ class VelociousDatabaseRecord {
       data
     })
     const runInsert = async () => await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
-    const insertResult = hasUserProvidedPrimaryKey && this._connection().requiresIdentityInsertForExplicitPrimaryKey()
+    // MSSQL rejects SET IDENTITY_INSERT on tables without an identity column, so
+    // only wraps explicit primary-key inserts when the column actually is one.
+    const requiresIdentityInsert = hasUserProvidedPrimaryKey &&
+      primaryKeyColumn?.getAutoIncrement() === true &&
+      this._connection().requiresIdentityInsertForExplicitPrimaryKey()
+    const insertResult = requiresIdentityInsert
       ? await this._connection().withExplicitPrimaryKeyInsert(this._tableName(), runInsert)
       : await runInsert()
 
