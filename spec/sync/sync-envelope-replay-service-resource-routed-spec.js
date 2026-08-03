@@ -482,6 +482,51 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "updatedAt"])
   })
 
+  it("derives default-readable attributes from the model contract when resource attributes is empty for server-wins convergence", async () => {
+    class DefaultReadableConflictResource extends FrontendModelBaseResource {
+      static ModelClass = Comment
+
+      /** @type {string[]} */
+      static attributes = []
+
+      /** @type {string[]} */
+      static writableAttributes = ["body", "taskId"]
+    }
+
+    const project = await Project.create({name: "Default readable project"})
+    const firstTask = await Task.create({name: "First default task", projectId: project.id()})
+    const secondTask = await Task.create({name: "Second default task", projectId: project.id()})
+    const comment = await Comment.create({body: "Default original", taskId: firstTask.id()})
+    const baseVersion = comment.updatedAt().toISOString()
+
+    comment.assign({body: "Default server body", taskId: secondTask.id(), updatedAt: "2026-07-04T10:00:00.000Z"})
+    await comment.save()
+
+    const service = buildService({
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      resourceTypeOverrides: {Comment: DefaultReadableConflictResource},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        data: {body: "Default stale body", taskId: firstTask.id()},
+        id: "25d6e7f8-1111-4222-8333-444455556666",
+        resourceId: String(comment.id()),
+        resourceType: "Comment"
+      })]
+    })
+    const conflict = result.syncs[0].conflict
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+    expect(conflict.suggestedResolution).toEqual("keep_server")
+    expect(conflict.serverModel.body).toEqual("Default server body")
+    expect(conflict.serverModel.taskId).toEqual(secondTask.id())
+    expect(conflict.serverModel.id).toEqual(comment.id())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
+    expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "taskId", "updatedAt"])
+  })
+
   it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {
     const resourceId = "a0b1c2d3-e4f5-6a7b-8c9d-0e1f2a3b4c5d"
     const resourceType = "Task"

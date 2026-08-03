@@ -780,8 +780,17 @@ export default class SyncEnvelopeReplayService {
     const ResourceClass = /** @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resource.constructor)
     const readableAttributes = new Set()
     const configuredAttributes = ResourceClass.resourceConfig().attributes
+    const configuredEntries = Array.isArray(configuredAttributes) ? configuredAttributes : Object.keys(configuredAttributes)
 
-    for (const configuredAttribute of Array.isArray(configuredAttributes) ? configuredAttributes : Object.keys(configuredAttributes)) {
+    if (configuredEntries.length === 0) {
+      const attributeNameToColumnName = ModelClass.getAttributeNameToColumnNameMap()
+
+      for (const attributeName of Object.keys(attributeNameToColumnName)) {
+        readableAttributes.add(attributeName)
+      }
+    }
+
+    for (const configuredAttribute of configuredEntries) {
       const configuredName = typeof configuredAttribute === "string" ? configuredAttribute : configuredAttribute.name
 
       if (!configuredName) continue
