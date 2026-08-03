@@ -142,9 +142,13 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
         echoOrigin: null,
         syncs: [{
           data: {id: uuidItem.id(), title: "Pin 111111"},
+          id: syncRows[0].id(),
+          projectId: uuidItem.id(),
           resourceId: uuidItem.id(),
           resourceType: "UuidItem",
-          syncType: "update"
+          serverSequence: syncRows[0].serverSequence(),
+          syncType: "update",
+          updatedAt: syncRows[0].updatedAt()?.toISOString()
         }]
       })
     } finally {

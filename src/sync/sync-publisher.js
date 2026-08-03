@@ -215,7 +215,7 @@ export default class SyncPublisher {
           await this.broadcaster()({
             body: {
               echoOrigin: null,
-              syncs: [{data, resourceId, resourceType: resourceConfig.resourceType, syncType}]
+              syncs: [this.publishedSyncEntry({data, resourceConfig, resourceId, syncRow, syncType})]
             },
             channel: VELOCIOUS_SYNC_CHANNEL,
             params: {...scopeValues.params, resourceType: resourceConfig.resourceType}
@@ -269,6 +269,42 @@ export default class SyncPublisher {
     }
 
     return {columns, params}
+  }
+
+  /**
+   * Builds the framework sync channel entry for one published change: the
+   * snapshotted payload plus the persisted sync row's public exact-row metadata
+   * (id, server sequence, updated-at, and declared scope-partition attributes).
+   * Uses the sync model's generated typed accessors and follows the
+   * change-feed serializer's public field convention.
+   * @param {{data: Record<string, ?>, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig, resourceId: string, syncRow: ?, syncType: string}} args - Publish args.
+   * @returns {Record<string, ?>} Broadcast sync entry.
+   */
+  publishedSyncEntry({data, resourceConfig, resourceId, syncRow, syncType}) {
+    /** @type {Record<string, ?>} */
+    const entry = {
+      data,
+      id: syncRow.id(),
+      resourceId,
+      resourceType: resourceConfig.resourceType,
+      serverSequence: syncRow.serverSequence(),
+      syncType,
+      updatedAt: isoDate(syncRow.updatedAt())
+    }
+
+    const scopeAttributes = declaredSyncScopeAttributes(this.config.syncModel)
+
+    for (const scopeAttribute of scopeAttributes || []) {
+      const scopeAccessor = syncRow[scopeAttribute]
+
+      if (typeof scopeAccessor !== "function") {
+        throw new Error(`Published sync row is missing the declared scope accessor ${scopeAttribute}().`)
+      }
+
+      entry[scopeAttribute] = scopeAccessor.call(syncRow)
+    }
+
+    return entry
   }
 
   /**
@@ -504,4 +540,19 @@ function defaultSerializedAttributes(record) {
   }
 
   return attributes
+}
+
+/**
+ * Converts a date-like value to an ISO string, matching the change-feed
+ * serializer's convention for the sync entry's public updated-at metadata.
+ * @param {Date | null} value - Persisted updated-at value.
+ * @returns {string} ISO date.
+ * @throws {Error} When the persisted row has no valid updated-at timestamp.
+ */
+function isoDate(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new Error("Published sync row must have a valid updatedAt timestamp.")
+  }
+
+  return value.toISOString()
 }
