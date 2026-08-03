@@ -6,7 +6,7 @@ export default class Request {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {string | Buffer | Uint8Array} [args.body] - Request body.
+   * @param {string} [args.body] - Request body.
    * @param {string} args.method - HTTP method.
    * @param {Header[]} args.headers - Header list.
    * @param {string} args.path - Path.
@@ -65,15 +65,15 @@ export default class Request {
    */
   prepare() {
     if (this.body) {
-      const contentLength = typeof this.body === "string" ? Buffer.byteLength(this.body, "utf8") : this.body.byteLength
-
-      this.addHeader("Content-Length", contentLength)
+      // Buffer.byteLength computes the UTF-8 length of strings without copying and
+      // returns .byteLength unchanged for Buffer/Uint8Array bodies.
+      this.addHeader("Content-Length", Buffer.byteLength(this.body, "utf8"))
     }
   }
 
   /**
    * Runs stream.
-   * @param {function(string | Buffer | Uint8Array) : void} callback - Callback function.
+   * @param {function(string) : void} callback - Callback function.
    * @returns {void} - No return value.
    */
   stream(callback) {

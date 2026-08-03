@@ -4,8 +4,8 @@ import { describe, expect, it } from "../../src/testing/test.js"
 import Request from "../../src/http-client/request.js"
 
 /**
- * Builds a request with the given body and returns the serialized head (request line + headers).
- * @param {string | Buffer | Uint8Array} body - Request body.
+ * Builds a request with the given string body and returns the serialized head (request line + headers).
+ * @param {string} body - Request body.
  * @returns {string} - Serialized request head.
  */
 function requestHead(body) {
@@ -52,11 +52,26 @@ describe("http client - request Content-Length framing", {databaseCleaning: {tra
     }
   })
 
-  it("declares the buffer byte length for Buffer and Uint8Array bodies", () => {
+  it("declares the buffer byte length for Buffer and Uint8Array bodies and streams the original bytes", () => {
+    // Binary bodies are exercised through stream() (not asString(), whose string
+    // concatenation is defined for string bodies) to prove the declared length comes
+    // from .byteLength and the body chunk reaches the wire unmodified.
     const buffer = Buffer.from("Aö€😀𐍈", "utf8")
     const uint8Array = new Uint8Array(buffer)
 
-    expect(requestHead(buffer)).toContain(`Content-Length: ${buffer.byteLength}\r\n`)
-    expect(requestHead(uint8Array)).toContain(`Content-Length: ${uint8Array.byteLength}\r\n`)
+    for (const body of [buffer, uint8Array]) {
+      const request = new Request({body, method: "POST", path: "/tasks", version: "1.1"})
+      /** @type {Array<string | Buffer | Uint8Array>} */
+      const chunks = []
+
+      request.stream((chunk) => chunks.push(chunk))
+
+      const head = chunks.slice(0, -1).join("")
+      const bodyChunk = chunks[chunks.length - 1]
+
+      expect(head).toContain(`Content-Length: ${body.byteLength}\r\n`)
+      expect(bodyChunk).toBe(body)
+      expect(Buffer.from(bodyChunk).equals(buffer)).toBeTrue()
+    }
   })
 })
