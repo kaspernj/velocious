@@ -38,10 +38,15 @@ function buildService(serviceArgs) {
  * @param {string} [args.resourceType] - Resource type. Defaults to "UuidItem".
  * @param {string} [args.syncType] - Sync type. Defaults to "update".
  * @param {string} [args.clientUpdatedAt] - Client timestamp. Defaults to a fixed time.
+ * @param {string} [args.baseVersion] - Optional base version for conflict detection.
  * @returns {Record<string, ?>} Raw sync entry.
  */
-function buildSync({clientUpdatedAt = "2026-07-03T10:00:00.000Z", data, id, resourceId, resourceType = "UuidItem", syncType = "update"}) {
-  return {clientUpdatedAt, data, id, resourceId, resourceType, syncType}
+function buildSync({baseVersion, clientUpdatedAt = "2026-07-03T10:00:00.000Z", data, id, resourceId, resourceType = "UuidItem", syncType = "update"}) {
+  const sync = {clientUpdatedAt, data, id, resourceId, resourceType, syncType}
+
+  if (baseVersion !== undefined) sync.baseVersion = baseVersion
+
+  return sync
 }
 
 describe("sync envelope replay service - resource routed", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -398,6 +403,34 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
       configuration: dummyConfiguration,
       conflictStrategy: {strategy: "fieldThreeWay", versionAttribute: "updatedAt"}
     })).toThrow(/Unsupported sync conflict strategy for backend replay/u)
+  })
+
+  it("defaults an omitted conflict strategy to optimisticVersion for routed upserts", async () => {
+    const uuidItem = await UuidItem.create({id: "i4d5e6f7-a8b9-7a0b-1c2d-3e4f5a6b7c8d", title: "Omitted strategy"})
+    const baseVersion = uuidItem.updatedAt().toISOString()
+
+    // Advance server state so the mutation's base version is stale.
+    uuidItem.assign({title: "Omitted strategy updated", updatedAt: "2026-07-04T10:00:00.000Z"})
+    await uuidItem.save()
+
+    const service = buildService({
+      configuration: dummyConfiguration,
+      conflictStrategy: {versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {title: "Stale update"},
+        id: "i3b4c5d6-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id())
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+    expect(result.syncs[0].conflict.suggestedResolution).toEqual("manual")
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Omitted strategy updated")
   })
 
   it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {
