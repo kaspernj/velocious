@@ -15,6 +15,7 @@
 * Declarative client sync scopes with per-scope cursors, automatic mutation tracking, realtime delivery, and `sync`/`pull` progress reporting for "X of Y" import screens (see [docs/sync-client.md](docs/sync-client.md))
 * Reactive `useLiveQuery(Model.where(...))` queries that stay current from committed local model changes across local writes, pulls, and realtime (see [docs/live-queries.md](docs/live-queries.md))
 * Server-side sync envelope replay orchestration for app-owned sync receivers (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
+* AwesomeTasks-shaped offline sync proof using routed resources, domain commands, signed offline grants, and peer-forwarded mutations (see [docs/awesome-tasks-offline-sync-proof.md](docs/awesome-tasks-offline-sync-proof.md))
 * SQLite web persistence that automatically prefers OPFS, then IndexedDB, and migrates legacy persisted bytes when possible (see [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
