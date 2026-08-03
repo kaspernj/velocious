@@ -1,0 +1,3 @@
+# Websocket channel publish concurrency
+
+Replaced the single global publish queue in the websocket events host with per-channel ordered promise tails. A slow replay-log write for one channel no longer head-of-line blocks publishes and V2 broadcasts on unrelated channels, while persistence-before-dispatch ordering and exact FIFO stay guaranteed within each channel (legacy `publish()` and `broadcastV2()` on the same channel string share one tail). `awaitPendingBroadcasts()` is now a snapshot barrier: it waits for every channel tail pending at call time, ignores work enqueued after the snapshot, and rethrows the first rejection in snapshot order. A failed channel stays poisoned and observable; unrelated channels keep working.
