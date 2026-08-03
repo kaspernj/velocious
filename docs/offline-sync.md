@@ -223,7 +223,7 @@ export default class SharedTaskResource extends FrontendModelBaseResource {
   static builtInCollectionCommands = ["index", "create"]
   static builtInMemberCommands = ["find", "update", "destroy"]
   static memberCommands = ["moveCard"]
-  static writableAttributes = ["projectId", "title"]
+  static writableAttributes = ["id", "projectId", "title"]
 
   static sync = {
     conflictStrategy: "optimisticVersion",
@@ -258,7 +258,7 @@ export default class SharedTaskResource extends FrontendModelBaseResource {
 }
 ```
 
-`static writableAttributes` is the flat permit used by `SyncEnvelopeReplayService` routed CRUD. `permittedParams(arg)` is the normal frontend-model write permit and supports nested attributes. The two declarations are intentionally separate: the routed replay service does not accept nested permit objects, and the built-in offline `FrontendModelBase.save()` queue currently rejects nested attributes and attachments. Represent an atomic offline nested workflow as a declared domain command instead of smuggling a nested payload through generic CRUD.
+`static writableAttributes` is the flat permit used by `SyncEnvelopeReplayService` routed CRUD. It includes `id` because routed creates validate the client-generated primary key against this permit before omitting it from the assigned attributes. `permittedParams(arg)` is the normal frontend-model write permit and supports nested attributes. The two declarations are intentionally separate: the routed replay service does not accept nested permit objects, and the built-in offline `FrontendModelBase.save()` queue currently rejects nested attributes and attachments. Represent an atomic offline nested workflow as a declared domain command instead of smuggling a nested payload through generic CRUD.
 
 The backend wrapper binds the real database model and may add backend-only ability or domain behavior:
 
@@ -470,7 +470,7 @@ const imported = await importPeerMutationBundle({
 
 Export includes `pending`, `applied-locally`, and `conflict` records by default. Import verifies the backend-signed device certificate and device mutation signature, skips duplicate actor/user/device mutation identities, retains the original `signedMutation`, and marks accepted rows `peer-applied`. It returns separate `imported`, `skipped`, and `rejected` arrays.
 
-The v1 peer bundle contains signed mutations and their embedded device certificates, but not signed offline grants. The app's transfer protocol must carry/store the originating signed grant keyed by `mutation.offlineGrantId`. On reconnect, forward the unchanged `record.signedMutation` with that grant to `SignedSyncEnvelopeReplayService`; never re-sign a peer mutation with the forwarding device. The service verifies the original certificate, mutation, grant, current manifest, actor/device/grant identities, policy hashes, and the actor/grant-scoped ability before resource routing.
+The v1 peer bundle contains signed mutations and their embedded device certificates, but not signed offline grants. The app's transfer protocol must carry/store the originating signed grant keyed by `mutation.offlineGrantId`. On reconnect, forward the unchanged `record.signedMutation` with that grant to `SignedSyncEnvelopeReplayService` only when it was explicitly built for that service: creates carry `id` in `attributes`, while updates, destroys, and domain commands carry their target `id` in `payload`. The built-in `save()`/`destroy()` queue instead keeps the primary key in `attributes`; replay those rows through `POST /frontend-models/sync/replay`, or construct the signed-service shape before signing and peer export. Never reshape or re-sign a peer's signed mutation with the forwarding device. The service verifies the original certificate, mutation, grant, current manifest, actor/device/grant identities, policy hashes, and the actor/grant-scoped ability before resource routing. Submit separate signed replay requests for each actor user, actor device, and offline grant; a mixed request fails as `mixed-signed-replay-batch`.
 
 `importPeerMutationBundle` does not apply the resource policy or local model change. If an app needs a quarantine state named `peer_received_unapplied` because related data, the grant, or local policy is unavailable, store that state beside (not as) the `LocalMutationLog` row and retain the original bundle entry for later verification/forwarding. Do not pass `peer_received_unapplied` to `updateStatus()`; it is not a framework status on the current API. A verified framework import is `peer-applied`.
 
@@ -567,7 +567,7 @@ Shared hooks must stay within the query intersection supported by backend record
 
 ## Sequence: backend replay and catch-up
 
-1. A device uploads its own and/or peer-forwarded signed mutations.
+1. A device uploads its own and/or peer-forwarded signed mutations in separate actor-user/device/grant batches.
 2. Backend verifies signatures, idempotency, actor context, grants, current policy, actor/grant-scoped abilities, and the selected permit path.
 3. Backend applies valid mutations or returns structured rejection/conflict results.
 4. Backend appends server-sequenced change records for accepted changes.
