@@ -29,6 +29,7 @@ function buildConfiguration() {
 function buildRequestRunner(response) {
   const request = {
     header: () => undefined,
+    httpMethod: () => "GET",
     httpVersion: () => "1.1"
   }
 
