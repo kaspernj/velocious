@@ -1479,10 +1479,9 @@ export default class BackgroundJobsStore {
   }
 
   async _initializeModel() {
-    BackgroundJobRecord.setDatabaseIdentifier(this.getDatabaseIdentifier())
-
     if (BackgroundJobRecord.isInitialized()) return
 
+    BackgroundJobRecord.setDatabaseIdentifier(this.getDatabaseIdentifier())
     const pool = this.configuration.getDatabasePool(this.getDatabaseIdentifier())
 
     await pool.withConnection({name: "Background jobs store initialize model"}, async () => {

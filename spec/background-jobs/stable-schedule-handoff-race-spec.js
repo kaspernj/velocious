@@ -3,6 +3,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import BackgroundJobRecord from "../../src/background-jobs/job-record.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
@@ -17,6 +18,9 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
  * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobCancellationResult | import("../../src/background-jobs/types.js").BackgroundJobReplacementResult>} - Mutation result.
  */
 async function runHandoffRace(mutation) {
+  dummyConfiguration.setCurrent()
+  await new BackgroundJobsStore({configuration: dummyConfiguration}).ensureReady()
+
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-stable-schedule-race-"))
   const databaseName = "stable-schedule-handoff-race"
   const databaseOptions = {
@@ -138,6 +142,14 @@ async function runHandoffRace(mutation) {
 }
 
 describe("Background jobs - stable schedule handoff races", {databaseCleaning: {transaction: false}}, () => {
+  it("keeps the initialized background job record on its configured database", async () => {
+    const databaseIdentifier = BackgroundJobRecord.getConfiguredDatabaseIdentifier()
+
+    await runHandoffRace("cancel")
+
+    expect(BackgroundJobRecord.getConfiguredDatabaseIdentifier()).toEqual(databaseIdentifier)
+  })
+
   it("reports handed_off when cancellation loses to an independent store handoff", async () => {
     const result = await runHandoffRace("cancel")
 

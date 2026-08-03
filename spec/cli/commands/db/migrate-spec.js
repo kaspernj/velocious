@@ -6,6 +6,7 @@ import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import uniqunize from "uniqunize"
 
@@ -363,7 +364,7 @@ describe("Cli - Commands - db:migrate", () => {
   })
 
   it("skips writing structure sql by default in test", {databaseCleaning: {transaction: false}}, async () => {
-    const directory = dummyDirectory()
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-db-migrate-without-structure-"))
     const configuration = new Configuration({
       database: dummyConfiguration.database,
       directory,
@@ -382,20 +383,24 @@ describe("Cli - Commands - db:migrate", () => {
       testing: true
     })
 
-    if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
-      console.warn(`Skipping structure sql disable assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
-      return
+    try {
+      if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
+        console.warn(`Skipping structure sql disable assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
+        return
+      }
+
+      await cli.getConfiguration().ensureConnections(async () => {
+        const structurePath = path.join(directory, "db", "structure-default.sql")
+
+        await cli.execute()
+
+        await expect(async () => {
+          await fs.readFile(structurePath, "utf8")
+        }).toThrow(/ENOENT/i)
+      })
+    } finally {
+      await cli.getConfiguration().closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
     }
-
-    await cli.getConfiguration().ensureConnections(async () => {
-      const structurePath = path.join(directory, "db", "structure-default.sql")
-
-      await fs.rm(structurePath, {force: true})
-      await cli.execute()
-
-      await expect(async () => {
-        await fs.readFile(structurePath, "utf8")
-      }).toThrow(/ENOENT/i)
-    })
   })
 })

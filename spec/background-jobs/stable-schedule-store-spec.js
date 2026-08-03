@@ -78,6 +78,16 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
 
     await pool.withConnection({name: "Background jobs remove stable schedule schema"}, async (db) => {
       await db.dropTable("background_job_schedule_keys", {cascade: true, ifExists: true})
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+
+      for (const index of await jobsTable.getIndexes()) {
+        if (!index.getColumnNames().includes("schedule_key")) continue
+
+        for (const sql of await db.removeIndexSQLs({name: index.getName(), tableName: "background_jobs"})) {
+          await db.query(sql)
+        }
+      }
+
       const tableData = new TableData("background_jobs")
 
       tableData.addColumn("schedule_key", {dropColumn: true})
