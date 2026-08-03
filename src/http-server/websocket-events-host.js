@@ -12,19 +12,32 @@ export class VelociousHttpServerWebsocketEventsHost {
      * Broadcast handlers grouped by the configuration that owns them.
      * @type {Map<import("../configuration.js").default, Set<import("./worker-handler/index.js").default>>} */
     this.broadcastHandlersByConfiguration = new Map()
-    this.publishQueue = Promise.resolve()
+    /**
+     * Ordered publish tails keyed by channel. Each channel persists and
+     * dispatches behind its own tail so a slow channel cannot head-of-line
+     * block unrelated channels. A rejected tail stays in the map so the
+     * channel remains poisoned and observable.
+     * @type {Map<string, Promise<void>>} */
+    this.publishQueuesByChannel = new Map()
   }
 
   /**
-   * Returns a promise that resolves when all pending publish/broadcast
-   * operations have completed (including event-log persistence). Useful
-   * when a request handler needs to guarantee its broadcast is persisted
-   * before responding — without this, the HTTP response can return before
-   * the async event-log write finishes.
+   * Returns a promise that settles when every channel tail pending at call
+   * time has settled (including event-log persistence). Useful when a
+   * request handler needs to guarantee its broadcast is persisted before
+   * responding — without this, the HTTP response can return before the
+   * async event-log write finishes. This is a snapshot barrier: work
+   * enqueued after the snapshot is not awaited, and the first rejection in
+   * snapshot order is rethrown after every snapshotted tail has settled.
    * @returns {Promise<void>}
    */
   async awaitPendingBroadcasts() {
-    await this.publishQueue
+    const snapshot = [...this.publishQueuesByChannel.values()]
+    const results = await Promise.allSettled(snapshot)
+
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason
+    }
   }
 
   /**
@@ -66,18 +79,22 @@ export class VelociousHttpServerWebsocketEventsHost {
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
-    this._queuePublish(async () => {
-      const persistedEvent = await this._persistEventIfNeeded({channel, payload})
+    this._queuePublish({
+      callback: async () => {
+        const persistedEvent = await this._persistEventIfNeeded({channel, payload})
 
-      for (const handler of this.handlers) {
-        handler.dispatchWebsocketEvent({
-          channel,
-          createdAt: persistedEvent?.createdAt,
-          eventId: persistedEvent?.id,
-          payload
-        })
-      }
-    }, "Failed to publish websocket event")
+        for (const handler of this.handlers) {
+          handler.dispatchWebsocketEvent({
+            channel,
+            createdAt: persistedEvent?.createdAt,
+            eventId: persistedEvent?.id,
+            payload
+          })
+        }
+      },
+      channel,
+      errorMessage: "Failed to publish websocket event"
+    })
   }
 
   /**
@@ -92,43 +109,54 @@ export class VelociousHttpServerWebsocketEventsHost {
    * @returns {void}
    */
   broadcastV2({body, broadcastParams, channel, configuration}) {
-    // Chain onto publishQueue so persistence completes before
-    // the next broadcast — without this, a subscriber that connects
-    // immediately after a broadcast could miss the just-persisted
-    // event when replaying from lastEventId on a slow DB.
-    this._queuePublish(async () => {
-      const persistedEvent = await this._persistV2EventIfNeeded({body, channel, configuration})
-      const dispatchedTargets = new Set()
+    // Chain onto the channel's own publish tail so persistence completes
+    // before the next broadcast on that same channel — without this, a
+    // subscriber that connects immediately after a broadcast could miss the
+    // just-persisted event when replaying from lastEventId on a slow DB.
+    // Other channels chain onto their own tails and are not delayed.
+    this._queuePublish({
+      callback: async () => {
+        const persistedEvent = await this._persistV2EventIfNeeded({body, channel, configuration})
+        const dispatchedTargets = new Set()
 
-      for (const handler of this.broadcastHandlersByConfiguration.get(configuration) || []) {
-        const dispatchKey = handler.websocketV2BroadcastDispatchKey()
+        for (const handler of this.broadcastHandlersByConfiguration.get(configuration) || []) {
+          const dispatchKey = handler.websocketV2BroadcastDispatchKey()
 
-        if (dispatchedTargets.has(dispatchKey)) continue
+          if (dispatchedTargets.has(dispatchKey)) continue
 
-        dispatchedTargets.add(dispatchKey)
-        handler.dispatchWebsocketV2Broadcast({
-          body,
-          broadcastParams,
-          channel,
-          eventId: persistedEvent?.id,
-          createdAt: persistedEvent?.createdAt
-        })
-      }
-    }, "Failed to persist/broadcast V2 event", configuration)
+          dispatchedTargets.add(dispatchKey)
+          handler.dispatchWebsocketV2Broadcast({
+            body,
+            broadcastParams,
+            channel,
+            eventId: persistedEvent?.id,
+            createdAt: persistedEvent?.createdAt
+          })
+        }
+      },
+      channel,
+      errorMessage: "Failed to persist/broadcast V2 event",
+      originatingConfiguration: configuration
+    })
   }
 
   /**
-   * Runs queue publish.
-   * @param {() => Promise<void>} callback - Publish work to run in order.
-   * @param {string} errorMessage - Message logged when publish work fails.
-   * @param {import("../configuration.js").default} [originatingConfiguration] - Configuration whose context owns the work.
+   * Queues publish work behind the channel's own ordered tail so only work
+   * for the same channel serializes — a slow or failed channel never
+   * head-of-line blocks unrelated channels.
+   * @param {object} args - Options object.
+   * @param {() => Promise<void>} args.callback - Publish work to run in channel order.
+   * @param {string} args.channel - Channel whose ordered tail the work chains onto.
+   * @param {string} args.errorMessage - Message logged when publish work fails.
+   * @param {import("../configuration.js").default} [args.originatingConfiguration] - Configuration whose context owns the work.
    * @returns {void}
    */
-  _queuePublish(callback, errorMessage, originatingConfiguration) {
+  _queuePublish({callback, channel, errorMessage, originatingConfiguration}) {
     const handler = this.handlers.values().next().value
     const configuration = originatingConfiguration || handler?.configuration
+    const previousTail = this.publishQueuesByChannel.get(channel) || Promise.resolve()
 
-    this.publishQueue = this.publishQueue
+    const tail = previousTail
       .then(async () => {
         if (configuration) {
           return await configuration.withoutCurrentConnectionContexts(callback)
@@ -140,6 +168,21 @@ export class VelociousHttpServerWebsocketEventsHost {
         console.error(errorMessage, error)
         throw error
       })
+
+    this.publishQueuesByChannel.set(channel, tail)
+
+    // Remove the tail once it settles successfully, but only when it is
+    // still the newest tail — an older settled tail must never delete a
+    // newer one. A rejected tail stays in the map so the channel remains
+    // poisoned and observable through awaitPendingBroadcasts.
+    tail.then(
+      () => {
+        if (this.publishQueuesByChannel.get(channel) === tail) {
+          this.publishQueuesByChannel.delete(channel)
+        }
+      },
+      () => undefined
+    )
   }
 
   /**
