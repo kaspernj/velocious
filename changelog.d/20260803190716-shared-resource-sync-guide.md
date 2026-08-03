@@ -1,1 +1,0 @@
-- Document the current shared-resource offline/P2P sync adoption path, including backend/local wrappers, policy manifests and grants, signed mutation logs and peer forwarding, authoritative replay and permits, conflict/result handling, security caveats, troubleshooting, and an ad hoc-sync migration checklist.
