@@ -349,6 +349,8 @@ export default class TableColumn {
 
     if (precision !== undefined && precision !== null) {
       sql += scale !== undefined && scale !== null ? `(${precision}, ${scale})` : `(${precision})`
+    } else if (databaseType == "mysql" && type == "DATETIME") {
+      sql += "(3)"
     } else if (type && maxlength !== undefined && maxlength !== null) {
       sql += `(${maxlength})`
     }

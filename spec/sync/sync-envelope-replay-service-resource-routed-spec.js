@@ -406,7 +406,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
   })
 
   it("defaults an omitted conflict strategy to optimisticVersion for routed upserts", async () => {
-    const uuidItem = await UuidItem.create({id: "i4d5e6f7-a8b9-7a0b-1c2d-3e4f5a6b7c8d", title: "Omitted strategy"})
+    const uuidItem = await UuidItem.create({id: "14d5e6f7-a8b9-7a0b-1c2d-3e4f5a6b7c8d", title: "Omitted strategy"})
     const baseVersion = uuidItem.updatedAt().toISOString()
 
     // Advance server state so the mutation's base version is stale.
@@ -423,7 +423,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
         baseVersion,
         clientUpdatedAt: "2026-07-03T10:00:00.000Z",
         data: {title: "Stale update"},
-        id: "i3b4c5d6-1111-4222-8333-444455556666",
+        id: "13b4c5d6-1111-4222-8333-444455556666",
         resourceId: String(uuidItem.id())
       })]
     })
@@ -490,7 +490,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
   })
 
   it("skips a stale delete with baseVersion instead of forcing deletion", async () => {
-    const uuidItem = await UuidItem.create({id: "g2b3c4d5-e6f7-5a8b-9c0d-1e2f3a4b5c6d", title: "Delete stale"})
+    const uuidItem = await UuidItem.create({id: "62b3c4d5-e6f7-5a8b-9c0d-1e2f3a4b5c6d", title: "Delete stale"})
 
     await SyncEntry.create({
       authenticationTokenId: ACTOR_ID,
@@ -511,7 +511,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
         baseVersion: "server-1",
         clientUpdatedAt: "2026-07-03T10:00:00.000Z",
         data: {},
-        id: "g1b2c3d4-1111-4222-8333-444455556666",
+        id: "61b2c3d4-1111-4222-8333-444455556666",
         resourceId: String(uuidItem.id()),
         syncType: "delete"
       })]
@@ -522,7 +522,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
   })
 
   it("skips a stale command with baseVersion instead of forcing execution", async () => {
-    const uuidItem = await UuidItem.create({id: "h3c4d5e6-f7a8-6a9b-0c1d-2e3f4a5b6c7d", title: "Command stale"})
+    const uuidItem = await UuidItem.create({id: "73c4d5e6-f7a8-6a9b-0c1d-2e3f4a5b6c7d", title: "Command stale"})
     /** @type {Array<string>} */
     const commandCalls = []
 
@@ -552,7 +552,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
         baseVersion: "server-1",
         clientUpdatedAt: "2026-07-03T10:00:00.000Z",
         data: {},
-        id: "h2b3c4d5-1111-4222-8333-444455556666",
+        id: "72b3c4d5-1111-4222-8333-444455556666",
         resourceId: String(uuidItem.id()),
         syncType: "ping"
       })]
