@@ -29,8 +29,9 @@ function redactString(value, secrets) {
  * Converts an integration-owned value (adapter report, live status, audit
  * payload fragment) into a bounded JSON-safe structure: plain objects, arrays,
  * strings, finite numbers, booleans, and null survive; everything else
- * (functions, class instances, undefined) is dropped. Strings are redacted and
- * capped in length.
+ * (functions, class instances, undefined) is dropped. String values and object
+ * keys are redacted and capped in length; deterministic suffixes preserve every
+ * value when redacted keys collide.
  * @param {?} value - Raw value from the integration.
  * @param {string[]} secrets - Secret values to redact.
  * @param {number} [depth] - Current recursion depth.
@@ -70,7 +71,23 @@ export function sanitizeAdapterValue(value, secrets, depth = 0) {
     for (const [key, entry] of Object.entries(value)) {
       const sanitized = sanitizeAdapterValue(entry, secrets, depth + 1)
 
-      if (sanitized !== undefined) result[key] = sanitized
+      if (sanitized === undefined) continue
+
+      const redactedKey = redactString(key, secrets)
+      let availableKey = redactedKey
+      let collisionNumber = 2
+
+      while (Object.hasOwn(result, availableKey)) {
+        availableKey = `${redactedKey}#${collisionNumber}`
+        collisionNumber++
+      }
+
+      Object.defineProperty(result, availableKey, {
+        configurable: true,
+        enumerable: true,
+        value: sanitized,
+        writable: true
+      })
     }
 
     return result

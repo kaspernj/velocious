@@ -1,5 +1,7 @@
 // @ts-check
 
+import {createHash} from "node:crypto"
+
 /**
  * DeploymentAdapter type. The configured deployment integration (e.g. Rampway)
  * owns the implementation; Velocious only calls this contract. All values are
@@ -27,6 +29,7 @@
  * @typedef {object} DeploymentMountOptions
  * @property {string[]} accessTokens - Accepted bearer tokens (required, fail closed when empty).
  * @property {DeploymentAdapter} adapter - Deployment integration adapter that owns execution.
+ * @property {string} mountIdentifier - Stable hash of the normalized mount path used to scope persisted state.
  * @property {Record<string, DeploymentProjectOptions>} projects - Allowlisted projects keyed by identifier (null-prototype map).
  * @property {string} [databaseIdentifier] - Database identifier the run store reads from.
  * @property {number} staleRunTimeoutMs - Lease timeout after which an active run without a heartbeat is reconciled according to its execution state.
@@ -41,6 +44,16 @@
  * @type {WeakMap<import("../configuration.js").default, Map<string, DeploymentMountOptions>>}
  */
 const registry = new WeakMap()
+
+/**
+ * Builds the stable, bounded identifier persisted for one normalized mount.
+ * Hashing keeps composite indexes portable even when the URL prefix is long.
+ * @param {string} at - Normalized mount path.
+ * @returns {string} - Stable mount identifier.
+ */
+export function deploymentMountIdentifier(at) {
+  return createHash("sha256").update(at).digest("hex")
+}
 
 /**
  * Registers mount options for a configuration and mount path.

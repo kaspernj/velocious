@@ -1,12 +1,14 @@
 // @ts-check
 
 import TableData from "../database/table-data/index.js"
+import TableIndex from "../database/table-data/table-index.js"
 import {createHash, randomUUID} from "node:crypto"
 
 /**
  * DeploymentRunRow type.
  * @typedef {object} DeploymentRunRow
  * @property {string} id - Run id (UUID).
+ * @property {string} mountIdentifier - Stable identifier of the authenticated API mount that owns the run.
  * @property {string} project - Allowlisted project identifier.
  * @property {string} stage - Allowlisted stage identifier.
  * @property {string} revision - Full immutable requested Git revision.
@@ -39,6 +41,9 @@ const RUNS_TABLE = "velocious_deployment_runs"
 const AUDIT_TABLE = "velocious_deployment_api_audit_events"
 const BLOCKING_STATUSES = ["pending", "running", "reconciliation_required"]
 const DEFAULT_STALE_RUN_TIMEOUT_MS = 60000
+const IDEMPOTENCY_INDEX_NAME = "index_deployment_runs_on_mount_and_key"
+const LEGACY_UNSCOPED_MOUNT_IDENTIFIER = "legacy-unscoped"
+const SCHEMA_LOCK_NAME = "velocious-deployment-api:schema-v2"
 
 /**
  * Ownership token identifying runs executed by this process. Combined with the
@@ -96,11 +101,17 @@ export default class DeploymentRunStore {
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string} [args.databaseIdentifier] - Database identifier; defaults to the primary database.
+   * @param {string} args.mountIdentifier - Stable identifier of the authenticated API mount.
    * @param {number} [args.staleRunTimeoutMs] - Lease timeout after which an active run without a heartbeat counts as interrupted.
    */
-  constructor({configuration, databaseIdentifier, staleRunTimeoutMs = DEFAULT_STALE_RUN_TIMEOUT_MS}) {
+  constructor({configuration, databaseIdentifier, mountIdentifier, staleRunTimeoutMs = DEFAULT_STALE_RUN_TIMEOUT_MS}) {
+    if (typeof mountIdentifier !== "string" || mountIdentifier.length === 0) {
+      throw new Error("DeploymentRunStore requires a mountIdentifier")
+    }
+
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier || "default"
+    this.mountIdentifier = mountIdentifier
     this.staleRunTimeoutMs = staleRunTimeoutMs
     /** @type {Promise<void> | null} */
     this._readyPromise = null
@@ -117,40 +128,57 @@ export default class DeploymentRunStore {
     }
 
     this._readyPromise = this._withDb(async (db) => {
-      db.clearSchemaCache()
+      const acquired = await db.acquireAdvisoryLock(SCHEMA_LOCK_NAME)
 
-      if (!(await db.tableExists(RUNS_TABLE))) {
-        const table = new TableData(RUNS_TABLE, {ifNotExists: true})
+      if (!acquired) throw new Error("Failed to acquire deployment API schema lock")
 
-        table.string("id", {null: false, primaryKey: true})
-        table.string("project", {null: false, index: true})
-        table.string("stage", {null: false})
-        table.string("revision", {null: false})
-        table.string("idempotency_key", {null: false, index: {unique: true}})
-        table.string("status", {null: false, index: true})
-        table.text("result_json", {null: true})
-        table.text("error_json", {null: true})
-        table.bigint("requested_at_ms", {null: false})
-        table.bigint("started_at_ms", {null: true})
-        table.bigint("finished_at_ms", {null: true})
-        table.string("owner_token", {null: true})
-        table.bigint("heartbeat_at_ms", {null: true})
+      try {
+        db.clearSchemaCache()
 
-        await db.createTable(table)
-      }
+        if (!(await db.tableExists(RUNS_TABLE))) {
+          const table = new TableData(RUNS_TABLE, {ifNotExists: true})
 
-      await this._ensureLeaseColumns(db)
+          table.string("id", {null: false, primaryKey: true})
+          table.string("mount_identifier", {maxLength: 64, null: false})
+          table.string("project", {null: false, index: true})
+          table.string("stage", {null: false})
+          table.string("revision", {null: false})
+          table.string("idempotency_key", {null: false})
+          table.string("status", {null: false, index: true})
+          table.text("result_json", {null: true})
+          table.text("error_json", {null: true})
+          table.bigint("requested_at_ms", {null: false})
+          table.bigint("started_at_ms", {null: true})
+          table.bigint("finished_at_ms", {null: true})
+          table.string("owner_token", {null: true})
+          table.bigint("heartbeat_at_ms", {null: true})
+          table.addIndex(new TableIndex(["mount_identifier", "idempotency_key"], {
+            name: IDEMPOTENCY_INDEX_NAME,
+            unique: true
+          }))
 
-      if (!(await db.tableExists(AUDIT_TABLE))) {
-        const table = new TableData(AUDIT_TABLE, {ifNotExists: true})
+          await db.createTable(table)
+        }
 
-        table.string("id", {null: false, primaryKey: true})
-        table.string("run_id", {null: true, index: true})
-        table.string("event", {null: false, index: true})
-        table.text("payload_json", {null: true})
-        table.bigint("created_at_ms", {null: false})
+        await this._ensureRunColumns(db)
+        await this._ensureScopedIdempotencyIndex(db)
 
-        await db.createTable(table)
+        if (!(await db.tableExists(AUDIT_TABLE))) {
+          const table = new TableData(AUDIT_TABLE, {ifNotExists: true})
+
+          table.string("id", {null: false, primaryKey: true})
+          table.string("mount_identifier", {maxLength: 64, null: false})
+          table.string("run_id", {null: true, index: true})
+          table.string("event", {null: false, index: true})
+          table.text("payload_json", {null: true})
+          table.bigint("created_at_ms", {null: false})
+
+          await db.createTable(table)
+        }
+
+        await this._ensureMountIdentifierColumn(db, AUDIT_TABLE)
+      } finally {
+        await db.releaseAdvisoryLock(SCHEMA_LOCK_NAME)
       }
     })
 
@@ -213,9 +241,9 @@ export default class DeploymentRunStore {
       }
 
       try {
-        // The key lock serializes the globally unique idempotency key across
-        // different project/stage pairs; always taken after the deployment
-        // lock so lock ordering can never deadlock.
+        // The key lock serializes this mount's idempotency key across different
+        // project/stage pairs; always taken after the deployment lock so lock
+        // ordering can never deadlock.
         const keyLockName = this._idempotencyLockName(idempotencyKey)
 
         await db.acquireAdvisoryLock(keyLockName)
@@ -255,6 +283,7 @@ export default class DeploymentRunStore {
             tableName: RUNS_TABLE,
             data: {
               id,
+              mount_identifier: this.mountIdentifier,
               project,
               stage,
               revision,
@@ -292,7 +321,23 @@ export default class DeploymentRunStore {
    * @returns {Promise<void>} - Resolves when updated.
    */
   async markRunning({id, startedAtMs}) {
-    await this._updateRun(id, {heartbeat_at_ms: startedAtMs, started_at_ms: startedAtMs, status: "running"})
+    await this.ensureReady()
+    await this._withDb(async (db) => {
+      const affected = await db.affectedRows(db.updateSql({
+        tableName: RUNS_TABLE,
+        data: {heartbeat_at_ms: startedAtMs, started_at_ms: startedAtMs, status: "running"},
+        conditions: {
+          id,
+          mount_identifier: this.mountIdentifier,
+          owner_token: PROCESS_OWNER_TOKEN,
+          status: "pending"
+        }
+      }))
+
+      if (affected !== 1) {
+        throw new Error(`Expected to mark exactly one pending deployment run with id ${id} as running for this process owner, but updated ${affected}`)
+      }
+    })
   }
 
   /**
@@ -309,7 +354,7 @@ export default class DeploymentRunStore {
       await db.affectedRows(db.updateSql({
         tableName: RUNS_TABLE,
         data: {heartbeat_at_ms: heartbeatAtMs},
-        conditions: {id, owner_token: PROCESS_OWNER_TOKEN, status: "running"}
+        conditions: {id, mount_identifier: this.mountIdentifier, owner_token: PROCESS_OWNER_TOKEN, status: "running"}
       }))
     })
   }
@@ -382,6 +427,7 @@ export default class DeploymentRunStore {
         tableName: AUDIT_TABLE,
         data: {
           id: randomUUID(),
+          mount_identifier: this.mountIdentifier,
           run_id: runId,
           event,
           payload_json: payload === undefined ? null : JSON.stringify(payload ?? null),
@@ -404,7 +450,7 @@ export default class DeploymentRunStore {
       const rows = await db
         .newQuery()
         .from(AUDIT_TABLE)
-        .where({run_id: runId})
+        .where({mount_identifier: this.mountIdentifier, run_id: runId})
         .order("created_at_ms ASC")
         .results()
 
@@ -422,18 +468,18 @@ export default class DeploymentRunStore {
    * @returns {string} - Bounded advisory-lock name.
    */
   _deploymentLockName({project, stage}) {
-    const hash = createHash("sha256").update(`${project}:${stage}`).digest("hex").slice(0, 32)
+    const hash = createHash("sha256").update(`${this.mountIdentifier}:${project}:${stage}`).digest("hex").slice(0, 32)
 
     return `velocious-deployment-api:${hash}`
   }
 
   /**
-   * Builds the advisory-lock name serializing one idempotency key globally.
+   * Builds the advisory-lock name serializing one idempotency key within this mount.
    * @param {string} idempotencyKey - Idempotency key.
    * @returns {string} - Bounded advisory-lock name.
    */
   _idempotencyLockName(idempotencyKey) {
-    const hash = createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 32)
+    const hash = createHash("sha256").update(`${this.mountIdentifier}:${idempotencyKey}`).digest("hex").slice(0, 32)
 
     return `velocious-deployment-api:key:${hash}`
   }
@@ -477,7 +523,7 @@ export default class DeploymentRunStore {
     const affected = await db.affectedRows(db.updateSql({
       tableName: RUNS_TABLE,
       data,
-      conditions: {id: run.id, owner_token: run.ownerToken, status: run.status}
+      conditions: {id: run.id, mount_identifier: this.mountIdentifier, owner_token: run.ownerToken, status: run.status}
     }))
 
     if (affected !== 1) {
@@ -488,6 +534,7 @@ export default class DeploymentRunStore {
       tableName: AUDIT_TABLE,
       data: {
         id: randomUUID(),
+        mount_identifier: this.mountIdentifier,
         run_id: run.id,
         event,
         payload_json: JSON.stringify({project: run.project, revision: run.revision, stage: run.stage}),
@@ -502,40 +549,111 @@ export default class DeploymentRunStore {
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when the columns exist.
    */
-  async _ensureLeaseColumns(db) {
+  async _ensureRunColumns(db) {
     const table = await db.getTableByNameOrFail(RUNS_TABLE)
+    const missingMountIdentifier = !(await table.getColumnByName("mount_identifier"))
     const missingOwnerToken = !(await table.getColumnByName("owner_token"))
     const missingHeartbeat = !(await table.getColumnByName("heartbeat_at_ms"))
 
-    if (!missingOwnerToken && !missingHeartbeat) return
+    if (missingMountIdentifier || missingOwnerToken || missingHeartbeat) {
+      const tableData = new TableData(RUNS_TABLE)
 
-    const tableData = new TableData(RUNS_TABLE)
+      if (missingMountIdentifier) tableData.string("mount_identifier", {maxLength: 64, null: true})
+      if (missingOwnerToken) tableData.string("owner_token", {null: true})
+      if (missingHeartbeat) tableData.bigint("heartbeat_at_ms", {null: true})
 
-    if (missingOwnerToken) tableData.string("owner_token", {null: true})
-    if (missingHeartbeat) tableData.bigint("heartbeat_at_ms", {null: true})
+      const sqls = await db.alterTableSQLs(tableData)
 
-    const sqls = await db.alterTableSQLs(tableData)
+      for (const sql of sqls) {
+        await db.query(sql)
+      }
 
-    for (const sql of sqls) {
-      await db.query(sql)
+      db.clearSchemaCache()
     }
 
-    db.clearSchemaCache()
+    await this._quarantineLegacyRows(db, RUNS_TABLE)
   }
 
   /**
-   * Updates run columns by id.
-   * @param {string} id - Run id.
-   * @param {Record<string, ?>} data - Column values.
-   * @returns {Promise<void>} - Resolves when updated.
+   * Adds and safely backfills a mount identifier on an existing lazily-owned table.
+   * Legacy rows were not attributable to an authenticated mount, so they are
+   * quarantined in an unreachable scope instead of being exposed to whichever
+   * mount happens to initialize first.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} tableName - Lazily-owned table name.
+   * @returns {Promise<void>} - Resolves when the column exists.
    */
-  async _updateRun(id, data) {
-    await this.ensureReady()
-    await this._withDb(async (db) => {
-      const affected = await db.affectedRows(db.updateSql({tableName: RUNS_TABLE, data, conditions: {id}}))
+  async _ensureMountIdentifierColumn(db, tableName) {
+    const table = await db.getTableByNameOrFail(tableName)
 
-      if (affected !== 1) throw new Error(`Expected to update exactly one deployment run with id ${id}, but updated ${affected}`)
+    if (!(await table.getColumnByName("mount_identifier"))) {
+      const tableData = new TableData(tableName)
+
+      tableData.string("mount_identifier", {maxLength: 64, null: true})
+
+      for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+
+      db.clearSchemaCache()
+    }
+
+    await this._quarantineLegacyRows(db, tableName)
+  }
+
+  /**
+   * Assigns pre-scope rows to a reserved identifier no real mount can use.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} tableName - Table containing legacy rows.
+   * @returns {Promise<void>} - Resolves when legacy rows are quarantined.
+   */
+  async _quarantineLegacyRows(db, tableName) {
+    await db.affectedRows(db.updateSql({
+      tableName,
+      data: {mount_identifier: LEGACY_UNSCOPED_MOUNT_IDENTIFIER},
+      conditions: {mount_identifier: null}
+    }))
+  }
+
+  /**
+   * Replaces the legacy global idempotency-key uniqueness with mount-scoped
+   * uniqueness. The scoped index is created before the old one is removed, so
+   * an interrupted lazy upgrade never leaves idempotency keys unfenced.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when index ownership is scoped.
+   */
+  async _ensureScopedIdempotencyIndex(db) {
+    db.clearSchemaCache()
+
+    const table = await db.getTableByNameOrFail(RUNS_TABLE)
+    const indexes = await table.getIndexes()
+    const scopedIndex = indexes.find((index) => {
+      return index.isUnique() && index.getColumnNames().join(",") === "mount_identifier,idempotency_key"
     })
+
+    if (!scopedIndex) {
+      const sqls = await db.createIndexSQLs({
+        columns: ["mount_identifier", "idempotency_key"],
+        name: IDEMPOTENCY_INDEX_NAME,
+        tableName: RUNS_TABLE,
+        unique: true
+      })
+
+      for (const sql of sqls) await db.query(sql)
+
+      db.clearSchemaCache()
+    }
+
+    const refreshedTable = await db.getTableByNameOrFail(RUNS_TABLE)
+    const legacyIndexes = (await refreshedTable.getIndexes()).filter((index) => {
+      return !index.isPrimaryKey() && index.isUnique() && index.getColumnNames().join(",") === "idempotency_key"
+    })
+
+    for (const legacyIndex of legacyIndexes) {
+      const sqls = await db.removeIndexSQLs({name: legacyIndex.getName(), tableName: RUNS_TABLE})
+
+      for (const sql of sqls) await db.query(sql)
+    }
+
+    if (legacyIndexes.length > 0) db.clearSchemaCache()
   }
 
   /**
@@ -554,7 +672,7 @@ export default class DeploymentRunStore {
       const affected = await db.affectedRows(db.updateSql({
         tableName: RUNS_TABLE,
         data,
-        conditions: {id, owner_token: ownerToken, status: "running"}
+        conditions: {id, mount_identifier: this.mountIdentifier, owner_token: ownerToken, status: "running"}
       }))
 
       if (affected !== 1) {
@@ -573,7 +691,7 @@ export default class DeploymentRunStore {
     const rows = await db
       .newQuery()
       .from(RUNS_TABLE)
-      .where({id})
+      .where({id, mount_identifier: this.mountIdentifier})
       .limit(1)
       .results()
 
@@ -590,7 +708,7 @@ export default class DeploymentRunStore {
     const rows = await db
       .newQuery()
       .from(RUNS_TABLE)
-      .where({idempotency_key: idempotencyKey})
+      .where({idempotency_key: idempotencyKey, mount_identifier: this.mountIdentifier})
       .limit(1)
       .results()
 
@@ -609,7 +727,7 @@ export default class DeploymentRunStore {
     const rows = await db
       .newQuery()
       .from(RUNS_TABLE)
-      .where({project, stage, status: BLOCKING_STATUSES})
+      .where({mount_identifier: this.mountIdentifier, project, stage, status: BLOCKING_STATUSES})
       .order("requested_at_ms ASC")
       .limit(1)
       .results()
@@ -627,6 +745,7 @@ export default class DeploymentRunStore {
 
     return {
       id: /** @type {string} */ (record.id),
+      mountIdentifier: /** @type {string} */ (record.mount_identifier),
       project: /** @type {string} */ (record.project),
       stage: /** @type {string} */ (record.stage),
       revision: /** @type {string} */ (record.revision),

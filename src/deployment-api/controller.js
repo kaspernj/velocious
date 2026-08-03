@@ -61,11 +61,29 @@ export default class VelociousDeploymentApiController extends Controller {
       this._deploymentRunStore = new DeploymentRunStore({
         configuration: this.getConfiguration(),
         databaseIdentifier: this._mountOptions().databaseIdentifier,
+        mountIdentifier: this._mountOptions().mountIdentifier,
         staleRunTimeoutMs: this._mountOptions().staleRunTimeoutMs
       })
     }
 
     return this._deploymentRunStore
+  }
+
+  /**
+   * Reports one internally consumed framework failure on both documented
+   * error channels so framework-specific and unified reporters see the same
+   * payload.
+   * @param {object} args - Options.
+   * @param {string} args.context - Deployment API failure context.
+   * @param {?} args.error - Consumed error.
+   * @returns {void} - No return value.
+   */
+  _emitFrameworkError({context, error}) {
+    const errorEvents = this.getConfiguration().getErrorEvents()
+    const payload = {context, error, request: this.getRequest()}
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -201,11 +219,7 @@ export default class VelociousDeploymentApiController extends Controller {
       // integration's own lock/build/health/rollback semantics and the caller
       // reads progress back through the show action.
       this._executeRun({options, run}).catch((error) => {
-        this.getConfiguration().getErrorEvents().emit("framework-error", {
-          context: "deployment-api-execute-run",
-          error,
-          request: this.getRequest()
-        })
+        this._emitFrameworkError({context: "deployment-api-execute-run", error})
       })
 
       await this.render({json: {run: this._serializeRun(run)}, status: 202})
@@ -302,10 +316,7 @@ export default class VelociousDeploymentApiController extends Controller {
 
       heartbeatTimer = setInterval(() => {
         store.heartbeat({heartbeatAtMs: Date.now(), id: run.id}).catch((error) => {
-          this.getConfiguration().getErrorEvents().emit("framework-error", {
-            context: "deployment-api-heartbeat",
-            error
-          })
+          this._emitFrameworkError({context: "deployment-api-heartbeat", error})
         })
       }, heartbeatIntervalMs)
       heartbeatTimer.unref()
@@ -336,11 +347,7 @@ export default class VelociousDeploymentApiController extends Controller {
         } catch (storeError) {
           // Recording the failure itself failed — that is an unexpected bug
           // and must surface to process-level error reporters.
-          this.getConfiguration().getErrorEvents().emit("framework-error", {
-            context: "deployment-api-record-failure",
-            error: storeError,
-            request: this.getRequest()
-          })
+          this._emitFrameworkError({context: "deployment-api-record-failure", error: storeError})
         }
 
         return
@@ -355,15 +362,7 @@ export default class VelociousDeploymentApiController extends Controller {
         // The adapter already returned success. Surface the recording error,
         // then fence the run in a durable non-retryable state rather than
         // falsely recording an external success as a deployment failure.
-        const errorEvents = this.getConfiguration().getErrorEvents()
-        const frameworkErrorPayload = {
-          context: "deployment-api-record-success",
-          error,
-          request: this.getRequest()
-        }
-
-        errorEvents.emit("framework-error", frameworkErrorPayload)
-        errorEvents.emit("all-error", {...frameworkErrorPayload, errorType: "framework-error"})
+        this._emitFrameworkError({context: "deployment-api-record-success", error})
 
         const reconciliationError = {
           message: "Deployment activation succeeded, but its result could not be persisted; operator reconciliation is required"
@@ -382,15 +381,10 @@ export default class VelociousDeploymentApiController extends Controller {
             runId: run.id
           })
         } catch (reconciliationErrorPersistenceError) {
-          const errorEvents = this.getConfiguration().getErrorEvents()
-          const frameworkErrorPayload = {
+          this._emitFrameworkError({
             context: "deployment-api-record-reconciliation-required",
-            error: reconciliationErrorPersistenceError,
-            request: this.getRequest()
-          }
-
-          errorEvents.emit("framework-error", frameworkErrorPayload)
-          errorEvents.emit("all-error", {...frameworkErrorPayload, errorType: "framework-error"})
+            error: reconciliationErrorPersistenceError
+          })
         }
       }
     } finally {
@@ -402,8 +396,8 @@ export default class VelociousDeploymentApiController extends Controller {
   /**
    * Records a sanitized audit event. Audit persistence must never strand or
    * suppress a deployment, so a failure here is reported on the
-   * framework-error channel (where process-level bug reporters capture it)
-   * and execution continues.
+   * framework-error and unified all-error channels (where process-level bug
+   * reporters capture it), and execution continues.
    * @param {object} args - Options.
    * @param {string} args.event - Event name.
    * @param {Record<string, ?>} args.payload - Payload; sanitized and redacted before persistence.
@@ -416,11 +410,7 @@ export default class VelociousDeploymentApiController extends Controller {
     try {
       await this._store().addAuditEvent({event, payload: sanitized, runId})
     } catch (error) {
-      this.getConfiguration().getErrorEvents().emit("framework-error", {
-        context: "deployment-api-audit",
-        error,
-        request: this.getRequest()
-      })
+      this._emitFrameworkError({context: "deployment-api-audit", error})
     }
   }
 

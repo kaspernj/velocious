@@ -1,14 +1,18 @@
 // @ts-check
 
 import {beforeEach, describe, expect, it} from "../../src/testing/test.js"
+import {buildDeploymentApiController} from "../helpers/deployment-api-controller-helper.js"
 import DeploymentRunStore from "../../src/deployment-api/run-store.js"
 import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import {deploymentMountIdentifier, getDeploymentMount} from "../../src/deployment-api/registry.js"
 import {getDeploymentRun, postDeploymentRun} from "../helpers/deployment-api-helper.js"
 import {OTHER_REVISION, testDeploymentAdapter, VALID_REVISION} from "../dummy/src/support/test-deployment-adapter.js"
 import {waitFor} from "awaitery"
 
 const TOKEN = "test-deployment-token"
+const MOUNT_PATH = "/velocious/deployments"
+const MOUNT_IDENTIFIER = deploymentMountIdentifier(MOUNT_PATH)
 const RUNS_TABLE = "velocious_deployment_runs"
 
 /**
@@ -17,7 +21,7 @@ const RUNS_TABLE = "velocious_deployment_runs"
 function runStore() {
   dummyConfiguration.setCurrent()
 
-  return new DeploymentRunStore({configuration: dummyConfiguration, staleRunTimeoutMs: 2000})
+  return new DeploymentRunStore({configuration: dummyConfiguration, mountIdentifier: MOUNT_IDENTIFIER, staleRunTimeoutMs: 2000})
 }
 
 /**
@@ -41,6 +45,7 @@ async function seedInterruptedRun({heartbeatAtMs, id, status = "running"}) {
       tableName: RUNS_TABLE,
       data: {
         id,
+        mount_identifier: MOUNT_IDENTIFIER,
         project: "dummy-project",
         stage: "production",
         revision: OTHER_REVISION,
@@ -226,6 +231,47 @@ describe("Deployment API - interrupted run recovery", {databaseCleaning: {transa
     })
   })
 
+  it("stops stale worker A before deployment when pending ownership moved to worker B", async () => {
+    await Dummy.run(async () => {
+      const store = runStore()
+      const outcome = await store.createRunIfPossible({
+        idempotencyKey: "pending-owner-race",
+        project: "dummy-project",
+        revision: VALID_REVISION,
+        stage: "production"
+      })
+      const staleRun = outcome.run
+
+      if (!staleRun) throw new Error("Expected deployment run to be created")
+
+      const pool = dummyConfiguration.getDatabasePool("default")
+
+      await pool.withConnection({name: "deployment-api-interruption-spec"}, async (db) => {
+        const affected = await db.affectedRows(db.updateSql({
+          tableName: RUNS_TABLE,
+          data: {owner_token: "worker-b-owner-token"},
+          conditions: {id: staleRun.id, owner_token: staleRun.ownerToken, status: "pending"}
+        }))
+
+        expect(affected).toEqual(1)
+      })
+
+      const options = getDeploymentMount(dummyConfiguration, MOUNT_PATH)
+
+      if (!options) throw new Error(`Expected deployment API mount at ${MOUNT_PATH}`)
+
+      const controller = await buildDeploymentApiController({store})
+
+      await expect(async () => await controller._executeRun({options, run: staleRun})).toThrow(/Expected to mark exactly one pending deployment run/)
+
+      const persisted = await store.findRunById(staleRun.id)
+
+      expect(persisted?.status).toEqual("pending")
+      expect(persisted?.ownerToken).toEqual("worker-b-owner-token")
+      expect(testDeploymentAdapter.deployCalls.length).toEqual(0)
+    })
+  })
+
   it("does not reclaim a run with a fresh lease owned by another process", async () => {
     await Dummy.run(async () => {
       await seedInterruptedRun({heartbeatAtMs: Date.now(), id: "fresh-run-1"})
@@ -264,6 +310,7 @@ describe("Deployment API - interrupted run recovery", {databaseCleaning: {transa
           tableName: RUNS_TABLE,
           data: {
             id: "fresh-pending-1",
+            mount_identifier: MOUNT_IDENTIFIER,
             project: "dummy-project",
             stage: "production",
             revision: OTHER_REVISION,

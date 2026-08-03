@@ -4,11 +4,13 @@ import {beforeEach, describe, expect, it} from "../../src/testing/test.js"
 import DeploymentRunStore from "../../src/deployment-api/run-store.js"
 import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import {deploymentMountIdentifier} from "../../src/deployment-api/registry.js"
 import {getDeploymentRun, postDeploymentRun} from "../helpers/deployment-api-helper.js"
 import {OTHER_REVISION, testDeploymentAdapter, VALID_REVISION} from "../dummy/src/support/test-deployment-adapter.js"
 import {waitFor} from "awaitery"
 
 const TOKEN = "test-deployment-token"
+const MOUNT_IDENTIFIER = deploymentMountIdentifier("/velocious/deployments")
 
 /**
  * @param {Record<string, ?>} overrides - Field overrides.
@@ -51,7 +53,7 @@ async function waitForRunStatus(id, status) {
 function runStore() {
   dummyConfiguration.setCurrent()
 
-  return new DeploymentRunStore({configuration: dummyConfiguration})
+  return new DeploymentRunStore({configuration: dummyConfiguration, mountIdentifier: MOUNT_IDENTIFIER})
 }
 
 describe("Deployment API - run lifecycle", {databaseCleaning: {transaction: false, truncate: true}}, () => {
@@ -136,6 +138,32 @@ describe("Deployment API - run lifecycle", {databaseCleaning: {transaction: fals
 
       expect(JSON.stringify(failedRun)).not.toContain(TOKEN)
       expect(JSON.stringify(failedRun)).toContain("[redacted]")
+    })
+  })
+
+  it("redacts nested secret-bearing object keys without losing colliding values in persisted and API-visible results", async () => {
+    await Dummy.run(async () => {
+      testDeploymentAdapter.includeTokenInKeys = true
+
+      const created = await postDeploymentRun({payload: payload(), token: TOKEN})
+      const createdRun = /** @type {Record<string, ?>} */ (created.body.run)
+      const runId = /** @type {string} */ (createdRun.id)
+      const apiRun = await waitForRunStatus(runId, "succeeded")
+      const persistedRun = await runStore().findRunById(runId)
+
+      if (!persistedRun) throw new Error(`Expected deployment run ${runId} to be persisted`)
+
+      for (const result of [apiRun.result, persistedRun.result]) {
+        const serialized = JSON.stringify(result)
+        const payload = /** @type {Record<string, ?>} */ (/** @type {Record<string, ?>} */ (result).secretKeyPayload)
+        const nested = /** @type {Record<string, ?>} */ (payload.nested)
+
+        expect(serialized).not.toContain(TOKEN)
+        expect(Object.values(payload)).toContain("literal-redacted-key")
+        expect(Object.values(payload)).toContain("secret-bearing-key")
+        expect(Object.keys(nested)).toEqual(["nested-[redacted]"])
+        expect(nested["nested-[redacted]"]).toEqual("nested-secret-bearing-key")
+      }
     })
   })
 

@@ -3,7 +3,7 @@
 import VelociousDeploymentApiController from "./controller.js"
 import {matchDeploymentApiPath} from "./path-matcher.js"
 import {normalizeMountPrefix} from "../utils/mount-prefix.js"
-import {registerDeploymentMount} from "./registry.js"
+import {deploymentMountIdentifier, registerDeploymentMount} from "./registry.js"
 
 const IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
 const MAX_IDENTIFIER_LENGTH = 64
@@ -187,6 +187,7 @@ export default class VelociousDeploymentApi {
       accessTokens: validateAccessTokens(accessTokens),
       adapter: validateAdapter(adapter),
       databaseIdentifier,
+      mountIdentifier: deploymentMountIdentifier(prefix),
       projects: validateProjects(projects),
       staleRunTimeoutMs: validateStaleRunTimeoutMs(staleRunTimeoutMs)
     }

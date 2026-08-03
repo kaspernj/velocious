@@ -58,7 +58,9 @@ compared in constant time, are only accepted through the
 `Authorization: Bearer <token>` header — never through URLs — and are never
 rendered in responses, logs, audit payloads, or persisted run state. Anything
 the adapter reports back is recursively redacted against the configured tokens
-before it is stored.
+before it is stored, including object keys. If redaction makes two keys equal,
+the later keys receive deterministic `#2`, `#3`, … suffixes so no values are
+lost.
 
 ## Adapter contract
 
@@ -122,13 +124,18 @@ when the integration provides `readStatus`. Unknown ids return
 
 Run state and audit events are stored in the consuming app's database
 (`velocious_deployment_runs` and `velocious_deployment_api_audit_events`,
-created lazily by the framework store — no app-side migration needed). The
-idempotency key has a unique index, and creation is serialized by two
-advisory locks taken in a consistent global order (first the project/stage
-deployment lock, then the idempotency-key lock), so a retry after a crash
-reads the original run instead of launching a duplicate, a key racing across
-different project/stage pairs gets a deterministic `idempotency_conflict`,
-and run state survives application restarts.
+created lazily by the framework store — no app-side migration needed). Every
+row, lookup, reconciliation, and advisory lock is scoped by a stable hash of
+the authenticated mount prefix. Mounts may therefore share one database
+without reading or blocking one another, and the same idempotency key may be
+used independently under each mount. Within a mount, the idempotency key has a
+composite unique index and creation is serialized by two advisory locks taken
+in a consistent order (first the project/stage deployment lock, then the
+idempotency-key lock), so a retry after a crash reads the original run instead
+of launching a duplicate and a key racing across different project/stage pairs
+gets a deterministic `idempotency_conflict`. A lazy upgrade quarantines rows
+created before mount ownership was persisted because they cannot be safely
+attributed to any authenticated mount.
 
 ### Interruption recovery
 
@@ -149,6 +156,9 @@ A run with a fresh lease owned by another worker is genuinely active and is
 never reclaimed; it returns `deployment_in_progress` as usual. Terminal
 success/failure writes are fenced by both the expected owner token and
 `running` status, so a stale worker cannot overwrite either reconciled state.
+The `pending` to `running` transition is likewise fenced by mount, id, this
+process's owner token, and `pending` status; losing ownership stops execution
+before the adapter is invoked.
 
 ### Audit and failure reporting
 
@@ -156,14 +166,16 @@ Every run records sanitized `run_requested`, `run_started`, and
 `run_succeeded`/`run_failed` audit events, plus
 `run_reconciliation_required` when manual reconciliation becomes necessary.
 Audit persistence is deliberately not on the deployment's critical path: if
-it fails, the failure is emitted on
-the framework-error channel (`context: "deployment-api-audit"`) and the
-deployment still executes — an audit outage never strands a pending run. When
+it fails, the failure is emitted on both `framework-error` and unified
+`all-error` (`errorType: "framework-error"`, context
+`deployment-api-audit`) and the deployment still executes — an audit outage
+never strands a pending run. When
 activation fails, the run is marked `failed` with a redacted error message
 and the integration-reported `recovery` payload, so restoration of the
 previous release is visible through readback. A failed deployment is an
 expected operational outcome and is reported through run state; only
-unexpected store/framework bugs are emitted on the framework-error channel.
+unexpected store/framework bugs are emitted on both framework failure
+channels with the same payload.
 If `adapter.deploy()` returns success but persisting `succeeded` throws, the
 recording error is emitted with context `deployment-api-record-success`; the
 controller never relabels that known external success as `failed`. It instead

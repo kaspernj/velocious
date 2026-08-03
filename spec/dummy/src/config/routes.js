@@ -1,7 +1,7 @@
 import Routes from "../../../../src/routes/index.js"
 import VelociousBackgroundJobsApi from "../../../../src/background-jobs/web/index.js"
 import VelociousDeploymentApi from "../../../../src/deployment-api/index.js"
-import {testDeploymentAdapter} from "../support/test-deployment-adapter.js"
+import {otherTestDeploymentAdapter, testDeploymentAdapter} from "../support/test-deployment-adapter.js"
 
 const routes = new Routes()
 
@@ -21,6 +21,20 @@ routes.draw((route) => {
         stages: {
           production: {releaseBranch: "master"},
           staging: {releaseBranch: "master"}
+        }
+      }
+    },
+    staleRunTimeoutMs: 2000
+  })
+
+  route.mount(VelociousDeploymentApi, {
+    accessTokens: ["other-test-deployment-token"],
+    adapter: otherTestDeploymentAdapter,
+    at: "/velocious/other-deployments",
+    projects: {
+      "dummy-project": {
+        stages: {
+          production: {releaseBranch: "master"}
         }
       }
     },
