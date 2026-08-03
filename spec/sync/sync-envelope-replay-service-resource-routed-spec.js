@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import Ability from "../../src/authorization/ability.js"
+import Comment from "../dummy/src/models/comment.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
@@ -431,6 +432,54 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect(result.syncs[0].syncState).toEqual("conflict")
     expect(result.syncs[0].conflict.suggestedResolution).toEqual("manual")
     expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Omitted strategy updated")
+  })
+
+  it("projects conflict fields through readable resource attributes and their serializers", async () => {
+    class ConflictCommentResource extends FrontendModelBaseResource {
+      static ModelClass = Comment
+      static attributes = ["body"]
+
+      /** @type {string[]} */
+      static writableAttributes = ["body", "taskId"]
+
+      /** @param {Comment} comment - Comment record. @returns {string} - Serialized body. */
+      bodyAttribute(comment) {
+        return `serialized:${comment.body()}`
+      }
+    }
+
+    const project = await Project.create({name: "Conflict projection project"})
+    const firstTask = await Task.create({name: "First projection task", projectId: project.id()})
+    const secondTask = await Task.create({name: "Second projection task", projectId: project.id()})
+    const comment = await Comment.create({body: "Original body", taskId: firstTask.id()})
+    const baseVersion = comment.updatedAt().toISOString()
+
+    comment.assign({body: "Authoritative body", taskId: secondTask.id(), updatedAt: "2026-07-04T10:00:00.000Z"})
+    await comment.save()
+
+    const service = buildService({
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      resourceTypeOverrides: {Comment: ConflictCommentResource},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        data: {body: "Stale body", taskId: firstTask.id()},
+        id: "24c5d6e7-1111-4222-8333-444455556666",
+        resourceId: String(comment.id()),
+        resourceType: "Comment"
+      })]
+    })
+    const conflict = result.syncs[0].conflict
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+    expect(conflict.affectedFields).toEqual(["body", "taskId"])
+    expect(conflict.serverModel.body).toEqual("serialized:Authoritative body")
+    expect(conflict.serverModel.taskId).toEqual(undefined)
+    expect(conflict.serverModel.id).toEqual(comment.id())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
+    expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "updatedAt"])
   })
 
   it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {

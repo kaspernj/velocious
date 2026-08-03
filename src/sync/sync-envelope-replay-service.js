@@ -725,17 +725,21 @@ export default class SyncEnvelopeReplayService {
     if (mutation.baseVersion === undefined || mutation.baseVersion === null) return null
 
     const versionAttribute = this.conflictStrategy.versionAttribute
-    const serverVersion = normalizeVersionValue(existingRecord.readAttribute(versionAttribute))
+    const serverVersion = normalizeConflictValue(existingRecord.readAttribute(versionAttribute))
 
     if (stableJsonStringify(serverVersion) === stableJsonStringify(mutation.baseVersion)) return null
 
     const ModelClass = resource.modelClass()
     const primaryKey = ModelClass.primaryKey()
+    const serializedAffectedAttributes = await this.serializedRoutedConflictAttributes({attributes, existingRecord, resource})
+    const serverAttributes = {
+      ...serializedAffectedAttributes,
+      [primaryKey]: existingRecord.readAttribute(primaryKey),
+      [versionAttribute]: serverVersion
+    }
+
     const serverRecord = {
-      attributes: {
-        [primaryKey]: existingRecord.readAttribute(primaryKey),
-        [versionAttribute]: serverVersion
-      },
+      attributes: serverAttributes,
       version: serverVersion
     }
     const conflictMutation = /** @type {import("./device-identity.js").SyncMutation} */ (/** @type {unknown} */ ({
@@ -757,6 +761,62 @@ export default class SyncEnvelopeReplayService {
     if (result.status !== "conflict") return null
 
     return {conflict: result.conflict, created: false, deleted: false, record: existingRecord, status: "conflict"}
+  }
+
+  /**
+   * Projects affected mutation fields through the resource's readable
+   * attribute contract. Writable-but-hidden fields are omitted, while custom
+   * `<attribute>Attribute(model)` serializers and model accessors remain the
+   * source of frontend-visible values. The full model attribute hash is never
+   * exposed.
+   * @param {object} args - Projection args.
+   * @param {Record<string, ?>} args.attributes - Permitted affected mutation attributes.
+   * @param {import("../database/record/index.js").default} args.existingRecord - Authorized server record.
+   * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
+   * @returns {Promise<Record<string, ?>>} Serialized readable affected attributes.
+   */
+  async serializedRoutedConflictAttributes({attributes, existingRecord, resource}) {
+    const ModelClass = resource.modelClass()
+    const ResourceClass = /** @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (resource.constructor)
+    const readableAttributes = new Set()
+    const configuredAttributes = ResourceClass.resourceConfig().attributes
+
+    for (const configuredAttribute of Array.isArray(configuredAttributes) ? configuredAttributes : Object.keys(configuredAttributes)) {
+      const configuredName = typeof configuredAttribute === "string" ? configuredAttribute : configuredAttribute.name
+
+      if (!configuredName) continue
+
+      const canonicalName = ModelClass.resolveAttributeName(configuredName)
+
+      readableAttributes.add(canonicalName || configuredName)
+    }
+
+    /** @type {Record<string, ?>} */
+    const serializedAttributes = {}
+
+    for (const affectedField of Object.keys(attributes)) {
+      const attributeName = ModelClass.resolveAttributeName(affectedField)
+
+      if (!attributeName || !readableAttributes.has(attributeName)) continue
+
+      const resourceAttribute = resource.resourceMethod(`${attributeName}Attribute`)
+
+      if (resourceAttribute) {
+        serializedAttributes[affectedField] = normalizeConflictValue(await resourceAttribute.method.call(resourceAttribute.resource, existingRecord))
+        continue
+      }
+
+      const recordMethods = /** @type {Record<string, ?>} */ (/** @type {unknown} */ (existingRecord))
+      const attributeMethod = recordMethods[attributeName]
+
+      if (typeof attributeMethod === "function") {
+        serializedAttributes[affectedField] = normalizeConflictValue(await attributeMethod.call(existingRecord))
+      } else {
+        serializedAttributes[affectedField] = normalizeConflictValue(existingRecord.readAttribute(attributeName))
+      }
+    }
+
+    return serializedAttributes
   }
 
   /**
@@ -1000,11 +1060,11 @@ export function syncReplayConflictLockName({resourceId, resourceType}) {
 }
 
 /**
- * Normalizes a server version value for deterministic comparison with a mutation baseVersion.
- * @param {?} value - Raw version value from a database record.
+ * Normalizes an authoritative conflict value for JSON transport and deterministic comparison.
+ * @param {?} value - Raw value from a database record.
  * @returns {?} - Normalized value (Date values become ISO strings).
  */
-function normalizeVersionValue(value) {
+function normalizeConflictValue(value) {
   if (value instanceof Date) return value.toISOString()
 
   return value

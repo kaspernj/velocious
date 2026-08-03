@@ -6,6 +6,51 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
 describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: true}}, () => {
+  it("does not hold a database lease around the whole suite", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+
+    class LeaseTrackingConfiguration extends Configuration {
+      activeLeaseScopes = 0
+
+      /** @template T @param {?} optionsOrCallback - Connection options or callback. @param {?} [callback] - Connection callback. @returns {Promise<T>} Callback result. */
+      async ensureConnections(optionsOrCallback, callback) {
+        const actualCallback = typeof optionsOrCallback === "function" ? optionsOrCallback : callback
+
+        if (!actualCallback) throw new Error("Expected an ensureConnections callback")
+
+        this.activeLeaseScopes++
+
+        try {
+          return await actualCallback({})
+        } finally {
+          this.activeLeaseScopes--
+        }
+      }
+    }
+
+    const configuration = new LeaseTrackingConfiguration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    class LeaseInspectingTestRunner extends TestRunner {
+      /** @returns {Promise<void>} Resolves after checking suite-level connection ownership. */
+      async runTests() {
+        expect(configuration.activeLeaseScopes).toBe(0)
+      }
+    }
+
+    const testRunner = new LeaseInspectingTestRunner({configuration, testFiles: []})
+
+    await testRunner.run()
+  })
+
   it("runs beforeAll/afterAll once per scope", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({
