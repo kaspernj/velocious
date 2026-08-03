@@ -1,11 +1,25 @@
 // @ts-check
 
-import {randomUUID} from "crypto"
+import {createHash, randomUUID} from "crypto"
 import Logger from "../logger.js"
 import TableData from "../database/table-data/index.js"
 import VelociousError from "../velocious-error.js"
 import BackgroundJobRecord from "./job-record.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
+
+/**
+ * PreparedBackgroundJob type.
+ * @typedef {object} PreparedBackgroundJob
+ * @property {string} argsJson - Serialized arguments.
+ * @property {{concurrencyKey: string, maxConcurrency: number, queueDerived: boolean} | null} concurrency - Resolved concurrency.
+ * @property {number} createdAtMs - Creation timestamp.
+ * @property {import("./types.js").BackgroundJobExecutionMode} executionMode - Execution mode.
+ * @property {string} jobId - New job id.
+ * @property {string} jobName - Job name.
+ * @property {number} maxRetries - Retry cap.
+ * @property {string} queue - Queue name.
+ * @property {number} scheduledAtMs - Eligibility timestamp.
+ */
 
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
@@ -22,6 +36,7 @@ const DROP_FORKED_COLUMN_MIGRATION_VERSION = "20260719000000"
 const LEGACY_POOLED_HANDOFF_ID_PREFIX = "velocious-pooled:"
 const LEGACY_POOLED_QUEUED_HANDOFF_ID = `${LEGACY_POOLED_HANDOFF_ID_PREFIX}queued`
 const JOBS_TABLE = "background_jobs"
+const SCHEDULE_KEYS_TABLE = "background_job_schedule_keys"
 const CONCURRENCY_TABLE = "background_job_concurrency"
 const COUNTS_REVISION_TABLE = "background_job_count_revisions"
 const COUNTS_REVISION_KEY = "counts"
@@ -153,16 +168,9 @@ export default class BackgroundJobsStore {
   async enqueue({jobName, args, options}) {
     await this.ensureReady()
 
-    const jobId = randomUUID()
-    const now = Date.now()
-    const executionMode = this._normalizeExecutionMode(options)
-    const maxRetries = this._normalizeMaxRetries(options?.maxRetries)
-    const scheduledAtMs = this._normalizeScheduledAtMs(options?.scheduledAtMs, now)
-    const argsJson = JSON.stringify(args || [])
-    const queue = this._normalizeQueue(options)
-    const concurrency = this._resolveConcurrency(options, queue)
+    const preparedJob = this._prepareJob({jobName, args, options})
     /** @type {string} */
-    let resultJobId = jobId
+    let resultJobId = preparedJob.jobId
 
     await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       if (options?.deduplicateWhileQueued) {
@@ -174,8 +182,8 @@ export default class BackgroundJobsStore {
           .newQuery()
           .from(JOBS_TABLE)
           .select("id")
-          .where({status: "queued", job_name: jobName, args_json: argsJson, queue})
-          .where(`scheduled_at_ms <= ${db.quote(scheduledAtMs)}`)
+          .where({status: "queued", job_name: jobName, args_json: preparedJob.argsJson, queue: preparedJob.queue})
+          .where(`scheduled_at_ms <= ${db.quote(preparedJob.scheduledAtMs)}`)
           .order("scheduled_at_ms ASC")
           .limit(1)
           .results()
@@ -187,35 +195,148 @@ export default class BackgroundJobsStore {
         }
       }
 
-      if (concurrency) {
-        if (concurrency.queueDerived) {
-          await this._ensureQueueConcurrencyKey(db, concurrency)
-        } else {
-          await this._ensureConcurrencyKey(db, concurrency)
-        }
-      }
-      await db.insert({
-        tableName: JOBS_TABLE,
-        data: {
-          id: jobId,
-          job_name: jobName,
-          args_json: argsJson,
-          execution_mode: executionMode,
-          queue,
-          max_retries: maxRetries,
-          attempts: 0,
-          status: "queued",
-          scheduled_at_ms: scheduledAtMs,
-          created_at_ms: now,
-          concurrency_key: concurrency?.concurrencyKey || null,
-          max_concurrency: concurrency?.maxConcurrency || null,
-          handoff_id: null
-        }
-      })
+      await this._insertPreparedJob(db, {preparedJob, scheduleKey: null})
       await this._recordCountDelta(db, {all: 1, queued: 1})
     }))
 
     return resultJobId
+  }
+
+  /**
+   * Replaces the queued owner of a stable schedule key with a new one-off job.
+   * A handed-off owner is left running and reported truthfully.
+   * @param {object} args - Options.
+   * @param {string} args.scheduleKey - Stable logical schedule key.
+   * @param {string} args.jobName - Job name.
+   * @param {Array<?>} args.args - Arguments.
+   * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
+   * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
+   */
+  async replaceScheduled({scheduleKey, jobName, args, options}) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = this._normalizeScheduleKey(scheduleKey)
+    const preparedJob = this._prepareJob({jobName, args, options})
+
+    return await this._withDb(async (db) => {
+      const lockName = this._scheduleKeyLockName(normalizedScheduleKey)
+      const acquired = await db.acquireAdvisoryLock(lockName)
+
+      if (!acquired) throw new Error("Failed to acquire background job schedule-key lock")
+
+      try {
+        return await this._serializedCountMutation(db, async () => {
+          const ownerRows = await db
+            .newQuery()
+            .from(SCHEDULE_KEYS_TABLE)
+            .where({schedule_key: normalizedScheduleKey})
+            .limit(1)
+            .results()
+          const ownerJobId = ownerRows[0] ? String(/** @type {Record<string, ?>} */ (ownerRows[0]).job_id) : null
+          const ownerJob = ownerJobId ? await this._getJobRowById(db, ownerJobId) : null
+          /** @type {import("./types.js").BackgroundJobReplacementPreviousStatus} */
+          let previousStatus = null
+          let previousJobId = null
+
+          if (ownerJob?.status === "queued") {
+            const affectedRows = await this._updateAffectedRows(db, {
+              tableName: JOBS_TABLE,
+              data: {status: "cancelled"},
+              conditions: {id: ownerJob.id, status: "queued"}
+            })
+
+            if (affectedRows === 1) {
+              previousJobId = ownerJob.id
+              previousStatus = "queued"
+            } else {
+              const currentOwnerJob = await this._getJobRowById(db, ownerJob.id)
+
+              if (currentOwnerJob?.status === "handed_off") {
+                previousJobId = currentOwnerJob.id
+                previousStatus = "handed_off"
+              }
+            }
+          } else if (ownerJob?.status === "handed_off") {
+            previousJobId = ownerJob.id
+            previousStatus = "handed_off"
+          }
+
+          await this._insertPreparedJob(db, {preparedJob, scheduleKey: normalizedScheduleKey})
+          await db.upsert({
+            tableName: SCHEDULE_KEYS_TABLE,
+            data: {schedule_key: normalizedScheduleKey, job_id: preparedJob.jobId},
+            conflictColumns: ["schedule_key"],
+            updateColumns: ["job_id"]
+          })
+
+          if (previousStatus !== "queued") await this._recordCountDelta(db, {all: 1, queued: 1})
+
+          return {jobId: preparedJob.jobId, previousJobId, previousStatus}
+        })
+      } finally {
+        await db.releaseAdvisoryLock(lockName)
+      }
+    })
+  }
+
+  /**
+   * Cancels the queued owner of a stable schedule key. A handed-off owner is
+   * detached but not marked stopped because execution may already be running.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
+   */
+  async cancelScheduled(scheduleKey) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = this._normalizeScheduleKey(scheduleKey)
+
+    return await this._withDb(async (db) => {
+      const lockName = this._scheduleKeyLockName(normalizedScheduleKey)
+      const acquired = await db.acquireAdvisoryLock(lockName)
+
+      if (!acquired) throw new Error("Failed to acquire background job schedule-key lock")
+
+      try {
+        return await this._serializedCountMutation(db, async () => {
+          const ownerRows = await db
+            .newQuery()
+            .from(SCHEDULE_KEYS_TABLE)
+            .where({schedule_key: normalizedScheduleKey})
+            .limit(1)
+            .results()
+
+          if (!ownerRows[0]) return {jobId: null, outcome: "not_found"}
+
+          const jobId = String(/** @type {Record<string, ?>} */ (ownerRows[0]).job_id)
+          const job = await this._getJobRowById(db, jobId)
+
+          if (job?.status === "queued") {
+            const affectedRows = await this._updateAffectedRows(db, {
+              tableName: JOBS_TABLE,
+              data: {status: "cancelled"},
+              conditions: {id: job.id, status: "queued"}
+            })
+
+            if (affectedRows === 1) {
+              await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
+              await this._recordStatusTransition(db, "queued", "cancelled")
+
+              return {jobId, outcome: "cancelled"}
+            }
+          }
+
+          const currentJob = await this._getJobRowById(db, jobId)
+
+          await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
+
+          if (currentJob?.status === "handed_off") return {jobId, outcome: "handed_off"}
+
+          return {jobId: null, outcome: "not_found"}
+        })
+      } finally {
+        await db.releaseAdvisoryLock(lockName)
+      }
+    })
   }
 
   /**
@@ -526,6 +647,7 @@ export default class BackgroundJobsStore {
       })
 
       if (affectedRows !== 1) return false
+      await this._releaseScheduleOwnershipForJob(db, job)
       await this._releaseConcurrency(db, job.concurrencyKey)
       await this._recordStatusTransition(db, "handed_off", "completed")
       return true
@@ -769,6 +891,7 @@ export default class BackgroundJobsStore {
 
     await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const snapshot = await this._countSnapshotOnLockedConnection(db)
+      if (await db.tableExists(SCHEDULE_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(SCHEDULE_KEYS_TABLE)}`)
       await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)}`)
       if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
       const deltas = Object.fromEntries(Object.entries(snapshot.counts).map(([key, value]) => [key, -value]))
@@ -791,6 +914,7 @@ export default class BackgroundJobsStore {
       if (job.status === "handed_off") await this._lockConcurrencyRow(db, job.concurrencyKey)
       const affectedRows = await this._updateAffectedRows(db, {tableName: JOBS_TABLE, data: {status: "cancelled"}, conditions: {id: job.id, status: job.status}})
       if (affectedRows !== 1) return false
+      await this._releaseScheduleOwnershipForJob(db, job)
       if (job.status === "handed_off") await this._releaseConcurrency(db, job.concurrencyKey)
       await this._recordStatusTransition(db, job.status, "cancelled")
       return true
@@ -810,6 +934,71 @@ export default class BackgroundJobsStore {
     }
 
     return (retryCount - 3) * 60 * 60 * 1000
+  }
+
+  /**
+   * Normalizes one new job before entering its persistence transaction.
+   * @param {object} args - Job input.
+   * @param {Array<?>} args.args - Job arguments.
+   * @param {string} args.jobName - Job name.
+   * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+   * @returns {PreparedBackgroundJob} - Prepared job.
+   */
+  _prepareJob({args, jobName, options}) {
+    const createdAtMs = Date.now()
+    const queue = this._normalizeQueue(options)
+
+    return {
+      argsJson: JSON.stringify(args || []),
+      concurrency: this._resolveConcurrency(options, queue),
+      createdAtMs,
+      executionMode: this._normalizeExecutionMode(options),
+      jobId: randomUUID(),
+      jobName,
+      maxRetries: this._normalizeMaxRetries(options?.maxRetries),
+      queue,
+      scheduledAtMs: this._normalizeScheduledAtMs(options?.scheduledAtMs, createdAtMs)
+    }
+  }
+
+  /**
+   * Inserts one prepared queued job, including its concurrency registration.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Insert input.
+   * @param {PreparedBackgroundJob} args.preparedJob - Prepared job.
+   * @param {string | null} args.scheduleKey - Historical stable key.
+   * @returns {Promise<void>} - Resolves after insertion.
+   */
+  async _insertPreparedJob(db, {preparedJob, scheduleKey}) {
+    const {concurrency} = preparedJob
+
+    if (concurrency) {
+      if (concurrency.queueDerived) {
+        await this._ensureQueueConcurrencyKey(db, concurrency)
+      } else {
+        await this._ensureConcurrencyKey(db, concurrency)
+      }
+    }
+
+    await db.insert({
+      tableName: JOBS_TABLE,
+      data: {
+        id: preparedJob.jobId,
+        job_name: preparedJob.jobName,
+        args_json: preparedJob.argsJson,
+        execution_mode: preparedJob.executionMode,
+        queue: preparedJob.queue,
+        max_retries: preparedJob.maxRetries,
+        attempts: 0,
+        status: "queued",
+        scheduled_at_ms: preparedJob.scheduledAtMs,
+        created_at_ms: preparedJob.createdAtMs,
+        schedule_key: scheduleKey,
+        concurrency_key: concurrency?.concurrencyKey || null,
+        max_concurrency: concurrency?.maxConcurrency || null,
+        handoff_id: null
+      }
+    })
   }
 
   /**
@@ -836,6 +1025,28 @@ export default class BackgroundJobsStore {
     if (Number.isSafeInteger(scheduledAtMs) && scheduledAtMs >= 0) return scheduledAtMs
 
     throw VelociousError.safe("background job scheduledAtMs must be a non-negative safe integer")
+  }
+
+  /**
+   * Validates a stable schedule key at the public storage boundary.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {string} - Validated key.
+   */
+  _normalizeScheduleKey(scheduleKey) {
+    if (typeof scheduleKey === "string" && scheduleKey.length > 0 && scheduleKey.length <= 255) return scheduleKey
+
+    throw VelociousError.safe("background job scheduleKey must be a non-empty string of at most 255 characters")
+  }
+
+  /**
+   * Builds a bounded advisory-lock name for one stable schedule key.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {string} - Advisory-lock name.
+   */
+  _scheduleKeyLockName(scheduleKey) {
+    const hash = createHash("sha256").update(scheduleKey).digest("hex").slice(0, 32)
+
+    return `background-jobs:schedule:${hash}`
   }
 
   /**
@@ -900,6 +1111,7 @@ export default class BackgroundJobsStore {
     // row alone, otherwise later callers fail with "no such table".
     if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
       await this._ensureJobsTableColumns(db)
+      await this._ensureScheduleKeysTable(db)
       await this._ensureConcurrencyTable(db)
       await this._ensureCountRevisionTable(db)
       await this._reconcileQueueConcurrency(db)
@@ -910,6 +1122,7 @@ export default class BackgroundJobsStore {
 
     await this._applyMigrations(db)
     await this._ensureJobsTableColumns(db)
+    await this._ensureScheduleKeysTable(db)
     await this._ensureConcurrencyTable(db)
     await this._ensureCountRevisionTable(db)
     await this._reconcileQueueConcurrency(db)
@@ -981,6 +1194,7 @@ export default class BackgroundJobsStore {
     table.string("status", {null: false, index: true})
     table.bigint("scheduled_at_ms", {null: false, index: true})
     table.bigint("created_at_ms", {null: false, index: true})
+    table.string("schedule_key", {null: true, index: true})
     table.bigint("handed_off_at_ms", {null: true, index: true})
     table.string("handoff_id", {null: true})
     table.bigint("completed_at_ms", {null: true})
@@ -1081,6 +1295,36 @@ export default class BackgroundJobsStore {
     }
 
     await this._ensureQueueColumn(db)
+    await this._ensureScheduleKeyColumn(db)
+  }
+
+  /**
+   * Idempotently adds the historical stable schedule key to existing jobs.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureScheduleKeyColumn(db) {
+    const lockName = `${MIGRATION_SCOPE}:schedule_key_column`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs schedule-key schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const lockedTable = await db.getTableByNameOrFail(JOBS_TABLE)
+
+      if (!(await lockedTable.getColumnByName("schedule_key"))) {
+        const tableData = new TableData(JOBS_TABLE)
+
+        tableData.string("schedule_key", {null: true, index: true})
+
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+
+        db.clearSchemaCache()
+      }
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
   }
 
   /**
@@ -1267,6 +1511,33 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Releases ownership only when the key still points at the expected job.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Ownership identity.
+   * @param {string} args.jobId - Expected owner job id.
+   * @param {string} args.scheduleKey - Stable schedule key.
+   * @returns {Promise<void>} - Resolves when deleted or already superseded.
+   */
+  async _releaseScheduleOwnership(db, {jobId, scheduleKey}) {
+    await db.delete({
+      tableName: SCHEDULE_KEYS_TABLE,
+      conditions: {job_id: jobId, schedule_key: scheduleKey}
+    })
+  }
+
+  /**
+   * Releases a job's ownership when it has a historical schedule key.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {import("./types.js").BackgroundJobRow} job - Terminal job.
+   * @returns {Promise<void>} - Resolves when deleted or not applicable.
+   */
+  async _releaseScheduleOwnershipForJob(db, job) {
+    if (!job.scheduleKey) return
+
+    await this._releaseScheduleOwnership(db, {jobId: job.id, scheduleKey: job.scheduleKey})
+  }
+
+  /**
    * Runs apply failure.
    * @param {object} args - Options.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
@@ -1300,6 +1571,7 @@ export default class BackgroundJobsStore {
     })
 
     if (affectedRows !== 1) return null
+    if (!shouldRetry) await this._releaseScheduleOwnershipForJob(db, job)
     await this._releaseConcurrency(db, job.concurrencyKey)
 
     // Return a snapshot of the transition this update just applied rather than re-reading the row.
@@ -1412,6 +1684,7 @@ export default class BackgroundJobsStore {
       args: this._parseArgs(row.args_json),
       executionMode,
       queue: row.queue ? String(row.queue) : DEFAULT_QUEUE,
+      scheduleKey: row.schedule_key ? String(row.schedule_key) : null,
       status: row.status ? String(row.status) : "queued",
       attempts: this._normalizeNumber(row.attempts),
       maxRetries: this._normalizeNumber(row.max_retries),
@@ -1542,6 +1815,34 @@ export default class BackgroundJobsStore {
     table.integer("max_concurrency", {null: false})
     table.integer("active_count", {null: false})
     await db.createTable(table)
+  }
+
+  /**
+   * Ensures the stable schedule-key ownership table exists.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ready.
+   */
+  async _ensureScheduleKeysTable(db) {
+    if (await db.tableExists(SCHEDULE_KEYS_TABLE)) return
+
+    const lockName = `${MIGRATION_SCOPE}:schedule_keys_table`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs schedule-key table schema lock")
+
+    try {
+      db.clearSchemaCache()
+      if (await db.tableExists(SCHEDULE_KEYS_TABLE)) return
+
+      const table = new TableData(SCHEDULE_KEYS_TABLE, {ifNotExists: true})
+
+      table.string("schedule_key", {primaryKey: true})
+      table.string("job_id", {null: false, index: true})
+      await db.createTable(table)
+      db.clearSchemaCache()
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
   }
 
   /**
@@ -1691,7 +1992,6 @@ export default class BackgroundJobsStore {
    * @returns {Promise<{counts: Record<string, number>, revision: number, total: number}>} Snapshot.
    */
   async _countSnapshotOnLockedConnection(db) {
-    await this._lockCountRevision(db)
     const rows = await db.newQuery().from(JOBS_TABLE).select("status").select("COUNT(*) AS count").group("status").results()
     const counts = this._emptyCountBuckets()
     let total = 0
@@ -2024,7 +2324,11 @@ export default class BackgroundJobsStore {
     await previous
 
     try {
-      return await this._transactionResult(db, callback)
+      return await this._transactionResult(db, async () => {
+        await this._lockCountRevision(db)
+
+        return await callback()
+      })
     } finally {
       resolveRun()
       if (countMutationChains.get(identifier) === chain) countMutationChains.delete(identifier)
