@@ -14,6 +14,7 @@ import FrontendModelController from "../../src/frontend-model-controller.js"
 import Interaction from "../dummy/src/models/interaction.js"
 import Project from "../dummy/src/models/project.js"
 import Record from "../../src/database/record/index.js"
+import RecordNotFoundError from "../../src/database/record/record-not-found-error.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
@@ -176,7 +177,9 @@ async function runFrontendApiWithResponse({configuration, params, requestPayload
  */
 function expectDebugFrontendModelError(payload, messagePattern) {
   expect(payload.status).toEqual("error")
+  expect(payload.errorType).toEqual("internal_error")
   expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+  expect(payload.correlationId).toMatch(/^[0-9a-f-]{36}$/)
   expect(payload.debugErrorClass).toEqual("Error")
   expect(payload.debugErrorMessage).toMatch(messagePattern)
   expect(Array.isArray(payload.debugBacktrace)).toEqual(true)
@@ -189,7 +192,9 @@ function expectDebugFrontendModelError(payload, messagePattern) {
  */
 function expectGenericFrontendModelError(payload) {
   expect(payload.status).toEqual("error")
+  expect(payload.errorType).toEqual("internal_error")
   expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+  expect(payload.correlationId).toMatch(/^[0-9a-f-]{36}$/)
   expect(payload.debugErrorClass).toEqual(undefined)
   expect(payload.debugErrorMessage).toEqual(undefined)
   expect(payload.debugBacktrace).toEqual(undefined)
@@ -644,7 +649,11 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       reporterRequestDetails.push(requestDetails)
       expect(error.message).toMatch(/No frontend model resource configuration/)
 
-      return {bugReportUrl: "https://tensorbuzz.test/bugs/1"}
+      return {
+        bugReportUrl: "https://tensorbuzz.test/bugs/1",
+        correlationId: "reporter-correlation-id",
+        errorType: "reporter_error"
+      }
     })
 
     const payload = await runFrontendApi({
@@ -657,6 +666,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
     expectGenericFrontendModelError(response)
     expect(response.bugReportUrl).toEqual("https://tensorbuzz.test/bugs/1")
+    expect(response.correlationId).not.toEqual("reporter-correlation-id")
+    expect(response.errorType).toEqual("internal_error")
     expect(reporterContexts.length).toEqual(1)
     expect(reporterContexts[0].action).toEqual("frontendApi")
     expect(reporterContexts[0].commandType).toEqual("index")
@@ -754,7 +765,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(frameworkErrors[0].error.message).toMatch(/Could not parse nested params key/)
   })
 
-  it("adds safe VelociousError codes to frontend-model client payload metadata", async () => {
+  it("returns safe VelociousError types, details, and compatibility metadata", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production")
     const controller = new FrontendModelController({
       action: "frontendApi",
@@ -765,11 +776,40 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       response: new Response({configuration}),
       viewPath: `${dummyDirectory()}/src/routes/frontend-models`
     })
-    const payload = await controller.frontendModelClientErrorPayloadForError(VelociousError.safe("Ticket scan failed", {code: "ticket-scan-pah-too-long"}))
+    const payload = await controller.frontendModelClientErrorPayloadForError(VelociousError.safe("Ticket scan failed", {
+      code: "ticket-scan-path-too-long",
+      details: {maximumLength: 100},
+      errorType: "application_error"
+    }))
+    const authorizationPayload = await controller.frontendModelClientErrorPayloadForError(VelociousError.safe("Not signed in.", {
+      errorType: "authorization_error"
+    }))
 
     expect(payload.status).toEqual("error")
+    expect(payload.errorType).toEqual("application_error")
     expect(payload.errorMessage).toEqual("Ticket scan failed")
-    expect(payload.velocious).toEqual({code: "ticket-scan-pah-too-long"})
+    expect(payload.details).toEqual({maximumLength: 100})
+    expect(payload.velocious).toEqual({code: "ticket-scan-path-too-long"})
+    expect(authorizationPayload.errorType).toEqual("authorization_error")
+    expect(authorizationPayload.errorMessage).toEqual("Not signed in.")
+  })
+
+  it("returns record-not-found errors with a stable safe type", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production")
+    const controller = new FrontendModelController({
+      action: "frontendApi",
+      configuration,
+      controller: "frontend-models",
+      params: {},
+      request: new Request({client: {remoteAddress: "127.0.0.1"}, configuration}),
+      response: new Response({configuration}),
+      viewPath: `${dummyDirectory()}/src/routes/frontend-models`
+    })
+    const payload = await controller.frontendModelClientErrorPayloadForError(new RecordNotFoundError("Couldn't find Task with 'id'=private-id"))
+
+    expect(payload.status).toEqual("error")
+    expect(payload.errorType).toEqual("record_not_found")
+    expect(payload.errorMessage).toEqual("Record not found.")
   })
 
   it("keeps unexpected shared frontend-model failures generic in production when debug details are enabled", async () => {
@@ -1407,6 +1447,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const payload = await postSharedTaskFrontendModelCommand("find", {id: 404})
 
       expect(payload.status).toEqual("error")
+      expect(payload.errorType).toEqual("record_not_found")
       expect(payload.errorMessage).toEqual("Task not found.")
     })
   })
@@ -1431,6 +1472,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         const payload = await postSharedTaskFrontendModelCommand("find", {id: task.id()})
 
         expect(payload.status).toEqual("error")
+        expect(payload.errorType).toEqual("record_not_found")
         expect(payload.errorMessage).toEqual("Task not found.")
       })
     })
@@ -1447,6 +1489,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         })
 
         expect(payload.status).toEqual("error")
+        expect(payload.errorType).toEqual("record_not_found")
         expect(payload.errorMessage).toEqual("Task not found.")
       })
     })
@@ -1462,6 +1505,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
         })
 
         expect(payload.status).toEqual("error")
+        expect(payload.errorType).toEqual("record_not_found")
         expect(payload.errorMessage).toEqual("Task not found.")
       })
     })
@@ -1781,6 +1825,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const payload = await postSharedTaskFrontendModelCommand("find", {})
 
       expect(payload.status).toEqual("error")
+      expect(payload.errorType).toEqual("validation_error")
       expect(payload.errorMessage).toEqual("Expected model id.")
     })
   })
@@ -2014,7 +2059,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(response.status).toEqual("error")
       expect(response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
-      expect(response.errorType).toBeUndefined()
+      expect(response.errorType).toEqual("internal_error")
+      expect(response.correlationId).toMatch(/^[0-9a-f-]{36}$/)
       expect(response.validationErrors).toBeUndefined()
       expect(response.debugErrorClass).toBeUndefined()
     })
@@ -2041,6 +2087,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(response.status).toEqual("error")
       expect(frameworkErrors.length).toBeGreaterThan(0)
+      expect(response.errorType).toEqual("internal_error")
+      expect(response.correlationId).toEqual(frameworkErrors[0].correlationId)
+      expect(response.correlationId).toEqual(frameworkErrors[0].context.correlationId)
       expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
       expect(frameworkErrors[0].error).toBeInstanceOf(Error)
       expect(frameworkErrors[0].requestDetails).toEqual({

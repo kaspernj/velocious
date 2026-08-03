@@ -7,6 +7,7 @@ import SyncUuidItemResource from "../resources/sync-uuid-item-resource.js"
 import Task from "../models/task.js"
 import TaskBoardSyncResource from "../resources/task-board-sync-resource.js"
 import User from "../models/user.js"
+import VelociousError from "../../../../src/velocious-error.js"
 
 /** @import {SharedEchoResponse} from "../../shared/frontend-command-types.js" */
 /** @import {default as ImportedUser} from "../models/user.js" */
@@ -142,6 +143,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "lookupByEmail",
         "delayedLookupByEmail",
         "echoMessage",
+        "rejectDomainOperation",
         "echoObjectStyle",
         "echoOptional",
         "multiLineReturn",
@@ -169,6 +171,15 @@ class UserFrontendResource extends FrontendModelBaseResource {
    */
   async echoMessage(args) {
     return {echoed: args.message, length: args.times}
+  }
+
+  /** @returns {never} - Always rejects with a safe domain error. */
+  rejectDomainOperation() {
+    throw VelociousError.safe("Domain operation was rejected.", {
+      code: "domain-operation-rejected",
+      details: {reason: "conflict"},
+      errorType: "application_error"
+    })
   }
 
   /**

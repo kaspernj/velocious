@@ -312,6 +312,7 @@
  * @property {string} controller - Controller class name.
  * @property {string} [action] - Controller action or endpoint label.
  * @property {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url" | "custom-command"} [commandType] - Frontend-model command type.
+ * @property {string} [correlationId] - Server-generated identifier shared by an unexpected client error and framework reports.
  * @property {boolean} [expectedError] - Whether the error is an expected user-flow failure.
  * @property {boolean} [frontendModelEndpoint] - Whether the error came from the frontend-model endpoint.
  * @property {string} [model] - Frontend-model name from the failed request.

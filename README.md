@@ -741,7 +741,7 @@ Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle
 
 Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
-Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
+Unexpected frontend-model endpoint failures stay client-safe in production with `errorType: "internal_error"`, `errorMessage: "Request failed."`, and a server-generated `correlationId` shared with the matching framework-error report. Expected application failures can use `VelociousError.safe(message, {errorType, details, code})`; generated frontend-model callers preserve the server's safe error fields. See [docs/frontend-models.md](docs/frontend-models.md#error-payloads).
 Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `preload`, `group`, `sort`, `pluck`, or Ransack attributes, return the specific frontend-model query error message with `velocious.code: "frontend-model-query-error"` and are not emitted as framework errors.
 Invalid frontend-model write attributes and attachment names, including attributes rejected by `permittedParams()`, return the specific safe error message with `velocious.code: "frontend-model-attribute-error"` and are not emitted as framework errors.
 In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
@@ -1812,7 +1812,7 @@ configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
 })
 ```
 
-Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` / `errorType`-marked errors keep their expected-error status — none of these reach the error bus.
+Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `internal_error` response with `Request failed.` and a correlation ID, then emits them as `framework-error`/`all-error` with the same correlation ID and `context.frontendModelEndpoint === true`. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` errors keep their expected-error status. A raw `errorType` property alone is not considered safe and does not suppress reporting.
 
 Unexpected inbound decoded WebSocket dispatch failures emit one `framework-error` and one matching `all-error`. Established expected client-flow errors remain excluded from both events.
 
