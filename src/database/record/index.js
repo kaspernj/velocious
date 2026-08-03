@@ -2677,12 +2677,14 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs the callback while holding a named advisory lock. Calls without
-   * a positive `holdTimeoutMs` use the caller connection; calls with a positive
-   * `holdTimeoutMs` use a dedicated lock connection so timeout cleanup can
-   * release the lock even when callback database work is stuck. Advisory locks
-   * are cooperative and session-scoped: they serialize callers that opt into
-   * the same `name`, without touching row or table locks, so unrelated traffic
-   * is free to proceed.
+   * By default calls use the caller connection. Calls with `dedicatedConnection`
+   * use a spawned lock connection that is released after the callback finishes,
+   * while the callback itself still runs against the caller/model connection.
+   * Calls with a positive `holdTimeoutMs` use a dedicated lock connection so
+   * timeout cleanup can release the lock even when callback database work is
+   * stuck. Advisory locks are cooperative and session-scoped: they serialize
+   * callers that opt into the same `name`, without touching row or table locks,
+   * so unrelated traffic is free to proceed.
    *
    * The lock is acquired before the callback runs and released in a
    * `finally` block afterwards, so the callback's return value is
@@ -2690,7 +2692,7 @@ class VelociousDatabaseRecord {
    * @template T
    * @param {string} name - Lock name.
    * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
-   * @param {{timeoutMs?: number | null, holdTimeoutMs?: number | null}} [args] - `timeoutMs` caps how long we wait to acquire the lock; `holdTimeoutMs` caps how long the callback may hold it before the lock is released and `AdvisoryLockHoldTimeoutError` is thrown.
+   * @param {{timeoutMs?: number | null, holdTimeoutMs?: number | null, dedicatedConnection?: boolean}} [args] - `timeoutMs` caps how long we wait to acquire the lock; `holdTimeoutMs` caps how long the callback may hold it before the lock is released and `AdvisoryLockHoldTimeoutError` is thrown; `dedicatedConnection` spawns a separate lock session without enabling a hold timeout.
    * @returns {Promise<T>} - Resolves with the callback's return value.
    * @throws {AdvisoryLockTimeoutError} - If `timeoutMs` elapses before the lock is granted.
    * @throws {AdvisoryLockHoldTimeoutError} - If `holdTimeoutMs` elapses while the callback holds the lock.
@@ -2716,7 +2718,7 @@ class VelociousDatabaseRecord {
    * @template T
    * @param {string} name - Lock name.
    * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
-   * @param {{holdTimeoutMs?: number | null}} [args] - `holdTimeoutMs` caps how long the callback may hold the lock before it is released and `AdvisoryLockHoldTimeoutError` is thrown.
+   * @param {{holdTimeoutMs?: number | null, dedicatedConnection?: boolean}} [args] - `holdTimeoutMs` caps how long the callback may hold the lock before it is released and `AdvisoryLockHoldTimeoutError` is thrown; `dedicatedConnection` spawns a separate lock session without enabling a hold timeout.
    * @returns {Promise<T>} - Resolves with the callback's return value.
    * @throws {AdvisoryLockBusyError} - If the lock is already held.
    * @throws {AdvisoryLockHoldTimeoutError} - If `holdTimeoutMs` elapses while the callback holds the lock.

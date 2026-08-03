@@ -6,7 +6,7 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
 import SyncEntry from "../dummy/src/models/sync-entry.js"
-import SyncEnvelopeReplayService from "../../src/sync/sync-envelope-replay-service.js"
+import SyncEnvelopeReplayService, {syncReplayConflictLockName} from "../../src/sync/sync-envelope-replay-service.js"
 import SyncUuidItemResource from "../dummy/src/resources/sync-uuid-item-resource.js"
 import Task from "../dummy/src/models/task.js"
 import UuidItem from "../dummy/src/models/uuid-item.js"
@@ -391,5 +391,142 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
     expect(result).toEqual({syncs: [{id: "ef55f1e2-1111-4222-8333-444455556666", syncState: "successful"}]})
     expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Custom before")
+  })
+
+  it("rejects unsupported conflict strategies at construction time", () => {
+    expect(() => buildService({
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "fieldThreeWay", versionAttribute: "updatedAt"}
+    })).toThrow(/Unsupported sync conflict strategy for backend replay/u)
+  })
+
+  it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {
+    const resourceId = "a0b1c2d3-e4f5-6a7b-8c9d-0e1f2a3b4c5d"
+    const resourceType = "Task"
+    const first = syncReplayConflictLockName({resourceId, resourceType})
+    const second = syncReplayConflictLockName({resourceId, resourceType})
+    const otherId = syncReplayConflictLockName({resourceId: "b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e", resourceType})
+    const otherType = syncReplayConflictLockName({resourceId, resourceType: "Project"})
+
+    expect(first).toEqual(second)
+    expect(first).not.toEqual(otherId)
+    expect(first).not.toEqual(otherType)
+    expect(first.length).toBeLessThanOrEqual(64)
+    expect(first).toMatch(/^vsr:[0-9a-f]{32}$/u)
+  })
+
+  it("skips a stale apply handler with baseVersion instead of forcing it to run", async () => {
+    const uuidItem = await UuidItem.create({id: "f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c", title: "Handler stale"})
+    /** @type {Array<string>} */
+    const handlerCalls = []
+
+    await SyncEntry.create({
+      authenticationTokenId: ACTOR_ID,
+      clientUpdatedAt: "2026-07-03T11:00:00.000Z",
+      data: JSON.stringify({title: "Later"}),
+      resourceId: String(uuidItem.id()),
+      resourceType: "UuidItem",
+      syncType: "update"
+    })
+
+    const service = buildService({
+      applyHandlers: {
+        UuidItem: async () => {
+          handlerCalls.push("ran")
+
+          return {created: false, deleted: false, record: null}
+        }
+      },
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion: "server-1",
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {title: "Earlier"},
+        id: "f0a1b2c3-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id())
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("successful")
+    expect(handlerCalls).toEqual([])
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Handler stale")
+  })
+
+  it("skips a stale delete with baseVersion instead of forcing deletion", async () => {
+    const uuidItem = await UuidItem.create({id: "g2b3c4d5-e6f7-5a8b-9c0d-1e2f3a4b5c6d", title: "Delete stale"})
+
+    await SyncEntry.create({
+      authenticationTokenId: ACTOR_ID,
+      clientUpdatedAt: "2026-07-03T11:00:00.000Z",
+      data: JSON.stringify({}),
+      resourceId: String(uuidItem.id()),
+      resourceType: "UuidItem",
+      syncType: "delete"
+    })
+
+    const service = buildService({
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion: "server-1",
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {},
+        id: "g1b2c3d4-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id()),
+        syncType: "delete"
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("successful")
+    expect(await UuidItem.findBy({id: uuidItem.id()})).not.toEqual(null)
+  })
+
+  it("skips a stale command with baseVersion instead of forcing execution", async () => {
+    const uuidItem = await UuidItem.create({id: "h3c4d5e6-f7a8-6a9b-0c1d-2e3f4a5b6c7d", title: "Command stale"})
+    /** @type {Array<string>} */
+    const commandCalls = []
+
+    await SyncEntry.create({
+      authenticationTokenId: ACTOR_ID,
+      clientUpdatedAt: "2026-07-03T11:00:00.000Z",
+      data: JSON.stringify({}),
+      resourceId: String(uuidItem.id()),
+      resourceType: "UuidItem",
+      syncType: "ping"
+    })
+
+    const service = buildService({
+      applyHandlers: {
+        UuidItem: async ({mutation}) => {
+          if (mutation.syncType === "ping") commandCalls.push("ran")
+
+          return {created: false, deleted: false, record: null}
+        }
+      },
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion: "server-1",
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {},
+        id: "h2b3c4d5-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id()),
+        syncType: "ping"
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("successful")
+    expect(commandCalls).toEqual([])
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Command stale")
   })
 })
