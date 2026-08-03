@@ -1,0 +1,1 @@
+Keep `.withCount(...)` aggregates anchored to the loaded parent IDs and mandatory polymorphic model type when caller `where` filters name the same columns. Conflicting filters now intersect with those cohort restrictions and return zero instead of widening or retargeting the count query.
