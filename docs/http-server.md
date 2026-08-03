@@ -38,24 +38,28 @@ acknowledges the response.
 
 ## Response Compression
 
-Buffered HTTP responses can be compressed with Brotli (`br`) or gzip. Compression
-is opt-in and disabled by default:
+Buffered HTTP responses are compressed with Brotli (`br`) or gzip by default
+whenever request negotiation and response eligibility allow — applications do
+not need to opt in. An absent `httpServer.compression` setting resolves to the
+documented enabled defaults. Disable compression globally with `false` or the
+object form's `enabled` flag:
 
 ```js
 const configuration = new Configuration({
   httpServer: {
-    compression: true
+    compression: false // or: {enabled: false}
   }
 })
 ```
 
-`true` enables compression with the documented defaults. An object enables it
-with overrides; unknown keys and out-of-range values are rejected:
+The object form also tunes the behavior; unknown keys and out-of-range values
+are rejected:
 
 ```js
 const configuration = new Configuration({
   httpServer: {
     compression: {
+      enabled: true, // Default true
       threshold: 1024, // Minimum buffered body size in bytes (default 1024)
       brotliQuality: 4, // Brotli quality 0-11 (default 4)
       gzipLevel: 6 // Gzip level 0-9 (default 6)
@@ -111,6 +115,19 @@ is skipped for:
   `Content-Range` header
 - bodyless statuses (1xx, 204, 304)
 - responses without an allowlisted `Content-Type`
+- requests carrying an `Authorization` or `Cookie` header, and responses
+  carrying a `Set-Cookie` header (all matched case-insensitively)
+- responses carrying `ETag`, `Digest`, or `Content-Digest` validator headers
+
+The credential-driven exclusions are automatic security skips: compressing
+secret-bearing responses (or secret-adjacent responses on credentialed
+requests) would expose them to compression-oracle attacks such as BREACH, so
+they are never transformed. The validator exclusions keep representation
+validators strictly application-owned — the server neither rewrites nor
+recomputes `ETag`/`Digest`/`Content-Digest` for encoded variants, so it
+declines to create those variants at all. These are skip conditions, not
+silent header removal: the response goes out untouched (or as an empty `406`
+when the client forbids identity, per the negotiation rule above).
 
 A skipped transformation is still sent as identity when the client accepts
 identity. When the client forbids identity and the transformation is skipped
@@ -141,12 +158,13 @@ equivalent GET — including `Content-Length` and any negotiated
 Compression buffers the whole body (which buffered responses already are) and
 spends CPU per request; keep the default Brotli quality 4 / gzip level 6 unless
 measurements say otherwise, and raise `threshold` if small responses dominate.
-Representation validators (`ETag`, `Digest`) remain application-owned: the
-server does not rewrite them when it compresses, so applications that set
-validators must account for content codings themselves. Responses compressed
-with `br`/`gzip` are safe against compression-oracle concerns only when the
-application does not reflect secrets alongside attacker-controlled input —
-use `disableCompression()` for such endpoints.
+Representation validators (`ETag`, `Digest`, `Content-Digest`) remain
+application-owned: the server never rewrites or recomputes them, and responses
+carrying them are excluded from transformation automatically. Responses
+compressed with `br`/`gzip` are safe against compression-oracle concerns only
+when the application does not reflect secrets alongside attacker-controlled
+input — credentialed requests and `Set-Cookie` responses are excluded
+automatically, and `disableCompression()` covers the remaining cases.
 
 ## CLI Workers
 

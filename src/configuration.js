@@ -159,32 +159,38 @@ function integerInRange(value, name, min, max, defaultValue) {
 }
 
 /**
- * Normalizes the opt-in buffered HTTP response compression configuration.
+ * Normalizes the buffered HTTP response compression configuration. Compression is
+ * enabled by default when the setting is absent; `false` or `{enabled: false}`
+ * disables it globally.
  * @param {boolean | import("./configuration-types.js").HttpCompressionConfiguration | undefined} value - Configured compression value.
  * @returns {import("./configuration-types.js").NormalizedHttpCompressionConfiguration} - Normalized compression configuration.
  */
 function normalizeHttpCompression(value) {
-  if (value === undefined || value === false) {
-    return {enabled: false, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
+  if (value === undefined || value === true) {
+    return {enabled: true, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
   }
 
-  if (value === true) {
-    return {enabled: true, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
+  if (value === false) {
+    return {enabled: false, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
   }
 
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError(`httpServer.compression must be a boolean or an object, got: ${String(value)}`)
   }
 
-  const {brotliQuality, gzipLevel, threshold, ...restCompression} = value
+  const {brotliQuality, enabled, gzipLevel, threshold, ...restCompression} = value
   const restCompressionKeys = Object.keys(restCompression)
 
   if (restCompressionKeys.length > 0) {
-    throw new TypeError(`httpServer.compression received unknown keys: ${restCompressionKeys.join(", ")} (supported: brotliQuality, gzipLevel, threshold)`)
+    throw new TypeError(`httpServer.compression received unknown keys: ${restCompressionKeys.join(", ")} (supported: brotliQuality, enabled, gzipLevel, threshold)`)
+  }
+
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    throw new TypeError(`httpServer.compression.enabled must be a boolean, got: ${String(enabled)}`)
   }
 
   return {
-    enabled: true,
+    enabled: enabled ?? true,
     threshold: positiveSafeInteger(threshold, "httpServer.compression.threshold", DEFAULT_COMPRESSION_THRESHOLD),
     brotliQuality: integerInRange(brotliQuality, "httpServer.compression.brotliQuality", 0, 11, DEFAULT_COMPRESSION_BROTLI_QUALITY),
     gzipLevel: integerInRange(gzipLevel, "httpServer.compression.gzipLevel", 0, 9, DEFAULT_COMPRESSION_GZIP_LEVEL)

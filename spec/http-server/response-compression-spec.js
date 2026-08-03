@@ -31,8 +31,8 @@ async function deliverCompressed({acceptEncoding, body = "compressible-body-cont
 }
 
 describe("http server - response compression", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("does not compress when compression is disabled", async () => {
-    const configuration = buildConfiguration()
+  it("does not compress when compression is explicitly disabled", async () => {
+    const configuration = buildConfiguration({compression: false})
     const request = buildRequest({headers: {"Accept-Encoding": "gzip, br"}})
     const body = "compressible-body-content ".repeat(128)
     const response = buildResponse({body, configuration})

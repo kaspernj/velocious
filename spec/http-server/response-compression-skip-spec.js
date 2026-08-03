@@ -116,6 +116,46 @@ describe("http server - response compression skip conditions", {databaseCleaning
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
+  it("skips transformation when the request carries an Authorization header", async () => {
+    const {outputs} = await deliverSkipped({requestHeaders: {"Authorization": "Bearer secret-token"}})
+
+    expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
+  })
+
+  it("skips transformation when the request carries a Cookie header", async () => {
+    const {outputs} = await deliverSkipped({requestHeaders: {"cookie": "session=secret"}})
+
+    expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
+  })
+
+  it("skips transformation when the response sets cookies", async () => {
+    const {outputs} = await deliverSkipped({headers: {"Set-Cookie": "session=secret; HttpOnly"}})
+
+    expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
+  })
+
+  it("skips transformation when the response carries validator headers, matched case-insensitively", async () => {
+    for (const headers of [{"etag": "\"abc123\""}, {"ETag": "\"abc123\""}, {"Digest": "sha-256=xyz"}, {"Content-Digest": "sha-512=xyz"}]) {
+      const {outputs} = await deliverSkipped({headers})
+
+      expect(headerText(outputs)).not.toContain("Content-Encoding")
+      expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
+    }
+  })
+
+  it("returns an empty 406 when a credentialed request forbids identity", async () => {
+    const {outputs} = await deliverSkipped({requestHeaders: {"Accept-Encoding": "gzip, identity;q=0", "Authorization": "Bearer secret-token"}})
+    const headers = headerText(outputs)
+
+    expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headers).toContain("Content-Length: 0\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+  })
+
   it("skips responses that carry a Content-Range header", async () => {
     const {outputs} = await deliverSkipped({headers: {"Content-Range": "bytes 0-99/2048"}})
 

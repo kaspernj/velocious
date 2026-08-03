@@ -147,7 +147,9 @@ export function addAcceptEncodingToVary(response) {
  * bodyless statuses are excluded by the caller. Transformation is skipped for
  * Cache-Control no-transform, non-allowlisted or pre-compressed media types,
  * server-sent events, partial (206) responses, requests with a Range header,
- * responses with a Content-Range header, and per-response opt-outs; a skipped
+ * credentialed requests (Authorization/Cookie headers), responses carrying
+ * credentials or validators (Set-Cookie/ETag/Digest/Content-Digest/Content-Range
+ * headers), and per-response opt-outs; a skipped
  * transformation is still sent as identity when the client accepts identity, and
  * answered "not-acceptable" when it does not. Responses that already carry an
  * application-supplied Content-Encoding are passed through unchanged and never
@@ -175,10 +177,22 @@ export async function applyResponseCompression({bodyBuffer, compression, request
     .flatMap((value) => value.split(","))
     .map((token) => token.trim().toLowerCase())
   const contentType = response.getHeader("Content-Type")[0]
+
+  // Automatic security exclusions: credentialed requests (Authorization/Cookie) and
+  // responses carrying credentials (Set-Cookie) or representation validators
+  // (ETag/Digest/Content-Digest) are never transformed — compression could leak
+  // secret-bearing content through a compression oracle, and validators stay
+  // application-owned rather than being recomputed for encoded variants.
   const transformable = !response.isCompressionDisabled() &&
     response.getStatusCode() !== 206 &&
     !request.header("range") &&
+    !request.header("authorization") &&
+    !request.header("cookie") &&
     response.getHeader("Content-Range").length === 0 &&
+    response.getHeader("Set-Cookie").length === 0 &&
+    response.getHeader("ETag").length === 0 &&
+    response.getHeader("Digest").length === 0 &&
+    response.getHeader("Content-Digest").length === 0 &&
     !cacheControlTokens.includes("no-transform") &&
     contentType !== undefined &&
     isCompressibleContentType(contentType)
