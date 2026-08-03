@@ -1,28 +1,13 @@
 // @ts-check
 
+import {mountSubPath, normalizeMountPrefix} from "../../utils/mount-prefix.js"
+
 /**
  * @typedef {object} JobsApiMatch
  * @property {string} action - Controller action to run.
  * @property {Record<string, string>} params - Extra params extracted from the path.
  */
-
-/**
- * Normalizes a mount prefix: ensures a leading slash and strips any trailing
- * slash so `/velocious/jobs/` and `/velocious/jobs` behave identically.
- * @param {string} at - Raw mount prefix.
- * @returns {string} - Normalized prefix.
- */
-export function normalizeMountPrefix(at) {
-  if (typeof at !== "string" || !at.startsWith("/")) {
-    throw new Error(`mount requires an 'at' path starting with '/', got: ${String(at)}`)
-  }
-
-  if (at.length > 1 && at.endsWith("/")) {
-    return at.slice(0, -1)
-  }
-
-  return at
-}
+export {normalizeMountPrefix}
 
 /**
  * Matches an incoming request against the read-only jobs API routes that live
@@ -35,19 +20,9 @@ export function normalizeMountPrefix(at) {
  * @returns {JobsApiMatch | null} - Matched action or null.
  */
 export function matchJobsApiPath({prefix, path, method}) {
-  /** @type {string} */
-  let subPath
+  const subPath = mountSubPath({prefix, path})
 
-  if (prefix === "/") {
-    // Root mount: the whole path is the sub-path (avoid building a "//" guard).
-    subPath = path
-  } else if (path === prefix) {
-    subPath = "/"
-  } else if (path.startsWith(`${prefix}/`)) {
-    subPath = path.slice(prefix.length)
-  } else {
-    return null
-  }
+  if (subPath === null) return null
 
   if (method === "GET" && subPath === "/api/health") return {action: "health", params: {}}
   if (method === "GET" && subPath === "/api/stats") return {action: "stats", params: {}}

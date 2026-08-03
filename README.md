@@ -30,6 +30,7 @@
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
 * Background jobs with failure events for production reporting and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md) and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
+* Mountable authenticated callable deployment API with allowlisted projects/stages, immutable-revision validation, idempotent runs, duplicate-safe interruption reconciliation, and adapter-owned execution for integrations like Rampway (see [docs/deployment-api.md](docs/deployment-api.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
