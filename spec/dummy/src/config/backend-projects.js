@@ -5,6 +5,7 @@ import Interaction from "../models/interaction.js"
 import Project from "../models/project.js"
 import SyncUuidItemResource from "../resources/sync-uuid-item-resource.js"
 import Task from "../models/task.js"
+import TaskBoardSyncResource from "../resources/task-board-sync-resource.js"
 import User from "../models/user.js"
 
 /** @import {SharedEchoResponse} from "../../shared/frontend-command-types.js" */
@@ -14,6 +15,8 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
     static attributes = ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", {name: "projectId", selectedByDefault: false}, {name: "createdAt", selectedByDefault: false}, "updatedAt"]
+
+  static sync = {operations: ["index", "find", "create", "update"]}
 
   static attachments = {
         descriptionFile: {type: "hasOne"},
@@ -27,6 +30,9 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static relationships = ["project", "comments"]
 
   static primaryKey = "id"
+
+  /** @type {string[]} */
+  static writableAttributes = ["isDone", "name", "projectId"]
 
   /**
    * Virtual attribute: returns the task name in uppercase.
@@ -275,6 +281,9 @@ class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
 
   static builtInMemberCommands = ["find"]
 
+  /** @type {string[]} */
+  static writableAttributes = ["body", "taskId"]
+
   /** @returns {Array<string>} - Permit spec for Comment writes. */
   permittedParams() {
     return ["body"]
@@ -305,6 +314,7 @@ const backendProjects = [
       Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,
+      TaskBoard: TaskBoardSyncResource,
       User: UserFrontendResource,
       UuidItem: SyncUuidItemResource
     }

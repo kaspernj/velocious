@@ -76,6 +76,8 @@ describe("Cli - Commands - db:migrate", () => {
         "string_subject_interactions",
         "string_subjects",
         "sync_entries",
+        "task_board_cards",
+        "task_boards",
         "tasks",
         "users",
         "uuid_acts_as_list_items",
@@ -200,6 +202,8 @@ describe("Cli - Commands - db:migrate", () => {
           "string_subject_interactions",
           "string_subjects",
           "sync_entries",
+          "task_board_cards",
+          "task_boards",
           "tasks",
           "users",
           "uuid_acts_as_list_items",
@@ -229,7 +233,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20260629160000",
         "20260702150000",
         "20260706120000",
-        "20260726132000"
+        "20260726132000",
+        "20260803120000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
@@ -250,6 +255,8 @@ describe("Cli - Commands - db:migrate", () => {
           "string_subject_interactions",
           "string_subjects",
           "sync_entries",
+          "task_board_cards",
+          "task_boards",
           "tasks",
           "users",
           "uuid_acts_as_list_items",
@@ -279,7 +286,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20260629160000",
         "20260702150000",
         "20260706120000",
-        "20260726132000"
+        "20260726132000",
+        "20260803120000"
       ])
     }
   })

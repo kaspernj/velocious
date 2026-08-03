@@ -363,6 +363,36 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
+   * Runs an explicit primary-key insert as one batch request: SQL Server scopes
+   * IDENTITY_INSERT to the session, and node-mssql pool-backed requests may use
+   * a different physical session per query, so enabling it in a separate query
+   * can leave the actual INSERT on another session. A single batch keeps the
+   * whole sequence on one session by construction: enable, insert, disable on
+   * success, and a CATCH that disables and rethrows the original error.
+   * @param {object} args - Options object.
+   * @param {import("../base.js").QueryOptions} args.options - Query options for the standard query path.
+   * @param {string} args.sql - Generated insert SQL.
+   * @param {string} args.tableName - Table being inserted into.
+   * @returns {Promise<import("../base.js").QueryResultType>} - Insert result.
+   */
+  async insertWithExplicitPrimaryKey({options, sql, tableName}) {
+    const quotedTable = this.quoteTable(tableName)
+    const batch = [
+      `SET IDENTITY_INSERT ${quotedTable} ON;`,
+      "BEGIN TRY",
+      `${sql};`,
+      `SET IDENTITY_INSERT ${quotedTable} OFF;`,
+      "END TRY",
+      "BEGIN CATCH",
+      `SET IDENTITY_INSERT ${quotedTable} OFF;`,
+      "THROW;",
+      "END CATCH"
+    ].join("\n")
+
+    return await this.query(batch, options)
+  }
+
+  /**
    * Runs escape.
    * @param {?} value - Value to use.
    * @returns {string} - The escape.
