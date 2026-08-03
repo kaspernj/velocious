@@ -3,7 +3,10 @@
 import {deliverDeclaredBroadcasts, upsertSyncRow} from "./sync-change-fanout.js"
 import {markServerApply} from "./sync-publish-suppression.js"
 import {resolveFrontendModelResourceClass} from "../frontend-models/resource-definition.js"
+import {resolveSyncConflict} from "./conflict-strategy.js"
 import SyncReplayUpsertApplier from "./sync-replay-upsert-applier.js"
+import stableJsonStringify from "./stable-json.js"
+import sha256Hex from "../utils/sha256-hex.js"
 import {ValidationError} from "../database/record/index.js"
 import VelociousError from "../velocious-error.js"
 
@@ -16,6 +19,8 @@ import VelociousError from "../velocious-error.js"
  */
 /**
  * @typedef {object} SyncReplayMutation
+ * @property {string | number | null} [baseVersion] - Base server/client version observed by the client.
+ * @property {string} [clientMutationId] - Original client mutation id from the signed envelope.
  * @property {Date} clientUpdatedAt - Client-side mutation timestamp.
  * @property {Record<string, ?>} data - Parsed mutation payload.
  * @property {?} id - Client sync row id for per-sync responses.
@@ -65,6 +70,7 @@ export default class SyncEnvelopeReplayService {
    * @param {(broadcast: {channel: string, params: Record<string, ?>, body: ?}) => Promise<void>} [args.broadcaster] - Delivers declarative broadcasts. Required when broadcasts are configured.
    * @param {SyncReplayBroadcast[]} [args.broadcasts] - Broadcasts fanned out by the default afterReplayMutation.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
+   * @param {{strategy?: "optimisticVersion" | "serverWins", versionAttribute: string} | null} [args.conflictStrategy] - Optional base-version conflict detection for routed upserts. Only `optimisticVersion` and `serverWins` are supported for backend replay because the server does not have the client's base snapshot. When `strategy` is omitted it defaults to `optimisticVersion`, matching `resolveSyncConflict` and normalized resource config. When configured, a mutation whose baseVersion does not match the current server versionAttribute is rejected with a structured conflict result instead of being applied.
    * @param {Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>} [args.resourceTypeOverrides] - Per-resourceType routing overrides: a resource class, or a string alias resolved through the registry.
    * @param {import("../authorization/ability.js").default} [args.ability] - Ability scoping routed record lookups and create membership checks.
    * @param {Record<string, ?>} [args.abilityContext] - Ability context passed to routed resources.
@@ -83,6 +89,7 @@ export default class SyncEnvelopeReplayService {
     this.broadcasts = args.broadcasts || null
     this.applyHandlers = args.applyHandlers ? this.builtApplyHandlers(args.applyHandlers) : null
     this.configuration = args.configuration || null
+    this.conflictStrategy = args.conflictStrategy || null
     this.resourceTypeOverrides = args.resourceTypeOverrides || null
     this.ability = args.ability || null
     this.abilityContext = args.abilityContext || null
@@ -95,6 +102,16 @@ export default class SyncEnvelopeReplayService {
     }
     if (this.broadcasts && !this.broadcaster) {
       throw new Error("SyncEnvelopeReplayService broadcasts require a broadcaster option delivering them")
+    }
+    if (this.conflictStrategy) {
+      const supportedConflictStrategies = new Set(["optimisticVersion", "serverWins"])
+
+      if (!this.conflictStrategy.versionAttribute || typeof this.conflictStrategy.versionAttribute !== "string") {
+        throw new Error("SyncEnvelopeReplayService conflictStrategy requires a non-blank versionAttribute")
+      }
+      if (this.conflictStrategy.strategy !== undefined && !supportedConflictStrategies.has(this.conflictStrategy.strategy)) {
+        throw new Error(`Unsupported sync conflict strategy for backend replay: ${this.conflictStrategy.strategy}. Only optimisticVersion and serverWins are supported.`)
+      }
     }
   }
 
@@ -181,6 +198,15 @@ export default class SyncEnvelopeReplayService {
         throw error
       }
 
+      if (applyResult && applyResult.status === "conflict") {
+        syncResponses.push({
+          conflict: applyResult.conflict,
+          id: mutation.id,
+          syncState: "conflict"
+        })
+        continue
+      }
+
       await this.persistReplayMutation({actor: actorResult.actor, context, existingSync, applyResult, mutation, shouldApply})
       await this.afterReplayMutation({actor: actorResult.actor, context, existingSync, applyResult, mutation, shouldApply})
 
@@ -249,7 +275,7 @@ export default class SyncEnvelopeReplayService {
     }
 
     const sync = /** @type {Record<string, ?>} */ (rawSync)
-    const {clientUpdatedAt, data, id, resourceId, resourceType, syncType} = sync
+    const {clientMutationId, clientUpdatedAt, data, id, resourceId, resourceType, syncType} = sync
 
     if (typeof resourceType !== "string" || resourceType.length < 1 || resourceId === undefined || resourceId === null || typeof syncType !== "string" || syncType.length < 1) {
       return {ok: false, response: {id, syncState: "failed", reason: "invalid-resource-id"}}
@@ -267,6 +293,8 @@ export default class SyncEnvelopeReplayService {
     return {
       ok: true,
       mutation: {
+        baseVersion: sync.baseVersion,
+        clientMutationId,
         clientUpdatedAt: clientUpdatedAtDate,
         data: normalizedDataResult.data,
         id,
@@ -644,29 +672,91 @@ export default class SyncEnvelopeReplayService {
    */
   async applyRoutedReplayUpsert({context, mutation, resource}) {
     const attributes = this.permittedRoutedAttributes({mutation, resource})
-    const existingRecord = await resource.findSyncRecord({mutation})
+    const ModelClass = resource.modelClass()
+    const runUpsert = async () => {
+      const existingRecord = await resource.findSyncRecord({mutation})
+      const conflictResult = await this.routedReplayConflictResult({attributes, existingRecord, mutation, resource})
 
-    /** @type {import("../database/record/index.js").default | null} */
-    let record = existingRecord
-    let created = false
+      if (conflictResult) return conflictResult
 
-    if (existingRecord) {
-      const releaseServerApply = markServerApply(existingRecord)
+      /** @type {import("../database/record/index.js").default | null} */
+      let record = existingRecord
+      let created = false
 
-      try {
-        existingRecord.assign(attributes)
-        await this.saveRoutedReplayRecord(existingRecord)
-      } finally {
-        releaseServerApply()
+      if (existingRecord) {
+        const releaseServerApply = markServerApply(existingRecord)
+
+        try {
+          existingRecord.assign(attributes)
+          await this.saveRoutedReplayRecord(existingRecord)
+        } finally {
+          releaseServerApply()
+        }
+      } else {
+        record = await this.createRoutedReplayRecord({attributes, mutation, resource})
+        created = true
       }
-    } else {
-      record = await this.createRoutedReplayRecord({attributes, mutation, resource})
-      created = true
+
+      const extras = await resource.afterSyncApply({context, created, mutation, record})
+
+      return {created, deleted: false, record, ...extras}
     }
 
-    const extras = await resource.afterSyncApply({context, created, mutation, record})
+    if (!this.conflictStrategy) return await runUpsert()
 
-    return {created, deleted: false, record, ...extras}
+    return await ModelClass.withAdvisoryLock(syncReplayConflictLockName({resourceId: mutation.resourceId, resourceType: mutation.resourceType}), runUpsert, {dedicatedConnection: true})
+  }
+
+  /**
+   * Checks whether a routed upsert mutation conflicts with the current server
+   * state when the service is configured with a conflict strategy. A mutation
+   * whose baseVersion does not match the server's current versionAttribute is
+   * rejected with a structured conflict payload instead of being applied.
+   * @param {object} args - Conflict-check args.
+   * @param {Record<string, ?>} args.attributes - Permitted mutation attributes.
+   * @param {import("../database/record/index.js").default | null} args.existingRecord - Existing server record.
+   * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
+   * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
+   * @returns {Promise<Record<string, ?> | null>} - Conflict apply result, or null when no conflict.
+   */
+  async routedReplayConflictResult({attributes, existingRecord, mutation, resource}) {
+    if (!this.conflictStrategy) return null
+    if (!existingRecord || mutation.syncType === "create") return null
+    if (mutation.baseVersion === undefined || mutation.baseVersion === null) return null
+
+    const versionAttribute = this.conflictStrategy.versionAttribute
+    const serverVersion = normalizeVersionValue(existingRecord.readAttribute(versionAttribute))
+
+    if (stableJsonStringify(serverVersion) === stableJsonStringify(mutation.baseVersion)) return null
+
+    const ModelClass = resource.modelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const serverRecord = {
+      attributes: {
+        [primaryKey]: existingRecord.readAttribute(primaryKey),
+        [versionAttribute]: serverVersion
+      },
+      version: serverVersion
+    }
+    const conflictMutation = /** @type {import("./device-identity.js").SyncMutation} */ (/** @type {unknown} */ ({
+      attributes,
+      baseVersion: mutation.baseVersion,
+      clientMutationId: mutation.clientMutationId || mutation.id,
+      model: mutation.resourceType,
+      operation: mutation.syncType,
+      payload: {id: mutation.resourceId}
+    }))
+    const result = await resolveSyncConflict({
+      baseRecord: null,
+      mutation: conflictMutation,
+      serverRecord,
+      strategy: this.conflictStrategy.strategy || "optimisticVersion",
+      versionAttribute
+    })
+
+    if (result.status !== "conflict") return null
+
+    return {conflict: result.conflict, created: false, deleted: false, record: existingRecord, status: "conflict"}
   }
 
   /**
@@ -889,4 +979,33 @@ export default class SyncEnvelopeReplayService {
 
     await deliverDeclaredBroadcasts({args, broadcaster: this.broadcaster, broadcasts: this.broadcasts})
   }
+}
+
+/**
+ * Returns a deterministic, MySQL-safe advisory-lock name for a routed replay
+ * resource identity. The full `{resourceType, resourceId}` identity is hashed
+ * with SHA-256 and truncated to 32 hex characters so the final name stays well
+ * under MySQL/MariaDB's 64-character `GET_LOCK` limit while remaining
+ * collision-resistant.
+ * @param {object} args - Lock identity args.
+ * @param {string} args.resourceId - Resource id.
+ * @param {string} args.resourceType - Resource type.
+ * @returns {string} - Advisory lock name.
+ */
+export function syncReplayConflictLockName({resourceId, resourceType}) {
+  const identity = stableJsonStringify({resourceId, resourceType})
+  const hash = sha256Hex(identity).slice(0, 32)
+
+  return `vsr:${hash}`
+}
+
+/**
+ * Normalizes a server version value for deterministic comparison with a mutation baseVersion.
+ * @param {?} value - Raw version value from a database record.
+ * @returns {?} - Normalized value (Date values become ISO strings).
+ */
+function normalizeVersionValue(value) {
+  if (value instanceof Date) return value.toISOString()
+
+  return value
 }

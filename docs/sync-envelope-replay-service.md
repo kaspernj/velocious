@@ -190,6 +190,59 @@ Every record the routed apply writes (upsert saves, creates, deletes) is marked 
 
 Validation is model validation: declare `validates(...)` (presence, length, format, uniqueness) on the model, and save-time `ValidationError`s fail only that sync as `{id, syncState: "failed", reason: "validation-error", message}` with the translated validation message. Every other client-safe apply failure (authorization denials, unknown resource types, unpermitted attributes) works the same way — the batch continues, and unexpected errors keep propagating.
 
+## Routed conflict detection
+
+The `conflictStrategy` constructor option enables base-version conflict detection for **routed upserts only**. It does not change deletes, custom commands, `applySync` overrides, or `applyHandlers` — those paths keep their existing stale-client behavior.
+
+```js
+new SyncEnvelopeReplayService({
+  configuration,
+  syncModel: Sync,
+  conflictStrategy: {
+    strategy: "optimisticVersion", // optional; defaults to "optimisticVersion"
+    versionAttribute: "updatedAt"   // required; server attribute to compare
+  }
+})
+```
+
+Supported strategies for backend replay:
+
+- `optimisticVersion` (default when `strategy` is omitted): if the mutation's `baseVersion` does not match the server's current `versionAttribute`, the sync returns `syncState: "conflict"` with a structured `conflict` payload. The suggested resolution is `"manual"`.
+- `serverWins`: the same version check runs, but the suggested resolution is `"keep_server"`.
+
+Unsupported strategies (`fieldThreeWay`, `lastWriterWins`, `appendOnly`, and unknown values) are rejected at construction time because the backend replay path does not have the client's base snapshot.
+
+A conflict is only evaluated when all of the following are true:
+
+- the mutation routes to a frontend-model resource,
+- the mutation's `syncType` is `"update"` (creates skip conflict detection),
+- the mutation supplies a non-null `baseVersion`,
+- a server record is found via `resource.findSyncRecord({mutation})`, and
+- the server value of `versionAttribute` differs from `baseVersion`.
+
+The comparison normalizes `Date` values to ISO strings before comparing by stable JSON serialization, so a timestamp string `baseVersion` matches an equivalent server `Date`.
+
+When a conflict is detected, the per-sync response is:
+
+```js
+{
+  id: "client-sync-id",
+  syncState: "conflict",
+  conflict: {
+    affectedFields: ["title"],
+    baseRecord: null,
+    baseVersion: "2026-07-03T10:00:00.000Z",
+    localMutation: {...},
+    serverModel: {id: "...", updatedAt: "2026-07-04T10:00:00.000Z"},
+    serverVersion: "2026-07-04T10:00:00.000Z",
+    suggestedResolution: "manual", // or "keep_server" for serverWins
+    versionAttribute: "updatedAt"
+  }
+}
+```
+
+The conflicting mutation is not applied, not persisted, and does not fan out broadcasts or change-feed events. The successful path remains serialized per resource identity through an advisory lock so two concurrent replays from the same base version cannot both pass.
+
 ## Boundary
 
 Use this service only for replaying envelopes through app-owned hooks. Do not put app-specific resource policy, scanner/device token rules, or model mutation logic in Velocious. New sync implementations should still move toward signed offline mutations, resource/domain-command replay, and server-sequenced change feeds described in [`offline-sync.md`](offline-sync.md).
