@@ -1,11 +1,15 @@
 // @ts-check
 
 import BackgroundJobsClient from "../../src/background-jobs/client.js"
-import { startBackgroundJobsMain } from "../helpers/background-jobs-helper.js"
+import { clearBackgroundJobs, startBackgroundJobsMain } from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
-describe("Background jobs - stable schedule API", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - stable schedule API", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  afterEach(async () => {
+    await clearBackgroundJobs()
+  })
+
   it("replaces and cancels a logical schedule through the public job protocol", async () => {
     const {main, store} = await startBackgroundJobsMain()
 

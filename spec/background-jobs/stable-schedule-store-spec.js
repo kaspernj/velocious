@@ -4,14 +4,11 @@ import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import TableData from "../../src/database/table-data/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
-/** @returns {Promise<BackgroundJobsStore>} - Empty background jobs store. */
-async function createClearedStore() {
+/** @returns {BackgroundJobsStore} - Background jobs store. */
+function createStore() {
   dummyConfiguration.setCurrent()
-  const store = new BackgroundJobsStore({configuration: dummyConfiguration})
 
-  await store.clearAll()
-
-  return store
+  return new BackgroundJobsStore({configuration: dummyConfiguration})
 }
 
 /**
@@ -27,7 +24,15 @@ async function getJobOrFail(store, jobId) {
   return job
 }
 
-describe("Background jobs - stable schedule store", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - stable schedule store", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  beforeEach(async () => {
+    await createStore().clearAll()
+  })
+
+  afterEach(async () => {
+    await createStore().clearAll()
+  })
+
   it("locks the durable count revision before a mutation reads job state", async () => {
     const calls = []
 
@@ -107,7 +112,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("atomically replaces the queued owner while retaining keyed history", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
     const first = await store.replaceScheduled({
       scheduleKey: "event:42:reminder:24h",
       jobName: "EventReminderJob",
@@ -141,7 +146,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("cancels the queued owner and preserves its keyed history", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
     const replacement = await store.replaceScheduled({
       scheduleKey: "event:43:reminder:24h",
       jobName: "EventReminderJob",
@@ -161,7 +166,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("reports handed-off replacement without claiming the running job stopped", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
     const first = await store.replaceScheduled({
       scheduleKey: "event:44:reminder:24h",
       jobName: "EventReminderJob",
@@ -192,7 +197,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("detaches a handed-off owner without claiming execution stopped", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
     const replacement = await store.replaceScheduled({
       scheduleKey: "event:45:reminder:24h",
       jobName: "EventReminderJob",
@@ -208,7 +213,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("conditionally releases ownership when jobs become terminal", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
     const first = await store.replaceScheduled({
       scheduleKey: "event:46:reminder:24h",
       jobName: "EventReminderJob",
@@ -250,7 +255,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("retains ownership for retries and releases it after terminal failure", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
     const replacement = await store.replaceScheduled({
       scheduleKey: "event:48:reminder:24h",
       jobName: "EventReminderJob",
@@ -286,7 +291,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("serializes concurrent replacements and persists ownership across store restarts", async () => {
-    const firstStore = await createClearedStore()
+    const firstStore = createStore()
     const secondStore = new BackgroundJobsStore({configuration: dummyConfiguration})
     const scheduleKey = "event:47:reminder:24h"
     const replacements = await Promise.all([
@@ -305,7 +310,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {truncate
   })
 
   it("rejects invalid stable schedule keys as client-safe errors", async () => {
-    const store = await createClearedStore()
+    const store = createStore()
 
     await expect(async () => await store.replaceScheduled({scheduleKey: "", jobName: "TestJob", args: []})).toThrow(/non-empty string/)
     await expect(async () => await store.cancelScheduled("x".repeat(256))).toThrow(/at most 255/)
