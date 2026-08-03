@@ -362,42 +362,34 @@ export default class VelociousDatabaseDriversMssql extends Base{
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
   supportsDefaultPrimaryKeyUUID() { return true }
 
-  requiresIdentityInsertForExplicitPrimaryKey() { return true }
-
   /**
-   * Runs the callback with IDENTITY_INSERT enabled for the table so an explicit
-   * primary-key value (client-generated offline-sync ids) can be inserted into
-   * an IDENTITY column. The setting is session-scoped and node-mssql pool-backed
-   * requests may use a different physical session per query, so without an
-   * active transaction the whole ON/callback/OFF sequence is pinned through the
-   * native transaction path; an active transaction is reused as-is. The setting
-   * is always reverted, even when the callback fails.
-   * @param {string} tableName - Table name being inserted into.
-   * @param {() => Promise<?>} callback - Insert work.
-   * @returns {Promise<?>} - The callback result.
+   * Runs an explicit primary-key insert as one batch request: SQL Server scopes
+   * IDENTITY_INSERT to the session, and node-mssql pool-backed requests may use
+   * a different physical session per query, so enabling it in a separate query
+   * can leave the actual INSERT on another session. A single batch keeps the
+   * whole sequence on one session by construction: enable, insert, disable on
+   * success, and a CATCH that disables and rethrows the original error.
+   * @param {object} args - Options object.
+   * @param {import("../base.js").QueryOptions} args.options - Query options for the standard query path.
+   * @param {string} args.sql - Generated insert SQL.
+   * @param {string} args.tableName - Table being inserted into.
+   * @returns {Promise<import("../base.js").QueryResultType>} - Insert result.
    */
-  async withExplicitPrimaryKeyInsert(tableName, callback) {
-    if (this._transactionsCount > 0) {
-      return await this._withExplicitPrimaryKeyInsertOnCurrentSession(tableName, callback)
-    }
+  async insertWithExplicitPrimaryKey({options, sql, tableName}) {
+    const quotedTable = this.quoteTable(tableName)
+    const batch = [
+      `SET IDENTITY_INSERT ${quotedTable} ON`,
+      "BEGIN TRY",
+      sql,
+      `SET IDENTITY_INSERT ${quotedTable} OFF`,
+      "END TRY",
+      "BEGIN CATCH",
+      `SET IDENTITY_INSERT ${quotedTable} OFF`,
+      "THROW",
+      "END CATCH"
+    ].join("\n")
 
-    return await this.transaction(async () => await this._withExplicitPrimaryKeyInsertOnCurrentSession(tableName, callback))
-  }
-
-  /**
-   * Runs the ON/callback/OFF sequence on the current transaction-bound session.
-   * @param {string} tableName - Table name being inserted into.
-   * @param {() => Promise<?>} callback - Insert work.
-   * @returns {Promise<?>} - The callback result.
-   */
-  async _withExplicitPrimaryKeyInsertOnCurrentSession(tableName, callback) {
-    await this.query(`SET IDENTITY_INSERT ${this.quoteTable(tableName)} ON`)
-
-    try {
-      return await callback()
-    } finally {
-      await this.query(`SET IDENTITY_INSERT ${this.quoteTable(tableName)} OFF`)
-    }
+    return await this.query(batch, options)
   }
 
   /**
