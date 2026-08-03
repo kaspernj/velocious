@@ -12,7 +12,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/database-migrations.md`: Migration helpers, UTC datetime storage, implicit primary keys, and reference column defaults.
 - `docs/docker-development-environment.md`: Canonical `dev` Compose service, development-home bind contract, credential boundary, and the static contract verifier.
 - `docs/operation-scoped-transactions.md`: Explicit singular-database transactions with operation-bound models, records, savepoints, commit callbacks, and pool isolation.
-- `docs/http-server.md`: HTTP server worker configuration and socket distribution behavior.
+- `docs/http-server.md`: HTTP server worker configuration, socket distribution behavior, buffered response compression, and HEAD response semantics.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.

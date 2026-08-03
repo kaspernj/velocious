@@ -250,7 +250,24 @@
  */
 
 /**
+ * @typedef {object} HttpCompressionConfiguration
+ * @property {boolean} [enabled] - Whether buffered response compression is enabled. Defaults to true; set false to disable globally.
+ * @property {number} [threshold] - Minimum buffered body size in bytes before compression is applied. Defaults to 1024.
+ * @property {number} [brotliQuality] - Brotli encoder quality (0-11). Defaults to 4.
+ * @property {number} [gzipLevel] - Gzip compression level (0-9). Defaults to 6.
+ */
+
+/**
+ * @typedef {object} NormalizedHttpCompressionConfiguration
+ * @property {boolean} enabled - Whether buffered HTTP response compression is enabled.
+ * @property {number} threshold - Minimum buffered body size in bytes before compression is applied.
+ * @property {number} brotliQuality - Brotli encoder quality (0-11).
+ * @property {number} gzipLevel - Gzip compression level (0-9).
+ */
+
+/**
  * @typedef {object} HttpServerConfiguration
+ * @property {boolean | HttpCompressionConfiguration} [compression] - Buffered response compression. Enabled with documented defaults when absent; false or {enabled: false} disables it globally.
  * @property {string} [host] - Hostname to bind the HTTP server to.
  * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
  * @property {number} [maxWorkers] - Backward-compatible alias for workers.

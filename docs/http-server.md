@@ -36,6 +36,136 @@ order. Bodyless status responses preserve their existing no-body and
 no-`Content-Length` behavior while still settling `onFinished` after the parent
 acknowledges the response.
 
+## Response Compression
+
+Buffered HTTP responses are compressed with Brotli (`br`) or gzip by default
+whenever request negotiation and response eligibility allow — applications do
+not need to opt in. An absent `httpServer.compression` setting resolves to the
+documented enabled defaults. Disable compression globally with `false` or the
+object form's `enabled` flag:
+
+```js
+const configuration = new Configuration({
+  httpServer: {
+    compression: false // or: {enabled: false}
+  }
+})
+```
+
+The object form also tunes the behavior; unknown keys and out-of-range values
+are rejected:
+
+```js
+const configuration = new Configuration({
+  httpServer: {
+    compression: {
+      enabled: true, // Default true
+      threshold: 1024, // Minimum buffered body size in bytes (default 1024)
+      brotliQuality: 4, // Brotli quality 0-11 (default 4)
+      gzipLevel: 6 // Gzip level 0-9 (default 6)
+    }
+  }
+})
+```
+
+The normalized configuration is available via
+`configuration.getHttpServerCompression()`.
+
+### Negotiation
+
+The server parses `Accept-Encoding` case-insensitively with q-values, wildcards,
+and identity semantics. Q-values follow the RFC grammar strictly (`0` or `1`
+with at most three fractional digits, only zeros after `1`); malformed values
+such as `.5`, `01`, `1.001`, or `0.1234` count as `q=0`. Identity participates
+in the same quality comparison as the supported codings: a higher-q identity
+selects identity (for example `gzip;q=0.5, identity;q=1` sends uncompressed),
+and equal-q ties break in server order `br`, `gzip`, `identity`. An explicit
+coding entry beats the wildcard, and a missing or empty header selects identity.
+
+When compression is enabled and the response does not already carry an
+application-supplied `Content-Encoding`, the server never emits an identity
+representation the client forbade. If no acceptable representation can be sent —
+identity is forbidden (`identity;q=0`, or `*;q=0` without an identity entry) and
+either no supported coding is acceptable or the transformation is skipped (see
+Exclusions below) — the server answers with an empty `406 Not Acceptable`. When
+identity is forbidden but a supported coding is acceptable and the response is a
+compression candidate, the size threshold never forces an unacceptable identity
+representation — the body is compressed regardless of size. Responses with an
+application-supplied `Content-Encoding` are always passed through unchanged, and
+a globally disabled compression configuration never negotiates (backward
+compatible).
+
+Compressed responses carry `Content-Encoding` and the exact compressed
+`Content-Length`, and `Accept-Encoding` is merged into `Vary`
+case-insensitively without duplicates (an existing `Vary: *` is preserved).
+Bodies below `threshold` are sent as identity when identity is acceptable.
+Compression uses only asynchronous `node:zlib` APIs, so event-loop ordering of
+pipelined responses is preserved.
+
+### Exclusions
+
+Only buffered string and `Uint8Array` responses are candidates. Transformation
+is skipped for:
+
+- `sendFile` streamed responses (they are never buffered for compression)
+- responses that already carry a `Content-Encoding`
+- `Cache-Control: no-transform`
+- `text/event-stream` (server-sent events)
+- `206` partial responses, requests with a `Range` header, and responses with a
+  `Content-Range` header
+- bodyless statuses (1xx, 204, 304)
+- responses without an allowlisted `Content-Type`
+- requests carrying an `Authorization` or `Cookie` header, and responses
+  carrying a `Set-Cookie` header (all matched case-insensitively)
+- responses carrying `ETag`, `Digest`, or `Content-Digest` validator headers
+
+The credential-driven exclusions are automatic security skips: compressing
+secret-bearing responses (or secret-adjacent responses on credentialed
+requests) would expose them to compression-oracle attacks such as BREACH, so
+they are never transformed. The validator exclusions keep representation
+validators strictly application-owned — the server neither rewrites nor
+recomputes `ETag`/`Digest`/`Content-Digest` for encoded variants, so it
+declines to create those variants at all. These are skip conditions, not
+silent header removal: the response goes out untouched (or as an empty `406`
+when the client forbids identity, per the negotiation rule above).
+
+A skipped transformation is still sent as identity when the client accepts
+identity. When the client forbids identity and the transformation is skipped
+(other than for an application-supplied `Content-Encoding`, which always passes
+through), the server answers with the same empty `406 Not Acceptable`, because
+no acceptable representation can actually be sent.
+
+The compressible content-type allowlist is conservative: `text/*` (except
+`text/event-stream`), `application/json` and `*+json`, `application/xml` and
+`*+xml`, JavaScript (`application/javascript`, `application/x-javascript`,
+`application/ecmascript`), and `image/svg+xml`. Unknown binary types and
+commonly pre-compressed media (images, video, archives) are never transformed.
+
+Controllers can opt out per response:
+
+```js
+this.response().disableCompression()
+```
+
+### HEAD requests
+
+HEAD responses select and compute the same representation headers as the
+equivalent GET — including `Content-Length` and any negotiated
+`Content-Encoding` — but emit no buffered or file body.
+
+### Considerations
+
+Compression buffers the whole body (which buffered responses already are) and
+spends CPU per request; keep the default Brotli quality 4 / gzip level 6 unless
+measurements say otherwise, and raise `threshold` if small responses dominate.
+Representation validators (`ETag`, `Digest`, `Content-Digest`) remain
+application-owned: the server never rewrites or recomputes them, and responses
+carrying them are excluded from transformation automatically. Responses
+compressed with `br`/`gzip` are safe against compression-oracle concerns only
+when the application does not reflect secrets alongside attacker-controlled
+input — credentialed requests and `Set-Cookie` responses are excluded
+automatically, and `disableCompression()` covers the remaining cases.
+
 ## CLI Workers
 
 Start a server with a fixed worker count:

@@ -8,6 +8,7 @@ import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
 import Request from "./request.js"
 import RequestRunner from "./request-runner.js"
+import {applyResponseCompression} from "./response-compression.js"
 import WebsocketSession from "./websocket-session.js"
 
 /**
@@ -37,6 +38,16 @@ function badRequestDetails(error) {
 export default class VeoliciousHttpServerClient {
   events = new EventEmitter()
   state = "initial"
+
+  /**
+   * Whether a done-requests drain is currently sending responses for this client.
+   * @type {boolean} */
+  _doneRequestsDrainActive = false
+
+  /**
+   * Whether another drain was requested while one was already active.
+   * @type {boolean} */
+  _doneRequestsDrainPending = false
 
   /**
    * Runs constructor.
@@ -311,10 +322,36 @@ export default class VeoliciousHttpServerClient {
 
   requestDone = () => {
     this.logger.debug(() => ["requestDone", {clientCount: this.clientCount, queueLength: this.requestRunners.length}])
-    void this.sendDoneRequests().catch((error) => {
+
+    return this._drainDoneRequests().catch((error) => {
       this.logger.warn("Failed while sending done requests", error)
       this.events.emit("close")
     })
+  }
+
+  /**
+   * Drains done requests one at a time. A runner is shifted out of the queue before
+   * its response finishes sending (async compression, file transfer), so an
+   * overlapping drain would otherwise pick up the next runner and reorder pipelined
+   * socket writes. Calls that arrive while a drain is active are folded into it.
+   * @returns {Promise<void>} - Resolves when every done response has been sent.
+   */
+  async _drainDoneRequests() {
+    if (this._doneRequestsDrainActive) {
+      this._doneRequestsDrainPending = true
+      return
+    }
+
+    this._doneRequestsDrainActive = true
+
+    try {
+      do {
+        this._doneRequestsDrainPending = false
+        await this.sendDoneRequests()
+      } while (this._doneRequestsDrainPending)
+    } finally {
+      this._doneRequestsDrainActive = false
+    }
   }
 
   async sendDoneRequests() {
@@ -393,6 +430,14 @@ export default class VeoliciousHttpServerClient {
     // arrive — drop the body entirely for those codes.
     const isBodylessStatus = isNoBodyStatusCode(response.getStatusCode())
 
+    // HEAD responses select and compute the exact same representation headers as the
+    // equivalent GET (including Content-Length and any negotiated Content-Encoding),
+    // but no buffered or file body is emitted below.
+    const isHeadRequest = request.httpMethod() == "HEAD"
+
+    /** @type {string | Uint8Array | null} */
+    let bodyToEmit = body
+
     if (!isBodylessStatus) {
       let contentLength
 
@@ -400,9 +445,34 @@ export default class VeoliciousHttpServerClient {
         const stats = await fs.stat(filePath)
         contentLength = stats.size
       } else {
-        contentLength = bodyIsString ? Buffer.byteLength(body, "utf8") : body.byteLength
+        // String bodies are UTF-8 framed, so the buffered bytes are the UTF-8 encoding;
+        // Uint8Array bodies are already the exact wire bytes.
+        const bodyBuffer = bodyIsString ? Buffer.from(body, "utf8") : Buffer.from(body)
+        const compressionResult = await applyResponseCompression({
+          bodyBuffer,
+          compression: this.configuration.getHttpServerCompression(),
+          request,
+          response
+        })
+
+        if (compressionResult.outcome == "not-acceptable") {
+          // The client forbids identity and no supported coding is acceptable: answer
+          // with an empty 406 instead of an unacceptable representation.
+          response.setStatus(406)
+          response.setBody("")
+          bodyToEmit = ""
+          contentLength = 0
+        } else if (compressionResult.outcome == "compressed") {
+          bodyToEmit = compressionResult.body
+          contentLength = compressionResult.body.length
+        } else {
+          contentLength = bodyBuffer.length
+        }
       }
 
+      // Remove any application pre-set Content-Length (any casing) so exactly one
+      // recomputed value goes on the wire.
+      response.removeHeader("Content-Length")
       response.setHeader("Content-Length", contentLength)
     }
 
@@ -427,11 +497,14 @@ export default class VeoliciousHttpServerClient {
     if (isBodylessStatus) {
       this.logger.debug(() => ["sendResponse body suppressed for no-body status", {clientCount: this.clientCount, statusCode: response.getStatusCode()}])
       if (hasFilePath) await this.sendFileOutput(filePath, false, fileOnFinished)
+    } else if (isHeadRequest) {
+      this.logger.debug(() => ["sendResponse body suppressed for HEAD request", {clientCount: this.clientCount}])
+      if (hasFilePath) await this.sendFileOutput(filePath, false, fileOnFinished)
     } else if (hasFilePath) {
       await this.sendFileOutput(filePath, true, fileOnFinished)
     } else {
-      this.events.emit("output", body)
-      this.logger.debug(() => ["sendResponse body emitted", {clientCount: this.clientCount, bodyLength: bodyIsString ? body.length : body.byteLength}])
+      this.events.emit("output", bodyToEmit)
+      this.logger.debug(() => ["sendResponse body emitted", {clientCount: this.clientCount, bodyLength: bodyToEmit ? bodyToEmit.length : 0}])
     }
 
     await requestRunner.logCompletedRequest()

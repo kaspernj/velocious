@@ -120,6 +120,10 @@ const DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES = 256
 const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_BYTES = 16 * 1024 * 1024
 const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_FRAMES = 256
 
+const DEFAULT_COMPRESSION_THRESHOLD = 1024
+const DEFAULT_COMPRESSION_BROTLI_QUALITY = 4
+const DEFAULT_COMPRESSION_GZIP_LEVEL = 6
+
 /**
  * Validates a positive safe integer configuration value.
  * @param {?} value - Configured positive safe integer.
@@ -134,6 +138,63 @@ function positiveSafeInteger(value, name, defaultValue) {
   }
 
   return value
+}
+
+/**
+ * Validates an integer configuration value inside an inclusive range.
+ * @param {?} value - Configured integer.
+ * @param {string} name - Configuration key.
+ * @param {number} min - Minimum accepted value (inclusive).
+ * @param {number} max - Maximum accepted value (inclusive).
+ * @param {number} defaultValue - Default value.
+ * @returns {number} - Validated configured or default value.
+ */
+function integerInRange(value, name, min, max, defaultValue) {
+  if (value === undefined) return defaultValue
+  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+    throw new TypeError(`${name} must be an integer between ${min} and ${max}`)
+  }
+
+  return value
+}
+
+/**
+ * Normalizes the buffered HTTP response compression configuration. Compression is
+ * enabled by default when the setting is absent; `false` or `{enabled: false}`
+ * disables it globally.
+ * @param {boolean | import("./configuration-types.js").HttpCompressionConfiguration | undefined} value - Configured compression value.
+ * @returns {import("./configuration-types.js").NormalizedHttpCompressionConfiguration} - Normalized compression configuration.
+ */
+function normalizeHttpCompression(value) {
+  if (value === undefined || value === true) {
+    return {enabled: true, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
+  }
+
+  if (value === false) {
+    return {enabled: false, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
+  }
+
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError(`httpServer.compression must be a boolean or an object, got: ${String(value)}`)
+  }
+
+  const {brotliQuality, enabled, gzipLevel, threshold, ...restCompression} = value
+  const restCompressionKeys = Object.keys(restCompression)
+
+  if (restCompressionKeys.length > 0) {
+    throw new TypeError(`httpServer.compression received unknown keys: ${restCompressionKeys.join(", ")} (supported: brotliQuality, enabled, gzipLevel, threshold)`)
+  }
+
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    throw new TypeError(`httpServer.compression.enabled must be a boolean, got: ${String(enabled)}`)
+  }
+
+  return {
+    enabled: enabled ?? true,
+    threshold: positiveSafeInteger(threshold, "httpServer.compression.threshold", DEFAULT_COMPRESSION_THRESHOLD),
+    brotliQuality: integerInRange(brotliQuality, "httpServer.compression.brotliQuality", 0, 11, DEFAULT_COMPRESSION_BROTLI_QUALITY),
+    gzipLevel: integerInRange(gzipLevel, "httpServer.compression.gzipLevel", 0, 9, DEFAULT_COMPRESSION_GZIP_LEVEL)
+  }
 }
 
 export default class VelociousConfiguration {
@@ -236,6 +297,7 @@ export default class VelociousConfiguration {
 
     this.httpServer = {
       ...(httpServer || {}),
+      compression: normalizeHttpCompression(httpServer?.compression),
       websocketInboundQueue: {
         maxPendingBytes: positiveSafeInteger(websocketInboundQueue?.maxPendingBytes, "httpServer.websocketInboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_BYTES),
         maxPendingMessages: positiveSafeInteger(websocketInboundQueue?.maxPendingMessages, "httpServer.websocketInboundQueue.maxPendingMessages", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES)
@@ -498,6 +560,14 @@ export default class VelociousConfiguration {
    */
   getCors() {
     return this.cors
+  }
+
+  /**
+   * Runs get http server compression.
+   * @returns {import("./configuration-types.js").NormalizedHttpCompressionConfiguration} - Normalized buffered response compression configuration.
+   */
+  getHttpServerCompression() {
+    return this.httpServer.compression
   }
 
   /**

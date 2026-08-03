@@ -99,6 +99,11 @@ export default class VelociousHttpServerClientResponse {
   headers = {}
 
   /**
+   * Whether compression has been disabled for this specific response.
+   * @type {boolean} */
+  compressionDisabled = false
+
+  /**
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
@@ -131,6 +136,58 @@ export default class VelociousHttpServerClientResponse {
    */
   setHeader(key, value) {
     this.headers[key] = [value]
+  }
+
+  /**
+   * Returns every value set for a header, matched case-insensitively.
+   * @param {string} key - Header name.
+   * @returns {string[]} - Header values in insertion order.
+   */
+  getHeader(key) {
+    const lowerCaseKey = key.toLowerCase()
+
+    /** @type {string[]} */
+    const values = []
+
+    for (const headerKey in this.headers) {
+      if (headerKey.toLowerCase() == lowerCaseKey) {
+        values.push(...this.headers[headerKey])
+      }
+    }
+
+    return values
+  }
+
+  /**
+   * Removes every value set for a header, matched case-insensitively.
+   * @param {string} key - Header name.
+   * @returns {void} - No return value.
+   */
+  removeHeader(key) {
+    const lowerCaseKey = key.toLowerCase()
+
+    for (const headerKey in this.headers) {
+      if (headerKey.toLowerCase() == lowerCaseKey) {
+        delete this.headers[headerKey]
+      }
+    }
+  }
+
+  /**
+   * Disables HTTP response compression for this specific response, even when the
+   * server is configured to compress buffered responses.
+   * @returns {void} - No return value.
+   */
+  disableCompression() {
+    this.compressionDisabled = true
+  }
+
+  /**
+   * Runs is compression disabled.
+   * @returns {boolean} - Whether compression has been disabled for this response.
+   */
+  isCompressionDisabled() {
+    return this.compressionDisabled
   }
 
   /**
