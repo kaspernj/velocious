@@ -20,6 +20,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/mailers.md`: EJS mailer templates, direct delivery, background delivery, and payload rendering.
 - `docs/model-initialization.md`: Eager and lazy record/frontend-model initialization behavior.
 - `docs/offline-sync.md`: Target architecture for local-first shared-resource sync, offline grants, peer transfer, and server-sequenced replay.
+- `docs/shared-resource-sync-guide.md`: Source-verified developer guide and gated migration checklist for shared resources, signed/P2P replay, and server catch-up.
 - `docs/live-queries.md`: `useLiveQuery` reactive local-model-change queries, the record-change bus, batching, and the invalidation cost model.
 - `docs/sync-envelope-replay-service.md`: Server-side sync envelope replay hook contract for app-owned sync receivers.
 - `docs/schema-metadata-cache.md`: Driver schema metadata caching, invalidation, and disabling.
