@@ -1,5 +1,7 @@
 # Frontend Models
 
+Projects sharing resource policy between backend and local/offline runtimes should also read the [shared-resource sync developer guide](shared-resource-sync-guide.md), including its permit and portable-query boundaries.
+
 ## Core transport
 - Frontend models run over HTTP transport, not local database connections.
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
