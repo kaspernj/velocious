@@ -132,6 +132,9 @@ describe("sync publisher - websocket user-scope delivery over a real database", 
 
     const resource = /** @type {RecordingUserScopeResource} */ (channel._resource)
 
+    const previousSyncChannelClass = dummyConfiguration.getWebsocketChannelClass(VELOCIOUS_SYNC_CHANNEL)
+
+    dummyConfiguration.registerWebsocketChannel(VELOCIOUS_SYNC_CHANNEL, TestSyncWebsocketChannel)
     dummyConfiguration._registerWebsocketChannelSubscription(VELOCIOUS_SYNC_CHANNEL, channel)
 
     const {publisher, restore} = buildPublisher()
@@ -173,6 +176,12 @@ describe("sync publisher - websocket user-scope delivery over a real database", 
     } finally {
       restore()
       dummyConfiguration._unregisterWebsocketChannelSubscription(VELOCIOUS_SYNC_CHANNEL, channel)
+
+      if (previousSyncChannelClass) {
+        dummyConfiguration.registerWebsocketChannel(VELOCIOUS_SYNC_CHANNEL, previousSyncChannelClass)
+      } else {
+        dummyConfiguration._websocketChannelClasses.delete(VELOCIOUS_SYNC_CHANNEL)
+      }
     }
   })
 })
