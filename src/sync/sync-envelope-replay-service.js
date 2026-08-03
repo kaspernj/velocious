@@ -64,7 +64,7 @@ export default class SyncEnvelopeReplayService {
    * @param {(args: {mutation: ?, applyResult: ?}) => ?} [args.persistSerializedData] - Overrides the persisted data payload (object results are JSON stringified).
    * @param {(broadcast: {channel: string, params: Record<string, ?>, body: ?}) => Promise<void>} [args.broadcaster] - Delivers declarative broadcasts. Required when broadcasts are configured.
    * @param {SyncReplayBroadcast[]} [args.broadcasts] - Broadcasts fanned out by the default afterReplayMutation.
-   * @param {{getBackendProjects: () => import("../configuration-types.js").BackendProjectConfiguration[]}} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
+   * @param {import("../configuration.js").default} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
    * @param {Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>} [args.resourceTypeOverrides] - Per-resourceType routing overrides: a resource class, or a string alias resolved through the registry.
    * @param {import("../authorization/ability.js").default} [args.ability] - Ability scoping routed record lookups and create membership checks.
    * @param {Record<string, ?>} [args.abilityContext] - Ability context passed to routed resources.
@@ -116,10 +116,11 @@ export default class SyncEnvelopeReplayService {
   /**
    * Replays a sync batch.
    * @param {Record<string, ?>} params - Request params carrying authentication and syncs.
+   * @param {Record<string, ?>} [requestState] - Request-local state passed to authentication/sync extraction hooks; subclasses may use this to share pre-computed per-request data without instance mutation.
    * @returns {Promise<{syncs: Array<Record<string, ?>>, status?: string, errorCode?: string, errorMessage?: string}>} Replay response.
    */
-  async replay(params) {
-    const actorResult = await this.authenticateReplay(params)
+  async replay(params, requestState = {}) {
+    const actorResult = await this.authenticateReplay(params, requestState)
 
     if (!actorResult.authenticated) {
       return {
@@ -131,9 +132,9 @@ export default class SyncEnvelopeReplayService {
     }
 
     const syncResponses = []
-    const context = await this.buildReplayContext({actor: actorResult.actor, params})
+    const context = await this.buildReplayContext({actor: actorResult.actor, params, requestState})
 
-    for (const rawSync of this.replaySyncs(params)) {
+    for (const rawSync of this.replaySyncs(params, requestState)) {
       const normalizedResult = this.normalizeReplaySync(rawSync)
 
       if (!normalizedResult.ok) {
@@ -195,9 +196,10 @@ export default class SyncEnvelopeReplayService {
    * Defaults to a token-model lookup when `authenticationTokenModel` is
    * configured; otherwise apps override this hook.
    * @param {Record<string, ?>} params - Request params.
+   * @param {Record<string, ?>} [_requestState] - Request-local state populated by subclasses before the base replay loop runs.
    * @returns {Promise<{authenticated: true, actor: ?} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
    */
-  async authenticateReplay(params) {
+  async authenticateReplay(params, _requestState) {
     if (!this.authenticationTokenModel) {
       throw new Error("SyncEnvelopeReplayService.authenticateReplay must be implemented (or configure authenticationTokenModel)")
     }
@@ -219,7 +221,7 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Builds per-batch mutable context for caches shared across sync items.
-   * @param {{actor: ?, params: Record<string, ?>}} _args - Actor and request params.
+   * @param {{actor: ?, params: Record<string, ?>, requestState: Record<string, ?>}} _args - Actor, request params, and request-local state.
    * @returns {Promise<Record<string, ?>>} Replay context.
    */
   async buildReplayContext(_args) {
@@ -229,9 +231,10 @@ export default class SyncEnvelopeReplayService {
   /**
    * Returns raw sync entries from request params.
    * @param {Record<string, ?>} params - Request params.
+   * @param {Record<string, ?>} [_requestState] - Request-local state populated by subclasses before the base replay loop runs.
    * @returns {Array<?>} Raw sync entries.
    */
-  replaySyncs(params) {
+  replaySyncs(params, _requestState) {
     return Array.isArray(params.syncs) ? params.syncs : []
   }
 
@@ -452,19 +455,34 @@ export default class SyncEnvelopeReplayService {
   }
 
   /**
+   * Resolves the ability and resource context used to authorize routed
+   * resources. Defaults to the constructor-wide ability/abilityContext;
+   * subclasses (signed replay) override this to derive authorization from a
+   * verified actor/grant instead of uploader-global state.
+   * @param {{actor: ?, context: Record<string, ?>}} _args - Replay actor and batch context.
+   * @returns {Promise<{ability: import("../authorization/ability.js").default | undefined, abilityContext: Record<string, ?>}>} Ability and resource context.
+   */
+  async replayAbilityFor(_args) {
+    return {ability: this.ability || undefined, abilityContext: this.abilityContext || {}}
+  }
+
+  /**
    * Builds the routed resource instance handling one mutation.
    * @param {object} args - Options.
+   * @param {?} args.actor - Replay actor.
+   * @param {Record<string, ?>} args.context - Replay context.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {SyncReplayResourceRegistration} args.registration - Resolved resource registration.
-   * @returns {import("../frontend-model-resource/base-resource.js").default} Routed resource instance.
+   * @returns {Promise<import("../frontend-model-resource/base-resource.js").default>} Routed resource instance.
    */
-  buildReplayResource({mutation, registration}) {
+  async buildReplayResource({actor, context, mutation, registration}) {
     const ResourceClass = registration.resourceClass
+    const {ability, abilityContext} = await this.replayAbilityFor({actor, context})
 
     return new ResourceClass({
-      ability: this.ability || undefined,
-      context: this.abilityContext || {},
-      locals: this.locals || {},
+      ability,
+      context: abilityContext,
+      locals: {...(this.locals || {}), ...(this.configuration ? {configuration: this.configuration} : {})},
       modelName: registration.modelName,
       params: mutation.data,
       ...(registration.resourceConfiguration ? {resourceConfiguration: registration.resourceConfiguration} : {})
@@ -480,14 +498,14 @@ export default class SyncEnvelopeReplayService {
    * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<Record<string, ?>>} Apply result with record, created/deleted flags, and afterSyncApply extras.
    */
-  async applyRoutedReplayMutation({context, existingSync, mutation}) {
+  async applyRoutedReplayMutation({actor, context, existingSync, mutation}) {
     const registration = this.replayResourceRegistration(mutation.resourceType)
 
     if (!registration) {
       throw VelociousError.safe(`Unknown sync resource type: ${mutation.resourceType}.`, {code: "unknown-resource-type"})
     }
 
-    const resource = this.buildReplayResource({mutation, registration})
+    const resource = await this.buildReplayResource({actor, context, mutation, registration})
     const customApplyResult = await resource.applySync({context, existingSync, mutation})
 
     if (customApplyResult !== null) return customApplyResult
@@ -500,7 +518,84 @@ export default class SyncEnvelopeReplayService {
 
     if (mutation.syncType === "delete") return await this.applyRoutedReplayDelete({mutation, resource})
 
+    const commandApplyResult = await this.applyRoutedReplayCommand({context, mutation, resource})
+
+    if (commandApplyResult !== null) return commandApplyResult
+
     return await this.applyRoutedReplayUpsert({context, mutation, resource})
+  }
+
+  /**
+   * Dispatches a routed sync mutation whose syncType matches a resource-declared
+   * custom command. Returns null when the mutation is not a command so the
+   * caller can fall through to the default upsert path.
+   * @param {{context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, resource: import("../frontend-model-resource/base-resource.js").default}} args - Command dispatch args.
+   * @returns {Promise<Record<string, ?> | null>} Command apply result or null.
+   */
+  async applyRoutedReplayCommand({context, mutation, resource}) {
+    const commandConfig = this.resourceCommandConfig(resource)
+    const commandMethodName = this.commandMethodNameForSyncType({commandConfig, syncType: mutation.syncType})
+
+    if (!commandMethodName) return null
+
+    const commandMethod = resource.resourceMethod(commandMethodName)
+
+    if (!commandMethod) {
+      throw VelociousError.safe(`Sync command handler missing for: ${mutation.resourceType}.${mutation.syncType}.`, {code: "sync-command-handler-missing"})
+    }
+
+    const args = this.commandArgsForMutation({commandConfig, commandMethodName, mutation})
+    const result = await commandMethod.method.call(commandMethod.resource, args)
+
+    const afterExtras = await resource.afterSyncApply({context, created: false, mutation, record: null})
+    const resultObject = result && typeof result === "object" && !Array.isArray(result) ? result : {}
+
+    return {commandResult: result, created: false, deleted: false, record: null, ...resultObject, ...afterExtras}
+  }
+
+  /**
+   * Resolves the custom-command configuration declared on a routed resource.
+   * @param {import("../frontend-model-resource/base-resource.js").default} resource - Routed resource instance.
+   * @returns {{collectionCommands: Record<string, string>, memberCommands: Record<string, string>}} Command config.
+   */
+  resourceCommandConfig(resource) {
+    const config = /** @type {Record<string, ?>} */ (resource.resourceConfigurationValue || {})
+
+    return {
+      collectionCommands: config.collectionCommands || {},
+      memberCommands: config.memberCommands || {}
+    }
+  }
+
+  /**
+   * Resolves the resource method name for a syncType when it names a declared
+   * custom command.
+   * @param {{commandConfig: {collectionCommands: Record<string, string>, memberCommands: Record<string, string>}, syncType: string}} args - Lookup args.
+   * @returns {string | null} Method name or null.
+   */
+  commandMethodNameForSyncType({commandConfig, syncType}) {
+    if (commandConfig.memberCommands[syncType]) return syncType
+    if (commandConfig.collectionCommands[syncType]) return syncType
+
+    return null
+  }
+
+  /**
+   * Builds the arguments object passed to a resource command method. Member
+   * commands receive the envelope's resourceId as `id`; the envelope identity
+   * is assigned after the payload so a payload `id` can never retarget the
+   * command away from the resource the authorization hooks approved.
+   * @param {{commandConfig: {collectionCommands: Record<string, string>, memberCommands: Record<string, string>}, commandMethodName: string, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Args builder args.
+   * @returns {Record<string, ?>} Command method arguments.
+   */
+  commandArgsForMutation({commandConfig, commandMethodName, mutation}) {
+    const isMember = commandConfig.memberCommands[commandMethodName] !== undefined
+
+    if (isMember) {
+      return {...mutation.data, id: mutation.resourceId}
+    }
+
+    return {...mutation.data}
   }
 
   /**

@@ -256,6 +256,8 @@ AwesomeTasks is a good proof target for generic resource sync:
 
 The proof should validate that shared resources, offline grants, local mutation logs, peer forwarding, server replay, and server-sequenced changes are usable outside ticket-app.
 
+The implemented proof is documented in [`docs/awesome-tasks-offline-sync-proof.md`](awesome-tasks-offline-sync-proof.md).
+
 ## Open implementation decisions
 
 - Exact signing algorithm and key rotation strategy.
