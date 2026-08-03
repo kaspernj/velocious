@@ -3,6 +3,16 @@
 Velocious record classes can be initialized eagerly through the application
 configuration, or lazily the first time an async class API needs table metadata.
 
+Eager `configuration.initializeModels()` is one atomic bootstrap phase.
+Concurrent callers share the same in-progress phase, and the initialized flag is
+committed only after the application hook, package models, audited relationships,
+and frontend-model websocket publishers all finish. If any step raises, every
+waiting caller receives that error and a later initialization call reruns the
+complete phase; it cannot skip models because an earlier attempt started but did
+not finish. This matters for warm background-job children, which remain reusable
+after reporting a bootstrap failure and must not admit later jobs with partial
+record metadata.
+
 ## Lazy record APIs
 
 Async class methods such as `create`, `count`, `find`, `findBy`, `first`,

@@ -286,6 +286,14 @@ export default class VelociousConfiguration {
     }
 
     this._isInitialized = false
+    this._modelsInitialized = false
+    /**
+     * In-progress `initializeModels()` promise. Model initialization is an
+     * atomic bootstrap phase: concurrent callers share it, and a rejection
+     * leaves the phase eligible for a later complete attempt.
+     * @type {Promise<void> | undefined}
+     */
+    this._initializeModelsPromise = undefined
     /**
      * In-progress `initialize()` promise, memoized so concurrent callers await
      * the same bootstrap. Reset to undefined if initialization fails.
@@ -2020,25 +2028,36 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeModels(args = {type: "server"}) {
-    if (!this._modelsInitialized) {
-      this._modelsInitialized = true
+    if (this._modelsInitialized) return
+    if (this._initializeModelsPromise) return await this._initializeModelsPromise
 
+    const initializeModelsPromise = (async () => {
       const shouldSkipDummyModelInitialization = process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
         && process.env.VELOCIOUS_BROWSER_TESTS === "true"
         && this.getEnvironment() === "test"
 
-      if (shouldSkipDummyModelInitialization) {
-        return
+      if (!shouldSkipDummyModelInitialization) {
+        if (this._initializeModels) {
+          await this._initializeModels({configuration: this, type: args.type})
+        }
+
+        await this.getEnvironmentHandler().initializePackageModels(this)
+        await initializeAuditedModelRelationships(this)
+
+        await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
       }
 
-      if (this._initializeModels) {
-        await this._initializeModels({configuration: this, type: args.type})
+      this._modelsInitialized = true
+    })()
+
+    this._initializeModelsPromise = initializeModelsPromise
+
+    try {
+      await initializeModelsPromise
+    } finally {
+      if (this._initializeModelsPromise === initializeModelsPromise) {
+        this._initializeModelsPromise = undefined
       }
-
-      await this.getEnvironmentHandler().initializePackageModels(this)
-      await initializeAuditedModelRelationships(this)
-
-      await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
     }
   }
 
