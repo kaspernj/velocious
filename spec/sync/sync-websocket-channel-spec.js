@@ -158,6 +158,36 @@ function buildUserScopeResource(rows) {
   }
 }
 
+/**
+ * Builds a user-scope sync resource class recording every changeDeliverable
+ * sync argument and deciding deliverability through the given predicate.
+ * @param {(sync: Record<string, ?>) => boolean} deliverable - Per-entry deliverability decision.
+ * @returns {{syncArgs: Array<Record<string, ?>>, TestSyncResource: typeof SyncResourceBase}} Recording resource class and its changeDeliverable sync args.
+ */
+function buildChangeDeliverableRecordingResource(deliverable) {
+  /** @type {Array<Record<string, ?>>} */
+  const syncArgs = []
+
+  class TestSyncResource extends SyncResourceBase {
+    static ModelClass = /** @type {?} */ (TestSyncModel)
+
+    /** @returns {Promise<void>} Allows every scope (including the user scope). */
+    async authorizeChanges() {}
+
+    /**
+     * @param {{sync: import("../../src/sync/sync-resource-base.js").ChangeDeliverableSyncEntry}} args - Delivery args with the published sync entry.
+     * @returns {Promise<boolean>} The predicate decision for this entry.
+     */
+    async changeDeliverable({sync}) {
+      syncArgs.push(sync)
+
+      return deliverable(sync)
+    }
+  }
+
+  return {syncArgs, TestSyncResource}
+}
+
 describe("sync websocket channel", () => {
   it("registers the framework sync channel when sync.api is configured and skips registration without it", () => {
     const {TestSyncResource} = buildTestSyncResource()
@@ -373,6 +403,95 @@ describe("sync websocket channel", () => {
     expect(messagesA).toHaveLength(1)
     expect(messagesA[0].body).toEqual(broadcast)
     expect(messagesB).toHaveLength(0)
+  })
+
+  it("passes the complete sync entry through to changeDeliverable with resourceId and resourceType normalized to strings", async () => {
+    const {syncArgs, TestSyncResource} = buildChangeDeliverableRecordingResource(() => true)
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const {channel} = buildDeliveringChannel({
+      configuration,
+      params: {authenticationToken: "token-1", conditions: {}, resourceType: "Ticket"}
+    })
+
+    await channel.canSubscribe()
+
+    const entry = {actorId: "device-7", data: {pin: "1"}, id: "sync-row-9", resourceId: 42, resourceType: "Ticket", syncType: "update"}
+
+    await channel.deliverBroadcast({echoOrigin: null, syncs: [entry]})
+
+    // The exact-row discriminator, actor metadata, and payload survive; only the identity fields are normalized.
+    expect(syncArgs).toHaveLength(1)
+    expect(syncArgs[0]).toEqual({actorId: "device-7", data: {pin: "1"}, id: "sync-row-9", resourceId: "42", resourceType: "Ticket", syncType: "update"})
+
+    // Normalization happens on a copy: the published entry is never mutated.
+    expect(entry.resourceId).toEqual(42)
+  })
+
+  it("authorizes entries for the same resource identity independently by their exact-row discriminator", async () => {
+    const {syncArgs, TestSyncResource} = buildChangeDeliverableRecordingResource((sync) => sync.id === "sync-row-allowed")
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const {channel, messages} = buildDeliveringChannel({
+      configuration,
+      params: {authenticationToken: "token-1", conditions: {}, resourceType: "Ticket"}
+    })
+
+    await channel.canSubscribe()
+
+    const allowedEntry = {id: "sync-row-allowed", resourceId: SCAN_ID, resourceType: "Ticket", syncType: "update"}
+    const deniedEntry = {id: "sync-row-denied", resourceId: SCAN_ID, resourceType: "Ticket", syncType: "update"}
+
+    await channel.deliverBroadcast({echoOrigin: null, syncs: [allowedEntry, deniedEntry]})
+
+    // Both entries reach the per-delivery re-check; only the allowed exact row delivers.
+    expect(syncArgs).toHaveLength(2)
+    expect(messages).toHaveLength(1)
+    expect(messages[0].body).toEqual({echoOrigin: null, syncs: [allowedEntry]})
+  })
+
+  it("keeps supporting identity-only legacy envelopes carrying only resourceId and resourceType", async () => {
+    const {syncArgs, TestSyncResource} = buildChangeDeliverableRecordingResource(() => true)
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const {channel, messages} = buildDeliveringChannel({
+      configuration,
+      params: {authenticationToken: "token-1", conditions: {}, resourceType: "Ticket"}
+    })
+
+    await channel.canSubscribe()
+
+    const entry = {resourceId: SCAN_ID, resourceType: "Ticket"}
+
+    // Single-entry envelope (no syncs array) with an identity-only entry.
+    await channel.deliverBroadcast(entry)
+
+    expect(syncArgs).toHaveLength(1)
+    expect(syncArgs[0]).toEqual({resourceId: SCAN_ID, resourceType: "Ticket"})
+    expect(messages).toHaveLength(1)
+    expect(messages[0].body).toEqual(entry)
+  })
+
+  it("does not mutate the original payload or sibling entries when filtering entries out", async () => {
+    const {TestSyncResource} = buildChangeDeliverableRecordingResource((sync) => sync.id === "keep")
+    const configuration = buildChannelConfiguration({sync: {api: {resourceClass: TestSyncResource}}})
+    const {channel, messages} = buildDeliveringChannel({
+      configuration,
+      params: {authenticationToken: "token-1", conditions: {}, resourceType: "Ticket"}
+    })
+
+    await channel.canSubscribe()
+
+    const keepEntry = {data: {pin: "1"}, id: "keep", resourceId: 42, resourceType: "Ticket"}
+    const dropEntry = {data: {pin: "2"}, id: "drop", resourceId: SCAN_ID, resourceType: "Ticket"}
+    const broadcast = {echoOrigin: null, syncs: [keepEntry, dropEntry]}
+    const snapshot = JSON.parse(JSON.stringify(broadcast))
+
+    await channel.deliverBroadcast(broadcast)
+
+    // The published payload and both original entries are untouched, and the
+    // delivered body carries the original surviving entry.
+    expect(broadcast).toEqual(snapshot)
+    expect(keepEntry.resourceId).toEqual(42)
+    expect(messages).toHaveLength(1)
+    expect(messages[0].body).toEqual({echoOrigin: null, syncs: [keepEntry]})
   })
 
   it("delivers scoped (non-user) broadcasts unchanged without a per-delivery access query", async () => {
