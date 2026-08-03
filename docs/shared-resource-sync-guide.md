@@ -41,7 +41,7 @@ export default class SharedTaskResource extends FrontendModelBaseResource {
   static builtInMemberCommands = ["find", "update"]
 
   // Routed SyncEnvelopeReplayService CRUD uses this flat list.
-  static writableAttributes = ["isDone", "name", "projectId"]
+  static writableAttributes = ["id", "isDone", "name", "projectId"]
 
   // This becomes deterministic manifest metadata. `policy` is hashed but is
   // not exposed in generated frontend config.
@@ -145,10 +145,10 @@ Velocious has two real permit APIs with different replay coverage.
 
 ### Flat permits for routed replay
 
-`SyncEnvelopeReplayService` resource routing requires `static writableAttributes`. It accepts camel-case attribute names and their real database column names, rejects every unknown key with `sync-unknown-attribute`, and always takes record identity from the envelope's `resourceId` rather than a payload `id`.
+`SyncEnvelopeReplayService` resource routing requires `static writableAttributes`. It accepts camel-case attribute names and their real database column names, rejects every unknown key with `sync-unknown-attribute`, and always takes record identity from the envelope's `resourceId` rather than a payload `id`. Include the model primary key when routed creates carry that client-generated key in `data`: replay validates it against this permit before omitting it from the assigned attributes.
 
 ```js
-static writableAttributes = ["isDone", "name", "projectId"]
+static writableAttributes = ["id", "isDone", "name", "projectId"]
 ```
 
 Routed replay does not call a request-aware `permittedParams(arg)` and does not support nested routed payloads. Use resource commands for domain-shaped or multi-record offline work.
@@ -262,14 +262,14 @@ new Configuration({
   sync: {
     deviceCertificateBackendPublicKey,
     offlineGrantSigningKeys: [
-      {current: true, id: "offline-grant-2026-08", secret: process.env.OFFLINE_GRANT_SECRET}
+      {current: true, id: "offline-grant-2026-08", secret: appSecrets.offlineGrantSigningSecret}
     ],
     offlineGrantTtlMs: 24 * 60 * 60 * 1000
   }
 })
 ```
 
-Never send an offline-grant signing secret or backend device-certificate private key to a client. Rotate grant keys by keeping old verification keys while one key is `current` for issuance.
+Load `appSecrets.offlineGrantSigningSecret` from the app's established secret store. Never send an offline-grant signing secret or backend device-certificate private key to a client. Rotate grant keys by keeping old verification keys while one key is `current` for issuance.
 
 With a normal frontend-model ability/current user, `POST /frontend-models/sync/bootstrap` with `{deviceId, scopes}` returns `{offlineGrant, syncManifest, status: "success"}`. The grant contains the user/device ids, expiry, materialized scopes, and current normalized resource entries. The current endpoint signs the submitted `scopes`; it does not independently prove that the user belongs to those scopes. Use it only behind app authorization that validates every requested scope, or issue the grant from an app-owned enrollment endpoint that performs the membership check and then calls `createOfflineGrantFromBootstrap(...)`. The bootstrap endpoint does not create a device keypair or certificate; scope authorization, device enrollment, and secure private-key storage remain app-owned security boundaries.
 
@@ -335,7 +335,7 @@ The importer verifies the backend-signed device certificate and the originating 
 
 Current import does **not** carry or verify the offline grant, compare its policy hash, run shared-resource policy, or mutate the receiving device's local domain model. Despite the status name, `peer-applied` means the signed row is pending reconciliation in `LocalMutationLog`; any provisional domain apply is still explicit app behavior. A rejected signature is not appended.
 
-When forwarding, send the retained original `signedMutation` plus the original actor's `signedOfflineGrant`. Do not re-sign it with the receiving device. `exportPeerMutationBundle(...)` does not automatically re-export imported rows: imports have status `peer-applied`, while the exporter accepts only `pending`, `applied-locally`, and `conflict`. Automatic multi-hop re-export is therefore unsupported. An application that needs another peer hop must explicitly transition or copy the record into an exportable, app-owned forwarding path while preserving the untouched original signed envelope, certificate provenance, and grant. `SignedSyncEnvelopeReplayService` derives authority from that original signer/grant rather than the uploader.
+When forwarding, send the retained original `signedMutation` plus the original actor's `signedOfflineGrant` only when the mutation was explicitly built for `SignedSyncEnvelopeReplayService`: creates carry `id` in `attributes`, while updates, deletes, and domain commands carry their target `id` in `payload`. The built-in `save()`/`destroy()` queue instead keeps the primary key in `attributes`; replay those rows through `/frontend-models/sync/replay`, or construct the signed-service shape before signing and peer export. Do not reshape or re-sign a peer mutation with the receiving device. `exportPeerMutationBundle(...)` does not automatically re-export imported rows: imports have status `peer-applied`, while the exporter accepts only `pending`, `applied-locally`, and `conflict`. Automatic multi-hop re-export is therefore unsupported. An application that needs another peer hop must explicitly transition or copy the record into an exportable, app-owned forwarding path while preserving the untouched original signed envelope, certificate provenance, and grant. `SignedSyncEnvelopeReplayService` derives authority from that original signer/grant rather than the uploader.
 
 The architecture term `peerReceivedUnapplied` (sometimes rendered `peer_received_unapplied` by apps) is not a valid current `LocalMutationLog` status. If local data or policy is insufficient to apply a verified mutation, keep it in an explicitly app-owned quarantine/forwarding state or leave the existing app path in place; do not pass that string to `updateStatus(...)` or claim that Velocious imported it. Framework-owned unverifiable-bundle quarantine and offline grant exchange/verification are not implemented yet.
 
