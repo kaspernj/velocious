@@ -1871,6 +1871,8 @@ this.getConfiguration().getWebsocketEvents().publish(channel, payload)
 this.renderJsonArg({status: "published"})
 ```
 
+Publishes are queued per channel: events on the same channel are persisted and dispatched in FIFO order, while a slow or failing channel never delays unrelated channels. `configuration.awaitPendingBroadcasts()` settles once every broadcast accepted before the call has settled. See [docs/websocket-channels.md](docs/websocket-channels.md#publish-ordering-and-failure-semantics) for the full ordering and failure contract.
+
 ## Websocket channels
 
 You can resolve websocket channel classes from subscribe messages and let them decide which streams to allow:
