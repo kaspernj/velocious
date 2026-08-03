@@ -1,6 +1,8 @@
-# Offline Sync Architecture
+# Offline and Shared-Resource Sync
 
-This document records the target architecture for Velocious local-first sync. It is an implementation plan and compatibility contract for building reusable offline sync in Velocious and then migrating downstream apps such as Printyourticket/ticket-app and AwesomeTasks onto the framework primitives.
+This document is both the architecture decision and the developer guide for Velocious local-first sync. The [goals](#goals) and [main concepts](#main-concepts) explain the durable framework boundary; the [adoption guide](#adoption-guide) uses APIs present on the current Velocious source. It is also the migration checklist for replacing an app-owned `{type, id, data}` sync path with framework-owned resource routing, signed offline authority, peer transfer, conflict reporting, and server-sequenced catch-up.
+
+The current implementation is deliberately composable rather than one all-in-one coordinator. Velocious owns shared-resource fallback, deterministic policy manifests, grants and device signatures, the row-oriented mutation log, peer mutation bundles, resource-routed replay, conflicts, and change-feed clients. An app still supplies persistent storage, device/grant custody, its actor/grant-scoped ability factory, feed scope hooks, and genuinely domain-specific commands. In particular, there is currently no global frontend resource registry and no `peer_received_unapplied` `LocalMutationLog` status; the guide calls out the small app-side wiring required at those boundaries.
 
 ## Goals
 
@@ -26,7 +28,7 @@ Projects that need long-lived offline or peer-to-peer sync should define shared 
 
 - model name and sync configuration
 - portable `abilities` helpers where they can run against either local SQLite or backend DB models
-- `permittedParams` / `offlinePermittedParams` logic, including nested attributes
+- `permittedParams` for normal writes and flat `writableAttributes` for routed replay
 - offline validation
 - conflict strategy
 - domain sync command schemas and handlers where they are portable
@@ -43,7 +45,7 @@ Shared resource modules must be bundle-safe. They should not import backend-only
 
 ### Resource context
 
-The framework should inject a consistent context into shared resources:
+Shared resources expose a consistent context API:
 
 - `currentUser()`
 - `currentDevice()`
@@ -113,17 +115,16 @@ Frontend apps should persist an append-only local mutation log instead of only s
 - dependency ids for offline-created records
 - local status
 
-Useful statuses include:
+The implemented `LocalMutationLog` statuses are:
 
 - `pending`
-- `appliedLocally`
-- `peerReceivedUnapplied`
-- `peerAppliedPendingServerConfirmation`
+- `applied-locally`
+- `peer-applied`
 - `conflict`
 - `rejected`
 - `synced`
 
-Local writes update SQLite optimistically after shared resource policy checks pass. Server replay later returns per-mutation results so the client can mark mutations as synced, rejected, or conflicted.
+Apps that need to retain a peer mutation before framework import can keep a separate `peer_received_unapplied` quarantine label, but it is not accepted by `LocalMutationLog.updateStatus()`. Local writes may update SQLite optimistically after shared resource policy checks pass. Server replay later returns per-mutation results so the client can mark mutations as synced, rejected, or conflicted.
 
 ### Server replay
 
@@ -135,8 +136,8 @@ Replay pipeline:
 2. Resolve the model/resource from the registered Velocious resource manifest.
 3. Build actor context from the signed mutation actor and offline grant.
 4. Resolve operation or domain command.
-5. Run sync-specific hooks when present; otherwise fall back to normal resource abilities and `permittedParams`.
-6. Reject unpermitted attributes and nested attributes as contract errors.
+5. Run sync-specific hooks; apply the signed actor/grant ability and either the normal frontend-model `permittedParams` pipeline or routed replay's flat `writableAttributes` permit.
+6. Reject unknown, read-only, or unpermitted attributes as contract errors.
 7. Apply create/update/destroy through the normal resource/model pipeline.
 8. Persist the mutation result idempotently.
 9. Append server-sequenced changes to the change feed.
@@ -172,14 +173,16 @@ If a client is too far behind for retained changes, the server returns `snapshot
 
 Devices should exchange signed mutation logs and proof material, not trusted database rows.
 
-A peer export contains:
+A complete app transfer protocol needs:
 
 - signed mutations
 - signed offline grants
-- signed device certificates
+- signed device certificates (embedded in each `SignedSyncMutation`)
 - optional snapshot chunks and signed snapshot manifests when available
 
-On import, the receiving device verifies:
+The current `exportPeerMutationBundle` v1 format carries only signed mutations (with embedded device certificates); the app must transfer/store signed grants separately. `importPeerMutationBundle` verifies the certificate and mutation signatures plus duplicate ids, then stores accepted rows as `peer-applied`. Grant, current-policy, ability, and permitted-attribute checks happen during server replay.
+
+The full receiving flow therefore verifies:
 
 1. backend signature on the offline grant
 2. backend signature on the device certificate
@@ -190,7 +193,7 @@ On import, the receiving device verifies:
 7. duplicate mutation ids
 8. local conflict strategy
 
-If the receiver cannot verify because policy code or local related data is missing, it stores the mutation as `peerReceivedUnapplied` and may forward it later. If verification passes, it can apply the mutation locally as `peerAppliedPendingServerConfirmation`.
+If the receiver cannot complete local application because proof or related data is missing, it may retain the untouched bundle entry under an app `peer_received_unapplied` quarantine label and forward it later. Once `importPeerMutationBundle` verifies it, the framework log status is `peer-applied`.
 
 ### Generic model mutations vs domain commands
 
@@ -205,66 +208,409 @@ Domain-sensitive workflows should use sync commands instead of raw model attribu
 
 A sync command still uses offline grants, mutation signatures, idempotency, shared resource policy, and backend replay, but the resource owns the domain decision and the emitted model changes.
 
-## Sequence: bootstrap
+## Adoption guide
+
+### Define one shared resource and two thin wrappers
+
+Keep portable declarations and small domain hooks in a bundle-safe shared file. This example uses only real `FrontendModelBaseResource` static fields and portable helpers:
+
+```js
+// shared/resources/task.js
+import FrontendModelBaseResource from "velocious/build/src/frontend-model-resource/base-resource.js"
+
+export default class SharedTaskResource extends FrontendModelBaseResource {
+  static attributes = ["id", "projectId", "title", "columnId", "position", "updatedAt"]
+  static builtInCollectionCommands = ["index", "create"]
+  static builtInMemberCommands = ["find", "update", "destroy"]
+  static memberCommands = ["moveCard"]
+  static writableAttributes = ["projectId", "title"]
+
+  static sync = {
+    conflictStrategy: "optimisticVersion",
+    operations: ["index", "find", "create", "update", "destroy", "moveCard"],
+    policyVersion: "tasks-v1",
+    metadata: {scope: "project"},
+    policy: {
+      grantScopeAttributes: ["projectId"],
+      writableAttributes: ["projectId", "title"]
+    }
+  }
+
+  permittedParams({action} = {}) {
+    if (action === "create") return ["id", "projectId", "title"]
+
+    return [
+      "title",
+      {commentsAttributes: ["id", "_destroy", "body"]}
+    ]
+  }
+
+  async moveCard({id, columnId, position}) {
+    const Task = this.model("Task")
+    const task = await Task.findByOrFail({id})
+
+    task.setColumnId(columnId)
+    task.setPosition(position)
+    await task.save()
+
+    return {id: task.id()}
+  }
+}
+```
+
+`static writableAttributes` is the flat permit used by `SyncEnvelopeReplayService` routed CRUD. `permittedParams(arg)` is the normal frontend-model write permit and supports nested attributes. The two declarations are intentionally separate: the routed replay service does not accept nested permit objects, and the built-in offline `FrontendModelBase.save()` queue currently rejects nested attributes and attachments. Represent an atomic offline nested workflow as a declared domain command instead of smuggling a nested payload through generic CRUD.
+
+The backend wrapper binds the real database model and may add backend-only ability or domain behavior:
+
+```js
+// backend/src/resources/task.js
+import FrontendModelBaseResource from "velocious/build/src/frontend-model-resource/base-resource.js"
+import SharedTaskResource from "../../../shared/resources/task.js"
+import Task from "../models/task.js"
+
+export default class TaskResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+  static SharedResource = SharedTaskResource
+}
+```
+
+Keep normal online abilities in the app's existing ability resources. For signed replay, the `abilityFactory` shown below must build an ability from the verified actor and grant scopes; do not derive it from mutation payload params.
+
+The frontend/local wrapper binds the SQLite model and receives the portable context explicitly. Velocious does not currently install these wrappers into a process-wide frontend resource registry, so keep one small app factory:
+
+```js
+// frontend/src/resources/task.js
+import FrontendModelBaseResource from "velocious/build/src/frontend-model-resource/base-resource.js"
+import SharedTaskResource from "../../../shared/resources/task.js"
+import Task from "../models/task.js"
+
+export default class LocalTaskResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+  static SharedResource = SharedTaskResource
+}
+
+export function localTaskResource({currentDevice, currentUser, offlineGrant}) {
+  return new LocalTaskResource({
+    context: {
+      currentDevice,
+      currentUser,
+      modelRegistry: {Task},
+      offlineGrant,
+      resourceRuntime: "offline"
+    },
+    modelName: "Task",
+    params: {}
+  })
+}
+```
+
+The context may expose `modelRegistry` as a name-to-class object or as `{model(name)}`. Shared code can call `currentUser()`, `currentDevice()`, `offlineGrant()`, `now()`, `resourceRuntime()`, `isBackend()`, `isFrontend()`, `isOffline()`, and `model(name)`. `SignedSyncEnvelopeReplayService` supplies `currentUser`, `offlineGrant`, `offlineGrantScopes`, and `resourceRuntime: "offline"`, but it does not add a model registry to that context. If signed shared hooks call `model(name)`, use the small replay subclass below to expose the backend configuration's model map.
+
+Fallback is deterministic:
+
+1. An environment wrapper's own or inherited static value/method.
+2. `static SharedResource`'s value/method.
+3. The `FrontendModelBaseResource` framework default.
+
+An environment method override wins completely. Call the relevant `super` method only when the wrapper deliberately wants to compose the shared/default behavior.
+
+### Register resources and configure sync once
+
+Register every replayable type in the backend project's `frontendModels` map. Then use one `sync` block on `Configuration`:
+
+```js
+const configuration = new Configuration({
+  backendProjects: [{
+    path: backendPath,
+    frontendModels: {
+      Sync: AppSyncResource,
+      Task: TaskResource
+    }
+  }],
+  sync: {
+    api: {resourceClass: AppSyncResource},
+    changeFeedRetentionSize: 10_000,
+    deviceCertificateBackendPublicKey,
+    offlineGrantSigningKeys: [{
+      current: true,
+      id: "offline-grant-2026-08",
+      secret: appSecrets.offlineGrantSigningSecret
+    }],
+    offlineGrantTtlMs: 24 * 60 * 60 * 1000
+  }
+})
+```
+
+`AppSyncResource` subclasses `SyncResourceBase`, binds the change-feed model with `static ModelClass`, and implements only `authorizeChanges({params, scope})` and `scopeChangesQuery({params, query, scope})`. The default replay class is `SyncEnvelopeReplayService`. For peer-forwarded mutations whose shared hooks use `model(name)`, expose the configuration on signed replay context and declare that class as `static ReplayServiceClass`:
+
+```js
+import SignedSyncEnvelopeReplayService from "velocious/build/src/sync/signed-sync-envelope-replay-service.js"
+import SyncResourceBase from "velocious/build/src/sync/sync-resource-base.js"
+
+class AppSignedSyncEnvelopeReplayService extends SignedSyncEnvelopeReplayService {
+  async buildReplayContext(args) {
+    return {
+      ...await super.buildReplayContext(args),
+      configuration: this.configuration
+    }
+  }
+}
+
+class AppSyncResource extends SyncResourceBase {
+  static ModelClass = Sync
+  static ReplayServiceClass = AppSignedSyncEnvelopeReplayService
+
+  // authorizeChanges(...) and scopeChangesQuery(...) stay app-specific.
+}
+```
+
+Return the signed service's app-owned arguments from `replayServiceArgs()`:
+
+```js
+replayServiceArgs() {
+  const sync = this.controllerInstance().getConfiguration().getSyncConfiguration()
+
+  if (!sync.deviceCertificateBackendPublicKey) throw new Error("Missing sync device certificate public key")
+
+  return {
+    actorLookup: async (userId) => await User.findBy({id: userId}),
+    abilityFactory: ({actor, grant}) => buildOfflineAbility({actor, grant}),
+    backendPublicKey: sync.deviceCertificateBackendPublicKey,
+    conflictStrategy: {strategy: "optimisticVersion", versionAttribute: "updatedAt"},
+    offlineGrantSigningKeys: sync.offlineGrantSigningKeys,
+    syncModel: Sync
+  }
+}
+```
+
+Load `appSecrets.offlineGrantSigningSecret` from the app's established secret store and keep it backend-only. Rotate by adding verification keys and marking exactly one key `current`; do not put a secret, token, private key, function, `Date`, or other nondeterministic value in resource `sync.metadata` or `sync.policy`.
+
+### Bootstrap the manifest and offline grant
+
+`POST /frontend-models/sync/bootstrap` with `{deviceId, scopes}`. The normal frontend-model request authentication establishes the current user. The response contains:
+
+```js
+{
+  status: "success",
+  syncManifest: {
+    Task: {
+      conflictStrategy: "optimisticVersion",
+      enabled: true,
+      operations: [/* sorted operation names */],
+      policyHash: "sha256-...",
+      policyVersion: "tasks-v1"
+    }
+  },
+  offlineGrant: {
+    algorithm: "HS256",
+    grant: {/* grantId, userId, deviceId, resources, scopes, issuedAt, expiresAt */},
+    keyId: "offline-grant-2026-08",
+    signature: "hmac-sha256-..."
+  }
+}
+```
+
+Velocious computes each `policyHash` from normalized enabled state, operations, model name, conflict strategy, `policyVersion`, frontend-safe `metadata`, and hash-only `policy`. Persist the complete signed grant and the manifest used for the local decision. A changed policy or version intentionally invalidates mutations and grants issued under the old hash; refresh bootstrap instead of rewriting signed mutations.
+
+Grant `scopes` are app material supplied at bootstrap, not proof by themselves. Derive the authoritative replay ability from the verified actor and grant and fail closed when the actor or scope cannot be resolved. Grant expiry bounds delayed revocation; shorter TTLs reduce the revocation window but require more online refreshes.
+
+### Persist and sign the local mutation log
+
+Back `LocalMutationLog` with one SQLite/IndexedDB row per record and implement `appendRecord`, `deleteRecords`, `nextSequence`, `record`, `records`, and `updateRecord`:
+
+```js
+import LocalMutationLog from "velocious/build/src/sync/local-mutation-log.js"
+
+const mutationLog = new LocalMutationLog({
+  storage: sqliteMutationLogStorage,
+  storageKey: "awesome-tasks.sync.mutations"
+})
+```
+
+For the built-in frontend-model optimistic queue, pass the grant id in the shape the current transport consumes:
+
+```js
+import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
+
+FrontendModelBase.configureTransport({
+  offlineSync: {
+    actorDeviceId: currentDevice.id,
+    actorUserId: currentUser.id,
+    enabled: true,
+    mutationLog,
+    offlineGrant: {id: signedOfflineGrant.grant.grantId}
+  }
+})
+```
+
+New/persisted `save()` calls queue `create`/`update`; `destroy()` queues `destroy`. The generated model's `resourceConfig().sync` must enable the operation. The built-in queue appends an unsigned mutation with `baseVersion: null`; `exportPeerMutationBundle` signs it when exporting. If an app needs a meaningful base version, explicit dependencies, or signing at mutation time, build the documented `SyncMutation`, call `createSignedMutation(...)`, and append both values with `mutationLog.append({mutation, signedMutation})`.
+
+Current log statuses are exactly `pending`, `applied-locally`, `peer-applied`, `conflict`, `rejected`, and `synced`. Use `pendingRecords()` for replay work, `updateStatus(...)` for reconciliation, and `compact(...)` only after retaining dependency-referenced records.
+
+### Export, import, forward, and replay P2P bundles
+
+```js
+import {
+  exportPeerMutationBundle,
+  importPeerMutationBundle
+} from "velocious/build/src/sync/peer-mutation-bundle.js"
+
+const bundle = await exportPeerMutationBundle({
+  deviceCertificate,
+  devicePrivateKey,
+  mutationLog
+})
+
+const imported = await importPeerMutationBundle({
+  backendPublicKey,
+  bundle,
+  mutationLog
+})
+```
+
+Export includes `pending`, `applied-locally`, and `conflict` records by default. Import verifies the backend-signed device certificate and device mutation signature, skips duplicate actor/user/device mutation identities, retains the original `signedMutation`, and marks accepted rows `peer-applied`. It returns separate `imported`, `skipped`, and `rejected` arrays.
+
+The v1 peer bundle contains signed mutations and their embedded device certificates, but not signed offline grants. The app's transfer protocol must carry/store the originating signed grant keyed by `mutation.offlineGrantId`. On reconnect, forward the unchanged `record.signedMutation` with that grant to `SignedSyncEnvelopeReplayService`; never re-sign a peer mutation with the forwarding device. The service verifies the original certificate, mutation, grant, current manifest, actor/device/grant identities, policy hashes, and the actor/grant-scoped ability before resource routing.
+
+`importPeerMutationBundle` does not apply the resource policy or local model change. If an app needs a quarantine state named `peer_received_unapplied` because related data, the grant, or local policy is unavailable, store that state beside (not as) the `LocalMutationLog` row and retain the original bundle entry for later verification/forwarding. Do not pass `peer_received_unapplied` to `updateStatus()`; it is not a framework status on the current API. A verified framework import is `peer-applied`.
+
+### Replay authorization, permits, commands, and results
+
+There are two current server entry paths:
+
+- `POST /frontend-models/sync/replay` verifies the signed certificate, signed grant, current manifest, operations, and hashes, then dispatches CRUD through the normal frontend-model command pipeline. That path reuses the request's current ability and `permittedParams`, including strict rejection of unknown flat or nested keys. Use it only when the authenticated request actor is the mutation actor.
+- `SignedSyncEnvelopeReplayService` is the peer-forwarding path. It derives an ability from the signed actor/grant with `abilityFactory`, routes through the registered resource, scopes lookup/create membership with that ability, and filters generic CRUD with flat `static writableAttributes`. Declared collection/member operations dispatch to the resource method with `mutation.payload`; member commands receive the envelope resource id as `args.id`.
+
+Examples of normal resource permits:
+
+```js
+permittedParams() {
+  return ["projectId", "title"]
+}
+```
+
+```js
+permittedParams() {
+  return [
+    "title",
+    {commentsAttributes: ["id", "_destroy", "body"]}
+  ]
+}
+```
+
+For nested writes, the model must also declare `acceptsNestedAttributesFor(...)`; including `"_destroy"` in the permit is not sufficient without `{allowDestroy: true}` on that relationship. See [`nested-attributes.md`](nested-attributes.md).
+
+Use generic CRUD for independent record state. Use a declared resource command for operations that need a lock, transaction, ordering invariant, multi-record change, or domain result. A command remains untrusted input: validate its payload, authorize the record(s), perform the transaction, and return a small result object. `TaskBoardSyncResource#moveCard` in the dummy app is the representative implementation.
+
+The built-in replay endpoint returns one `results[]` entry per mutation. Feed each entry to the exported result mapper:
+
+```js
+import {applySyncReplayResultToLocalMutationLog} from "velocious/build/src/sync/conflict-strategy.js"
+
+await applySyncReplayResultToLocalMutationLog({mutationLog, record, result})
+```
+
+It maps applied/duplicate/success to `synced`, conflicts to `conflict`, and error/rejected or a failed command/change-feed append to `rejected`. `SignedSyncEnvelopeReplayService` instead returns `syncs[]` with `syncState: "successful" | "failed" | "conflict"`; update the matching row explicitly and retain the complete result in `syncResult`.
+
+### Conflict strategies
+
+Resource `static sync.conflictStrategy` accepts `optimisticVersion`, `serverWins`, `lastWriterWins`, `fieldThreeWay`, or `appendOnly` as policy metadata. `resolveSyncConflict(...)` implements those strategies when the caller can provide the required base/server snapshots.
+
+Routed backend replay has less information and supports only `optimisticVersion` and `serverWins`. Enable it explicitly with `conflictStrategy: {strategy, versionAttribute}` on the replay service; the static resource declaration alone does not turn the check on. A stale update returns `syncState: "conflict"` with `affectedFields`, `baseVersion`, `localMutation`, `serverModel`, `serverVersion`, `suggestedResolution`, and `versionAttribute`. It is not applied, persisted, or broadcast. Commands, deletes, `applySync` overrides, and legacy `applyHandlers` own their own conflict semantics.
+
+### Portable query boundary
+
+Shared hooks must stay within the query intersection supported by backend records and the app's local/frontend model: model lookup (`find`, `findBy`, `findByOrFail`), descriptor-based `where`/`joins`, `sort`/`order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`, and `toArray`/`load` as supported by that model. Do not use raw SQL strings, driver/table objects, backend-only transactions, filesystem/Node APIs, secrets, or non-literal dynamic imports in shared modules. Relationship joins and conditions must be object descriptors; frontend models reject raw SQL join fragments. When a workflow needs backend-only locking or database features, keep only the command declaration shared and override/implement its handler in the backend wrapper.
+
+### Security boundary
+
+- The frontend, its SQLite rows, shared JavaScript policy, manifest cache, and UI authorization checks are untrusted. They improve offline behavior; only signature verification plus server resource/ability enforcement authorizes a write.
+- Offline authority is deliberately revocable only after a grant expires or reconnects to a changed current policy. Choose `offlineGrantTtlMs` for the resource risk and audit mutations by original actor/device, not uploader.
+- The built-in bootstrap endpoint signs the `scopes` object supplied in the request. Expose it only behind app authorization that validates/materializes those scopes, or wrap bootstrap in an app endpoint that derives scopes server-side. Never let an arbitrary client expand its own signed scope.
+- A peer may store and forward another device's mutation. The backend must use the signed actor/grant and `abilityFactory`, never the forwarding device's HTTP identity. Retain the original signature and idempotency key.
+- Keep roles, billing settings, credentials/tokens, signing configuration, destructive administration, and other high-risk resources online-only: omit sync operations or declare `static sync = false`. Do not issue offline grants for them.
+- Grant HMAC secrets and device/backend private keys never belong in `metadata`, `policy`, generated resources, peer bundles, logs, or frontend configuration. The device's own private key belongs in platform secure storage.
+
+### Troubleshooting
+
+**Policy hash mismatch.** Compare the mutation `policyHash`, `signedOfflineGrant.grant.resources[model].policyHash`, and current bootstrap `syncManifest[model].policyHash`. Also confirm the operation is enabled in both manifest and grant. A resource `policyVersion`, operation, model name, conflict strategy, metadata, or hash-only policy change can move the hash. Refresh bootstrap and create new mutations; do not edit and re-sign an old user's intent just to force it through.
+
+**Rejected mutation.** Inspect the per-entry `status`, `response`, `reason`, and `errorMessage`/`message`. Common causes are an expired/mismatched certificate or grant, missing actor lookup, `offline-grant-denied`, `signed-replay-ability-missing`, `access-denied`, `sync-unknown-attribute`, model validation, or a missing command handler. Keep client-safe rejections isolated to their row; unexpected thrown errors remain framework failures and must be reported rather than converted to a rejection.
+
+**Conflict.** Persist the complete conflict payload on the log row. `affectedFields` identifies the locally written fields; `serverModel`/`serverVersion` are authoritative. Apply the resource's UX (`manual` or `keep_server`), then either mark the mutation terminal or create a new mutation from the new server base. Do not retry the same stale signed mutation indefinitely.
+
+**`peer_received_unapplied`.** This is an app quarantine label, not a current `LocalMutationLog` status. Verify that the peer bundle format is v1, the embedded certificate and mutation signature validate against the configured backend public key, the certificate is unexpired, and the originating signed grant is present in the app grant store. Then refresh missing local scope/policy data and call `importPeerMutationBundle` again. If local application must remain deferred, preserve the original bundle entry for forwarding; once framework import succeeds its log status is `peer-applied`.
+
+## Sequence: bootstrap and initial catch-up
 
 1. User signs in while online.
-2. Frontend asks for sync bootstrap for a project, event, board, or other scope.
-3. Backend evaluates resources, abilities, `permittedParams`, offline hooks, and materialized scopes for the actor/device.
-4. Backend returns initial snapshot data, server sequence, shared policy hashes, device certificate, and signed offline grant.
-5. Frontend stores snapshot data in local SQLite and persists the grant/device material.
+2. App registers or refreshes the device certificate through its device-identity flow.
+3. Frontend posts `{deviceId, scopes}` to `/frontend-models/sync/bootstrap` behind app authorization that validates those scopes.
+4. Backend returns the current sync manifest and signed offline grant.
+5. Frontend persists the complete grant/device material, then obtains the scoped snapshot/change feed or declares `SyncClient` scopes and pulls into local storage.
 
 ## Sequence: offline write
 
 1. User performs an action while offline.
-2. Frontend resolves the shared resource and checks the signed grant, local scope, `permittedParams`, and local validation.
-3. Frontend appends a signed mutation to the local log.
+2. App optionally resolves the local shared wrapper for provisional grant, permit, and domain validation; this is never authoritative security.
+3. Frontend appends a mutation (and optionally its signature) to `LocalMutationLog`.
 4. Frontend updates local SQLite optimistically.
 5. UI shows the change as pending until backend confirmation.
 
 ## Sequence: peer import
 
-1. Device A exports signed pending mutations and proof material.
-2. Device B imports the bundle.
-3. Device B verifies signatures, grants, policy hash, and local applicability.
-4. Device B applies verifiable mutations provisionally or stores unverifiable mutations for forwarding.
-5. Device B can later upload Device A's signed mutations to the backend.
+1. Device A calls `exportPeerMutationBundle`; the app transfers the bundle and corresponding signed grants.
+2. Device B calls `importPeerMutationBundle`, which verifies certificate/mutation signatures and deduplicates entries.
+3. Device B stores verified entries as `peer-applied`; app quarantine retains entries that cannot yet be imported/applied.
+4. Device B may apply verified mutations provisionally through its local shared wrapper.
+5. Device B later uploads Device A's original `signedMutation` and signed grant without re-signing either.
 
 ## Sequence: backend replay and catch-up
 
 1. A device uploads its own and/or peer-forwarded signed mutations.
-2. Backend verifies signatures, idempotency, actor context, grants, abilities, and `permittedParams`.
+2. Backend verifies signatures, idempotency, actor context, grants, current policy, actor/grant-scoped abilities, and the selected permit path.
 3. Backend applies valid mutations or returns structured rejection/conflict results.
 4. Backend appends server-sequenced change records for accepted changes.
-5. Clients pull changes after their last sequence and converge on authoritative state.
+5. Client maps each replay result onto its local log row, pulls after its last sequence, and converges on authoritative state.
 
-## Ticket-app migration outline
+## Migration checklist: ad hoc app sync to framework sync
 
-1. Harden current ticket-app sync path while the framework is being built: remove unsafe auth bypasses, authorize every sync mutation, scope pending rows by actor/device/event, and add idempotency.
-2. Move scanner read-side event/ticket/ticket-scan snapshots to Velocious snapshot/change-feed primitives.
-3. Replace scanner `TicketScan` and `Ticket.whereaboutState` attribute sync with a `TicketScan.scanAttempt` domain command.
-4. Add peer-transfer support for scanner devices using signed mutations and grants.
-5. Remove old ad-hoc sync endpoints after supported app versions have migrated.
+1. **Inventory and classify.** List every ad hoc resource, operation, queue status, snapshot, cursor, peer payload, retry rule, and conflict rule. Classify each write as generic CRUD, domain command, or online-only high risk.
+2. **Fence the legacy path.** Before migration, require authentication/authorization per mutation, actor/device/scope partitioning, an idempotency key, payload allowlists, bounded batches, and audit/error reporting. Stop adding new generic mechanics there.
+3. **Create shared declarations.** Move frontend-safe attributes, commands, flat `writableAttributes`, `permittedParams`, sync operations, policy metadata/version, and portable domain checks into one shared resource per type.
+4. **Add thin environment wrappers.** Bind backend and local SQLite model classes with `static SharedResource`. Keep backend database/lock integrations and frontend storage/UI code out of the shared module.
+5. **Register the backend manifest.** Add wrappers to `backendProjects[].frontendModels`; verify the generated `syncManifest`, operation list, and deterministic policy hashes. Keep high-risk resources absent/disabled.
+6. **Install authoritative abilities.** Build replay abilities from the verified signed actor and offline grant scopes. Add cross-scope denial tests, missing-actor/grant failure tests, and peer-uploader/original-actor tests.
+7. **Issue bounded grants and device certificates.** Choose expiry/rotation, secure key custody, server-derived scopes, bootstrap refresh behavior, and audit fields. Roll out read-only bootstrap before offline writes.
+8. **Adopt the row mutation log.** Migrate pending rows into `LocalMutationLog` shape without losing original ids/order/dependencies. Persist one row per mutation and map legacy statuses to the six framework statuses plus any separate quarantine table.
+9. **Move one low-risk resource end to end.** Queue/sign, export/import, replay through the registered resource and abilities/permit, map results, and catch up from a server-sequenced feed. Keep the legacy endpoint as a version-gated fallback during rollout.
+10. **Extract domain commands.** Replace multi-row or invariant-sensitive raw updates with declared commands; add transaction/lock handling in the backend wrapper and return explicit domain results/change-feed entries.
+11. **Select and test conflict behavior.** Choose a base version and supported replay strategy per CRUD resource; exercise two-device, stale-policy, rejected-attribute, expired-grant, duplicate, and concurrent replay cases.
+12. **Add peer forwarding.** Transfer signed grants beside v1 bundles, retain original signed envelopes, quarantine unverifiable entries, and prove a different uploader cannot change the original authority.
+13. **Cut over reads and writes.** Move snapshots/pulls/realtime to `SyncClient` and framework change feeds, compare convergence/metrics with legacy sync, then disable legacy writes for migrated client versions.
+14. **Remove the old machinery.** After the supported-client window closes, delete legacy endpoints, serializers, dirty-row queues, bypasses, retry workers, and compatibility status mappings. Keep audit retention and a rollback/runbook for already-issued grants.
 
-## AwesomeTasks proof outline
+## Reference implementation and tests
 
-AwesomeTasks is a good proof target for generic resource sync:
+The architecture decision is the [goals](#goals), [non-goals](#non-goals), and [main concepts](#main-concepts) in this document. The focused proof and tests are:
 
-- task create/update through model mutations
-- comment create as append-only model mutation
-- labels/assignments through model or command sync depending on conflict needs
-- board move through a `TaskBoard.moveCard` domain command instead of raw `rowNumber` updates
+- [`awesome-tasks-offline-sync-proof.md`](awesome-tasks-offline-sync-proof.md) — framework-owned Task/Comment CRUD, `TaskBoard.moveCard`, signed offline replay, and actor/grant scope proof.
+- [`frontend-model-resource/base-resource-spec.js`](../spec/frontend-model-resource/base-resource-spec.js) — shared static/method fallback and portable resource context/model registry.
+- [`frontend-models/resource-definition-spec.js`](../spec/frontend-models/resource-definition-spec.js) — deterministic sync policy normalization, hashes, and manifest.
+- [`controller/frontend-model-sync-bootstrap-spec.js`](../spec/controller/frontend-model-sync-bootstrap-spec.js) and [`controller/frontend-model-sync-replay-spec.js`](../spec/controller/frontend-model-sync-replay-spec.js) — signed grants, manifest enforcement, normal ability/`permittedParams` replay, and result/change-feed behavior.
+- [`sync/local-mutation-log-spec.js`](../spec/sync/local-mutation-log-spec.js) and [`sync/peer-mutation-bundle-spec.js`](../spec/sync/peer-mutation-bundle-spec.js) — row log, exact statuses, signatures, deduplication, and peer imports.
+- [`sync/awesome-tasks-offline-peer-sync-end-to-end-spec.js`](../spec/sync/awesome-tasks-offline-peer-sync-end-to-end-spec.js) — two-device forwarding, unauthorized attributes, policy mismatches, conflicts, and convergence.
+- [`sync/awesome-tasks-signed-scope-authorization-spec.js`](../spec/sync/awesome-tasks-signed-scope-authorization-spec.js) — signed actor/grant ability isolation and fail-closed routing.
+- [`sync/sync-envelope-replay-service-resource-routed-spec.js`](../spec/sync/sync-envelope-replay-service-resource-routed-spec.js) — registered resource routing, commands, abilities, flat permits, and safe failures.
 
-The proof should validate that shared resources, offline grants, local mutation logs, peer forwarding, server replay, and server-sequenced changes are usable outside ticket-app.
+## Current integration boundaries
 
-The implemented proof is documented in [`docs/awesome-tasks-offline-sync-proof.md`](awesome-tasks-offline-sync-proof.md).
-
-## Open implementation decisions
-
-- Exact signing algorithm and key rotation strategy.
-- Whether offline grant persistence is framework-owned or app-owned with framework interfaces.
-- The default conflict strategy for resources without an explicit strategy.
-- How much snapshot integrity data is required for peer bootstrap in v1.
-- Whether frontend-local resources are generated automatically from shared resources or configured explicitly per app.
+- App storage owns offline grant persistence, secure device private-key custody, and the row storage adapter.
+- Frontend/local shared wrappers are explicitly constructed; Velocious does not yet register or generate them.
+- Peer bundle v1 does not carry offline grants or snapshot integrity material and does not apply a local resource mutation.
+- `peer_received_unapplied` quarantine is app-owned; `LocalMutationLog` accepts only its six documented statuses.
+- The built-in frontend-model queue writes `baseVersion: null`; version-aware conflict replay requires an explicitly built mutation until tracking supplies a base version.
+- Static resource conflict policy and replay enforcement are separate; routed backend enforcement supports only `optimisticVersion` and `serverWins`.
 
 ## Implemented slice: declarative sync client
 
@@ -394,7 +740,7 @@ FrontendModelBase.configureTransport({
     mutationLog,
     actorUserId: currentUser.id,
     actorDeviceId: currentDevice.id,
-    offlineGrant: signedGrant.grant,
+    offlineGrant: {id: signedGrant.grant.grantId},
     clientMutationId: () => crypto.randomUUID(),
     now: () => new Date()
   }
@@ -419,7 +765,7 @@ If the local sync policy does not list the operation, the write is rejected loca
 
 ### Current boundaries
 
-This slice does not replay mutations to the backend, resolve conflicts, import peer logs, or persist frontend-model rows into app SQLite tables by itself. Those belong to the later server replay, change feed, conflict, P2P, and app integration tasks. The current contract is the durable local mutation log plus the optimistic frontend-model `save()`/`destroy()` queue path.
+`LocalMutationLog` itself does not replay mutations, resolve conflicts, import peers, or persist frontend-model rows into app SQLite tables. Compose it with `exportPeerMutationBundle`/`importPeerMutationBundle`, a replay endpoint/service, `applySyncReplayResultToLocalMutationLog` or explicit status mapping, and the app's local record storage. The built-in `save()`/`destroy()` queue also records `baseVersion: null` and rejects nested/attachment payloads, so version-aware or domain-atomic writes need an explicitly built mutation/command.
 
 ## Implemented slice: resource-routed replay
 

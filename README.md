@@ -11,7 +11,7 @@
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md) and [docs/websocket-channels.md](docs/websocket-channels.md))
-* Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))
+* Shared-resource offline/P2P sync developer guide: policy manifests, grants, signed mutation logs, peer forwarding, replay, conflicts, security, troubleshooting, and migration checklist (see [docs/offline-sync.md](docs/offline-sync.md))
 * Declarative client sync scopes with per-scope cursors, automatic mutation tracking, realtime delivery whose per-recipient authorization hook receives the complete persisted sync envelope, and `sync`/`pull` progress reporting for "X of Y" import screens (see [docs/sync-client.md](docs/sync-client.md) and [docs/offline-sync.md](docs/offline-sync.md))
 * Reactive `useLiveQuery(Model.where(...))` queries that stay current from committed local model changes across local writes, pulls, and realtime (see [docs/live-queries.md](docs/live-queries.md))
 * Server-side sync envelope replay orchestration for app-owned sync receivers (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
@@ -35,7 +35,6 @@
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
-* Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
 * Selective named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
 * Explicit singular-database operation transactions whose model scopes preserve ownership through records, relationships, lifecycle work, nested savepoints, pre-commit guards, and commit callbacks (see [docs/operation-scoped-transactions.md](docs/operation-scoped-transactions.md))
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))

@@ -7,6 +7,7 @@
 - Bound each request with `FrontendModelBase.configureTransport({timeout: 10000})` (milliseconds, or a function resolving one). Built on awaitery's `timeout`, the deadline covers connection, response-header wait, and JSON/error response-body consumption; on expiry the live `fetch` — and any `websocketClient` adapter whose `post` forwards the provided `signal` — is aborted and awaitery's `TimeoutError` is thrown (classify via `error instanceof TimeoutError` from `awaitery/build/timeout.js`), so a stalled request can never hang forever. Pass `signal` (an `AbortSignal` or a function returning one) to compose a caller/session cancellation with the deadline; a caller abort stays distinguishable from a timeout. A `websocketClient` adapter receives the composed signal as `post(path, body, {headers, signal})` and should forward it into its transport so the deadline can abort the live request and its body read.
 - `FrontendModelBase.waitForIdle()` waits until queued, scheduled, and active frontend-model transport requests have resolved. Browser/system-test harnesses can call it during teardown before resetting app state.
 - Keep request execution centralized in Velocious instead of per-project endpoint overrides.
+- For long-offline or peer-to-peer writes, use the shared-resource wrappers, signed mutation log, replay, and migration guidance in [offline-sync.md](offline-sync.md); normal frontend-model transport remains the online path.
 
 ## Error payloads
 
