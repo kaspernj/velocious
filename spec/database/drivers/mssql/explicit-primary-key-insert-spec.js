@@ -79,9 +79,10 @@ describe("Database - drivers - mssql explicit primary key insert", {databaseClea
       expect(onIndex).toBeGreaterThanOrEqual(0)
       expect(insertIndex).toBeGreaterThan(onIndex)
       expect(offIndex).toBeGreaterThan(insertIndex)
-      expect(batch).toContain("BEGIN TRY")
+      expect(batch).toContain("SET IDENTITY_INSERT [tasks] ON;\nBEGIN TRY")
+      expect(batch).toContain(`${INSERT_SQL};\nSET IDENTITY_INSERT [tasks] OFF;`)
       expect(catchIndex).toBeGreaterThan(offIndex)
-      expect(batch.lastIndexOf("SET IDENTITY_INSERT [tasks] OFF")).toBeGreaterThan(catchIndex)
+      expect(batch).toContain("SET IDENTITY_INSERT [tasks] OFF;\nTHROW;")
       expect(throwIndex).toBeGreaterThan(catchIndex)
     } finally {
       restore()

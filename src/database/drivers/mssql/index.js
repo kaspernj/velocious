@@ -378,14 +378,14 @@ export default class VelociousDatabaseDriversMssql extends Base{
   async insertWithExplicitPrimaryKey({options, sql, tableName}) {
     const quotedTable = this.quoteTable(tableName)
     const batch = [
-      `SET IDENTITY_INSERT ${quotedTable} ON`,
+      `SET IDENTITY_INSERT ${quotedTable} ON;`,
       "BEGIN TRY",
-      sql,
-      `SET IDENTITY_INSERT ${quotedTable} OFF`,
+      `${sql};`,
+      `SET IDENTITY_INSERT ${quotedTable} OFF;`,
       "END TRY",
       "BEGIN CATCH",
-      `SET IDENTITY_INSERT ${quotedTable} OFF`,
-      "THROW",
+      `SET IDENTITY_INSERT ${quotedTable} OFF;`,
+      "THROW;",
       "END CATCH"
     ].join("\n")
 
