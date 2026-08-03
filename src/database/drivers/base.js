@@ -962,6 +962,26 @@ export default class VelociousDatabaseDriversBase {
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
+   * Whether inserting an explicit primary-key value needs a driver-level wrapper
+   * (MSSQL IDENTITY columns reject explicit values unless IDENTITY_INSERT is set
+   * for the session).
+   * @returns {boolean} - Whether explicit primary-key inserts need the wrapper.
+   */
+  requiresIdentityInsertForExplicitPrimaryKey() { return false }
+
+  /**
+   * Runs the callback with explicit identity inserts enabled for the table when
+   * the driver requires it. Base drivers need no wrapper and run the callback
+   * directly.
+   * @param {string} _tableName - Table name being inserted into.
+   * @param {() => Promise<?>} callback - Insert work.
+   * @returns {Promise<?>} - The callback result.
+   */
+  async withExplicitPrimaryKeyInsert(_tableName, callback) {
+    return await callback()
+  }
+
+  /**
    * Runs supports insert into returning.
    * @abstract
    * @returns {boolean} - Whether supports insert into returning.

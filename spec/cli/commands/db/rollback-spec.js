@@ -143,6 +143,7 @@ describe("Cli - Commands - db:rollback", () => {
       "sync_entries",
       "tasks",
       "users",
+      "uuid_acts_as_list_items",
       "uuid_interactions",
       "uuid_items"
     ]
@@ -166,22 +167,23 @@ describe("Cli - Commands - db:rollback", () => {
       "20260601052206",
       "20260629160000",
       "20260702150000",
-      "20260706120000"
+      "20260706120000",
+      "20260726132000"
     ]
 
     expect(uniqunize(filteredTables.sort())).toEqual(expectedRolledBackTables)
 
     expect(uniqunize(defaultSchemaMigrations.sort())).toEqual(expectedRolledBackMigrations)
 
-    // Rolling back one step removes 20260726132000-create-uuid-acts-as-list-items.
+    // Rolling back one step removes 20260803120000-create-task-boards-and-cards.
     expect(await syncEntriesColumnNames(cliRollback.configuration)).toContain("project_id")
 
     await runMigrations()
 
     const {defaultSchemaMigrations: newDefaultSchemaMigrations, tablesResult: newTablesResult} = await getTestData()
     const filteredNewTablesResult = newTablesResult.filter((tableName) => !internalTables.has(tableName))
-    const expectedMigratedTables = [...expectedRolledBackTables, "uuid_acts_as_list_items"].sort()
-    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260726132000"].sort()
+    const expectedMigratedTables = [...expectedRolledBackTables, "task_board_cards", "task_boards"].sort()
+    const expectedMigratedMigrations = [...expectedRolledBackMigrations, "20260803120000"].sort()
 
     expect(uniqunize(filteredNewTablesResult.sort())).toEqual(expectedMigratedTables)
 

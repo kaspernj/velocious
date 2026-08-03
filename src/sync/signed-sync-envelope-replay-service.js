@@ -1,6 +1,7 @@
 // @ts-check
 
 import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
+import {frontendModelSyncManifestForBackendProjects} from "../frontend-models/resource-definition.js"
 import {verifyOfflineGrant} from "./offline-grant.js"
 import {mutationIdempotencyKey, verifySignedMutation} from "./device-identity.js"
 import VelociousError from "../velocious-error.js"
@@ -18,6 +19,14 @@ import VelociousError from "../velocious-error.js"
  * mutations: the HTTP uploader may differ from the mutation actor, but replay
  * authority is derived from the signed envelope and grant, not the uploader's
  * session.
+ *
+ * Every mutation is validated against the current sync manifest (the same
+ * contract as the controller's sync replay endpoint): the model and operation
+ * must be enabled in the current manifest, the grant resource entry must be
+ * enabled and list the operation, and the grant policy hash must equal both the
+ * mutation policy hash and the current manifest policy hash. Routed resources
+ * are authorized through an actor/grant-scoped ability built by the configured
+ * `abilityFactory`; without one, routed signed replay fails closed.
  */
 export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayService {
   /**
@@ -26,9 +35,10 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * @param {import("./device-identity.js").SyncJsonWebKey} args.backendPublicKey - Backend public key used to verify device certificates.
    * @param {Array<import("./offline-grant.js").OfflineGrantSigningKey>} [args.offlineGrantSigningKeys] - Offline-grant verification keys.
    * @param {(userId: string) => Promise<{id: () => string} | null>} [args.actorLookup] - Optional lookup from grant user id to an actor object with an `id()` method. Defaults to a wrapper around the grant user id.
+   * @param {(args: {actor: ?, configuration: import("../configuration.js").default | null, grant: import("./offline-grant.js").OfflineGrant}) => Promise<import("../authorization/ability.js").default | null> | import("../authorization/ability.js").default | null} [args.abilityFactory] - Builds the actor/grant-scoped ability used to authorize routed resources. Required for routed signed replay; without it every routed sync fails closed.
    * @param {Record<string, ?>} [args.rest] - Remaining arguments forwarded to {@link SyncEnvelopeReplayService}.
    */
-  constructor({backendPublicKey, offlineGrantSigningKeys, actorLookup, ...rest}) {
+  constructor({abilityFactory, backendPublicKey, offlineGrantSigningKeys, actorLookup, ...rest}) {
     super({
       actorForeignKeyColumn: "authenticationTokenId",
       ...rest
@@ -36,6 +46,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
 
     if (!backendPublicKey) throw new Error("SignedSyncEnvelopeReplayService requires backendPublicKey")
 
+    this.abilityFactory = abilityFactory || null
     this.backendPublicKey = backendPublicKey
     this.offlineGrantSigningKeys = offlineGrantSigningKeys || []
     this.actorLookup = actorLookup || null
@@ -43,9 +54,9 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
 
   /**
    * Verifies signed mutations and then runs the generic replay loop over the
-   * derived sync envelopes. Verified actor and derived syncs are kept in the
-   * request-local `requestState` object so concurrent replay calls on one
-   * service instance cannot cross their authentication state.
+   * derived sync envelopes. Verified actor, grant, and derived syncs are kept
+   * in the request-local `requestState` object so concurrent replay calls on
+   * one service instance cannot cross their authentication state.
    * @param {Record<string, ?>} params - Request params.
    * @param {Record<string, ?>} [requestState] - Request-local state shared with the base replay hooks.
    * @returns {Promise<{syncs: Array<Record<string, ?>>}>} Replay response.
@@ -54,6 +65,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
     const verified = await this.verifyAndTransformSignedReplay(params)
 
     requestState.signedReplayActor = verified.actor
+    requestState.signedReplayGrant = verified.grant
     requestState.signedReplaySyncs = verified.syncs
 
     const result = await super.replay(params, requestState)
@@ -99,11 +111,50 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
   }
 
   /**
+   * Builds the replay context carrying the verified signed actor and grant
+   * (with its scopes) plus the offline runtime marker, so resource hooks and
+   * ability factories authorize against the signer instead of the uploader.
+   * @param {{actor: ?, params: Record<string, ?>, requestState: Record<string, ?>}} args - Actor, request params, and request-local state.
+   * @returns {Promise<Record<string, ?>>} Replay context.
+   */
+  async buildReplayContext({actor, requestState}) {
+    const grant = /** @type {import("./offline-grant.js").OfflineGrant | undefined} */ (requestState?.signedReplayGrant)
+
+    return {
+      currentUser: actor,
+      offlineGrant: grant,
+      offlineGrantScopes: grant?.scopes || {},
+      resourceRuntime: "offline"
+    }
+  }
+
+  /**
+   * Derives the routed-resource ability from the verified signed actor and
+   * grant through the configured `abilityFactory`. The constructor-wide
+   * uploader ability is never used for signed replay: without a factory (or a
+   * factory result) every routed sync fails closed with a client-safe error.
+   * @param {{actor: ?, context: Record<string, ?>}} args - Verified actor and replay context.
+   * @returns {Promise<{ability: import("../authorization/ability.js").default, abilityContext: Record<string, ?>}>} Scoped ability and resource context.
+   */
+  async replayAbilityFor({actor, context}) {
+    const grant = /** @type {import("./offline-grant.js").OfflineGrant} */ (context.offlineGrant)
+    const ability = this.abilityFactory
+      ? await this.abilityFactory({actor, configuration: this.configuration, grant})
+      : null
+
+    if (!ability) {
+      throw VelociousError.safe("Signed sync replay requires an actor/grant-scoped abilityFactory.", {code: "signed-replay-ability-missing"})
+    }
+
+    return {ability, abilityContext: context}
+  }
+
+  /**
    * Verifies every signed mutation, its offline grant, and the actor/grant
    * consistency, then transforms the envelopes into the sync format the base
    * replay service understands.
    * @param {Record<string, ?>} params - Request params.
-   * @returns {Promise<{actor: ?, syncs: Array<Record<string, ?>>}>} Verified actor and derived syncs.
+   * @returns {Promise<{actor: ?, grant: import("./offline-grant.js").OfflineGrant, syncs: Array<Record<string, ?>>}>} Verified actor, common grant, and derived syncs.
    */
   async verifyAndTransformSignedReplay(params) {
     const rawEntries = Array.isArray(params.signedMutations) ? params.signedMutations : []
@@ -112,12 +163,18 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
       throw VelociousError.safe("Expected signed mutations.", {code: "missing-signed-mutations"})
     }
 
+    const syncManifest = this.configuration
+      ? frontendModelSyncManifestForBackendProjects(this.configuration.getBackendProjects())
+      : {}
+
     /** @type {string | null} */
     let grantUserId = null
     /** @type {string | null} */
     let grantDeviceId = null
     /** @type {string | null} */
     let grantId = null
+    /** @type {import("./offline-grant.js").OfflineGrant | null} */
+    let commonGrant = null
     /** @type {Array<Record<string, ?>>} */
     const syncs = []
 
@@ -158,6 +215,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
         grantUserId = offlineGrant.userId
         grantDeviceId = offlineGrant.deviceId
         grantId = offlineGrant.grantId
+        commonGrant = offlineGrant
       } else if (
         grantUserId !== offlineGrant.userId ||
         grantDeviceId !== offlineGrant.deviceId ||
@@ -166,9 +224,8 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
         throw VelociousError.safe("All signed mutations in a batch must share actor, device, and grant.", {code: "mixed-signed-replay-batch"})
       }
 
-      if (!this.grantAuthorizesMutation({grant: offlineGrant, mutation})) {
-        throw VelociousError.safe(`Offline grant does not authorize ${mutation.model}.${mutation.operation}.`, {code: "offline-grant-denied"})
-      }
+      this.validateCurrentSyncPolicy({mutation, syncManifest})
+      this.validateGrantAgainstSyncPolicy({mutation, offlineGrant, syncManifest})
 
       const sync = this.syncFromSignedMutation({mutation})
       const idempotencyKey = mutationIdempotencyKey({mutation})
@@ -176,7 +233,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
       syncs.push({...sync, id: idempotencyKey, idempotencyKey})
     }
 
-    if (!grantUserId) {
+    if (!grantUserId || !commonGrant) {
       throw VelociousError.safe("Could not resolve signed replay actor.", {code: "missing-signed-replay-actor"})
     }
 
@@ -187,30 +244,66 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
         throw VelociousError.safe("Signed replay actor not found.", {code: "signed-replay-actor-missing"})
       }
 
-      return {actor: lookedUpActor, syncs}
+      return {actor: lookedUpActor, grant: commonGrant, syncs}
     }
 
-    return {actor: {id: () => grantUserId}, syncs}
+    return {actor: {id: () => grantUserId}, grant: commonGrant, syncs}
   }
 
   /**
-   * Checks whether the offline grant authorizes the mutation's model/operation.
-   * @param {{grant: import("./offline-grant.js").OfflineGrant, mutation: import("./device-identity.js").SyncMutation}} args - Authorization args.
-   * @returns {boolean} Whether authorized.
+   * Validates a mutation against the current sync manifest: the model and the
+   * operation must be enabled, and the mutation's policy hash must match the
+   * current manifest policy hash.
+   * @param {{mutation: import("./device-identity.js").SyncMutation, syncManifest: Record<string, import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration>}} args - Validation args.
+   * @returns {void} Throws a client-safe error when the current policy denies the mutation.
    */
-  grantAuthorizesMutation({grant, mutation}) {
-    const resourceGrant = grant.resources[mutation.model]
+  validateCurrentSyncPolicy({mutation, syncManifest}) {
+    const syncResource = syncManifest[mutation.model]
 
-    if (!resourceGrant) return false
-    if (resourceGrant === true) return true
-    if (Array.isArray(resourceGrant) && resourceGrant.includes(mutation.operation)) return true
-    if (typeof resourceGrant === "object" && resourceGrant !== null && !Array.isArray(resourceGrant)) {
-      const operations = resourceGrant.operations
-
-      if (Array.isArray(operations) && operations.includes(mutation.operation)) return true
+    if (!syncResource) {
+      throw VelociousError.safe(`Sync replay model is not enabled: ${mutation.model}.`, {code: "sync-replay-model-not-enabled"})
     }
 
-    return false
+    if (!syncResource.operations.includes(mutation.operation)) {
+      throw VelociousError.safe(`Sync replay operation is not enabled for ${mutation.model}: ${mutation.operation}.`, {code: "sync-replay-operation-not-enabled"})
+    }
+
+    if (syncResource.policyHash !== mutation.policyHash) {
+      throw VelociousError.safe(`Sync replay policy hash mismatch for ${mutation.model}.`, {code: "sync-replay-policy-hash-mismatch"})
+    }
+  }
+
+  /**
+   * Validates the verified offline grant against the current sync policy, the
+   * same contract as the controller's sync replay endpoint: the grant resource
+   * entry must be a normalized manifest entry (enabled with an operations list
+   * and the current policy hash), it must list the mutation operation, and its
+   * policy hash must equal both the mutation and current manifest hashes.
+   * Legacy array/true grant-resource shortcuts are not the bootstrap contract
+   * and never authorize a mutation.
+   * @param {{mutation: import("./device-identity.js").SyncMutation, offlineGrant: import("./offline-grant.js").OfflineGrant, syncManifest: Record<string, import("../configuration-types.js").NormalizedFrontendModelResourceSyncConfiguration>}} args - Validation args.
+   * @returns {void} Throws a client-safe error when the grant does not authorize the mutation.
+   */
+  validateGrantAgainstSyncPolicy({mutation, offlineGrant, syncManifest}) {
+    const grantResource = /** @type {Record<string, ?> | undefined} */ (offlineGrant.resources[mutation.model])
+    const grantOperations = Array.isArray(grantResource?.operations) ? grantResource.operations : []
+    const grantPolicyHash = grantResource?.policyHash
+
+    if (!grantResource || grantResource.enabled !== true) {
+      throw VelociousError.safe(`Offline grant does not authorize ${mutation.model}.`, {code: "offline-grant-denied"})
+    }
+
+    if (!grantOperations.includes(mutation.operation)) {
+      throw VelociousError.safe(`Offline grant does not authorize ${mutation.model}: ${mutation.operation}.`, {code: "offline-grant-denied"})
+    }
+
+    if (grantPolicyHash !== mutation.policyHash || grantPolicyHash !== syncManifest[mutation.model]?.policyHash) {
+      throw VelociousError.safe(`Offline grant policy hash mismatch for ${mutation.model}.`, {code: "offline-grant-policy-hash-mismatch"})
+    }
+
+    if (!offlineGrant.scopes || typeof offlineGrant.scopes !== "object" || Array.isArray(offlineGrant.scopes)) {
+      throw VelociousError.safe("Offline grant scopes are invalid.", {code: "offline-grant-scopes-invalid"})
+    }
   }
 
   /**

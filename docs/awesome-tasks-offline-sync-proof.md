@@ -25,18 +25,30 @@ This document records the Velocious-only integration proof for task `ac926b23-10
    - Verified actor and derived syncs are passed through request-local state so concurrent replay calls on one service instance cannot cross authentication state.
    - Verified mutations are transformed into the generic sync envelope shape and replayed by the same routed-resource path.
 
+4. **Current-policy enforcement on signed replay**
+   - Every signed mutation is validated against the current sync manifest (the same contract as the controller's sync replay endpoint): the model and operation must be enabled in the current manifest, and the mutation's policy hash must equal the manifest policy hash.
+   - The grant's resource entry must be a normalized bootstrap manifest entry (`enabled` with an `operations` list and the current `policyHash`); its policy hash must equal both the mutation and current manifest hashes, so grants issued under a revoked or changed policy stop replaying.
+   - Legacy array/`true` grant-resource shortcuts never authorize a signed mutation.
+
+5. **Actor/grant-scoped authorization**
+   - The verified actor and common grant (with its scopes) travel request-locally into the replay context (`currentUser`, `offlineGrant`, `offlineGrantScopes`, `resourceRuntime: "offline"`).
+   - Routed resources are authorized through an ability built by the service's `abilityFactory` from the verified actor and grant — never from constructor-wide uploader ability. Without a factory result, routed signed replay fails closed per sync.
+   - The proof scopes `Task`/`TaskBoard` access to the grant's project scope: a project-A grant cannot update a project-B task or move a card on a project-B board, while same-project replay succeeds.
+
 ## App-side surface kept minimal
 
 The dummy-app fixture only adds:
 
 - Migration and models for `TaskBoard` and `TaskBoardCard`.
-- A small `TaskBoardSyncResource` declaring `writableAttributes`, `memberCommands`, and the `moveCard` handler.
+- A small `TaskBoardSyncResource` declaring `writableAttributes`, `memberCommands`, a `sync` policy declaration, and the `moveCard` handler; its board lookup applies the request ability when one is present.
+- `sync` policy declarations on the existing Task resource so the current-manifest contract covers it.
 - Registration of the resource and permitted params in `backend-projects.js`.
+- A proof `abilityFactory` (in `spec/helpers/signed-sync-replay-helper.js`) scoping Task/TaskBoard abilities to the grant's project scope.
 
 All generic orchestration lives in Velocious:
 
-- `src/sync/sync-envelope-replay-service.js` — batch auth, normalization, stale-guard, routed-resource dispatch, and command dispatch.
-- `src/sync/signed-sync-envelope-replay-service.js` — certificate/offline-grant verification and envelope derivation.
+- `src/sync/sync-envelope-replay-service.js` — batch auth, normalization, stale-guard, routed-resource dispatch, command dispatch, and the `replayAbilityFor` authorization hook.
+- `src/sync/signed-sync-envelope-replay-service.js` — certificate/offline-grant verification, current-policy and grant-policy enforcement, request-local actor/grant context, and fail-closed actor/grant-scoped ability derivation.
 - `src/sync/sync-replay-upsert-applier.js` — declarative upsert applier used by legacy `applyHandlers`.
 
 ## What is not claimed
@@ -48,6 +60,8 @@ The proof demonstrates the behavior above under the locking and transaction mech
 - `spec/sync/awesome-tasks-task-comment-sync-spec.js` — Task/Comment routed replay and permit-list rejection.
 - `spec/sync/awesome-tasks-task-board-move-card-spec.js` — `TaskBoard.moveCard` ordering, atomic move, publish suppression, column moves, and error handling.
 - `spec/sync/awesome-tasks-signed-offline-sync-spec.js` — long-offline Task update, expired-grant rejection, missing-actor failure, concurrent two-actor isolation, and peer-forwarded `moveCard`.
+- `spec/sync/awesome-tasks-signed-policy-enforcement-spec.js` — current-manifest and grant-policy enforcement: disabled/stale/current policy cases and legacy-shortcut rejection.
+- `spec/sync/awesome-tasks-signed-scope-authorization-spec.js` — cross-project denial for Task updates and `moveCard`, same-project success, ability-factory actor/grant delivery, and fail-closed replay without a factory.
 
 ## See also
 

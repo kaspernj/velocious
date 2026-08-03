@@ -455,18 +455,33 @@ export default class SyncEnvelopeReplayService {
   }
 
   /**
+   * Resolves the ability and resource context used to authorize routed
+   * resources. Defaults to the constructor-wide ability/abilityContext;
+   * subclasses (signed replay) override this to derive authorization from a
+   * verified actor/grant instead of uploader-global state.
+   * @param {{actor: ?, context: Record<string, ?>}} _args - Replay actor and batch context.
+   * @returns {Promise<{ability: import("../authorization/ability.js").default | undefined, abilityContext: Record<string, ?>}>} Ability and resource context.
+   */
+  async replayAbilityFor(_args) {
+    return {ability: this.ability || undefined, abilityContext: this.abilityContext || {}}
+  }
+
+  /**
    * Builds the routed resource instance handling one mutation.
    * @param {object} args - Options.
+   * @param {?} args.actor - Replay actor.
+   * @param {Record<string, ?>} args.context - Replay context.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {SyncReplayResourceRegistration} args.registration - Resolved resource registration.
-   * @returns {import("../frontend-model-resource/base-resource.js").default} Routed resource instance.
+   * @returns {Promise<import("../frontend-model-resource/base-resource.js").default>} Routed resource instance.
    */
-  buildReplayResource({mutation, registration}) {
+  async buildReplayResource({actor, context, mutation, registration}) {
     const ResourceClass = registration.resourceClass
+    const {ability, abilityContext} = await this.replayAbilityFor({actor, context})
 
     return new ResourceClass({
-      ability: this.ability || undefined,
-      context: this.abilityContext || {},
+      ability,
+      context: abilityContext,
       locals: {...(this.locals || {}), ...(this.configuration ? {configuration: this.configuration} : {})},
       modelName: registration.modelName,
       params: mutation.data,
@@ -483,14 +498,14 @@ export default class SyncEnvelopeReplayService {
    * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<Record<string, ?>>} Apply result with record, created/deleted flags, and afterSyncApply extras.
    */
-  async applyRoutedReplayMutation({context, existingSync, mutation}) {
+  async applyRoutedReplayMutation({actor, context, existingSync, mutation}) {
     const registration = this.replayResourceRegistration(mutation.resourceType)
 
     if (!registration) {
       throw VelociousError.safe(`Unknown sync resource type: ${mutation.resourceType}.`, {code: "unknown-resource-type"})
     }
 
-    const resource = this.buildReplayResource({mutation, registration})
+    const resource = await this.buildReplayResource({actor, context, mutation, registration})
     const customApplyResult = await resource.applySync({context, existingSync, mutation})
 
     if (customApplyResult !== null) return customApplyResult
@@ -567,8 +582,9 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Builds the arguments object passed to a resource command method. Member
-   * commands receive the envelope's resourceId as `id`; collection commands
-   * receive only the mutation payload.
+   * commands receive the envelope's resourceId as `id`; the envelope identity
+   * is assigned after the payload so a payload `id` can never retarget the
+   * command away from the resource the authorization hooks approved.
    * @param {{commandConfig: {collectionCommands: Record<string, string>, memberCommands: Record<string, string>}, commandMethodName: string, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Args builder args.
    * @returns {Record<string, ?>} Command method arguments.
    */
@@ -576,7 +592,7 @@ export default class SyncEnvelopeReplayService {
     const isMember = commandConfig.memberCommands[commandMethodName] !== undefined
 
     if (isMember) {
-      return {id: mutation.resourceId, ...mutation.data}
+      return {...mutation.data, id: mutation.resourceId}
     }
 
     return {...mutation.data}

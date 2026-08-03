@@ -4275,7 +4275,10 @@ class VelociousDatabaseRecord {
       tableName: this._tableName(),
       data
     })
-    const insertResult = await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
+    const runInsert = async () => await this._connection().query(sql, {logName: `${this.getModelClass().name} Create`})
+    const insertResult = hasUserProvidedPrimaryKey && this._connection().requiresIdentityInsertForExplicitPrimaryKey()
+      ? await this._connection().withExplicitPrimaryKeyInsert(this._tableName(), runInsert)
+      : await runInsert()
 
     await this._applyInsertResult({data, insertResult, primaryKey})
     this.setIsNewRecord(false)

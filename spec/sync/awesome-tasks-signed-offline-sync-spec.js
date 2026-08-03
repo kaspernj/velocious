@@ -8,54 +8,13 @@ import SignedSyncEnvelopeReplayService from "../../src/sync/signed-sync-envelope
 import Task from "../dummy/src/models/task.js"
 import TaskBoard from "../dummy/src/models/task-board.js"
 import TaskBoardCard from "../dummy/src/models/task-board-card.js"
+import {generateSyncSigningKeyPair} from "../../src/sync/device-identity.js"
 import {
-  createDeviceCertificate,
-  createSignedMutation,
-  generateSyncSigningKeyPair
-} from "../../src/sync/device-identity.js"
-import {createOfflineGrantFromBootstrap} from "../../src/sync/offline-grant.js"
-
-/**
- * Builds the test keys, certificate, and grant fixtures for signed replay specs.
- * @param {object} args - Fixture args.
- * @param {string} args.actorDeviceId - Device id.
- * @param {string} args.actorUserId - User id.
- * @param {string} args.grantId - Grant id.
- * @param {Date} args.grantNow - Grant issue time.
- * @param {number} [args.grantTtlMs] - Grant TTL.
- * @param {Record<string, ?>} args.resources - Grant resource manifest.
- * @param {import("../../src/sync/device-identity.js").SyncJsonWebKey} [args.backendKeys] - Optional shared backend key pair; generated when omitted.
- * @param {import("../../src/sync/offline-grant.js").OfflineGrantSigningKey} [args.signingKey] - Optional shared offline-grant signing key; defaults to a literal test key.
- * @returns {Promise<Record<string, ?>>} Fixture bundle.
- */
-async function buildSignedReplayFixtures({actorDeviceId, actorUserId, grantId, grantNow, grantTtlMs = 24 * 60 * 60 * 1000, resources, backendKeys, signingKey}) {
-  const resolvedBackendKeys = backendKeys || await generateSyncSigningKeyPair()
-  const deviceKeys = await generateSyncSigningKeyPair()
-  const deviceCertificate = await createDeviceCertificate({
-    backendPrivateKey: resolvedBackendKeys.privateKey,
-    certificate: {
-      actorDeviceId,
-      actorUserId,
-      certificateId: "cert-1",
-      devicePublicKey: deviceKeys.publicKey,
-      expiresAt: "2027-01-01T00:00:00.000Z",
-      issuedAt: "2026-08-01T00:00:00.000Z"
-    }
-  })
-  const resolvedSigningKey = signingKey || {current: true, id: "key-1", secret: "super-secret-key"}
-  const signedOfflineGrant = await createOfflineGrantFromBootstrap({
-    deviceId: actorDeviceId,
-    grantId,
-    grantTtlMs,
-    now: grantNow,
-    resources,
-    scopes: {projectId: "project-1"},
-    signingKey: resolvedSigningKey,
-    userId: actorUserId
-  })
-
-  return {backendKeys: resolvedBackendKeys, deviceCertificate, deviceKeys, signingKey: resolvedSigningKey, signedOfflineGrant}
-}
+  buildOfflineGrantAbilityFactory,
+  buildSignedReplayFixtures,
+  dummySyncManifest,
+  signFixtureMutation
+} from "../helpers/signed-sync-replay-helper.js"
 
 describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("replays a long-offline signed Task update after verifying device certificate and grant", async () => {
@@ -67,11 +26,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
       actorUserId: "user-1",
       grantId: "grant-1",
       grantNow,
-      resources: {Task: ["update"]}
+      resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
+      scopes: {projectId: project.id()}
     })
-    const signedMutation = await createSignedMutation({
-      deviceCertificate: fixtures.deviceCertificate,
-      devicePrivateKey: fixtures.deviceKeys.privateKey,
+    const signedMutation = await signFixtureMutation({
+      fixtures,
       mutation: {
         actorDeviceId: "device-a",
         actorUserId: "user-1",
@@ -83,10 +42,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
         offlineGrantId: "grant-1",
         operation: "update",
         payload: {id: String(task.id())},
-        policyHash: "sha256-policy"
+        policyHash: dummySyncManifest().Task.policyHash
       }
     })
     const service = new SignedSyncEnvelopeReplayService({
+      abilityFactory: buildOfflineGrantAbilityFactory(),
       backendPublicKey: fixtures.backendKeys.publicKey,
       configuration: dummyConfiguration,
       offlineGrantSigningKeys: [fixtures.signingKey],
@@ -119,11 +79,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
       grantId: "grant-expired",
       grantNow,
       grantTtlMs: 1000,
-      resources: {Task: ["update"]}
+      resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
+      scopes: {projectId: project.id()}
     })
-    const signedMutation = await createSignedMutation({
-      deviceCertificate: fixtures.deviceCertificate,
-      devicePrivateKey: fixtures.deviceKeys.privateKey,
+    const signedMutation = await signFixtureMutation({
+      fixtures,
       mutation: {
         actorDeviceId: "device-a",
         actorUserId: "user-1",
@@ -134,10 +94,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
         offlineGrantId: "grant-expired",
         operation: "update",
         payload: {id: String(task.id())},
-        policyHash: "sha256-policy"
+        policyHash: dummySyncManifest().Task.policyHash
       }
     })
     const service = new SignedSyncEnvelopeReplayService({
+      abilityFactory: buildOfflineGrantAbilityFactory(),
       backendPublicKey: fixtures.backendKeys.publicKey,
       configuration: dummyConfiguration,
       offlineGrantSigningKeys: [fixtures.signingKey],
@@ -168,11 +129,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
       actorUserId: "peer-user",
       grantId: "grant-peer",
       grantNow,
-      resources: {TaskBoard: ["moveCard"]}
+      resources: {TaskBoard: {enabled: true, operations: ["moveCard"], policyHash: dummySyncManifest().TaskBoard.policyHash}},
+      scopes: {projectId: project.id()}
     })
-    const signedMutation = await createSignedMutation({
-      deviceCertificate: fixtures.deviceCertificate,
-      devicePrivateKey: fixtures.deviceKeys.privateKey,
+    const signedMutation = await signFixtureMutation({
+      fixtures,
       mutation: {
         actorDeviceId: "peer-device",
         actorUserId: "peer-user",
@@ -182,10 +143,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
         offlineGrantId: "grant-peer",
         operation: "moveCard",
         payload: {id: String(board.id()), targetColumnId: "done", taskId: String(task.id())},
-        policyHash: "sha256-policy"
+        policyHash: dummySyncManifest().TaskBoard.policyHash
       }
     })
     const service = new SignedSyncEnvelopeReplayService({
+      abilityFactory: buildOfflineGrantAbilityFactory(),
       backendPublicKey: fixtures.backendKeys.publicKey,
       configuration: dummyConfiguration,
       offlineGrantSigningKeys: [fixtures.signingKey],
@@ -218,11 +180,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
       actorUserId: "unknown-user",
       grantId: "grant-missing-actor",
       grantNow,
-      resources: {Task: ["update"]}
+      resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
+      scopes: {projectId: project.id()}
     })
-    const signedMutation = await createSignedMutation({
-      deviceCertificate: fixtures.deviceCertificate,
-      devicePrivateKey: fixtures.deviceKeys.privateKey,
+    const signedMutation = await signFixtureMutation({
+      fixtures,
       mutation: {
         actorDeviceId: "device-a",
         actorUserId: "unknown-user",
@@ -233,10 +195,11 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
         offlineGrantId: "grant-missing-actor",
         operation: "update",
         payload: {id: String(task.id())},
-        policyHash: "sha256-policy"
+        policyHash: dummySyncManifest().Task.policyHash
       }
     })
     const service = new SignedSyncEnvelopeReplayService({
+      abilityFactory: buildOfflineGrantAbilityFactory(),
       actorLookup: async () => null,
       backendPublicKey: fixtures.backendKeys.publicKey,
       configuration: dummyConfiguration,
@@ -255,41 +218,41 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
     expect(unchangedTask.name()).toEqual("Missing actor task")
   })
 
-  it("keeps concurrent replays on one service from crossing actors", async () => {
+  it("keeps concurrent replays on one service from crossing actors or grants", async () => {
     const grantNow = new Date("2026-08-03T00:00:00.000Z")
 
     /**
-     * Builds one actor's fixtures and signed mutation for a no-DB probe resource.
+     * Builds one actor's fixtures and signed Task mutation.
      * @param {string} userId - Actor user id.
      * @param {string} deviceId - Actor device id.
      * @param {string} mutationId - Client mutation id.
-     * @param {string} probeId - Probe resource id.
+     * @param {string} probeTaskId - Target task id carried in the payload.
      * @returns {Promise<Record<string, ?>>} Fixtures plus signed mutation.
      */
-    async function buildActorMutation(userId, deviceId, mutationId, probeId) {
+    async function buildActorMutation(userId, deviceId, mutationId, probeTaskId) {
       const fixtures = await buildSignedReplayFixtures({
         actorDeviceId: deviceId,
         actorUserId: userId,
         backendKeys: sharedBackendKeys,
         grantId: `grant-${userId}`,
         grantNow,
-        resources: {ActorProbe: ["update"]},
+        resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
+        scopes: {projectId: `project-of-${userId}`},
         signingKey: sharedSigningKey
       })
-      const signedMutation = await createSignedMutation({
-        deviceCertificate: fixtures.deviceCertificate,
-        devicePrivateKey: fixtures.deviceKeys.privateKey,
+      const signedMutation = await signFixtureMutation({
+        fixtures,
         mutation: {
           actorDeviceId: deviceId,
           actorUserId: userId,
           attributes: {},
           clientMutationId: mutationId,
-          model: "ActorProbe",
+          model: "Task",
           occurredAt: "2026-08-01T01:00:00.000Z",
           offlineGrantId: `grant-${userId}`,
           operation: "update",
-          payload: {id: probeId},
-          policyHash: "sha256-policy"
+          payload: {id: probeTaskId},
+          policyHash: dummySyncManifest().Task.policyHash
         }
       })
 
@@ -298,18 +261,22 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
 
     const sharedBackendKeys = await generateSyncSigningKeyPair()
     const sharedSigningKey = {current: true, id: "shared-key-1", secret: "shared-super-secret-key"}
-    const actorA = await buildActorMutation("user-a", "device-a", "mutation-a", "probe-a")
-    const actorB = await buildActorMutation("user-b", "device-b", "mutation-b", "probe-b")
+    const actorA = await buildActorMutation("user-a", "device-a", "mutation-a", "task-a")
+    const actorB = await buildActorMutation("user-b", "device-b", "mutation-b", "task-b")
 
-    /** @type {string[]} */
-    const observedActors = []
+    /** @type {Array<{actorId: ?, grantUserId: ?, grantScopes: ?}>} */
+    const observed = []
 
     const service = new SignedSyncEnvelopeReplayService({
       actorLookup: async (userId) => ({id: () => `actor-${userId}`}),
       applyHandlers: {
-        ActorProbe: async ({actor}) => {
+        Task: async ({actor, context}) => {
           await new Promise((resolve) => setTimeout(resolve, 10))
-          observedActors.push(actor.id())
+          observed.push({
+            actorId: actor.id(),
+            grantScopes: context.offlineGrant?.scopes,
+            grantUserId: context.offlineGrant?.userId
+          })
 
           return {actorId: actor.id()}
         }
@@ -327,6 +294,12 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
     expect(resultA).toEqual({syncs: [{idempotencyKey: "user-a:device-a:mutation-a", syncState: "successful"}]})
     expect(resultB).toEqual({syncs: [{idempotencyKey: "user-b:device-b:mutation-b", syncState: "successful"}]})
 
-    expect(observedActors.sort()).toEqual(["actor-user-a", "actor-user-b"])
+    const observedByActor = Object.fromEntries(observed.map((entry) => [entry.actorId, entry]))
+
+    expect(Object.keys(observedByActor).sort()).toEqual(["actor-user-a", "actor-user-b"])
+    expect(observedByActor["actor-user-a"].grantUserId).toEqual("user-a")
+    expect(observedByActor["actor-user-a"].grantScopes).toEqual({projectId: "project-of-user-a"})
+    expect(observedByActor["actor-user-b"].grantUserId).toEqual("user-b")
+    expect(observedByActor["actor-user-b"].grantScopes).toEqual({projectId: "project-of-user-b"})
   })
 })

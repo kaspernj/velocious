@@ -224,4 +224,30 @@ describe("AwesomeTasks TaskBoard.moveCard offline sync command", {databaseCleani
     expect(boardEntries[0].syncType()).toEqual("moveCard")
     expect(cardEntries).toHaveLength(0)
   })
+
+  it("keeps the envelope resource id authoritative over a payload id for member commands", async () => {
+    const project = await Project.create({name: "Board project"})
+    const board = await TaskBoard.create({name: "Project board", projectId: project.id()})
+    const otherBoard = await TaskBoard.create({name: "Other board", projectId: project.id()})
+    const task = await Task.create({name: "Task", projectId: project.id()})
+
+    await TaskBoardCard.create({taskBoardId: board.id(), taskId: task.id(), boardColumnId: "todo", position: 1})
+
+    const service = buildService()
+    const result = await service.replay({
+      syncs: [buildSync({
+        data: {id: otherBoard.id(), targetColumnId: "done", taskId: task.id()},
+        id: "move-card-envelope-id",
+        resourceId: String(board.id()),
+        resourceType: "TaskBoard",
+        syncType: "moveCard"
+      })]
+    })
+
+    expect(result).toEqual({syncs: [{id: "move-card-envelope-id", syncState: "successful"}]})
+
+    const movedCard = await TaskBoardCard.findByOrFail({taskBoardId: board.id(), taskId: task.id()})
+
+    expect(movedCard.boardColumnId()).toEqual("done")
+  })
 })

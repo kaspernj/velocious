@@ -362,6 +362,27 @@ export default class VelociousDatabaseDriversMssql extends Base{
   shouldSetAutoIncrementWhenPrimaryKey() { return true }
   supportsDefaultPrimaryKeyUUID() { return true }
 
+  requiresIdentityInsertForExplicitPrimaryKey() { return true }
+
+  /**
+   * Runs the callback with IDENTITY_INSERT enabled for the table so an explicit
+   * primary-key value (client-generated offline-sync ids) can be inserted into
+   * an IDENTITY column. The setting is session-scoped and always reverted,
+   * even when the insert fails.
+   * @param {string} tableName - Table name being inserted into.
+   * @param {() => Promise<?>} callback - Insert work.
+   * @returns {Promise<?>} - The callback result.
+   */
+  async withExplicitPrimaryKeyInsert(tableName, callback) {
+    await this.query(`SET IDENTITY_INSERT ${this.quoteTable(tableName)} ON`)
+
+    try {
+      return await callback()
+    } finally {
+      await this.query(`SET IDENTITY_INSERT ${this.quoteTable(tableName)} OFF`)
+    }
+  }
+
   /**
    * Runs escape.
    * @param {?} value - Value to use.

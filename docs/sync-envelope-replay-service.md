@@ -87,10 +87,11 @@ The response shape is compatible with batch replay clients:
 
 Override these methods as needed:
 
-- `authenticateReplay(params)`: required. Return `{authenticated: true, actor}` or `{authenticated: false, errorCode, errorMessage}`.
-- `buildReplayContext({actor, params})`: optional per-batch cache/context object.
-- `replaySyncs(params)`: optional custom extraction of raw envelopes. Defaults to `params.syncs`.
+- `authenticateReplay(params, requestState)`: required. Return `{authenticated: true, actor}` or `{authenticated: false, errorCode, errorMessage}`.
+- `buildReplayContext({actor, params, requestState})`: optional per-batch cache/context object.
+- `replaySyncs(params, requestState)`: optional custom extraction of raw envelopes. Defaults to `params.syncs`.
 - `authorizeReplayMutation({actor, context, mutation})`: optional per-envelope access check. Defaults to allowed.
+- `replayAbilityFor({actor, context})`: optional authorization derivation for routed resources. Defaults to the constructor-wide `ability`/`abilityContext`; subclasses carrying verified per-request identity (for example `SignedSyncEnvelopeReplayService`) override it to derive the ability from the verified actor/grant instead of uploader-global state.
 - `findExistingReplaySync({actor, context, mutation})`: optional current sync/change lookup.
 - `shouldApplyReplayMutation({actor, context, existingSync, mutation})`: optional stale/conflict decision. Defaults to comparing `mutation.clientUpdatedAt` against `existingReplaySyncClientUpdatedAt(existingSync)`.
 - `applyReplayMutation({actor, context, existingSync, mutation})`: optional app/domain mutation dispatcher.

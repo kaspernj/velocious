@@ -18,6 +18,8 @@ class TaskBoardSyncResource extends FrontendModelBaseResource {
 
   static memberCommands = ["moveCard"]
 
+  static sync = {operations: ["index", "find", "moveCard"]}
+
   /**
    * Returns the Velocious configuration, supplied by the replay service through
    * locals so domain commands can use the established transaction mechanism.
@@ -88,7 +90,10 @@ class TaskBoardSyncResource extends FrontendModelBaseResource {
    * @returns {Promise<{movedCardId: number, taskId: number, targetColumnId: string, position: number}>} - Move result.
    */
   async executeMove({operation, boardId, requestedPosition, targetColumnId, taskId}) {
-    const board = await operation.forModel(TaskBoard).findBy({id: boardId})
+    const boardQuery = operation.forModel(TaskBoard).where({id: boardId})
+    const board = this.ability
+      ? await this.ability.applyToQuery({action: "update", modelClass: TaskBoard, query: boardQuery}).first()
+      : await boardQuery.first()
 
     if (!board) {
       throw this.writableAttributeError("TaskBoard not found.", {code: "task-board-not-found"})
