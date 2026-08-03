@@ -200,6 +200,7 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
 
     const envelope = /** @type {Record<string, ?>} */ (body)
     const scope = /** @type {import("./sync-resource-base.js").SerializedChangesScope} */ (this._scope)
+    /** @type {Array<Record<string, ?>>} */
     const syncs = Array.isArray(envelope.syncs) ? envelope.syncs : [envelope]
     const configuration = this.session.configuration
     /** @type {Array<Record<string, ?>>} */
@@ -219,7 +220,19 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
 
         if (resourceId === undefined || resourceId === null) continue
 
-        if (await resource.changeDeliverable({params: this.params, scope, sync: {resourceId: String(resourceId), resourceType: String(resourceType)}})) {
+        // Pass the complete broadcast entry through so the app's
+        // changeDeliverable can authorize by exact-row identity (immutable
+        // sync-row id, actor-specific metadata) — concurrent targeted and
+        // shared broadcasts for the same resource identity authorize
+        // independently. Only resourceId/resourceType are normalized to
+        // strings, on a copy so the published entry is never mutated.
+        const syncEntry = {
+          ...sync,
+          resourceId: String(resourceId),
+          resourceType: String(resourceType)
+        }
+
+        if (await resource.changeDeliverable({params: this.params, scope, sync: syncEntry})) {
           deliverableSyncs.push(sync)
         }
       }

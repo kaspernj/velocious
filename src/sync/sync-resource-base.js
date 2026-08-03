@@ -14,6 +14,17 @@ import VelociousError from "../velocious-error.js"
  * @property {string | null} resourceType - Client resource/model name the scope was declared for, or null for the all-types (user) scope: one scope covering every resource type this resource authorizes for the caller, so a sync authorizes once however many types it serves.
  * @property {string[] | null} resourceTypes - For the all-types scope, the resource types the client can apply. A cheap delivery/type filter only - it narrows, never widens, what the app's authorization already allows. Null for a type-declared scope.
  */
+
+/**
+ * One published sync entry as delivered to the per-delivery access re-check
+ * ({@link SyncResourceBase#changeDeliverable}): the complete broadcast sync
+ * entry — including the immutable sync-row id, actor-specific metadata, and
+ * any other app fields the publisher put on it — with `resourceId` and
+ * `resourceType` normalized to strings. Apps authorizing by exact-row
+ * identity read the extra fields; overrides that only read
+ * `resourceId`/`resourceType` keep working unchanged.
+ * @typedef {Record<string, ?> & {resourceId: string, resourceType: string}} ChangeDeliverableSyncEntry
+ */
 const QUICK_SEARCH_COLUMN = "quickSearch"
 
 /**
@@ -240,7 +251,14 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
    * checks whether the published change's feed row is visible within that
    * scope. Apps get this for free from the scoping they already declared;
    * override only for custom per-delivery rules.
-   * @param {{params: Record<string, ?>, scope: SerializedChangesScope | null, sync: {resourceId: string, resourceType: string}}} args - Request params, subscription scope, and the published change's identity.
+   *
+   * The `sync` argument is the complete broadcast sync entry — immutable
+   * sync-row id, actor-specific metadata, and any other publisher fields —
+   * with `resourceId`/`resourceType` normalized to strings, so an override
+   * can authorize concurrent targeted and shared broadcasts for the same
+   * resource identity independently by their exact-row identity. The channel
+   * never mutates the published entry; normalization happens on a copy.
+   * @param {{params: Record<string, ?>, scope: SerializedChangesScope | null, sync: ChangeDeliverableSyncEntry}} args - Request params, subscription scope, and the published sync entry.
    * @returns {Promise<boolean>} Whether the change may be delivered to this subscription.
    */
   async changeDeliverable({params, scope, sync}) {
