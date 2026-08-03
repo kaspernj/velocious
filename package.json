@@ -22,6 +22,7 @@
     "benchmark:query-roundtrip-batching": "node benchmark/query-roundtrip-batching.js",
     "benchmark:websocket-outbound-queue": "node benchmark/websocket-outbound-queue.js",
     "benchmark:websocket-frame-buffering": "node benchmark/websocket-frame-buffering.js",
+    "benchmark:http-client-content-length-byte-length": "node benchmark/http-client-content-length-byte-length.js",
     "build": "node scripts/clean-build.js && npm run compile",
     "compile": "tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
     "copy:js": "cpy \"index.js\" build && cpy \"bin/**/*.js\" build/bin && cpy \"src/**/*.js\" build --parents",
