@@ -1,5 +1,7 @@
 import Routes from "../../../../src/routes/index.js"
 import VelociousBackgroundJobsApi from "../../../../src/background-jobs/web/index.js"
+import VelociousDeploymentApi from "../../../../src/deployment-api/index.js"
+import {testDeploymentAdapter} from "../support/test-deployment-adapter.js"
 
 const routes = new Routes()
 
@@ -8,6 +10,21 @@ routes.draw((route) => {
     accessTokens: ["test-jobs-token"],
     at: "/velocious/jobs",
     authorize: async ({request}) => request.header("x-jobs-allow") === "yes"
+  })
+
+  route.mount(VelociousDeploymentApi, {
+    accessTokens: ["test-deployment-token"],
+    adapter: testDeploymentAdapter,
+    at: "/velocious/deployments",
+    projects: {
+      "dummy-project": {
+        stages: {
+          production: {releaseBranch: "master"},
+          staging: {releaseBranch: "master"}
+        }
+      }
+    },
+    staleRunTimeoutMs: 2000
   })
 
   route.namespace("api", (route) => {
