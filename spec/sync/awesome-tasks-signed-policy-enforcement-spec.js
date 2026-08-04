@@ -13,6 +13,8 @@ import {
   signFixtureMutation
 } from "../helpers/signed-sync-replay-helper.js"
 
+const GRANT_NOW = new Date("2026-08-04T00:00:00.000Z")
+
 /**
  * Builds a signed replay service with the proof ability factory.
  * @param {Record<string, ?>} fixtures - Fixture bundle.
@@ -77,7 +79,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {NotAModel: {enabled: true, operations: ["update"], policyHash: "sha256-stale"}},
       scopes: {projectId: project.id()}
     })
@@ -98,7 +100,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: {enabled: true, operations: ["destroy"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -119,7 +121,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -140,7 +142,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: {enabled: false, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -157,7 +159,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: {enabled: true, operations: ["find"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -174,7 +176,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: {enabled: true, operations: ["update"], policyHash: "sha256-stale"}},
       scopes: {projectId: project.id()}
     })
@@ -191,7 +193,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: ["update"]},
       scopes: {projectId: project.id()}
     })
@@ -208,7 +210,7 @@ describe("AwesomeTasks signed offline sync policy enforcement", {databaseCleanin
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-policy",
-      grantNow: new Date("2026-08-03T00:00:00.000Z"),
+      grantNow: GRANT_NOW,
       resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })

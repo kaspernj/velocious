@@ -205,9 +205,9 @@ The dashboard UI is a separate Expo app + npm package + GitHub repo
 - talks only to the Jobs API above, using the stats snapshot plus count deltas
   when supported and falling back to polling for older Velocious versions.
 
-The same `route.mount(...)` pattern is used by the authenticated
-[callable deployment API](deployment-api.md), which mounts a bounded
-deployment endpoint backed by an integration-owned adapter.
+Velocious no longer ships a deployment API. If your app previously mounted the
+removed deployment endpoint, migrate that workflow to Rampway instead; see the
+[Rampway migration guidance](rampway-migration.md).
 
 ## Roadmap
 

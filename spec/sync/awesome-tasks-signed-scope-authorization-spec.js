@@ -15,7 +15,7 @@ import {
   signFixtureMutation
 } from "../helpers/signed-sync-replay-helper.js"
 
-const GRANT_NOW = new Date("2026-08-03T00:00:00.000Z")
+const GRANT_NOW = new Date("2026-08-04T00:00:00.000Z")
 
 /**
  * Builds grant fixtures for one actor scoped to a project.
