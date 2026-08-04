@@ -81,8 +81,8 @@ export default class BackgroundJobsScheduler {
      * Narrows the runtime value to the documented type.
      * @type {Array<ReturnType<typeof setTimeout>>} */
     this.timeoutIds = []
-    /** @type {Set<Promise<void>>} - Scheduled enqueues that shutdown must drain. */
-    this.pendingEnqueues = new Set()
+    /** @type {Map<string, Promise<void>>} - In-flight scheduled enqueues by schedule key that shutdown must drain. */
+    this.pendingEnqueuesByJobKey = new Map()
     /**
      * Narrows the runtime value to the documented type.
      * @type {boolean} - True between stop() and the next start(); cron self-rescheduler checks this so a stop() during an in-flight enqueue doesn't immediately re-arm.
@@ -131,7 +131,7 @@ export default class BackgroundJobsScheduler {
     this.intervalIds = []
     this.timeoutIds = []
 
-    await Promise.all(this.pendingEnqueues)
+    await Promise.all(this.pendingEnqueuesByJobKey.values())
   }
 
   /**
@@ -181,13 +181,15 @@ export default class BackgroundJobsScheduler {
     }
 
     const timeoutId = setTimeout(() => {
-      void this.runScheduledJob({jobConfiguration, jobKey})
+      const scheduledEnqueue = this.runScheduledJob({jobConfiguration, jobKey})
 
       const intervalId = setInterval(() => {
-        void this.runScheduledJob({jobConfiguration, jobKey})
+        return this.runScheduledJob({jobConfiguration, jobKey})
       }, intervalMs)
 
       this.intervalIds.push(intervalId)
+
+      return scheduledEnqueue
     }, firstInMs)
 
     this.timeoutIds.push(timeoutId)
@@ -242,13 +244,15 @@ export default class BackgroundJobsScheduler {
    * @returns {Promise<void>} - Resolves after the enqueue attempt finishes.
    */
   async runScheduledJob({jobConfiguration, jobKey}) {
+    if (this.stopped || this.pendingEnqueuesByJobKey.has(jobKey)) return
+
     const pendingEnqueue = this.enqueueScheduledJob({jobConfiguration, jobKey})
-    this.pendingEnqueues.add(pendingEnqueue)
+    this.pendingEnqueuesByJobKey.set(jobKey, pendingEnqueue)
 
     try {
       await pendingEnqueue
     } finally {
-      this.pendingEnqueues.delete(pendingEnqueue)
+      this.pendingEnqueuesByJobKey.delete(jobKey)
     }
   }
 
