@@ -11,6 +11,59 @@ import os from "os"
 import path from "path"
 
 describe("Cli - Commands - db:schema:load", () => {
+  it("loads the canonical dummy structure without losing framework schema", {databaseCleaning: {transaction: false}}, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-db-schema-load-canonical-"))
+    const dbDir = path.join(directory, "db")
+    const configuration = new Configuration({
+      database: {
+        test: {
+          default: {
+            driver: SqliteDriver,
+            poolType: SingleMultiUsePool,
+            type: "sqlite",
+            name: "schema-load-canonical-test",
+            migrations: true
+          }
+        }
+      },
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode()
+    })
+    const cli = new Cli({
+      configuration,
+      directory,
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["db:schema:load"],
+      testing: true
+    })
+
+    try {
+      await fs.mkdir(dbDir, {recursive: true})
+      await fs.copyFile(
+        path.resolve(import.meta.dirname, "../../../../dummy/db/structure-default.sql"),
+        path.join(dbDir, "structure-default.sql")
+      )
+      await cli.execute()
+
+      await cli.getConfiguration().ensureConnections(async (dbs) => {
+        const backgroundJobsTable = await dbs.default.getTableByNameOrFail("background_jobs")
+        const executionModeColumn = await backgroundJobsTable.getColumnByName("execution_mode")
+
+        if (!executionModeColumn) throw new Error("execution_mode column not found")
+
+        expect(executionModeColumn.getNull()).toEqual(false)
+        expect(await dbs.default.tableExists("background_job_schedule_keys")).toEqual(true)
+        expect(await dbs.default.tableExists("velocious_attachments")).toEqual(true)
+        expect(await dbs.default.tableExists("velocious_server_sequences")).toEqual(true)
+        expect(await dbs.default.tableExists("velocious_sync_scopes")).toEqual(true)
+      })
+    } finally {
+      await cli.getConfiguration().closeDatabaseConnections()
+      await fs.rm(directory, {recursive: true, force: true})
+    }
+  })
+
   it("loads the configured structure sql file into the database", {databaseCleaning: {transaction: false}}, async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-db-schema-load-"))
     const dbDir = path.join(directory, "db")

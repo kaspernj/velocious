@@ -2248,6 +2248,20 @@ await MyJob.performLaterWithOptions({
 
 Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
 
+Use a durable stable key when the same logical one-off schedule must be moved or cancelled without retaining its transient job id:
+
+```js
+const result = await MyJob.replaceScheduled({
+  scheduleKey: `event:${eventId}:reminder:24h`,
+  args: [eventId, reminderRevision],
+  options: {scheduledAtMs: reminderAtMs}
+})
+
+await MyJob.cancelScheduled(`event:${eventId}:reminder:24h`)
+```
+
+A queued owner is atomically cancelled during replacement/cancellation. A `previousStatus` or cancellation `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
+
 Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
 
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.

@@ -88,7 +88,7 @@ export async function buildSignedReplayFixtures({actorDeviceId, actorUserId, gra
       actorUserId,
       certificateId: "cert-1",
       devicePublicKey: deviceKeys.publicKey,
-      expiresAt: "2099-01-01T00:00:00.000Z",
+      expiresAt: "2031-01-01T00:00:00.000Z",
       issuedAt: "2026-08-01T00:00:00.000Z"
     }
   })

@@ -70,6 +70,7 @@ Example list response:
     {
       "id": "…",
       "jobName": "FailingJob",
+      "scheduleKey": "event:42:reminder:24h",
       "status": "failed",
       "attempts": 1,
       "maxRetries": 0,
@@ -90,6 +91,8 @@ Example list response:
   "pagination": {"page": 1, "perPage": 25, "total": 1, "totalPages": 1}
 }
 ```
+
+`scheduleKey` is the historical logical schedule key, or `null` for legacy/unkeyed jobs. It remains visible after replacement, cancellation, completion, failure, or orphaning even though terminal jobs no longer own that key.
 
 Velocious jobs don't have Sidekiq-style named queues; they have a `job_name`
 (the job class) and a `status`. The dashboard groups and filters by those.
