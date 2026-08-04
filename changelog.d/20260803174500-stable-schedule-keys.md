@@ -1,0 +1,1 @@
+Add durable stable schedule keys for replacing/rescheduling and cancelling logical one-off background jobs. Queued mutations are atomic across processes, handed-off outcomes remain truthful best-effort, dispatcher timers re-arm after every mutation, and terminal dashboard history retains the schedule key without retaining ownership.

@@ -14,6 +14,17 @@ export default class BackgroundJobsClient {
   }
 
   /**
+   * Builds a one-shot client socket request from the resolved configuration.
+   * @returns {Promise<BackgroundJobsSocketRequest>} - Socket request.
+   */
+  async _request() {
+    const configuration = await this.configurationPromise
+    const {host, port} = configuration.getBackgroundJobsConfig()
+
+    return new BackgroundJobsSocketRequest({host, port, role: "client"})
+  }
+
+  /**
    * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
@@ -22,9 +33,7 @@ export default class BackgroundJobsClient {
    * @returns {Promise<string>} - Job id.
    */
   async enqueue({jobName, args, options}) {
-    const configuration = await this.configurationPromise
-    const {host, port} = configuration.getBackgroundJobsConfig()
-    const request = new BackgroundJobsSocketRequest({host, port, role: "client"})
+    const request = await this._request()
 
     return await request.run({
       onConnect: (jsonSocket) => {
@@ -43,6 +52,65 @@ export default class BackgroundJobsClient {
 
         if (message?.type === "enqueue-error") {
           reject(new Error(message.error || "Failed to enqueue job"))
+        }
+      }
+    })
+  }
+
+  /**
+   * Atomically replaces the queued owner of a stable schedule key.
+   * @param {object} args - Options.
+   * @param {string} args.scheduleKey - Stable logical schedule key.
+   * @param {string} args.jobName - Job name.
+   * @param {Array<?>} args.args - Job args.
+   * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+   * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
+   */
+  async replaceScheduled({scheduleKey, jobName, args, options}) {
+    const request = await this._request()
+
+    return await request.run({
+      onConnect: (jsonSocket) => {
+        jsonSocket.send({type: "replace-scheduled", scheduleKey, jobName, args, options})
+      },
+      onMessage: ({message, resolve, reject}) => {
+        if (message?.type === "schedule-replaced") {
+          resolve({
+            jobId: message.jobId,
+            previousJobId: message.previousJobId,
+            previousStatus: message.previousStatus
+          })
+          return
+        }
+
+        if (message?.type === "replace-scheduled-error") {
+          reject(new Error(message.error || "Failed to replace scheduled job"))
+        }
+      }
+    })
+  }
+
+  /**
+   * Cancels or detaches the current owner of a stable schedule key.
+   * @param {object} args - Options.
+   * @param {string} args.scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
+   */
+  async cancelScheduled({scheduleKey}) {
+    const request = await this._request()
+
+    return await request.run({
+      onConnect: (jsonSocket) => {
+        jsonSocket.send({type: "cancel-scheduled", scheduleKey})
+      },
+      onMessage: ({message, resolve, reject}) => {
+        if (message?.type === "schedule-cancelled") {
+          resolve({jobId: message.jobId, outcome: message.outcome})
+          return
+        }
+
+        if (message?.type === "cancel-scheduled-error") {
+          reject(new Error(message.error || "Failed to cancel scheduled job"))
         }
       }
     })

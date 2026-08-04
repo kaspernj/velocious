@@ -16,6 +16,8 @@ Set the runtime explicitly with `executionMode` — `"pooled"` (default), `"inli
 
 For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-background-job-enqueue.md). Recurring schedules use the separate `scheduledBackgroundJobs` configuration described in the [README](../README.md#scheduled-jobs).
 
+Logical one-off schedules that may be moved or cancelled can use `replaceScheduled` and `cancelScheduled` with a durable stable key. Queued replacement/cancellation is atomic across processes; a `handed_off` result is explicitly best-effort because running JavaScript is not interrupted. Consumers must pair the API with their own generation/revision check immediately before side effects. See [Replacing or cancelling a logical schedule](scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
+
 ## Database connection scopes
 
 By default, a job receives the existing Velocious behavior: every active configured database is checked out for the duration of `perform`. Jobs that need a known subset should declare it on the job class:
