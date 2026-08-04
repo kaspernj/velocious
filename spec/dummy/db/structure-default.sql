@@ -12,7 +12,9 @@ CREATE TABLE `background_job_concurrency` (`concurrency_key` VARCHAR(255) PRIMAR
 
 CREATE TABLE `background_job_count_revisions` (`key` VARCHAR(255) PRIMARY KEY, `revision` BIGINT NOT NULL);
 
-CREATE TABLE `background_jobs` (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `execution_mode` VARCHAR(255) NOT NULL, `queue` VARCHAR(255), `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `handoff_id` VARCHAR(255), `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT, `concurrency_key` VARCHAR(255), `max_concurrency` INTEGER);
+CREATE TABLE `background_job_schedule_keys` (`schedule_key` VARCHAR(255) PRIMARY KEY, `job_id` VARCHAR(255) NOT NULL);
+
+CREATE TABLE "background_jobs" (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `execution_mode` VARCHAR(255) NOT NULL, `queue` VARCHAR(255), `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `handoff_id` VARCHAR(255), `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT, `concurrency_key` VARCHAR(255), `max_concurrency` INTEGER, `schedule_key` VARCHAR(255));
 
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
@@ -72,6 +74,8 @@ CREATE UNIQUE INDEX `index_on_authentication_tokens_token` ON `authentication_to
 
 CREATE INDEX `index_on_authentication_tokens_user_id` ON `authentication_tokens` (`user_id`);
 
+CREATE INDEX `index_on_background_job_schedule_keys_job_id` ON `background_job_schedule_keys` (`job_id`);
+
 CREATE INDEX `index_on_background_jobs_concurrency_key` ON `background_jobs` (`concurrency_key`);
 
 CREATE INDEX `index_on_background_jobs_created_at_ms` ON `background_jobs` (`created_at_ms`);
@@ -83,6 +87,8 @@ CREATE INDEX `index_on_background_jobs_job_name` ON `background_jobs` (`job_name
 CREATE INDEX `index_on_background_jobs_orphaned_at_ms` ON `background_jobs` (`orphaned_at_ms`);
 
 CREATE INDEX `index_on_background_jobs_queue` ON `background_jobs` (`queue`);
+
+CREATE INDEX `index_on_background_jobs_schedule_key` ON "background_jobs" (`schedule_key`);
 
 CREATE INDEX `index_on_background_jobs_scheduled_at_ms` ON `background_jobs` (`scheduled_at_ms`);
 

@@ -16,17 +16,16 @@ import {
   signFixtureMutation
 } from "../helpers/signed-sync-replay-helper.js"
 
-const GRANT_NOW = new Date("2026-08-04T00:00:00.000Z")
-
 describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("replays a long-offline signed Task update after verifying device certificate and grant", async () => {
     const project = await Project.create({name: "Signed sync project"})
     const task = await Task.create({name: "Signed task", projectId: project.id()})
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-1",
-      grantNow: GRANT_NOW,
+      grantNow,
       resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -73,11 +72,12 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
   it("rejects replay when the offline grant has expired", async () => {
     const project = await Project.create({name: "Expired grant project"})
     const task = await Task.create({name: "Expired task", projectId: project.id()})
+    const grantNow = new Date("2026-08-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "device-a",
       actorUserId: "user-1",
       grantId: "grant-expired",
-      grantNow: GRANT_NOW,
+      grantNow,
       grantTtlMs: 1000,
       resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
@@ -123,11 +123,12 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
 
     await TaskBoardCard.create({taskBoardId: board.id(), taskId: task.id(), boardColumnId: "todo", position: 1})
 
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "peer-device",
       actorUserId: "peer-user",
       grantId: "grant-peer",
-      grantNow: GRANT_NOW,
+      grantNow,
       resources: {TaskBoard: {enabled: true, operations: ["moveCard"], policyHash: dummySyncManifest().TaskBoard.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -173,11 +174,12 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
   it("fails closed when actorLookup returns null", async () => {
     const project = await Project.create({name: "Missing actor project"})
     const task = await Task.create({name: "Missing actor task", projectId: project.id()})
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "device-a",
       actorUserId: "unknown-user",
       grantId: "grant-missing-actor",
-      grantNow: GRANT_NOW,
+      grantNow,
       resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
       scopes: {projectId: project.id()}
     })
@@ -217,6 +219,8 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
   })
 
   it("keeps concurrent replays on one service from crossing actors or grants", async () => {
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
+
     /**
      * Builds one actor's fixtures and signed Task mutation.
      * @param {string} userId - Actor user id.
@@ -231,7 +235,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
         actorUserId: userId,
         backendKeys: sharedBackendKeys,
         grantId: `grant-${userId}`,
-        grantNow: GRANT_NOW,
+        grantNow,
         resources: {Task: {enabled: true, operations: ["update"], policyHash: dummySyncManifest().Task.policyHash}},
         scopes: {projectId: `project-of-${userId}`},
         signingKey: sharedSigningKey

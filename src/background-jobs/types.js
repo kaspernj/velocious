@@ -35,6 +35,7 @@
  * @property {Array<?>} args - Serialized job arguments.
  * @property {BackgroundJobExecutionMode} executionMode - How the job should run.
  * @property {string} queue - Queue name (defaults to `"default"`).
+ * @property {string | null} scheduleKey - Stable logical schedule key retained for history.
  * @property {string} status - Current job status.
  * @property {number | null} attempts - Failure attempts count.
  * @property {number | null} maxRetries - Max retry attempts.
@@ -49,6 +50,23 @@
  * @property {string | null} lastError - Last failure message.
  * @property {string | null} concurrencyKey - Durable concurrency key.
  * @property {number | null} maxConcurrency - Durable per-key cap.
+ */
+/**
+ * @typedef {"queued" | "handed_off" | null} BackgroundJobReplacementPreviousStatus
+ */
+/**
+ * @typedef {object} BackgroundJobReplacementResult
+ * @property {string} jobId - Newly queued job id.
+ * @property {string | null} previousJobId - Previous active owner's job id.
+ * @property {BackgroundJobReplacementPreviousStatus} previousStatus - Previous owner's observed state.
+ */
+/**
+ * @typedef {"cancelled" | "handed_off" | "not_found"} BackgroundJobCancellationOutcome
+ */
+/**
+ * @typedef {object} BackgroundJobCancellationResult
+ * @property {string | null} jobId - Detached owner's job id, when one was active.
+ * @property {BackgroundJobCancellationOutcome} outcome - Truthful best-effort outcome.
  */
 /**
  * @typedef {object} BackgroundJobFailureEvent
@@ -72,6 +90,12 @@
  * @typedef {{type: "enqueue", jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
  * @typedef {{type: "enqueued", jobId: string}} BackgroundJobEnqueuedMessage
  * @typedef {{type: "enqueue-error", error?: string}} BackgroundJobEnqueueErrorMessage
+ * @typedef {{type: "replace-scheduled", scheduleKey: string, jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobReplaceScheduledMessage
+ * @typedef {{type: "schedule-replaced", jobId: string, previousJobId: string | null, previousStatus: BackgroundJobReplacementPreviousStatus}} BackgroundJobScheduleReplacedMessage
+ * @typedef {{type: "replace-scheduled-error", error?: string}} BackgroundJobReplaceScheduledErrorMessage
+ * @typedef {{type: "cancel-scheduled", scheduleKey: string}} BackgroundJobCancelScheduledMessage
+ * @typedef {{type: "schedule-cancelled", jobId: string | null, outcome: BackgroundJobCancellationOutcome}} BackgroundJobScheduleCancelledMessage
+ * @typedef {{type: "cancel-scheduled-error", error?: string}} BackgroundJobCancelScheduledErrorMessage
  * @typedef {{type: "job", payload: BackgroundJobPayload}} BackgroundJobJobMessage
  * @typedef {{type: "job-complete", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobCompleteMessage
  * @typedef {{type: "job-failed", jobId: string, error?: ?, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
@@ -79,7 +103,7 @@
  * @typedef {{type: "job-update-error", jobId: string, error?: string}} BackgroundJobUpdateErrorMessage
  */
 /**
- * @typedef {BackgroundJobHelloMessage | BackgroundJobReadyMessage | BackgroundJobDrainingMessage | BackgroundJobHeartbeatMessage | BackgroundJobEnqueueMessage | BackgroundJobEnqueuedMessage | BackgroundJobEnqueueErrorMessage | BackgroundJobJobMessage | BackgroundJobCompleteMessage | BackgroundJobFailedMessage | BackgroundJobUpdatedMessage | BackgroundJobUpdateErrorMessage} BackgroundJobSocketMessage
+ * @typedef {BackgroundJobHelloMessage | BackgroundJobReadyMessage | BackgroundJobDrainingMessage | BackgroundJobHeartbeatMessage | BackgroundJobEnqueueMessage | BackgroundJobEnqueuedMessage | BackgroundJobEnqueueErrorMessage | BackgroundJobReplaceScheduledMessage | BackgroundJobScheduleReplacedMessage | BackgroundJobReplaceScheduledErrorMessage | BackgroundJobCancelScheduledMessage | BackgroundJobScheduleCancelledMessage | BackgroundJobCancelScheduledErrorMessage | BackgroundJobJobMessage | BackgroundJobCompleteMessage | BackgroundJobFailedMessage | BackgroundJobUpdatedMessage | BackgroundJobUpdateErrorMessage} BackgroundJobSocketMessage
  */
 
 export const nothing = {}

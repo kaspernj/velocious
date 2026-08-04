@@ -199,6 +199,31 @@ describe("Background jobs - web API", {databaseCleaning: {truncate: true}}, () =
     })
   })
 
+  it("retains stable schedule keys in terminal dashboard history", async () => {
+    await Dummy.run(async () => {
+      const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+
+      await store.clearAll()
+      const replacement = await store.replaceScheduled({
+        scheduleKey: "event:61:reminder:24h",
+        jobName: "TestJob",
+        args: [61]
+      })
+      const handoff = await store.markHandedOff({jobId: replacement.jobId, workerId: "worker-1"})
+
+      if (!handoff) throw new Error("Expected stable scheduled job handoff")
+
+      await store.markCompleted({jobId: replacement.jobId, workerId: "worker-1", ...handoff})
+
+      const response = await fetch(`${API_BASE}/jobs/${replacement.jobId}`, {headers: {Authorization: `Bearer ${TOKEN}`}})
+      const body = await response.json()
+
+      expect(response.status).toEqual(200)
+      expect(body.job.scheduleKey).toEqual("event:61:reminder:24h")
+      expect(body.job.status).toEqual("completed")
+    })
+  })
+
   it("returns 404 for a missing job", async () => {
     await Dummy.run(async () => {
       await seedJobs()

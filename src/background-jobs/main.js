@@ -538,6 +538,16 @@ export default class BackgroundJobsMain {
   _handleClientSocketMessage({jsonSocket, message}) {
     if (message?.type === "enqueue") {
       this._handleEnqueue({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "replace-scheduled") {
+      this._handleReplaceScheduled({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "cancel-scheduled") {
+      this._handleCancelScheduled({jsonSocket, message})
     }
   }
 
@@ -749,23 +759,99 @@ export default class BackgroundJobsMain {
       this._notifyEnqueued()
       await this._drain()
     } catch (error) {
-      if (error instanceof VelociousError && error.safeToExpose) {
-        jsonSocket.send({type: "enqueue-error", error: error.message})
-        return
-      }
-
-      const normalizedError = error instanceof Error ? error : new Error(String(error))
-      const payload = {
+      this._handleClientMutationError({
         context: {jobName: message.jobName, stage: "background-job-enqueue"},
-        error: normalizedError
-      }
-      const errorEvents = this.configuration.getErrorEvents()
-
-      this.logger.error(() => ["Failed to enqueue background job:", normalizedError])
-      errorEvents.emit("framework-error", payload)
-      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
-      jsonSocket.send({type: "enqueue-error", error: "Failed to enqueue job"})
+        error,
+        fallbackMessage: "Failed to enqueue job",
+        jsonSocket,
+        logMessage: "Failed to enqueue background job:",
+        responseType: "enqueue-error"
+      })
     }
+  }
+
+  /**
+   * Handles a stable-key replacement request and re-arms dispatch afterward.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobReplaceScheduledMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleReplaceScheduled({jsonSocket, message}) {
+    try {
+      const result = await this.store.replaceScheduled({
+        scheduleKey: message.scheduleKey,
+        jobName: message.jobName,
+        args: message.args || [],
+        options: message.options || {}
+      })
+
+      jsonSocket.send({type: "schedule-replaced", ...result})
+      this._notifyEnqueued()
+      await this._drain()
+    } catch (error) {
+      this._handleClientMutationError({
+        context: {jobName: message.jobName, scheduleKey: message.scheduleKey, stage: "background-job-replace-scheduled"},
+        error,
+        fallbackMessage: "Failed to replace scheduled job",
+        jsonSocket,
+        logMessage: "Failed to replace scheduled background job:",
+        responseType: "replace-scheduled-error"
+      })
+    }
+  }
+
+  /**
+   * Handles a stable-key cancellation request and re-arms dispatch afterward.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobCancelScheduledMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleCancelScheduled({jsonSocket, message}) {
+    try {
+      const result = await this.store.cancelScheduled(message.scheduleKey)
+
+      jsonSocket.send({type: "schedule-cancelled", ...result})
+      this._notifyEnqueued()
+      await this._drain()
+    } catch (error) {
+      this._handleClientMutationError({
+        context: {scheduleKey: message.scheduleKey, stage: "background-job-cancel-scheduled"},
+        error,
+        fallbackMessage: "Failed to cancel scheduled job",
+        jsonSocket,
+        logMessage: "Failed to cancel scheduled background job:",
+        responseType: "cancel-scheduled-error"
+      })
+    }
+  }
+
+  /**
+   * Returns safe validation failures and reports unexpected client mutations.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Framework-error context.
+   * @param {?} args.error - Mutation failure.
+   * @param {string} args.fallbackMessage - Client-safe fallback message.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {string} args.logMessage - Error log prefix.
+   * @param {"enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error"} args.responseType - Response type.
+   * @returns {void}
+   */
+  _handleClientMutationError({context, error, fallbackMessage, jsonSocket, logMessage, responseType}) {
+    if (error instanceof VelociousError && error.safeToExpose) {
+      jsonSocket.send({type: responseType, error: error.message})
+      return
+    }
+
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => [logMessage, normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    jsonSocket.send({type: responseType, error: fallbackMessage})
   }
 
   /**

@@ -101,6 +101,36 @@ export default class VelociousJob {
   }
 
   /**
+   * Atomically replaces this job class's queued owner for a stable schedule key.
+   * @param {object} args - Options.
+   * @param {string} args.scheduleKey - Stable logical schedule key.
+   * @param {Array<?>} args.args - Job args.
+   * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+   * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
+   */
+  static async replaceScheduled({scheduleKey, args, options}) {
+    const client = new BackgroundJobsClient()
+
+    return await client.replaceScheduled({
+      scheduleKey,
+      jobName: this.jobName(),
+      args,
+      options: this._withQueue(options)
+    })
+  }
+
+  /**
+   * Cancels or detaches the current owner of a stable schedule key.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
+   */
+  static async cancelScheduled(scheduleKey) {
+    const client = new BackgroundJobsClient()
+
+    return await client.cancelScheduled({scheduleKey})
+  }
+
+  /**
    * Runs split args and options.
    * @param {Array<?>} args - Job args.
    * @returns {{jobArgs: Array<?>, jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
