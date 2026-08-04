@@ -77,7 +77,8 @@ const SORTABLE_COLUMNS = {
 
 /**
  * Serializes concurrent `_applySchema` runs within THIS process, keyed by database
- * identifier. Two stores that share one connection (SingleMultiUse / SQLite)
+ * identifier, before callers without an existing connection check one out. Two
+ * stores that share one connection (SingleMultiUse / SQLite)
  * otherwise interleave the multi-step table rebuild and corrupt it (the jobs table
  * is left as its `*_velocious_rebuild` temp). A DB advisory lock can't fix that: on
  * a session-scoped / re-entrant driver (MySQL `GET_LOCK`) a second acquire on the
@@ -1059,22 +1060,17 @@ export default class BackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
   async _ensureSchema(existingDb) {
-    if (existingDb) {
-      await this._applySchema(existingDb)
-
-      return
-    }
-
-    await this._withDb((db) => this._applySchema(db))
+    await this._applySchema(existingDb)
   }
 
   /**
-   * Creates or upgrades the background-jobs tables, columns and concurrency rows on
-   * the given connection.
-   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * Serializes creation or upgrade of the background-jobs schema, checking out a
+   * connection only after earlier schema work has completed when one is not supplied.
+   * @param {import("../database/drivers/base.js").default} [existingDb] - Caller-owned
+   *   database connection.
    * @returns {Promise<void>} - Resolves when the schema is present.
    */
-  async _applySchema(db) {
+  async _applySchema(existingDb) {
     // Serialize concurrent schema applies within this process, keyed by database
     // identifier (see `schemaApplyChains`). The per-step locks inside the steps use
     // DIFFERENT lock names, so two concurrent callers could otherwise each hold a
@@ -1084,7 +1080,16 @@ export default class BackgroundJobsStore {
     // the second caller then re-checks and finds every step already done.
     const identifier = this.getDatabaseIdentifier() ?? "default"
     const previous = schemaApplyChains.get(identifier) ?? Promise.resolve()
-    const run = previous.then(() => this._applySchemaSteps(db), () => this._applySchemaSteps(db))
+    const applyWithConnection = async () => {
+      if (existingDb) {
+        await this._applySchemaSteps(existingDb)
+
+        return
+      }
+
+      await this._withDb((db) => this._applySchemaSteps(db))
+    }
+    const run = previous.then(applyWithConnection, applyWithConnection)
 
     // Keep the chain alive regardless of this run's outcome so one failed apply does
     // not wedge later callers; this run still propagates its own result/error.
