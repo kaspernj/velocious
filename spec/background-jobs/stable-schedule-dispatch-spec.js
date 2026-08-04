@@ -36,6 +36,41 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
     }
   })
 
+  it("dispatches a job that becomes eligible between the drain probe and the timer arm", async () => {
+    const {main, store, worker} = await startBackgroundJobs()
+    const lateOutputPath = await outputPathFor("stable-schedule-boundary-late")
+    const earlyOutputPath = await outputPathFor("stable-schedule-boundary-early")
+
+    try {
+      await TestJob.replaceScheduled({
+        scheduleKey: "event:60:reminder:24h",
+        args: ["late", lateOutputPath],
+        options: {executionMode: "inline", scheduledAtMs: Date.now() + 10000}
+      })
+      await main._drain()
+      await timeout({timeout: 500}, async () => {
+        while (main._draining || !main._scheduledTimer) await wait(0.01)
+      })
+
+      // Simulate a job crossing into eligibility between the drain's
+      // eligible-job probe and the scheduled-timer arm: it is inserted
+      // directly (bypassing the socket, so no drain is triggered) after the
+      // drain already finished. The arm that follows must dispatch it instead
+      // of stranding it behind the timer armed for the still-future job.
+      await store.enqueue({
+        jobName: TestJob.jobName(),
+        args: ["early", earlyOutputPath],
+        options: {executionMode: "inline", scheduledAtMs: Date.now() - 1000}
+      })
+      await main._armScheduledTimer()
+
+      expect(await waitForOutputJson({outputPath: earlyOutputPath, timeoutSeconds: 1})).toEqual({message: "early"})
+    } finally {
+      await worker.stop()
+      await main.stop()
+    }
+  })
+
   it("re-arms after cancellation and never dispatches the cancelled owner", async () => {
     const {main, worker} = await startBackgroundJobs()
     const cancelledOutputPath = await outputPathFor("stable-schedule-cancelled")

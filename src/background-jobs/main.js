@@ -1354,9 +1354,20 @@ export default class BackgroundJobsMain {
     if (this.dispatchStrategy === "polling") return
 
     const next = await this.store.nextScheduledJob()
-    if (!next || typeof next.scheduledAtMs !== "number") return
+    let delay
 
-    const delay = Math.max(0, Math.min(next.scheduledAtMs - Date.now(), MAX_TIMER_MS))
+    if (next && typeof next.scheduledAtMs === "number") {
+      delay = Math.max(0, Math.min(next.scheduledAtMs - Date.now(), MAX_TIMER_MS))
+    }
+
+    // `nextScheduledJob` only returns future jobs, so a job that became
+    // eligible after the drain's eligible-job probe is invisible to it. If one
+    // is dispatchable now, arm a 0-delay re-drain so it is dispatched
+    // immediately instead of being stranded until the next future timer (or
+    // external signal) fires.
+    if (await this.nextAvailableJobForReadyWorkers()) delay = 0
+
+    if (typeof delay !== "number") return
 
     this._scheduledTimer = setTimeout(() => {
       this._scheduledTimer = undefined

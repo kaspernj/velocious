@@ -14,8 +14,10 @@ import {listenOnLocalhost} from "../helpers/local-server-helper.js"
  * @typedef {object} ControlledServer
  * @property {() => Promise<void>} close - Stops the server.
  * @property {number} port - Bound TCP port.
+ * @property {Promise<void>} requestReceived - Resolves when the server receives the request.
+ * @property {Promise<void>} socketConnected - Resolves when the TCP socket connects.
  * @property {Promise<void>} socketClosed - Resolves when the client socket closes.
- * @property {{requestReceived: boolean, socketClosed: boolean}} state - Observed connection state.
+ * @property {{requestReceived: boolean, socketConnected: boolean, socketClosed: boolean}} state - Observed connection state.
  */
 
 /**
@@ -26,7 +28,17 @@ import {listenOnLocalhost} from "../helpers/local-server-helper.js"
  * @returns {Promise<ControlledServer>} - The started controlled server.
  */
 async function startControlledServer(handler) {
-  const state = {requestReceived: false, socketClosed: false}
+  const state = {requestReceived: false, socketConnected: false, socketClosed: false}
+  /** @type {() => void} */
+  let resolveRequestReceived = () => {}
+  const requestReceived = new Promise((resolve) => {
+    resolveRequestReceived = () => resolve(undefined)
+  })
+  /** @type {() => void} */
+  let resolveSocketConnected = () => {}
+  const socketConnected = new Promise((resolve) => {
+    resolveSocketConnected = () => resolve(undefined)
+  })
   /** @type {() => void} */
   let resolveSocketClosed = () => {}
   const socketClosed = new Promise((resolve) => {
@@ -34,10 +46,13 @@ async function startControlledServer(handler) {
   })
   const server = http.createServer((req, res) => {
     state.requestReceived = true
+    resolveRequestReceived()
     handler(req, res)
   })
 
   server.on("connection", (socket) => {
+    state.socketConnected = true
+    resolveSocketConnected()
     socket.on("close", () => {
       state.socketClosed = true
       resolveSocketClosed()
@@ -53,6 +68,8 @@ async function startControlledServer(handler) {
       server.close(() => resolve(undefined))
     }),
     port,
+    requestReceived,
+    socketConnected,
     socketClosed,
     state
   }
@@ -109,7 +126,13 @@ describe("frontend-models - transport deadline", () => {
         }
 
         expect(error).toBeInstanceOf(TimeoutError)
-        expect(controlled.state.requestReceived).toBeTrue()
+
+        // The TCP socket connects before the HTTP request is sent, and on localhost the
+        // connection event fires well within the 40ms deadline. Using socketConnected
+        // (TCP-level) instead of requestReceived (HTTP-level) avoids an unbounded wait
+        // when the abort fires before the server parses the request.
+        await controlled.socketConnected
+        expect(controlled.state.socketConnected).toBeTrue()
 
         await controlled.socketClosed
 

@@ -78,7 +78,7 @@ export function dummySyncManifest() {
  * @param {import("../../src/sync/offline-grant.js").OfflineGrantSigningKey} [args.signingKey] - Optional shared offline-grant signing key; defaults to a literal test key.
  * @returns {Promise<Record<string, ?>>} Fixture bundle.
  */
-export async function buildSignedReplayFixtures({actorDeviceId, actorUserId, grantId, grantNow, grantTtlMs = 24 * 60 * 60 * 1000, resources, scopes, backendKeys, signingKey}) {
+export async function buildSignedReplayFixtures({actorDeviceId, actorUserId, grantId, grantNow, grantTtlMs = 1000 * 60 * 60 * 24 * 365 * 100, resources, scopes, backendKeys, signingKey}) {
   const resolvedBackendKeys = backendKeys || await generateSyncSigningKeyPair()
   const deviceKeys = await generateSyncSigningKeyPair()
   const deviceCertificate = await createDeviceCertificate({
