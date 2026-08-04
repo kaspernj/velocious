@@ -22,7 +22,7 @@ const ACTOR_ID = "1f6e9a4c-2b3d-4e5f-8a9b-0c1d2e3f4a5b"
  */
 function buildSync({data, id, resourceId, resourceType = "Task", syncType = "update"}) {
   return {
-    clientUpdatedAt: "2026-08-03T10:00:00.000Z",
+    clientUpdatedAt: "2030-01-01T10:00:00.000Z",
     data,
     id,
     resourceId: String(resourceId),

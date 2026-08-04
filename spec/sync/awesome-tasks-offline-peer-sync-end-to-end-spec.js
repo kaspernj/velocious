@@ -16,7 +16,7 @@ import {
   signFixtureMutation
 } from "../helpers/signed-sync-replay-helper.js"
 
-const GRANT_NOW = new Date("2026-08-03T00:00:00.000Z")
+const GRANT_NOW = new Date("2030-01-01T00:00:00.000Z")
 
 /**
  * Builds an in-memory storage adapter for a LocalMutationLog.

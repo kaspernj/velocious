@@ -20,7 +20,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
   it("replays a long-offline signed Task update after verifying device certificate and grant", async () => {
     const project = await Project.create({name: "Signed sync project"})
     const task = await Task.create({name: "Signed task", projectId: project.id()})
-    const grantNow = new Date("2026-08-03T00:00:00.000Z")
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "device-a",
       actorUserId: "user-1",
@@ -123,7 +123,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
 
     await TaskBoardCard.create({taskBoardId: board.id(), taskId: task.id(), boardColumnId: "todo", position: 1})
 
-    const grantNow = new Date("2026-08-03T00:00:00.000Z")
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "peer-device",
       actorUserId: "peer-user",
@@ -174,7 +174,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
   it("fails closed when actorLookup returns null", async () => {
     const project = await Project.create({name: "Missing actor project"})
     const task = await Task.create({name: "Missing actor task", projectId: project.id()})
-    const grantNow = new Date("2026-08-03T00:00:00.000Z")
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
     const fixtures = await buildSignedReplayFixtures({
       actorDeviceId: "device-a",
       actorUserId: "unknown-user",
@@ -219,7 +219,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
   })
 
   it("keeps concurrent replays on one service from crossing actors or grants", async () => {
-    const grantNow = new Date("2026-08-03T00:00:00.000Z")
+    const grantNow = new Date("2030-01-01T00:00:00.000Z")
 
     /**
      * Builds one actor's fixtures and signed Task mutation.
