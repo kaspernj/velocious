@@ -2,7 +2,7 @@ import path from "node:path"
 import process from "node:process"
 import {spawn} from "node:child_process"
 import {fileURLToPath} from "node:url"
-import {prepareSourcePeerPackage} from "./source-peer-package.js"
+import {prepareSourcePeerPackage} from "../src/environment-handlers/node/source-peer-package.js"
 
 /**
  * @param {NodeJS.Signals} signal - Termination signal.

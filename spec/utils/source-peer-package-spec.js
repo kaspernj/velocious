@@ -1,14 +1,19 @@
 // @ts-check
 
+import {execFile} from "node:child_process"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import {promisify} from "node:util"
 
 import {
   SOURCE_PEER_SHIM_MARKER_FILE,
-  prepareSourcePeerPackage
-} from "../../scripts/source-peer-package.js"
+  prepareSourcePeerPackage,
+  withSourcePeerPackage
+} from "../../src/environment-handlers/node/source-peer-package.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+const execFileAsync = promisify(execFile)
 
 /**
  * @param {string} filePath - File or directory path.
@@ -37,6 +42,43 @@ async function createProjectDirectory() {
 }
 
 describe("source peer package shim", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("keeps the shim available for a browser run and cleans it afterward", async () => {
+    const projectDirectory = await createProjectDirectory()
+    const packageDirectory = path.join(projectDirectory, "node_modules", "velocious")
+
+    try {
+      await withSourcePeerPackage(projectDirectory, async () => {
+        expect(await pathExists(packageDirectory)).toEqual(true)
+      })
+
+      expect(await pathExists(packageDirectory)).toEqual(false)
+    } finally {
+      await fs.rm(projectDirectory, {recursive: true, force: true})
+    }
+  })
+
+  it("cleans the shim when wrapped work rejects", async () => {
+    const projectDirectory = await createProjectDirectory()
+    const packageDirectory = path.join(projectDirectory, "node_modules", "velocious")
+    const callbackError = new Error("wrapped work failed")
+    let rejection
+
+    try {
+      try {
+        await withSourcePeerPackage(projectDirectory, async () => {
+          throw callbackError
+        })
+      } catch (error) {
+        rejection = error
+      }
+
+      expect(rejection).toBe(callbackError)
+      expect(await pathExists(packageDirectory)).toEqual(false)
+    } finally {
+      await fs.rm(projectDirectory, {recursive: true, force: true})
+    }
+  })
+
   it("maps build/src to checkout source and removes its owned shim", async () => {
     const projectDirectory = await createProjectDirectory()
     const packageDirectory = path.join(projectDirectory, "node_modules", "velocious")
@@ -50,6 +92,24 @@ describe("source peer package shim", {databaseCleaning: {transaction: false, tru
       )
 
       await shim.cleanup()
+
+      expect(await pathExists(packageDirectory)).toEqual(false)
+    } finally {
+      await fs.rm(projectDirectory, {recursive: true, force: true})
+    }
+  })
+
+  it("removes its owned shim when the process exits directly", async () => {
+    const projectDirectory = await createProjectDirectory()
+    const packageDirectory = path.join(projectDirectory, "node_modules", "velocious")
+    const helperUrl = new URL("../../src/environment-handlers/node/source-peer-package.js", import.meta.url).href
+
+    try {
+      await execFileAsync(process.execPath, [
+        "--input-type=module",
+        "--eval",
+        `import {prepareSourcePeerPackage} from ${JSON.stringify(helperUrl)}; await prepareSourcePeerPackage(${JSON.stringify(projectDirectory)}); process.exit(0)`
+      ])
 
       expect(await pathExists(packageDirectory)).toEqual(false)
     } finally {
