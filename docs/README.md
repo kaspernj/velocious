@@ -16,6 +16,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
+- `docs/rampway-integration.md`: Mounting and operating Rampway's package-owned durable deployment control plane in a Velocious application.
 - `docs/logging.md`: Rails-style request and database query logging behavior.
 - `docs/mailers.md`: EJS mailer templates, direct delivery, background delivery, and payload rendering.
 - `docs/model-initialization.md`: Eager and lazy record/frontend-model initialization behavior.

@@ -2,6 +2,18 @@ import path from "node:path"
 import process from "node:process"
 import {spawn} from "node:child_process"
 import {fileURLToPath} from "node:url"
+import {prepareSourcePeerPackage} from "./source-peer-package.js"
+
+/**
+ * @param {NodeJS.Signals} signal - Termination signal.
+ * @returns {number} - Conventional signal exit code.
+ */
+function signalExitCode(signal) {
+  if (signal === "SIGINT") return 130
+  if (signal === "SIGTERM") return 143
+
+  return 1
+}
 
 /** Runs the Velocious test command from the dummy app with cross-platform env setup. */
 async function main() {
@@ -12,32 +24,61 @@ async function main() {
   const testDirectory = path.resolve(dummyDirectory, "..")
   const cliPath = path.join(projectDirectory, "bin", "velocious.js")
   const args = ["test", ...process.argv.slice(2)]
+  const sourcePeerPackage = await prepareSourcePeerPackage(projectDirectory)
+  /** @type {import("node:child_process").ChildProcess | undefined} */
+  let childProcess
+  /** @type {NodeJS.Signals | undefined} */
+  let receivedSignal
+  const handleSignal = (/** @type {NodeJS.Signals} */ signal) => {
+    receivedSignal ??= signal
 
-  await new Promise((resolve, reject) => {
-    const childProcess = spawn(process.execPath, [cliPath, ...args], {
-      cwd: dummyDirectory,
-      env: {...process.env, VELOCIOUS_TEST_DIR: testDirectory},
-      stdio: "inherit"
-    })
-
-    childProcess.once("error", reject)
-    childProcess.once("close", (code, signal) => {
-      if (signal) {
-        reject(new Error(`Test process terminated by signal: ${signal}`))
-        return
+    void sourcePeerPackage.cleanup().finally(() => {
+      if (childProcess && childProcess.exitCode === null && childProcess.signalCode === null) {
+        childProcess.kill(signal)
       }
-
-      // A non-zero exit without the runner's own failure summary is the
-      // "silent test-runner death" mode (e.g. a hard process.exit or native
-      // crash). Always print the exit code so CI logs show that the child
-      // died rather than ending the log mid-run with no explanation.
-      if (code !== 0) console.error(`Test process exited with code: ${code ?? "unknown"}`)
-
-      resolve(code ?? 1)
     })
-  }).then((code) => {
-    process.exit(/** @type {number} */ (code))
-  })
+  }
+
+  process.once("SIGINT", handleSignal)
+  process.once("SIGTERM", handleSignal)
+
+  let exitCode
+
+  try {
+    exitCode = await new Promise((resolve, reject) => {
+      childProcess = spawn(process.execPath, [cliPath, ...args], {
+        cwd: dummyDirectory,
+        env: {...process.env, VELOCIOUS_TEST_DIR: testDirectory},
+        stdio: "inherit"
+      })
+
+      childProcess.once("error", reject)
+      childProcess.once("close", (code, signal) => {
+        if (signal) {
+          if (receivedSignal) {
+            resolve(signalExitCode(receivedSignal))
+          } else {
+            reject(new Error(`Test process terminated by signal: ${signal}`))
+          }
+          return
+        }
+
+        // A non-zero exit without the runner's own failure summary is the
+        // "silent test-runner death" mode (e.g. a hard process.exit or native
+        // crash). Always print the exit code so CI logs show that the child
+        // died rather than ending the log mid-run with no explanation.
+        if (code !== 0) console.error(`Test process exited with code: ${code ?? "unknown"}`)
+
+        resolve(code ?? 1)
+      })
+    })
+  } finally {
+    process.removeListener("SIGINT", handleSignal)
+    process.removeListener("SIGTERM", handleSignal)
+    await sourcePeerPackage.cleanup()
+  }
+
+  process.exitCode = receivedSignal ? signalExitCode(receivedSignal) : exitCode
 }
 
 await main()

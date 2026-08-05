@@ -1,9 +1,13 @@
 import Routes from "../../../../src/routes/index.js"
 import VelociousBackgroundJobsApi from "../../../../src/background-jobs/web/index.js"
+import RampwayDeploymentApi from "rampway/velocious"
+import rampwayDeploymentConfig from "./rampway-deployment-config.js"
 
 const routes = new Routes()
 
 routes.draw((route) => {
+  route.mount(RampwayDeploymentApi, rampwayDeploymentConfig)
+
   route.mount(VelociousBackgroundJobsApi, {
     accessTokens: ["test-jobs-token"],
     at: "/velocious/jobs",
