@@ -1301,7 +1301,7 @@ If you need to regenerate missing structure files without rerunning migrations, 
 npx velocious db:schema:dump
 ```
 
-`db:schema:dump` generates a structure SQL file for each configured database identifier under `db/structure-<identifier>.sql`. It only writes files when one or more expected files are missing. The generated file includes the full DDL (tables, indexes, views, triggers, etc.) followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every currently applied migration version. This preserves the migration ledger in the checked-in snapshot so fresh databases loaded from it do not re-run migrations that already shaped the schemas in the file.
+`db:schema:dump` generates a structure SQL file for each configured database identifier under `db/structure-<identifier>.sql`. It only writes files when one or more expected files are missing. The generated file includes the full DDL (tables, indexes, views, triggers, etc.) followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every currently applied migration version. MySQL and MariaDB dumps place same-schema referenced base tables before their dependent tables. The migration ledger preserves applied versions in the checked-in snapshot so fresh databases loaded from it do not re-run migrations that already shaped the schemas in the file.
 
 If you need to load the checked-in structure files for each configured database, use:
 
