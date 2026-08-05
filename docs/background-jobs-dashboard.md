@@ -45,6 +45,10 @@ it when the routes are set, registering a route-resolver hook so the controller
 can ship inside the `velocious` package (the same mechanism the `sql.js` asset
 route uses).
 
+External packages use the same surface. For example, Rampway ships its own
+controller, durable run store, and detached deployment worker behind a
+[`route.mount(...)` integration](rampway-integration.md).
+
 ## Endpoints
 
 All paths are relative to the mount prefix (`at`). Responses are JSON.

@@ -7,7 +7,7 @@ import {fileURLToPath} from "node:url"
 import {describe, expect, it} from "../src/testing/test.js"
 
 describe("Removed core deployment API", () => {
-  it("no longer ships the deployment API source, specs, docs, or dummy mounts", () => {
+  it("no longer ships the Velocious-owned deployment API source, specs, or docs", () => {
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
     for (const removedPath of [
@@ -22,10 +22,10 @@ describe("Removed core deployment API", () => {
     }
   })
 
-  it("no longer mounts the deployment API from the dummy routes", async () => {
+  it("does not restore the removed Velocious controller through the dummy routes", async () => {
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
     const routesSource = await fs.promises.readFile(path.join(repoRoot, "spec/dummy/src/config/routes.js"), "utf8")
 
-    expect(routesSource).not.toContain("deployment-api")
+    expect(routesSource).not.toContain("../../../../src/deployment-api")
   })
 })

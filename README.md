@@ -9,6 +9,7 @@
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
+* Optional Rampway-owned durable deployment control plane mounted through the standard routes DSL on Velocious 1.0.577 or newer (see [docs/rampway-integration.md](docs/rampway-integration.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md) and [docs/websocket-channels.md](docs/websocket-channels.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see the [shared-resource sync developer guide](docs/shared-resource-sync-guide.md) and [offline sync architecture](docs/offline-sync.md))
@@ -867,6 +868,51 @@ Supported route helpers:
 
 - `routes.get(path, {to: [ControllerClass, "action"], params?})`
 - `routes.post(path, {to: [ControllerClass, "action"], params?})`
+
+## Rampway deployment control plane
+
+Applications can install `rampway@^0.4.0` and mount its package-owned Velocious
+control plane through the existing routes DSL. Keep bearer tokens in backend
+secrets and provide explicit allowlisted config paths and release branches:
+
+```sh
+npm install rampway@^0.4.0 velocious@^1.0.577
+```
+
+Rampway 0.4.0 declares `velocious ^1.0.574` as its peer range, but applications
+mounting this API must use Velocious 1.0.577 or newer. Versions 1.0.574 through
+1.0.576 attempted an app-local controller import before the package-supplied
+`controllerClass`, allowing a same-named app controller to shadow Rampway's
+authenticated controller.
+
+```js
+import RampwayDeploymentApi from "rampway/velocious"
+import deploymentSecrets from "./secrets/deployments.js"
+
+routes.draw((route) => {
+  route.mount(RampwayDeploymentApi, {
+    accessTokens: deploymentSecrets.rampwayAccessTokens,
+    at: "/rampway/deployments",
+    projects: {
+      "my-app": {
+        stages: {
+          production: {
+            configPath: "/srv/my-app/control/rampway.config.mjs",
+            releaseBranch: "main"
+          }
+        }
+      }
+    },
+    workerBootstrapPath: "/srv/my-app/control/rampway-velocious-worker.mjs"
+  })
+})
+```
+
+Rampway owns authentication, deployment execution, idempotency, durable runs,
+audits, reconciliation, and the detached worker. Velocious supplies its normal
+route, request, error-event, and database abstractions. See
+[docs/rampway-integration.md](docs/rampway-integration.md) for bootstrap,
+persistence, security, and rollback requirements.
 
 
 ```js

@@ -6,9 +6,11 @@ import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestRunner from "../../../../testing/test-runner.js"
 import TestSuiteSplitter from "../../../../testing/test-suite-splitter.js"
 import {normalizeExamplePatterns, parseFilters} from "../../../../testing/test-filter-parser.js"
+import {prepareSourcePeerPackage} from "../../source-peer-package.js"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
   async execute() {
+    await prepareSourcePeerPackage()
     this.getConfiguration().setEnvironment("test")
 
     let directory

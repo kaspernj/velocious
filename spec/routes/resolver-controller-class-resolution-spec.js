@@ -41,7 +41,26 @@ function buildResolver(configuration) {
 }
 
 describe("routes - resolver controller class resolution", {databaseCleaning: {transaction: true}}, () => {
-  it("falls back to route hook controller class when local controller file is missing", async () => {
+  it("uses the route hook controller class without importing a conflicting app controller", async () => {
+    const configuration = buildConfiguration()
+    const resolver = buildResolver(configuration)
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-resolver-controller-class-"))
+    const controllerPath = path.join(tempDirectory, "controller.js")
+
+    try {
+      await fs.writeFile(controllerPath, "throw new Error(\"App controller should not be imported\")\n", "utf8")
+
+      resolver.routeHookControllerClass = FrontendModelController
+
+      const resolvedControllerClass = await resolver.resolveControllerClass({controllerPath})
+
+      expect(resolvedControllerClass).toBe(FrontendModelController)
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+  })
+
+  it("uses the route hook controller class when the app controller file is missing", async () => {
     const configuration = buildConfiguration()
     const resolver = buildResolver(configuration)
 
@@ -62,8 +81,6 @@ describe("routes - resolver controller class resolution", {databaseCleaning: {tr
 
     try {
       await fs.writeFile(controllerPath, "import \"./missing-dependency.js\"\nexport default class MissingDependencyController {}\n", "utf8")
-
-      resolver.routeHookControllerClass = FrontendModelController
 
       await expect(async () => {
         await resolver.resolveControllerClass({controllerPath})
