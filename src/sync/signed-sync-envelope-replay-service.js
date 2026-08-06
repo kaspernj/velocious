@@ -332,6 +332,8 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
     }
 
     return {
+      baseVersion: mutation.baseVersion,
+      clientMutationId: mutation.clientMutationId,
       clientUpdatedAt: mutation.occurredAt,
       data,
       resourceId,

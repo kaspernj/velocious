@@ -286,6 +286,19 @@ export default class VelociousConfiguration {
     }
 
     this._isInitialized = false
+    this._modelsInitialized = false
+    /**
+     * Invalidates model phases that started before database connections closed.
+     * @type {number}
+     */
+    this._modelInitializationGeneration = 0
+    /**
+     * In-progress `initializeModels()` promise. Model initialization is an
+     * atomic bootstrap phase: concurrent callers share it, and a rejection
+     * leaves the phase eligible for a later complete attempt.
+     * @type {Promise<void> | undefined}
+     */
+    this._initializeModelsPromise = undefined
     /**
      * In-progress `initialize()` promise, memoized so concurrent callers await
      * the same bootstrap. Reset to undefined if initialization fails.
@@ -2020,25 +2033,39 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeModels(args = {type: "server"}) {
-    if (!this._modelsInitialized) {
-      this._modelsInitialized = true
+    if (this._modelsInitialized) return
+    if (this._initializeModelsPromise) return await this._initializeModelsPromise
 
+    const modelInitializationGeneration = this._modelInitializationGeneration
+    const initializeModelsPromise = (async () => {
       const shouldSkipDummyModelInitialization = process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
         && process.env.VELOCIOUS_BROWSER_TESTS === "true"
         && this.getEnvironment() === "test"
 
-      if (shouldSkipDummyModelInitialization) {
-        return
+      if (!shouldSkipDummyModelInitialization) {
+        if (this._initializeModels) {
+          await this._initializeModels({configuration: this, type: args.type})
+        }
+
+        await this.getEnvironmentHandler().initializePackageModels(this)
+        await initializeAuditedModelRelationships(this)
+
+        await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
       }
 
-      if (this._initializeModels) {
-        await this._initializeModels({configuration: this, type: args.type})
+      if (this._modelInitializationGeneration === modelInitializationGeneration) {
+        this._modelsInitialized = true
       }
+    })()
 
-      await this.getEnvironmentHandler().initializePackageModels(this)
-      await initializeAuditedModelRelationships(this)
+    this._initializeModelsPromise = initializeModelsPromise
 
-      await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
+    try {
+      await initializeModelsPromise
+    } finally {
+      if (this._initializeModelsPromise === initializeModelsPromise) {
+        this._initializeModelsPromise = undefined
+      }
     }
   }
 
@@ -2073,6 +2100,12 @@ export default class VelociousConfiguration {
 
     this._initializePromise = (async () => {
       await this.initializeModels({type})
+
+      // Model initialization can be invalidated by a concurrent connection close.
+      // If models are not ready, stop without marking the configuration initialized
+      // so the next caller retries a full bootstrap.
+      if (!this._modelsInitialized) return
+
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
       this._validateResourceRelationshipsOnModels()
@@ -2103,6 +2136,13 @@ export default class VelociousConfiguration {
       // caller awaiting the same cached rejection.
       this._initializePromise = undefined
       throw error
+    }
+
+    // If the inner IIFE returned without marking the configuration initialized
+    // (e.g. because models were invalidated mid-bootstrap), clear the promise so
+    // a later call retries a full bootstrap.
+    if (!this._isInitialized) {
+      this._initializePromise = undefined
     }
   }
 
@@ -3244,8 +3284,10 @@ export default class VelociousConfiguration {
           PoolClass.clearGlobalConnections(this)
         }
 
-        // Allow models to be re-initialized after connections are closed.
+        // Allow full re-initialization after connections are closed.
+        this._modelInitializationGeneration += 1
         this._modelsInitialized = false
+        this._isInitialized = false
       }
     })()
 

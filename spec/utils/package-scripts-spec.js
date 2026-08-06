@@ -54,7 +54,11 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
   })
 
   it("builds the declared package entry points when installed from Git", {timeoutSeconds: 180}, async () => {
-    const temporaryDirectory = await fs.mkdtemp(path.join(repositoryDirectory(), "tmp", "git-install-spec-"))
+    const temporaryDirectoryParent = path.join(repositoryDirectory(), "tmp")
+
+    await fs.mkdir(temporaryDirectoryParent, {recursive: true})
+
+    const temporaryDirectory = await fs.mkdtemp(path.join(temporaryDirectoryParent, "git-install-spec-"))
     const sourceDirectory = path.join(temporaryDirectory, "source")
     const consumerDirectory = path.join(temporaryDirectory, "consumer")
     const npmExecutable = process.env.npm_execpath

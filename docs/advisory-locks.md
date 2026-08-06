@@ -47,12 +47,24 @@ await Account.withAdvisoryLockOrFail("queue-planner", async () => {
   await runQueuePlanner()
 }, {holdTimeoutMs: 600_000})
 
+// Optional dedicated lock session. Acquires and releases the advisory lock on
+// a freshly spawned dedicated connection even when no hold timeout is set. The
+// callback still runs on the caller/model connection. This avoids same-session
+// lock re-entrancy, which matters when the caller connection is reused across
+// concurrent work (for example a test runner pinning one connection) and you
+// need independent lock ownership rather than re-entrant acquisition.
+await Account.withAdvisoryLock("sync-account-42", async () => {
+  await syncAccount(42)
+}, {dedicatedConnection: true})
+
 // Introspection. Useful in diagnostics; callers that want to act on the
 // result should prefer `withAdvisoryLockOrFail` to avoid a TOCTOU window.
 const isBusy = await Account.hasAdvisoryLock("sync-account-42")
 ```
 
 Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `finally` block, so the callback's return value is propagated on success and the lock is released on either a thrown error or an early return. Calls without a positive `holdTimeoutMs` acquire and release the advisory lock on the caller's existing database connection/context to avoid extra connection overhead. Calls with a positive `holdTimeoutMs` acquire and release the advisory lock through a dedicated lock connection; the callback keeps using the caller's existing database connection/context. When `holdTimeoutMs` fires, the dedicated lock connection releases the advisory lock before `AdvisoryLockHoldTimeoutError` is thrown.
+
+Pass `{dedicatedConnection: true}` to force a dedicated lock connection even when no `holdTimeoutMs` is set. The callback still runs on the caller/model connection; only lock ownership moves to the spawned session. Use this when the caller connection may be shared or reused and you need independent, non-re-entrant lock semantics.
 
 Each database connection also keeps a counted registry of advisory locks it successfully acquires. Before a checked-out connection returns to its pool, Velocious releases every lock still in that registry so an abandoned critical section cannot leak a session lock into the next checkout. Closing a connection performs the same cleanup before closing the physical database session, including the dedicated connection used by positive `holdTimeoutMs` calls. Cleanup preserves re-entrant acquisition counts and attempts every tracked lock; release failures are surfaced rather than silently leaving a reusable connection poisoned.
 

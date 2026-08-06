@@ -51,7 +51,7 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
   const rows = []
   let nextId = 1
   let nextServerSequence = 1
-  const persistedUpdatedAt = new Date("2026-08-03T14:00:00.000Z")
+  const persistedUpdatedAt = new Date("2030-01-01T14:00:00.000Z")
   const getAttributeNameToColumnNameMap = () => ({accountId: "account_id", eventId: "event_id"})
 
   return {
@@ -205,7 +205,7 @@ describe("sync publisher from configuration", () => {
         resourceType: "PublishedScan",
         serverSequence: 1,
         syncType: "update",
-        updatedAt: "2026-08-03T14:00:00.000Z"
+        updatedAt: "2030-01-01T14:00:00.000Z"
       }]
     })
   })

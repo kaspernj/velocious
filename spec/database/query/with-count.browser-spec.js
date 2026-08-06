@@ -1,9 +1,13 @@
 import Configuration from "../../../src/configuration.js"
 import Interaction from "../../dummy/src/models/interaction.js"
+import LoggerArrayOutput from "../../../src/logger/outputs/array-output.js"
 import Project from "../../dummy/src/models/project.js"
 import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import RequestTiming from "../../../src/http-server/client/request-timing.js"
 import Task from "../../dummy/src/models/task.js"
+
+/** @typedef {import("../../../src/configuration-types.js").LoggingConfiguration} LoggingConfiguration */
+/** @typedef {Configuration & {_logging?: LoggingConfiguration}} MutableLoggingConfiguration */
 
 describe("Database - query - withCount", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("attaches counts for a basic hasMany", async () => {
@@ -39,17 +43,75 @@ describe("Database - query - withCount", {databaseCleaning: {transaction: false,
     expect(loaded.readCount("tasksCount")).toEqual(1)
   })
 
-  it("filters the counted association via where", async () => {
-    const project = await Project.create({nameEn: "Filtered", nameDe: "Gefiltert"})
+  it("keeps a non-cohort filter batched across parents", async () => {
+    const projectA = await Project.create({nameEn: "Filtered A", nameDe: "Gefiltert A"})
+    const projectB = await Project.create({nameEn: "Filtered B", nameDe: "Gefiltert B"})
+    const requestTiming = new RequestTiming()
 
-    await Task.create({name: "Done task", project, isDone: true})
-    await Task.create({name: "Open task", project, isDone: false})
+    await Task.create({name: "A done task", project: projectA, isDone: true})
+    await Task.create({name: "A open task", project: projectA, isDone: false})
+    await Task.create({name: "B done task 1", project: projectB, isDone: true})
+    await Task.create({name: "B done task 2", project: projectB, isDone: true})
 
-    const [loaded] = await Project.where({id: project.id()}).withCount({
-      doneTasksCount: {relationship: "tasks", where: {isDone: true}}
-    }).toArray()
+    const loaded = await Configuration.current().getEnvironmentHandler().runWithRequestTiming(requestTiming, async () => {
+      return await Project
+        .where({id: [projectA.id(), projectB.id()]})
+        .order("projects.id ASC")
+        .withCount({
+          doneTasksCount: {relationship: "tasks", where: {isDone: true}}
+        })
+        .toArray()
+    })
 
-    expect(loaded.readCount("doneTasksCount")).toEqual(1)
+    expect(loaded[0].readCount("doneTasksCount")).toEqual(1)
+    expect(loaded[1].readCount("doneTasksCount")).toEqual(2)
+    expect(requestTiming.dbQueryCount).toEqual(2)
+  })
+
+  it("intersects a colliding foreign-key filter with the parent cohort", async () => {
+    const projectA = await Project.create({nameEn: "Cohort A", nameDe: "Kohorte A"})
+    const projectB = await Project.create({nameEn: "Cohort B", nameDe: "Kohorte B"})
+
+    await Task.create({name: "B task", project: projectB})
+
+    const configuration = /** @type {MutableLoggingConfiguration} */ (Configuration.current())
+    const previousLogging = configuration._logging
+    const arrayOutput = new LoggerArrayOutput()
+
+    configuration._logging = {
+      console: false,
+      file: false,
+      outputs: [{output: arrayOutput, levels: ["info"]}],
+      queryLogging: true
+    }
+
+    try {
+      const [loaded] = await Project.where({id: projectA.id()}).withCount({
+        otherProjectTasksCount: {relationship: "tasks", where: {project_id: projectB.id()}}
+      }).toArray()
+
+      expect(loaded.readCount("otherProjectTasksCount")).toEqual(0)
+    } finally {
+      configuration._logging = previousLogging
+    }
+
+    const aggregateLogs = arrayOutput
+      .getLogs()
+      .filter((log) => log.message.includes("COUNT(*) AS count_value"))
+
+    expect(aggregateLogs.length).toEqual(1)
+
+    const aggregateSql = aggregateLogs[0].message
+    const whereStart = aggregateSql.indexOf(" WHERE ")
+    const groupStart = aggregateSql.indexOf(" GROUP BY ", whereStart)
+
+    expect(whereStart >= 0).toBeTrue()
+    expect(groupStart > whereStart).toBeTrue()
+
+    const whereSql = aggregateSql.slice(whereStart, groupStart)
+
+    expect(whereSql.split("project_id").length).toEqual(3)
+    expect(whereSql.includes(" AND ")).toBeTrue()
   })
 
   it("uses one aggregate roundtrip for compatible aliases", async () => {
@@ -171,6 +233,21 @@ describe("Database - query - withCount", {databaseCleaning: {transaction: false,
 
     expect(loadedProject.readCount("interactionsCount")).toEqual(1)
     expect(loadedTask.readCount("interactionsCount")).toEqual(2)
+  })
+
+  it("intersects a colliding polymorphic type filter with the parent type", async () => {
+    const project = await Project.create({nameEn: "Shared id project", nameDe: "Projekt mit gemeinsamer ID"})
+    const task = await Task.create({id: project.id(), name: "Shared id task", project})
+
+    expect(task.id()).toEqual(project.id())
+
+    await Interaction.create({subjectType: "Project", subjectId: project.id(), kind: "Project interaction"})
+
+    const [loadedTask] = await Task.where({id: task.id()}).withCount({
+      projectInteractionsCount: {relationship: "interactions", where: {subject_type: "Project"}}
+    }).toArray()
+
+    expect(loadedTask.readCount("projectInteractionsCount")).toEqual(0)
   })
 
   it(".count() on the parent query ignores withCount", async () => {

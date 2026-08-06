@@ -75,4 +75,100 @@ describe("Configuration - concurrent initialize", () => {
       await fs.rm(directory, {recursive: true, force: true})
     }
   })
+
+  it("does not commit a model phase invalidated by closing connections", async () => {
+    const directory = path.join(repoRoot(), "tmp", `initialize-close-race-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await fs.mkdir(path.join(directory, "src", "jobs"), {recursive: true})
+    await fs.writeFile(path.join(directory, "package.json"), JSON.stringify({type: "module"}))
+
+    let modelPhases = 0
+    /** @type {() => void} */
+    let signalFirstPhaseStarted = () => {}
+    const firstPhaseStarted = new Promise((resolve) => { signalFirstPhaseStarted = resolve })
+    /** @type {() => void} */
+    let releaseFirstPhase = () => {}
+    const firstPhaseRelease = new Promise((resolve) => { releaseFirstPhase = resolve })
+    const configuration = new Configuration({
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {
+        modelPhases += 1
+        if (modelPhases !== 1) return
+
+        signalFirstPhaseStarted()
+        await firstPhaseRelease
+      },
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    try {
+      const staleModelPhase = configuration.initializeModels({type: "background-jobs-runner"})
+      await firstPhaseStarted
+      await configuration.closeDatabaseConnections()
+      releaseFirstPhase()
+      await staleModelPhase
+
+      expect(modelPhases).toEqual(1)
+
+      await configuration.initializeModels({type: "background-jobs-runner"})
+      expect(modelPhases).toEqual(2)
+
+      await configuration.initializeModels({type: "background-jobs-runner"})
+      expect(modelPhases).toEqual(2)
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {recursive: true, force: true})
+    }
+  })
+
+  it("does not mark the configuration initialized when models are invalidated during initialize()", async () => {
+    const directory = path.join(repoRoot(), "tmp", `initialize-outer-close-race-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    await fs.mkdir(path.join(directory, "src", "jobs"), {recursive: true})
+    await fs.writeFile(path.join(directory, "package.json"), JSON.stringify({type: "module"}))
+
+    let modelPhases = 0
+    /** @type {() => void} */
+    let signalPhaseStarted = () => {}
+    const phaseStarted = new Promise((resolve) => { signalPhaseStarted = resolve })
+    /** @type {() => void} */
+    let releasePhase = () => {}
+    const phaseRelease = new Promise((resolve) => { releasePhase = resolve })
+    const configuration = new Configuration({
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {
+        modelPhases += 1
+        if (modelPhases !== 1) return
+
+        signalPhaseStarted()
+        await phaseRelease
+      },
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    try {
+      const staleInit = configuration.initialize({type: "background-jobs-runner"})
+      await phaseStarted
+      await configuration.closeDatabaseConnections()
+      releasePhase()
+
+      await staleInit
+
+      expect(configuration.isInitialized()).toBe(false)
+      expect(modelPhases).toEqual(1)
+
+      await configuration.initialize({type: "background-jobs-runner"})
+      expect(configuration.isInitialized()).toBe(true)
+      expect(modelPhases).toEqual(2)
+    } finally {
+      await configuration.closeDatabaseConnections()
+      await fs.rm(directory, {recursive: true, force: true})
+    }
+  })
 })

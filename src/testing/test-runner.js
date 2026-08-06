@@ -828,24 +828,22 @@ export default class TestRunner {
     process.on("uncaughtException", onUncaughtException)
 
     try {
-      await this.getConfiguration().ensureConnections({name: "Test runner suite"}, async () => {
-        await this.runTests({
-          afterEaches: [],
-          beforeEaches: [],
-          tests,
-          descriptions: [],
-          indentLevel: 0
-        })
-
-        // A rejection scheduled by the final test (a detached rejected promise,
-        // or an afterCommit callback rejecting as the suite drains) is reported
-        // by Node on a LATER turn. Drain a few turns while the handler is still
-        // attached — and connections still open — so those late rejections are
-        // recorded instead of escaping to the default crash path after cleanup.
-        for (let drainTurn = 0; drainTurn < 3; drainTurn++) {
-          await new Promise((resolve) => setImmediate(resolve))
-        }
+      await this.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        tests,
+        descriptions: [],
+        indentLevel: 0
       })
+
+      // A rejection scheduled by the final test (a detached rejected promise,
+      // or an afterCommit callback rejecting as the suite drains) is reported
+      // by Node on a LATER turn. Drain a few turns while the handler is still
+      // attached so those late rejections are recorded instead of escaping to
+      // the default crash path after cleanup.
+      for (let drainTurn = 0; drainTurn < 3; drainTurn++) {
+        await new Promise((resolve) => setImmediate(resolve))
+      }
     } finally {
       process.off("unhandledRejection", onUnhandledRejection)
       process.off("uncaughtException", onUncaughtException)
@@ -1005,11 +1003,8 @@ export default class TestRunner {
               // Pin one connection per test so beforeEach, the test body and afterEach
               // all run on the SAME connection. This is required for transaction-based
               // database cleaning (beforeEach starts a transaction, afterEach rolls it
-              // back). ensureConnections reuses the suite-level pinned connection while
-              // it is healthy and transparently re-establishes a per-test pin if an
-              // earlier spec closed the suite connection (which would otherwise leave a
-              // stale async-context pin and force every later test onto a fresh checkout,
-              // breaking isolation).
+              // back). Releasing the lease after each lifecycle also runs the pool's
+              // session cleanup before another test can reuse the connection.
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
                 // Register dynamic candidates before application hooks so transaction
                 // state changes made during a hook are visible to a request dispatched

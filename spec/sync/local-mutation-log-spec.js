@@ -51,6 +51,34 @@ describe("local sync mutation log", () => {
     expect(storage.calls.map((call) => call.method)).toEqual(["nextSequence", "appendRecord", "records"])
   })
 
+  it("retains an optional signed mutation envelope on appended records", async () => {
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({
+      idGenerator: () => "log-1",
+      now: () => new Date("2026-06-24T10:00:00.000Z"),
+      storage
+    })
+    const signedMutation = {algorithm: "ECDSA-P256-SHA256", mutation: buildMutation({clientMutationId: "mutation-1"}), signature: "signature-1"}
+    const record = await mutationLog.append({mutation: buildMutation({clientMutationId: "mutation-1"}), signedMutation})
+
+    expect(record.signedMutation).toEqual(signedMutation)
+    expect((await mutationLog.records())[0].signedMutation).toEqual(signedMutation)
+  })
+
+  it("rejects a signed mutation envelope whose embedded mutation differs from the appended mutation", async () => {
+    const storage = buildMemoryStorage()
+    const mutationLog = new LocalMutationLog({
+      idGenerator: () => "log-1",
+      now: () => new Date("2026-06-24T10:00:00.000Z"),
+      storage
+    })
+    const mutation = buildMutation({clientMutationId: "mutation-1"})
+    const signedMutation = {algorithm: "ECDSA-P256-SHA256", mutation: buildMutation({clientMutationId: "mutation-2"}), signature: "signature-1"}
+
+    await expect(async () => mutationLog.append({mutation, signedMutation})).toThrow(/Signed mutation payload does not match/u)
+    expect(storage.calls.map((call) => call.method)).toEqual([])
+  })
+
   it("persists pending mutations across new log instances without one JSON blob", async () => {
     const storage = buildMemoryStorage()
     const firstLog = new LocalMutationLog({idGenerator: () => "log-1", storage})

@@ -20,6 +20,7 @@ describe("Cli - Commands - db:migrate framework schema", () => {
       // Drop the framework tables so only db:migrate — via the ensureFrameworkSchema
       // hook — can recreate them (no runtime store boots in this test).
       await dbs.default.withDisabledForeignKeys(async () => {
+        await dbs.default.dropTable("background_job_schedule_keys", {cascade: true, ifExists: true})
         await dbs.default.dropTable("background_job_concurrency", {cascade: true, ifExists: true})
         await dbs.default.dropTable("background_jobs", {cascade: true, ifExists: true})
       })
@@ -35,6 +36,18 @@ describe("Cli - Commands - db:migrate framework schema", () => {
       if (!executionModeColumn) throw new Error("db:migrate didn't create the execution_mode column")
 
       expect(executionModeColumn.getName()).toEqual("execution_mode")
+
+      const scheduleKeyColumn = await backgroundJobsTable.getColumnByName("schedule_key")
+
+      if (!scheduleKeyColumn) throw new Error("db:migrate didn't create the schedule_key column")
+
+      expect(scheduleKeyColumn.getName()).toEqual("schedule_key")
+
+      const scheduleKeysTable = await dbs.default.getTableByName("background_job_schedule_keys")
+
+      if (!scheduleKeysTable) throw new Error("db:migrate didn't create the background_job_schedule_keys table")
+
+      expect(scheduleKeysTable.getName()).toEqual("background_job_schedule_keys")
 
       const concurrencyTable = await dbs.default.getTableByName("background_job_concurrency")
 
@@ -57,6 +70,7 @@ describe("Cli - Commands - db:migrate framework schema", () => {
       // concurrency reconcile — which under `--parallel N` fires once per tenant
       // worker and InnoDB-deadlocks (ER_LOCK_DEADLOCK) on the shared rows.
       await dbs.default.withDisabledForeignKeys(async () => {
+        await dbs.default.dropTable("background_job_schedule_keys", {cascade: true, ifExists: true})
         await dbs.default.dropTable("background_job_concurrency", {cascade: true, ifExists: true})
         await dbs.default.dropTable("background_jobs", {cascade: true, ifExists: true})
       })

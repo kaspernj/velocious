@@ -21,6 +21,7 @@ Without a resource definition, frontend models should not silently work.
 - Resource `attachments` defines attachment helpers generated on frontend models.
 
 ## Shared resource fallback
+- See the [shared-resource sync developer guide](shared-resource-sync-guide.md) for a complete shared recipe, backend/local wrappers, security boundaries, and migration gates.
 - Environment-specific resources may declare `static SharedResource = SharedModelResource` to reuse a bundled shared resource recipe.
 - Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value, framework default.
 - Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.

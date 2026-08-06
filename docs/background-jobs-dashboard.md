@@ -45,6 +45,10 @@ it when the routes are set, registering a route-resolver hook so the controller
 can ship inside the `velocious` package (the same mechanism the `sql.js` asset
 route uses).
 
+External packages use the same surface. For example, Rampway ships its own
+controller, durable run store, and detached deployment worker behind a
+[`route.mount(...)` integration](rampway-integration.md).
+
 ## Endpoints
 
 All paths are relative to the mount prefix (`at`). Responses are JSON.
@@ -70,6 +74,7 @@ Example list response:
     {
       "id": "…",
       "jobName": "FailingJob",
+      "scheduleKey": "event:42:reminder:24h",
       "status": "failed",
       "attempts": 1,
       "maxRetries": 0,
@@ -90,6 +95,8 @@ Example list response:
   "pagination": {"page": 1, "perPage": 25, "total": 1, "totalPages": 1}
 }
 ```
+
+`scheduleKey` is the historical logical schedule key, or `null` for legacy/unkeyed jobs. It remains visible after replacement, cancellation, completion, failure, or orphaning even though terminal jobs no longer own that key.
 
 Velocious jobs don't have Sidekiq-style named queues; they have a `job_name`
 (the job class) and a `status`. The dashboard groups and filters by those.
@@ -204,10 +211,6 @@ The dashboard UI is a separate Expo app + npm package + GitHub repo
   the same UI works embedded (single same-origin app) or standalone;
 - talks only to the Jobs API above, using the stats snapshot plus count deltas
   when supported and falling back to polling for older Velocious versions.
-
-The same `route.mount(...)` pattern is used by the authenticated
-[callable deployment API](deployment-api.md), which mounts a bounded
-deployment endpoint backed by an integration-owned adapter.
 
 ## Roadmap
 

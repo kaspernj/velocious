@@ -2,11 +2,12 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import Ability from "../../src/authorization/ability.js"
+import Comment from "../dummy/src/models/comment.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
 import SyncEntry from "../dummy/src/models/sync-entry.js"
-import SyncEnvelopeReplayService from "../../src/sync/sync-envelope-replay-service.js"
+import SyncEnvelopeReplayService, {syncReplayConflictLockName} from "../../src/sync/sync-envelope-replay-service.js"
 import SyncUuidItemResource from "../dummy/src/resources/sync-uuid-item-resource.js"
 import Task from "../dummy/src/models/task.js"
 import UuidItem from "../dummy/src/models/uuid-item.js"
@@ -38,10 +39,15 @@ function buildService(serviceArgs) {
  * @param {string} [args.resourceType] - Resource type. Defaults to "UuidItem".
  * @param {string} [args.syncType] - Sync type. Defaults to "update".
  * @param {string} [args.clientUpdatedAt] - Client timestamp. Defaults to a fixed time.
+ * @param {string} [args.baseVersion] - Optional base version for conflict detection.
  * @returns {Record<string, ?>} Raw sync entry.
  */
-function buildSync({clientUpdatedAt = "2026-07-03T10:00:00.000Z", data, id, resourceId, resourceType = "UuidItem", syncType = "update"}) {
-  return {clientUpdatedAt, data, id, resourceId, resourceType, syncType}
+function buildSync({baseVersion, clientUpdatedAt = "2026-07-03T10:00:00.000Z", data, id, resourceId, resourceType = "UuidItem", syncType = "update"}) {
+  const sync = {clientUpdatedAt, data, id, resourceId, resourceType, syncType}
+
+  if (baseVersion !== undefined) sync.baseVersion = baseVersion
+
+  return sync
 }
 
 describe("sync envelope replay service - resource routed", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
@@ -391,5 +397,263 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
     expect(result).toEqual({syncs: [{id: "ef55f1e2-1111-4222-8333-444455556666", syncState: "successful"}]})
     expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Custom before")
+  })
+
+  it("rejects unsupported conflict strategies at construction time", () => {
+    expect(() => buildService({
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "fieldThreeWay", versionAttribute: "updatedAt"}
+    })).toThrow(/Unsupported sync conflict strategy for backend replay/u)
+  })
+
+  it("defaults an omitted conflict strategy to optimisticVersion for routed upserts", async () => {
+    const uuidItem = await UuidItem.create({id: "14d5e6f7-a8b9-7a0b-1c2d-3e4f5a6b7c8d", title: "Omitted strategy"})
+    const baseVersion = uuidItem.updatedAt().toISOString()
+
+    // Advance server state so the mutation's base version is stale.
+    uuidItem.assign({title: "Omitted strategy updated", updatedAt: "2026-07-04T10:00:00.000Z"})
+    await uuidItem.save()
+
+    const service = buildService({
+      configuration: dummyConfiguration,
+      conflictStrategy: {versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {title: "Stale update"},
+        id: "13b4c5d6-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id())
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+    expect(result.syncs[0].conflict.suggestedResolution).toEqual("manual")
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Omitted strategy updated")
+  })
+
+  it("projects conflict fields through readable resource attributes and their serializers", async () => {
+    class ConflictCommentResource extends FrontendModelBaseResource {
+      static ModelClass = Comment
+      static attributes = ["body"]
+
+      /** @type {string[]} */
+      static writableAttributes = ["body", "taskId"]
+
+      /** @param {Comment} comment - Comment record. @returns {string} - Serialized body. */
+      bodyAttribute(comment) {
+        return `serialized:${comment.body()}`
+      }
+    }
+
+    const project = await Project.create({name: "Conflict projection project"})
+    const firstTask = await Task.create({name: "First projection task", projectId: project.id()})
+    const secondTask = await Task.create({name: "Second projection task", projectId: project.id()})
+    const comment = await Comment.create({body: "Original body", taskId: firstTask.id()})
+    const baseVersion = comment.updatedAt().toISOString()
+
+    comment.assign({body: "Authoritative body", taskId: secondTask.id(), updatedAt: "2026-07-04T10:00:00.000Z"})
+    await comment.save()
+
+    const service = buildService({
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      resourceTypeOverrides: {Comment: ConflictCommentResource},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        data: {body: "Stale body", taskId: firstTask.id()},
+        id: "24c5d6e7-1111-4222-8333-444455556666",
+        resourceId: String(comment.id()),
+        resourceType: "Comment"
+      })]
+    })
+    const conflict = result.syncs[0].conflict
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+    expect(conflict.affectedFields).toEqual(["body", "taskId"])
+    expect(conflict.serverModel.body).toEqual("serialized:Authoritative body")
+    expect(conflict.serverModel.taskId).toEqual(undefined)
+    expect(conflict.serverModel.id).toEqual(comment.id())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
+    expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "updatedAt"])
+  })
+
+  it("derives default-readable attributes from the model contract when resource attributes is empty for server-wins convergence", async () => {
+    class DefaultReadableConflictResource extends FrontendModelBaseResource {
+      static ModelClass = Comment
+
+      /** @type {string[]} */
+      static attributes = []
+
+      /** @type {string[]} */
+      static writableAttributes = ["body", "taskId"]
+    }
+
+    const project = await Project.create({name: "Default readable project"})
+    const firstTask = await Task.create({name: "First default task", projectId: project.id()})
+    const secondTask = await Task.create({name: "Second default task", projectId: project.id()})
+    const comment = await Comment.create({body: "Default original", taskId: firstTask.id()})
+    const baseVersion = comment.updatedAt().toISOString()
+
+    comment.assign({body: "Default server body", taskId: secondTask.id(), updatedAt: "2026-07-04T10:00:00.000Z"})
+    await comment.save()
+
+    const service = buildService({
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      resourceTypeOverrides: {Comment: DefaultReadableConflictResource},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        data: {body: "Default stale body", taskId: firstTask.id()},
+        id: "25d6e7f8-1111-4222-8333-444455556666",
+        resourceId: String(comment.id()),
+        resourceType: "Comment"
+      })]
+    })
+    const conflict = result.syncs[0].conflict
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+    expect(conflict.suggestedResolution).toEqual("keep_server")
+    expect(conflict.serverModel.body).toEqual("Default server body")
+    expect(conflict.serverModel.taskId).toEqual(secondTask.id())
+    expect(conflict.serverModel.id).toEqual(comment.id())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
+    expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "taskId", "updatedAt"])
+  })
+
+  it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {
+    const resourceId = "a0b1c2d3-e4f5-6a7b-8c9d-0e1f2a3b4c5d"
+    const resourceType = "Task"
+    const first = syncReplayConflictLockName({resourceId, resourceType})
+    const second = syncReplayConflictLockName({resourceId, resourceType})
+    const otherId = syncReplayConflictLockName({resourceId: "b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e", resourceType})
+    const otherType = syncReplayConflictLockName({resourceId, resourceType: "Project"})
+
+    expect(first).toEqual(second)
+    expect(first).not.toEqual(otherId)
+    expect(first).not.toEqual(otherType)
+    expect(first.length).toBeLessThanOrEqual(64)
+    expect(first).toMatch(/^vsr:[0-9a-f]{32}$/u)
+  })
+
+  it("skips a stale apply handler with baseVersion instead of forcing it to run", async () => {
+    const uuidItem = await UuidItem.create({id: "f1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c", title: "Handler stale"})
+    /** @type {Array<string>} */
+    const handlerCalls = []
+
+    await SyncEntry.create({
+      authenticationTokenId: ACTOR_ID,
+      clientUpdatedAt: "2026-07-03T11:00:00.000Z",
+      data: JSON.stringify({title: "Later"}),
+      resourceId: String(uuidItem.id()),
+      resourceType: "UuidItem",
+      syncType: "update"
+    })
+
+    const service = buildService({
+      applyHandlers: {
+        UuidItem: async () => {
+          handlerCalls.push("ran")
+
+          return {created: false, deleted: false, record: null}
+        }
+      },
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion: "server-1",
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {title: "Earlier"},
+        id: "f0a1b2c3-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id())
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("successful")
+    expect(handlerCalls).toEqual([])
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Handler stale")
+  })
+
+  it("skips a stale delete with baseVersion instead of forcing deletion", async () => {
+    const uuidItem = await UuidItem.create({id: "62b3c4d5-e6f7-5a8b-9c0d-1e2f3a4b5c6d", title: "Delete stale"})
+
+    await SyncEntry.create({
+      authenticationTokenId: ACTOR_ID,
+      clientUpdatedAt: "2026-07-03T11:00:00.000Z",
+      data: JSON.stringify({}),
+      resourceId: String(uuidItem.id()),
+      resourceType: "UuidItem",
+      syncType: "delete"
+    })
+
+    const service = buildService({
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion: "server-1",
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {},
+        id: "61b2c3d4-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id()),
+        syncType: "delete"
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("successful")
+    expect(await UuidItem.findBy({id: uuidItem.id()})).not.toEqual(null)
+  })
+
+  it("skips a stale command with baseVersion instead of forcing execution", async () => {
+    const uuidItem = await UuidItem.create({id: "73c4d5e6-f7a8-6a9b-0c1d-2e3f4a5b6c7d", title: "Command stale"})
+    /** @type {Array<string>} */
+    const commandCalls = []
+
+    await SyncEntry.create({
+      authenticationTokenId: ACTOR_ID,
+      clientUpdatedAt: "2026-07-03T11:00:00.000Z",
+      data: JSON.stringify({}),
+      resourceId: String(uuidItem.id()),
+      resourceType: "UuidItem",
+      syncType: "ping"
+    })
+
+    const service = buildService({
+      applyHandlers: {
+        UuidItem: async ({mutation}) => {
+          if (mutation.syncType === "ping") commandCalls.push("ran")
+
+          return {created: false, deleted: false, record: null}
+        }
+      },
+      configuration: dummyConfiguration,
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion: "server-1",
+        clientUpdatedAt: "2026-07-03T10:00:00.000Z",
+        data: {},
+        id: "72b3c4d5-1111-4222-8333-444455556666",
+        resourceId: String(uuidItem.id()),
+        syncType: "ping"
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("successful")
+    expect(commandCalls).toEqual([])
+    expect((await UuidItem.findByOrFail({id: uuidItem.id()})).title()).toEqual("Command stale")
   })
 })

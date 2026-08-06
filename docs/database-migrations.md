@@ -130,7 +130,7 @@ await this.migrateLegacyLocalDateTimesToUtcStorage({
 
 ## Structure Snapshots and the Migration Ledger
 
-`db:schema:dump` generates `db/structure-<identifier>.sql` files from the current database state. Each file contains the full DDL for tables, indexes, views, and triggers, followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every applied migration version. This embeds the migration ledger directly in the checked-in snapshot.
+`db:schema:dump` generates `db/structure-<identifier>.sql` files from the current database state. Each file contains the full DDL for tables, indexes, views, and triggers, followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every applied migration version. MySQL and MariaDB dumps place same-schema referenced base tables before their dependent tables. The migration ledger is embedded directly in the checked-in snapshot.
 
 When a fresh database is created from a structure file via `db:schema:load`, those insert rows repopulate the `schema_migrations` table so the loaded database knows exactly which migrations have already been applied. Subsequent `db:migrate` calls see those versions and skip them.
 

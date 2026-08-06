@@ -538,6 +538,16 @@ export default class BackgroundJobsMain {
   _handleClientSocketMessage({jsonSocket, message}) {
     if (message?.type === "enqueue") {
       this._handleEnqueue({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "replace-scheduled") {
+      this._handleReplaceScheduled({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "cancel-scheduled") {
+      this._handleCancelScheduled({jsonSocket, message})
     }
   }
 
@@ -749,23 +759,99 @@ export default class BackgroundJobsMain {
       this._notifyEnqueued()
       await this._drain()
     } catch (error) {
-      if (error instanceof VelociousError && error.safeToExpose) {
-        jsonSocket.send({type: "enqueue-error", error: error.message})
-        return
-      }
-
-      const normalizedError = error instanceof Error ? error : new Error(String(error))
-      const payload = {
+      this._handleClientMutationError({
         context: {jobName: message.jobName, stage: "background-job-enqueue"},
-        error: normalizedError
-      }
-      const errorEvents = this.configuration.getErrorEvents()
-
-      this.logger.error(() => ["Failed to enqueue background job:", normalizedError])
-      errorEvents.emit("framework-error", payload)
-      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
-      jsonSocket.send({type: "enqueue-error", error: "Failed to enqueue job"})
+        error,
+        fallbackMessage: "Failed to enqueue job",
+        jsonSocket,
+        logMessage: "Failed to enqueue background job:",
+        responseType: "enqueue-error"
+      })
     }
+  }
+
+  /**
+   * Handles a stable-key replacement request and re-arms dispatch afterward.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobReplaceScheduledMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleReplaceScheduled({jsonSocket, message}) {
+    try {
+      const result = await this.store.replaceScheduled({
+        scheduleKey: message.scheduleKey,
+        jobName: message.jobName,
+        args: message.args || [],
+        options: message.options || {}
+      })
+
+      this._notifyEnqueued()
+      await this._drain()
+      jsonSocket.send({type: "schedule-replaced", ...result})
+    } catch (error) {
+      this._handleClientMutationError({
+        context: {jobName: message.jobName, scheduleKey: message.scheduleKey, stage: "background-job-replace-scheduled"},
+        error,
+        fallbackMessage: "Failed to replace scheduled job",
+        jsonSocket,
+        logMessage: "Failed to replace scheduled background job:",
+        responseType: "replace-scheduled-error"
+      })
+    }
+  }
+
+  /**
+   * Handles a stable-key cancellation request and re-arms dispatch afterward.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobCancelScheduledMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleCancelScheduled({jsonSocket, message}) {
+    try {
+      const result = await this.store.cancelScheduled(message.scheduleKey)
+
+      this._notifyEnqueued()
+      await this._drain()
+      jsonSocket.send({type: "schedule-cancelled", ...result})
+    } catch (error) {
+      this._handleClientMutationError({
+        context: {scheduleKey: message.scheduleKey, stage: "background-job-cancel-scheduled"},
+        error,
+        fallbackMessage: "Failed to cancel scheduled job",
+        jsonSocket,
+        logMessage: "Failed to cancel scheduled background job:",
+        responseType: "cancel-scheduled-error"
+      })
+    }
+  }
+
+  /**
+   * Returns safe validation failures and reports unexpected client mutations.
+   * @param {object} args - Options.
+   * @param {Record<string, ?>} args.context - Framework-error context.
+   * @param {?} args.error - Mutation failure.
+   * @param {string} args.fallbackMessage - Client-safe fallback message.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {string} args.logMessage - Error log prefix.
+   * @param {"enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error"} args.responseType - Response type.
+   * @returns {void}
+   */
+  _handleClientMutationError({context, error, fallbackMessage, jsonSocket, logMessage, responseType}) {
+    if (error instanceof VelociousError && error.safeToExpose) {
+      jsonSocket.send({type: responseType, error: error.message})
+      return
+    }
+
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => [logMessage, normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    jsonSocket.send({type: responseType, error: fallbackMessage})
   }
 
   /**
@@ -1268,9 +1354,20 @@ export default class BackgroundJobsMain {
     if (this.dispatchStrategy === "polling") return
 
     const next = await this.store.nextScheduledJob()
-    if (!next || typeof next.scheduledAtMs !== "number") return
+    let delay
 
-    const delay = Math.max(0, Math.min(next.scheduledAtMs - Date.now(), MAX_TIMER_MS))
+    if (next && typeof next.scheduledAtMs === "number") {
+      delay = Math.max(0, Math.min(next.scheduledAtMs - Date.now(), MAX_TIMER_MS))
+    }
+
+    // `nextScheduledJob` only returns future jobs, so a job that became
+    // eligible after the drain's eligible-job probe is invisible to it. If one
+    // is dispatchable now, arm a 0-delay re-drain so it is dispatched
+    // immediately instead of being stranded until the next future timer (or
+    // external signal) fires.
+    if (await this.nextAvailableJobForReadyWorkers()) delay = 0
+
+    if (typeof delay !== "number") return
 
     this._scheduledTimer = setTimeout(() => {
       this._scheduledTimer = undefined

@@ -2,6 +2,8 @@
 
 This document records the target architecture for Velocious local-first sync. It is an implementation plan and compatibility contract for building reusable offline sync in Velocious and then migrating downstream apps such as Printyourticket/ticket-app and AwesomeTasks onto the framework primitives.
 
+For a source-verified adoption path, current implementation boundaries, and a migration checklist, see the [shared-resource sync developer guide](shared-resource-sync-guide.md). Concepts in this architecture are not necessarily implemented unless an implemented slice below or the developer guide says they are.
+
 ## Goals
 
 - Let frontend apps keep working for long periods with no backend connection.
