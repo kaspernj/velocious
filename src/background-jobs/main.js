@@ -786,9 +786,9 @@ export default class BackgroundJobsMain {
         options: message.options || {}
       })
 
-      jsonSocket.send({type: "schedule-replaced", ...result})
       this._notifyEnqueued()
       await this._drain()
+      jsonSocket.send({type: "schedule-replaced", ...result})
     } catch (error) {
       this._handleClientMutationError({
         context: {jobName: message.jobName, scheduleKey: message.scheduleKey, stage: "background-job-replace-scheduled"},
@@ -812,9 +812,9 @@ export default class BackgroundJobsMain {
     try {
       const result = await this.store.cancelScheduled(message.scheduleKey)
 
-      jsonSocket.send({type: "schedule-cancelled", ...result})
       this._notifyEnqueued()
       await this._drain()
+      jsonSocket.send({type: "schedule-cancelled", ...result})
     } catch (error) {
       this._handleClientMutationError({
         context: {scheduleKey: message.scheduleKey, stage: "background-job-cancel-scheduled"},
