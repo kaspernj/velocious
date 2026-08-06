@@ -37,7 +37,7 @@ describe("Cli - generate - base-models", () => {
     const userModelPath = `${dummyDirectory()}/src/models/user.js`
     const userBaseContents = await fs.readFile(userBasePath, "utf8")
 
-    expect(userBaseContents).toContain("@returns {typeof User} - The concrete model class.")
+    expect(userBaseContents).toContain("@returns {typeof import(\"../models/user.js\").default}")
     expect(await typescriptCliDiagnostics([userBasePath, userModelPath])).toEqual([])
   })
 

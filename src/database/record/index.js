@@ -1001,7 +1001,7 @@ class VelociousDatabaseRecord {
    * @returns {Record<string, import("./relationships/base.js").default>} - Relationship definitions keyed by name.
    */
   static getRelationshipsMap() {
-    if (!Object.hasOwn(this, "_relationships")) {
+    if (!Object.hasOwn(this, "_relationships") || !this._relationships) {
       /**
        * Narrows the runtime value to the documented type.
        * @type {Record<string, import("./relationships/base.js").default>} */
@@ -1066,7 +1066,7 @@ class VelociousDatabaseRecord {
    * @returns {Record<string, import("../query/query-data.js").QueryDataFn>} - queryData registrations keyed by name.
    */
   static getQueryDataMap() {
-    if (!Object.hasOwn(this, "_queryDataRegistrations")) {
+    if (!Object.hasOwn(this, "_queryDataRegistrations") || !this._queryDataRegistrations) {
       // Prototype-less map so bracket access can only ever surface
       // registrations actually made on this class — never inherited
       // Object.prototype members.
