@@ -4744,7 +4744,10 @@ export default class FrontendModelBase {
       ? response.errorMessage
       : `Request failed for ${this.name}#${commandType}`)
 
-    const error = /** @type {Error & {velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>, debugErrorClass?: string, debugBacktrace?: string[]}} */ (new Error(errorMessage))
+    const error = /** @type {Error & {correlationId?: string, details?: Record<string, ?>, errorMessage?: string, velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>, debugErrorClass?: string, debugBacktrace?: string[]}} */ (new Error(errorMessage))
+    if (hasErrorMessage) {
+      error.errorMessage = response.errorMessage
+    }
     if (response.velocious && typeof response.velocious === "object") {
       error.velocious = response.velocious
     }
@@ -4753,6 +4756,12 @@ export default class FrontendModelBase {
     }
     if (response.validationErrors && typeof response.validationErrors === "object") {
       error.validationErrors = response.validationErrors
+    }
+    if (response.details && typeof response.details === "object") {
+      error.details = response.details
+    }
+    if (typeof response.correlationId === "string") {
+      error.correlationId = response.correlationId
     }
     // Forward server-provided debug detail (included only when the backend
     // deems the requester allowed to see it, e.g. an admin) so callers can

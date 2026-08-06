@@ -1,5 +1,6 @@
 // @ts-check
 
+import {randomUUID} from "node:crypto"
 import * as inflection from "inflection"
 import Controller from "./controller.js"
 import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
@@ -14,6 +15,7 @@ import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendMod
 import {requestDetails} from "./error-reporting/request-details.js"
 import RoutesResolver from "./routes/resolver.js"
 import {ValidationError} from "./database/record/index.js"
+import RecordNotFoundError from "./database/record/record-not-found-error.js"
 import { normalizeDateStringForWrite } from "./database/datetime-storage.js"
 import VelociousError from "./velocious-error.js"
 import isDate from "./utils/is-date.js"
@@ -232,30 +234,17 @@ function frontendModelErrorHasVelociousMetadata(error) {
 }
 
 /**
- * Whether the error has a frontend-model error type marker.
- * @param {unknown} error - Caught error.
- * @returns {boolean} Whether the error has an error type.
- */
-function frontendModelErrorHasErrorType(error) {
-  if (!error || typeof error !== "object") return false
-
-  // Runtime checks above narrow this caught value to the marker record shape.
-  const errorRecord = /** @type {{errorType?: string}} */ (error)
-
-  return typeof errorRecord.errorType === "string" && errorRecord.errorType.length > 0
-}
-
-/**
  * Whether the error is an expected frontend-model user-flow failure.
  * @param {unknown} error - Caught error.
  * @returns {boolean} Whether the error is expected.
  */
 function frontendModelExpectedError(error) {
+  if (error instanceof RecordNotFoundError) return true
   if (error instanceof ValidationError) return true
   if (error instanceof VelociousError && error.safeToExpose) return true
   if (frontendModelErrorHasVelociousMetadata(error)) return true
 
-  return frontendModelErrorHasErrorType(error)
+  return false
 }
 
 /**
@@ -285,6 +274,10 @@ function frontendModelVelociousMetadataForError(error) {
  * @returns {string} - Message safe to return to API clients.
  */
 function frontendModelClientMessageForError(error) {
+  if (error instanceof RecordNotFoundError) {
+    return "Record not found."
+  }
+
   if (error instanceof VelociousError && error.safeToExpose) {
     return error.message
   }
@@ -320,6 +313,10 @@ function frontendModelDebugPayloadForError({configuration, environment, error}) 
   }
 
   if (error instanceof VelociousError && error.safeToExpose) {
+    return {}
+  }
+
+  if (error instanceof RecordNotFoundError) {
     return {}
   }
 
@@ -3098,11 +3095,16 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model error payload.
    * @param {string} errorMessage - Error message.
+   * @param {object} [options] - Structured error fields.
+   * @param {import("./configuration-types.js").ClientErrorPayloadReporterPayload} [options.details] - Client-safe details.
+   * @param {"application_error" | "authorization_error" | "internal_error" | "record_not_found" | "validation_error"} [options.errorType] - Stable client-facing error category.
    * @returns {Record<string, ?>} - Error payload.
    */
-  frontendModelErrorPayload(errorMessage) {
+  frontendModelErrorPayload(errorMessage, options = {}) {
     return {
+      ...(options.details ? {details: options.details} : {}),
       errorMessage,
+      ...(options.errorType ? {errorType: options.errorType} : {}),
       status: "error"
     }
   }
@@ -3127,6 +3129,7 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelEndpointErrorContext({action, commandType, error, model, requestId}) {
     let resolvedModel = model
+    const expectedError = frontendModelExpectedError(error)
 
     if (!resolvedModel) {
       const cachedParams = this._frontendModelParamsOverride || this._frontendModelParams
@@ -3138,7 +3141,8 @@ export default class FrontendModelController extends Controller {
       action,
       commandType,
       controller: this.constructor.name,
-      expectedError: frontendModelExpectedError(error),
+      ...(expectedError ? {} : {correlationId: randomUUID()}),
+      expectedError,
       frontendModelEndpoint: true,
       model: resolvedModel,
       requestId
@@ -3154,6 +3158,22 @@ export default class FrontendModelController extends Controller {
   async frontendModelClientErrorPayloadForError(error, endpointErrorContext) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)
     const normalizedError = error instanceof Error ? error : new Error(String(error))
+    /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
+    const safeErrorPayload = {}
+
+    if (error instanceof VelociousError && error.safeToExpose) {
+      if (error.errorType) safeErrorPayload.errorType = error.errorType
+      if (error.details) safeErrorPayload.details = error.details
+    } else if (error instanceof RecordNotFoundError) {
+      safeErrorPayload.errorType = "record_not_found"
+    } else if (velociousMetadata) {
+      if (typeof velociousMetadata.errorType === "string") {
+        safeErrorPayload.errorType = velociousMetadata.errorType
+      }
+      if (isPlainObject(velociousMetadata.details)) {
+        safeErrorPayload.details = velociousMetadata.details
+      }
+    }
 
     let validationErrorsPayload = {}
 
@@ -3179,7 +3199,14 @@ export default class FrontendModelController extends Controller {
       }
     }
 
+    const reporterPayload = await this.getConfiguration().clientErrorPayloadForError({
+      context: endpointErrorContext || {controller: this.constructor.name},
+      error: normalizedError,
+      request: this.getRequest()
+    })
+
     return {
+      ...reporterPayload,
       ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error)),
       ...frontendModelDebugPayloadForError({
         configuration: this.getConfiguration(),
@@ -3187,28 +3214,22 @@ export default class FrontendModelController extends Controller {
         error
       }),
       ...(velociousMetadata ? {velocious: velociousMetadata} : {}),
+      ...safeErrorPayload,
       ...validationErrorsPayload,
-      ...(await this.getConfiguration().clientErrorPayloadForError({
-        context: endpointErrorContext || {controller: this.constructor.name},
-        error: normalizedError,
-        request: this.getRequest()
-      }))
+      ...(!endpointErrorContext?.expectedError && endpointErrorContext?.correlationId
+        ? {correlationId: endpointErrorContext.correlationId, errorType: "internal_error"}
+        : {})
     }
   }
 
   /**
    * Runs frontend model log endpoint error.
    * @param {object} args - Error log args.
-   * @param {string} args.action - Endpoint/action label.
    * @param {?} args.error - Caught error.
-   * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url" | "custom-command"} [args.commandType] - Frontend-model command type.
-   * @param {string | undefined} [args.model] - Request model name when available.
-   * @param {string | undefined} [args.requestId] - Batch request id when available.
+   * @param {FrontendModelEndpointErrorContext} args.errorContext - Shared client/logging error context.
    * @returns {Promise<void>} - Resolves after logging.
    */
-  async frontendModelLogEndpointError({action, error, commandType, model, requestId}) {
-    const errorContext = this.frontendModelEndpointErrorContext({action, commandType, error, model, requestId})
-
+  async frontendModelLogEndpointError({error, errorContext}) {
     // Expected user-flow errors are surfaced to clients by
     // frontendModelClientErrorPayloadForError, but skipped here so monitoring
     // stays focused on real backend failures.
@@ -3219,11 +3240,12 @@ export default class FrontendModelController extends Controller {
       : String(error)
 
     await this.logger.error(() => ["Frontend model endpoint request failed", {
-      action,
-      commandType,
+      action: errorContext.action,
+      commandType: errorContext.commandType,
+      correlationId: errorContext.correlationId,
       error: errorMessage,
       model: errorContext.model,
-      requestId
+      requestId: errorContext.requestId
     }])
 
     // Surface genuinely unexpected backend failures on the framework-error
@@ -3231,6 +3253,7 @@ export default class FrontendModelController extends Controller {
     // controller silently swallowing them behind the generic "Request
     // failed." client message.
     const errorPayload = {
+      correlationId: errorContext.correlationId,
       context: errorContext,
       error: error instanceof Error ? error : new Error(String(error)),
       request: this.getRequest(),
@@ -3257,7 +3280,7 @@ export default class FrontendModelController extends Controller {
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({action, commandType: action, error})
 
-      await this.frontendModelLogEndpointError({action, commandType: action, error, model: errorContext.model})
+      await this.frontendModelLogEndpointError({error, errorContext})
 
       await this.render({
         json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext), this.transportSerializationOptions()))
@@ -3334,7 +3357,7 @@ export default class FrontendModelController extends Controller {
       )
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       const serializedModel = await resource.serialize(model, "create")
@@ -3343,7 +3366,7 @@ export default class FrontendModelController extends Controller {
     }
 
     if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
-      return this.frontendModelErrorPayload("Expected model id.")
+      return this.frontendModelErrorPayload("Expected model id.", {errorType: "validation_error"})
     }
 
     if (action === "attach") {
@@ -3361,7 +3384,7 @@ export default class FrontendModelController extends Controller {
       const model = await this.frontendModelFindRecord("attach", id)
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       await model.getAttachmentByName(attachmentName).attach(attachmentInput)
@@ -3377,13 +3400,13 @@ export default class FrontendModelController extends Controller {
       const model = await this.frontendModelFindRecord("download", id)
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       const downloadedAttachment = await model.getAttachmentByName(attachmentParams.attachmentName).download(attachmentParams.attachmentId)
 
       if (!downloadedAttachment) {
-        return this.frontendModelErrorPayload("Attachment not found.")
+        return this.frontendModelErrorPayload("Attachment not found.", {errorType: "record_not_found"})
       }
 
       return {
@@ -3406,7 +3429,7 @@ export default class FrontendModelController extends Controller {
       const model = await this.frontendModelFindRecord("url", id)
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       const url = await model.getAttachmentByName(attachmentParams.attachmentName).url(attachmentParams.attachmentId)
@@ -3428,7 +3451,7 @@ export default class FrontendModelController extends Controller {
       const model = await this.frontendModelFindRecord("attachmentList", id)
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       const attachments = await model.getAttachmentByName(attachmentParams.attachmentName).listMetadata()
@@ -3443,7 +3466,7 @@ export default class FrontendModelController extends Controller {
       const model = await this.frontendModelFindRecord("find", id)
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       await this.frontendModelComputeAbilities([model])
@@ -3459,7 +3482,7 @@ export default class FrontendModelController extends Controller {
       const model = await this.frontendModelFindRecord("update", id)
 
       if (!model) {
-        return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+        return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
       }
 
       const updatedModel = await resource.update(model, mutationAttributes.attributes, {
@@ -3475,7 +3498,7 @@ export default class FrontendModelController extends Controller {
     const model = await this.frontendModelFindRecord("destroy", id)
 
     if (!model) {
-      return this.frontendModelErrorPayload(`${modelClass.name} not found.`)
+      return this.frontendModelErrorPayload(`${modelClass.name} not found.`, {errorType: "record_not_found"})
     }
 
     await resource.destroy(model)
@@ -3624,12 +3647,7 @@ export default class FrontendModelController extends Controller {
             : undefined
         })
 
-        await this.frontendModelLogEndpointError({
-          action: errorContext.action,
-          commandType: errorContext.commandType,
-          error,
-          model: errorContext.model
-        })
+        await this.frontendModelLogEndpointError({error, errorContext})
 
         results.push({
           idempotencyKey,
@@ -3724,12 +3742,7 @@ export default class FrontendModelController extends Controller {
         model: mutation.model
       })
 
-      await this.frontendModelLogEndpointError({
-        action: errorContext.action,
-        commandType: errorContext.commandType,
-        error,
-        model: errorContext.model
-      })
+      await this.frontendModelLogEndpointError({error, errorContext})
 
       return {
         response: await this.frontendModelClientErrorPayloadForError(error, errorContext),
@@ -3754,12 +3767,7 @@ export default class FrontendModelController extends Controller {
         model: mutation.model
       })
 
-      await this.frontendModelLogEndpointError({
-        action: errorContext.action,
-        commandType: errorContext.commandType,
-        error,
-        model: errorContext.model
-      })
+      await this.frontendModelLogEndpointError({error, errorContext})
 
       return {
         response,
@@ -4275,13 +4283,7 @@ export default class FrontendModelController extends Controller {
           requestId
         })
 
-        await this.frontendModelLogEndpointError({
-          action: errorContext.action,
-          commandType: errorContext.commandType,
-          error,
-          model: errorContext.model,
-          requestId: errorContext.requestId
-        })
+        await this.frontendModelLogEndpointError({error, errorContext})
 
         responses.push({
           requestId,
@@ -4506,7 +4508,7 @@ export default class FrontendModelController extends Controller {
     } catch (error) {
       const errorContext = this.frontendModelEndpointErrorContext({action: "frontendCustomCommand", commandType: "custom-command", error})
 
-      await this.frontendModelLogEndpointError({action: errorContext.action, commandType: errorContext.commandType, error, model: errorContext.model})
+      await this.frontendModelLogEndpointError({error, errorContext})
 
       await this.render({
         json: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext), this.transportSerializationOptions()))
