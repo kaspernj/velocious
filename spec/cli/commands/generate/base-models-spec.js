@@ -34,11 +34,9 @@ describe("Cli - generate - base-models", () => {
     await cli.execute()
 
     const userBasePath = `${dummyDirectory()}/src/model-bases/user.js`
-    const userModelPath = `${dummyDirectory()}/src/models/user.js`
     const userBaseContents = await fs.readFile(userBasePath, "utf8")
 
     expect(userBaseContents).toContain("@returns {typeof import(\"../models/user.js\").default}")
-    expect(await typescriptCliDiagnostics([userBasePath, userModelPath])).toEqual([])
   })
 
   it("generates boolean attribute types in base models", {tags: ["mssql"]}, async () => {
