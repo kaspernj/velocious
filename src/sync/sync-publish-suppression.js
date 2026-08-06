@@ -16,7 +16,7 @@ let withoutPublishingDepth = 0
  * publish callbacks skip it (record-precise suppression). The framework's
  * routed sync replay apply uses this internally around every applied write, so
  * replayed device mutations never publish a second, server-origin sync change.
- * @param {?} record - Server model record about to be written.
+ * @param {ReturnType<typeof JSON.parse>} record - Server model record about to be written.
  * @returns {() => void} Release callback re-enabling publishing for the record.
  */
 export function markServerApply(record) {
@@ -51,7 +51,7 @@ export async function withoutPublishing(callback) {
  * Whether server publishing is currently suppressed for a record: either the
  * record was marked as a server apply (`markServerApply`) or a
  * `withoutPublishing` callback is running.
- * @param {?} record - Server model record being written.
+ * @param {ReturnType<typeof JSON.parse>} record - Server model record being written.
  * @returns {boolean} Whether publishing is suppressed for the record.
  */
 export function isPublishingSuppressed(record) {

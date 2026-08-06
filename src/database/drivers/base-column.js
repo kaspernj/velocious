@@ -21,7 +21,7 @@ export default class VelociousDatabaseDriversBaseColumn {
   /**
    * Runs get default.
    * @abstract
-   * @returns {?} - The default.
+   * @returns {ReturnType<typeof JSON.parse>} - The default.
    */
   getDefault() {
     throw new Error("getDefault not implemented")

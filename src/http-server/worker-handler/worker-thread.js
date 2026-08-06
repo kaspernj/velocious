@@ -25,7 +25,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
+   * @param {import("node:worker_threads").MessagePort | null} args.parentPort - Parent port.
    * @param {{debug: boolean, directory: string, environment: string, workerCount: number}} args.workerData - Worker configuration details.
    */
   constructor({parentPort, workerData}) {
@@ -104,9 +104,9 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {number} [data.requestId] - Debug request id.
    * @param {number} [data.transferId] - File transfer id.
    * @param {"completed" | "aborted"} [data.result] - File transfer result.
-   * @param {?} [data.payload] - Payload data.
-   * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
-   * @param {?} [data.body] - V2 broadcast body.
+   * @param {ReturnType<typeof JSON.parse>} [data.payload] - Payload data.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {ReturnType<typeof JSON.parse>} [data.body] - V2 broadcast body.
    */
   onCommand = async (data) => {
     await this.logger.debugLowLevel(() => [`Worker ${this.workerCount} received command`, data])
@@ -250,7 +250,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} [data.channel] - Channel name.
    * @param {string} [data.createdAt] - Event creation time.
    * @param {string} [data.eventId] - Event identifier.
-   * @param {?} [data.payload] - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} [data.payload] - Payload data.
    * @returns {Promise<void>} Resolves when the websocket event is dispatched.
    */
   async handleWebsocketEvent(data) {
@@ -264,8 +264,8 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
   /**
    * Runs handle websocket v2 broadcast.
    * @param {object} data - Data payload.
-   * @param {Record<string, ?>} [data.broadcastParams] - V2 broadcast filter params.
-   * @param {?} [data.body] - V2 broadcast body.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [data.broadcastParams] - V2 broadcast filter params.
+   * @param {ReturnType<typeof JSON.parse>} [data.body] - V2 broadcast body.
    * @param {string} [data.channel] - Channel name.
    * @param {string} [data.eventId] - Event identifier.
    * @returns {void}
@@ -320,7 +320,7 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @param {string} args.channel - Channel name.
    * @param {string | undefined} args.createdAt - Event creation time.
    * @param {string | undefined} args.eventId - Event identifier.
-   * @param {?} args.payload - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} args.payload - Payload data.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async broadcastWebsocketEvent({channel, createdAt, eventId, payload}) {

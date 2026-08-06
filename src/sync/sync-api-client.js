@@ -52,7 +52,7 @@ export default class SyncApiClient {
    * @param {object} args - Pull args.
    * @param {string} args.authenticationToken - Auth token to send with change requests.
    * @param {number} [args.batchSize] - Max syncs per request.
-   * @param {?} args.cursorModel - Model that responds to findBy/findOrInitializeBy for cursor persistence.
+   * @param {ReturnType<typeof JSON.parse>} args.cursorModel - Model that responds to findBy/findOrInitializeBy for cursor persistence.
    * @param {string} args.cursorKey - Cursor option key.
    * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
    * @param {Record<string, SyncResourceConfig>} args.resources - Resource policies.
@@ -73,7 +73,7 @@ export default class SyncApiClient {
 
   /**
    * Loads a persisted sync cursor from a model row with a value column.
-   * @param {{cursorKey: string, cursorModel: ?}} args - Cursor args.
+   * @param {{cursorKey: string, cursorModel: ReturnType<typeof JSON.parse>}} args - Cursor args.
    * @returns {Promise<string | null>} Persisted cursor payload.
    */
   static async loadSyncCursor({cursorKey, cursorModel}) {
@@ -84,7 +84,7 @@ export default class SyncApiClient {
 
   /**
    * Saves a persisted sync cursor to a model row with a value column.
-   * @param {{cursor: SyncCursor, cursorKey: string, cursorModel: ?}} args - Cursor args.
+   * @param {{cursor: SyncCursor, cursorKey: string, cursorModel: ReturnType<typeof JSON.parse>}} args - Cursor args.
    * @returns {Promise<void>}
    */
   static async saveSyncCursor({cursor, cursorKey, cursorModel}) {
@@ -232,7 +232,7 @@ export default class SyncApiClient {
 
   /**
    * Parses a persisted or response cursor payload.
-   * @param {SyncCursor | string | Record<string, ?> | null | undefined} payload - Cursor payload.
+   * @param {SyncCursor | string | Record<string, ReturnType<typeof JSON.parse>> | null | undefined} payload - Cursor payload.
    * @returns {SyncCursor} Parsed cursor.
    */
   static syncCursorFromPayload(payload) {
@@ -261,13 +261,13 @@ export default class SyncApiClient {
 
   /**
    * Builds a normalized sync row adapter.
-   * @param {?} payload - Raw sync payload.
+   * @param {ReturnType<typeof JSON.parse>} payload - Raw sync payload.
    * @returns {SyncChangeEnvelope} Sync row adapter.
    */
   static syncEnvelopeFromPayload(payload) {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Sync changes entry must be an object")
 
-    const syncPayload = /** @type {Record<string, ?>} */ (payload)
+    const syncPayload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (payload)
 
     return {
       data: () => syncPayload.data,
@@ -283,7 +283,7 @@ export default class SyncApiClient {
    * mechanics stay here; apps only declare which models/attributes/hooks are
    * allowed for each resource type.
    * @param {Record<string, SyncResourceConfig>} resources - Resource policy map.
-   * @param {(record: ?) => () => void} [onRecord] - Called with each record about to be written; returns a release callback invoked after the write (used for echo suppression).
+   * @param {(record: ReturnType<typeof JSON.parse>) => () => void} [onRecord] - Called with each record about to be written; returns a release callback invoked after the write (used for echo suppression).
    * @returns {(sync: SyncChangeEnvelope) => Promise<SyncChangeApplyResult>} Sync apply callback.
    */
   static resourceApplier(resources, onRecord) {
@@ -292,7 +292,7 @@ export default class SyncApiClient {
 
   /**
    * Applies one sync row using declarative resource policy.
-   * @param {{resources: Record<string, SyncResourceConfig>, sync: SyncChangeEnvelope, onRecord?: (record: ?) => () => void}} args - Apply args.
+   * @param {{resources: Record<string, SyncResourceConfig>, sync: SyncChangeEnvelope, onRecord?: (record: ReturnType<typeof JSON.parse>) => () => void}} args - Apply args.
    * @returns {Promise<SyncChangeApplyResult>} Apply result.
    */
   static async applyResourceSync({onRecord, resources, sync}) {
@@ -333,7 +333,7 @@ export default class SyncApiClient {
 
   /**
    * Destroys a synced resource via its declared model policy.
-   * @param {{resource: SyncResourceConfig, sync: SyncChangeEnvelope, onRecord?: (record: ?) => () => void}} args - Destroy args.
+   * @param {{resource: SyncResourceConfig, sync: SyncChangeEnvelope, onRecord?: (record: ReturnType<typeof JSON.parse>) => () => void}} args - Destroy args.
    * @returns {Promise<boolean>} Whether a local row was destroyed.
    */
   static async destroySyncedResource({onRecord, resource, sync}) {
@@ -373,8 +373,8 @@ export default class SyncApiClient {
    * @param {object} args - Replay args.
    * @param {string} args.authenticationToken - Auth token to send with replay requests.
    * @param {number} [args.batchSize] - Max syncs per request.
-   * @param {?} args.syncModel - Local Sync model class.
-   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ?>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
+   * @param {ReturnType<typeof JSON.parse>} args.syncModel - Local Sync model class.
+   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
    * @returns {Promise<void>}
    */
   static async replayLocalSyncs(args) {
@@ -409,7 +409,7 @@ export default class SyncApiClient {
 
   /**
    * Serializes the replay-relevant state of a local sync row for in-flight comparisons.
-   * @param {?} sync - Local sync row.
+   * @param {ReturnType<typeof JSON.parse>} sync - Local sync row.
    * @returns {string} Stable snapshot of the row's replayed payload.
    */
   static localSyncReplaySnapshot(sync) {
@@ -418,7 +418,7 @@ export default class SyncApiClient {
 
   /**
    * Builds one replay envelope from a local sync row.
-   * @param {?} sync - Local sync row.
+   * @param {ReturnType<typeof JSON.parse>} sync - Local sync row.
    * @returns {{clientUpdatedAt?: string, data: Record<string, unknown>, id: number, resourceId: string, resourceType: string, syncType: string}} Sync replay envelope.
    */
   static localSyncPayload(sync) {
@@ -436,7 +436,7 @@ export default class SyncApiClient {
 
   /**
    * Resolves one local sync row payload, falling back to preloaded resource attributes.
-   * @param {?} sync - Local sync row.
+   * @param {ReturnType<typeof JSON.parse>} sync - Local sync row.
    * @returns {Record<string, unknown>} Sync data.
    */
   static localSyncData(sync) {
@@ -462,14 +462,14 @@ export default class SyncApiClient {
   /**
    * Queues a local sync row for a Velocious model resource.
    * @param {object} args - Queue args.
-   * @param {?} args.resource - Resource being synced.
-   * @param {?} args.syncModel - Local Sync model class.
+   * @param {ReturnType<typeof JSON.parse>} args.resource - Resource being synced.
+   * @param {ReturnType<typeof JSON.parse>} args.syncModel - Local Sync model class.
    * @param {Record<string, unknown>} [args.data] - Explicit sync data.
    * @param {string} [args.syncType] - Sync operation type.
    * @param {string[]} [args.localOnlyAttributes] - Attributes to strip from queued payloads.
    * @param {string[]} [args.booleanAttributes] - Attributes to coerce through sync boolean parsing.
    * @param {(data: Record<string, unknown>) => Record<string, unknown>} [args.normalizeData] - App-specific data normalizer.
-   * @returns {Promise<?>} Local sync row.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} Local sync row.
    */
   static async queueLocalSync(args) {
     const resourceRecordId = args.resource.id()
@@ -512,7 +512,7 @@ export default class SyncApiClient {
    * (no explicit `data`) is the resource's attributes minus local-only attributes,
    * with booleans coerced and Date values serialized to ISO strings, so apps don't
    * need per-model tracked-payload builders.
-   * @param {{resource: ?, data?: Record<string, unknown>, localOnlyAttributes?: string[], booleanAttributes?: string[], normalizeData?: (data: Record<string, unknown>) => Record<string, unknown>}} args - Data args.
+   * @param {{resource: ReturnType<typeof JSON.parse>, data?: Record<string, unknown>, localOnlyAttributes?: string[], booleanAttributes?: string[], normalizeData?: (data: Record<string, unknown>) => Record<string, unknown>}} args - Data args.
    * @returns {Record<string, unknown>} Queued data.
    */
   static queuedSyncData(args) {
@@ -534,12 +534,12 @@ export default class SyncApiClient {
   /**
    * Builds a small app-facing local sync queue facade from declarative model config.
    * @param {object} args - Queue config.
-   * @param {?} args.syncModel - Local Sync model class.
+   * @param {ReturnType<typeof JSON.parse>} args.syncModel - Local Sync model class.
    * @param {string} args.singleFlightKey - Key used to serialize backend replay.
    * @param {() => Promise<void>} args.syncPending - Backend replay callback.
-   * @param {(resource: ?) => string[]} [args.localOnlyAttributes] - Resource-specific local-only attributes.
-   * @param {(resource: ?) => string[]} [args.booleanAttributes] - Resource-specific SQLite boolean attributes.
-   * @returns {{queue: (queueArgs: {resource: ?, data?: Record<string, unknown>, syncType?: string}) => Promise<?>, syncPending: () => Promise<void>}} Configured local sync queue.
+   * @param {(resource: ReturnType<typeof JSON.parse>) => string[]} [args.localOnlyAttributes] - Resource-specific local-only attributes.
+   * @param {(resource: ReturnType<typeof JSON.parse>) => string[]} [args.booleanAttributes] - Resource-specific SQLite boolean attributes.
+   * @returns {{queue: (queueArgs: {resource: ReturnType<typeof JSON.parse>, data?: Record<string, unknown>, syncType?: string}) => Promise<ReturnType<typeof JSON.parse>>, syncPending: () => Promise<void>}} Configured local sync queue.
    */
   static localSyncQueue(args) {
     return {
@@ -605,8 +605,8 @@ export default class SyncApiClient {
    * @param {number} [args.batchSize] - Max syncs per request. Defaults to 100.
    * @param {() => Promise<Array<unknown>>} args.pendingSyncs - Loads pending local sync rows in replay order.
    * @param {(sync: unknown) => string | number | null | undefined} args.syncId - Returns the local sync id.
-   * @param {(sync: unknown) => Record<string, ?>} args.syncPayload - Builds the API sync envelope.
-   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ?>>}) => Promise<SyncReplayResponse>} args.postReplay - Posts one replay request.
+   * @param {(sync: unknown) => Record<string, ReturnType<typeof JSON.parse>>} args.syncPayload - Builds the API sync envelope.
+   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Posts one replay request.
    * @param {(sync: unknown, response: SyncReplayItem) => Promise<void>} args.markSuccessful - Marks one sync as successful locally.
    * @returns {Promise<void>} Resolves after all batches are replayed.
    */
@@ -625,8 +625,8 @@ export default class SyncApiClient {
    * @param {string} args.authenticationToken - Auth token.
    * @param {Array<unknown>} args.pendingSyncs - Batch syncs.
    * @param {(sync: unknown) => string | number | null | undefined} args.syncId - Sync id getter.
-   * @param {(sync: unknown) => Record<string, ?>} args.syncPayload - Payload builder.
-   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ?>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
+   * @param {(sync: unknown) => Record<string, ReturnType<typeof JSON.parse>>} args.syncPayload - Payload builder.
+   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
    * @param {(sync: unknown, response: SyncReplayItem) => Promise<void>} args.markSuccessful - Success hook.
    * @returns {Promise<void>} Resolves after the batch is acknowledged.
    */

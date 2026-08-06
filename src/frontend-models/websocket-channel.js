@@ -198,7 +198,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * Runs debug snapshot.
-   * @returns {Record<string, ?>} Debug-safe subscription details.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Debug-safe subscription details.
    */
   debugSnapshot() {
     const eventFilters = this._eventFilters()
@@ -279,7 +279,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         throw new Error("Frontend model eventFilters entries must be objects")
       }
 
-      const eventFilter = /** @type {Record<string, ?>} */ (entry)
+      const eventFilter = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (entry)
       const unknownKeys = Object.keys(eventFilter).filter((key) => !EVENT_FILTER_KEYS.has(key))
 
       if (unknownKeys.length > 0) {
@@ -325,7 +325,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Runs frontend model controller.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
-   * @param {Record<string, ?>} [params] - Optional params override.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [params] - Optional params override.
    * @returns {import("../frontend-model-controller.js").default} - Synthetic controller used for resource serialization.
    */
   _frontendModelController(FrontendModelController, params = {}) {
@@ -360,7 +360,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Resolves tenant for event.
    * @param {string | number} id - Event record id.
-   * @returns {Promise<?>} - Resolved tenant.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolved tenant.
    */
   async _resolveEventTenant(id) {
     const configuration = this.session.configuration

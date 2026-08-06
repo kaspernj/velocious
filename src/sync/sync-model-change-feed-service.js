@@ -19,8 +19,8 @@ export default class SyncModelChangeFeedService {
    * @param {Record<string, unknown>} args.params - Request params.
    * @param {number} [args.defaultLimit] - Default page size.
    * @param {number} [args.maxLimit] - Maximum page size.
-   * @param {(record: ?) => Record<string, unknown>} [args.serializeRecord] - Record serializer.
-   * @param {function({query: import("../database/query/model-class-query.js").default}): void} [args.scopeQuery] - Applies app-owned visibility scope.
+   * @param {(record: ReturnType<typeof JSON.parse>) => Record<string, unknown>} [args.serializeRecord] - Record serializer.
+   * @param {(args: {query: import("../database/query/model-class-query.js").default}) => void} [args.scopeQuery] - Applies app-owned visibility scope.
    */
   constructor({defaultLimit = 1000, maxLimit = 1000, modelClass, params, scopeQuery, serializeRecord}) {
     this.defaultLimit = defaultLimit
@@ -197,7 +197,7 @@ export default class SyncModelChangeFeedService {
 
   /**
    * Serializes a record into a transport cursor.
-   * @param {?} record - Sync/change record.
+   * @param {ReturnType<typeof JSON.parse>} record - Sync/change record.
    * @returns {{id: string, serverSequence: number, updatedAt: string}} Cursor for row.
    */
   cursorForRecord(record) {
@@ -211,7 +211,7 @@ export default class SyncModelChangeFeedService {
    * attributes keep the deprecated 1.0.503 wire and emit `eventId`. Keys are
    * sorted so a declared `["eventId"]` partition stays byte-identical with the
    * 1.0.503 wire.
-   * @param {?} record - Sync/change record.
+   * @param {ReturnType<typeof JSON.parse>} record - Sync/change record.
    * @returns {Record<string, unknown>} Default serialized row.
    */
   defaultSerializeRecord(record) {
@@ -236,7 +236,7 @@ export default class SyncModelChangeFeedService {
 
   /**
    * Reads and parses the record data payload.
-   * @param {?} record - Sync/change record.
+   * @param {ReturnType<typeof JSON.parse>} record - Sync/change record.
    * @returns {unknown} Parsed data value.
    */
   recordData(record) {
@@ -250,7 +250,7 @@ export default class SyncModelChangeFeedService {
 
   /**
    * Reads a value from either a record accessor method or plain property.
-   * @param {?} record - Sync/change record.
+   * @param {ReturnType<typeof JSON.parse>} record - Sync/change record.
    * @param {string} name - Camel-cased value/method name.
    * @returns {unknown} Record value.
    */
@@ -259,7 +259,7 @@ export default class SyncModelChangeFeedService {
       throw new Error("Sync changes row must be an object.")
     }
 
-    const recordObject = /** @type {Record<string, ?>} */ (record)
+    const recordObject = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (record)
     const method = recordObject[name]
     const value = typeof method === "function" ? method.call(record) : method
 

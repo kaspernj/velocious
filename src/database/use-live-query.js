@@ -29,7 +29,7 @@ import LiveQuery from "./live-query.js"
 /**
  * Stable empty state returned while there is no active query, so a paused hook
  * keeps a referentially stable snapshot for `useSyncExternalStore`.
- * @type {LiveQueryState<?>} */
+ * @type {LiveQueryState<ReturnType<typeof JSON.parse>>} */
 const EMPTY_STATE = {error: null, loading: false, results: []}
 
 /**
@@ -47,7 +47,7 @@ let nextQueryIdentity = 0
  * controller is rebuilt when they change. Model-class queries expose `toSql`, so
  * distinct conditions yield distinct keys; other sources fall back to a stable
  * per-object identity (such sources must be memoized by the caller).
- * @param {LiveQuerySource<?> & {toSql?: () => ?}} query - Query source.
+ * @param {LiveQuerySource<ReturnType<typeof JSON.parse>> & {toSql?: () => ReturnType<typeof JSON.parse>}} query - Query source.
  * @param {RecordModelClass[] | undefined} models - Explicit model classes to observe.
  * @returns {string} Dependency key.
  */
@@ -73,7 +73,7 @@ function liveQueryDependencyKey(query, models) {
  * whenever a watched model commits — so local writes, pull applies, and realtime
  * applies all refresh the results without any manual refresh plumbing.
  * @template T
- * @param {(LiveQuerySource<T> & {toSql?: () => ?}) | null | undefined} query - Query source, e.g. `Model.where({...})`.
+ * @param {(LiveQuerySource<T> & {toSql?: () => ReturnType<typeof JSON.parse>}) | null | undefined} query - Query source, e.g. `Model.where({...})`.
  * @param {UseLiveQueryOptions} [options] - Hook options.
  * @returns {LiveQueryState<T>} Current results, loading, and last error.
  */

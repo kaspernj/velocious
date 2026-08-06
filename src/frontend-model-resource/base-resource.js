@@ -55,7 +55,7 @@ import VelociousError from "../velocious-error.js"
  * @property {string} column - Column or attribute name.
  * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
  * @property {string[]} path - Relationship path.
- * @property {?} value - Search value.
+ * @property {ReturnType<typeof JSON.parse>} value - Search value.
  */
 
 /**
@@ -103,7 +103,7 @@ import VelociousError from "../velocious-error.js"
 /**
  * Arguments for the applySync full-escape-hatch hook.
  * @typedef {object} FrontendModelApplySyncArgs
- * @property {Record<string, ?>} context - Replay context.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} context - Replay context.
  * @property {import("../database/record/index.js").default | null} existingSync - Existing sync row or null.
  * @property {FrontendModelSyncMutation} mutation - Normalized replay mutation.
  */
@@ -139,14 +139,14 @@ import VelociousError from "../velocious-error.js"
 
 /**
  * Virtual setter method on a frontend-model resource.
- * @typedef {function(import("../database/record/index.js").default, FrontendModelResourcePayloadValue): (void | Promise<void>)} FrontendModelResourceVirtualSetter
+ * @typedef {(arg1: import("../database/record/index.js").default, arg2: FrontendModelResourcePayloadValue) => (void | Promise<void>)} FrontendModelResourceVirtualSetter
  */
 
 /**
  * Static helpers used when checking whether a model-like receiver accepts an attribute.
  * @typedef {object} WritableAttributeReceiverClass
- * @property {function(string): string | null} resolveAttributeName - Resolves aliases to canonical attribute names.
- * @property {function(Record<string, ?>, string): string | null} findMemberNameInsensitive - Locates a setter method on the receiver.
+ * @property {(arg: string) => string | null} resolveAttributeName - Resolves aliases to canonical attribute names.
+ * @property {(arg1: Record<string, ReturnType<typeof JSON.parse>>, arg2: string) => string | null} findMemberNameInsensitive - Locates a setter method on the receiver.
  */
 
 /**
@@ -170,11 +170,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /** @type {typeof import("../database/record/index.js").default | undefined} */
   static ModelClass = undefined
 
-  /** @type {Record<string, ?> | string[] | undefined} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>> | string[] | undefined} */
   static attributes = undefined
   /** @type {string[] | undefined} */
   static abilities = undefined
-  /** @type {Record<string, ?> | undefined} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
   static attachments = undefined
   /** @type {string[] | undefined} */
   static commands = undefined
@@ -198,7 +198,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static sync = undefined
   /** @type {string[] | undefined} */
   static translatedAttributes = undefined
-  /** @type {?} */
+  /** @type {ReturnType<typeof JSON.parse>} */
   static SharedResource = undefined
 
   /**
@@ -236,7 +236,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Returns the configured shared resource class.
-   * @returns {?} - Shared resource class.
+   * @returns {ReturnType<typeof JSON.parse>} - Shared resource class.
    */
   static sharedResourceClass() {
     return this.SharedResource
@@ -246,7 +246,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Reads a static resource config value from the environment resource first,
    * then from the shared resource.
    * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
-   * @returns {?} - Resolved config value.
+   * @returns {ReturnType<typeof JSON.parse>} - Resolved config value.
    */
   static sharedResourceStaticValue(name) {
     if (this[name] !== undefined) return this[name]
@@ -403,11 +403,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const sync = this.sharedResourceStaticValue("sync")
     /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */
     const config = {
-      attributes: /** @type {Record<string, ?> | string[]} */ (attributes || [])
+      attributes: /** @type {Record<string, ReturnType<typeof JSON.parse>> | string[]} */ (attributes || [])
     }
 
     if (abilities) config.abilities = /** @type {string[]} */ (abilities)
-    if (attachments) config.attachments = /** @type {Record<string, ?>} */ (attachments)
+    if (attachments) config.attachments = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (attachments)
     if (commands) config.commands = /** @type {string[]} */ (commands)
     if (builtInCollectionCommands) config.builtInCollectionCommands = /** @type {string[]} */ (builtInCollectionCommands)
     if (builtInMemberCommands) config.builtInMemberCommands = /** @type {string[]} */ (builtInMemberCommands)
@@ -524,8 +524,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * {@link FrontendModelBaseResource.writableAttributes} permit list, or `[]`
    * — nothing permitted — without a declared list. Subclasses override to
    * customize; an explicit override always wins.
-   * @param {{action?: "create" | "update", params?: Record<string, ?>, ability?: import("../authorization/ability.js").default, locals?: Record<string, ?>}} [arg] - Request context.
-   * @returns {Array<string | Record<string, ?>>} - Permit spec.
+   * @param {{action?: "create" | "update", params?: Record<string, ReturnType<typeof JSON.parse>>, ability?: import("../authorization/ability.js").default, locals?: Record<string, ReturnType<typeof JSON.parse>>}} [arg] - Request context.
+   * @returns {Array<string | Record<string, ReturnType<typeof JSON.parse>>>} - Permit spec.
    */
   permittedParams(arg) {
     return this.sharedResourceMethodOr("permittedParams", [arg], () => {
@@ -565,7 +565,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * applies through {@link FrontendModelBaseResource#findSyncRecord} scoping
    * and the create membership check.
    * @param {object} args - Options.
-   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Replay context.
    * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
    * @returns {FrontendModelSyncAuthorization | Promise<FrontendModelSyncAuthorization>} Authorization result.
    */
@@ -624,7 +624,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const abilities = this.resourceConfigurationValue?.abilities
 
     if (abilities && typeof abilities == "object" && !Array.isArray(abilities)) {
-      const abilityAction = /** @type {Record<string, ?>} */ (abilities)[action]
+      const abilityAction = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (abilities)[action]
 
       if (typeof abilityAction == "string" && abilityAction.length > 0) return abilityAction
     }
@@ -650,11 +650,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * merged into the apply result, reaching persistExtraAttributes and
    * broadcasts.
    * @param {object} args - Options.
-   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Replay context.
    * @param {boolean} args.created - Whether the record was created.
    * @param {FrontendModelSyncMutation} args.mutation - Normalized replay mutation.
    * @param {import("../database/record/index.js").default | null} args.record - Applied record or null.
-   * @returns {Record<string, ?> | Promise<Record<string, ?>>} Extra apply-result entries.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>> | Promise<Record<string, ReturnType<typeof JSON.parse>>>} Extra apply-result entries.
    */
   afterSyncApply({context, created, mutation, record}) {
     void context
@@ -1002,7 +1002,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Saves a model and applies nested attributes in one transaction.
-   * @param {{filtered: Record<string, ?>, model: import("../database/record/index.js").default, options: FrontendModelResourceSaveOptions, permit: {attributes: string[], nested: Record<string, ?>}}} args - Save arguments.
+   * @param {{filtered: Record<string, ReturnType<typeof JSON.parse>>, model: import("../database/record/index.js").default, options: FrontendModelResourceSaveOptions, permit: {attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}}} args - Save arguments.
    * @returns {Promise<import("../database/record/index.js").default>} - Saved model.
    */
   async _saveWithNestedAttributes({filtered, model, options, permit}) {
@@ -1029,11 +1029,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Assigns attributes to a model, using virtual setters on the resource when available.
    * @param {import("../database/record/index.js").default} model - Model instance.
-   * @param {Record<string, ?>} attributes - Attributes to assign.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Attributes to assign.
    * @returns {Promise<void>}
    */
   async _assignWithVirtualSetters(model, attributes) {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const directAttributes = {}
     const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
     const translatedSet = new Set(ResourceClass.translatedAttributesConfig() || [])
@@ -1059,9 +1059,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Splits attachment-named attributes into the attachment payload while preserving legacy callers
    * that submitted attachments as normal frontend-model attributes.
-   * @param {Record<string, ?>} attributes - Incoming mutation attributes.
-   * @param {Record<string, ?> | null} attachments - Explicit attachment payload.
-   * @returns {{attributes: Record<string, ?>, attachments: Record<string, ?> | null}} Attributes with attachment keys removed and merged attachment payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Incoming mutation attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | null} attachments - Explicit attachment payload.
+   * @returns {{attributes: Record<string, ReturnType<typeof JSON.parse>>, attachments: Record<string, ReturnType<typeof JSON.parse>> | null}} Attributes with attachment keys removed and merged attachment payload.
    */
   _extractAttachmentAttributes(attributes, attachments) {
     const attachmentDefinitions = this.modelClass().getAttachmentsMap()
@@ -1073,9 +1073,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       throw new Error("Expected attachments to be an object.")
     }
 
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const regularAttributes = {}
-    /** @type {Record<string, ?> | null} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>> | null} */
     let mergedAttachments = attachments ? {...attachments} : null
 
     for (const [attributeName, value] of Object.entries(attributes)) {
@@ -1098,7 +1098,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Queues attachment payloads on a model after validating permits and attachment definitions.
    * @param {import("../database/record/index.js").default} model - Model receiving attachments.
-   * @param {Record<string, ?> | null} attachments - Attachments keyed by attachment name.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | null} attachments - Attachments keyed by attachment name.
    * @param {string[]} permittedAttributeNames - Attribute/attachment names permitted by the resource.
    * @returns {void}
    */
@@ -1154,7 +1154,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const loaded = instanceRelationship.loaded()
 
       if (Array.isArray(loaded)) {
-        translation = loaded.find((t) => /** @type {Record<string, ?>} */ (t).locale() === locale)
+        translation = loaded.find((t) => /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (t).locale() === locale)
       }
     } else {
       if (!instanceRelationship.getPreloaded()) {
@@ -1164,7 +1164,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       const loaded = instanceRelationship.loaded()
 
       if (Array.isArray(loaded)) {
-        translation = loaded.find((t) => /** @type {Record<string, ?>} */ (t).locale() === locale)
+        translation = loaded.find((t) => /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (t).locale() === locale)
       }
     }
 
@@ -1172,7 +1172,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       translation = instanceRelationship.build({locale})
     }
 
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const assignments = {}
 
     assignments[name] = value
@@ -1200,7 +1200,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Runs serialize.
    * @param {import("../database/record/index.js").default} model - Model to serialize.
    * @param {"index" | "find" | "create" | "update"} [action] - Action.
-   * @returns {Promise<Record<string, ?>>} - Serialized model payload.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Serialized model payload.
    */
   async serialize(model, action) {
     void action
@@ -1214,7 +1214,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
    * @param {string} args.relationshipName - Relationship receiving nested attributes.
    * @param {FrontendModelResourcePayloadValue} args.rawEntries - Raw nested entries from the request payload.
-   * @param {{attributes: string[], nested: Record<string, ?>}} args.childPermit - Parsed child permit.
+   * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit.
    * @param {FrontendModelResourceController | null | undefined} args.controller - Controller instance for child resource lookup.
    * @returns {{ability: import("../authorization/ability.js").default | undefined, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
    */
@@ -1332,7 +1332,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * (`{attributes, attachments, nestedAttributes}`) or direct Rails-style
    * fields (`{name, file, commentsAttributes}`).
    * @param {object} args - Normalization inputs.
-   * @param {{attributes: string[], nested: Record<string, ?>}} args.childPermit - Parsed child permit spec.
+   * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit spec.
    * @param {FrontendModelResourceNestedEntry} args.entry - Raw nested entry.
    * @param {string} args.relationshipName - Relationship name for error messages.
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
@@ -1417,7 +1417,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
    * @param {FrontendModelResourceAttributePayload} nestedAttributes - Nested-attribute payload keyed by relationship name.
    * @param {FrontendModelResourceController | null | undefined} controller - Controller instance for resource resolution and authorization.
-   * @param {{attributes: string[], nested: Record<string, ?>} | null} [parentPermit] - Parsed parent permit spec.
+   * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>} | null} [parentPermit] - Parsed parent permit spec.
    * @returns {Promise<void>}
    */
   async _applyBelongsToNestedAttributes(parent, nestedAttributes, controller, parentPermit = null) {
@@ -1518,7 +1518,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {import("../database/record/index.js").default} parent - Parent model instance.
    * @param {FrontendModelResourceAttributePayload} nestedAttributes - Nested-attribute payload keyed by relationship name.
    * @param {FrontendModelResourceController | null | undefined} controller - Controller instance for resource resolution and authorization.
-   * @param {{attributes: string[], nested: Record<string, ?>} | null} [parentPermit] - Parsed parent permit spec.
+   * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>} | null} [parentPermit] - Parsed parent permit spec.
    * @returns {Promise<void>}
    */
   async _applyNestedAttributes(parent, nestedAttributes, controller, parentPermit = null) {
@@ -1652,7 +1652,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {object} args - Assignment inputs.
    * @param {import("../database/record/index.js").default} args.child - Child model receiving data.
    * @param {string[]} args.childWritableAttributes - Permitted child attribute and attachment names.
-   * @param {Record<string, ?>} args.entry - Nested entry payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.entry - Nested entry payload.
    * @returns {Promise<void>}
    */
   async _assignNestedEntryToChild({child, childWritableAttributes, entry}) {
@@ -1831,7 +1831,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * parent's permit so the post-save serialize step emits them and the
    * client can reconcile ids.
    * @param {import("../database/record/index.js").default} model - Saved parent model.
-   * @param {{attributes: string[], nested: Record<string, ?>}} permit - Parsed parent permit.
+   * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} permit - Parsed parent permit.
    * @returns {Promise<void>}
    */
   async _preloadNestedWritableRelationships(model, permit) {
@@ -1861,13 +1861,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
  *   //     tasks: {attributes: ["id", "_destroy", "name"], nested: {}}
  *   //   }
  *   // }
- * @param {Array<string | Record<string, ?>> | undefined} permitSpec - Flat permit spec.
- * @returns {{attributes: string[], nested: Record<string, {attributes: string[], nested: Record<string, ?>}>}} - Parsed structure.
+ * @param {Array<string | Record<string, ReturnType<typeof JSON.parse>>> | undefined} permitSpec - Flat permit spec.
+ * @returns {{attributes: string[], nested: Record<string, {attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}>}} - Parsed structure.
  */
 function parsePermittedParams(permitSpec) {
   /** @type {string[]} */
   const attributes = []
-  /** @type {Record<string, {attributes: string[], nested: Record<string, ?>}>} */
+  /** @type {Record<string, {attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}>} */
   const nested = {}
 
   if (!Array.isArray(permitSpec)) return {attributes, nested}
@@ -1919,12 +1919,12 @@ function prototypeOwnerForMethod(instance, methodName) {
 
 /**
  * Runs filter writable frontend model attributes.
- * @param {Record<string, ?>} receiver - Model instance or prototype.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} receiver - Model instance or prototype.
  * @param {WritableAttributeReceiverClass} receiverClass - Static helper owner for the receiver.
- * @param {Record<string, ?>} attributes - Incoming frontend-model attributes.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Incoming frontend-model attributes.
  * @param {FrontendModelBaseResource | null} [resource] - Resource instance for virtual-setter detection.
  * @param {string[] | null} [permittedAttributeNames] - Optional explicit permit list. `null` falls back to setter-existence checks only.
- * @returns {Record<string, ?>} - Writable attributes only.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Writable attributes only.
  */
 function filterWritableFrontendModelAttributes(
   receiver,
@@ -1935,7 +1935,7 @@ function filterWritableFrontendModelAttributes(
 ) {
   // Frontend-model writes should fail fast when callers submit read-only or unknown attrs.
   // Silent drops hide contract mistakes in generated models and app-side wrapper code.
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const writableAttributes = {}
   /** @type {string[]} */
   const invalidAttributes = []

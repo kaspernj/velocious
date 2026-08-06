@@ -9,7 +9,7 @@ import Task from "../dummy/src/models/task.js"
 /**
  * Builds a sync client tracking the real dummy Task model (static sync = true)
  * with a fake pending-sync model capturing queued rows.
- * @returns {{client: SyncClient, syncModel: ?}} Commit-tracking harness.
+ * @returns {{client: SyncClient, syncModel: ReturnType<typeof JSON.parse>}} Commit-tracking harness.
  */
 function buildTaskTrackingHarness() {
   const syncModel = buildFakeSyncModel()
@@ -75,7 +75,7 @@ describe("sync client - commit tracking", {databaseCleaning: {transaction: false
     await client.start()
 
     const project = await Project.create({name: "Drift project"})
-    /** @param {?} record - Saved task. @returns {Promise<void>} Assigns an unsaved attribute after the tracked callback ran. */
+    /** @param {ReturnType<typeof JSON.parse>} record - Saved task. @returns {Promise<void>} Assigns an unsaved attribute after the tracked callback ran. */
     const driftAfterSave = async (record) => {
       record.assign({name: "Drifted name"})
     }

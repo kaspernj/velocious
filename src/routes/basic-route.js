@@ -17,7 +17,7 @@ export default class VelociousBasicRoute extends BaseRoute {
   /**
    * Runs match with path.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.params - Parameters object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
@@ -40,7 +40,7 @@ export default class VelociousBasicRoute extends BaseRoute {
       throw new Error("mount expects a mountable with a 'mountInto' method")
     }
 
-    const at = /** @type {Record<string, ?>} */ (options).at
+    const at = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (options).at
 
     if (typeof at !== "string" || !at.startsWith("/")) {
       throw new Error(`mount requires an 'at' option starting with '/', got: ${String(at)}`)
@@ -52,7 +52,7 @@ export default class VelociousBasicRoute extends BaseRoute {
   /**
    * Runs namespace.
    * @param {string} name - Name.
-   * @param {function(import("./namespace-route.js").default) : void} callback - Callback function.
+   * @param {(arg: import("./namespace-route.js").default) => void} callback - Callback function.
    * @returns {void} - No return value.
    */
   namespace(name, callback) {
@@ -87,7 +87,7 @@ export default class VelociousBasicRoute extends BaseRoute {
   /**
    * Runs resources.
    * @param {string} name - Name.
-   * @param {function(import("./resource-route.js").default) : void} [callback] - Callback function.
+   * @param {(arg: import("./resource-route.js").default) => void} [callback] - Callback function.
    * @returns {void} - No return value.
    */
   resources(name, callback) {

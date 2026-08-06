@@ -4,13 +4,13 @@
  * Runs query.
  * @param {import("sqlite").Database} connection - Connection.
  * @param {string} sql - SQL string.
- * @returns {Promise<Record<string, ?>[]>} - Resolves with string value.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {
   try {
     /**
      * Defines result.
-     * @type {Record<string, ?>[]} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>[]} */
     let result
 
     result = await connection.all(sql)

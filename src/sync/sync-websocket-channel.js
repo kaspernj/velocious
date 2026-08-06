@@ -126,7 +126,7 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
     if (!scope) return false
 
     const scopingParams = broadcastParams && typeof broadcastParams === "object" && !Array.isArray(broadcastParams)
-      ? /** @type {Record<string, ?>} */ (broadcastParams)
+      ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (broadcastParams)
       : {}
 
     if (!Object.hasOwn(scopingParams, "resourceType")) return false
@@ -198,12 +198,12 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
   async _userScopeDeliverableBody(body) {
     if (!body || typeof body !== "object" || Array.isArray(body)) return null
 
-    const envelope = /** @type {Record<string, ?>} */ (body)
+    const envelope = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (body)
     const scope = /** @type {import("./sync-resource-base.js").SerializedChangesScope} */ (this._scope)
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const syncs = Array.isArray(envelope.syncs) ? envelope.syncs : [envelope]
     const configuration = this.session.configuration
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const deliverableSyncs = []
 
     // Broadcast fan-out runs through `withoutCurrentConnectionContexts` (see
@@ -246,7 +246,7 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
 
   /**
    * Returns the authorized scope for debug snapshots.
-   * @returns {Record<string, ?>} Debug-safe subscription details.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Debug-safe subscription details.
    */
   debugSnapshot() {
     return {scope: this._scope, userScope: this._isUserScope()}

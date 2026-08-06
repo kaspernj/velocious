@@ -22,8 +22,8 @@ import VelociousError from "../velocious-error.js"
  * @property {string | number | null} [baseVersion] - Base server/client version observed by the client.
  * @property {string} [clientMutationId] - Original client mutation id from the signed envelope.
  * @property {Date} clientUpdatedAt - Client-side mutation timestamp.
- * @property {Record<string, ?>} data - Parsed mutation payload.
- * @property {?} id - Client sync row id for per-sync responses.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} data - Parsed mutation payload.
+ * @property {ReturnType<typeof JSON.parse>} id - Client sync row id for per-sync responses.
  * @property {string} resourceId - Resource id as a string.
  * @property {string} resourceType - Resource/model name.
  * @property {string} serializedData - JSON serialized mutation payload.
@@ -32,10 +32,10 @@ import VelociousError from "../velocious-error.js"
 /**
  * One declarative broadcast fanned out after a mutation applies.
  * @typedef {object} SyncReplayBroadcast
- * @property {string | ((args: Record<string, ?>) => string)} channel - Channel name or resolver.
- * @property {(args: Record<string, ?>) => Record<string, ?>} broadcastParams - Channel routing params.
- * @property {(args: Record<string, ?>) => ?} body - Broadcast body.
- * @property {(args: Record<string, ?>) => boolean} [when] - Optional gate; skipped when it returns false.
+ * @property {string | ((args: Record<string, ReturnType<typeof JSON.parse>>) => string)} channel - Channel name or resolver.
+ * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Channel routing params.
+ * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>} body - Broadcast body.
+ * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => boolean} [when] - Optional gate; skipped when it returns false.
  */
 
 /**
@@ -59,22 +59,22 @@ export default class SyncEnvelopeReplayService {
    * `authenticateReplay` must expose an `id()` method.
    * @param {object} [args] - Constructor arguments.
    * @param {{debug?: (...args: Array<unknown>) => void, warn?: (...args: Array<unknown>) => void}} [args.logger] - Logger used for normalization warnings.
-   * @param {?} [args.syncModel] - Sync/change model enabling model-backed default hooks.
+   * @param {ReturnType<typeof JSON.parse>} [args.syncModel] - Sync/change model enabling model-backed default hooks.
    * @param {string} [args.actorForeignKeyColumn] - Sync model column linking rows to the replay actor.
-   * @param {?} [args.authenticationTokenModel] - Token model enabling the default token-lookup authenticateReplay.
+   * @param {ReturnType<typeof JSON.parse>} [args.authenticationTokenModel] - Token model enabling the default token-lookup authenticateReplay.
    * @param {string} [args.authenticationTokenColumn] - Token model column holding the token. Defaults to "token".
    * @param {string} [args.authenticationTokenParam] - Request param carrying the token. Defaults to "authenticationToken".
-   * @param {Record<string, ((args: Record<string, ?>) => Promise<?>) | ConstructorParameters<typeof SyncReplayUpsertApplier>[0]>} [args.applyHandlers] - Per-resourceType apply handlers (functions or declarative upsert-applier specs) enabling the default applyReplayMutation dispatch. Deprecated: prefer resource routing via `configuration`/`resourceTypeOverrides`; applyHandlers remain for released adopters and will be removed after their migration.
-   * @param {(args: Record<string, ?>) => Record<string, ?>} [args.persistExtraAttributes] - Extra attributes merged into the model-backed persisted row (e.g. an event scope column).
-   * @param {(args: {mutation: ?, applyResult: ?}) => ?} [args.persistSerializedData] - Overrides the persisted data payload (object results are JSON stringified).
-   * @param {(broadcast: {channel: string, params: Record<string, ?>, body: ?}) => Promise<void>} [args.broadcaster] - Delivers declarative broadcasts. Required when broadcasts are configured.
+   * @param {Record<string, ((args: Record<string, ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>) | ConstructorParameters<typeof SyncReplayUpsertApplier>[0]>} [args.applyHandlers] - Per-resourceType apply handlers (functions or declarative upsert-applier specs) enabling the default applyReplayMutation dispatch. Deprecated: prefer resource routing via `configuration`/`resourceTypeOverrides`; applyHandlers remain for released adopters and will be removed after their migration.
+   * @param {(args: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>} [args.persistExtraAttributes] - Extra attributes merged into the model-backed persisted row (e.g. an event scope column).
+   * @param {(args: {mutation: ReturnType<typeof JSON.parse>, applyResult: ReturnType<typeof JSON.parse>}) => ReturnType<typeof JSON.parse>} [args.persistSerializedData] - Overrides the persisted data payload (object results are JSON stringified).
+   * @param {(broadcast: {channel: string, params: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>}) => Promise<void>} [args.broadcaster] - Delivers declarative broadcasts. Required when broadcasts are configured.
    * @param {SyncReplayBroadcast[]} [args.broadcasts] - Broadcasts fanned out by the default afterReplayMutation.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
    * @param {{strategy?: "optimisticVersion" | "serverWins", versionAttribute: string} | null} [args.conflictStrategy] - Optional base-version conflict detection for routed upserts. Only `optimisticVersion` and `serverWins` are supported for backend replay because the server does not have the client's base snapshot. When `strategy` is omitted it defaults to `optimisticVersion`, matching `resolveSyncConflict` and normalized resource config. When configured, a mutation whose baseVersion does not match the current server versionAttribute is rejected with a structured conflict result instead of being applied.
    * @param {Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>} [args.resourceTypeOverrides] - Per-resourceType routing overrides: a resource class, or a string alias resolved through the registry.
    * @param {import("../authorization/ability.js").default} [args.ability] - Ability scoping routed record lookups and create membership checks.
-   * @param {Record<string, ?>} [args.abilityContext] - Ability context passed to routed resources.
-   * @param {Record<string, ?>} [args.locals] - Locals passed to routed resources.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.abilityContext] - Ability context passed to routed resources.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.locals] - Locals passed to routed resources.
    */
   constructor(args = {}) {
     this.logger = args.logger || console
@@ -117,8 +117,8 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Wraps declarative apply-handler specs in upsert appliers.
-   * @param {Record<string, ?>} applyHandlers - Raw apply handlers.
-   * @returns {Record<string, (args: Record<string, ?>) => Promise<?>>} Callable handlers by resource type.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} applyHandlers - Raw apply handlers.
+   * @returns {Record<string, (args: Record<string, ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>>} Callable handlers by resource type.
    */
   builtApplyHandlers(applyHandlers) {
     return Object.fromEntries(Object.entries(applyHandlers).map(([resourceType, handler]) => {
@@ -126,15 +126,15 @@ export default class SyncEnvelopeReplayService {
 
       const applier = new SyncReplayUpsertApplier(handler)
 
-      return [resourceType, (/** @type {Record<string, ?>} */ applyArgs) => applier.apply(/** @type {?} */ (applyArgs))]
+      return [resourceType, (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ applyArgs) => applier.apply(/** @type {ReturnType<typeof JSON.parse>} */ (applyArgs))]
     }))
   }
 
   /**
    * Replays a sync batch.
-   * @param {Record<string, ?>} params - Request params carrying authentication and syncs.
-   * @param {Record<string, ?>} [requestState] - Request-local state passed to authentication/sync extraction hooks; subclasses may use this to share pre-computed per-request data without instance mutation.
-   * @returns {Promise<{syncs: Array<Record<string, ?>>, status?: string, errorCode?: string, errorMessage?: string}>} Replay response.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params carrying authentication and syncs.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [requestState] - Request-local state passed to authentication/sync extraction hooks; subclasses may use this to share pre-computed per-request data without instance mutation.
+   * @returns {Promise<{syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>, status?: string, errorCode?: string, errorMessage?: string}>} Replay response.
    */
   async replay(params, requestState = {}) {
     const actorResult = await this.authenticateReplay(params, requestState)
@@ -174,7 +174,7 @@ export default class SyncEnvelopeReplayService {
       const existingSync = await this.findExistingReplaySync({actor: actorResult.actor, context, mutation})
       const shouldApply = await this.shouldApplyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
 
-      /** @type {?} */
+      /** @type {ReturnType<typeof JSON.parse>} */
       let applyResult
 
       try {
@@ -221,9 +221,9 @@ export default class SyncEnvelopeReplayService {
    *
    * Defaults to a token-model lookup when `authenticationTokenModel` is
    * configured; otherwise apps override this hook.
-   * @param {Record<string, ?>} params - Request params.
-   * @param {Record<string, ?>} [_requestState] - Request-local state populated by subclasses before the base replay loop runs.
-   * @returns {Promise<{authenticated: true, actor: ?} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [_requestState] - Request-local state populated by subclasses before the base replay loop runs.
+   * @returns {Promise<{authenticated: true, actor: ReturnType<typeof JSON.parse>} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
    */
   async authenticateReplay(params, _requestState) {
     if (!this.authenticationTokenModel) {
@@ -247,8 +247,8 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Builds per-batch mutable context for caches shared across sync items.
-   * @param {{actor: ?, params: Record<string, ?>, requestState: Record<string, ?>}} _args - Actor, request params, and request-local state.
-   * @returns {Promise<Record<string, ?>>} Replay context.
+   * @param {{actor: ReturnType<typeof JSON.parse>, params: Record<string, ReturnType<typeof JSON.parse>>, requestState: Record<string, ReturnType<typeof JSON.parse>>}} _args - Actor, request params, and request-local state.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Replay context.
    */
   async buildReplayContext(_args) {
     return {}
@@ -256,9 +256,9 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Returns raw sync entries from request params.
-   * @param {Record<string, ?>} params - Request params.
-   * @param {Record<string, ?>} [_requestState] - Request-local state populated by subclasses before the base replay loop runs.
-   * @returns {Array<?>} Raw sync entries.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [_requestState] - Request-local state populated by subclasses before the base replay loop runs.
+   * @returns {Array<ReturnType<typeof JSON.parse>>} Raw sync entries.
    */
   replaySyncs(params, _requestState) {
     return Array.isArray(params.syncs) ? params.syncs : []
@@ -266,15 +266,15 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Normalizes one sync entry.
-   * @param {?} rawSync - Raw sync entry.
-   * @returns {{ok: true, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation} | {ok: false, response: Record<string, ?>}} Normalized mutation or failed response.
+   * @param {ReturnType<typeof JSON.parse>} rawSync - Raw sync entry.
+   * @returns {{ok: true, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation} | {ok: false, response: Record<string, ReturnType<typeof JSON.parse>>}} Normalized mutation or failed response.
    */
   normalizeReplaySync(rawSync) {
     if (!rawSync || typeof rawSync !== "object" || Array.isArray(rawSync)) {
       return {ok: false, response: {id: undefined, syncState: "failed", reason: "invalid-sync"}}
     }
 
-    const sync = /** @type {Record<string, ?>} */ (rawSync)
+    const sync = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rawSync)
     const {clientMutationId, clientUpdatedAt, data, id, resourceId, resourceType, syncType} = sync
 
     if (typeof resourceType !== "string" || resourceType.length < 1 || resourceId === undefined || resourceId === null || typeof syncType !== "string" || syncType.length < 1) {
@@ -308,8 +308,8 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Normalizes one sync data payload.
-   * @param {{data: ?, id: ?, resourceId: string, resourceType: string}} args - Sync payload normalization arguments.
-   * @returns {{ok: true, data: Record<string, ?>} | {ok: false, response: Record<string, ?>}} Normalized payload or failed response.
+   * @param {{data: ReturnType<typeof JSON.parse>, id: ReturnType<typeof JSON.parse>, resourceId: string, resourceType: string}} args - Sync payload normalization arguments.
+   * @returns {{ok: true, data: Record<string, ReturnType<typeof JSON.parse>>} | {ok: false, response: Record<string, ReturnType<typeof JSON.parse>>}} Normalized payload or failed response.
    */
   normalizeReplaySyncData({data, id, resourceId, resourceType}) {
     if (data === undefined || data === null) return {ok: true, data: {}}
@@ -320,7 +320,7 @@ export default class SyncEnvelopeReplayService {
 
         if (!parsedData || typeof parsedData !== "object" || Array.isArray(parsedData)) return {ok: true, data: {}}
 
-        return {ok: true, data: /** @type {Record<string, ?>} */ (parsedData)}
+        return {ok: true, data: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (parsedData)}
       } catch (error) {
         this.logger.warn?.("Invalid sync data JSON", {error, id, resourceId, resourceType})
         return {ok: false, response: {id, syncState: "failed", reason: "invalid-data"}}
@@ -334,7 +334,7 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Authorizes one normalized mutation.
-   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, and mutation.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, and mutation.
    * @returns {Promise<{allowed: boolean, reason?: string}>} Access result.
    */
   async authorizeReplayMutation(_args) {
@@ -346,8 +346,8 @@ export default class SyncEnvelopeReplayService {
    *
    * Defaults to a sync-model lookup by actor and resource identity when a sync
    * model is configured; otherwise apps override this hook.
-   * @param {{actor: ?, context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, and mutation.
-   * @returns {Promise<?>} Existing sync row.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, and mutation.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} Existing sync row.
    */
   async findExistingReplaySync({actor, mutation}) {
     if (!this.syncModel) return null
@@ -361,8 +361,8 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Resolves the persisted actor id used by model-backed default hooks.
-   * @param {?} actor - Actor returned from authenticateReplay.
-   * @returns {?} Actor id.
+   * @param {ReturnType<typeof JSON.parse>} actor - Actor returned from authenticateReplay.
+   * @returns {ReturnType<typeof JSON.parse>} Actor id.
    */
   replayActorId(actor) {
     if (!actor || typeof actor !== "object" || typeof actor.id !== "function") {
@@ -374,7 +374,7 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Returns whether a normalized mutation should be applied to domain models.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
    * @returns {Promise<boolean>} Whether to apply the mutation.
    */
   async shouldApplyReplayMutation({existingSync, mutation}) {
@@ -385,13 +385,13 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Resolves the client timestamp from an existing sync row.
-   * @param {?} existingSync - Existing sync row.
+   * @param {ReturnType<typeof JSON.parse>} existingSync - Existing sync row.
    * @returns {Date | null} Existing client timestamp.
    */
   existingReplaySyncClientUpdatedAt(existingSync) {
     if (!existingSync || typeof existingSync !== "object") return null
 
-    const syncRecord = /** @type {Record<string, ?>} */ (existingSync)
+    const syncRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (existingSync)
     const value = typeof syncRecord.clientUpdatedAt === "function"
       ? syncRecord.clientUpdatedAt()
       : syncRecord.clientUpdatedAt
@@ -412,8 +412,8 @@ export default class SyncEnvelopeReplayService {
    * precedence); mutations without a matching handler fall through to
    * resource routing when a configuration or resourceTypeOverrides are
    * configured, and otherwise fail loudly.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
-   * @returns {Promise<?>} Project-specific apply result.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} Project-specific apply result.
    */
   async applyReplayMutation(args) {
     if (this.applyHandlers) {
@@ -487,8 +487,8 @@ export default class SyncEnvelopeReplayService {
    * resources. Defaults to the constructor-wide ability/abilityContext;
    * subclasses (signed replay) override this to derive authorization from a
    * verified actor/grant instead of uploader-global state.
-   * @param {{actor: ?, context: Record<string, ?>}} _args - Replay actor and batch context.
-   * @returns {Promise<{ability: import("../authorization/ability.js").default | undefined, abilityContext: Record<string, ?>}>} Ability and resource context.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>}} _args - Replay actor and batch context.
+   * @returns {Promise<{ability: import("../authorization/ability.js").default | undefined, abilityContext: Record<string, ReturnType<typeof JSON.parse>>}>} Ability and resource context.
    */
   async replayAbilityFor(_args) {
     return {ability: this.ability || undefined, abilityContext: this.abilityContext || {}}
@@ -497,8 +497,8 @@ export default class SyncEnvelopeReplayService {
   /**
    * Builds the routed resource instance handling one mutation.
    * @param {object} args - Options.
-   * @param {?} args.actor - Replay actor.
-   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {ReturnType<typeof JSON.parse>} args.actor - Replay actor.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Replay context.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {SyncReplayResourceRegistration} args.registration - Resolved resource registration.
    * @returns {Promise<import("../frontend-model-resource/base-resource.js").default>} Routed resource instance.
@@ -523,8 +523,8 @@ export default class SyncEnvelopeReplayService {
    * assign/save for updates, save-then-check membership creates, destroys for
    * deletes, and the resource's afterSyncApply tail. Client-safe failures
    * throw safe errors that fail the single sync.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
-   * @returns {Promise<Record<string, ?>>} Apply result with record, created/deleted flags, and afterSyncApply extras.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Apply result with record, created/deleted flags, and afterSyncApply extras.
    */
   async applyRoutedReplayMutation({actor, context, existingSync, mutation}) {
     const registration = this.replayResourceRegistration(mutation.resourceType)
@@ -557,8 +557,8 @@ export default class SyncEnvelopeReplayService {
    * Dispatches a routed sync mutation whose syncType matches a resource-declared
    * custom command. Returns null when the mutation is not a command so the
    * caller can fall through to the default upsert path.
-   * @param {{context: Record<string, ?>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, resource: import("../frontend-model-resource/base-resource.js").default}} args - Command dispatch args.
-   * @returns {Promise<Record<string, ?> | null>} Command apply result or null.
+   * @param {{context: Record<string, ReturnType<typeof JSON.parse>>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, resource: import("../frontend-model-resource/base-resource.js").default}} args - Command dispatch args.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} Command apply result or null.
    */
   async applyRoutedReplayCommand({context, mutation, resource}) {
     const commandConfig = this.resourceCommandConfig(resource)
@@ -587,7 +587,7 @@ export default class SyncEnvelopeReplayService {
    * @returns {{collectionCommands: Record<string, string>, memberCommands: Record<string, string>}} Command config.
    */
   resourceCommandConfig(resource) {
-    const config = /** @type {Record<string, ?>} */ (resource.resourceConfigurationValue || {})
+    const config = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (resource.resourceConfigurationValue || {})
 
     return {
       collectionCommands: config.collectionCommands || {},
@@ -614,7 +614,7 @@ export default class SyncEnvelopeReplayService {
    * is assigned after the payload so a payload `id` can never retarget the
    * command away from the resource the authorization hooks approved.
    * @param {{commandConfig: {collectionCommands: Record<string, string>, memberCommands: Record<string, string>}, commandMethodName: string, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Args builder args.
-   * @returns {Record<string, ?>} Command method arguments.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Command method arguments.
    */
   commandArgsForMutation({commandConfig, commandMethodName, mutation}) {
     const isMember = commandConfig.memberCommands[commandMethodName] !== undefined
@@ -635,7 +635,7 @@ export default class SyncEnvelopeReplayService {
    * @param {object} args - Options.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
-   * @returns {Promise<Record<string, ?>>} Apply result with the deleted flag.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Apply result with the deleted flag.
    */
   async applyRoutedReplayDelete({mutation, resource}) {
     const record = await resource.findSyncRecord({forDelete: true, mutation})
@@ -665,10 +665,10 @@ export default class SyncEnvelopeReplayService {
    * again. Model validation failures become client-safe per-sync failures
    * carrying the translated validation message.
    * @param {object} args - Options.
-   * @param {Record<string, ?>} args.context - Replay context.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Replay context.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
-   * @returns {Promise<Record<string, ?>>} Apply result with record, created flag, and afterSyncApply extras.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Apply result with record, created flag, and afterSyncApply extras.
    */
   async applyRoutedReplayUpsert({context, mutation, resource}) {
     const attributes = this.permittedRoutedAttributes({mutation, resource})
@@ -713,11 +713,11 @@ export default class SyncEnvelopeReplayService {
    * whose baseVersion does not match the server's current versionAttribute is
    * rejected with a structured conflict payload instead of being applied.
    * @param {object} args - Conflict-check args.
-   * @param {Record<string, ?>} args.attributes - Permitted mutation attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Permitted mutation attributes.
    * @param {import("../database/record/index.js").default | null} args.existingRecord - Existing server record.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
-   * @returns {Promise<Record<string, ?> | null>} - Conflict apply result, or null when no conflict.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} - Conflict apply result, or null when no conflict.
    */
   async routedReplayConflictResult({attributes, existingRecord, mutation, resource}) {
     if (!this.conflictStrategy) return null
@@ -770,10 +770,10 @@ export default class SyncEnvelopeReplayService {
    * source of frontend-visible values. The full model attribute hash is never
    * exposed.
    * @param {object} args - Projection args.
-   * @param {Record<string, ?>} args.attributes - Permitted affected mutation attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Permitted affected mutation attributes.
    * @param {import("../database/record/index.js").default} args.existingRecord - Authorized server record.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
-   * @returns {Promise<Record<string, ?>>} Serialized readable affected attributes.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Serialized readable affected attributes.
    */
   async serializedRoutedConflictAttributes({attributes, existingRecord, resource}) {
     const ModelClass = resource.modelClass()
@@ -800,7 +800,7 @@ export default class SyncEnvelopeReplayService {
       readableAttributes.add(canonicalName || configuredName)
     }
 
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const serializedAttributes = {}
 
     for (const affectedField of Object.keys(attributes)) {
@@ -815,7 +815,7 @@ export default class SyncEnvelopeReplayService {
         continue
       }
 
-      const recordMethods = /** @type {Record<string, ?>} */ (/** @type {unknown} */ (existingRecord))
+      const recordMethods = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (/** @type {unknown} */ (existingRecord))
       const attributeMethod = recordMethods[attributeName]
 
       if (typeof attributeMethod === "function") {
@@ -838,7 +838,7 @@ export default class SyncEnvelopeReplayService {
    * @param {object} args - Options.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
-   * @returns {Record<string, ?>} Permitted attributes for record.assign.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Permitted attributes for record.assign.
    */
   permittedRoutedAttributes({mutation, resource}) {
     const permittedAttributes = resource.declaredWritableAttributes()
@@ -864,7 +864,7 @@ export default class SyncEnvelopeReplayService {
     const primaryKey = ModelClass.primaryKey()
     const primaryKeyAttribute = ModelClass.getColumnNameToAttributeNameMap()[primaryKey]
 
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const attributes = {}
 
     for (const [key, value] of Object.entries(mutation.data)) {
@@ -891,7 +891,7 @@ export default class SyncEnvelopeReplayService {
    * the resource's lookup scope fails the sync as an authorization denial
    * instead of colliding on the primary key.
    * @param {object} args - Options.
-   * @param {Record<string, ?>} args.attributes - Permitted payload attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Permitted payload attributes.
    * @param {import("./sync-envelope-replay-service.js").SyncReplayMutation} args.mutation - Normalized replay mutation.
    * @param {import("../frontend-model-resource/base-resource.js").default} args.resource - Routed resource instance.
    * @returns {Promise<import("../database/record/index.js").default>} Created record.
@@ -960,7 +960,7 @@ export default class SyncEnvelopeReplayService {
    * Maps a routed save/create failure: model validation errors become
    * client-safe errors with their translated messages, everything else
    * propagates unchanged.
-   * @param {?} error - Thrown save/create error.
+   * @param {ReturnType<typeof JSON.parse>} error - Thrown save/create error.
    * @returns {Error} Error to rethrow.
    */
   routedReplaySaveError(error) {
@@ -973,8 +973,8 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Resolves an apply result for stale mutations that should not touch domain models.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
-   * @returns {Promise<?>} Project-specific apply result.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} _args - Actor, batch context, existing sync row, and mutation.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} Project-specific apply result.
    */
   async skippedReplayMutation(_args) {
     return null
@@ -985,7 +985,7 @@ export default class SyncEnvelopeReplayService {
    *
    * Defaults to a stale-guarded sync-model upsert (with server re-sequencing on
    * updates) when a sync model is configured; otherwise apps override this hook.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay persistence arguments.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, applyResult: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay persistence arguments.
    * @returns {Promise<void>}
    */
   async persistReplayMutation({actor, applyResult, context, existingSync, mutation, shouldApply}) {
@@ -1018,8 +1018,8 @@ export default class SyncEnvelopeReplayService {
 
   /**
    * Builds the sync-model attributes persisted by the model-backed default.
-   * @param {{actor: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor and mutation.
-   * @returns {Record<string, ?>} Sync row attributes.
+   * @param {{actor: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor and mutation.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Sync row attributes.
    */
   replayPersistAttributes({actor, mutation}) {
     return {
@@ -1037,7 +1037,7 @@ export default class SyncEnvelopeReplayService {
    *
    * Defaults to fanning the applied result out through the configured
    * declarative broadcasts.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, applyResult: ?, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay side-effect arguments.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, applyResult: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation, shouldApply: boolean}} args - Replay side-effect arguments.
    * @returns {Promise<void>}
    */
   async afterReplayMutation(args) {
@@ -1070,8 +1070,8 @@ export function syncReplayConflictLockName({resourceId, resourceType}) {
 
 /**
  * Normalizes an authoritative conflict value for JSON transport and deterministic comparison.
- * @param {?} value - Raw value from a database record.
- * @returns {?} - Normalized value (Date values become ISO strings).
+ * @param {ReturnType<typeof JSON.parse>} value - Raw value from a database record.
+ * @returns {ReturnType<typeof JSON.parse>} - Normalized value (Date values become ISO strings).
  */
 function normalizeConflictValue(value) {
   if (value instanceof Date) return value.toISOString()

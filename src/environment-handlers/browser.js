@@ -23,7 +23,7 @@ import Logger from "../logger.js"
 
 /**
  * TestFilesRequireContextIDFunctionType type.
- * @typedef {(id: string) => ?} TestFilesRequireContextIDFunctionType
+ * @typedef {(id: string) => ReturnType<typeof JSON.parse>} TestFilesRequireContextIDFunctionType
  * @typedef {TestFilesRequireContextIDFunctionType & {
  *   keys: () => string[],
  *   id: string

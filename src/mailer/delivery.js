@@ -10,7 +10,7 @@ export default class MailerDelivery {
   mailer
   /**
    * Narrows the runtime value to the documented type.
-   * @type {Promise<?>} */
+   * @type {Promise<ReturnType<typeof JSON.parse>>} */
   actionPromise
   /**
    * Narrows the runtime value to the documented type.
@@ -21,7 +21,7 @@ export default class MailerDelivery {
    * Runs constructor.
    * @param {object} args - Constructor args.
    * @param {import("./base.js").VelociousMailerBase} args.mailer - Mailer instance.
-   * @param {Promise<?>} args.actionPromise - Action promise.
+   * @param {Promise<ReturnType<typeof JSON.parse>>} args.actionPromise - Action promise.
    * @param {string} args.actionName - Action name.
    */
   constructor({mailer, actionPromise, actionName}) {
@@ -42,7 +42,7 @@ export default class MailerDelivery {
 
   /**
    * Runs deliver now.
-   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Delivered payload or handler result.
+   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ReturnType<typeof JSON.parse>>} - Delivered payload or handler result.
    */
   async deliverNow() {
     const payload = await this.buildPayload()

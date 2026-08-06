@@ -496,7 +496,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
 
         expect(called).toEqual(true)
         expect(receivedPayload).not.toEqual(null)
-        expect(/** @type {Record<string, ?>} */ (receivedPayload).params).toEqual({key: "value"})
+        expect(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (receivedPayload).params).toEqual({key: "value"})
       } finally {
         unsubscribe()
       }

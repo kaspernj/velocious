@@ -8,7 +8,7 @@ import Base from "./base.js"
 
 /**
  * VelociousDatabaseDriversSqliteWeb class.
- * @typedef {{query: (sql: string) => Promise<Record<string, ?>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} SqliteWebConnection
+ * @typedef {{query: (sql: string) => Promise<Record<string, ReturnType<typeof JSON.parse>>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} SqliteWebConnection
  */
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
@@ -170,7 +170,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, ?>[]>} - Resolves with the query actual.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql) {
     const result = await this.getConnection().query(sql)

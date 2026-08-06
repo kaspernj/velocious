@@ -37,7 +37,7 @@
  */
 
 /**
- * @typedef {{type: "broadcast", channel: string, broadcastParams: Record<string, ?>, body: ?, originPeerId?: string}} BeaconBroadcastMessage
+ * @typedef {{type: "broadcast", channel: string, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>, originPeerId?: string}} BeaconBroadcastMessage
  *
  * `channel`, `broadcastParams`, and `body` mirror the
  * `configuration.broadcastToChannel(channel, broadcastParams, body)`

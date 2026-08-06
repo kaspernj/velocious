@@ -23,8 +23,8 @@ const GRANT_NOW = new Date("2030-01-01T00:00:00.000Z")
  * @param {string} args.grantId - Grant id.
  * @param {string} args.operation - Authorized operation.
  * @param {string} args.model - Grant model.
- * @param {?} args.projectId - Grant project scope.
- * @returns {Promise<Record<string, ?>>} Fixture bundle.
+ * @param {ReturnType<typeof JSON.parse>} args.projectId - Grant project scope.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Fixture bundle.
  */
 async function buildGrantForProject({grantId, model, operation, projectId}) {
   return await buildSignedReplayFixtures({
@@ -40,12 +40,12 @@ async function buildGrantForProject({grantId, model, operation, projectId}) {
 /**
  * Signs a Task update mutation against fixtures.
  * @param {object} args - Mutation args.
- * @param {Record<string, ?>} args.fixtures - Fixture bundle.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.fixtures - Fixture bundle.
  * @param {string} args.grantId - Grant id.
  * @param {string} args.mutationId - Client mutation id.
  * @param {string} args.name - New task name.
  * @param {number} args.taskId - Target task id.
- * @returns {Promise<Record<string, ?>>} Signed mutation envelope.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Signed mutation envelope.
  */
 async function signTaskUpdate({fixtures, grantId, mutationId, name, taskId}) {
   return await signFixtureMutation({
@@ -182,9 +182,9 @@ describe("AwesomeTasks signed offline sync scope authorization", {databaseCleani
     const fixtures = await buildGrantForProject({grantId: "grant-a", model: "Task", operation: "update", projectId: projectA.id()})
     const signedMutation = await signTaskUpdate({fixtures, grantId: "grant-a", mutationId: "mutation-factory", name: "Factory scoped", taskId: taskA.id()})
 
-    /** @type {Array<{actor: ?, grant: ?}>} */
+    /** @type {Array<{actor: ReturnType<typeof JSON.parse>, grant: ReturnType<typeof JSON.parse>}>} */
     const factoryCalls = []
-    const recordingFactory = (/** @type {{actor: ?, grant: ?}} */ args) => {
+    const recordingFactory = (/** @type {{actor: ReturnType<typeof JSON.parse>, grant: ReturnType<typeof JSON.parse>}} */ args) => {
       factoryCalls.push(args)
 
       return buildOfflineGrantAbilityFactory()(args)

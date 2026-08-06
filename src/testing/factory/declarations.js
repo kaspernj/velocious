@@ -7,7 +7,7 @@
  * @property {"attribute"} kind - Discriminant.
  * @property {string} name - Attribute name.
  * @property {boolean} isTransient - Whether the value is transient (never assigned/returned).
- * @property {?} value - Literal value or lazy `(context) => value` function.
+ * @property {ReturnType<typeof JSON.parse>} value - Literal value or lazy `(context) => value` function.
  */
 
 /**
@@ -16,7 +16,7 @@
  * @typedef {object} CallbackDeclaration
  * @property {"callback"} kind - Discriminant.
  * @property {string} event - One of the supported callback events.
- * @property {(args: {record: ?, context: ?, strategy: string}) => (void | Promise<void>)} fn - Callback body.
+ * @property {(args: {record: ReturnType<typeof JSON.parse>, context: ReturnType<typeof JSON.parse>, strategy: string}) => (void | Promise<void>)} fn - Callback body.
  */
 
 /**
@@ -31,14 +31,14 @@
  * A custom-constructor declaration.
  * @typedef {object} InitializeWithDeclaration
  * @property {"initializeWith"} kind - Discriminant.
- * @property {(args: {attributes: Record<string, ?>, context: ?, get: (name: string) => ?}) => (? | Promise<?>)} fn - Constructor body.
+ * @property {(args: {attributes: Record<string, ReturnType<typeof JSON.parse>>, context: ReturnType<typeof JSON.parse>, get: (name: string) => ReturnType<typeof JSON.parse>}) => (ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>)} fn - Constructor body.
  */
 
 /**
  * A custom-persistence declaration.
  * @typedef {object} ToCreateDeclaration
  * @property {"toCreate"} kind - Discriminant.
- * @property {(args: {record: ?, context: ?}) => (void | Promise<void>)} fn - Persistence body.
+ * @property {(args: {record: ReturnType<typeof JSON.parse>, context: ReturnType<typeof JSON.parse>}) => (void | Promise<void>)} fn - Persistence body.
  */
 
 /**
@@ -56,7 +56,7 @@
 /**
  * Creates a literal/lazy attribute declaration.
  * @param {string} name - Attribute name.
- * @param {?} value - Literal value or lazy function.
+ * @param {ReturnType<typeof JSON.parse>} value - Literal value or lazy function.
  * @param {boolean} isTransient - Whether the declaration is transient.
  * @returns {AttributeDeclaration} - The frozen declaration.
  */

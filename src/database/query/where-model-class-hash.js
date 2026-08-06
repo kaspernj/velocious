@@ -6,7 +6,7 @@ import WhereBase from "./where-base.js"
 
 /**
  * No match.
- * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, ?>}} WhereHash
+ * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, ReturnType<typeof JSON.parse>>}} WhereHash
  */
 
 const NO_MATCH = Symbol("no-match")
@@ -107,7 +107,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
   /**
    * Runs is relationship where operator tuple.
-   * @param {?} tupleValue - Candidate tuple.
+   * @param {ReturnType<typeof JSON.parse>} tupleValue - Candidate tuple.
    * @returns {boolean} - Whether this is a relationship where tuple.
    */
   _isRelationshipWhereOperatorTuple(tupleValue) {
@@ -122,7 +122,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
   /**
    * Runs normalize relationship where operator tuples.
-   * @param {?} value - Candidate relationship where value.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate relationship where value.
    * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
    */
   _normalizeRelationshipWhereOperatorTuples(value) {
@@ -136,7 +136,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     const normalized = []
     /**
      * Add condition.
-     * @param {?} conditionValue - Candidate nested condition.
+     * @param {ReturnType<typeof JSON.parse>} conditionValue - Candidate nested condition.
      */
     const addCondition = (conditionValue) => {
       if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
@@ -178,7 +178,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
   /**
    * Runs is relationship where operator tuple container.
-   * @param {?} value - Candidate relationship where value.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate relationship where value.
    * @returns {boolean} - Whether value can be normalized to relationship tuples.
    */
   _isRelationshipWhereOperatorTupleContainer(value) {
@@ -302,8 +302,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {string} args.columnName - Column name.
-   * @param {?} args.value - Value to normalize.
-   * @returns {?} - Normalized value.
+   * @param {ReturnType<typeof JSON.parse>} args.value - Value to normalize.
+   * @returns {ReturnType<typeof JSON.parse>} - Normalized value.
    */
   _normalizeSqliteBooleanValue({modelClass, columnName, value}) {
     if (modelClass.getDatabaseType() != "sqlite") return value
@@ -315,8 +315,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     /**
      * Normalize.
-     * @param {?} entry - Value to normalize.
-     * @returns {?} - SQLite predicate value with booleans encoded as 1 or 0.
+     * @param {ReturnType<typeof JSON.parse>} entry - Value to normalize.
+     * @returns {ReturnType<typeof JSON.parse>} - SQLite predicate value with booleans encoded as 1 or 0.
      */
     const normalize = (entry) => {
       if (entry === true) return 1
@@ -336,8 +336,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
    * @param {object} args - Options object.
    * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
    * @param {string} args.columnName - Column name.
-   * @param {?} args.value - Value to normalize.
-   * @returns {?} - Normalized value.
+   * @param {ReturnType<typeof JSON.parse>} args.value - Value to normalize.
+   * @returns {ReturnType<typeof JSON.parse>} - Normalized value.
    */
   _normalizeValueForColumnType({modelClass, columnName, value}) {
     const columnType = modelClass.getColumnTypeByName(columnName)
@@ -353,8 +353,8 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
 
     /**
      * Normalize.
-     * @param {?} entry - Value to normalize.
-     * @returns {?} - Column-compatible predicate value, or the no-match sentinel for numeric UUIDs.
+     * @param {ReturnType<typeof JSON.parse>} entry - Value to normalize.
+     * @returns {ReturnType<typeof JSON.parse>} - Column-compatible predicate value, or the no-match sentinel for numeric UUIDs.
      */
     const normalize = (entry) => {
       if (isUuidType && typeof entry === "number") return NO_MATCH

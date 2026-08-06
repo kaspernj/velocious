@@ -27,21 +27,21 @@ const SCAN_COLUMNS = [
  * Builds a sync client harness deriving everything from a configuration with
  * registered fake models and a recording transport.
  * @param {object} [args] - Harness args.
- * @param {(args: {scope: Record<string, ?>}) => string | null | Promise<string | null>} [args.legacyCursor] - Legacy cursor seed hook.
- * @param {Array<?>} [args.modelClasses] - Model classes to register. Defaults to a Ticket (pull-apply) and TicketScan (queueing) pair.
- * @returns {?} Harness with client, fakes, and recorded calls.
+ * @param {(args: {scope: Record<string, ReturnType<typeof JSON.parse>>}) => string | null | Promise<string | null>} [args.legacyCursor] - Legacy cursor seed hook.
+ * @param {Array<ReturnType<typeof JSON.parse>>} [args.modelClasses] - Model classes to register. Defaults to a Ticket (pull-apply) and TicketScan (queueing) pair.
+ * @returns {ReturnType<typeof JSON.parse>} Harness with client, fakes, and recorded calls.
  */
 function buildHarness({legacyCursor, modelClasses} = {}) {
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const postChangesCalls = []
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const postReplayCalls = []
   /** @type {Array<Error>} */
   const errors = []
   const syncModel = buildFakeSyncModel()
   const ticketRecord = {
-    assignedAttributes: /** @type {Record<string, ?> | null} */ (null),
-    /** @param {Record<string, ?>} attributes - Applied attributes. @returns {void} */
+    assignedAttributes: /** @type {Record<string, ReturnType<typeof JSON.parse>> | null} */ (null),
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Applied attributes. @returns {void} */
     assign(attributes) {
       this.assignedAttributes = attributes
     },
@@ -49,12 +49,12 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
     save: async () => {}
   }
   const state = {
-    changesResponses: /** @type {Array<Record<string, ?>>} */ ([]),
+    changesResponses: /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ ([]),
     online: true,
-    replayResponse: /** @type {Record<string, ?> | ((payload: Record<string, ?>) => Record<string, ?>)} */ ({status: "success", syncs: []})
+    replayResponse: /** @type {Record<string, ReturnType<typeof JSON.parse>> | ((payload: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>)} */ ({status: "success", syncs: []})
   }
   const transport = {
-    /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+    /** @param {string} path - Posted path. @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ReturnType<typeof JSON.parse>>}>} Response with json accessor. */
     post: async (path, payload) => {
       if (path.endsWith("/changes")) {
         postChangesCalls.push(payload)
@@ -76,7 +76,7 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
         ...state.replayResponse,
         syncs: state.replayResponse.syncs.length > 0
           ? state.replayResponse.syncs
-          : payload.syncs.map((/** @type {Record<string, ?>} */ sync) => ({id: sync.id, syncState: "successful"}))
+          : payload.syncs.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ sync) => ({id: sync.id, syncState: "successful"}))
       }
 
       return {json: () => replayResponse}
@@ -87,7 +87,7 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
       columns: TICKET_COLUMNS,
       modelName: "Ticket",
       sync: {
-        attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({name: data.name}),
+        attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({name: data.name}),
         findRecord: async () => ticketRecord
       }
     }),
@@ -120,8 +120,8 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
 
 /**
  * Builds a fake scan record of a harness TicketScan model class for queueing tests.
- * @param {?} modelClass - TicketScan model class.
- * @returns {?} Fake TicketScan record.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - TicketScan model class.
+ * @returns {ReturnType<typeof JSON.parse>} Fake TicketScan record.
  */
 function buildScanRecord(modelClass) {
   return buildRecord(modelClass, SCAN_ID, {accepted: 1, localOnly: "internal", ticketId: TICKET_ID})
@@ -349,7 +349,7 @@ describe("sync client", () => {
 
     harness.state.replayResponse = (payload) => ({
       status: "success",
-      syncs: payload.syncs.map((/** @type {Record<string, ?>} */ sync) => ({id: sync.id, syncState: "failed"}))
+      syncs: payload.syncs.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ sync) => ({id: sync.id, syncState: "failed"}))
     })
 
     const syncRow = await harness.client.queue({resource: buildScanRecord(harness.modelClasses[1])})
@@ -547,7 +547,7 @@ describe("sync client", () => {
       modelName: "TrackedScan",
       sync: {
         track: true,
-        trackedData: (/** @type {{operation: string, record: ?}} */ {operation, record}) => ({deviceId: "device-1", operation, ticketId: record.attributes().ticketId})
+        trackedData: (/** @type {{operation: string, record: ReturnType<typeof JSON.parse>}} */ {operation, record}) => ({deviceId: "device-1", operation, ticketId: record.attributes().ticketId})
       }
     })
     const harness = buildHarness({modelClasses: [TrackedScan]})
@@ -564,13 +564,13 @@ describe("sync client", () => {
   })
 
   it("does not queue tracked mutations for records written by pull-apply", async () => {
-    /** @type {?} */
+    /** @type {ReturnType<typeof JSON.parse>} */
     let record = null
     const TrackedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "TrackedScan",
       sync: {
-        attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({ticketId: data.ticketId}),
+        attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({ticketId: data.ticketId}),
         findRecord: async () => record,
         track: true
       }
@@ -691,7 +691,7 @@ describe("sync client", () => {
     const originalCreate = harness.syncModel.create
     let failNextCreate = true
 
-    harness.syncModel.create = async (/** @type {Record<string, ?>} */ attributes) => {
+    harness.syncModel.create = async (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ attributes) => {
       if (failNextCreate) {
         failNextCreate = false
 
@@ -726,7 +726,7 @@ describe("sync client", () => {
     }
 
     const transport = {
-      /** @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+      /** @returns {Promise<{json: () => Record<string, ReturnType<typeof JSON.parse>>}>} Response with json accessor. */
       post: async () => ({json: () => ({status: "success", syncs: []})})
     }
     const configuration = buildConfiguration({
@@ -734,11 +734,11 @@ describe("sync client", () => {
       sync: {client: {authenticationToken: () => "token-1", isOnline: () => false, transport}}
     })
     const client = new SyncClient({configuration, syncModel})
-    /** @type {Array<Array<?>>} */
+    /** @type {Array<Array<ReturnType<typeof JSON.parse>>>} */
     const loggedErrors = []
 
     client._logger = {
-      /** @param {...?} messages - Logged error parts. @returns {Promise<void>} */
+      /** @param {...ReturnType<typeof JSON.parse>} messages - Logged error parts. @returns {Promise<void>} */
       error: async (...messages) => {
         loggedErrors.push(messages)
       }

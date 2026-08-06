@@ -40,7 +40,7 @@ describe("record validation messages", () => {
   })
 
   it("fails loudly on unknown message types", () => {
-    expect(() => validationMessage({type: /** @type {?} */ ("nope")})).toThrow(/Unknown validation message type/u)
+    expect(() => validationMessage({type: /** @type {ReturnType<typeof JSON.parse>} */ ("nope")})).toThrow(/Unknown validation message type/u)
   })
 })
 

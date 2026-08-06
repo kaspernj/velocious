@@ -116,7 +116,7 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
    * Reads one required string-like where value.
    * @param {object} args - Args.
    * @param {string} args.attributeName - Attribute name.
-   * @param {Record<string, ?>} args.where - Where hash.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.where - Where hash.
    * @returns {string} - String value.
    */
   requiredSingleWhereValue({attributeName, where}) {

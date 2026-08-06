@@ -61,7 +61,7 @@ describe("sync model change-feed service - scope-partition serialization", () =>
       static syncScopeAttributes = ["projectId"]
     }
 
-    const service = new SyncModelChangeFeedService({modelClass: /** @type {?} */ (ProjectScopedSyncModel), params: {}})
+    const service = new SyncModelChangeFeedService({modelClass: /** @type {ReturnType<typeof JSON.parse>} */ (ProjectScopedSyncModel), params: {}})
     const serialized = service.defaultSerializeRecord(buildFakeRow({...ROW_VALUES, projectId: "project-1"}))
 
     expect(serialized.projectId).toEqual("project-1")
@@ -73,8 +73,8 @@ describe("sync model change-feed service - scope-partition serialization", () =>
       static syncScopeAttributes = ["eventId"]
     }
 
-    const undeclaredService = new SyncModelChangeFeedService({modelClass: /** @type {?} */ (TestSyncModel), params: {}})
-    const declaredService = new SyncModelChangeFeedService({modelClass: /** @type {?} */ (EventScopedSyncModel), params: {}})
+    const undeclaredService = new SyncModelChangeFeedService({modelClass: /** @type {ReturnType<typeof JSON.parse>} */ (TestSyncModel), params: {}})
+    const declaredService = new SyncModelChangeFeedService({modelClass: /** @type {ReturnType<typeof JSON.parse>} */ (EventScopedSyncModel), params: {}})
     const row = buildFakeRow({...ROW_VALUES, eventId: "event-1"})
     const expectedWire = JSON.stringify({
       data: {title: "Row 1"},
@@ -96,7 +96,7 @@ describe("sync model change-feed service - scope-partition serialization", () =>
       static syncScopeAttributes = ["projectId"]
     }
 
-    const service = new SyncModelChangeFeedService({modelClass: /** @type {?} */ (ProjectScopedSyncModel), params: {}})
+    const service = new SyncModelChangeFeedService({modelClass: /** @type {ReturnType<typeof JSON.parse>} */ (ProjectScopedSyncModel), params: {}})
 
     expect(() => service.defaultSerializeRecord(buildFakeRow(ROW_VALUES))).toThrow("Sync changes row is missing projectId.")
   })

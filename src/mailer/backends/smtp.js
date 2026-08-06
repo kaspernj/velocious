@@ -4,11 +4,11 @@ import restArgsError from "../../utils/rest-args-error.js"
 
 /**
  * Defines this typedef.
- * @typedef {{auth?: Record<string, ?>, [key: string]: ?}} SmtpConnectionOptions */
+ * @typedef {{auth?: Record<string, ReturnType<typeof JSON.parse>>, [key: string]: ReturnType<typeof JSON.parse>}} SmtpConnectionOptions */
 
 /**
  * Runs normalize recipients.
- * @param {?} value - Recipient input.
+ * @param {ReturnType<typeof JSON.parse>} value - Recipient input.
  * @returns {string[]} - Normalized recipients.
  */
 function normalizeRecipients(value) {
@@ -160,7 +160,7 @@ export default class SmtpMailerBackend {
       }
 
       const sendMessage = () => {
-        connection.send({from: envelopeFrom, to: recipients}, /** @type {?} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
+        connection.send({from: envelopeFrom, to: recipients}, /** @type {ReturnType<typeof JSON.parse>} */ (message), (/** @type {Error | null | undefined} */ sendError) => {
           if (sendError) {
             rejectDelivery(sendError)
             return

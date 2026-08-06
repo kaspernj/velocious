@@ -7,7 +7,7 @@ export default class ExpectToChange extends BaseExpect {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {function(): Promise<number>} args.changeCallback - Change callback.
+   * @param {() => Promise<number>} args.changeCallback - Change callback.
    * @param {import("./expect.js").default} args.expect - Expect.
    */
   constructor({changeCallback, expect, ...restArgs}) {

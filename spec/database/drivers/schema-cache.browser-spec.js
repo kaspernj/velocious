@@ -10,7 +10,7 @@ import {describe, expect, it} from "../../../src/testing/test.js"
 /** @typedef {import("../../../src/database/drivers/base.js").default} Driver */
 
 /**
- * @param {function(LoggerArrayOutput): Promise<void>} callback - Callback with captured query logs.
+ * @param {(arg: LoggerArrayOutput) => Promise<void>} callback - Callback with captured query logs.
  * @returns {Promise<void>} - Resolves when complete.
  */
 async function withQueryLogOutput(callback) {
@@ -45,7 +45,7 @@ function sqlMessages(arrayOutput) {
 
 /**
  * @param {LoggerArrayOutput} arrayOutput - Query log output.
- * @param {function(string): boolean} callback - Message matcher.
+ * @param {(arg: string) => boolean} callback - Message matcher.
  * @returns {number} - Matching SQL query count.
  */
 function countSqlMessages(arrayOutput, callback) {

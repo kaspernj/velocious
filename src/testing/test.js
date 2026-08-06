@@ -149,9 +149,9 @@ function configureTests({consoleOutput, excludeTags, defaultTimeoutSeconds, fail
 
 /**
  * Runs merge test args.
- * @param {Record<string, ?>} baseArgs - Base args.
- * @param {Record<string, ?>} extraArgs - Extra args.
- * @returns {Record<string, ?>} - Merged args.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} baseArgs - Base args.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} extraArgs - Extra args.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Merged args.
  */
 function mergeTestArgs(baseArgs, extraArgs) {
   const merged = Object.assign({}, baseArgs, extraArgs)
@@ -220,7 +220,7 @@ function afterAll(callback) {
 async function describe(description, arg1, arg2) {
   /**
    * Defines testArgs.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let testArgs, testFunction
 
   if (typeof arg2 == "function") {
@@ -265,7 +265,7 @@ async function describe(description, arg1, arg2) {
 
 /**
  * Runs expect.
- * @param {?} arg - Arg.
+ * @param {ReturnType<typeof JSON.parse>} arg - Arg.
  * @returns {Expect} - The expect.
  */
 function expect(arg) {
@@ -286,7 +286,7 @@ function it(description, arg1, arg2) {
   const currentTest = currentPath[currentPath.length - 1]
   /**
    * Defines testArgs.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let testArgs
 
   /**
@@ -326,7 +326,7 @@ function it(description, arg1, arg2) {
 function fit(description, arg1, arg2) {
   /**
    * Defines testArgs.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let testArgs
 
   /**
@@ -348,15 +348,17 @@ function fit(description, arg1, arg2) {
 }
 
 // Make the methods global so they can be used in test files
-globalThis.afterEach = afterEach
-globalThis.afterAll = afterAll
-globalThis.beforeEach = beforeEach
-globalThis.beforeAll = beforeAll
-globalThis.describe = describe
-globalThis.expect = expect
-globalThis.it = it
-globalThis.fit = fit
-globalThis.testEvents = testEvents
-globalThis.configureTests = configureTests
+Object.assign(globalThis, {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  configureTests,
+  describe,
+  expect,
+  fit,
+  it,
+  testEvents
+})
 
 export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests, waitForEvent}

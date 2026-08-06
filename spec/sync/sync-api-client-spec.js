@@ -212,7 +212,7 @@ describe("sync API client", () => {
  * Builds a fake local sync model with pending-row querying and id lookup.
  * Plain findBy reloads behave like non-preloaded records: their resource() throws.
  * @param {TestSync[]} rows - Local sync rows.
- * @returns {?} Fake sync model.
+ * @returns {ReturnType<typeof JSON.parse>} Fake sync model.
  */
 function buildReplaySyncModel(rows) {
   return {

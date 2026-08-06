@@ -5,7 +5,7 @@ import {describe, expect, it} from "../../../src/testing/test.js"
 // definition/precedence specs stay DB-free and use a placeholder class.
 class ModelDouble {
   /**
-   * @param {Record<string, ?>} attributes - Assigned attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Assigned attributes.
    */
   constructor(attributes = {}) {
     Object.assign(this, attributes)

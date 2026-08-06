@@ -87,7 +87,7 @@ export default class Tenant {
    * tenant-switched models are initialized, so each tenant's database is queryable without the
    * caller wiring up connections or model metadata. Returns how many tenants the callback ran
    * for (after filtering).
-   * @param {{identifier: string, callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, parallel?: number, filter?: (tenant: ?) => boolean, configuration?: import("../configuration.js").default}} args - Tenant database identifier, per-tenant operation, filtering, and concurrency settings.
+   * @param {{identifier: string, callback: (args: {databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ReturnType<typeof JSON.parse>}) => Promise<void>, parallel?: number, filter?: (tenant: ReturnType<typeof JSON.parse>) => boolean, configuration?: import("../configuration.js").default}} args - Tenant database identifier, per-tenant operation, filtering, and concurrency settings.
    * @returns {Promise<number>} - Number of processed tenants.
    */
   static async each({identifier, callback, parallel = 1, filter, configuration = Current.configuration()}) {
@@ -125,7 +125,7 @@ export default class Tenant {
    * per-tenant subquery and declares the key columns and aggregates; see
    * {@link import("./tenant-aggregator.js").TenantAggregateOptions}.
    * @param {import("./tenant-aggregator.js").TenantAggregateOptions} options - Aggregate configuration.
-   * @returns {Promise<Array<Record<string, ?>>>} - One merged row per distinct key-column combination.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - One merged row per distinct key-column combination.
    */
   static async aggregateAcross(options) {
     return await new TenantAggregator(options).run()

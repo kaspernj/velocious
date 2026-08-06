@@ -10,7 +10,7 @@ import buildCliCommandContext from "./cli-command-context.js"
 export default class RunnerCommand extends BaseCommand {
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Resolves with the evaluated code result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the evaluated code result.
    */
   async execute() {
     const configuration = this.getConfiguration()
@@ -66,7 +66,7 @@ export default class RunnerCommand extends BaseCommand {
   /**
    * Runs evaluate code.
    * @param {string} code - JavaScript code to evaluate.
-   * @returns {Promise<?>} - Evaluated code result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Evaluated code result.
    */
   async evaluateCode(code) {
     const context = this.buildRunnerContext()

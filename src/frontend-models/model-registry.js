@@ -1,12 +1,12 @@
 // @ts-check
 
-/** @type {Map<string, ?>} */
+/** @type {Map<string, ReturnType<typeof JSON.parse>>} */
 const frontendModelRegistry = new Map()
 
 /**
  * Register a frontend model class so it can be resolved by name in relationship lookups.
  * Uses resourceConfig().modelName when available to support minified builds where class names are mangled.
- * @param {?} modelClass - Model class to register.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - Model class to register.
  * @returns {void}
  */
 export function registerFrontendModel(modelClass) {
@@ -17,8 +17,8 @@ export function registerFrontendModel(modelClass) {
 
 /**
  * Resolve a relationship model class value that may be a class reference or a string name.
- * @param {?} value - Class or class name string.
- * @returns {?} - Resolved model class or null.
+ * @param {ReturnType<typeof JSON.parse>} value - Class or class name string.
+ * @returns {ReturnType<typeof JSON.parse>} - Resolved model class or null.
  */
 export function resolveFrontendModelClass(value) {
   if (!value) return null

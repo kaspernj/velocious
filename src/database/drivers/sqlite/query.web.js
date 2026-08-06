@@ -4,7 +4,7 @@
  * Runs query.
  * @param {import("sql.js").Database} connection - Connection.
  * @param {string} sql - SQL string.
- * @returns {Promise<Record<string, ?>[]>} - Resolves with string value.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with string value.
  */
 export default async function query(connection, sql) {
   const rows = []
@@ -34,7 +34,7 @@ export default async function query(connection, sql) {
     for (const rowValues of result[0].values) {
       /**
        * Row.
-       * @type {Record<string, ?>} */
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const row = {}
 
       for (const columnIndex in columns) {

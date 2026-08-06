@@ -9,7 +9,7 @@ let asyncLocalStorage
 
 /**
  * Database annotations global.
- * @type {typeof globalThis & {velociousDatabaseAnnotations?: {getDatabaseAnnotations: () => string[], withDatabaseAnnotation: (annotation: string, callback: () => Promise<?>) => Promise<?>}}} */
+ * @type {typeof globalThis & {velociousDatabaseAnnotations?: {getDatabaseAnnotations: () => string[], withDatabaseAnnotation: (annotation: string, callback: () => Promise<ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>}}} */
 const databaseAnnotationsGlobal = globalThis
 
 if (AsyncLocalStorage) {
@@ -27,8 +27,8 @@ function getDatabaseAnnotations() {
 /**
  * Runs the callback with an annotation that is appended to database query comments.
  * @param {string} annotation - Human-readable annotation for queries executed inside the callback.
- * @param {() => Promise<?>} callback - Callback to execute inside the annotation context.
- * @returns {Promise<?>} - Resolves with the callback result.
+ * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to execute inside the annotation context.
+ * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the callback result.
  */
 async function withDatabaseAnnotation(annotation, callback) {
   if (!asyncLocalStorage) return await callback()

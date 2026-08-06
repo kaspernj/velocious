@@ -8,7 +8,7 @@ export default class Response {
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.method - HTTP method.
-   * @param {function() : void} args.onComplete - On complete.
+   * @param {() => void} args.onComplete - On complete.
    */
   constructor({method = "GET", onComplete}) {
     if (!method) throw new Error(`Invalid method given: ${method}`)

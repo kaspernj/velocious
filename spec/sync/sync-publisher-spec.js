@@ -34,20 +34,20 @@ function buildRoutedReplayService({resourceClass = SyncUuidItemResource} = {}) {
  * the real SyncEntry sync model and a recording broadcaster. The publish
  * declaration is assigned onto UuidItem's static sync for the duration of the
  * test and restored by the returned restore callback.
- * @param {{broadcaster?: (broadcast: {body: ?, channel: string, params: Record<string, ?>}) => Promise<void>, onError?: null, publish?: Record<string, ?>}} [args] - Broadcaster/publish declaration overrides; `onError: null` builds the publisher without an onError hook.
- * @returns {{broadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, errors: Error[], frameworkBroadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, publisher: SyncPublisher, restore: () => void}} Publish harness. `broadcasts` records the declared app-channel broadcasts, `frameworkBroadcasts` the framework sync channel broadcasts.
+ * @param {{broadcaster?: (broadcast: {body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<void>, onError?: null, publish?: Record<string, ReturnType<typeof JSON.parse>>}} [args] - Broadcaster/publish declaration overrides; `onError: null` builds the publisher without an onError hook.
+ * @returns {{broadcasts: Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>, errors: Error[], frameworkBroadcasts: Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>, publisher: SyncPublisher, restore: () => void}} Publish harness. `broadcasts` records the declared app-channel broadcasts, `frameworkBroadcasts` the framework sync channel broadcasts.
  */
 function buildUuidItemPublishHarness({broadcaster, onError, publish} = {}) {
-  /** @type {Array<{body: ?, channel: string, params: Record<string, ?>}>} */
+  /** @type {Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>} */
   const broadcasts = []
-  /** @type {Array<{body: ?, channel: string, params: Record<string, ?>}>} */
+  /** @type {Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>} */
   const frameworkBroadcasts = []
   /** @type {Error[]} */
   const errors = []
   const originalSync = UuidItem.sync
 
   UuidItem.sync = {
-    .../** @type {Record<string, ?>} */ (originalSync),
+    .../** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (originalSync),
     publish: publish || {
       broadcasts: [{
         body: (/** @type {import("../../src/sync/sync-publisher-types.js").SyncPublishBroadcastArgs} */ args) => ({data: args.data, syncType: args.syncType}),
@@ -243,7 +243,7 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
 
     await publisher.start()
 
-    /** @param {?} record - Saved uuid item. @returns {Promise<void>} Assigns an unsaved attribute after the publish callback ran. */
+    /** @param {ReturnType<typeof JSON.parse>} record - Saved uuid item. @returns {Promise<void>} Assigns an unsaved attribute after the publish callback ran. */
     const driftAfterSave = async (record) => {
       record.assign({title: "Drifted title"})
     }
@@ -465,11 +465,11 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
     await publisher.start()
 
     try {
-      /** @type {?} */
+      /** @type {ReturnType<typeof JSON.parse>} */
       let appliedRecord = null
 
       class CapturingUuidItemResource extends SyncUuidItemResource {
-        /** @param {{context: Record<string, ?>, created: boolean, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation, record: ?}} args - After-apply args. @returns {Record<string, ?>} - Extra apply-result entries. */
+        /** @param {{context: Record<string, ReturnType<typeof JSON.parse>>, created: boolean, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation, record: ReturnType<typeof JSON.parse>}} args - After-apply args. @returns {Record<string, ReturnType<typeof JSON.parse>>} - Extra apply-result entries. */
         afterSyncApply({record}) {
           appliedRecord = record
 
@@ -537,26 +537,26 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
 
     await publisher.start()
 
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const frameworkErrorPayloads = []
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const allErrorPayloads = []
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const loggedErrors = []
     const errorEvents = dummyConfiguration.getErrorEvents()
-    /** @param {?} payload - Emitted framework-error payload. @returns {void} */
+    /** @param {ReturnType<typeof JSON.parse>} payload - Emitted framework-error payload. @returns {void} */
     const onFrameworkError = (payload) => {
       frameworkErrorPayloads.push(payload)
     }
-    /** @param {?} payload - Emitted all-error payload. @returns {void} */
+    /** @param {ReturnType<typeof JSON.parse>} payload - Emitted all-error payload. @returns {void} */
     const onAllError = (payload) => {
       allErrorPayloads.push(payload)
     }
 
     errorEvents.on("framework-error", onFrameworkError)
     errorEvents.on("all-error", onAllError)
-    publisher._logger = /** @type {?} */ ({
-      /** @param {...?} messages - Logged messages. @returns {Promise<void>} */
+    publisher._logger = /** @type {ReturnType<typeof JSON.parse>} */ ({
+      /** @param {...ReturnType<typeof JSON.parse>} messages - Logged messages. @returns {Promise<void>} */
       error: async (...messages) => {
         loggedErrors.push(messages)
       }

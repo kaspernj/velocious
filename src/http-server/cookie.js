@@ -125,7 +125,7 @@ export default class Cookie {
 
   /**
    * Runs encrypt value.
-   * @param {?} value - Value to encrypt.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to encrypt.
    * @param {string} secret - Encryption secret.
    * @returns {string} - Encrypted value.
    */
@@ -174,7 +174,7 @@ export default class Cookie {
 
   /**
    * Runs serialize encrypted value.
-   * @param {?} value - Value to serialize.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to serialize.
    * @returns {{payload: string, type: string}} - Serialized payload.
    */
   static _serializeEncryptedValue(value) {

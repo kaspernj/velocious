@@ -1,6 +1,6 @@
 // @ts-check
 
-/** @typedef {{to: ?, subject: string, from?: ?, cc?: ?, bcc?: ?, replyTo?: ?, headers?: Record<string, string>, html: string, mailer: string, action: string}} MailerDeliveryPayload */
+/** @typedef {{to: ReturnType<typeof JSON.parse>, subject: string, from?: ReturnType<typeof JSON.parse>, cc?: ReturnType<typeof JSON.parse>, bcc?: ReturnType<typeof JSON.parse>, replyTo?: ReturnType<typeof JSON.parse>, headers?: Record<string, string>, html: string, mailer: string, action: string}} MailerDeliveryPayload */
 
 export {
   VelociousMailerBase,

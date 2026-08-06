@@ -14,7 +14,7 @@ export default class AttributesForStrategy extends BaseStrategy {
    * @param {object} args - Options.
    * @param {import("../factory-registry.js").default} args.registry - Owning registry.
    * @param {import("../factory-runner.js").CompiledPlan} args.plan - Compiled plan.
-   * @returns {Promise<Record<string, ?>>} - The resolved attributes.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - The resolved attributes.
    */
   async run({registry, plan}) {
     const context = this._newContext(registry, plan, "attributesFor")

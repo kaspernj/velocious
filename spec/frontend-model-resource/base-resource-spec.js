@@ -135,7 +135,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
 
   it("falls back to shared resource instance methods when environment resource uses defaults", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
-      /** @returns {Array<string | Record<string, ?>>} */
+      /** @returns {Array<string | Record<string, ReturnType<typeof JSON.parse>>>} */
       permittedParams() {
         return ["name", {tasksAttributes: ["name"]}]
       }
@@ -223,7 +223,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     const offlineGrant = {id: "grant-1"}
 
     class SharedProjectResource extends FrontendModelBaseResource {
-      /** @returns {Record<string, ?>} */
+      /** @returns {Record<string, ReturnType<typeof JSON.parse>>} */
       contextSnapshot() {
         return {
           currentDevice: this.currentDevice(),

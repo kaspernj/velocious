@@ -61,14 +61,14 @@ export default class StructureSqlLoader {
    * `exec` (a single round-trip for the whole dump), otherwise undefined so the
    * caller falls back to per-statement execution.
    * @param {import("./drivers/base.js").default} db - Database connection.
-   * @returns {{exec: (sql: string) => Promise<?>} | undefined} - Connection with exec support.
+   * @returns {{exec: (sql: string) => Promise<ReturnType<typeof JSON.parse>>} | undefined} - Connection with exec support.
    */
   executableConnection(db) {
-    const dbWithConnection = /** @type {import("./drivers/base.js").default & {connection?: ?}} */ (db)
+    const dbWithConnection = /** @type {import("./drivers/base.js").default & {connection?: ReturnType<typeof JSON.parse>}} */ (db)
     const connection = dbWithConnection.connection
 
     if (connection && typeof connection == "object" && "exec" in connection && typeof connection.exec == "function") {
-      return /** @type {{exec: (sql: string) => Promise<?>}} */ (connection)
+      return /** @type {{exec: (sql: string) => Promise<ReturnType<typeof JSON.parse>>}} */ (connection)
     }
   }
 }

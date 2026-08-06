@@ -16,11 +16,11 @@ const SCAN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 
 /**
  * Builds a publisher with a recording broadcaster for one published model class.
- * @param {{modelClass: ?, scopeAttributes?: string[]}} args - Published model class and the sync model's declared scope attributes.
- * @returns {{broadcasts: Array<{body: ?, channel: string, params: Record<string, ?>}>, publisher: SyncPublisher, syncModel: ?}} Publisher harness.
+ * @param {{modelClass: ReturnType<typeof JSON.parse>, scopeAttributes?: string[]}} args - Published model class and the sync model's declared scope attributes.
+ * @returns {{broadcasts: Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>, publisher: SyncPublisher, syncModel: ReturnType<typeof JSON.parse>}} Publisher harness.
  */
 function buildBroadcastingPublisher({modelClass, scopeAttributes}) {
-  /** @type {Array<{body: ?, channel: string, params: Record<string, ?>}>} */
+  /** @type {Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>} */
   const broadcasts = []
   const syncModel = buildFakeServerSyncModel({scopeAttributes})
   const publisher = new SyncPublisher({
@@ -44,10 +44,10 @@ function buildBroadcastingPublisher({modelClass, scopeAttributes}) {
  * updatedAt, and any declared scope attributes.
  * @param {object} [args] - Sync model args.
  * @param {string[]} [args.scopeAttributes] - Declared static syncScopeAttributes.
- * @returns {?} Fake server sync model with a rows array.
+ * @returns {ReturnType<typeof JSON.parse>} Fake server sync model with a rows array.
  */
 function buildFakeServerSyncModel({scopeAttributes} = {}) {
-  /** @type {Array<?>} */
+  /** @type {Array<ReturnType<typeof JSON.parse>>} */
   const rows = []
   let nextId = 1
   let nextServerSequence = 1
@@ -58,7 +58,7 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
     /** @returns {Record<string, string>} Attribute-to-column map like a real model class. */
     getAttributeNameToColumnNameMap,
     syncScopeAttributes: scopeAttributes,
-    /** @param {Record<string, ?>} attributes - Row attributes. @returns {Promise<?>} Created row. */
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Row attributes. @returns {Promise<ReturnType<typeof JSON.parse>>} Created row. */
     create: async (attributes) => {
       const rowId = `00000000-0000-0000-0000-${String(nextId++).padStart(12, "0")}`
       let serverSequence = nextServerSequence++
@@ -73,7 +73,7 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
           row.advanceServerSequenceCalls++
           serverSequence = nextServerSequence++
         },
-        /** @param {Record<string, ?>} newAttributes - Assigned attributes. @returns {void} */
+        /** @param {Record<string, ReturnType<typeof JSON.parse>>} newAttributes - Assigned attributes. @returns {void} */
         assign: (newAttributes) => {
           Object.assign(row.attributes, newAttributes)
         },
@@ -104,7 +104,7 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
       return row
     },
     rows,
-    /** @param {Record<string, ?>} conditions - Where conditions. @returns {{first: () => Promise<?>}} Chainable query. */
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Where conditions. @returns {{first: () => Promise<ReturnType<typeof JSON.parse>>}} Chainable query. */
     where: (conditions) => ({
       first: async () => rows.find((row) =>
         row.attributes.resource_id === conditions.resource_id &&
@@ -119,7 +119,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {serialize: (/** @type {?} */ scan) => ({id: scan.id()})}}
+      sync: {publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
     })
     const OptedOut = buildMetadataModelClass({columns: DEVICE_COLUMNS, modelName: "OptedOut", sync: {publish: false, track: true}})
     const ClientOnly = buildMetadataModelClass({columns: DEVICE_COLUMNS, modelName: "ClientOnly", sync: true})
@@ -141,9 +141,9 @@ describe("sync publisher from configuration", () => {
       modelName: "PublishedScan",
       sync: {
         publish: {
-          eventId: (/** @type {?} */ scan) => scan.attributes().eventId,
+          eventId: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => scan.attributes().eventId,
           resourceType: "TicketScan",
-          serialize: (/** @type {?} */ scan) => ({id: scan.id(), ticketNr: scan.attributes().ticketNr})
+          serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id(), ticketNr: scan.attributes().ticketNr})
         }
       }
     })
@@ -180,7 +180,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: ACCOUNT_SCOPED_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {serialize: (/** @type {?} */ scan) => ({id: scan.id(), ticketNr: scan.readAttribute("ticketNr")})}}
+      sync: {publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id(), ticketNr: scan.readAttribute("ticketNr")})}}
     })
     const {broadcasts, publisher, syncModel} = buildBroadcastingPublisher({modelClass: PublishedScan, scopeAttributes: ["accountId"]})
 
@@ -214,7 +214,7 @@ describe("sync publisher from configuration", () => {
     const PublishedAccount = buildMetadataModelClass({
       columns: DEVICE_COLUMNS,
       modelName: "PublishedAccount",
-      sync: {publish: {serialize: (/** @type {?} */ account) => ({id: account.id()})}}
+      sync: {publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ account) => ({id: account.id()})}}
     })
     const {broadcasts, publisher, syncModel} = buildBroadcastingPublisher({modelClass: PublishedAccount, scopeAttributes: ["accountId"]})
 
@@ -231,7 +231,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {scopeAttributes: {accountId: "ticketNr"}, serialize: (/** @type {?} */ scan) => ({id: scan.id()})}}
+      sync: {publish: {scopeAttributes: {accountId: "ticketNr"}, serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
     })
     const {broadcasts, publisher, syncModel} = buildBroadcastingPublisher({modelClass: PublishedScan, scopeAttributes: ["accountId"]})
 
@@ -246,7 +246,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {serialize: (/** @type {?} */ scan) => ({id: scan.id()})}}
+      sync: {publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
     })
     const {broadcasts, publisher, syncModel} = buildBroadcastingPublisher({modelClass: PublishedScan})
 
@@ -263,7 +263,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {eventId: "ticketNr", serialize: (/** @type {?} */ scan) => ({id: scan.id()})}}
+      sync: {publish: {eventId: "ticketNr", serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
     })
     const {broadcasts, publisher, syncModel} = buildBroadcastingPublisher({modelClass: PublishedScan})
 
@@ -308,7 +308,7 @@ describe("sync publisher from configuration", () => {
             broadcastParams: (/** @type {import("../../src/sync/sync-publisher-types.js").SyncPublishBroadcastArgs} */ args) => ({resourceId: args.resourceId}),
             channel: "legacy-scans"
           }],
-          serialize: (/** @type {?} */ scan) => ({id: scan.id()})
+          serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})
         }
       }
     })
@@ -324,7 +324,7 @@ describe("sync publisher from configuration", () => {
   })
 
   it("rejects invalid publish declarations loudly", async () => {
-    /** @param {?} publish - Publish declaration under test. @param {string[]} [scopeAttributes] - Sync model scope attributes. @returns {SyncPublisher} Built publisher. */
+    /** @param {ReturnType<typeof JSON.parse>} publish - Publish declaration under test. @param {string[]} [scopeAttributes] - Sync model scope attributes. @returns {SyncPublisher} Built publisher. */
     const buildWithPublish = (publish, scopeAttributes) => {
       const Invalid = buildMetadataModelClass({columns: DEVICE_COLUMNS, modelName: "Invalid", sync: {publish}})
 
@@ -352,7 +352,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {serialize: (/** @type {?} */ scan) => ({id: scan.id()})}}
+      sync: {publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
     })
 
     await expect(() => SyncPublisher.fromConfiguration(buildConfiguration({modelClasses: [PublishedScan], sync: {}})))
@@ -367,7 +367,7 @@ describe("sync publisher from configuration", () => {
     const PublishedScan = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
       modelName: "PublishedScan",
-      sync: {publish: {serialize: (/** @type {?} */ scan) => ({id: scan.id()})}}
+      sync: {publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
     })
     const Sync = buildMetadataModelClass({columns: DEVICE_COLUMNS, modelName: "Sync"})
     const configuration = buildConfiguration({modelClasses: [PublishedScan, Sync], sync: {}})

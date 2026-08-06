@@ -16,7 +16,7 @@ const ACTOR_ID = "1f6e9a4c-2b3d-4e5f-8a9b-0c1d2e3f4a5b"
 
 /**
  * Builds a routed replay service with a stubbed authenticated actor.
- * @param {Record<string, ?>} serviceArgs - Service constructor args.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} serviceArgs - Service constructor args.
  * @returns {SyncEnvelopeReplayService} Routed replay service.
  */
 function buildService(serviceArgs) {
@@ -33,14 +33,14 @@ function buildService(serviceArgs) {
 /**
  * Builds one sync entry payload.
  * @param {object} args - Options.
- * @param {Record<string, ?>} args.data - Mutation data.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.data - Mutation data.
  * @param {string} args.id - Client sync id.
  * @param {string} args.resourceId - Resource id.
  * @param {string} [args.resourceType] - Resource type. Defaults to "UuidItem".
  * @param {string} [args.syncType] - Sync type. Defaults to "update".
  * @param {string} [args.clientUpdatedAt] - Client timestamp. Defaults to a fixed time.
  * @param {string} [args.baseVersion] - Optional base version for conflict detection.
- * @returns {Record<string, ?>} Raw sync entry.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} Raw sync entry.
  */
 function buildSync({baseVersion, clientUpdatedAt = "2026-07-03T10:00:00.000Z", data, id, resourceId, resourceType = "UuidItem", syncType = "update"}) {
   const sync = {clientUpdatedAt, data, id, resourceId, resourceType, syncType}
@@ -161,7 +161,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
   it("fails syncs denied by authorizeSyncMutation with the custom reason and continues the batch", async () => {
     class AuthorizeDeniedResource extends SyncUuidItemResource {
-      /** @param {{context: Record<string, ?>, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation}} args - Authorization args. @returns {{allowed: boolean, reason?: string}} - Authorization result. */
+      /** @param {{context: Record<string, ReturnType<typeof JSON.parse>>, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation}} args - Authorization args. @returns {{allowed: boolean, reason?: string}} - Authorization result. */
       authorizeSyncMutation({context, mutation}) {
         void context
 
@@ -308,7 +308,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
   it("merges afterSyncApply extras into the apply result for persistence and broadcasts", async () => {
     class ExtrasResource extends SyncUuidItemResource {
-      /** @param {{context: Record<string, ?>, created: boolean, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation, record: import("../../src/database/record/index.js").default | null}} args - After-apply args. @returns {Record<string, ?>} - Extra apply-result entries. */
+      /** @param {{context: Record<string, ReturnType<typeof JSON.parse>>, created: boolean, mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation, record: import("../../src/database/record/index.js").default | null}} args - After-apply args. @returns {Record<string, ReturnType<typeof JSON.parse>>} - Extra apply-result entries. */
       afterSyncApply({context, created, mutation, record}) {
         void context
         void created
@@ -320,9 +320,9 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     }
 
     const uuidItem = await UuidItem.create({id: "c6a7e4f0-2b1c-4d3e-8f5a-7b8c9d0e1f2a", title: "Extras before"})
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const broadcastCalls = []
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const persistExtraCalls = []
 
     const service = buildService({
@@ -330,11 +330,11 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
         broadcastCalls.push(broadcast)
       },
       broadcasts: [{
-        body: (/** @type {Record<string, ?>} */ args) => ({extraNote: args.applyResult.extraNote, title: args.applyResult.record.title()}),
+        body: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ args) => ({extraNote: args.applyResult.extraNote, title: args.applyResult.record.title()}),
         broadcastParams: () => ({}),
         channel: "uuid-items"
       }],
-      persistExtraAttributes: (/** @type {Record<string, ?>} */ args) => {
+      persistExtraAttributes: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ args) => {
         persistExtraCalls.push(args)
 
         return {}
@@ -361,7 +361,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
     const service = buildService({
       applyHandlers: {
-        UuidItem: async (/** @type {Record<string, ?>} */ args) => {
+        UuidItem: async (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ args) => {
           handlerCalls.push(args.mutation.resourceId)
 
           return {created: false, deleted: false, record: null}

@@ -27,7 +27,7 @@ class VelociousRouteNamespaceRoute extends BasicRoute {
   /**
    * Runs match with path.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.params - Parameters object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.

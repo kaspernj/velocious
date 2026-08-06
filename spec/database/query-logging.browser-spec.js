@@ -34,14 +34,14 @@ class TestDriver extends DatabaseDriverBase {
 }
 
 class TimingDriver extends TestDriver {
-  /** @type {function(number): void} */
+  /** @type {(arg: number) => void} */
   advanceTime
 
   /**
    * @param {import("../../src/configuration-types.js").DatabaseConfigurationType} config - Database config.
    * @param {Configuration} configuration - Configuration.
    * @param {object} args - Options object.
-   * @param {function(number): void} args.advanceTime - Advances fake time.
+   * @param {(arg: number) => void} args.advanceTime - Advances fake time.
    */
   constructor(config, configuration, {advanceTime}) {
     super(config, configuration)
@@ -61,7 +61,7 @@ class TimingDriver extends TestDriver {
 }
 
 /**
- * @param {function(LoggerArrayOutput): Promise<void>} callback - Callback with captured query logs.
+ * @param {(arg: LoggerArrayOutput) => Promise<void>} callback - Callback with captured query logs.
  * @param {object} [args] - Options object.
  * @param {LogLevel[]} [args.levels] - Enabled output levels.
  * @param {boolean | undefined} [args.queryLogging] - Query logging override.

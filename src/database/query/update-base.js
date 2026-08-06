@@ -4,8 +4,8 @@ export default class VelociousDatabaseQueryUpdateBase {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.conditions - Conditions.
-   * @param {Record<string, ?>} args.data - Data payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.conditions - Conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.data - Data payload.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {string} args.tableName - Table name.
    */
@@ -26,7 +26,7 @@ export default class VelociousDatabaseQueryUpdateBase {
 
   /**
    * Runs format value.
-   * @param {?} value - Value to format.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to format.
    * @returns {string | number} - SQL literal.
    */
   formatValue(value) {

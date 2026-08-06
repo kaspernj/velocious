@@ -10,7 +10,7 @@ import BackgroundJobsClient from "./client.js"
  * `class RunBuildJob extends VelociousJob<[string]>` with `async perform(buildId)`.
  * The default empty tuple keeps argument-less jobs (`extends VelociousJob`,
  * `async perform()`) working unchanged.
- * @template {Array<?>} [TArgs=[]]
+ * @template {Array<ReturnType<typeof JSON.parse>>} [TArgs=[]]
  */
 export default class VelociousJob {
   /**
@@ -69,7 +69,7 @@ export default class VelociousJob {
 
   /**
    * Runs perform later.
-   * @param {...?} args - Job args.
+   * @param {...ReturnType<typeof JSON.parse>} args - Job args.
    * @returns {Promise<string>} - Job id.
    */
   static async performLater(...args) {
@@ -86,7 +86,7 @@ export default class VelociousJob {
   /**
    * Runs perform later with options.
    * @param {object} args - Options.
-   * @param {Array<?>} args.args - Job args.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<string>} - Job id.
    */
@@ -104,7 +104,7 @@ export default class VelociousJob {
    * Atomically replaces this job class's queued owner for a stable schedule key.
    * @param {object} args - Options.
    * @param {string} args.scheduleKey - Stable logical schedule key.
-   * @param {Array<?>} args.args - Job args.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
    */
@@ -132,8 +132,8 @@ export default class VelociousJob {
 
   /**
    * Runs split args and options.
-   * @param {Array<?>} args - Job args.
-   * @returns {{jobArgs: Array<?>, jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Job args.
+   * @returns {{jobArgs: Array<ReturnType<typeof JSON.parse>>, jobOptions: import("./types.js").BackgroundJobOptions}} - Split args and options.
    */
   static _splitArgsAndOptions(args) {
     if (args.length === 0) {

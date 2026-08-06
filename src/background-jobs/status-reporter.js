@@ -37,7 +37,7 @@ export default class BackgroundJobsStatusReporter {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {?} [args.error] - Error.
+   * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
@@ -84,7 +84,7 @@ export default class BackgroundJobsStatusReporter {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {?} [args.error] - Error.
+   * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.

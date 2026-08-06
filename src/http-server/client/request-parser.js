@@ -21,7 +21,7 @@ export default class VelociousHttpServerClientRequestParser {
     this.hasCompleted = false
     /**
      * Narrows the runtime value to the documented type.
-     * @type {Record<string, string | string[] | undefined | Record<string, ?> | Array<?>>} */
+     * @type {Record<string, string | string[] | undefined | Record<string, ReturnType<typeof JSON.parse>> | Array<ReturnType<typeof JSON.parse>>>} */
     this.params = {}
 
     this.requestBuffer = new RequestBuffer({configuration})
@@ -60,7 +60,7 @@ export default class VelociousHttpServerClientRequestParser {
 
       incorporate(this.params, newParams)
     } catch (error) {
-      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),

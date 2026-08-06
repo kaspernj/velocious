@@ -13,12 +13,12 @@ const ACTOR_ID = "1f6e9a4c-2b3d-4e5f-8a9b-0c1d2e3f4a5b"
 /**
  * Builds a sync replay payload.
  * @param {object} args - Payload args.
- * @param {Record<string, ?>} args.data - Mutation data.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.data - Mutation data.
  * @param {string} args.id - Client sync id.
  * @param {string} args.resourceId - Resource id.
  * @param {string} [args.resourceType] - Resource type. Defaults to "Task".
  * @param {string} [args.syncType] - Sync type. Defaults to "update".
- * @returns {Record<string, ?>} Sync payload.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} Sync payload.
  */
 function buildSync({data, id, resourceId, resourceType = "Task", syncType = "update"}) {
   return {
@@ -33,7 +33,7 @@ function buildSync({data, id, resourceId, resourceType = "Task", syncType = "upd
 
 /**
  * Builds a routed replay service with a stubbed authenticated actor.
- * @param {Record<string, ?>} [serviceArgs] - Extra service constructor args.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [serviceArgs] - Extra service constructor args.
  * @returns {SyncEnvelopeReplayService} Replay service.
  */
 function buildService(serviceArgs = {}) {

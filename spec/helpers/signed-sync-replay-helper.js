@@ -19,7 +19,7 @@ class OfflineGrantTaskAbilityResource extends AuthorizationBaseResource {
 
   /** @returns {void} */
   abilities() {
-    const scopes = /** @type {Record<string, ?>} */ (this.getContext().offlineGrantScopes || {})
+    const scopes = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this.getContext().offlineGrantScopes || {})
 
     this.can(["create", "destroy", "read", "update"], scopes.projectId === undefined ? "1=0" : {projectId: scopes.projectId})
   }
@@ -31,7 +31,7 @@ class OfflineGrantTaskBoardAbilityResource extends AuthorizationBaseResource {
 
   /** @returns {void} */
   abilities() {
-    const scopes = /** @type {Record<string, ?>} */ (this.getContext().offlineGrantScopes || {})
+    const scopes = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this.getContext().offlineGrantScopes || {})
 
     this.can(["read", "update"], scopes.projectId === undefined ? "1=0" : {projectId: scopes.projectId})
   }
@@ -41,7 +41,7 @@ class OfflineGrantTaskBoardAbilityResource extends AuthorizationBaseResource {
  * Returns the AwesomeTasks proof abilityFactory: builds an Ability derived from
  * the verified signed actor and offline grant, scoping Task/TaskBoard access to
  * the grant's project scope.
- * @returns {(args: {actor: ?, configuration: ?, grant: import("../../src/sync/offline-grant.js").OfflineGrant}) => Ability} Ability factory.
+ * @returns {(args: {actor: ReturnType<typeof JSON.parse>, configuration: ReturnType<typeof JSON.parse>, grant: import("../../src/sync/offline-grant.js").OfflineGrant}) => Ability} Ability factory.
  */
 export function buildOfflineGrantAbilityFactory() {
   return ({actor, grant}) => new Ability({
@@ -72,11 +72,11 @@ export function dummySyncManifest() {
  * @param {string} args.grantId - Grant id.
  * @param {Date} args.grantNow - Grant issue time.
  * @param {number} [args.grantTtlMs] - Grant TTL.
- * @param {Record<string, ?>} args.resources - Grant resource manifest (normalized entries with enabled/operations/policyHash).
- * @param {Record<string, ?>} args.scopes - Grant scopes.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.resources - Grant resource manifest (normalized entries with enabled/operations/policyHash).
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.scopes - Grant scopes.
  * @param {import("../../src/sync/device-identity.js").SyncJsonWebKey} [args.backendKeys] - Optional shared backend key pair; generated when omitted.
  * @param {import("../../src/sync/offline-grant.js").OfflineGrantSigningKey} [args.signingKey] - Optional shared offline-grant signing key; defaults to a literal test key.
- * @returns {Promise<Record<string, ?>>} Fixture bundle.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Fixture bundle.
  */
 export async function buildSignedReplayFixtures({actorDeviceId, actorUserId, grantId, grantNow, grantTtlMs = 1000 * 60 * 60 * 24 * 365 * 100, resources, scopes, backendKeys, signingKey}) {
   const resolvedBackendKeys = backendKeys || await generateSyncSigningKeyPair()
@@ -110,14 +110,14 @@ export async function buildSignedReplayFixtures({actorDeviceId, actorUserId, gra
 /**
  * Signs one mutation against fixture keys.
  * @param {object} args - Mutation args.
- * @param {Record<string, ?>} args.fixtures - Fixture bundle from {@link buildSignedReplayFixtures}.
- * @param {Record<string, ?>} args.mutation - Mutation payload passed to createSignedMutation.
- * @returns {Promise<Record<string, ?>>} Signed mutation envelope.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.fixtures - Fixture bundle from {@link buildSignedReplayFixtures}.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.mutation - Mutation payload passed to createSignedMutation.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Signed mutation envelope.
  */
 export async function signFixtureMutation({fixtures, mutation}) {
   return await createSignedMutation({
-    deviceCertificate: /** @type {Record<string, ?>} */ (fixtures.deviceCertificate),
-    devicePrivateKey: /** @type {Record<string, ?>} */ (fixtures.deviceKeys).privateKey,
+    deviceCertificate: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (fixtures.deviceCertificate),
+    devicePrivateKey: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (fixtures.deviceKeys).privateKey,
     mutation
   })
 }

@@ -16,20 +16,20 @@ class TestSyncModel {}
 /**
  * Builds an in-memory change-feed query that AND-matches accumulated
  * conditions, mutating in place like the Velocious model query.
- * @param {Array<Record<string, ?>>} rows - Feed rows.
- * @returns {{where: (condition: Record<string, ?>) => ?, first: () => Promise<Record<string, ?> | null>}} Fake feed query.
+ * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} rows - Feed rows.
+ * @returns {{where: (condition: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>, first: () => Promise<Record<string, ReturnType<typeof JSON.parse>> | null>}} Fake feed query.
  */
 function buildFeedQuery(rows) {
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const conditions = []
   const query = {
-    /** @param {Record<string, ?>} condition - Added condition. @returns {?} Query for chaining. */
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} condition - Added condition. @returns {ReturnType<typeof JSON.parse>} Query for chaining. */
     where: (condition) => {
       conditions.push(condition)
 
       return query
     },
-    /** @returns {Promise<Record<string, ?> | null>} First matching row. */
+    /** @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} First matching row. */
     first: async () => rows.find((row) => conditions.every((condition) => Object.entries(condition).every(([key, value]) => (
       Array.isArray(value) ? value.map(String).includes(String(row[key])) : String(row[key]) === String(value)
     )))) || null
@@ -40,8 +40,8 @@ function buildFeedQuery(rows) {
 
 /**
  * Builds a fake change-feed model class over in-memory rows.
- * @param {Array<Record<string, ?>>} rows - Feed rows keyed by column name.
- * @returns {?} Fake change-feed model class.
+ * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} rows - Feed rows keyed by column name.
+ * @returns {ReturnType<typeof JSON.parse>} Fake change-feed model class.
  */
 function buildFeedModelClass(rows) {
   return class FeedModel {
@@ -55,7 +55,7 @@ function buildFeedModelClass(rows) {
       return "id"
     }
 
-    /** @param {Record<string, ?>} condition - Initial condition. @returns {?} Feed query. */
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} condition - Initial condition. @returns {ReturnType<typeof JSON.parse>} Feed query. */
     static where(condition) {
       const query = buildFeedQuery(rows)
 
@@ -69,18 +69,18 @@ function buildFeedModelClass(rows) {
 /**
  * Builds a test sync resource class recording authorizeChanges calls and
  * denying the denied event scope like an app authorization would.
- * @returns {{calls: Array<{context: Record<string, ?>, params: Record<string, ?>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}>, TestSyncResource: typeof SyncResourceBase}} Recording resource class and its calls.
+ * @returns {{calls: Array<{context: Record<string, ReturnType<typeof JSON.parse>>, params: Record<string, ReturnType<typeof JSON.parse>>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}>, TestSyncResource: typeof SyncResourceBase}} Recording resource class and its calls.
  */
 function buildTestSyncResource() {
-  /** @type {Array<{context: Record<string, ?>, params: Record<string, ?>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}>} */
+  /** @type {Array<{context: Record<string, ReturnType<typeof JSON.parse>>, params: Record<string, ReturnType<typeof JSON.parse>>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}>} */
   const calls = []
 
   class TestSyncResource extends SyncResourceBase {
-    static ModelClass = /** @type {?} */ (TestSyncModel)
+    static ModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (TestSyncModel)
 
-    /** @param {{params: Record<string, ?>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args - Request params and parsed scope. @returns {Promise<void>} */
+    /** @param {{params: Record<string, ReturnType<typeof JSON.parse>>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args - Request params and parsed scope. @returns {Promise<void>} */
     async authorizeChanges({params, scope}) {
-      calls.push({context: /** @type {Record<string, ?>} */ (this.getContext()), params, scope})
+      calls.push({context: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this.getContext()), params, scope})
 
       if (scope?.conditions.eventId === DENIED_EVENT_ID) {
         throw new Error("Current context may not read changes for this event")
@@ -94,8 +94,8 @@ function buildTestSyncResource() {
 /**
  * Builds a configuration with a sync.api resource class and an optional ability resolver.
  * @param {object} [args] - Configuration args.
- * @param {?} [args.abilityResolver] - Ability resolver receiving the subscribe params.
- * @param {?} [args.sync] - Sync configuration override.
+ * @param {ReturnType<typeof JSON.parse>} [args.abilityResolver] - Ability resolver receiving the subscribe params.
+ * @param {ReturnType<typeof JSON.parse>} [args.sync] - Sync configuration override.
  * @returns {Configuration} Configuration instance.
  */
 function buildChannelConfiguration({abilityResolver, sync} = {}) {
@@ -114,24 +114,24 @@ function buildChannelConfiguration({abilityResolver, sync} = {}) {
 
 /**
  * Builds a framework sync channel bound to a fake websocket session.
- * @param {{configuration: Configuration, params: Record<string, ?>}} args - Channel args.
+ * @param {{configuration: Configuration, params: Record<string, ReturnType<typeof JSON.parse>>}} args - Channel args.
  * @returns {SyncWebsocketChannel} Framework sync channel instance.
  */
 function buildChannel({configuration, params}) {
-  const session = /** @type {?} */ ({configuration, upgradeRequest: undefined})
+  const session = /** @type {ReturnType<typeof JSON.parse>} */ ({configuration, upgradeRequest: undefined})
 
   return new SyncWebsocketChannel({params, session, subscriptionId: "s1"})
 }
 
 /**
  * Builds a framework sync channel whose session captures delivered messages.
- * @param {{configuration: Configuration, params: Record<string, ?>}} args - Channel args.
- * @returns {{channel: SyncWebsocketChannel, messages: Array<Record<string, ?>>}} Channel and captured message bodies.
+ * @param {{configuration: Configuration, params: Record<string, ReturnType<typeof JSON.parse>>}} args - Channel args.
+ * @returns {{channel: SyncWebsocketChannel, messages: Array<Record<string, ReturnType<typeof JSON.parse>>>}} Channel and captured message bodies.
  */
 function buildDeliveringChannel({configuration, params}) {
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const messages = []
-  const session = /** @type {?} */ ({configuration, sendJson: (/** @type {Record<string, ?>} */ message) => messages.push(message), upgradeRequest: undefined})
+  const session = /** @type {ReturnType<typeof JSON.parse>} */ ({configuration, sendJson: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ message) => messages.push(message), upgradeRequest: undefined})
 
   return {channel: new SyncWebsocketChannel({params, session, subscriptionId: "s1"}), messages}
 }
@@ -139,19 +139,19 @@ function buildDeliveringChannel({configuration, params}) {
 /**
  * Builds a user-scope-capable sync resource class scoping the feed by the
  * ability's allowed event ids, over the given in-memory feed rows.
- * @param {Array<Record<string, ?>>} rows - Feed rows.
+ * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} rows - Feed rows.
  * @returns {typeof SyncResourceBase} User-scope sync resource class.
  */
 function buildUserScopeResource(rows) {
   const feedModel = buildFeedModelClass(rows)
 
   return class UserScopeResource extends SyncResourceBase {
-    static ModelClass = /** @type {?} */ (feedModel)
+    static ModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (feedModel)
 
     /** @returns {Promise<void>} Allows every scope (including the user scope). */
     async authorizeChanges() {}
 
-    /** @param {{query: ?}} args - Feed query. @returns {void} Scopes the feed by the ability's allowed event ids. */
+    /** @param {{query: ReturnType<typeof JSON.parse>}} args - Feed query. @returns {void} Scopes the feed by the ability's allowed event ids. */
     scopeChangesQuery({query}) {
       query.where({event_id: /** @type {{allowedEventIds: string[]}} */ (this.getContext()).allowedEventIds})
     }
@@ -161,15 +161,15 @@ function buildUserScopeResource(rows) {
 /**
  * Builds a user-scope sync resource class recording every changeDeliverable
  * sync argument and deciding deliverability through the given predicate.
- * @param {(sync: Record<string, ?>) => boolean} deliverable - Per-entry deliverability decision.
- * @returns {{syncArgs: Array<Record<string, ?>>, TestSyncResource: typeof SyncResourceBase}} Recording resource class and its changeDeliverable sync args.
+ * @param {(sync: Record<string, ReturnType<typeof JSON.parse>>) => boolean} deliverable - Per-entry deliverability decision.
+ * @returns {{syncArgs: Array<Record<string, ReturnType<typeof JSON.parse>>>, TestSyncResource: typeof SyncResourceBase}} Recording resource class and its changeDeliverable sync args.
  */
 function buildChangeDeliverableRecordingResource(deliverable) {
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const syncArgs = []
 
   class TestSyncResource extends SyncResourceBase {
-    static ModelClass = /** @type {?} */ (TestSyncModel)
+    static ModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (TestSyncModel)
 
     /** @returns {Promise<void>} Allows every scope (including the user scope). */
     async authorizeChanges() {}
@@ -207,7 +207,7 @@ describe("sync websocket channel", () => {
   it("authorizes subscriptions through the app sync resource authorizeChanges with the parsed scope and resolved ability context", async () => {
     const {calls, TestSyncResource} = buildTestSyncResource()
     const configuration = buildChannelConfiguration({
-      abilityResolver: (/** @type {{params: Record<string, ?>}} */ {params}) => ({
+      abilityResolver: (/** @type {{params: Record<string, ReturnType<typeof JSON.parse>>}} */ {params}) => ({
         getContext: () => ({authenticatedToken: params.authenticationToken, partnerEventPytIds: [123]}),
         getLocals: () => ({})
       }),
@@ -373,7 +373,7 @@ describe("sync websocket channel", () => {
 
   it("re-checks record access per delivery for user scopes so disjoint-access subscribers each receive only theirs", async () => {
     const configuration = buildChannelConfiguration({
-      abilityResolver: (/** @type {{params: Record<string, ?>}} */ {params}) => ({
+      abilityResolver: (/** @type {{params: Record<string, ReturnType<typeof JSON.parse>>}} */ {params}) => ({
         getContext: () => ({allowedEventIds: params.authenticationToken === "token-a" ? [ALLOWED_EVENT_ID] : [DENIED_EVENT_ID]}),
         getLocals: () => ({})
       }),

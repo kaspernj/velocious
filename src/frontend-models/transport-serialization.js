@@ -31,9 +31,9 @@ const PRELOADED_RELATIONSHIPS_KEY = "__preloadedRelationships"
  * own data properties instead of mutating the object's prototype chain. This
  * lets callers receive a regular `{}` object (with `Object.prototype` and a
  * normal `constructor.name`) while still preventing prototype pollution.
- * @param {Record<string, ?>} target - Target object.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} target - Target object.
  * @param {string} key - Property key.
- * @param {?} value - Property value.
+ * @param {ReturnType<typeof JSON.parse>} value - Property value.
  * @returns {void}
  */
 export function assignSafeProperty(target, key, value) {
@@ -47,7 +47,7 @@ export function assignSafeProperty(target, key, value) {
 
 /**
  * Runs is undefined marker.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value is encoded undefined marker.
  */
 function isUndefinedMarker(value) {
@@ -60,7 +60,7 @@ function isUndefinedMarker(value) {
 
 /**
  * Check whether a value is a typed marker object with a string `value` field.
- * @param {?} value - Candidate marker.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate marker.
  * @param {string} markerType - Expected marker type value.
  * @param {(stringValue: string) => boolean} valueMatches - Additional string value predicate.
  * @returns {boolean} - Whether value matches the marker shape.
@@ -82,7 +82,7 @@ function isStringValueMarker(value, markerType, valueMatches) {
 
 /**
  * Runs is date marker.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value is encoded date marker.
  */
 function isDateMarker(value) {
@@ -91,7 +91,7 @@ function isDateMarker(value) {
 
 /**
  * Runs is big int marker.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value is encoded bigint marker.
  */
 function isBigIntMarker(value) {
@@ -100,7 +100,7 @@ function isBigIntMarker(value) {
 
 /**
  * Runs is non finite number marker.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value is encoded non-finite number marker.
  */
 function isNonFiniteNumberMarker(value) {
@@ -120,8 +120,8 @@ function isNonFiniteNumberMarker(value) {
 
 /**
  * Runs is frontend model marker.
- * @param {?} value - Candidate value.
- * @returns {value is {__velocious_type: "frontend_model", attributes: Record<string, ?>, modelName: string, preloadedRelationships?: Record<string, ?>}} - Whether value is encoded frontend-model marker.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
+ * @returns {value is {__velocious_type: "frontend_model", attributes: Record<string, ReturnType<typeof JSON.parse>>, modelName: string, preloadedRelationships?: Record<string, ReturnType<typeof JSON.parse>>}} - Whether value is encoded frontend-model marker.
  */
 function isFrontendModelMarker(value) {
   if (!isPlainObject(value)) return false
@@ -142,13 +142,13 @@ function isFrontendModelMarker(value) {
 
 /**
  * Runs the isBackendModelInstance helper.
- * @param {?} value - Candidate value.
- * @returns {value is {attributes: () => Record<string, ?>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => typeof import("../database/record/index.js").default, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => ?}}} - Whether value looks like a backend model instance.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
+ * @returns {value is {attributes: () => Record<string, ReturnType<typeof JSON.parse>>, constructor: {getModelName?: () => string, name?: string}, getModelClass: () => typeof import("../database/record/index.js").default, getRelationshipByName: (relationshipName: string) => {getPreloaded: () => boolean, loaded: () => ReturnType<typeof JSON.parse>}}} - Whether value looks like a backend model instance.
  */
 export function isBackendModelInstance(value) {
   if (!value || typeof value !== "object") return false
 
-  const candidate = /** @type {Record<string, ?>} */ (value)
+  const candidate = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)
 
   return (
     typeof candidate.attributes === "function"
@@ -159,10 +159,10 @@ export function isBackendModelInstance(value) {
 
 /**
  * Runs serialize frontend model transport value internal.
- * @param {?} value - Value to serialize.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to serialize.
  * @param {WeakSet<object>} seenModels - Models already visited in the current recursion path.
  * @param {NormalizedFrontendModelTransportSerializationOptions} options - Serialization options.
- * @returns {?} - Serialized value with transport markers.
+ * @returns {ReturnType<typeof JSON.parse>} - Serialized value with transport markers.
  */
 function serializeFrontendModelTransportValueInternal(value, seenModels, options) {
   if (value === undefined) {
@@ -204,10 +204,10 @@ function serializeFrontendModelTransportValueInternal(value, seenModels, options
 
     /**
      * Serialized model.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const serializedModel = {
       [TYPE_KEY]: TYPE_FRONTEND_MODEL,
-      attributes: /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels, options)),
+      attributes: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValueInternal(modelAttributes, seenModels, options)),
       modelName
     }
 
@@ -219,7 +219,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels, options
 
     /**
      * Preloaded relationships.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const preloadedRelationships = {}
     const relationshipsMap = value.getModelClass().getRelationshipsMap()
 
@@ -249,7 +249,7 @@ function serializeFrontendModelTransportValueInternal(value, seenModels, options
   if (isPlainObject(value)) {
     /**
      * Serialized.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const serialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {
@@ -277,13 +277,13 @@ function normalizeFrontendModelTransportSerializationOptions(options) {
 
 /**
  * Runs deserialize frontend model marker.
- * @param {{attributes: Record<string, ?>, modelName: string, preloadedRelationships?: Record<string, ?>}} marker - Encoded frontend-model marker.
- * @returns {?} - Hydrated frontend model or plain object fallback.
+ * @param {{attributes: Record<string, ReturnType<typeof JSON.parse>>, modelName: string, preloadedRelationships?: Record<string, ReturnType<typeof JSON.parse>>}} marker - Encoded frontend-model marker.
+ * @returns {ReturnType<typeof JSON.parse>} - Hydrated frontend model or plain object fallback.
  */
 function deserializeFrontendModelMarker(marker) {
-  const attributes = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.attributes))
+  const attributes = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(marker.attributes))
   const preloadedRelationships = isPlainObject(marker.preloadedRelationships)
-    ? /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
+    ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(marker.preloadedRelationships))
     : {}
   const modelClass = resolveFrontendModelClass(marker.modelName)
 
@@ -317,9 +317,9 @@ function deserializeFrontendModelMarker(marker) {
 
 /**
  * Runs the serializeFrontendModelTransportValue helper.
- * @param {?} value - Value to serialize.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to serialize.
  * @param {FrontendModelTransportSerializationOptions} [options] - Serialization options.
- * @returns {?} - Serialized value with transport markers.
+ * @returns {ReturnType<typeof JSON.parse>} - Serialized value with transport markers.
  */
 export function serializeFrontendModelTransportValue(value, options = {}) {
   return serializeFrontendModelTransportValueInternal(
@@ -331,8 +331,8 @@ export function serializeFrontendModelTransportValue(value, options = {}) {
 
 /**
  * Runs the deserializeFrontendModelTransportValue helper.
- * @param {?} value - Value to deserialize.
- * @returns {?} - Deserialized value with transport markers restored.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to deserialize.
+ * @returns {ReturnType<typeof JSON.parse>} - Deserialized value with transport markers restored.
  */
 export function deserializeFrontendModelTransportValue(value) {
   if (isUndefinedMarker(value)) {
@@ -371,7 +371,7 @@ export function deserializeFrontendModelTransportValue(value) {
   if (isPlainObject(value)) {
     /**
      * Deserialized.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const deserialized = {}
 
     for (const [key, nestedValue] of Object.entries(value)) {

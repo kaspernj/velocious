@@ -147,7 +147,7 @@ export default class TestFilesFinder {
 
   /**
    * Runs with finding count.
-   * @param {function() : Promise<void>} callback - Callback function.
+   * @param {() => Promise<void>} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
   withFindingCount(callback) {

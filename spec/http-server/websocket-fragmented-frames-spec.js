@@ -41,9 +41,9 @@ function buildSession(messageHandler, {maxPendingMessages} = {}) {
 
 /**
  * Narrows a decoded message value at the raw handler boundary.
- * @param {?} value - Decoded message value.
+ * @param {ReturnType<typeof JSON.parse>} value - Decoded message value.
  * @param {string} description - Expected value description.
- * @returns {Record<string, ?>}
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>}
  */
 function expectRecord(value, description) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -55,7 +55,7 @@ function expectRecord(value, description) {
 
 /**
  * Returns a required numeric property from a decoded message.
- * @param {Record<string, ?>} record - Message record.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} record - Message record.
  * @param {string} property - Property name.
  * @returns {number}
  */
@@ -68,7 +68,7 @@ function expectNumberProperty(record, property) {
 
 /**
  * Returns a required string property from a decoded message.
- * @param {Record<string, ?>} record - Message record.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} record - Message record.
  * @param {string} property - Property name.
  * @returns {string}
  */

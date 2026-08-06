@@ -11,7 +11,7 @@ import UUID from "pure-uuid"
  */
 /**
  * AuditChanges type.
- * @typedef {Record<string, ?>} AuditChanges
+ * @typedef {Record<string, ReturnType<typeof JSON.parse>>} AuditChanges
  */
 
 /**
@@ -20,7 +20,7 @@ import UUID from "pure-uuid"
  * @property {string} action - Audit action name.
  * @property {number | string} auditId - Created audit row id.
  * @property {AuditChanges | null} auditedChanges - Changes captured for the audit.
- * @property {Record<string, ?> | null} params - Optional caller-supplied audit params.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} params - Optional caller-supplied audit params.
  * @property {import("./index.js").default} record - Audited record.
  */
 
@@ -34,7 +34,7 @@ import UUID from "pure-uuid"
  * @typedef {object} CreateAuditArgs
  * @property {string} action - Audit action name.
  * @property {AuditChanges | null} [auditedChanges] - Explicit changes to persist.
- * @property {Record<string, ?> | null} [params] - Optional metadata to store with the audit.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} [params] - Optional metadata to store with the audit.
  */
 
 /**

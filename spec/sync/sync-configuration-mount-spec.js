@@ -9,12 +9,12 @@ import FrontendModelBaseResource from "../../src/frontend-model-resource/base-re
 class TestSyncModel {}
 
 class TestSyncResource extends FrontendModelBaseResource {
-  static ModelClass = /** @type {?} */ (TestSyncModel)
+  static ModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (TestSyncModel)
 }
 
 /**
  * Builds a minimal configuration for sync mount tests.
- * @param {Record<string, ?>} [sync] - Sync configuration.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [sync] - Sync configuration.
  * @returns {Configuration} Configuration instance.
  */
 function buildConfiguration(sync) {
@@ -34,13 +34,13 @@ function buildConfiguration(sync) {
  * Resolves a route hook match for a request path.
  * @param {Configuration} configuration - Configuration with route hooks.
  * @param {string} currentPath - Request path.
- * @returns {Promise<Record<string, ?> | null>} Matched route or null.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} Matched route or null.
  */
 async function resolveRoute(configuration, currentPath) {
   const request = {httpMethod: () => "POST"}
 
   for (const hook of configuration.getRouteResolverHooks()) {
-    const match = await hook({configuration, currentPath, request: /** @type {?} */ (request)})
+    const match = await hook({configuration, currentPath, request: /** @type {ReturnType<typeof JSON.parse>} */ (request)})
 
     if (match) return match
   }

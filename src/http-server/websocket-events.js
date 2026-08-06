@@ -4,7 +4,7 @@ export default class VelociousHttpServerWebsocketEvents {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {import("worker_threads").parentPort} args.parentPort - Parent port.
+   * @param {import("node:worker_threads").MessagePort | null} args.parentPort - Parent port.
    * @param {number} args.workerCount - Worker count.
    */
   constructor({parentPort, workerCount}) {
@@ -15,7 +15,7 @@ export default class VelociousHttpServerWebsocketEvents {
   /**
    * Runs publish.
    * @param {string} channel - Channel name.
-   * @param {?} payload - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} payload - Payload data.
    * @returns {void} - No return value.
    */
   publish(channel, payload) {
@@ -31,8 +31,8 @@ export default class VelociousHttpServerWebsocketEvents {
    * every worker so subscribers on any worker receive the broadcast.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, ?>} args.broadcastParams - Filter params forwarded to `matches()`.
-   * @param {?} args.body - Message body delivered via `sendMessage()`.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.broadcastParams - Filter params forwarded to `matches()`.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Message body delivered via `sendMessage()`.
    * @returns {void}
    */
   publishV2Broadcast({channel, broadcastParams, body}) {

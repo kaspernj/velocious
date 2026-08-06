@@ -8,7 +8,7 @@
  * @param {string | undefined} args.eventId - Event identifier.
  * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
  * @param {import("../../logger.js").default} args.logger - Logger for isolated subscriber failures.
- * @param {?} args.payload - Broadcast payload.
+ * @param {ReturnType<typeof JSON.parse>} args.payload - Broadcast payload.
  * @returns {Promise<void>} Resolves after subscribers have been attempted.
  */
 export default async function dispatchChannelSubscribers({channel, configuration, createdAt, eventId, logger, payload}) {

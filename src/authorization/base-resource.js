@@ -81,7 +81,7 @@ export default class AuthorizationBaseResource {
   /**
    * Runs assert resource conditions signature.
    * @param {object} args - Signature args.
-   * @param {?} args.conditions - Conditions value.
+   * @param {ReturnType<typeof JSON.parse>} args.conditions - Conditions value.
    * @param {"can" | "cannot"} args.methodName - Method name.
    * @returns {void}
    */

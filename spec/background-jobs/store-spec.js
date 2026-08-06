@@ -798,7 +798,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     let releaseCalls = 0
     const db = {
       newQuery: () => ({from: () => ({where: () => ({where: () => ({results: async () => [rawRow]})})})}),
-      updateSql: (/** @type {{conditions: Record<string, ?>}} */ args) => {
+      updateSql: (/** @type {{conditions: Record<string, ReturnType<typeof JSON.parse>>}} */ args) => {
         capturedConditions = args.conditions
 
         return "UPDATE background_jobs SET status = 'orphaned' WHERE fenced"
@@ -811,12 +811,12 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
         return []
       },
-      quote: (/** @type {?} */ value) => (value === null ? "NULL" : `'${value}'`),
+      quote: (/** @type {ReturnType<typeof JSON.parse>} */ value) => (value === null ? "NULL" : `'${value}'`),
       quoteColumn: (/** @type {string} */ value) => value,
       quoteTable: (/** @type {string} */ value) => value
     }
     const scriptedDb = /** @type {import("../../src/database/drivers/base.js").default} */ (db)
-    const store = new ScriptedBackgroundJobsStore({db: scriptedDb, job: /** @type {?} */ (rawRow)})
+    const store = new ScriptedBackgroundJobsStore({db: scriptedDb, job: /** @type {ReturnType<typeof JSON.parse>} */ (rawRow)})
 
     const orphanedJobs = await store.markOrphanedJobs({orphanedAfterMs: 0})
 

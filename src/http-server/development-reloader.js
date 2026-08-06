@@ -22,7 +22,7 @@ export default class VelociousHttpServerDevelopmentReloader {
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
-   * @param {function({changedPath: string}) : Promise<void>} args.onReload - Reload callback.
+   * @param {(args: {changedPath: string}) => Promise<void>} args.onReload - Reload callback.
    * @param {number} [args.debounceMs] - Debounce window for grouped changes.
    * @param {typeof fsWatch} [args.watchFactory] - File watch factory.
    * @param {typeof fs.readdir} [args.readdir] - Directory reader.

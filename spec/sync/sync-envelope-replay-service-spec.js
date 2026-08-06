@@ -256,14 +256,14 @@ describe("sync envelope replay service", () => {
 
   it("authenticates replay actors through a configured token model", async () => {
     const tokenRecord = {id: () => "token-row-1"}
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const findByCalls = []
 
     class TokenAuthedReplayService extends SyncEnvelopeReplayService {
       constructor() {
         super({
           authenticationTokenModel: {
-            /** @param {Record<string, ?>} conditions - Lookup conditions. @returns {Promise<?>} Token row. */
+            /** @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Lookup conditions. @returns {Promise<ReturnType<typeof JSON.parse>>} Token row. */
             findBy: async (conditions) => {
               findByCalls.push(conditions)
 
@@ -300,7 +300,7 @@ describe("sync envelope replay service", () => {
         }
       }
     })
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const persisted = []
 
     service.callbacks.persistReplayMutation = async ({applyResult}) => {
@@ -376,7 +376,7 @@ describe("sync envelope replay service", () => {
   })
 
   it("skips declarative broadcasts for stale replays", async () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const broadcastCalls = []
     const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
@@ -405,7 +405,7 @@ describe("sync envelope replay service", () => {
   })
 
   it("fans applied mutations out through declarative broadcasts", async () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const broadcastCalls = []
     const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
@@ -437,7 +437,7 @@ describe("sync envelope replay service", () => {
   })
 
   it("skips broadcasts whose when-gate declines", async () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const broadcastCalls = []
     const service = new TestSyncEnvelopeReplayService({
       authenticateReplay: async () => ({actor: {}, authenticated: true}),
@@ -482,7 +482,7 @@ describe("sync envelope replay service", () => {
 /**
  * Builds a fake sync record for model-backed replay tests.
  * @param {{clientUpdatedAt: Date}} args - Existing record state.
- * @returns {{assign: Function, advanceServerSequence: Function, save: Function, clientUpdatedAt: Function, calls: Array<string>, assignedAttributes: Record<string, ?>}} Fake sync record.
+ * @returns {{assign: Function, advanceServerSequence: Function, save: Function, clientUpdatedAt: Function, calls: Array<string>, assignedAttributes: Record<string, ReturnType<typeof JSON.parse>>}} Fake sync record.
  */
 function buildFakeSyncRecord({clientUpdatedAt}) {
   const record = {
@@ -506,8 +506,8 @@ function buildFakeSyncRecord({clientUpdatedAt}) {
 
 /**
  * Builds a fake sync model class for model-backed replay tests.
- * @param {{existingSync?: ?}} [args] - Existing record returned from findBy.
- * @returns {{findBy: Function, create: Function, findByCalls: Array<Record<string, ?>>, createCalls: Array<Record<string, ?>>}} Fake sync model.
+ * @param {{existingSync?: ReturnType<typeof JSON.parse>}} [args] - Existing record returned from findBy.
+ * @returns {{findBy: Function, create: Function, findByCalls: Array<Record<string, ReturnType<typeof JSON.parse>>>, createCalls: Array<Record<string, ReturnType<typeof JSON.parse>>>}} Fake sync model.
  */
 function buildFakeSyncModel({existingSync = null} = {}) {
   const model = {

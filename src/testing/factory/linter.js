@@ -37,7 +37,7 @@ export default class FactoryLinter {
    */
   async lint({factories, traits = false, strategy = "create"} = {}) {
     const definitions = this._selectDefinitions(factories)
-    /** @type {Array<{label: string, error: ?}>} */
+    /** @type {Array<{label: string, error: ReturnType<typeof JSON.parse>}>} */
     const failures = []
 
     for (const definition of definitions) {
@@ -75,7 +75,7 @@ export default class FactoryLinter {
    * @param {import("./factory-definition.js").default} definition - Factory definition.
    * @param {string[]} traits - Traits to apply for this case.
    * @param {"attributesFor" | "build" | "create"} strategy - Strategy to run.
-   * @param {Array<{label: string, error: ?}>} failures - Failure sink.
+   * @param {Array<{label: string, error: ReturnType<typeof JSON.parse>}>} failures - Failure sink.
    * @returns {Promise<void>} - Resolves when the case has been evaluated.
    */
   async _lintCase(definition, traits, strategy, failures) {

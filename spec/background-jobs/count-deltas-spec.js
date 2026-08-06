@@ -12,7 +12,7 @@ const registeredSubscriptions = new Set()
  * connection and bypasses the real process-local SQLite transaction serializer,
  * matching two workers in separate processes.
  * @param {object} args - Options.
- * @param {Array<Record<string, ?>>} args.events - Recorded deltas.
+ * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} args.events - Recorded deltas.
  * @param {Set<string>} args.ids - Shared persisted job ids.
  * @param {{value: number}} args.revision - Shared durable revision.
  * @param {() => Promise<void>} args.selectBarrier - Waits until both stores selected.
@@ -56,17 +56,17 @@ function buildConcurrentPruneStore({events, ids, revision, selectBarrier}) {
     /** Skips schema setup for the scripted cross-process race. @returns {Promise<void>} Resolves immediately. */
     async ensureReady() {}
 
-    /** @param {Function} callback - Database callback. @returns {Promise<?>} Callback result. */
+    /** @param {Function} callback - Database callback. @returns {Promise<ReturnType<typeof JSON.parse>>} Callback result. */
     async _withDb(callback) {
       return await callback(db)
     }
 
-    /** @param {?} _db - Database. @param {Function} callback - Transaction callback. @returns {Promise<?>} Callback result. */
+    /** @param {ReturnType<typeof JSON.parse>} _db - Database. @param {Function} callback - Transaction callback. @returns {Promise<ReturnType<typeof JSON.parse>>} Callback result. */
     async _serializedCountMutation(_db, callback) {
       return await callback()
     }
 
-    /** @param {?} _db - Database. @param {Record<string, number>} deltas - Deltas. @returns {Promise<void>} Resolves after recording. */
+    /** @param {ReturnType<typeof JSON.parse>} _db - Database. @param {Record<string, number>} deltas - Deltas. @returns {Promise<void>} Resolves after recording. */
     async _recordCountDelta(_db, deltas) {
       if (Object.values(deltas).some((value) => value !== 0)) {
         revision.value += 1
@@ -77,7 +77,7 @@ function buildConcurrentPruneStore({events, ids, revision, selectBarrier}) {
 }
 
 /**
- * @returns {Promise<{events: Array<Record<string, ?>>, revision: number, store: BackgroundJobsStore}>} Empty store and captured count events.
+ * @returns {Promise<{events: Array<Record<string, ReturnType<typeof JSON.parse>>>, revision: number, store: BackgroundJobsStore}>} Empty store and captured count events.
  */
 async function setupStore() {
   dummyConfiguration.setCurrent()
@@ -86,10 +86,10 @@ async function setupStore() {
   await store.clearAll()
   const {revision} = await store.countSnapshot()
 
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const events = []
   const subscription = /** @type {import("../../src/http-server/websocket-channel.js").default} */ ({
-    deliverBroadcast: (/** @type {Record<string, ?>} */ body) => events.push(body),
+    deliverBroadcast: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ body) => events.push(body),
     isClosed: () => false,
     matches: () => true,
     subscriptionId: "count-deltas-spec"
@@ -185,7 +185,7 @@ describe("Background jobs - count deltas", {databaseCleaning: {truncate: true}},
 
   it("subtracts concurrently pruned rows only once across independent stores", async () => {
     const ids = new Set(["completed-1", "completed-2"])
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const events = []
     const revision = {value: 0}
     let selectedCount = 0

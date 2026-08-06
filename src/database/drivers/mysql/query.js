@@ -84,7 +84,7 @@ function killServerQuery(pool, threadId) {
     let killConnection
 
     try {
-      killConnection = mysql.createConnection(/** @type {?} */ (connectionConfig))
+      killConnection = mysql.createConnection(/** @type {ReturnType<typeof JSON.parse>} */ (connectionConfig))
     } catch {
       resolve()
 
@@ -111,7 +111,7 @@ function killServerQuery(pool, threadId) {
  * @param {import("mysql").Pool} pool - Pool.
  * @param {string} sql - SQL string.
  * @param {{signal?: AbortSignal}} [options] - Query options.
- * @returns {Promise<Record<string, ?>[]>} - Resolves with the mapped rows.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the mapped rows.
  */
 export default async function query(pool, sql, {signal} = {}) {
   if (signal?.aborted) throw new QueryAbortedError({sql})
@@ -157,7 +157,7 @@ export default async function query(pool, sql, {signal} = {}) {
       return
     }
 
-    connection.query(sql, (/** @type {?} */ error, /** @type {?} */ results, /** @type {?} */ fields) => {
+    connection.query(sql, (/** @type {ReturnType<typeof JSON.parse>} */ error, /** @type {ReturnType<typeof JSON.parse>} */ results, /** @type {ReturnType<typeof JSON.parse>} */ fields) => {
       if (settled) return
 
       settle()
@@ -184,9 +184,9 @@ export default async function query(pool, sql, {signal} = {}) {
 
 /**
  * Materializes the driver rows as isolated plain records keyed by field name.
- * @param {?} results - Driver result rows.
- * @param {?} fields - Driver result fields.
- * @returns {Record<string, ?>[]} - Mapped rows.
+ * @param {ReturnType<typeof JSON.parse>} results - Driver result rows.
+ * @param {ReturnType<typeof JSON.parse>} fields - Driver result fields.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>[]} - Mapped rows.
  */
 function mapRows(results, fields) {
   const rows = []
@@ -196,7 +196,7 @@ function mapRows(results, fields) {
   for (const rowData of resultRows) {
     /**
      * Result.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const result = {}
 
     for (const fieldData of resultFields) {

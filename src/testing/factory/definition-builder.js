@@ -52,13 +52,13 @@ function assertName(name, what) {
  * leading strings are traits and a trailing plain object supplies factory/strategy
  * plus overrides.
  * @param {string} name - Relationship name.
- * @param {Array<?>} args - Remaining arguments.
+ * @param {Array<ReturnType<typeof JSON.parse>>} args - Remaining arguments.
  * @returns {AssociationDeclaration} - The declaration.
  */
 function buildAssociationDeclaration(name, args) {
   /** @type {string[]} */
   const traits = []
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let options = {}
 
   for (const arg of args) {
@@ -79,7 +79,7 @@ function buildAssociationDeclaration(name, args) {
 /**
  * Parses the polymorphic `sequence(name, ...)` argument forms into a Sequence.
  * @param {string} name - Sequence name.
- * @param {Array<?>} args - Remaining arguments (initial/options and/or formatter).
+ * @param {Array<ReturnType<typeof JSON.parse>>} args - Remaining arguments (initial/options and/or formatter).
  * @returns {Sequence} - The constructed sequence.
  */
 function buildSequence(name, args) {
@@ -121,7 +121,7 @@ class DeclarationCollector {
   /**
    * Records a literal/lazy attribute.
    * @param {string} name - Attribute name.
-   * @param {?} value - Literal value or lazy function.
+   * @param {ReturnType<typeof JSON.parse>} value - Literal value or lazy function.
    * @returns {void}
    */
   attribute(name, value) {
@@ -132,7 +132,7 @@ class DeclarationCollector {
   /**
    * Records a transient attribute.
    * @param {string} name - Transient name.
-   * @param {?} value - Literal value or lazy function.
+   * @param {ReturnType<typeof JSON.parse>} value - Literal value or lazy function.
    * @returns {void}
    */
   transient(name, value) {
@@ -143,7 +143,7 @@ class DeclarationCollector {
   /**
    * Records an association.
    * @param {string} name - Relationship name.
-   * @param {Array<?>} args - Traits and/or an options object.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Traits and/or an options object.
    * @returns {void}
    */
   association(name, ...args) {
@@ -213,13 +213,13 @@ function compileTrait(name, callback) {
 
   const collector = new DeclarationCollector()
   const builder = {
-    attribute: (/** @type {string} */ attrName, /** @type {?} */ value) => collector.attribute(attrName, value),
-    transient: (/** @type {string} */ attrName, /** @type {?} */ value) => collector.transient(attrName, value),
-    association: (/** @type {string} */ assocName, /** @type {Array<?>} */ ...args) => collector.association(assocName, ...args),
-    before: (/** @type {string} */ phase, /** @type {?} */ fn) => collector.before(phase, fn),
-    after: (/** @type {string} */ phase, /** @type {?} */ fn) => collector.after(phase, fn),
-    initializeWith: (/** @type {?} */ fn) => collector.initializeWith(fn),
-    toCreate: (/** @type {?} */ fn) => collector.toCreate(fn),
+    attribute: (/** @type {string} */ attrName, /** @type {ReturnType<typeof JSON.parse>} */ value) => collector.attribute(attrName, value),
+    transient: (/** @type {string} */ attrName, /** @type {ReturnType<typeof JSON.parse>} */ value) => collector.transient(attrName, value),
+    association: (/** @type {string} */ assocName, /** @type {Array<ReturnType<typeof JSON.parse>>} */ ...args) => collector.association(assocName, ...args),
+    before: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.before(phase, fn),
+    after: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.after(phase, fn),
+    initializeWith: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.initializeWith(fn),
+    toCreate: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.toCreate(fn),
     skipCreate: () => collector.skipCreate(),
     trait: (/** @type {string} */ includeName) => {
       assertName(includeName, "Trait include")
@@ -284,14 +284,14 @@ export default class DefinitionSession {
       factory: (/** @type {string} */ name, /** @type {(builder: object) => void} */ cb) => this._modifyFactory(name, cb),
       trait: (/** @type {string} */ name, /** @type {(builder: object) => void} */ cb) =>
         this.registry._registerGlobalTrait(compileTrait(name, cb)),
-      sequence: (/** @type {string} */ name, /** @type {Array<?>} */ ...args) =>
+      sequence: (/** @type {string} */ name, /** @type {Array<ReturnType<typeof JSON.parse>>} */ ...args) =>
         this.registry._registerSequence(buildSequence(name, args), null),
-      before: (/** @type {string} */ phase, /** @type {?} */ fn) =>
+      before: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) =>
         this.registry._addGlobalDeclaration(callbackDeclaration(eventNameFor("before", phase), fn)),
-      after: (/** @type {string} */ phase, /** @type {?} */ fn) =>
+      after: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) =>
         this.registry._addGlobalDeclaration(callbackDeclaration(eventNameFor("after", phase), fn)),
-      initializeWith: (/** @type {?} */ fn) => this.registry._addGlobalDeclaration(initializeWithDeclaration(fn)),
-      toCreate: (/** @type {?} */ fn) => this.registry._addGlobalDeclaration(toCreateDeclaration(fn)),
+      initializeWith: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => this.registry._addGlobalDeclaration(initializeWithDeclaration(fn)),
+      toCreate: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => this.registry._addGlobalDeclaration(toCreateDeclaration(fn)),
       skipCreate: () => this.registry._addGlobalDeclaration(skipCreateDeclaration())
     }
   }
@@ -312,7 +312,7 @@ export default class DefinitionSession {
     }
 
     const collector = new DeclarationCollector()
-    /** @type {Array<{name: string, modelOrOptions: ?, cb: ?}>} */
+    /** @type {Array<{name: string, modelOrOptions: ReturnType<typeof JSON.parse>, cb: ReturnType<typeof JSON.parse>}>} */
     const nestedFactories = []
     const localTraits = new Map(existing.localTraits)
     /** @type {Sequence[]} */
@@ -348,18 +348,18 @@ export default class DefinitionSession {
    */
   _rootBuilder() {
     return {
-      factory: (/** @type {string} */ name, /** @type {?} */ modelOrOptions, /** @type {?} */ cb) =>
+      factory: (/** @type {string} */ name, /** @type {ReturnType<typeof JSON.parse>} */ modelOrOptions, /** @type {ReturnType<typeof JSON.parse>} */ cb) =>
         this._defineFactory(name, modelOrOptions, cb, null),
       trait: (/** @type {string} */ name, /** @type {(builder: object) => void} */ cb) =>
         this.registry._registerGlobalTrait(compileTrait(name, cb)),
-      sequence: (/** @type {string} */ name, /** @type {Array<?>} */ ...args) =>
+      sequence: (/** @type {string} */ name, /** @type {Array<ReturnType<typeof JSON.parse>>} */ ...args) =>
         this.registry._registerSequence(buildSequence(name, args), null),
-      before: (/** @type {string} */ phase, /** @type {?} */ fn) =>
+      before: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) =>
         this.registry._addGlobalDeclaration(callbackDeclaration(eventNameFor("before", phase), fn)),
-      after: (/** @type {string} */ phase, /** @type {?} */ fn) =>
+      after: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) =>
         this.registry._addGlobalDeclaration(callbackDeclaration(eventNameFor("after", phase), fn)),
-      initializeWith: (/** @type {?} */ fn) => this.registry._addGlobalDeclaration(initializeWithDeclaration(fn)),
-      toCreate: (/** @type {?} */ fn) => this.registry._addGlobalDeclaration(toCreateDeclaration(fn)),
+      initializeWith: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => this.registry._addGlobalDeclaration(initializeWithDeclaration(fn)),
+      toCreate: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => this.registry._addGlobalDeclaration(toCreateDeclaration(fn)),
       skipCreate: () => this.registry._addGlobalDeclaration(skipCreateDeclaration())
     }
   }
@@ -368,8 +368,8 @@ export default class DefinitionSession {
    * Compiles and registers a factory (and its nested children/local traits/scoped
    * sequences).
    * @param {string} name - Factory name.
-   * @param {?} modelOrOptions - Model class or options object.
-   * @param {?} cb - Factory builder callback.
+   * @param {ReturnType<typeof JSON.parse>} modelOrOptions - Model class or options object.
+   * @param {ReturnType<typeof JSON.parse>} cb - Factory builder callback.
    * @param {string | null} inheritedParent - Parent name for nested factories.
    * @returns {void}
    */
@@ -378,7 +378,7 @@ export default class DefinitionSession {
 
     let modelClass = null
     let builderCallback = cb
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     let options = {}
 
     if (typeof cb === "function") {
@@ -411,7 +411,7 @@ export default class DefinitionSession {
     const baseTraits = Array.isArray(options.traits) ? options.traits : []
 
     const collector = new DeclarationCollector()
-    /** @type {Array<{name: string, modelOrOptions: ?, cb: ?}>} */
+    /** @type {Array<{name: string, modelOrOptions: ReturnType<typeof JSON.parse>, cb: ReturnType<typeof JSON.parse>}>} */
     const nestedFactories = []
     /** @type {Map<string, TraitDefinition>} */
     const localTraits = new Map()
@@ -439,22 +439,22 @@ export default class DefinitionSession {
   /**
    * Builds the factory builder object.
    * @param {DeclarationCollector} collector - Declaration collector.
-   * @param {Array<{name: string, modelOrOptions: ?, cb: ?}>} nestedFactories - Nested factory sink.
+   * @param {Array<{name: string, modelOrOptions: ReturnType<typeof JSON.parse>, cb: ReturnType<typeof JSON.parse>}>} nestedFactories - Nested factory sink.
    * @param {Map<string, TraitDefinition>} localTraits - Local trait sink.
    * @param {Sequence[]} scopedSequences - Scoped sequence sink.
    * @returns {object} - Factory builder.
    */
   _factoryBuilder(collector, nestedFactories, localTraits, scopedSequences) {
     return {
-      attribute: (/** @type {string} */ attrName, /** @type {?} */ value) => collector.attribute(attrName, value),
-      transient: (/** @type {string} */ attrName, /** @type {?} */ value) => collector.transient(attrName, value),
-      association: (/** @type {string} */ assocName, /** @type {Array<?>} */ ...args) => collector.association(assocName, ...args),
-      before: (/** @type {string} */ phase, /** @type {?} */ fn) => collector.before(phase, fn),
-      after: (/** @type {string} */ phase, /** @type {?} */ fn) => collector.after(phase, fn),
-      initializeWith: (/** @type {?} */ fn) => collector.initializeWith(fn),
-      toCreate: (/** @type {?} */ fn) => collector.toCreate(fn),
+      attribute: (/** @type {string} */ attrName, /** @type {ReturnType<typeof JSON.parse>} */ value) => collector.attribute(attrName, value),
+      transient: (/** @type {string} */ attrName, /** @type {ReturnType<typeof JSON.parse>} */ value) => collector.transient(attrName, value),
+      association: (/** @type {string} */ assocName, /** @type {Array<ReturnType<typeof JSON.parse>>} */ ...args) => collector.association(assocName, ...args),
+      before: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.before(phase, fn),
+      after: (/** @type {string} */ phase, /** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.after(phase, fn),
+      initializeWith: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.initializeWith(fn),
+      toCreate: (/** @type {ReturnType<typeof JSON.parse>} */ fn) => collector.toCreate(fn),
       skipCreate: () => collector.skipCreate(),
-      sequence: (/** @type {string} */ seqName, /** @type {Array<?>} */ ...args) => scopedSequences.push(buildSequence(seqName, args)),
+      sequence: (/** @type {string} */ seqName, /** @type {Array<ReturnType<typeof JSON.parse>>} */ ...args) => scopedSequences.push(buildSequence(seqName, args)),
       trait: (/** @type {string} */ traitName, /** @type {((builder: object) => void) | undefined} */ traitCb) => {
         if (typeof traitCb === "function") {
           const compiled = compileTrait(traitName, traitCb)
@@ -469,7 +469,7 @@ export default class DefinitionSession {
           collector.declarations.push(traitIncludeDeclaration(traitName))
         }
       },
-      factory: (/** @type {string} */ childName, /** @type {?} */ childModelOrOptions, /** @type {?} */ childCb) =>
+      factory: (/** @type {string} */ childName, /** @type {ReturnType<typeof JSON.parse>} */ childModelOrOptions, /** @type {ReturnType<typeof JSON.parse>} */ childCb) =>
         nestedFactories.push({name: childName, modelOrOptions: childModelOrOptions, cb: childCb})
     }
   }

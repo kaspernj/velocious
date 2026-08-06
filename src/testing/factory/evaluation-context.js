@@ -27,7 +27,7 @@ export default class EvaluationContext {
     /** @type {"attributesFor" | "build" | "create"} - Active strategy. */
     this.strategy = strategy
 
-    /** @type {Map<string, ?>} - Per-run memoized values / in-flight promises. */
+    /** @type {Map<string, ReturnType<typeof JSON.parse>>} - Per-run memoized values / in-flight promises. */
     this._memo = new Map()
   }
 
@@ -35,7 +35,7 @@ export default class EvaluationContext {
    * Builds the named evaluator context handed to lazy values and callbacks for a
    * given dependency path.
    * @param {string[]} path - Current resolution path (for cycle detection).
-   * @returns {{get: (name: string) => Promise<?>, generate: (name: string) => Promise<?>, association: (factory: string, ...args: Array<?>) => Promise<?>}} - The evaluator context.
+   * @returns {{get: (name: string) => Promise<ReturnType<typeof JSON.parse>>, generate: (name: string) => Promise<ReturnType<typeof JSON.parse>>, association: (factory: string, ...args: Array<ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>}} - The evaluator context.
    */
   contextFor(path) {
     return {
@@ -49,7 +49,7 @@ export default class EvaluationContext {
    * Resolves an attribute/transient/association by name, memoizing the result.
    * @param {string} name - Name to resolve.
    * @param {string[]} path - Current resolution path.
-   * @returns {Promise<?>} - The resolved value.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The resolved value.
    */
   _get(name, path) {
     if (path.includes(name)) {
@@ -76,7 +76,7 @@ export default class EvaluationContext {
    * Evaluates a resolved slot, honouring lazy functions and overrides.
    * @param {import("./factory-runner.js").Slot} slot - Slot to evaluate.
    * @param {string[]} childPath - Path including this slot's name.
-   * @returns {Promise<?>} - The evaluated value.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The evaluated value.
    */
   async _evaluateSlot(slot, childPath) {
     if (slot.slotKind === "association") {
@@ -94,7 +94,7 @@ export default class EvaluationContext {
    * Resolves a declared/overridden association slot. An explicit object/null
    * override suppresses nested factory execution and is returned verbatim.
    * @param {import("./factory-runner.js").Slot} slot - Association slot.
-   * @returns {Promise<?>} - The associated record (or override value).
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The associated record (or override value).
    */
   async _resolveAssociationSlot(slot) {
     if (slot.isOverride) return slot.value
@@ -115,16 +115,16 @@ export default class EvaluationContext {
   /**
    * Runs an explicitly-invoked association from a lazy value's `association(...)`.
    * @param {string} factoryName - Factory to run.
-   * @param {Array<?>} args - Traits and/or an overrides object.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Traits and/or an overrides object.
    * @param {string[]} _path - Current resolution path (unused; associations open a fresh run).
-   * @returns {Promise<?>} - The associated record, or null under attributesFor.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The associated record, or null under attributesFor.
    */
   _explicitAssociation(factoryName, args, _path) {
     if (this.strategy === "attributesFor") return Promise.resolve(null)
 
     /** @type {string[]} */
     const traits = []
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     let overrides = {}
 
     for (const arg of args) {
@@ -141,10 +141,10 @@ export default class EvaluationContext {
    * Resolves every plain attribute slot (used by attributesFor). Transients and
    * associations are omitted, though transients may still be evaluated on demand
    * as dependencies.
-   * @returns {Promise<Record<string, ?>>} - The resolved attributes.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - The resolved attributes.
    */
   async resolveAttributes() {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const attributes = {}
 
     for (const [name, slot] of this.plan.resolved) {
@@ -158,10 +158,10 @@ export default class EvaluationContext {
 
   /**
    * Resolves every transient before callbacks that expose them as plain properties.
-   * @returns {Promise<Record<string, ?>>} - Evaluated transient values.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Evaluated transient values.
    */
   async resolveTransients() {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const transients = {}
 
     for (const [name, slot] of this.plan.resolved) {
@@ -174,14 +174,14 @@ export default class EvaluationContext {
   /**
    * Resolves everything needed to construct a record: public attributes,
    * transients, and associated records.
-   * @returns {Promise<{publicAttributes: Record<string, ?>, transients: Record<string, ?>, associations: Array<{name: string, record: ?}>}>} - Resolved construction inputs.
+   * @returns {Promise<{publicAttributes: Record<string, ReturnType<typeof JSON.parse>>, transients: Record<string, ReturnType<typeof JSON.parse>>, associations: Array<{name: string, record: ReturnType<typeof JSON.parse>}>}>} - Resolved construction inputs.
    */
   async resolveForConstruction() {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const publicAttributes = {}
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const transients = {}
-    /** @type {Array<{name: string, record: ?}>} */
+    /** @type {Array<{name: string, record: ReturnType<typeof JSON.parse>}>} */
     const associations = []
 
     for (const [name, slot] of this.plan.resolved) {

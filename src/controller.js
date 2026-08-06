@@ -12,6 +12,9 @@ import querystring from "querystring"
 import {serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 
 export default class VelociousController {
+  /** @type {Array<string> | undefined} */
+  static _beforeActions = undefined
+
   /**
    * Runs before action.
    * @param {string} methodName - Method name.
@@ -34,7 +37,7 @@ export default class VelociousController {
    * @param {string} args.action - Action.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {string} args.controller - Controller.
-   * @param {Record<string, ?>} args.params - Parameters object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Parameters object.
    * @param {import("./http-server/client/request.js").default} args.request - Request object.
    * @param {import("./http-server/client/response.js").default} args.response - Response object.
    * @param {string} args.viewPath - View path.
@@ -73,7 +76,7 @@ export default class VelociousController {
 
   /**
    * Runs get params.
-   * @returns {Record<string, ?>} - The params.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The params.
    */
   getParams() { return this._params }
 
@@ -98,7 +101,7 @@ export default class VelociousController {
   /**
    * Runs set cookie.
    * @param {string} name - Cookie name.
-   * @param {?} value - Cookie value.
+   * @param {ReturnType<typeof JSON.parse>} value - Cookie value.
    * @param {object} [args] - Options object.
    * @param {string} [args.domain] - Domain.
    * @param {Date} [args.expires] - Expires date.
@@ -169,7 +172,7 @@ export default class VelociousController {
       const beforeActions = currentControllerClass._beforeActions
 
       if (beforeActions) {
-        const controllerPrototype = /** @type {Record<string, ((...args: Array<?>) => ?) | undefined>} */ (/** @type {?} */ (currentControllerClass.prototype))
+        const controllerPrototype = /** @type {Record<string, ((...args: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | undefined>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (currentControllerClass.prototype))
 
         for (const beforeActionName of beforeActions) {
           const beforeAction = controllerPrototype[beforeActionName]
@@ -192,7 +195,7 @@ export default class VelociousController {
 
   /**
    * Runs params.
-   * @returns {Record<string, ?>} - The params.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The params.
    */
   params() {
     // Merge query parameters so controllers can read them via params()
@@ -205,7 +208,7 @@ export default class VelociousController {
 
   /**
    * Runs query parameters.
-   * @returns {Record<string, ?>} - The query parameters.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The query parameters.
    */
   queryParameters() {
     const query = this._request.path().split("?")[1]
@@ -215,13 +218,13 @@ export default class VelociousController {
     try {
       /**
        * Unparsed params.
-       * @type {Record<string, ?>} */
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const unparsedParams = querystring.parse(query)
       const paramsToObject = new ParamsToObject(unparsedParams)
 
       return paramsToObject.toObject()
     } catch (error) {
-      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */ (error)
 
       ensuredError.velociousContext = {
         ...(ensuredError.velociousContext || {}),

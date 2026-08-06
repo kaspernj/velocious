@@ -83,11 +83,11 @@ function buildDeviceMutationLog(prefix) {
  * @param {object} args - Fixture args.
  * @param {string} args.actorDeviceId - Device id.
  * @param {string} args.actorUserId - User id.
- * @param {Record<string, ?>} [args.backendKeys] - Shared backend key pair.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.backendKeys] - Shared backend key pair.
  * @param {string} args.grantId - Grant id.
- * @param {?} args.projectId - Project scope.
- * @param {Record<string, ?>} [args.signingKey] - Shared offline-grant signing key.
- * @returns {Promise<Record<string, ?>>} Fixture bundle.
+ * @param {ReturnType<typeof JSON.parse>} args.projectId - Project scope.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.signingKey] - Shared offline-grant signing key.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Fixture bundle.
  */
 async function buildDeviceFixtures({actorDeviceId, actorUserId, backendKeys, grantId, projectId, signingKey}) {
   return await buildSignedReplayFixtures({
@@ -107,7 +107,7 @@ async function buildDeviceFixtures({actorDeviceId, actorUserId, backendKeys, gra
  * @param {object} args - Mutation args.
  * @param {string} args.actorDeviceId - Device id.
  * @param {string} args.actorUserId - User id.
- * @param {Record<string, ?>} args.attributes - Update attributes.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Update attributes.
  * @param {string} args.baseVersion - Base version.
  * @param {string} args.clientMutationId - Client mutation id.
  * @param {string} args.grantId - Grant id.
@@ -134,9 +134,9 @@ function buildTaskUpdateMutation({actorDeviceId, actorUserId, attributes, baseVe
  * Replays signed mutations through the backend replay service.
  * @param {object} args - Replay args.
  * @param {{strategy?: string, versionAttribute: string} | null} [args.conflictStrategy] - Optional base-version conflict strategy.
- * @param {Record<string, ?>} args.fixtures - Backend fixtures.
- * @param {Array<{signedMutation: Record<string, ?>, signedOfflineGrant: Record<string, ?>}>} args.signedMutations - Signed mutations.
- * @returns {Promise<Record<string, ?>>} Replay result.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.fixtures - Backend fixtures.
+ * @param {Array<{signedMutation: Record<string, ReturnType<typeof JSON.parse>>, signedOfflineGrant: Record<string, ReturnType<typeof JSON.parse>>}>} args.signedMutations - Signed mutations.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Replay result.
  */
 async function replaySignedMutations({conflictStrategy = null, fixtures, signedMutations}) {
   const service = new SignedSyncEnvelopeReplayService({

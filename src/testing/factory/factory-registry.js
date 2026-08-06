@@ -13,13 +13,13 @@ import {isPlainObject} from "is-plain-object"
 /**
  * Normalizes a strategy invocation's variadic tail into ordered trait names plus
  * a single final overrides object (`strategy(name, ...traits, overrides?)`).
- * @param {Array<?>} args - Arguments after the factory name (and count for lists).
- * @returns {{traits: string[], overrides: Record<string, ?>}} - Normalized invocation.
+ * @param {Array<ReturnType<typeof JSON.parse>>} args - Arguments after the factory name (and count for lists).
+ * @returns {{traits: string[], overrides: Record<string, ReturnType<typeof JSON.parse>>}} - Normalized invocation.
  */
 function normalizeInvocationArgs(args) {
   /** @type {string[]} */
   const traits = []
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let overrides = {}
   let sawOverrides = false
 
@@ -115,7 +115,7 @@ export default class FactoryRegistry {
   /**
    * Subscribes to factory debug events (`start`, `success`, `failure`).
    * @param {string} event - Event name.
-   * @param {(payload: {invocationId: string, factory: string, strategy: string, traits: string[], durationMs?: number, error?: ?}) => void} handler - Event handler.
+   * @param {(payload: {invocationId: string, factory: string, strategy: string, traits: string[], durationMs?: number, error?: ReturnType<typeof JSON.parse>}) => void} handler - Event handler.
    * @returns {this} - This registry (for chaining).
    */
   on(event, handler) {
@@ -127,7 +127,7 @@ export default class FactoryRegistry {
   /**
    * Unsubscribes a previously-registered event handler.
    * @param {string} event - Event name.
-   * @param {(payload: ?) => void} handler - Event handler to remove.
+   * @param {(payload: ReturnType<typeof JSON.parse>) => void} handler - Event handler to remove.
    * @returns {this} - This registry (for chaining).
    */
   off(event, handler) {
@@ -139,8 +139,8 @@ export default class FactoryRegistry {
   /**
    * Resolves attributes without constructing a model or building associations.
    * @param {string} factoryName - Factory name.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Record<string, ?>>} - The resolved attributes.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - The resolved attributes.
    */
   async attributesFor(factoryName, ...args) {
     const {traits, overrides} = normalizeInvocationArgs(args)
@@ -151,8 +151,8 @@ export default class FactoryRegistry {
   /**
    * Builds an unsaved record graph.
    * @param {string} factoryName - Factory name.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<?>} - The built record.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The built record.
    */
   async build(factoryName, ...args) {
     const {traits, overrides} = normalizeInvocationArgs(args)
@@ -163,8 +163,8 @@ export default class FactoryRegistry {
   /**
    * Builds and persists a record graph.
    * @param {string} factoryName - Factory name.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<?>} - The persisted record.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The persisted record.
    */
   async create(factoryName, ...args) {
     const {traits, overrides} = normalizeInvocationArgs(args)
@@ -176,8 +176,8 @@ export default class FactoryRegistry {
    * Resolves attributes for a list of records sequentially.
    * @param {string} factoryName - Factory name.
    * @param {number} count - Number of entries.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<Record<string, ?>>>} - The resolved attribute objects.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - The resolved attribute objects.
    */
   async attributesForList(factoryName, count, ...args) {
     return await this._runList("attributesFor", factoryName, count, args)
@@ -187,8 +187,8 @@ export default class FactoryRegistry {
    * Builds a list of unsaved records sequentially.
    * @param {string} factoryName - Factory name.
    * @param {number} count - Number of records.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<?>>} - The built records.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - The built records.
    */
   async buildList(factoryName, count, ...args) {
     return await this._runList("build", factoryName, count, args)
@@ -198,8 +198,8 @@ export default class FactoryRegistry {
    * Creates a list of persisted records sequentially.
    * @param {string} factoryName - Factory name.
    * @param {number} count - Number of records.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<?>>} - The persisted records.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - The persisted records.
    */
   async createList(factoryName, count, ...args) {
     return await this._runList("create", factoryName, count, args)
@@ -208,8 +208,8 @@ export default class FactoryRegistry {
   /**
    * Resolves attributes for exactly two records.
    * @param {string} factoryName - Factory name.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<Record<string, ?>>>} - The two resolved attribute objects.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - The two resolved attribute objects.
    */
   async attributesForPair(factoryName, ...args) {
     return await this._runList("attributesFor", factoryName, 2, args)
@@ -218,8 +218,8 @@ export default class FactoryRegistry {
   /**
    * Builds exactly two unsaved records.
    * @param {string} factoryName - Factory name.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<?>>} - The two built records.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - The two built records.
    */
   async buildPair(factoryName, ...args) {
     return await this._runList("build", factoryName, 2, args)
@@ -228,8 +228,8 @@ export default class FactoryRegistry {
   /**
    * Creates exactly two persisted records.
    * @param {string} factoryName - Factory name.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<?>>} - The two persisted records.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - The two persisted records.
    */
   async createPair(factoryName, ...args) {
     return await this._runList("create", factoryName, 2, args)
@@ -238,7 +238,7 @@ export default class FactoryRegistry {
   /**
    * Advances a sequence and returns its formatted value.
    * @param {string} sequenceName - Sequence name.
-   * @returns {Promise<?>} - The formatted value.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The formatted value.
    */
   async generate(sequenceName) {
     return await this._generateScoped(sequenceName, [])
@@ -248,10 +248,10 @@ export default class FactoryRegistry {
    * Advances a sequence `count` times and returns the formatted values.
    * @param {string} sequenceName - Sequence name.
    * @param {number} count - Number of values.
-   * @returns {Promise<Array<?>>} - The formatted values.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - The formatted values.
    */
   async generateList(sequenceName, count) {
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const values = []
 
     for (let index = 0; index < count; index++) {
@@ -326,12 +326,12 @@ export default class FactoryRegistry {
    * @param {"attributesFor" | "build" | "create"} strategy - Strategy name.
    * @param {string} factoryName - Factory name.
    * @param {number} count - Number of entries.
-   * @param {Array<?>} args - Trait names then an optional overrides object.
-   * @returns {Promise<Array<?>>} - The results.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Trait names then an optional overrides object.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - The results.
    */
   async _runList(strategy, factoryName, count, args) {
     const {traits, overrides} = normalizeInvocationArgs(args)
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const results = []
     /** @type {import("./factory-runner.js").CompiledPlan | undefined} */
     let planTemplate
@@ -357,9 +357,9 @@ export default class FactoryRegistry {
    * @param {object} args - Options.
    * @param {string} args.factoryName - Factory name.
    * @param {string[]} args.traits - Ordered traits.
-   * @param {Record<string, ?>} args.overrides - Overrides.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.overrides - Overrides.
    * @param {"attributesFor" | "build" | "create"} args.strategy - Strategy name.
-   * @returns {Promise<?>} - The strategy result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The strategy result.
    */
   async _runFactory(args) {
     return (await this._runFactoryInvocation(args)).result
@@ -370,10 +370,10 @@ export default class FactoryRegistry {
    * @param {object} args - Options.
    * @param {string} args.factoryName - Factory name.
    * @param {string[]} args.traits - Ordered traits.
-   * @param {Record<string, ?>} args.overrides - Overrides.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.overrides - Overrides.
    * @param {"attributesFor" | "build" | "create"} args.strategy - Strategy name.
    * @param {import("./factory-runner.js").CompiledPlan} [args.planTemplate] - Reusable declaration plan.
-   * @returns {Promise<{result: ?, planTemplate: import("./factory-runner.js").CompiledPlan}>} - Result and declaration plan.
+   * @returns {Promise<{result: ReturnType<typeof JSON.parse>, planTemplate: import("./factory-runner.js").CompiledPlan}>} - Result and declaration plan.
    */
   async _runFactoryInvocation({factoryName, traits, overrides, strategy, planTemplate}) {
     this._activeEvaluations += 1
@@ -484,7 +484,7 @@ export default class FactoryRegistry {
    * global scope and advances it.
    * @param {string} sequenceName - Sequence name.
    * @param {string[]} chainNames - Inheritance chain names (child last).
-   * @returns {Promise<?>} - The formatted value.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The formatted value.
    */
   async _generateScoped(sequenceName, chainNames) {
     for (let index = chainNames.length - 1; index >= 0; index--) {

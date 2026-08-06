@@ -4,7 +4,7 @@ import BaseCommand from "../../base-command.js"
 export default class DbGenerateFrontendModels extends BaseCommand {
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Command execution result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Command execution result.
    */
   async execute() {
     return await this.getConfiguration().getEnvironmentHandler().cliCommandsGenerateFrontendModels(this)

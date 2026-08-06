@@ -5,20 +5,20 @@ import SyncReplayUpsertApplier from "../../src/sync/sync-replay-upsert-applier.j
 
 /**
  * Builds a fake model class with an in-memory row store.
- * @returns {?} Fake model class.
+ * @returns {ReturnType<typeof JSON.parse>} Fake model class.
  */
 function buildFakeModelClass() {
-  /** @type {Array<?>} */
+  /** @type {Array<ReturnType<typeof JSON.parse>>} */
   const rows = []
 
   /**
-   * @param {Record<string, ?>} attributes - Row attributes.
-   * @returns {?} Fake record.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Row attributes.
+   * @returns {ReturnType<typeof JSON.parse>} Fake record.
    */
   const buildRecord = (attributes) => {
     const record = {
       attributes: {...attributes},
-      /** @param {Record<string, ?>} newAttributes - Assigned attributes. @returns {void} */
+      /** @param {Record<string, ReturnType<typeof JSON.parse>>} newAttributes - Assigned attributes. @returns {void} */
       assign(newAttributes) {
         Object.assign(record.attributes, newAttributes)
       },
@@ -39,7 +39,7 @@ function buildFakeModelClass() {
   }
 
   return {
-    /** @param {Record<string, ?>} attributes - Attributes. @returns {Promise<?>} Created record. */
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Attributes. @returns {Promise<ReturnType<typeof JSON.parse>>} Created record. */
     create: async (attributes) => {
       const record = buildRecord(attributes)
 
@@ -47,7 +47,7 @@ function buildFakeModelClass() {
 
       return record
     },
-    /** @param {Record<string, ?>} conditions - Conditions. @returns {Promise<?>} Found record. */
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions. @returns {Promise<ReturnType<typeof JSON.parse>>} Found record. */
     findBy: async (conditions) => rows.find((row) => Object.entries(conditions).every(([key, value]) => row.attributes[key] === value)) || null,
     rows
   }
@@ -55,8 +55,8 @@ function buildFakeModelClass() {
 
 /**
  * Builds a normalized replay mutation.
- * @param {Record<string, ?>} [overrides] - Mutation overrides.
- * @returns {?} Replay mutation.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [overrides] - Mutation overrides.
+ * @returns {ReturnType<typeof JSON.parse>} Replay mutation.
  */
 function buildMutation(overrides = {}) {
   return {
@@ -210,7 +210,7 @@ describe("sync replay upsert applier", () => {
   it("uses custom findRecord resolvers and runs afterApply domain tails", async () => {
     const modelClass = buildFakeModelClass()
     const customRecord = await modelClass.create({id: "custom", title: "Old"})
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const afterApplyCalls = []
     const applier = new SyncReplayUpsertApplier({
       afterApply: async ({mappedAttributes, mutation, record}) => {

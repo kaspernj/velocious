@@ -10,7 +10,7 @@
  * published sync row and broadcasts them as the framework sync channel's
  * scoping params, and the change feed serializes them onto every changes row
  * under their own names. Velocious itself has no built-in partition name.
- * @param {?} syncModel - Sync/change model class.
+ * @param {ReturnType<typeof JSON.parse>} syncModel - Sync/change model class.
  * @returns {string[] | null} Declared scope attributes, or null when the model declares none.
  */
 export function declaredSyncScopeAttributes(syncModel) {

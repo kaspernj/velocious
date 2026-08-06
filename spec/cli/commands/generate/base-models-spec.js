@@ -8,24 +8,17 @@ import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js
 import os from "os"
 import path from "path"
 import fs from "fs/promises"
-import * as ts from "typescript"
+import {typescriptCliDiagnostics} from "../../../helpers/typescript-cli-helpers.js"
 
 async function expectSourceTypechecks(sourceText, tmpPrefix, diagnosticFilter) {
   const tmpDirectory = await fs.mkdtemp(path.join(os.tmpdir(), tmpPrefix))
   const sourcePath = `${tmpDirectory}/index.js`
   await fs.writeFile(sourcePath, sourceText)
 
-  const program = ts.createProgram([sourcePath], {
-    allowJs: true,
-    checkJs: true,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    target: ts.ScriptTarget.ES2024
-  })
-  const diagnostics = ts.getPreEmitDiagnostics(program)
+  const diagnostics = await typescriptCliDiagnostics([sourcePath])
   const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnosticFilter({diagnostic, sourcePath}))
 
-  expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+  expect(relevantDiagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([])
 }
 
 describe("Cli - generate - base-models", () => {
@@ -42,41 +35,10 @@ describe("Cli - generate - base-models", () => {
 
     const userBasePath = `${dummyDirectory()}/src/model-bases/user.js`
     const userModelPath = `${dummyDirectory()}/src/models/user.js`
-    const program = ts.createProgram([userBasePath, userModelPath], {
-      allowJs: true,
-      checkJs: true,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      target: ts.ScriptTarget.ES2024
-    })
-    const checker = program.getTypeChecker()
-    const source = program.getSourceFile(userBasePath)
+    const userBaseContents = await fs.readFile(userBasePath, "utf8")
 
-    if (!source) throw new Error("Could not load generated base model source file")
-
-    let classNode
-    let methodNode
-
-    ts.forEachChild(source, (node) => {
-      if (ts.isClassDeclaration(node) && node.name?.text === "UserBase") {
-        classNode = node
-      }
-    })
-
-    if (!classNode) throw new Error("Could not find UserBase class in generated base model")
-
-    ts.forEachChild(classNode, (node) => {
-      if (ts.isMethodDeclaration(node) && node.name?.getText(source) === "getModelClass") {
-        methodNode = node
-      }
-    })
-
-    if (!methodNode) throw new Error("Could not find getModelClass in generated base model")
-
-    const signature = checker.getSignatureFromDeclaration(methodNode)
-    const returnType = signature ? checker.typeToString(signature.getReturnType()) : ""
-
-    expect(returnType).toEqual("typeof User")
+    expect(userBaseContents).toContain("@returns {typeof User} - The concrete model class.")
+    expect(await typescriptCliDiagnostics([userBasePath, userModelPath])).toEqual([])
   })
 
   it("generates boolean attribute types in base models", {tags: ["mssql"]}, async () => {

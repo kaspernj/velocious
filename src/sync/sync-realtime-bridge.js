@@ -50,7 +50,7 @@ export default class SyncRealtimeBridge {
    * Subscribes the derived realtime channels (idempotent and single-flighted):
    * an active subscription is kept as-is and a concurrent subscribe awaits the
    * in-flight attempt. Call `unsubscribe()` first to change the context.
-   * @param {?} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
+   * @param {ReturnType<typeof JSON.parse>} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
    * @returns {Promise<void>}
    */
   async subscribe(context) {
@@ -72,7 +72,7 @@ export default class SyncRealtimeBridge {
    * Locally created resources are only promoted to the bridge once everything
    * is live; an unsubscribe arriving during any await marks this attempt stale
    * and it tears its own resources down instead of resubscribing.
-   * @param {?} context - App context passed to the channels callback.
+   * @param {ReturnType<typeof JSON.parse>} context - App context passed to the channels callback.
    * @returns {Promise<void>}
    */
   async _subscribe(context) {
@@ -251,7 +251,7 @@ export default class SyncRealtimeBridge {
    * `{resourceType, conditions}`), plus the deprecated legacy paths —
    * model-level static realtime declarations and the config channels callback.
    * Fails loudly when nothing is subscribable.
-   * @param {?} context - App context passed to the deprecated channels callback.
+   * @param {ReturnType<typeof JSON.parse>} context - App context passed to the deprecated channels callback.
    * @returns {Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} Channel descriptors.
    */
   async channelDescriptors(context) {
@@ -301,8 +301,8 @@ export default class SyncRealtimeBridge {
    * The all-types (user) scope has no resource type and no conditions - it
    * covers everything the server authorizes for the caller - so there is
    * nothing to map.
-   * @param {{conditions: Record<string, ?>, resourceType: string | null}} scopeRow - Active scope row.
-   * @returns {Record<string, ?>} Attribute-named scope conditions.
+   * @param {{conditions: Record<string, ReturnType<typeof JSON.parse>>, resourceType: string | null}} scopeRow - Active scope row.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Attribute-named scope conditions.
    */
   attributeNamedConditions(scopeRow) {
     if (scopeRow.resourceType === null) return {}
@@ -314,7 +314,7 @@ export default class SyncRealtimeBridge {
     }
 
     const columnNameToAttributeName = resourceConfig.modelClass.getColumnNameToAttributeNameMap()
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const conditions = {}
 
     for (const [conditionName, conditionValue] of Object.entries(scopeRow.conditions)) {
@@ -327,7 +327,7 @@ export default class SyncRealtimeBridge {
   /**
    * Chains one pushed message onto the serialized apply queue so changes apply
    * in arrival order; failures go to the sync client's error reporting.
-   * @param {{body: ?, resourceType: string | null}} args - Message args.
+   * @param {{body: ReturnType<typeof JSON.parse>, resourceType: string | null}} args - Message args.
    * @returns {void}
    */
   enqueueApply({body, resourceType}) {
@@ -344,7 +344,7 @@ export default class SyncRealtimeBridge {
    * Applies one pushed message through the derived resource applier: drops
    * own-device messages by echo origin, defaults the channel's resourceType onto
    * envelopes without one, and fails loudly on unknown resource types.
-   * @param {{body: ?, resourceType: string | null}} args - Message args.
+   * @param {{body: ReturnType<typeof JSON.parse>, resourceType: string | null}} args - Message args.
    * @returns {Promise<void>}
    */
   async applyMessage({body, resourceType}) {

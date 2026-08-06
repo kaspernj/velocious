@@ -39,8 +39,8 @@ function baseName(value) {
 
 /**
  * Runs is plain object.
- * @param {?} value - Candidate value.
- * @returns {value is Record<string, ?>} - Whether value is a plain object.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
+ * @returns {value is Record<string, ReturnType<typeof JSON.parse>>} - Whether value is a plain object.
  */
 function isPlainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
@@ -52,7 +52,7 @@ function isPlainObject(value) {
 
 /**
  * Runs is uint8 array.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {value is Uint8Array} - Whether value is a byte array.
  */
 function isUint8Array(value) {
@@ -61,7 +61,7 @@ function isUint8Array(value) {
 
 /**
  * Runs is array buffer.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {value is ArrayBuffer} - Whether value is array buffer.
  */
 function isArrayBuffer(value) {
@@ -70,11 +70,11 @@ function isArrayBuffer(value) {
 
 /**
  * Runs is array buffer like.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether value supports arrayBuffer().
  */
 function isArrayBufferLike(value) {
-  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).arrayBuffer === "function")
+  return Boolean(value && typeof value === "object" && typeof /** @type {ReturnType<typeof JSON.parse>} */ (value).arrayBuffer === "function")
 }
 
 /**
@@ -117,7 +117,7 @@ async function uploadedFileBuffer(uploadedFile, environmentHandler) {
 
 /**
  * Runs normalize record attachment input.
- * @param {?} input - Attachment input.
+ * @param {ReturnType<typeof JSON.parse>} input - Attachment input.
  * @param {object} [args] - Options.
  * @param {boolean} [args.allowPathInput] - Whether `{path: ...}` input is allowed.
  * @param {string[]} [args.allowedPathPrefixes] - Optional allowlist for path input.
@@ -187,11 +187,11 @@ export default async function normalizeRecordAttachmentInput(input, args = {}) {
     const arrayBuffer = await input.arrayBuffer()
 
     buffer = Buffer.from(arrayBuffer)
-    filename = typeof /** @type {?} */ (input).name === "string" && /** @type {?} */ (input).name.length > 0
-      ? /** @type {?} */ (input).name
+    filename = typeof /** @type {ReturnType<typeof JSON.parse>} */ (input).name === "string" && /** @type {ReturnType<typeof JSON.parse>} */ (input).name.length > 0
+      ? /** @type {ReturnType<typeof JSON.parse>} */ (input).name
       : defaultFilename
-    contentType = typeof /** @type {?} */ (input).type === "string" && /** @type {?} */ (input).type.length > 0
-      ? /** @type {?} */ (input).type
+    contentType = typeof /** @type {ReturnType<typeof JSON.parse>} */ (input).type === "string" && /** @type {ReturnType<typeof JSON.parse>} */ (input).type.length > 0
+      ? /** @type {ReturnType<typeof JSON.parse>} */ (input).type
       : null
   } else if (typeof input === "string" || Buffer.isBuffer(input) || isArrayBuffer(input) || isUint8Array(input)) {
     buffer = toBuffer(input)

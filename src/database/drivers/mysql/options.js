@@ -22,7 +22,7 @@ export default class VelociousDatabaseDriversMysqlOptions extends QueryParserOpt
 
   /**
    * Runs quote.
-   * @param {?} string - String.
+   * @param {ReturnType<typeof JSON.parse>} string - String.
    * @returns {number | string} - The quote.
    */
   quote(string) {

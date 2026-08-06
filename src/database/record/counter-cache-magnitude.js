@@ -20,13 +20,13 @@
  *   belongsTo: string,
  *   counterColumn: string,
  *   sourceAttribute: string,
- *   magnitude: (sourceValue: ?) => number
+ *   magnitude: (sourceValue: ReturnType<typeof JSON.parse>) => number
  * }} MagnitudeCounterCacheDefinition
  */
 
 /**
  * Captured pending magnitude change stashed on a record between beforeSave and afterSave.
- * @typedef {{newMagnitude: number, oldMagnitude: number, newParentId: ?, oldParentId: ?}} PendingMagnitudeDelta
+ * @typedef {{newMagnitude: number, oldMagnitude: number, newParentId: ReturnType<typeof JSON.parse>, oldParentId: ReturnType<typeof JSON.parse>}} PendingMagnitudeDelta
  */
 
 /**
@@ -38,7 +38,7 @@
 export function registerMagnitudeCounterCache(modelClass, definition) {
   /**
    * Dynamic class.
-   * @type {?} */
+   * @type {ReturnType<typeof JSON.parse>} */
   const dynamicClass = modelClass
   const registeredFlag = `_magnitudeCounterCacheRegistered_${definition.counterColumn}`
 
@@ -54,7 +54,7 @@ export function registerMagnitudeCounterCache(modelClass, definition) {
   modelClass.beforeSave(async function (record) {
     /**
      * Dynamic record.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const dynamicRecord = record
 
     dynamicRecord[pendingKey] = computePendingMagnitudeDelta(record, definition)
@@ -63,7 +63,7 @@ export function registerMagnitudeCounterCache(modelClass, definition) {
   modelClass.afterSave(async function (record) {
     /**
      * Dynamic record.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const dynamicRecord = record
     const pending = /** @type {PendingMagnitudeDelta | null} */ (dynamicRecord[pendingKey])
 
@@ -151,9 +151,9 @@ async function applyPendingMagnitudeDelta(record, definition, pending) {
  * @param {import("./index.js").default} record - Record being saved.
  * @param {string} sourceAttribute - Source attribute name.
  * @param {string} sourceColumn - Source column name.
- * @param {Record<string, ?>} changes - The record's pre-save changes (column-keyed).
- * @param {?} currentValue - The current (new) read value, returned when the source did not change.
- * @returns {?} The read-cast pre-save value.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} changes - The record's pre-save changes (column-keyed).
+ * @param {ReturnType<typeof JSON.parse>} currentValue - The current (new) read value, returned when the source did not change.
+ * @returns {ReturnType<typeof JSON.parse>} The read-cast pre-save value.
  */
 function oldSourceValueThroughReadCast(record, sourceAttribute, sourceColumn, changes, currentValue) {
   if (!(sourceColumn in changes)) {
@@ -162,7 +162,7 @@ function oldSourceValueThroughReadCast(record, sourceAttribute, sourceColumn, ch
 
   /**
    * Dynamic record.
-   * @type {?} */
+   * @type {ReturnType<typeof JSON.parse>} */
   const dynamicRecord = record
   const pendingChange = dynamicRecord._changes[sourceColumn]
 
@@ -179,7 +179,7 @@ function oldSourceValueThroughReadCast(record, sourceAttribute, sourceColumn, ch
  * Reads the record's current foreign-key value for the counter-cache parent.
  * @param {import("./index.js").default} record - Record whose parent is targeted.
  * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
- * @returns {?} The current foreign-key value.
+ * @returns {ReturnType<typeof JSON.parse>} The current foreign-key value.
  */
 function currentParentId(record, definition) {
   const foreignKeyColumn = record.getModelClass().getRelationshipByName(definition.belongsTo).getForeignKey()
@@ -191,7 +191,7 @@ function currentParentId(record, definition) {
  * Atomically adds `amount` to the parent's counter column for one parent row.
  * @param {import("./index.js").default} record - Child record (for connection + relationship metadata).
  * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
- * @param {?} parentId - Parent primary-key value.
+ * @param {ReturnType<typeof JSON.parse>} parentId - Parent primary-key value.
  * @param {number} amount - Signed integer to add.
  * @returns {Promise<void>}
  */

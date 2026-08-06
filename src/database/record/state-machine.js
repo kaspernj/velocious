@@ -67,7 +67,7 @@ export function stateMachine(ModelClass, definition) {
   // Store definition on the model class for introspection
   /**
    * Dynamic class.
-   * @type {?} */
+   * @type {ReturnType<typeof JSON.parse>} */
   const dynamicClass = ModelClass
 
   // Idempotent: re-declaring on the same class (or a re-evaluated module) must not
@@ -108,7 +108,7 @@ export function stateMachine(ModelClass, definition) {
   // Register event methods and guard methods on the prototype
   /**
    * Proto.
-   * @type {?} */
+   * @type {ReturnType<typeof JSON.parse>} */
   const proto = ModelClass.prototype
 
   for (const [eventName, eventDef] of Object.entries(definition.events)) {
@@ -157,7 +157,7 @@ export function stateMachine(ModelClass, definition) {
     proto[eventName] = function () {
       /**
        * Self.
-       * @type {?} */
+       * @type {ReturnType<typeof JSON.parse>} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -192,7 +192,7 @@ export function stateMachine(ModelClass, definition) {
     proto[`${eventName}AndSave`] = async function () {
       /**
        * Self.
-       * @type {?} */
+       * @type {ReturnType<typeof JSON.parse>} */
       const self = this
       const currentState = self.readAttribute(column)
 
@@ -224,7 +224,7 @@ export function stateMachine(ModelClass, definition) {
   ModelClass.beforeSave(async function (model) {
     /**
      * Dynamic model.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 
@@ -257,7 +257,7 @@ export function stateMachine(ModelClass, definition) {
   ModelClass.afterSave(async function (model) {
     /**
      * Dynamic model.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const dynamicModel = model
     const pending = dynamicModel[PENDING_TRANSITION_KEY]
 

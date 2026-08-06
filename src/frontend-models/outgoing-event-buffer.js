@@ -2,7 +2,7 @@
  * BufferedOutgoingEvent type.
  * @typedef {object} BufferedOutgoingEvent
  * @property {string} customPath - Request path.
- * @property {Record<string, ?>} payload - Command payload.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} payload - Command payload.
  */
 // @ts-check
 

@@ -14,7 +14,7 @@ import WorkerHandler from "./worker-handler/index.js"
  * @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
 /**
  * Defines this typedef.
- * @typedef {function({configuration: import("../configuration.js").default, workerCount: number}) : (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
+ * @typedef {(args: {configuration: import("../configuration.js").default, workerCount: number}) => (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
 
 /**
  * Runs normalize worker count.
@@ -84,7 +84,7 @@ export default class VelociousHttpServer {
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxWorkers] - Max workers.
    * @param {number} [args.workers] - Worker handlers to start.
-   * @param {function({configuration: import("../configuration.js").default, onReload: function({changedPath: string}) : Promise<void>}) : {start: () => Promise<void>, stop: () => Promise<void>}} [args.developmentReloaderFactory] - Development reloader factory.
+   * @param {(args: {configuration: import("../configuration.js").default, onReload: (args: {changedPath: string}) => Promise<void>}) => {start: () => Promise<void>, stop: () => Promise<void>}} [args.developmentReloaderFactory] - Development reloader factory.
    * @param {WorkerHandlerFactory} [args.workerHandlerFactory] - Worker handler factory.
    */
   constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port, workerHandlerFactory, workers}) {
@@ -224,7 +224,7 @@ export default class VelociousHttpServer {
 
   /**
    * Runs get debug snapshot.
-   * @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - HTTP server worker diagnostics.
    */
   async getDebugSnapshot() {
     return {
@@ -241,7 +241,7 @@ export default class VelociousHttpServer {
   /**
    * Runs worker debug snapshot.
    * @param {WorkerHandler | InProcessHandler} workerHandler - Worker handler to inspect.
-   * @returns {Promise<Record<string, ?>>} Worker debug snapshot.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Worker debug snapshot.
    */
   async workerDebugSnapshot(workerHandler) {
     if (workerHandler instanceof WorkerHandler) return await workerHandler.getDebugSnapshot()
@@ -253,7 +253,7 @@ export default class VelociousHttpServer {
   /**
    * Runs in process worker debug snapshot.
    * @param {InProcessHandler} workerHandler - In-process worker handler to inspect.
-   * @returns {Record<string, ?>} Worker debug snapshot.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Worker debug snapshot.
    */
   inProcessWorkerDebugSnapshot(workerHandler) {
     return {

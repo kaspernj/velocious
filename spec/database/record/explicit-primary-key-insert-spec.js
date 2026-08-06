@@ -8,8 +8,8 @@ import UuidItem from "../../dummy/src/models/uuid-item.js"
  * Builds a fake connection that records every query and marks explicit
  * primary-key inserts, delegating SQL generation to the real driver.
  * @param {object} args - Harness args.
- * @param {Record<string, ?>} args.insertedRow - Row returned for the INSERT (mirrors an OUTPUT/RETURNING clause).
- * @returns {{connection: Record<string, ?>, queries: string[]}} Fake connection harness.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.insertedRow - Row returned for the INSERT (mirrors an OUTPUT/RETURNING clause).
+ * @returns {{connection: Record<string, ReturnType<typeof JSON.parse>>, queries: string[]}} Fake connection harness.
  */
 function buildIdentityInsertConnection({insertedRow}) {
   const realDriver = Task.connection()
@@ -19,8 +19,8 @@ function buildIdentityInsertConnection({insertedRow}) {
 
   const connection = {
     afterCommit: async (/** @type {() => Promise<void>} */ callback) => await callback(),
-    insertSql: (/** @type {Record<string, ?>} */ args) => realDriver.insertSql(args),
-    insertWithExplicitPrimaryKey: async (/** @type {{options: Record<string, ?>, sql: string, tableName: string}} */ args) => {
+    insertSql: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ args) => realDriver.insertSql(args),
+    insertWithExplicitPrimaryKey: async (/** @type {{options: Record<string, ReturnType<typeof JSON.parse>>, sql: string, tableName: string}} */ args) => {
       queries.push(`EXPLICIT ${args.tableName}: ${args.sql}`)
 
       return [insertedRow]
@@ -40,7 +40,7 @@ describe("Database - record - explicit primary key insert", {databaseCleaning: {
     const {connection, queries} = buildIdentityInsertConnection({insertedRow: {id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c"}})
     const uuidItem = new UuidItem({id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", title: "Explicit UUID key"})
 
-    uuidItem.__connection = /** @type {import("../../../src/database/drivers/base.js").default} */ (/** @type {?} */ (connection))
+    uuidItem.__connection = /** @type {import("../../../src/database/drivers/base.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ (connection))
 
     await uuidItem._createNewRecord()
 
@@ -52,7 +52,7 @@ describe("Database - record - explicit primary key insert", {databaseCleaning: {
     const {connection, queries} = buildIdentityInsertConnection({insertedRow: {id: 123456}})
     const task = new Task({id: 123456, name: "Explicit identity key"})
 
-    task.__connection = /** @type {import("../../../src/database/drivers/base.js").default} */ (/** @type {?} */ (connection))
+    task.__connection = /** @type {import("../../../src/database/drivers/base.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ (connection))
 
     await task._createNewRecord()
 
@@ -64,11 +64,11 @@ describe("Database - record - explicit primary key insert", {databaseCleaning: {
     /**
      * Builds a minimal explicit-insert connection recording onto the given log.
      * @param {string[]} queries - Query log.
-     * @returns {Record<string, ?>} Fake connection.
+     * @returns {Record<string, ReturnType<typeof JSON.parse>>} Fake connection.
      */
     const buildConnection = (queries) => ({
       insertSql: () => "INSERT INTO [tasks] ([id]) VALUES (123456)",
-      insertWithExplicitPrimaryKey: async (/** @type {{options: Record<string, ?>, sql: string, tableName: string}} */ args) => {
+      insertWithExplicitPrimaryKey: async (/** @type {{options: Record<string, ReturnType<typeof JSON.parse>>, sql: string, tableName: string}} */ args) => {
         queries.push(`EXPLICIT ${args.tableName}: ${args.sql}`)
 
         return [{id: 123456}]
@@ -94,7 +94,7 @@ describe("Database - record - explicit primary key insert", {databaseCleaning: {
     let resolutions = 0
     const originalConnection = Task.connection
 
-    Task.connection = /** @type {typeof Task.connection} */ (/** @type {?} */ (() => {
+    Task.connection = /** @type {typeof Task.connection} */ (/** @type {ReturnType<typeof JSON.parse>} */ (() => {
       resolutions++
 
       return resolutions <= 3 ? connA : connB

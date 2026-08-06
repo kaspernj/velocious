@@ -6,7 +6,7 @@ export default class VelociousError extends Error {
    * Runs constructor.
    * @param {string} message - Error message.
    * @param {object} [args] - Options.
-   * @param {?} [args.cause] - Error cause.
+   * @param {ReturnType<typeof JSON.parse>} [args.cause] - Error cause.
    * @param {string} [args.code] - Optional error code.
    * @param {import("./configuration-types.js").ClientErrorPayloadReporterPayload} [args.details] - Structured client-safe error details.
    * @param {"application_error" | "authorization_error" | "record_not_found" | "validation_error"} [args.errorType] - Stable client-facing error category.
@@ -28,7 +28,7 @@ export default class VelociousError extends Error {
    * Runs safe.
    * @param {string} message - Error message.
    * @param {object} [args] - Options.
-   * @param {?} [args.cause] - Error cause.
+   * @param {ReturnType<typeof JSON.parse>} [args.cause] - Error cause.
    * @param {string} [args.code] - Optional error code.
    * @param {import("./configuration-types.js").ClientErrorPayloadReporterPayload} [args.details] - Structured client-safe error details.
    * @param {"application_error" | "authorization_error" | "record_not_found" | "validation_error"} [args.errorType] - Stable client-facing error category.

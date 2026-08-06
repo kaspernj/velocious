@@ -10,7 +10,7 @@ import repl from "node:repl"
 /**
  * Runs build console context.
  * @param {ConsoleContextArgs} args - Options object.
- * @returns {Record<string, ?>} - The console context.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The console context.
  */
 function buildConsoleContext({application, configuration}) {
   /**
@@ -56,7 +56,7 @@ function buildConsoleContext({application, configuration}) {
 /**
  * Runs assign console context.
  * @param {object} args - Options object.
- * @param {Record<string, ?>} args.context - The base context.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - The base context.
  * @param {import("node:repl").REPLServer} args.replServer - The REPL server.
  * @returns {void} - No return value.
  */
@@ -76,7 +76,7 @@ function assignConsoleContext({context, replServer}) {
  * Runs start console repl.
  * @param {object} args - Options object.
  * @param {import("../../../../configuration.js").default} args.configuration - Configuration instance.
- * @param {Record<string, ?>} args.context - REPL context.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - REPL context.
  * @returns {Promise<void>} - Resolves when the console exits.
  */
 async function startConsoleRepl({configuration, context}) {
@@ -117,7 +117,7 @@ async function startConsoleRepl({configuration, context}) {
 export default class VelociousCliCommandsConsole extends BaseCommand{
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async execute() {
     const configuration = this.getConfiguration()

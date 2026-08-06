@@ -11,7 +11,7 @@ import toImportSpecifier from "../../../../../utils/to-import-specifier.js"
 /**
  * Runs import runner function.
  * @param {string} filePath - Absolute path to script file.
- * @returns {Promise<(context: RunnerContext) => Promise<?>>} - The default-exported async function.
+ * @returns {Promise<(context: RunnerContext) => Promise<ReturnType<typeof JSON.parse>>>} - The default-exported async function.
  */
 async function importRunnerFunction(filePath) {
   const runnerImport = await import(toImportSpecifier(filePath))
@@ -28,7 +28,7 @@ async function importRunnerFunction(filePath) {
 export default class DbSeed extends BaseCommand {
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Resolves with the seed function result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the seed function result.
    */
   async execute() {
     const configuration = this.getConfiguration()

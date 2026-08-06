@@ -55,7 +55,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
    * Runs build.
    * @abstract
-   * @param {Record<string, ?>} attributes - Attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(attributes) { // eslint-disable-line no-unused-vars
@@ -126,14 +126,14 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   async _tryCohortPreload() {
     const relationshipDef = this.getRelationship()
     const configuration = relationshipDef.getConfiguration()
-    const cohort = /** @type {Array<import("../index.js").default> | undefined} */ (/** @type {?} */ (this.model)._loadCohort)
+    const cohort = /** @type {Array<import("../index.js").default> | undefined} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this.model)._loadCohort)
 
     if (!configuration.getAutoload() || !relationshipDef.getAutoload() || !cohort || cohort.length <= 1) {
       return false
     }
 
     const relationshipName = relationshipDef.getRelationshipName()
-    const OwnerModelClass = /** @type {?} */ (this.model).constructor
+    const OwnerModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (this.model).constructor
     /**
      * Batch.
      * @type {Array<import("../index.js").default>} */

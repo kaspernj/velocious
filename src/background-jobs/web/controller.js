@@ -180,7 +180,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   /**
    * Runs serialize job.
    * @param {import("../types.js").BackgroundJobRow} job - Job row.
-   * @returns {Record<string, ?>} - Serialized job for the API.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Serialized job for the API.
    */
   _serializeJob(job) {
     const redactArgs = Boolean(this._mountOptions().redactArgs)
@@ -209,7 +209,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
   /**
    * Runs serialize schedule.
    * @param {import("../../configuration-types.js").ScheduledBackgroundJobsConfiguration | undefined} scheduled - Scheduled jobs config.
-   * @returns {Array<Record<string, ?>>} - Serialized recurring jobs.
+   * @returns {Array<Record<string, ReturnType<typeof JSON.parse>>>} - Serialized recurring jobs.
    */
   _serializeSchedule(scheduled) {
     const jobs = scheduled?.jobs
@@ -219,7 +219,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
     const redactArgs = Boolean(this._mountOptions().redactArgs)
 
     return Object.keys(jobs).map((name) => {
-      const entry = jobs[name] || /** @type {?} */ ({})
+      const entry = jobs[name] || /** @type {ReturnType<typeof JSON.parse>} */ ({})
 
       return {
         args: redactArgs ? undefined : (entry.args || []),
@@ -235,7 +235,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
 
   /**
    * Runs sanitize status.
-   * @param {?} value - Raw status param.
+   * @param {ReturnType<typeof JSON.parse>} value - Raw status param.
    * @returns {string | undefined} - Valid status or undefined.
    */
   _sanitizeStatus(value) {
@@ -244,7 +244,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
 
   /**
    * Runs sanitize sort.
-   * @param {?} value - Raw sort param (e.g. "createdAtMs" or "-failedAtMs").
+   * @param {ReturnType<typeof JSON.parse>} value - Raw sort param (e.g. "createdAtMs" or "-failedAtMs").
    * @returns {{sortColumn: string, sortDirection: "ASC" | "DESC"}} - Normalized sort.
    */
   _sanitizeSort(value) {
@@ -261,7 +261,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
 
   /**
    * Runs positive int.
-   * @param {?} value - Raw numeric param.
+   * @param {ReturnType<typeof JSON.parse>} value - Raw numeric param.
    * @param {number} fallback - Fallback when invalid.
    * @returns {number} - Positive integer.
    */

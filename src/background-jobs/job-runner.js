@@ -20,7 +20,7 @@ export class BackgroundJobPerformedFailure extends Error {
 /**
  * Runs report beacon ready error.
  * @param {import("../configuration.js").default} configuration - Configuration.
- * @param {?} error - Beacon readiness error.
+ * @param {ReturnType<typeof JSON.parse>} error - Beacon readiness error.
  * @returns {void}
  */
 function reportBeaconReadyError(configuration, error) {
@@ -94,7 +94,7 @@ export default async function runJobPayload(payload, {closeConnections = true, m
   const jobInstance = new JobClass()
   /**
    * Perform.
-   * @type {(...args: Array<?>) => Promise<void>} */
+   * @type {(...args: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} */
   const perform = jobInstance.perform
 
   // Name the process after the job it is running so `ps`/`top` show what each

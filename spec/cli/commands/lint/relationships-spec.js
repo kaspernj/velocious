@@ -56,7 +56,7 @@ function buildConfiguration(modelClasses) {
  * @param {object} [options] - Run options.
  * @param {string} [options.directory] - CLI project directory.
  * @param {boolean} [options.testing] - Whether to run the CLI in test mode.
- * @returns {Promise<?>} - Resolves with the CLI result.
+ * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the CLI result.
  */
 async function runLint(configuration, processArgs = ["lint:relationships"], {directory = dummyDirectory(), testing = true} = {}) {
   const cli = new Cli({

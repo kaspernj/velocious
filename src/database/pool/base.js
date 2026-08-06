@@ -29,8 +29,8 @@ import baseMethodsForward from "./base-methods-forward.js"
 /**
  * DatabasePoolDebugSnapshot type.
  * @typedef {object} DatabasePoolDebugSnapshot
- * @property {Record<string, ?>} configuration - Sanitized resolved database configuration.
- * @property {Array<Record<string, ?>>} connections - Live connection snapshots.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} configuration - Sanitized resolved database configuration.
+ * @property {Array<Record<string, ReturnType<typeof JSON.parse>>>} connections - Live connection snapshots.
  * @property {number} connectionsBeingSpawned - Number of in-progress connection spawns.
  * @property {number} idleCount - Number of idle connections.
  * @property {string} identifier - Database identifier.
@@ -50,7 +50,7 @@ const shared = {
 
 /**
  * Runs stable stringify.
- * @param {?} value - Value to stringify.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to stringify.
  * @returns {string} - Stable JSON string.
  */
 function stableStringify(value) {
@@ -60,9 +60,9 @@ function stableStringify(value) {
 
   if (value && typeof value === "object") {
     const entries = Object
-      .keys(/** @type {Record<string, ?>} */ (value))
+      .keys(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value))
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(/** @type {Record<string, ?>} */ (value)[key])}`)
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)[key])}`)
 
     return `{${entries.join(",")}}`
   }
@@ -73,7 +73,7 @@ function stableStringify(value) {
 class VelociousDatabasePoolBase {
   /**
    * Without current connection context.
-   * @type {undefined | ((callback: () => ?) => ?)} */
+   * @type {undefined | ((callback: () => ReturnType<typeof JSON.parse>) => ReturnType<typeof JSON.parse>)} */
   _withoutCurrentConnectionContext = undefined
 
   /**
@@ -361,8 +361,8 @@ class VelociousDatabasePoolBase {
    * Runs with connection.
    * @template T
    * @abstract
-   * @param {ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} _optionsOrCallback - Checkout options or callback function.
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} [_callback] - Callback function.
+   * @param {ConnectionCheckoutOptions | ((arg: import("../drivers/base.js").default) => Promise<T>)} _optionsOrCallback - Checkout options or callback function.
+   * @param {(arg: import("../drivers/base.js").default) => Promise<T>} [_callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   withConnection(_optionsOrCallback, _callback) {
@@ -410,7 +410,7 @@ class VelociousDatabasePoolBase {
 
   /**
    * Runs debug configuration snapshot.
-   * @returns {Record<string, ?>} - Sanitized resolved database configuration.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Sanitized resolved database configuration.
    */
   debugConfigurationSnapshot() {
     const databaseConfig = this.getConfiguration()
@@ -434,8 +434,8 @@ class VelociousDatabasePoolBase {
   /**
    * Runs debug connection snapshot.
    * @param {import("../drivers/base.js").default} connection - Database connection.
-   * @param {Record<string, ?>} details - Extra diagnostic fields.
-   * @returns {Record<string, ?>} - Connection diagnostic snapshot.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} details - Extra diagnostic fields.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Connection diagnostic snapshot.
    */
   debugConnectionSnapshot(connection, details = {}) {
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)

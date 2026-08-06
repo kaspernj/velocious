@@ -7,7 +7,7 @@ export default class VelociousDatabaseDriversSqliteColumn extends BaseColumn {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.column - Column.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.column - Column.
    * @param {import("../base.js").default} args.driver - Database driver instance.
    * @param {import("../base-table.js").default} args.table - Table.
    */

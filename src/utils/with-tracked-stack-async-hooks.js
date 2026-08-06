@@ -9,8 +9,8 @@ let asyncLocalStorage
 
 /**
  * Tracked stack global.
- * @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<?>), arg2?: (() => Promise<?>) | Error) => Promise<?>}}} */
-const trackedStackGlobal = /** @type {?} */ (globalThis)
+ * @type {{withTrackedStack?: {addTrackedStackToError: (error: Error) => void, withTrackedStack: (arg1: string | (() => Promise<ReturnType<typeof JSON.parse>>), arg2?: (() => Promise<ReturnType<typeof JSON.parse>>) | Error) => Promise<ReturnType<typeof JSON.parse>>}}} */
+const trackedStackGlobal = /** @type {ReturnType<typeof JSON.parse>} */ (globalThis)
 
 if (AsyncLocalStorage) {
   asyncLocalStorage = new AsyncLocalStorage()
@@ -39,14 +39,14 @@ function addTrackedStackToError(error) {
 
 /**
  * Runs with tracked stack.
- * @param {(() => Promise<?>) | string} arg1 - Arg1.
- * @param {(() => Promise<?>) | Error} [arg2] - Arg2.
- * @returns {Promise<?>} - Resolves with the callback result.
+ * @param {(() => Promise<ReturnType<typeof JSON.parse>>) | string} arg1 - Arg1.
+ * @param {(() => Promise<ReturnType<typeof JSON.parse>>) | Error} [arg2] - Arg2.
+ * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the callback result.
  */
 async function withTrackedStack(arg1, arg2) {
   /**
    * Defines callback.
-   * @type {() => Promise<?>} */
+   * @type {() => Promise<ReturnType<typeof JSON.parse>>} */
   let callback
 
   /**
@@ -55,10 +55,10 @@ async function withTrackedStack(arg1, arg2) {
   let stack
 
   if (typeof arg2 == "function" && typeof arg1 == "string") {
-    callback = /** @type {() => Promise<?>} */ (arg2)
+    callback = /** @type {() => Promise<ReturnType<typeof JSON.parse>>} */ (arg2)
     stack = arg1
   } else {
-    callback = /** @type {() => Promise<?>} */ (arg1)
+    callback = /** @type {() => Promise<ReturnType<typeof JSON.parse>>} */ (arg1)
     stack = Error().stack || ""
   }
 

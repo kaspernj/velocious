@@ -8,7 +8,7 @@ import stableJsonStringify from "./stable-json.js"
 
 /**
  * @typedef {object} SyncScopeRow
- * @property {Record<string, ?>} conditions - Scope attribute conditions.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} conditions - Scope attribute conditions.
  * @property {string | null} cursorPayload - Persisted cursor JSON payload.
  * @property {string} id - Scope row id.
  * @property {string | null} resourceType - Scope resource/model name, or null for the all-types (user) scope.
@@ -159,7 +159,7 @@ export default class SyncScopeStore {
     }
 
     return await this._withDb(async (db) => {
-      const rows = /** @type {Array<Record<string, ?>>} */ (await db
+      const rows = /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ (await db
         .newQuery()
         .from(TABLE_NAME)
         .where({state: "active"})
@@ -300,7 +300,7 @@ export default class SyncScopeStore {
    * @returns {Promise<SyncScopeRow | null>} Scope row or null.
    */
   async _rowByScopeDigest(db, digest) {
-    const rows = /** @type {Array<Record<string, ?>>} */ (await db
+    const rows = /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ (await db
       .newQuery()
       .from(TABLE_NAME)
       .where({scope_digest: digest})
@@ -312,12 +312,12 @@ export default class SyncScopeStore {
 
   /**
    * Normalizes a raw scope table row.
-   * @param {Record<string, ?>} row - Raw table row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} row - Raw table row.
    * @returns {SyncScopeRow} Normalized scope row.
    */
   _normalizeScopeRow(row) {
     return {
-      conditions: /** @type {Record<string, ?>} */ (JSON.parse(String(row.conditions_json))),
+      conditions: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (JSON.parse(String(row.conditions_json))),
       cursorPayload: row.cursor_json === null || row.cursor_json === undefined ? null : String(row.cursor_json),
       id: String(row.id),
       resourceType: String(row.resource_type) === "" ? null : String(row.resource_type),

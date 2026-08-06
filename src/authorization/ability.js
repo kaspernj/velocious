@@ -3,7 +3,7 @@
 /**
  * Defines this typedef.
  * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
- * @typedef {Record<string, ?> | string | ((query: import("../database/query/model-class-query.js").default<MC>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: MC}) => void | import("../database/query/model-class-query.js").default<MC>)} AbilityConditionsType
+ * @typedef {Record<string, ReturnType<typeof JSON.parse>> | string | ((query: import("../database/query/model-class-query.js").default<MC>, args: {ability: VelociousAuthorizationAbility, action: string, modelClass: MC}) => void | import("../database/query/model-class-query.js").default<MC>)} AbilityConditionsType
  */
 
 /**
@@ -45,8 +45,8 @@ export default class VelociousAuthorizationAbility {
   /**
    * Runs constructor.
    * @param {object} args - Ability args.
-   * @param {Record<string, ?>} [args.context] - Ability context.
-   * @param {Record<string, ?>} [args.locals] - Ability locals.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.context] - Ability context.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.locals] - Ability locals.
    * @param {Array<typeof import("./base-resource.js").default>} [args.resources] - Resource classes.
    */
   constructor({context = {}, locals = {}, resources} = {}) {
@@ -97,7 +97,7 @@ export default class VelociousAuthorizationAbility {
 
   /**
    * Runs get context.
-   * @returns {Record<string, ?>} - Context.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Context.
    */
   getContext() {
     return this.context
@@ -105,7 +105,7 @@ export default class VelociousAuthorizationAbility {
 
   /**
    * Runs get locals.
-   * @returns {Record<string, ?>} - Locals.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Locals.
    */
   getLocals() {
     return this.locals
@@ -113,7 +113,7 @@ export default class VelociousAuthorizationAbility {
 
   /**
    * Runs current user.
-   * @returns {?} - Current user from context.
+   * @returns {ReturnType<typeof JSON.parse>} - Current user from context.
    */
   currentUser() {
     return this.context.currentUser

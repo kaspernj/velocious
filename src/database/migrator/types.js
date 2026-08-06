@@ -9,11 +9,11 @@
  */
 
 /**
- * @typedef {function() : typeof import("../migration/index.js").default} ImportCallbackType
+ * @typedef {() => typeof import("../migration/index.js").default} ImportCallbackType
  */
 
 /**
- * @typedef {function(string) : Promise<typeof import("../migration/index.js").default>} ImportFullpathCallbackType
+ * @typedef {(arg: string) => Promise<typeof import("../migration/index.js").default>} ImportFullpathCallbackType
  */
 
 /**

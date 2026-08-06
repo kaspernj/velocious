@@ -14,7 +14,7 @@ function buildDriver(type) {
     getType: () => type,
     options() {
       return {
-        quote: (/** @type {?} */ value) => `'${value}'`
+        quote: (/** @type {ReturnType<typeof JSON.parse>} */ value) => `'${value}'`
       }
     },
     quoteColumn: (/** @type {string} */ name) => `"${name}"`,

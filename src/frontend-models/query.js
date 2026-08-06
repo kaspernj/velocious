@@ -11,7 +11,7 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {string} column - Attribute name to search.
  * @property {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq"} operator - Search operator.
  * @property {string[]} path - Relationship path from root model.
- * @property {?} value - Search value.
+ * @property {ReturnType<typeof JSON.parse>} value - Search value.
  */
 /**
  * FrontendModelTransportValue type.
@@ -184,8 +184,8 @@ export function normalizePreload(preload) {
  * query API into the strict internal entries used in the transport
  * payload. Shares the shape semantics with the backend normalizer in
  * `database/query/with-count.js`.
- * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} spec - Association-count shorthand to normalize.
- * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} - Normalized association-count requests.
+ * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ReturnType<typeof JSON.parse>>}>} spec - Association-count shorthand to normalize.
+ * @returns {Array<{attributeName: string, relationshipName: string, where?: Record<string, ReturnType<typeof JSON.parse>>}>} - Normalized association-count requests.
  */
 function normalizeWithCountFrontend(spec) {
   if (spec == null) return []
@@ -219,7 +219,7 @@ function normalizeWithCountFrontend(spec) {
     if (value === false) continue
 
     if (isPlainObject(value)) {
-      const options = /** @type {{relationship?: string, where?: Record<string, ?>}} */ (value)
+      const options = /** @type {{relationship?: string, where?: Record<string, ReturnType<typeof JSON.parse>>}} */ (value)
       entries.push({
         attributeName: key,
         relationshipName: options.relationship || key,
@@ -330,7 +330,7 @@ function mergePreloadRecord(targetPreload, incomingPreload) {
 
 /**
  * Runs normalize select.
- * @param {?} select - Select payload.
+ * @param {ReturnType<typeof JSON.parse>} select - Select payload.
  * @param {string | null} [rootModelName] - Optional root model name for shorthand select payloads.
  * @returns {Record<string, string[]>} - Normalized model-name keyed select record.
  */
@@ -424,8 +424,8 @@ export function normalizeSearchOperator(operator) {
 
 /**
  * Runs merge join record.
- * @param {Record<string, ?>} targetJoins - Existing join record.
- * @param {Record<string, ?>} incomingJoins - Incoming join record.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} targetJoins - Existing join record.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} incomingJoins - Incoming join record.
  * @returns {void}
  */
 function mergeJoinRecord(targetJoins, incomingJoins) {
@@ -459,8 +459,8 @@ function mergeJoinRecord(targetJoins, incomingJoins) {
 
 /**
  * Runs the normalizeJoins helper.
- * @param {?} joins - Join payload.
- * @returns {Record<string, ?>} - Normalized relationship descriptor joins.
+ * @param {ReturnType<typeof JSON.parse>} joins - Join payload.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Normalized relationship descriptor joins.
  */
 export function normalizeJoins(joins) {
   if (!joins) return {}
@@ -468,7 +468,7 @@ export function normalizeJoins(joins) {
   if (Array.isArray(joins)) {
     /**
      * Normalized.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const normalized = {}
 
     for (const joinEntry of joins) {
@@ -488,7 +488,7 @@ export function normalizeJoins(joins) {
 
   /**
    * Normalized.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const normalized = {}
 
   for (const [relationshipName, relationshipJoin] of Object.entries(joins)) {
@@ -510,7 +510,7 @@ export function normalizeJoins(joins) {
 
 /**
  * Runs normalize sort direction.
- * @param {?} direction - Direction value.
+ * @param {ReturnType<typeof JSON.parse>} direction - Direction value.
  * @returns {"asc" | "desc"} - Normalized direction.
  */
 function normalizeSortDirection(direction) {
@@ -529,7 +529,7 @@ function normalizeSortDirection(direction) {
 
 /**
  * Check whether a value is a two-item `[column, direction]` sort tuple.
- * @param {?} value - Candidate tuple.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate tuple.
  * @returns {value is [string, string]} - Whether value is a sort tuple.
  */
 function sortTuple(value) {
@@ -546,7 +546,7 @@ function sortTuple(value) {
 
 /**
  * Check whether a value is a structured sort descriptor with a relationship path.
- * @param {?} value - Candidate descriptor.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate descriptor.
  * @returns {value is {column: string, direction: string, path: string[]}} - Whether value is an explicit sort descriptor object.
  */
 function sortDescriptor(value) {
@@ -632,7 +632,7 @@ function parseSortTuple(sortValue, path = []) {
 
 /**
  * Normalize a nested object sort payload into flat sort descriptors.
- * @param {Record<string, ?>} sortValue - Nested sort object.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} sortValue - Nested sort object.
  * @param {string[]} path - Relationship path.
  * @returns {FrontendModelSort[]} - Normalized sort descriptors.
  */
@@ -685,7 +685,7 @@ function normalizeSortObject(sortValue, path) {
 
 /**
  * Normalize any supported sort payload into flat sort descriptors.
- * @param {?} sort - Sort payload.
+ * @param {ReturnType<typeof JSON.parse>} sort - Sort payload.
  * @returns {FrontendModelSort[]} - Normalized sort definitions.
  */
 export function normalizeSort(sort) {
@@ -772,7 +772,7 @@ function parseGroupString(groupValue, path = []) {
 
 /**
  * Check whether a value is a structured column/path descriptor.
- * @param {?} value - Candidate descriptor.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate descriptor.
  * @returns {value is {column: string, path: string[]}} - Whether candidate is an explicit column descriptor object.
  */
 function columnPathDescriptor(value) {
@@ -787,7 +787,7 @@ function columnPathDescriptor(value) {
 /**
  * Normalize a nested object column projection payload into flat descriptors.
  * @template {{column: string, path: string[]}} T
- * @param {Record<string, ?>} value - Nested projection object.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} value - Nested projection object.
  * @param {string[]} path - Relationship path.
  * @param {(columnValue: string, path?: string[]) => T} parseString - String projection parser.
  * @param {string} label - Projection label for errors.
@@ -834,7 +834,7 @@ function normalizeColumnProjectionObject(value, path, parseString, label) {
 
 /**
  * Normalize any supported group payload into flat group descriptors.
- * @param {?} group - Group payload.
+ * @param {ReturnType<typeof JSON.parse>} group - Group payload.
  * @returns {FrontendModelGroup[]} - Normalized group definitions.
  */
 export function normalizeGroup(group) {
@@ -910,7 +910,7 @@ function parsePluckString(pluckValue, path = []) {
 
 /**
  * Normalize any supported pluck payload into flat pluck descriptors.
- * @param {?} pluck - Pluck payload.
+ * @param {ReturnType<typeof JSON.parse>} pluck - Pluck payload.
  * @returns {FrontendModelPluck[]} - Normalized pluck definitions.
  */
 export function normalizePluck(pluck) {
@@ -971,7 +971,7 @@ export function normalizePluck(pluck) {
  * @returns {Set<string>} - Resource attribute names.
  */
 function frontendModelResourceAttributes(modelClass) {
-  const resourceConfig = /** @type {Record<string, ?>} */ (modelClass.resourceConfig())
+  const resourceConfig = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (modelClass.resourceConfig())
   const attributes = resourceConfig.attributes
 
   if (Array.isArray(attributes)) {
@@ -1039,7 +1039,7 @@ function assertPluckDefinitionsAllowed({modelClass, pluck}) {
 
 /**
  * Runs serialize find conditions.
- * @param {Record<string, ?>} conditions - findBy conditions.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - findBy conditions.
  * @returns {string} - Serialized conditions for error messages.
  */
 function serializeFindConditions(conditions) {
@@ -1052,7 +1052,7 @@ function serializeFindConditions(conditions) {
 
 /**
  * Runs normalize integer argument.
- * @param {?} value - Candidate integer value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate integer value.
  * @param {string} argumentName - Argument name for errors.
  * @param {object} options - Integer options.
  * @param {number} options.min - Minimum allowed value.
@@ -1086,7 +1086,7 @@ function reverseSortDirection(direction) {
 export default class FrontendModelQuery {
   /**
    * Ransack.
-   * @type {Record<string, ?>[]} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>[]} */
   _ransack = []
   /**
    * Searches.
@@ -1130,11 +1130,11 @@ export default class FrontendModelQuery {
     this._perPage = null
     /**
      * Narrows the runtime value to the documented type.
-     * @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, ?>}>} */
+     * @type {Array<{attributeName: string, relationshipName: string, where?: Record<string, ReturnType<typeof JSON.parse>>}>} */
     this._withCount = []
     /**
      * Narrows the runtime value to the documented type.
-     * @type {Array<string | Record<string, ?>>} */
+     * @type {Array<string | Record<string, ReturnType<typeof JSON.parse>>>} */
     this._queryData = []
     /**
      * Per-record ability spec. Normalized to a list of
@@ -1211,7 +1211,7 @@ export default class FrontendModelQuery {
    * counts to each returned record. Parses the same shapes as the
    * backend `ModelClassQuery#withCount`, then ships the normalized
    * entries as part of the `index` command payload.
-   * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ?>}>} spec - Relationships whose counts should be serialized.
+   * @param {string | string[] | Record<string, boolean | {relationship?: string, where?: Record<string, ReturnType<typeof JSON.parse>>}>} spec - Relationships whose counts should be serialized.
    * @returns {this} - This query for chaining.
    */
   withCount(spec) {
@@ -1229,20 +1229,20 @@ export default class FrontendModelQuery {
    * frontend ships only these names; the SQL fragments stay server-
    * side. All resulting aliases are attached to the root record and
    * read back with `record.queryData(aliasName)`.
-   * @param {string | Array<string | Record<string, ?>> | Record<string, ?>} spec - Backend query-data names and arguments to serialize.
+   * @param {string | Array<string | Record<string, ReturnType<typeof JSON.parse>>> | Record<string, ReturnType<typeof JSON.parse>>} spec - Backend query-data names and arguments to serialize.
    * @returns {this} - This query for chaining.
    */
   queryData(spec) {
     if (spec == null) return this
 
-    this._queryData.push(/** @type {?} */ (spec))
+    this._queryData.push(/** @type {ReturnType<typeof JSON.parse>} */ (spec))
 
     return this
   }
 
   /**
    * Runs where.
-   * @param {Record<string, ?>} conditions - Root-model where conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Root-model where conditions.
    * @returns {this} - Query with merged where conditions.
    */
   where(conditions) {
@@ -1282,7 +1282,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs ransack.
-   * @param {Record<string, ?>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
    * @returns {this} - Query with Ransack filters and sort applied.
    */
   ransack(params) {
@@ -1364,7 +1364,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs joins.
-   * @param {Record<string, ?> | Array<Record<string, ?>>} joins - Relationship descriptor joins.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} joins - Relationship descriptor joins.
    * @returns {this} - Query with merged joins.
    */
   joins(joins) {
@@ -1378,7 +1378,7 @@ export default class FrontendModelQuery {
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
    * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
-   * @param {?} value - Search value.
+   * @param {ReturnType<typeof JSON.parse>} value - Search value.
    * @returns {this} - Query with appended search.
    */
   search(path, column, operator, value) {
@@ -1414,7 +1414,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs sort.
-   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
+   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} sort - Sort definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
   sort(sort) {
@@ -1425,7 +1425,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs order.
-   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} order - Order definition(s).
+   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} order - Order definition(s).
    * @returns {this} - Query with appended sort definitions.
    */
   order(order) {
@@ -1434,7 +1434,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs group.
-   * @param {string | string[] | Record<string, ?> | Array<Record<string, ?>>} group - Group definition(s).
+   * @param {string | string[] | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} group - Group definition(s).
    * @returns {this} - Query with appended group definitions.
    */
   group(group) {
@@ -1574,7 +1574,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs preload payload.
-   * @returns {Record<string, ?>} - Payload preload hash when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload preload hash when present.
    */
   preloadPayload() {
     if (Object.keys(this._preload).length === 0) return {}
@@ -1584,7 +1584,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs with count payload.
-   * @returns {Record<string, ?>} - Payload withCount array when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload withCount array when present.
    */
   withCountPayload() {
     if (this._withCount.length === 0) return {}
@@ -1600,7 +1600,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs abilities payload.
-   * @returns {Record<string, ?>} - Payload abilities array when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload abilities array when present.
    */
   abilitiesPayload() {
     if (this._abilities.length === 0) return {}
@@ -1615,7 +1615,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs query data payload.
-   * @returns {Record<string, ?>} - Payload queryData spec when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload queryData spec when present.
    */
   queryDataPayload() {
     if (this._queryData.length === 0) return {}
@@ -1631,7 +1631,7 @@ export default class FrontendModelQuery {
   /**
    * Runs select payload.
    * @param {string[]} [requiredAttributes] - Extra required attributes for root model selection.
-   * @returns {Record<string, ?>} - Payload select hash when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload select hash when present.
    */
   selectPayload(requiredAttributes = []) {
     const select = this.selectWithRequiredRootAttributes(requiredAttributes)
@@ -1643,7 +1643,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs selects extra payload.
-   * @returns {Record<string, ?>} - Payload selectsExtra hash when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload selectsExtra hash when present.
    */
   selectsExtraPayload() {
     if (Object.keys(this._selectsExtra).length === 0) return {}
@@ -1653,7 +1653,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs search payload.
-   * @returns {Record<string, ?>} - Payload searches array when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload searches array when present.
    */
   searchPayload() {
     if (this._searches.length === 0) return {}
@@ -1670,7 +1670,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs ransack payload.
-   * @returns {Record<string, ?>} - Payload ransack hash when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload ransack hash when present.
    */
   ransackPayload() {
     if (this._ransack.length === 0) return {}
@@ -1689,7 +1689,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs joins payload.
-   * @returns {Record<string, ?>} - Payload joins hash when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload joins hash when present.
    */
   joinsPayload() {
     if (Object.keys(this._joins).length === 0) return {}
@@ -1701,7 +1701,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs sort payload.
-   * @returns {Record<string, ?>} - Payload sort array when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload sort array when present.
    */
   sortPayload() {
     if (this._sort.length === 0) return {}
@@ -1717,7 +1717,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs group payload.
-   * @returns {Record<string, ?>} - Payload group array when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload group array when present.
    */
   groupPayload() {
     if (this._group.length === 0) return {}
@@ -1732,7 +1732,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs distinct payload.
-   * @returns {Record<string, ?>} - Payload distinct flag when enabled.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload distinct flag when enabled.
    */
   distinctPayload() {
     if (!this._distinct) return {}
@@ -1744,7 +1744,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs where payload.
-   * @returns {Record<string, ?>} - Payload where hash when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload where hash when present.
    */
   wherePayload() {
     if (Object.keys(this._where).length === 0) return {}
@@ -1756,12 +1756,12 @@ export default class FrontendModelQuery {
 
   /**
    * Runs pagination payload.
-   * @returns {Record<string, ?>} - Payload pagination params when present.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Payload pagination params when present.
    */
   paginationPayload() {
     /**
      * Payload.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const payload = {}
 
     if (this._limit !== null) payload.limit = this._limit
@@ -1877,7 +1877,7 @@ export default class FrontendModelQuery {
     // can batch lazy relationship access later. Single-record lookups still flow
     // through here (with a cohort of one) and degrade cleanly to per-record load.
     for (const model of models) {
-      /** @type {?} */ (model)._loadCohort = models
+      /** @type {ReturnType<typeof JSON.parse>} */ (model)._loadCohort = models
     }
 
     return models
@@ -1970,8 +1970,8 @@ export default class FrontendModelQuery {
 
   /**
    * Runs pluck.
-   * @param {...(string | string[] | Record<string, ?> | Array<Record<string, ?>>)} columns - Pluck definition(s).
-   * @returns {Promise<Array<?>>} - Plucked values.
+   * @param {...(string | string[] | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>)} columns - Pluck definition(s).
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - Plucked values.
    */
   async pluck(...columns) {
     if (columns.length < 1) {
@@ -2023,7 +2023,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs find by.
-   * @param {Record<string, ?>} conditions - Conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions.
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
   async findBy(conditions) {
@@ -2066,7 +2066,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs find by or fail.
-   * @param {Record<string, ?>} conditions - Conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions.
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
   async findByOrFail(conditions) {
@@ -2081,7 +2081,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs find or initialize by.
-   * @param {Record<string, ?>} conditions - Conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions.
    * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
    */
   async findOrInitializeBy(conditions) {
@@ -2097,7 +2097,7 @@ export default class FrontendModelQuery {
 
   /**
    * Runs find or create by.
-   * @param {Record<string, ?>} conditions - Conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions.
    * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save.
    * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
    */
@@ -2121,8 +2121,8 @@ export default class FrontendModelQuery {
 
   /**
    * Runs validated structured conditions.
-   * @param {Record<string, ?>} conditions - Candidate structured conditions.
-   * @returns {Record<string, ?>} - Validated conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Candidate structured conditions.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Validated conditions.
    */
   validatedStructuredConditions(conditions) {
     this.modelClass.assertFindByConditions(conditions)

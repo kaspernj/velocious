@@ -23,12 +23,12 @@
 
 /**
  * @typedef {object} SyncResourceConfig
- * @property {(args: {attributes: Record<string, unknown>, data: Record<string, unknown>, record: ?, sync: SyncChangeEnvelope}) => Promise<boolean | void> | boolean | void} [afterApply] - Optional post-save hook.
- * @property {(args: {data: Record<string, unknown>, record: ?, sync: SyncChangeEnvelope}) => Promise<Record<string, unknown>> | Record<string, unknown>} attributes - Allowed attributes builder.
+ * @property {(args: {attributes: Record<string, unknown>, data: Record<string, unknown>, record: ReturnType<typeof JSON.parse>, sync: SyncChangeEnvelope}) => Promise<boolean | void> | boolean | void} [afterApply] - Optional post-save hook.
+ * @property {(args: {data: Record<string, unknown>, record: ReturnType<typeof JSON.parse>, sync: SyncChangeEnvelope}) => Promise<Record<string, unknown>> | Record<string, unknown>} attributes - Allowed attributes builder.
  * @property {boolean} enabled - Whether this resource is sync-enabled.
- * @property {(args: {data: Record<string, unknown>, resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<?> | ?} [findRecord] - Optional upsert finder.
- * @property {(args: {resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<?> | ?} [findRecordForDelete] - Optional destroy finder.
- * @property {?} modelClass - Velocious model class.
+ * @property {(args: {data: Record<string, unknown>, resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [findRecord] - Optional upsert finder.
+ * @property {(args: {resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [findRecordForDelete] - Optional destroy finder.
+ * @property {ReturnType<typeof JSON.parse>} modelClass - Velocious model class.
  */
 
 /**
@@ -46,11 +46,11 @@
 /**
  * @typedef {object} SyncChangesResponse
  * @property {string} [errorMessage] - Error message.
- * @property {SyncCursor | Record<string, ?>} [nextCursor] - Next cursor.
+ * @property {SyncCursor | Record<string, ReturnType<typeof JSON.parse>>} [nextCursor] - Next cursor.
  * @property {string} [status] - Response status.
  * @property {Array<unknown>} [syncs] - Sync rows.
  * @property {number} [total] - Total pending change count for the scope from the request cursor (additive; absent on older servers).
- * @property {SyncCursor | Record<string, ?>} [upToCursor] - Snapshot upper-bound cursor.
+ * @property {SyncCursor | Record<string, ReturnType<typeof JSON.parse>>} [upToCursor] - Snapshot upper-bound cursor.
  */
 
 /**

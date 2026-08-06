@@ -13,7 +13,7 @@ function throwMissingMethod({driverName, methodName}) {
 
 /**
  * Runs to buffer.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {Buffer} - Buffer value.
  */
 function toBuffer(value) {
@@ -35,7 +35,7 @@ export default class NativeAttachmentStorageDriver {
    * @param {object} args - Options.
    * @param {import("../../../../configuration.js").default} [args.configuration] - Configuration instance.
    * @param {string} args.name - Driver name.
-   * @param {Record<string, ?>} [args.options] - Driver options.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.options] - Driver options.
    */
   constructor({configuration, name, options = {}}) {
     this.configuration = configuration
@@ -94,7 +94,7 @@ export default class NativeAttachmentStorageDriver {
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
-   * @param {Record<string, ?>} args.row - Attachment row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.row - Attachment row.
    * @returns {Promise<Buffer>} - Attachment bytes.
    */
   async read({model, name, row, storageKey}) {
@@ -119,7 +119,7 @@ export default class NativeAttachmentStorageDriver {
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
-   * @param {Record<string, ?>} args.row - Attachment row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.row - Attachment row.
    * @returns {Promise<void>} - Resolves when deleted.
    */
   async delete({model, name, row, storageKey}) {
@@ -140,7 +140,7 @@ export default class NativeAttachmentStorageDriver {
    * @param {string} args.storageKey - Storage key.
    * @param {import("../../index.js").default} args.model - Model instance.
    * @param {string} args.name - Attachment name.
-   * @param {Record<string, ?>} args.row - Attachment row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.row - Attachment row.
    * @returns {Promise<string | null>} - Attachment URL.
    */
   async url({model, name, row, storageKey}) {

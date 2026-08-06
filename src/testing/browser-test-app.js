@@ -25,8 +25,8 @@ root.appendChild(systemTestingComponent)
 const systemTestBrowserHelper = new SystemTestBrowserHelper()
 systemTestBrowserHelper.enableOnBrowser()
 
-globalThis.velociousBrowserTest = {
+Object.assign(globalThis, {velociousBrowserTest: {
   BrowserEnvironmentHandler,
   runFrontendModelEventHookScenario,
   systemTestBrowserHelper
-}
+}})

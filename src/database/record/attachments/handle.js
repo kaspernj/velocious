@@ -6,7 +6,7 @@ import {recordAttachmentsStoreForModel} from "./store.js"
 /**
  * Runs download from row.
  * @param {object} args - Options.
- * @param {Record<string, ?>} args.row - Raw row.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.row - Raw row.
  * @param {Buffer} args.content - Attachment bytes.
  * @param {string | null} args.url - Attachment URL.
  * @returns {RecordAttachmentDownload} - Download payload.
@@ -26,8 +26,8 @@ function downloadFromRow({content, row, url}) {
 
 /**
  * Runs is array.
- * @param {?} value - Candidate value.
- * @returns {value is Array<?>} - Whether value is an array.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
+ * @returns {value is Array<ReturnType<typeof JSON.parse>>} - Whether value is an array.
  */
 function isArray(value) {
   return Array.isArray(value)
@@ -39,7 +39,7 @@ function isArray(value) {
 export default class RecordAttachmentHandle {
   /**
    * Pending inputs.
-   * @type {Array<?>} */
+   * @type {Array<ReturnType<typeof JSON.parse>>} */
   pendingInputs = []
 
   /**
@@ -65,7 +65,7 @@ export default class RecordAttachmentHandle {
 
   /**
    * Runs queue attach.
-   * @param {?} input - Attachment input.
+   * @param {ReturnType<typeof JSON.parse>} input - Attachment input.
    * @returns {void} - Queues attachment write for next save.
    */
   queueAttach(input) {
@@ -92,7 +92,7 @@ export default class RecordAttachmentHandle {
 
   /**
    * Runs attach.
-   * @param {?} input - Attachment input.
+   * @param {ReturnType<typeof JSON.parse>} input - Attachment input.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(input) {

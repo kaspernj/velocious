@@ -93,9 +93,9 @@ export default class SyncPublisher {
       resources[resourceConfig.resourceType] = resourceConfig
     }
 
-    /** @type {{actorForeignKeyColumn: string, broadcaster: import("./sync-publisher-types.js").SyncPublisherOptions["broadcaster"], configuration: Configuration, onError: import("./sync-publisher-types.js").SyncPublisherOptions["onError"], resources: Record<string, import("./sync-publisher-types.js").SyncPublisherResourceConfig>, syncModel: ?}} */
+    /** @type {{actorForeignKeyColumn: string, broadcaster: import("./sync-publisher-types.js").SyncPublisherOptions["broadcaster"], configuration: Configuration, onError: import("./sync-publisher-types.js").SyncPublisherOptions["onError"], resources: Record<string, import("./sync-publisher-types.js").SyncPublisherResourceConfig>, syncModel: ReturnType<typeof JSON.parse>}} */
     this.config = {actorForeignKeyColumn, broadcaster, configuration, onError, resources, syncModel: resolvedSyncModel}
-    /** @type {Array<{callback: (record: ?) => Promise<void>, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy", modelClass: ?}>} */
+    /** @type {Array<{callback: (record: ReturnType<typeof JSON.parse>) => Promise<void>, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy", modelClass: ReturnType<typeof JSON.parse>}>} */
     this._publishedCallbacks = []
     /** @type {Logger | null} */
     this._logger = null
@@ -183,7 +183,7 @@ export default class SyncPublisher {
    * publish failures are reported without rethrowing into the driver's
    * afterCommit chain (see reportAfterCommitError).
    * @param {{operation: "create" | "update" | "destroy", resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig}} args - Operation and resource config.
-   * @returns {(record: ?) => Promise<void>} Lifecycle callback.
+   * @returns {(record: ReturnType<typeof JSON.parse>) => Promise<void>} Lifecycle callback.
    */
   publishedMutationCallback({operation, resourceConfig}) {
     return async (record) => {
@@ -193,7 +193,7 @@ export default class SyncPublisher {
       const resourceId = String(record.id())
       const syncType = operation === "destroy" ? "delete" : "update"
       const scopeValues = await this.publishedScopeValues({record, resourceConfig})
-      /** @type {Record<string, ?>} */
+      /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const attributes = {
         [this.config.actorForeignKeyColumn]: null,
         client_updated_at: new Date(),
@@ -241,7 +241,7 @@ export default class SyncPublisher {
    * the record's own id for scope-root models, or the deprecated resolver
    * function). The values are persisted onto the sync row's partition columns
    * and broadcast as the framework sync channel's scoping params.
-   * @param {{record: ?, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig}} args - Mutated record and resource config.
+   * @param {{record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig}} args - Mutated record and resource config.
    * @returns {Promise<{columns: Record<string, string | null>, params: Record<string, string | null>}>} Scope values keyed by sync-row column and by scope attribute.
    */
   async publishedScopeValues({record, resourceConfig}) {
@@ -251,7 +251,7 @@ export default class SyncPublisher {
     const params = {}
 
     for (const scopePlanEntry of resourceConfig.scopePlan) {
-      /** @type {?} */
+      /** @type {ReturnType<typeof JSON.parse>} */
       let rawValue
 
       if (scopePlanEntry.resolver) {
@@ -277,11 +277,11 @@ export default class SyncPublisher {
    * (id, server sequence, updated-at, and declared scope-partition attributes).
    * Uses the sync model's generated typed accessors and follows the
    * change-feed serializer's public field convention.
-   * @param {{data: Record<string, ?>, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig, resourceId: string, syncRow: ?, syncType: string}} args - Publish args.
-   * @returns {Record<string, ?>} Broadcast sync entry.
+   * @param {{data: Record<string, ReturnType<typeof JSON.parse>>, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig, resourceId: string, syncRow: ReturnType<typeof JSON.parse>, syncType: string}} args - Publish args.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Broadcast sync entry.
    */
   publishedSyncEntry({data, resourceConfig, resourceId, syncRow, syncType}) {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const entry = {
       data,
       id: syncRow.id(),
@@ -312,9 +312,9 @@ export default class SyncPublisher {
    * server-origin rows carry a null actor column (no device to echo the
    * change back to), so repeated server changes to one resource reuse and
    * re-sequence one feed row.
-   * @param {Record<string, ?>} attributes - Snapshotted sync row attributes.
-   * @param {?} syncModel - Operation-bound or static Sync model interface.
-   * @returns {Promise<?>} Upserted sync row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Snapshotted sync row attributes.
+   * @param {ReturnType<typeof JSON.parse>} syncModel - Operation-bound or static Sync model interface.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} Upserted sync row.
    */
   async upsertPublishedSyncRow(attributes, syncModel = this.config.syncModel) {
     const existingSync = await syncModel
@@ -386,7 +386,7 @@ export default class SyncPublisher {
  * Resolves a model class's active publish declaration from `static sync`.
  * Opted-out (`publish: false`) and undeclared models resolve to null; every
  * other declared value flows into loud declaration validation.
- * @param {?} modelClass - Registered model class.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - Registered model class.
  * @returns {import("./sync-publisher-types.js").SyncPublishDeclaration | null} Active publish declaration, or null.
  */
 function publishDeclarationFor(modelClass) {
@@ -401,7 +401,7 @@ function publishDeclarationFor(modelClass) {
  * Builds one published resource config from a model's `static sync` publish
  * declaration. `publish: true` opts in with all defaults (attribute payload,
  * derived scope partition, created/updated operations).
- * @param {{modelClass: ?, publish: import("./sync-publisher-types.js").SyncPublishDeclaration | null, scopeAttributes: string[] | null, syncModel: ?}} args - Declaration args plus the sync model's declared scope attributes.
+ * @param {{modelClass: ReturnType<typeof JSON.parse>, publish: import("./sync-publisher-types.js").SyncPublishDeclaration | null, scopeAttributes: string[] | null, syncModel: ReturnType<typeof JSON.parse>}} args - Declaration args plus the sync model's declared scope attributes.
  * @returns {import("./sync-publisher-types.js").SyncPublisherResourceConfig} Derived resource config.
  */
 function resourceConfigFromPublishDeclaration({modelClass, publish, scopeAttributes: syncScopeAttributes, syncModel}) {
@@ -451,7 +451,7 @@ function resourceConfigFromPublishDeclaration({modelClass, publish, scopeAttribu
  * name map), or the record's own id when the model has no such attribute
  * (scope-root models). The deprecated `eventId` declaration forms map to a
  * fixed `eventId`/`event_id` plan for 1.0.503 compatibility.
- * @param {{eventId: import("./sync-publisher-types.js").SyncPublishDeclarationConfig["eventId"], modelClass: ?, modelName: string, scopeAttributes: Record<string, string> | undefined, syncModel: ?, syncScopeAttributes: string[] | null}} args - Declaration and sync-model scope args.
+ * @param {{eventId: import("./sync-publisher-types.js").SyncPublishDeclarationConfig["eventId"], modelClass: ReturnType<typeof JSON.parse>, modelName: string, scopeAttributes: Record<string, string> | undefined, syncModel: ReturnType<typeof JSON.parse>, syncScopeAttributes: string[] | null}} args - Declaration and sync-model scope args.
  * @returns {Array<import("./sync-publisher-types.js").SyncPublisherScopePlanEntry>} Derived scope plan.
  */
 function scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncModel, syncScopeAttributes}) {
@@ -512,7 +512,7 @@ function scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncMode
 
 /**
  * Resolves the sync-row column persisting a declared scope attribute.
- * @param {{scopeAttribute: string, syncModel: ?}} args - Scope attribute and sync model.
+ * @param {{scopeAttribute: string, syncModel: ReturnType<typeof JSON.parse>}} args - Scope attribute and sync model.
  * @returns {string} Sync-row column name.
  */
 function syncScopeColumnName({scopeAttribute, syncModel}) {
@@ -528,11 +528,11 @@ function syncScopeColumnName({scopeAttribute, syncModel}) {
 /**
  * Default publish serializer: the record's attributes with Date values
  * serialized to ISO strings.
- * @param {?} record - Mutated server model record.
- * @returns {Record<string, ?>} Serialized attributes payload.
+ * @param {ReturnType<typeof JSON.parse>} record - Mutated server model record.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} Serialized attributes payload.
  */
 function defaultSerializedAttributes(record) {
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const attributes = {...record.attributes()}
 
   for (const [attributeName, value] of Object.entries(attributes)) {

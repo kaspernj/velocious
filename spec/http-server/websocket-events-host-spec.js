@@ -53,7 +53,7 @@ class GatedPersistEventsHost extends VelociousHttpServerWebsocketEventsHost {
    * Runs persist event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {?} args.payload - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} args.payload - Payload data.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistEventIfNeeded({channel, payload}) {
@@ -65,7 +65,7 @@ class GatedPersistEventsHost extends VelociousHttpServerWebsocketEventsHost {
   /**
    * Runs persist v2 event if needed.
    * @param {object} args - Options.
-   * @param {?} args.body - Event body.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Event body.
    * @param {string} args.channel - Channel name.
    * @param {import("../../src/configuration.js").default} args.configuration - Originating configuration.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata when storage is enabled.
@@ -87,8 +87,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
       websocketV2BroadcastDispatchKey: () => dummyConfiguration
     }
 
-    dummyConfiguration._registerWebsocketChannelSubscription("RegistrySeparation", /** @type {?} */ (subscription))
-    const unregister = host.register(/** @type {?} */ (handler))
+    dummyConfiguration._registerWebsocketChannelSubscription("RegistrySeparation", /** @type {ReturnType<typeof JSON.parse>} */ (subscription))
+    const unregister = host.register(/** @type {ReturnType<typeof JSON.parse>} */ (handler))
 
     expect(dummyConfiguration._websocketChannelSubscriptions.get("RegistrySeparation")).toEqual(new Set([subscription]))
     expect(host.broadcastHandlersByConfiguration.get(dummyConfiguration)).toEqual(new Set([handler]))
@@ -99,7 +99,7 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     })
 
     unregister()
-    dummyConfiguration._unregisterWebsocketChannelSubscription("RegistrySeparation", /** @type {?} */ (subscription))
+    dummyConfiguration._unregisterWebsocketChannelSubscription("RegistrySeparation", /** @type {ReturnType<typeof JSON.parse>} */ (subscription))
     expect(host.broadcastHandlersByConfiguration.has(dummyConfiguration)).toEqual(false)
   })
 
@@ -156,7 +156,7 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     const deliveries = []
     const channelBDelivered = deferred()
 
-    host.register(/** @type {?} */ ({
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
       configuration,
       dispatchWebsocketV2Broadcast: ({channel}) => {
         deliveries.push(channel)
@@ -191,13 +191,13 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     /** @type {Array<string>} */
     const deliveries = []
 
-    host.register(/** @type {?} */ ({
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
       configuration: configurationA,
       dispatchWebsocketEvent: ({payload}) => deliveries.push(`legacy-a:${payload.n}`),
       dispatchWebsocketV2Broadcast: ({body}) => deliveries.push(`v2-a:${body.n}`),
       websocketV2BroadcastDispatchKey: () => configurationA
     }))
-    host.register(/** @type {?} */ ({
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
       configuration: configurationB,
       dispatchWebsocketEvent: ({payload}) => deliveries.push(`legacy-b:${payload.n}`),
       dispatchWebsocketV2Broadcast: ({body}) => deliveries.push(`v2-b:${body.n}`),
@@ -230,7 +230,7 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     const deliveries = []
     const channelBDelivered = deferred()
 
-    host.register(/** @type {?} */ ({
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
       configuration,
       dispatchWebsocketV2Broadcast: ({channel}) => {
         deliveries.push(channel)

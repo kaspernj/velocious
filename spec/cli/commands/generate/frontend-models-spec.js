@@ -13,7 +13,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "node:path"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
-import * as ts from "typescript"
+import {typescriptCliDiagnostics} from "../../../helpers/typescript-cli-helpers.js"
 
 class Call extends DatabaseRecord {
   /** @returns {number | null} */
@@ -235,7 +235,7 @@ function configureLegacyPrimaryKeyUserColumns() {
  * Typechecks source text and fails on diagnostics matched by the filter.
  * @param {string} sourceText - Source text to check.
  * @param {string} tmpPrefix - Temporary directory prefix.
- * @param {function({diagnostic: ts.Diagnostic, sourcePath: string}): boolean} diagnosticFilter - Relevant diagnostic filter.
+ * @param {(args: {diagnostic: import("../../../helpers/typescript-cli-helpers.js").TypeScriptCliDiagnostic, sourcePath: string}) => boolean} diagnosticFilter - Relevant diagnostic filter.
  * @returns {Promise<void>}
  */
 async function expectSourceTypechecks(sourceText, tmpPrefix, diagnosticFilter) {
@@ -243,23 +243,16 @@ async function expectSourceTypechecks(sourceText, tmpPrefix, diagnosticFilter) {
   const sourcePath = `${tmpDirectory}/index.js`
   await fs.writeFile(sourcePath, sourceText)
 
-  const program = ts.createProgram([sourcePath], {
-    allowJs: true,
-    checkJs: true,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    target: ts.ScriptTarget.ES2024
-  })
-  const diagnostics = ts.getPreEmitDiagnostics(program)
+  const diagnostics = await typescriptCliDiagnostics([sourcePath])
   const relevantDiagnostics = diagnostics.filter((diagnostic) => diagnosticFilter({diagnostic, sourcePath}))
 
-  expect(relevantDiagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([])
+  expect(relevantDiagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([])
 }
 
 /**
  * @param {object} args - Build args.
  * @param {import("../../../../src/configuration-types.js").BackendProjectConfiguration[]} [args.backendProjectsList] - Backend projects.
- * @param {function({configuration: Configuration}) : Promise<void>} [args.initializeModels] - Model initializer.
+ * @param {(args: {configuration: Configuration}) => Promise<void>} [args.initializeModels] - Model initializer.
  * @returns {Configuration} - Configuration instance.
  */
 function buildConfiguration({backendProjectsList, initializeModels} = {}) {

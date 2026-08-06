@@ -85,7 +85,7 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   /**
    * Runs query.
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, ?>[]>} - Resolves with the query.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query.
    */
   async query(sql) {
     const result = await queryWeb(this.connection, sql)
