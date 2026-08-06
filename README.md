@@ -934,7 +934,8 @@ Translated models also get a `currentTranslation` `hasOne` relationship scoped t
 
 Async class APIs initialize record metadata on first use when a model has not
 already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)
-for the eager and lazy initialization behavior.
+for the eager and lazy initialization behavior, including atomic shared bootstrap
+and complete recovery after an eager initialization failure.
 
 ## Lifecycle callbacks
 
@@ -2225,6 +2226,11 @@ VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS=5400000
 `maxConcurrentInlineJobs` (default: `4`) caps how many `executionMode: "inline"` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores; select it with `executionMode: "forked"`.
 
 New jobs default to `executionMode: "pooled"`: a worker runs them in warm, reusable Node child runners. `pooledRunnerCount` (default: `4`) bounds this independent per-worker pool, and `pooledRunnerConcurrency` (default: `1`) sets how many jobs each child runs at once on its own event loop, so total pooled capacity is `pooledRunnerCount × pooledRunnerConcurrency` — raise concurrency for I/O-bound jobs to get high throughput from a bounded, isolated set of processes. `pooledRunnerCount`, `pooledRunnerConcurrency`, and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. A child is recycled after an acknowledged job when it reaches `pooledRunnerMaxJobs` (default: `100`), `pooledRunnerMaxRssBytes` (default: `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` (default: `3600000`, or one hour). `execution_mode` is the single source of truth for a job's runtime — pooled rows persist as `execution_mode = "pooled"` directly. See [execution modes and pooled runners](docs/background-jobs.md#execution-modes-and-pooled-runners).
+
+Cold pooled jobs share one atomic model-bootstrap phase. If that phase fails, all
+waiting jobs receive the failure; a later job in the surviving child cannot run
+until a complete model-initialization phase succeeds. The pool's configured
+concurrency and per-job connection scopes are unchanged.
 
 `maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel. After the main process acknowledges their durable status report, forked and spawned one-shot runners exit without waiting for graceful Beacon/database teardown; the OS closes their process-owned resources. A missing or rejected status acknowledgement makes the runner exit as failed instead of reporting clean success. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
 
