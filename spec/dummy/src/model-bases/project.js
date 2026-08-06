@@ -139,7 +139,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/user.js").default}
    */
   buildCreatingUser(attributes) { void attributes; throw new Error("Not implemented") }
@@ -281,7 +281,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/project-detail.js").default}
    */
   buildProjectDetail(attributes) { void attributes; throw new Error("Not implemented") }
@@ -311,7 +311,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/project-detail.js").default}
    */
   buildActiveProjectDetail(attributes) { void attributes; throw new Error("Not implemented") }
@@ -341,7 +341,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/task.js").default}
    */
   buildReviewTask(attributes) { void attributes; throw new Error("Not implemented") }
@@ -399,7 +399,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
   buildPrimaryInteraction(attributes) { void attributes; throw new Error("Not implemented") }
@@ -513,7 +513,7 @@ export default class ProjectBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../model-bases/project-translation.js").default}
    */
   buildCurrentTranslation(attributes) { void attributes; throw new Error("Not implemented") }

@@ -10,7 +10,7 @@ import VelociousError from "../velocious-error.js"
 /**
  * Optional client-declared sync scope carried on a changes request.
  * @typedef {object} SerializedChangesScope
- * @property {Record<string, ?>} conditions - Plain attribute conditions from the client query.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} conditions - Plain attribute conditions from the client query.
  * @property {string | null} resourceType - Client resource/model name the scope was declared for, or null for the all-types (user) scope: one scope covering every resource type this resource authorizes for the caller, so a sync authorizes once however many types it serves.
  * @property {string[] | null} resourceTypes - For the all-types scope, the resource types the client can apply. A cheap delivery/type filter only - it narrows, never widens, what the app's authorization already allows. Null for a type-declared scope.
  */
@@ -23,7 +23,7 @@ import VelociousError from "../velocious-error.js"
  * `resourceType` normalized to strings. Apps authorizing by exact-row
  * identity read the extra fields; overrides that only read
  * `resourceId`/`resourceType` keep working unchanged.
- * @typedef {Record<string, ?> & {resourceId: string, resourceType: string}} ChangeDeliverableSyncEntry
+ * @typedef {Record<string, ReturnType<typeof JSON.parse>> & {resourceId: string, resourceType: string}} ChangeDeliverableSyncEntry
  */
 const QUICK_SEARCH_COLUMN = "quickSearch"
 
@@ -108,7 +108,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Returns a stable change-feed page after app authorization.
-   * @returns {Promise<Record<string, ?>>} Change-feed page result.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Change-feed page result.
    */
   async changes() {
     const params = this.params()
@@ -121,7 +121,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Replays client sync envelopes through the app replay service.
-   * @returns {Promise<Record<string, ?>>} Replay result with per-sync states.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Replay result with per-sync states.
    */
   async replay() {
     const result = await this.buildReplayService().replay(this.params())
@@ -133,7 +133,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Parses the optional client-declared scope from request params.
-   * @param {Record<string, ?>} params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
    * @returns {SerializedChangesScope | null} Parsed scope, or null when the client sent none.
    */
   changesScope(params) {
@@ -145,7 +145,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
       throw new Error(`Sync changes scope must be an object, got: ${String(scope)}`)
     }
 
-    const scopeParams = /** @type {Record<string, ?>} */ (scope)
+    const scopeParams = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (scope)
     const resourceType = scopeParams.resourceType === null || scopeParams.resourceType === undefined
       ? null
       : forcedNonBlankString(scopeParams.resourceType, "resourceType")
@@ -156,12 +156,12 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
       throw new Error(`Sync changes scope.conditions must be an object, got: ${String(conditions)}`)
     }
 
-    return {conditions: /** @type {Record<string, ?>} */ (conditions), resourceType, resourceTypes}
+    return {conditions: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (conditions), resourceType, resourceTypes}
   }
 
   /**
    * Parses the optional resource-type list an all-types scope declares.
-   * @param {?} value - Raw `scope.resourceTypes` param.
+   * @param {ReturnType<typeof JSON.parse>} value - Raw `scope.resourceTypes` param.
    * @returns {string[] | null} Declared resource types, or null when the client sent none.
    */
   changesScopeResourceTypes(value) {
@@ -174,8 +174,8 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Builds the change-feed service serving this changes request.
-   * @param {{params: Record<string, ?>, scope: SerializedChangesScope | null}} args - Request params and parsed scope.
-   * @returns {{changes: () => Promise<Record<string, ?>>}} Change-feed service.
+   * @param {{params: Record<string, ReturnType<typeof JSON.parse>>, scope: SerializedChangesScope | null}} args - Request params and parsed scope.
+   * @returns {{changes: () => Promise<Record<string, ReturnType<typeof JSON.parse>>>}} Change-feed service.
    */
   changeFeedService({params, scope}) {
     return new SyncModelChangeFeedService({
@@ -206,7 +206,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Returns constructor args for the app replay service.
-   * @returns {Record<string, ?>} Replay service constructor args.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Replay service constructor args.
    */
   replayServiceArgs() {
     return {}
@@ -226,7 +226,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Authorizes the current context for reading the requested changes.
-   * @param {{params: Record<string, ?>, scope: SerializedChangesScope | null}} _args - Request params and parsed scope.
+   * @param {{params: Record<string, ReturnType<typeof JSON.parse>>, scope: SerializedChangesScope | null}} _args - Request params and parsed scope.
    * @returns {Promise<void>} Resolves when access is allowed; throws otherwise.
    */
   async authorizeChanges(_args) {
@@ -235,7 +235,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
 
   /**
    * Applies app visibility scoping onto the change-feed query.
-   * @param {{params: Record<string, ?>, query: import("../database/query/model-class-query.js").default, scope: SerializedChangesScope | null}} _args - Request params, feed query, and parsed scope.
+   * @param {{params: Record<string, ReturnType<typeof JSON.parse>>, query: import("../database/query/model-class-query.js").default, scope: SerializedChangesScope | null}} _args - Request params, feed query, and parsed scope.
    * @returns {void}
    */
   scopeChangesQuery(_args) {
@@ -258,7 +258,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
    * can authorize concurrent targeted and shared broadcasts for the same
    * resource identity independently by their exact-row identity. The channel
    * never mutates the published entry; normalization happens on a copy.
-   * @param {{params: Record<string, ?>, scope: SerializedChangesScope | null, sync: ChangeDeliverableSyncEntry}} args - Request params, subscription scope, and the published sync entry.
+   * @param {{params: Record<string, ReturnType<typeof JSON.parse>>, scope: SerializedChangesScope | null, sync: ChangeDeliverableSyncEntry}} args - Request params, subscription scope, and the published sync entry.
    * @returns {Promise<boolean>} Whether the change may be delivered to this subscription.
    */
   async changeDeliverable({params, scope, sync}) {

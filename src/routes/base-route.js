@@ -60,7 +60,7 @@ export default class VelociousBaseRoute {
 
   /**
    * Mounts.
-   * @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} */
+   * @type {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ReturnType<typeof JSON.parse>>}>} */
   mounts = []
 
   constructor() {
@@ -69,7 +69,7 @@ export default class VelociousBaseRoute {
 
   /**
    * Runs get mounts.
-   * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ?>}>} - Mounts declared on this route.
+   * @returns {Array<{mountable: {mountInto: (args: object) => void}, options: Record<string, ReturnType<typeof JSON.parse>>}>} - Mounts declared on this route.
    */
   getMounts() { return this.mounts }
 
@@ -96,7 +96,7 @@ export default class VelociousBaseRoute {
   /**
    * Runs match with path.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.params - Parameters object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.
@@ -109,7 +109,7 @@ export default class VelociousBaseRoute {
    * Runs namespace.
    * @abstract
    * @param {string} name - Name.
-   * @param {function(import("./namespace-route.js").default) : void} callback - Callback function.
+   * @param {(arg: import("./namespace-route.js").default) => void} callback - Callback function.
    * @returns {void} - No return value.
    */
   namespace(name, callback) { throw new Error("'namespace' not implemented") } // eslint-disable-line no-unused-vars
@@ -126,7 +126,7 @@ export default class VelociousBaseRoute {
    * Runs resources.
    * @abstract
    * @param {string} name - Name.
-   * @param {function(import("./resource-route.js").default) : void} callback - Callback function.
+   * @param {(arg: import("./resource-route.js").default) => void} callback - Callback function.
    * @returns {void} - No return value.
    */
   resources(name, callback) { throw new Error("'resources' not implemented") } // eslint-disable-line no-unused-vars

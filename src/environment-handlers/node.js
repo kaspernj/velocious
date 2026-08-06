@@ -39,7 +39,7 @@ import AttachmentPathSource from "./node/attachment-path-source.js"
 
 /**
  * Defines this typedef.
- * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ?, timeZone?: string}} TimezoneStore */
+ * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ReturnType<typeof JSON.parse>, timeZone?: string}} TimezoneStore */
 
 /**
  * Runs path within allowed prefixes.
@@ -118,11 +118,11 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
       /**
        * Discovered frontend-model resources keyed by model name.
-       * @type {Record<string, ?>} */
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const discovered = {}
       /**
        * Every discovered ability resource class (frontend-model and authorization).
-       * @type {Array<?>} */
+       * @type {Array<ReturnType<typeof JSON.parse>>} */
       const abilityResourceClasses = []
 
       for (const file of files) {
@@ -284,8 +284,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs run with timezone offset.
    * @param {number} offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
-   * @param {() => Promise<?>} callback - Callback to run.
-   * @returns {Promise<?>} - Result of the callback.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to run.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result of the callback.
    */
   async runWithTimezoneOffset(offsetMinutes, callback) {
     if (!this._timezoneAsyncLocalStorage) {
@@ -306,8 +306,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs run with timezone.
    * @param {string} timeZone - IANA timezone identifier.
-   * @param {() => Promise<?>} callback - Callback to run.
-   * @returns {Promise<?>} - Result of the callback.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to run.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result of the callback.
    */
   async runWithTimezone(timeZone, callback) {
     if (!this._timezoneAsyncLocalStorage) {
@@ -416,8 +416,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs run with ability.
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithAbility(ability, callback) {
     if (!this._timezoneAsyncLocalStorage) {
@@ -476,8 +476,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs run with request timing.
    * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithRequestTiming(requestTiming, callback) {
     if (!this._timezoneAsyncLocalStorage) {
@@ -509,9 +509,9 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * Runs run with tenant.
-   * @param {?} tenant - Tenant to set for callback scope.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithTenant(tenant, callback) {
     if (!this._timezoneAsyncLocalStorage) {
@@ -531,7 +531,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * Runs set current tenant.
-   * @param {?} tenant - Tenant to set.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant to set.
    * @returns {void} - No return value.
    */
   setCurrentTenant(tenant) {
@@ -557,7 +557,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * Runs get current tenant.
-   * @returns {?} - Current tenant.
+   * @returns {ReturnType<typeof JSON.parse>} - Current tenant.
    */
   getCurrentTenant() {
     if (!this._timezoneAsyncLocalStorage) {
@@ -616,7 +616,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands init.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsInit(command) {
     return await this.forwardCommand(command, CliCommandsInit)
@@ -625,7 +625,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands migration generate.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsMigrationGenerate(command) {
     return await this.forwardCommand(command, CliCommandsGenerateMigration)
@@ -634,7 +634,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands migration destroy.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsMigrationDestroy(command) {
     return await this.forwardCommand(command, CliCommandsDestroyMigration)
@@ -643,7 +643,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands generate base models.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsGenerateBaseModels(command) {
     return await this.forwardCommand(command, CliCommandsGenerateBaseModels)
@@ -652,7 +652,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands generate frontend models.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsGenerateFrontendModels(command) {
     return await this.forwardCommand(command, CliCommandsGenerateFrontendModels)
@@ -661,7 +661,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands generate model.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsGenerateModel(command) {
     return await this.forwardCommand(command, CliCommandsGenerateModel)
@@ -670,7 +670,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands lint relationships.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsLintRelationships(command) {
     return await this.forwardCommand(command, CliCommandsLintRelationships)
@@ -679,7 +679,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands routes.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsRoutes(command) {
     return await this.forwardCommand(command, CliCommandsRoutes)
@@ -688,7 +688,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands console.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsConsole(command) {
     return await this.forwardCommand(command, CliCommandsConsole)
@@ -697,7 +697,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands server.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsServer(command) {
     return await this.forwardCommand(command, CliCommandsServer)
@@ -706,7 +706,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands test.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsTest(command) {
     return await this.forwardCommand(command, CliCommandsTest)
@@ -715,7 +715,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands background jobs main.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsMain(command) {
     return await this.forwardCommand(command, CliCommandsBackgroundJobsMain)
@@ -724,7 +724,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands background jobs worker.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsWorker(command) {
     return await this.forwardCommand(command, CliCommandsBackgroundJobsWorker)
@@ -733,7 +733,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands background jobs runner.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsRunner(command) {
     return await this.forwardCommand(command, CliCommandsBackgroundJobsRunner)
@@ -742,7 +742,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands beacon.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBeacon(command) {
     return await this.forwardCommand(command, CliCommandsBeacon)
@@ -771,7 +771,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands db schema dump.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsDbSchemaDump(command) {
     return await this.forwardCommand(command, CliCommandsDbSchemaDump)
@@ -780,7 +780,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands db schema load.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsDbSchemaLoad(command) {
     return await this.forwardCommand(command, CliCommandsDbSchemaLoad)
@@ -789,7 +789,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands db seed.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsDbSeed(command) {
     return await this.forwardCommand(command, CliCommandsDbSeed)
@@ -798,7 +798,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands runner.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsRunner(command) {
     return await this.forwardCommand(command, CliCommandsRunner)
@@ -807,7 +807,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   /**
    * Runs cli commands run script.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsRunScript(command) {
     return await this.forwardCommand(command, CliCommandsRunScript)

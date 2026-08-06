@@ -150,7 +150,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * Runs insert multiple.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<?>>} rows - Rows to insert.
+   * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) {
@@ -213,7 +213,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * Runs insert multiple with single insert.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<?>>} rows - Rows to insert.
+   * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
@@ -227,7 +227,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * Runs insert multiple with transaction.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<?>>} rows - Rows to insert.
+   * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultipleWithTransaction(tableName, columns, rows) {
@@ -240,7 +240,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     for (const row of rows) {
       /**
        * Data.
-       * @type {Record<string, ?>} */
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const data = {}
 
       for (const columnIndex in columns) {
@@ -302,8 +302,8 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * Runs escape.
-   * @param {?} value - Value to use.
-   * @returns {?} - The escape.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The escape.
    */
   escape(value) {
     value = this._convertValue(value)
@@ -335,7 +335,7 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
 
   /**
    * Runs quote.
-   * @param {?} value - Value to use.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {

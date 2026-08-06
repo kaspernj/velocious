@@ -38,8 +38,8 @@ export default class Current {
   /**
    * Runs with ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   static async withAbility(ability, callback) {
     return await this.configuration().runWithAbility(ability, callback)

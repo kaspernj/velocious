@@ -434,7 +434,7 @@ export default class BackgroundJobsWorker {
     /**
      * Identified payload.
      * @type {import("./types.js").BackgroundJobPayload & {id: string}} */
-    const identifiedPayload = /** @type {?} */ (payload)
+    const identifiedPayload = /** @type {ReturnType<typeof JSON.parse>} */ (payload)
 
     const executionMode = this._executionModeForPayload(identifiedPayload)
 
@@ -795,12 +795,12 @@ export default class BackgroundJobsWorker {
    * runs jobs concurrently and reports one `job-outcome` per job id.
    * @param {object} args - Message details.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
-   * @param {?} args.message - IPC message.
+   * @param {ReturnType<typeof JSON.parse>} args.message - IPC message.
    * @returns {void}
    */
   _handlePooledChildMessage({child, message}) {
     if (!message || typeof message !== "object") return
-    const record = /** @type {{type?: ?, jobId?: ?, acknowledged?: ?, rssBytes?: ?, error?: ?}} */ (message)
+    const record = /** @type {{type?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
     const state = this.pooledChildStates.get(child)
     if (record.type !== "job-outcome" || !state || state.settling || typeof record.jobId !== "string") return
     const entry = state.inflight.get(record.jobId)
@@ -885,7 +885,7 @@ export default class BackgroundJobsWorker {
    * loop when a child crashes on startup.
    * @param {object} args - Failure details.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
-   * @param {?} args.error - Failure.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Failure.
    * @returns {Promise<void>}
    */
   async _handlePooledChildFailure({child, error}) {
@@ -935,7 +935,7 @@ export default class BackgroundJobsWorker {
     const jobInstance = new JobClass()
     /**
      * Perform.
-     * @type {(...args: Array<?>) => Promise<void>} */
+     * @type {(...args: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} */
     const perform = jobInstance.perform
 
     await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job worker inline: ${payload.jobName}`}, async () => {
@@ -1170,7 +1170,7 @@ export default class BackgroundJobsWorker {
    * Runs report forked child failure.
    * @param {object} args - Options.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
-   * @param {?} args.error - Error.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Error.
    * @returns {void}
    */
   _reportForkedChildFailure({payload, error}) {
@@ -1234,7 +1234,7 @@ export default class BackgroundJobsWorker {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {?} [args.error] - Error.
+   * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
@@ -1261,7 +1261,7 @@ export default class BackgroundJobsWorker {
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
    * @param {"completed" | "failed"} args.status - Status.
-   * @param {?} [args.error] - Error.
+   * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.

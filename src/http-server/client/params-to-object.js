@@ -12,7 +12,7 @@ function malformedNestedParamsKeyError(args) {
   const error = new Error(`Could not parse nested params key "${key}" at rest "${rest}"`)
   /**
    * Typed error.
-   * @type {Error & {velociousContext?: Record<string, ?>}} */
+   * @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */
   const typedError = error
 
   typedError.velociousContext = {
@@ -29,7 +29,7 @@ function malformedNestedParamsKeyError(args) {
 export default class ParamsToObject {
   /**
    * Runs constructor.
-   * @param {Record<string, ?>} object - Object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} object - Object.
    */
   constructor(object) {
     this.object = object
@@ -37,12 +37,12 @@ export default class ParamsToObject {
 
   /**
    * Runs to object.
-   * @returns {Record<string, ?>} - The object.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The object.
    */
   toObject() {
     /**
      * Result.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const result = {}
 
     for(const key in this.object) {
@@ -57,8 +57,8 @@ export default class ParamsToObject {
   /**
    * Runs treat initial.
    * @param {string} key - Key.
-   * @param {?} value - Value to use.
-   * @param {Record<string, ?> | Array<?>} result - Result.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | Array<ReturnType<typeof JSON.parse>>} result - Result.
    * @returns {void} - No return value.
    */
   treatInitial(key, value, result) {
@@ -70,12 +70,12 @@ export default class ParamsToObject {
 
       /**
        * Defines newResult.
-       * @type {Array<?> | Record<string, ?>} */
+       * @type {Array<ReturnType<typeof JSON.parse>> | Record<string, ReturnType<typeof JSON.parse>>} */
       let newResult
-      const objectResult = /** @type {Record<string, ?>} */ (result)
+      const objectResult = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (result)
 
       if (inputName in objectResult) {
-        newResult = /** @type {Array<?> | Record<string, ?>} */ (objectResult[inputName])
+        newResult = /** @type {Array<ReturnType<typeof JSON.parse>> | Record<string, ReturnType<typeof JSON.parse>>} */ (objectResult[inputName])
       } else if (rest == "[]") {
         newResult = []
         objectResult[inputName] = newResult
@@ -86,7 +86,7 @@ export default class ParamsToObject {
 
       this.treatSecond(value, rest, newResult, key)
     } else {
-      const objectResult = /** @type {Record<string, ?>} */ (result)
+      const objectResult = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (result)
 
       objectResult[key] = value
     }
@@ -94,9 +94,9 @@ export default class ParamsToObject {
 
   /**
    * Runs treat second.
-   * @param {?} value - Value to use.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
    * @param {string} rest - Rest.
-   * @param {Record<string, ?> | Array<?>} result - Result.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | Array<ReturnType<typeof JSON.parse>>} result - Result.
    * @param {string} [fullKey] - Original full key.
    * @returns {void} - No return value.
    */
@@ -110,7 +110,7 @@ export default class ParamsToObject {
 
     /**
      * Defines newResult.
-     * @type {Array<?> | Record<string, ?>} */
+     * @type {Array<ReturnType<typeof JSON.parse>> | Record<string, ReturnType<typeof JSON.parse>>} */
     let newResult
 
     if (rest == "[]") {
@@ -120,12 +120,12 @@ export default class ParamsToObject {
 
       result.push(value)
     } else if (newRest == "") {
-      /** @type {Record<string, ?>} */ (result)[key] = value
+      /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (result)[key] = value
     } else {
-      const objectResult = /** @type {Record<string, ?>} */ (result)
+      const objectResult = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (result)
 
       if (!Array.isArray(result) && key in objectResult) {
-        newResult = /** @type {Array<?> | Record<string, ?>} */ (objectResult[key])
+        newResult = /** @type {Array<ReturnType<typeof JSON.parse>> | Record<string, ReturnType<typeof JSON.parse>>} */ (objectResult[key])
       } else if (newRest == "[]") {
         newResult = []
         objectResult[key] = newResult

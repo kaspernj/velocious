@@ -31,13 +31,13 @@ async function shutdownRunner(exitCode) {
 
 /**
  * Runs is job message.
- * @param {?} message - IPC message.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {message is {type: "job", payload: import("./types.js").BackgroundJobPayload}} - Whether this is a job message.
  */
 function isJobMessage(message) {
   if (!message || typeof message !== "object") return false
 
-  const messageRecord = /** @type {{type?: ?, payload?: ?}} */ (message)
+  const messageRecord = /** @type {{type?: ReturnType<typeof JSON.parse>, payload?: ReturnType<typeof JSON.parse>}} */ (message)
 
   return messageRecord.type === "job" && Object.hasOwn(messageRecord, "payload")
 }
@@ -68,7 +68,7 @@ function reportJobFinished() {
 
 /**
  * Runs run job message.
- * @param {?} message - IPC message.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {Promise<void>} - Resolves after the payload has run.
  */
 async function runJobMessage(message) {
@@ -84,7 +84,7 @@ async function runJobMessage(message) {
 
 /**
  * Runs handle job message.
- * @param {?} message - IPC message.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {Promise<void>} - Resolves after completion is reported.
  */
 async function handleJobMessage(message) {

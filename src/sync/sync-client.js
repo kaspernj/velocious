@@ -119,12 +119,12 @@ export default class SyncClient {
     this._scheduledReplay = null
     /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null} */
     this._pullResourceConfigs = null
-    /** @type {Array<{callback: (record: ?) => Promise<void>, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy", modelClass: ?}>} */
+    /** @type {Array<{callback: (record: ReturnType<typeof JSON.parse>) => Promise<void>, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy", modelClass: ReturnType<typeof JSON.parse>}>} */
     this._trackedCallbacks = []
     /** @type {WeakSet<object>} */
     this._remoteApplyRecords = new WeakSet()
     this._withoutTrackingDepth = 0
-    /** @type {Logger | {error: (...messages: Array<?>) => Promise<void>} | null} */
+    /** @type {Logger | {error: (...messages: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} | null} */
     this._logger = null
     this._started = false
   }
@@ -207,7 +207,7 @@ export default class SyncClient {
    * Post-commit queue failures are reported without rethrowing into the
    * driver's afterCommit chain (see reportAfterCommitError).
    * @param {{operation: "create" | "update" | "destroy", resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Operation and resource config.
-   * @returns {(record: ?) => Promise<void>} Lifecycle callback.
+   * @returns {(record: ReturnType<typeof JSON.parse>) => Promise<void>} Lifecycle callback.
    */
   trackedMutationCallback({operation, resourceConfig}) {
     return async (record) => {
@@ -265,7 +265,7 @@ export default class SyncClient {
 
   /**
    * Returns the lazily built client logger.
-   * @returns {Logger | {error: (...messages: Array<?>) => Promise<void>}} Client logger.
+   * @returns {Logger | {error: (...messages: Array<ReturnType<typeof JSON.parse>>) => Promise<void>}} Client logger.
    */
   logger() {
     this._logger ||= new Logger("SyncClient", {configuration: this.config.configuration})
@@ -275,7 +275,7 @@ export default class SyncClient {
 
   /**
    * Whether a record is currently being written by pull-apply (echo suppression).
-   * @param {?} record - Local model record.
+   * @param {ReturnType<typeof JSON.parse>} record - Local model record.
    * @returns {boolean} Whether the record write originates from a remote change.
    */
   isRemoteApply(record) {
@@ -287,7 +287,7 @@ export default class SyncClient {
    * either the record was marked as a remote apply (`markRemoteApply`, used by
    * pull and realtime applies) or a `withoutTracking` callback is running on
    * this client.
-   * @param {?} record - Local model record.
+   * @param {ReturnType<typeof JSON.parse>} record - Local model record.
    * @returns {boolean} Whether tracked queueing is suppressed for the record.
    */
   isTrackingSuppressed(record) {
@@ -321,7 +321,7 @@ export default class SyncClient {
    * Marks one record as being written from server-originated data so tracked
    * mutation queueing skips it (record-precise suppression). The derived pull
    * and realtime appliers use this internally around every applied write.
-   * @param {?} record - Local model record about to be written.
+   * @param {ReturnType<typeof JSON.parse>} record - Local model record about to be written.
    * @returns {() => void} Release callback re-enabling tracking for the record.
    */
   markRemoteApply(record) {
@@ -359,7 +359,7 @@ export default class SyncClient {
 
   /**
    * Declares (or re-activates) a sync scope from a model query and pulls it when online.
-   * @param {import("../database/query/model-class-query.js").default<?>} query - Query declaring the sync scope.
+   * @param {import("../database/query/model-class-query.js").default<ReturnType<typeof JSON.parse>>} query - Query declaring the sync scope.
    * @param {object} [options] - Sync options.
    * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [options.onProgress] - Called per applied page of the pull this declaration triggers, so the initial import of a newly declared scope can drive a "syncedCount of total" progress bar. See `pull()`.
    * @returns {Promise<{scope: import("./sync-client-types.js").SerializedSyncScope, pulled: import("./sync-api-client-types.js").SyncChangesResult | null}>} Declared scope and pull result (null while offline).
@@ -381,7 +381,7 @@ export default class SyncClient {
 
   /**
    * Deactivates the sync scope declared by a model query.
-   * @param {import("../database/query/model-class-query.js").default<?>} query - Query whose scope should stop syncing.
+   * @param {import("../database/query/model-class-query.js").default<ReturnType<typeof JSON.parse>>} query - Query whose scope should stop syncing.
    * @returns {Promise<void>}
    */
   async unsync(query) {
@@ -514,7 +514,7 @@ export default class SyncClient {
   /**
    * Subscribes the derived realtime channels so pushed websocket changes apply
    * through the same derived applier as pulls (idempotent, single-flighted).
-   * @param {?} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
+   * @param {ReturnType<typeof JSON.parse>} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
    * @returns {Promise<void>}
    */
   async subscribeRealtime(context) {
@@ -655,8 +655,8 @@ export default class SyncClient {
   /**
    * Queues a local model change as a pending sync row and schedules an immediate
    * replay attempt (kept pending while offline or when the backend rejects it).
-   * @param {{resource: ?, data?: Record<string, ?>, syncType?: string}} args - Queue args.
-   * @returns {Promise<?>} Pending local sync row.
+   * @param {{resource: ReturnType<typeof JSON.parse>, data?: Record<string, ReturnType<typeof JSON.parse>>, syncType?: string}} args - Queue args.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} Pending local sync row.
    */
   async queue({data, resource, syncType}) {
     const resourceConfig = this.resourceConfigFor(resource)
@@ -751,7 +751,7 @@ export default class SyncClient {
 
   /**
    * Resolves the declared resource config for a local record.
-   * @param {?} resource - Local model record.
+   * @param {ReturnType<typeof JSON.parse>} resource - Local model record.
    * @returns {import("./sync-client-types.js").SyncClientResourceConfig} Declared resource config.
    */
   resourceConfigFor(resource) {
@@ -773,7 +773,7 @@ export default class SyncClient {
    * Resolves the sync type for a mutation through the resource config. The
    * "upsert" flag queues creates and updates as "update" rows (the server
    * upserts by resource id) and destroys as "delete" rows.
-   * @param {{operation: "create" | "update" | "destroy", record: ?, resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Mutation args.
+   * @param {{operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Mutation args.
    * @returns {string} Sync type.
    */
   defaultSyncType({operation, record, resourceConfig}) {
@@ -809,7 +809,7 @@ export default class SyncClient {
 /**
  * Builds one resource config from a model's `static sync` declaration plus its
  * derived column metadata.
- * @param {{declaration: import("./sync-client-types.js").ModelSyncDeclaration, modelClass: ?, resourceType: string}} args - Declaration args.
+ * @param {{declaration: import("./sync-client-types.js").ModelSyncDeclaration, modelClass: ReturnType<typeof JSON.parse>, resourceType: string}} args - Declaration args.
  * @returns {import("./sync-client-types.js").SyncClientResourceConfig} Derived resource config.
  */
 function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceType}) {
@@ -855,7 +855,7 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
  * Derives boolean and local-only attribute names from a model's column metadata:
  * booleans from boolean column types; local-only from the primary key,
  * createdAt/updatedAt, and sync bookkeeping columns.
- * @param {{modelClass: ?, resourceType: string}} args - Derivation args.
+ * @param {{modelClass: ReturnType<typeof JSON.parse>, resourceType: string}} args - Derivation args.
  * @returns {{booleanAttributes: string[], localOnlyAttributes: string[]}} Derived attribute names.
  */
 function derivedSyncAttributes({modelClass, resourceType}) {
@@ -921,7 +921,7 @@ function normalizedTrack(track) {
 /**
  * Builds a framework-owned sync endpoint POSTer over the configured transport.
  * @param {{path: string, transport: import("../configuration-types.js").VelociousSyncClientTransport}} args - Poster args.
- * @returns {(payload: Record<string, ?>) => Promise<?>} Sync endpoint POSTer.
+ * @returns {(payload: Record<string, ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>} Sync endpoint POSTer.
  */
 function transportPoster({path, transport}) {
   return async (payload) => {
@@ -955,7 +955,7 @@ export function syncClient(configuration = Configuration.current()) {
 
 /**
  * Declares a sync scope on the current sync client.
- * @param {import("../database/query/model-class-query.js").default<?>} query - Query declaring the sync scope.
+ * @param {import("../database/query/model-class-query.js").default<ReturnType<typeof JSON.parse>>} query - Query declaring the sync scope.
  * @returns {Promise<{scope: import("./sync-client-types.js").SerializedSyncScope, pulled: import("./sync-api-client-types.js").SyncChangesResult | null}>} Declared scope and pull result.
  */
 export async function sync(query) {

@@ -10,7 +10,7 @@ export default class VelociousDatabaseDriversBaseForeignKey {
 
   /**
    * Runs constructor.
-   * @param {Record<string, ?>} data - Data payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
    */
   constructor(data) {
     this.data = data

@@ -26,7 +26,7 @@ export default class FrontendModelPreloader {
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec === "object" && "_preload" in queryOrSpec
     const query = isQuery
       ? /** @type {import("./query.js").default<import("./base.js").FrontendModelClass>} */ (queryOrSpec)
-      : modelClass.preload(/** @type {?} */ (queryOrSpec))
+      : modelClass.preload(/** @type {ReturnType<typeof JSON.parse>} */ (queryOrSpec))
 
     const topLevelRelationships = Object.keys(query._preload)
 

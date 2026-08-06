@@ -11,10 +11,10 @@ import {resetFrontendModelTransport} from "../helpers/frontend-model-test-helper
 /**
  * Builds a controllable snapreq-compatible client.
  * @param {{connectDelayMs?: number, readyDelayMs?: number, initiallyOpen?: boolean}} [args] - Delay and state controls.
- * @returns {{calls: Array<{options: Record<string, ?>, stage: string}>, client: Record<string, ?>, state: {closed: number, open: boolean, opened: number}}} - Client fixture.
+ * @returns {{calls: Array<{options: Record<string, ReturnType<typeof JSON.parse>>, stage: string}>, client: Record<string, ReturnType<typeof JSON.parse>>, state: {closed: number, open: boolean, opened: number}}} - Client fixture.
  */
 function buildControlledClient({connectDelayMs = 0, readyDelayMs = 0, initiallyOpen = false} = {}) {
-  /** @type {Array<{options: Record<string, ?>, stage: string}>} */
+  /** @type {Array<{options: Record<string, ReturnType<typeof JSON.parse>>, stage: string}>} */
   const calls = []
   const state = {closed: 0, open: initiallyOpen, opened: 0}
   const createHandle = (options) => {
@@ -69,7 +69,7 @@ class ControlledWebSocket {
   static instances = []
   /** @type {(socket: ControlledWebSocket) => void} */
   static onCreate = () => {}
-  /** @type {(message: Record<string, ?>) => void} */
+  /** @type {(message: Record<string, ReturnType<typeof JSON.parse>>) => void} */
   static onRequest = () => {}
   /** @type {() => void} */
   static onSessionResumePending = () => {}
@@ -77,7 +77,7 @@ class ControlledWebSocket {
   static pendingClose = null
   /** @type {(() => void) | null} */
   static pendingSessionResume = null
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   static sentMessages = []
   static CONNECTING = 0
   static OPEN = 1

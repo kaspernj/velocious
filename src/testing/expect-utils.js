@@ -4,8 +4,8 @@ import {anythingDifferent} from "set-state-compare/build/diff-utils.js"
 
 /**
  * Runs object containing.
- * @param {?} value - Value.
- * @returns {{__velociousMatcher: string, value: ?}} - Matcher wrapper.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
+ * @returns {{__velociousMatcher: string, value: ReturnType<typeof JSON.parse>}} - Matcher wrapper.
  */
 function objectContaining(value) {
   if (value === null || typeof value !== "object") {
@@ -20,8 +20,8 @@ function objectContaining(value) {
 
 /**
  * Runs array containing.
- * @param {?} value - Value.
- * @returns {{__velociousMatcher: string, value: ?}} - Matcher wrapper.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
+ * @returns {{__velociousMatcher: string, value: ReturnType<typeof JSON.parse>}} - Matcher wrapper.
  */
 function arrayContaining(value) {
   if (!Array.isArray(value)) {
@@ -36,7 +36,7 @@ function arrayContaining(value) {
 
 /**
  * Runs is object like.
- * @param {?} value - Value.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
  * @returns {boolean} - Whether object-like.
  */
 function isObjectLike(value) {
@@ -45,25 +45,25 @@ function isObjectLike(value) {
 
 /**
  * Runs is array containing.
- * @param {?} value - Value.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
  * @returns {boolean} - Whether arrayContaining matcher.
  */
 function isArrayContaining(value) {
-  return !!value && typeof value === "object" && (/** @type {?} */ (value)).__velociousMatcher === "arrayContaining"
+  return !!value && typeof value === "object" && (/** @type {ReturnType<typeof JSON.parse>} */ (value)).__velociousMatcher === "arrayContaining"
 }
 
 /**
  * Runs is object containing.
- * @param {?} value - Value.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
  * @returns {boolean} - Whether objectContaining matcher.
  */
 function isObjectContaining(value) {
-  return !!value && typeof value === "object" && (/** @type {?} */ (value)).__velociousMatcher === "objectContaining"
+  return !!value && typeof value === "object" && (/** @type {ReturnType<typeof JSON.parse>} */ (value)).__velociousMatcher === "objectContaining"
 }
 
 /**
  * Runs is plain object.
- * @param {?} value - Value.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
  * @returns {boolean} - Whether plain object.
  */
 function isPlainObject(value) {
@@ -76,8 +76,8 @@ function isPlainObject(value) {
 
 /**
  * Runs values equal.
- * @param {?} actual - Actual value.
- * @param {?} expected - Expected value.
+ * @param {ReturnType<typeof JSON.parse>} actual - Actual value.
+ * @param {ReturnType<typeof JSON.parse>} expected - Expected value.
  * @returns {boolean} - Whether values are equal.
  */
 function valuesEqual(actual, expected) {
@@ -94,20 +94,20 @@ function valuesEqual(actual, expected) {
 
 /**
  * Runs collect match differences.
- * @param {?} actual - Actual value.
- * @param {?} expected - Expected value.
+ * @param {ReturnType<typeof JSON.parse>} actual - Actual value.
+ * @param {ReturnType<typeof JSON.parse>} expected - Expected value.
  * @param {string} path - Path.
- * @param {Record<string, Array<?>>} differences - Differences.
+ * @param {Record<string, Array<ReturnType<typeof JSON.parse>>>} differences - Differences.
  * @returns {void} - No return value.
  */
 function collectMatchDifferences(actual, expected, path, differences) {
   if (isObjectContaining(expected)) {
-    collectMatchDifferences(actual, /** @type {?} */ (expected).value, path, differences)
+    collectMatchDifferences(actual, /** @type {ReturnType<typeof JSON.parse>} */ (expected).value, path, differences)
     return
   }
 
   if (isArrayContaining(expected)) {
-    const {matches} = matchArrayContaining(actual, /** @type {Array<?>} */ (/** @type {?} */ (expected).value))
+    const {matches} = matchArrayContaining(actual, /** @type {Array<ReturnType<typeof JSON.parse>>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (expected).value))
 
     if (!matches) {
       differences[path || "$"] = [expected, actual]
@@ -136,8 +136,8 @@ function collectMatchDifferences(actual, expected, path, differences) {
       return
     }
 
-    const expectedObject = /** @type {Record<string, ?>} */ (expected)
-    const actualObject = /** @type {Record<string, ?>} */ (actual)
+    const expectedObject = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (expected)
+    const actualObject = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (actual)
 
     for (const key of Object.keys(expectedObject)) {
       const nextPath = path ? `${path}.${key}` : key
@@ -160,14 +160,14 @@ function collectMatchDifferences(actual, expected, path, differences) {
 
 /**
  * Runs match object.
- * @param {?} actual - Actual value.
- * @param {Record<string, ?> | Array<?>} expected - Expected value.
- * @returns {{matches: boolean, differences: Record<string, Array<?>>}} - Match result.
+ * @param {ReturnType<typeof JSON.parse>} actual - Actual value.
+ * @param {Record<string, ReturnType<typeof JSON.parse>> | Array<ReturnType<typeof JSON.parse>>} expected - Expected value.
+ * @returns {{matches: boolean, differences: Record<string, Array<ReturnType<typeof JSON.parse>>>}} - Match result.
  */
 function matchObject(actual, expected) {
   /**
    * Differences.
-   * @type {Record<string, Array<?>>} */
+   * @type {Record<string, Array<ReturnType<typeof JSON.parse>>>} */
   const differences = {}
 
   collectMatchDifferences(actual, expected, "", differences)
@@ -180,14 +180,14 @@ function matchObject(actual, expected) {
 
 /**
  * Runs match array containing.
- * @param {?} actual - Actual value.
- * @param {Array<?>} expected - Expected values.
- * @returns {{matches: boolean, differences: Record<string, Array<?>>}} - Match result.
+ * @param {ReturnType<typeof JSON.parse>} actual - Actual value.
+ * @param {Array<ReturnType<typeof JSON.parse>>} expected - Expected values.
+ * @returns {{matches: boolean, differences: Record<string, Array<ReturnType<typeof JSON.parse>>>}} - Match result.
  */
 function matchArrayContaining(actual, expected) {
   /**
    * Differences.
-   * @type {Record<string, Array<?>>} */
+   * @type {Record<string, Array<ReturnType<typeof JSON.parse>>>} */
   const differences = {}
 
   if (!Array.isArray(actual)) {
@@ -204,7 +204,7 @@ function matchArrayContaining(actual, expected) {
       if (usedIndexes.has(i)) continue
 
       if (isObjectContaining(expectedItem)) {
-        const {matches} = matchObject(actual[i], /** @type {?} */ (expectedItem).value)
+        const {matches} = matchObject(actual[i], /** @type {ReturnType<typeof JSON.parse>} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break
@@ -213,7 +213,7 @@ function matchArrayContaining(actual, expected) {
       }
 
       if (isArrayContaining(expectedItem)) {
-        const {matches} = matchArrayContaining(actual[i], /** @type {?} */ (expectedItem).value)
+        const {matches} = matchArrayContaining(actual[i], /** @type {ReturnType<typeof JSON.parse>} */ (expectedItem).value)
         if (matches) {
           matchedIndex = i
           break

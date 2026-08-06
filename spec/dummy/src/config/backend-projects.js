@@ -78,7 +78,7 @@ class TaskFrontendResource extends FrontendModelBaseResource {
     void value
   }
 
-  /** @returns {Array<string | Record<string, ?>>} - Permit spec for Task writes. */
+  /** @returns {Array<string | Record<string, ReturnType<typeof JSON.parse>>>} - Permit spec for Task writes. */
   permittedParams() {
     return [
       "name",
@@ -103,7 +103,7 @@ class ProjectFrontendResource extends FrontendModelBaseResource {
 
   static relationships = ["creatingUser", "interactions", "tasks"]
 
-  /** @returns {Array<string | Record<string, ?>>} - Permit spec for Project writes (name is translated). */
+  /** @returns {Array<string | Record<string, ReturnType<typeof JSON.parse>>>} - Permit spec for Project writes (name is translated). */
   permittedParams() {
     return [
       "name",

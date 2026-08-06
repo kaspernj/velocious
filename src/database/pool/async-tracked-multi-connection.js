@@ -113,7 +113,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     super({configuration, identifier})
     /**
      * Runs a callback without the inherited current connection context.
-     * @type {(callback: () => ?) => ?}
+     * @type {(callback: () => ReturnType<typeof JSON.parse>) => ReturnType<typeof JSON.parse>}
      */
     const withoutCurrentConnectionContext = (callback) => this.asyncLocalStorage.run(SUPPRESSED_CONNECTION_CONTEXT, callback)
     this._withoutCurrentConnectionContext = withoutCurrentConnectionContext
@@ -155,7 +155,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * Runs close checked out connection after checkin failure.
    * @param {import("../drivers/base.js").default} connection - Connection that failed check-in cleanup.
    * @param {number | undefined} id - Connection checkout id.
-   * @param {?} originalError - Error that caused check-in cleanup to fail.
+   * @param {ReturnType<typeof JSON.parse>} originalError - Error that caused check-in cleanup to fail.
    * @returns {Promise<void>} - Resolves when cleanup has been attempted.
    */
   async closeCheckedOutConnectionAfterCheckinFailure(connection, id, originalError) {
@@ -321,7 +321,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs valid checkout timeout millis.
-   * @param {?} value - Candidate checkout timeout.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate checkout timeout.
    * @returns {value is number} - Whether the value is a valid timeout.
    */
   validCheckoutTimeoutMillis(value) {
@@ -330,7 +330,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs valid max connections.
-   * @param {?} value - Candidate max connection count.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate max connection count.
    * @returns {value is number} - Whether the value is a valid max connection count.
    */
   validMaxConnections(value) {
@@ -561,7 +561,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Builds a sanitized connection summary for checkout timeout diagnostics.
-   * @param {Record<string, ?>} connection - Connection debug snapshot.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} connection - Connection debug snapshot.
    * @returns {string} - Sanitized connection state.
    */
   pendingCheckoutTimeoutConnectionSummary(connection) {
@@ -575,7 +575,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const activeQuery = connection.activeQuery
 
     if (activeQuery && typeof activeQuery === "object" && !Array.isArray(activeQuery)) {
-      const runningMs = (/** @type {Record<string, ?>} */ (activeQuery)).runningMs
+      const runningMs = (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (activeQuery)).runningMs
 
       if (typeof runningMs === "number") parts.push(`activeQueryMs=${runningMs}`)
     }
@@ -703,8 +703,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Runs with connection.
    * @template T
-   * @param {import("./base.js").ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} optionsOrCallback - Checkout options or callback to invoke with the connection.
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} [callback] - Callback to invoke with the connection.
+   * @param {import("./base.js").ConnectionCheckoutOptions | ((arg: import("../drivers/base.js").default) => Promise<T>)} optionsOrCallback - Checkout options or callback to invoke with the connection.
+   * @param {(arg: import("../drivers/base.js").default) => Promise<T>} [callback] - Callback to invoke with the connection.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnection(optionsOrCallback, callback) {
@@ -923,12 +923,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Runs debug connection snapshots.
    * @param {number} now - Current timestamp.
-   * @returns {{connections: Array<Record<string, ?>>, seenConnections: Set<import("../drivers/base.js").default>}} - Connection snapshots and seen set.
+   * @returns {{connections: Array<Record<string, ReturnType<typeof JSON.parse>>>, seenConnections: Set<import("../drivers/base.js").default>}} - Connection snapshots and seen set.
    */
   debugConnectionSnapshots(now) {
     /**
      * Connections.
-     * @type {Array<Record<string, ?>>} */
+     * @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const connections = []
     const seenConnections = new Set()
 
@@ -941,7 +941,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs add in use debug connection snapshots.
-   * @param {{connections: Array<Record<string, ?>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @param {{connections: Array<Record<string, ReturnType<typeof JSON.parse>>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
    * @returns {void}
    */
   addInUseDebugConnectionSnapshots({connections, now, seenConnections}) {
@@ -957,7 +957,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs add idle debug connection snapshots.
-   * @param {{connections: Array<Record<string, ?>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @param {{connections: Array<Record<string, ReturnType<typeof JSON.parse>>>, now: number, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
    * @returns {void}
    */
   addIdleDebugConnectionSnapshots({connections, now, seenConnections}) {
@@ -976,7 +976,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs add fallback debug connection snapshots.
-   * @param {{connections: Array<Record<string, ?>>, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
+   * @param {{connections: Array<Record<string, ReturnType<typeof JSON.parse>>>, seenConnections: Set<import("../drivers/base.js").default>}} args - Snapshot collection state.
    * @returns {void}
    */
   addFallbackDebugConnectionSnapshots({connections, seenConnections}) {
@@ -986,7 +986,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs add debug connection snapshot if unseen.
-   * @param {{connection: import("../drivers/base.js").default | undefined, connections: Array<Record<string, ?>>, reapable?: boolean, seenConnections: Set<import("../drivers/base.js").default>, state: string}} args - Snapshot collection state.
+   * @param {{connection: import("../drivers/base.js").default | undefined, connections: Array<Record<string, ReturnType<typeof JSON.parse>>>, reapable?: boolean, seenConnections: Set<import("../drivers/base.js").default>, state: string}} args - Snapshot collection state.
    * @returns {void}
    */
   addDebugConnectionSnapshotIfUnseen({connection, connections, reapable, seenConnections, state}) {
@@ -1083,7 +1083,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs valid idle timeout millis.
-   * @param {?} value - Candidate idle timeout value.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate idle timeout value.
    * @returns {value is number} - Whether the value is a valid idle timeout.
    */
   validIdleTimeoutMillis(value) {

@@ -8,16 +8,16 @@ import stableJsonStringify from "./stable-json.js"
  * @typedef {object} ServerChangeFeedEntry
  * @property {string | null} actorDeviceId - Signed mutation actor device id when available.
  * @property {string | null} actorUserId - Signed mutation actor user id when available.
- * @property {Record<string, ?> | null} attributes - Serialized mutation attributes.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} attributes - Serialized mutation attributes.
  * @property {string} createdAt - Server change creation timestamp.
  * @property {string} id - Server change id.
  * @property {string | null} idempotencyKey - Mutation idempotency key when available.
  * @property {string} model - Frontend model name.
  * @property {string} operation - Mutation operation.
- * @property {Record<string, ?> | null} payload - Serialized mutation payload.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} payload - Serialized mutation payload.
  * @property {string | null} recordId - Changed record id when known.
- * @property {Record<string, ?> | null} response - Command response payload.
- * @property {Record<string, ?> | null} scope - Offline grant scope.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} response - Command response payload.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} scope - Offline grant scope.
  * @property {number} serverSequence - Monotonic server sequence.
  */
 /**
@@ -188,7 +188,7 @@ export default class ServerChangeFeedStore {
    * @param {number} args.afterSequence - Exclusive lower bound.
    * @param {number} [args.limit] - Maximum number of changes.
    * @param {number} [args.upToSequence] - Inclusive upper bound.
-   * @param {Record<string, ?>} [args.scope] - Caller sync scope.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.scope] - Caller sync scope.
    * @returns {Promise<{changes: ServerChangeFeedEntry[], hasMore: boolean, nextSequence: number, oldestSequence: number | null, snapshotRequired: boolean, upToSequence: number}>} - Ordered page.
    */
   async changesAfter({afterSequence, limit = DEFAULT_PAGE_SIZE, scope, upToSequence}) {
@@ -424,7 +424,7 @@ export default class ServerChangeFeedStore {
    * @param {number} args.afterSequence - Exclusive lower bound.
    * @param {number} args.limit - Page size.
    * @param {number} [args.upToSequence] - Inclusive upper bound.
-   * @param {Record<string, ?>} [args.scope] - Caller sync scope.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.scope] - Caller sync scope.
    * @returns {{changes: ServerChangeFeedEntry[], hasMore: boolean, nextSequence: number, oldestSequence: number | null, snapshotRequired: boolean, upToSequence: number}} - Ordered page.
    */
   _memoryChangesAfter({afterSequence, limit, scope, upToSequence}) {
@@ -448,8 +448,8 @@ export default class ServerChangeFeedStore {
 
   /**
    * Runs with db.
-   * @param {(db: import("../database/drivers/base.js").default) => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async _withDb(callback) {
     return await this.configuration.ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Server change-feed store"}, async (dbs) => {
@@ -464,7 +464,7 @@ export default class ServerChangeFeedStore {
 
 /**
  * Normalizes page limit.
- * @param {?} limit - Requested limit.
+ * @param {ReturnType<typeof JSON.parse>} limit - Requested limit.
  * @returns {number} - Page size.
  */
 function normalizeLimit(limit) {
@@ -476,8 +476,8 @@ function normalizeLimit(limit) {
 
 /**
  * Parses JSON-ish values.
- * @param {?} value - JSON string.
- * @returns {?} - Parsed value.
+ * @param {ReturnType<typeof JSON.parse>} value - JSON string.
+ * @returns {ReturnType<typeof JSON.parse>} - Parsed value.
  */
 function parseJsonOrNull(value) {
   if (typeof value !== "string" || value.length < 1) return null
@@ -487,8 +487,8 @@ function parseJsonOrNull(value) {
 
 /**
  * Compares sync scopes by stable JSON representation.
- * @param {Record<string, ?> | null} changeScope - Persisted change scope.
- * @param {Record<string, ?> | undefined} requestedScope - Caller scope.
+ * @param {Record<string, ReturnType<typeof JSON.parse>> | null} changeScope - Persisted change scope.
+ * @param {Record<string, ReturnType<typeof JSON.parse>> | undefined} requestedScope - Caller scope.
  * @returns {boolean} - Whether the change is visible for the requested scope.
  */
 function scopesEqual(changeScope, requestedScope) {

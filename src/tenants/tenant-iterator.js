@@ -22,8 +22,8 @@ export default class TenantIterator {
 
   /**
    * Runs `callback` within each tenant's context and returns how many tenants were processed.
-   * @param {Array<?>} tenants - Tenant descriptors to enter and process.
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Per-tenant operation receiving the active database configuration.
+   * @param {Array<ReturnType<typeof JSON.parse>>} tenants - Tenant descriptors to enter and process.
+   * @param {(args: {databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ReturnType<typeof JSON.parse>}) => Promise<void>} callback - Per-tenant operation receiving the active database configuration.
    * @returns {Promise<number>} - Number of processed tenants.
    */
   async run(tenants, callback) {
@@ -35,7 +35,7 @@ export default class TenantIterator {
       return tenants.length
     }
 
-    /** @type {Array<{error: Error, tenant: ?}>} */
+    /** @type {Array<{error: Error, tenant: ReturnType<typeof JSON.parse>}>} */
     const failures = []
     const workers = []
     let tenantIndex = 0
@@ -76,7 +76,7 @@ export default class TenantIterator {
 
   /**
    * Enters one tenant's context and runs the callback, asserting the database is active first.
-   * @param {{callback: function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>, tenant: ?}} args - Tenant descriptor and operation to run in its context.
+   * @param {{callback: (args: {databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ReturnType<typeof JSON.parse>}) => Promise<void>, tenant: ReturnType<typeof JSON.parse>}} args - Tenant descriptor and operation to run in its context.
    * @returns {Promise<void>}
    */
   async runTenantCallback({callback, tenant}) {
@@ -94,12 +94,12 @@ export default class TenantIterator {
 
   /**
    * Builds a human-readable label for a tenant for use in error messages.
-   * @param {?} tenant - Tenant descriptor to identify in an error.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant descriptor to identify in an error.
    * @returns {string} - Human-readable tenant label.
    */
   static tenantLabel(tenant) {
     if (tenant && typeof tenant === "object") {
-      const tenantObject = /** @type {{id?: ?, name?: ?, slug?: ?}} */ (tenant)
+      const tenantObject = /** @type {{id?: ReturnType<typeof JSON.parse>, name?: ReturnType<typeof JSON.parse>, slug?: ReturnType<typeof JSON.parse>}} */ (tenant)
 
       for (const attributeName of /** @type {Array<"slug" | "name" | "id">} */ (["slug", "name", "id"])) {
         const attributeOrAccessor = tenantObject[attributeName]

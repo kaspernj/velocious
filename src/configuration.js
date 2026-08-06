@@ -3,7 +3,7 @@
 /**
  * WithConnectionsCallbackType type.
  * @template T
- * @typedef {function(Record<string, import("./database/drivers/base.js").default>) : Promise<T>} WithConnectionsCallbackType
+ * @typedef {(arg: Record<string, import("./database/drivers/base.js").default>) => Promise<T>} WithConnectionsCallbackType
  */
 /**
  * WithConnectionsOptionsType type.
@@ -37,7 +37,7 @@ export {CurrentConfigurationNotSetError}
  * @returns {string | undefined} - Current working directory when the runtime exposes one.
  */
 function currentWorkingDirectory() {
-  const processObject = /** @type {{cwd?: ?} | undefined} */ (globalThis.process)
+  const processObject = /** @type {{cwd?: ReturnType<typeof JSON.parse>} | undefined} */ (globalThis.process)
 
   if (typeof processObject?.cwd !== "function") return undefined
 
@@ -68,17 +68,17 @@ function resolveWithConnectionsArgs(optionsOrCallback, callback, defaultName) {
 
 /**
  * Runs canonical debug snapshot value.
- * @param {?} value - Snapshot value to canonicalize.
- * @returns {?} Snapshot value with object keys sorted recursively.
+ * @param {ReturnType<typeof JSON.parse>} value - Snapshot value to canonicalize.
+ * @returns {ReturnType<typeof JSON.parse>} Snapshot value with object keys sorted recursively.
  */
 function canonicalDebugSnapshotValue(value) {
   if (!value || typeof value !== "object") return value
   if (Array.isArray(value)) return value.map((entry) => canonicalDebugSnapshotValue(entry))
 
   return Object.keys(value).sort().reduce((result, key) => {
-    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, ?>} */ (value)[key])
+    result[key] = canonicalDebugSnapshotValue(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)[key])
     return result
-  }, /** @type {Record<string, ?>} */ ({}))
+  }, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({}))
 }
 
 /**
@@ -106,7 +106,7 @@ function mergeDatabaseConfiguration(databaseConfiguration, overrideConfiguration
 
 /**
  * Resolves the grace window (ms) before a sustained beacon outage is reported.
- * @param {?} value - Configured `unreachableReportMs`, if any.
+ * @param {ReturnType<typeof JSON.parse>} value - Configured `unreachableReportMs`, if any.
  * @returns {number} - The configured value when it's a finite number, otherwise the 30s default.
  */
 function resolveBeaconUnreachableReportMs(value) {
@@ -126,7 +126,7 @@ const DEFAULT_COMPRESSION_GZIP_LEVEL = 6
 
 /**
  * Validates a positive safe integer configuration value.
- * @param {?} value - Configured positive safe integer.
+ * @param {ReturnType<typeof JSON.parse>} value - Configured positive safe integer.
  * @param {string} name - Configuration key.
  * @param {number} defaultValue - Default value.
  * @returns {number} - Validated configured or default value.
@@ -142,7 +142,7 @@ function positiveSafeInteger(value, name, defaultValue) {
 
 /**
  * Validates an integer configuration value inside an inclusive range.
- * @param {?} value - Configured integer.
+ * @param {ReturnType<typeof JSON.parse>} value - Configured integer.
  * @param {string} name - Configuration key.
  * @param {number} min - Minimum accepted value (inclusive).
  * @param {number} max - Maximum accepted value (inclusive).
@@ -322,7 +322,7 @@ export default class VelociousConfiguration {
     }
     /**
      * Stores the http server instance value.
-     * @type {{getDebugSnapshot: () => Promise<Record<string, ?>>} | undefined} */
+     * @type {{getDebugSnapshot: () => Promise<Record<string, ReturnType<typeof JSON.parse>>>} | undefined} */
     this._httpServerInstance = undefined
     this.locale = locale
     this.localeFallbacks = localeFallbacks
@@ -395,7 +395,7 @@ export default class VelociousConfiguration {
 
     /**
      * Stores the websocket session identity resolver value.
-     * @type {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} */
+     * @type {((session: import("./http-server/client/websocket-session.js").default) => ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>) | null} */
     this._websocketSessionIdentityResolver = null
     this._logging = logging
     this._mailerBackend = mailerBackend
@@ -742,7 +742,7 @@ export default class VelociousConfiguration {
   /**
    * Runs resolve database configuration.
    * @param {string} identifier - Identifier.
-   * @param {?} [tenant] - Tenant override.
+   * @param {ReturnType<typeof JSON.parse>} [tenant] - Tenant override.
    * @returns {import("./configuration-types.js").DatabaseConfigurationType} - Resolved database configuration for the identifier.
    */
   resolveDatabaseConfiguration(identifier, tenant = this.getCurrentTenant()) {
@@ -792,7 +792,7 @@ export default class VelociousConfiguration {
   /**
    * Runs is database identifier active.
    * @param {string} identifier - Database identifier.
-   * @param {?} [tenant] - Tenant override.
+   * @param {ReturnType<typeof JSON.parse>} [tenant] - Tenant override.
    * @returns {boolean} - Whether this database identifier is active in the current tenant context.
    */
   isDatabaseIdentifierActive(identifier, tenant = this.getCurrentTenant()) {
@@ -828,7 +828,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get debug snapshot.
-   * @returns {Promise<Record<string, ?>>} - Human-readable server diagnostics.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Human-readable server diagnostics.
    */
   async getDebugSnapshot() {
     const localSnapshot = this.getLocalDebugSnapshot()
@@ -841,7 +841,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get local debug snapshot.
-   * @returns {Record<string, ?>} - Human-readable diagnostics for this process only.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Human-readable diagnostics for this process only.
    */
   getLocalDebugSnapshot() {
     return {
@@ -856,10 +856,10 @@ export default class VelociousConfiguration {
 
   /**
    * Runs debug http server snapshot.
-   * @returns {Promise<Record<string, ?>>} - HTTP server worker diagnostics.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - HTTP server worker diagnostics.
    */
   async _debugHttpServerSnapshot() {
-    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, ?>>} | undefined} */ (this._httpServerInstance)
+    const httpServer = /** @type {{getDebugSnapshot?: () => Promise<Record<string, ReturnType<typeof JSON.parse>>>} | undefined} */ (this._httpServerInstance)
 
     if (!httpServer?.getDebugSnapshot) {
       return {configured: Boolean(this.httpServer), active: false}
@@ -870,7 +870,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs debug server snapshot.
-   * @returns {Record<string, ?>} - Server runtime diagnostics.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Server runtime diagnostics.
    */
   _debugServerSnapshot() {
     const nodeProcess = typeof process === "undefined" ? undefined : process
@@ -887,7 +887,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs debug configuration snapshot.
-   * @returns {Record<string, ?>} - Configuration diagnostics.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Configuration diagnostics.
    */
   _debugConfigurationSnapshot() {
     return {
@@ -907,7 +907,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs debug background jobs snapshot.
-   * @returns {Record<string, ?>} - Background job diagnostics.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Background job diagnostics.
    */
   _debugBackgroundJobsSnapshot() {
     return {
@@ -918,7 +918,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs debug database snapshot.
-   * @returns {Record<string, ?>} - Database diagnostics.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Database diagnostics.
    */
   _debugDatabaseSnapshot() {
     /**
@@ -941,7 +941,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs debug websocket snapshot.
-   * @returns {Record<string, ?>} - WebSocket diagnostics.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - WebSocket diagnostics.
    */
   _debugWebsocketSnapshot() {
     /**
@@ -955,11 +955,11 @@ export default class VelociousConfiguration {
     const subscriptions = Array.from(this._websocketChannelSubscriptions.entries()).map(([channel, channelSubscriptions]) => {
       /**
        * Details buckets.
-       * @type {Map<string, {count: number, details: Record<string, ?>}>} */
+       * @type {Map<string, {count: number, details: Record<string, ReturnType<typeof JSON.parse>>}>} */
       const detailsBuckets = new Map()
 
       for (const subscription of channelSubscriptions) {
-        const details = /** @type {Record<string, ?>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
+        const details = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (canonicalDebugSnapshotValue(subscription.debugSnapshot()))
         const key = JSON.stringify(details)
         const existingBucket = detailsBuckets.get(key)
 
@@ -984,7 +984,7 @@ export default class VelociousConfiguration {
       const channelSubscriptionBuckets = new Map()
 
       for (const {channelType, subscription} of session._channelSubscriptions.values()) {
-        const details = /** @type {Record<string, ?>} */ (subscription.debugSnapshot())
+        const details = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (subscription.debugSnapshot())
         const model = typeof details.model === "string" ? details.model : null
         const key = JSON.stringify({channelType, model})
         const existingBucket = channelSubscriptionBuckets.get(key)
@@ -1804,7 +1804,7 @@ export default class VelociousConfiguration {
   _deliverBroadcastFromBeacon(message) {
     /**
      * Websocket events.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -2250,7 +2250,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs set translator.
-   * @param {function(string, Record<string, ?> | undefined) : string} callback - Translator callback.
+   * @param {(arg1: string, arg2: Record<string, ReturnType<typeof JSON.parse>> | undefined) => string} callback - Translator callback.
    * @returns {void} - No return value.
    */
   setTranslator(callback) { this._translator = callback }
@@ -2258,7 +2258,7 @@ export default class VelociousConfiguration {
   /**
    * Runs default translator.
    * @param {string} msgID - Msg id.
-   * @param {Record<string, ?>} [args] - Translator options and variables.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args] - Translator options and variables.
    * @returns {string} - The default translator.
    */
   _defaultTranslator(msgID, args) {
@@ -2286,7 +2286,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get translator.
-   * @returns {(msgID: string, args?: Record<string, ?>) => string} - The configured translator.
+   * @returns {(msgID: string, args?: Record<string, ReturnType<typeof JSON.parse>>) => string} - The configured translator.
    */
   getTranslator() {
     if (this._translator) return this._translator
@@ -2472,8 +2472,8 @@ export default class VelociousConfiguration {
    * `canSubscribe()` continue to receive broadcasts until they
    * unsubscribe or the session ends.
    * @param {string} name
-   * @param {Record<string, ?>} broadcastParams
-   * @param {?} body
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams
+   * @param {ReturnType<typeof JSON.parse>} body
    * @returns {void}
    */
   /**
@@ -2567,7 +2567,7 @@ export default class VelociousConfiguration {
    *
    * Return `null`/`undefined` to mean "no identity" — resumes still
    * succeed if pause and resume both resolve to a nullish value.
-   * @param {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} resolver - Authenticated-caller identity resolver, or null to disable identity checks.
+   * @param {((session: import("./http-server/client/websocket-session.js").default) => ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>) | null} resolver - Authenticated-caller identity resolver, or null to disable identity checks.
    * @returns {void}
    */
   setWebsocketSessionIdentityResolver(resolver) {
@@ -2576,7 +2576,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get websocket session identity resolver.
-   * @returns {((session: import("./http-server/client/websocket-session.js").default) => ? | Promise<?>) | null} - The configured identity resolver.
+   * @returns {((session: import("./http-server/client/websocket-session.js").default) => ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>) | null} - The configured identity resolver.
    */
   getWebsocketSessionIdentityResolver() {
     return this._websocketSessionIdentityResolver
@@ -2675,8 +2675,8 @@ export default class VelociousConfiguration {
   /**
    * Runs broadcast to channel.
    * @param {string} name - Channel type receiving the broadcast.
-   * @param {Record<string, ?>} broadcastParams - Values used to match eligible subscriptions.
-   * @param {?} body - Broadcast payload delivered to matching subscriptions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Values used to match eligible subscriptions.
+   * @param {ReturnType<typeof JSON.parse>} body - Broadcast payload delivered to matching subscriptions.
    * @returns {void}
    */
   broadcastToChannel(name, broadcastParams, body) {
@@ -2705,7 +2705,7 @@ export default class VelociousConfiguration {
     // so fall through to the local dispatch.
     /**
      * Websocket events.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.broadcastV2 === "function") {
@@ -2731,7 +2731,7 @@ export default class VelociousConfiguration {
   async awaitPendingBroadcasts() {
     /**
      * Websocket events.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
@@ -2744,8 +2744,8 @@ export default class VelociousConfiguration {
    * directly (in-process mode) or by the worker thread after the
    * main-process fan-out.
    * @param {string} name - Channel name.
-   * @param {Record<string, ?>} broadcastParams - Params passed to each subscription's `matches()`.
-   * @param {?} body - Message body delivered via `sendMessage()`.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Params passed to each subscription's `matches()`.
+   * @param {ReturnType<typeof JSON.parse>} body - Message body delivered via `sendMessage()`.
    * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
    * @returns {void}
    */
@@ -2825,7 +2825,7 @@ export default class VelociousConfiguration {
   /**
    * Runs resolve ability.
    * @param {object} args - Ability resolver args.
-   * @param {Record<string, ?>} args.params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Request params.
    * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} [args.request] - Request object. Absent for websocket channel subscriptions resolved from subscribe params.
    * @param {import("./http-server/client/response.js").default} [args.response] - Response object. Absent outside HTTP request handling.
    * @returns {Promise<import("./authorization/ability.js").default | undefined>} - Resolved ability.
@@ -2852,8 +2852,8 @@ export default class VelociousConfiguration {
   /**
    * Runs run with ability.
    * @param {import("./authorization/ability.js").default | undefined} ability - Ability instance.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithAbility(ability, callback) {
     return await this.getEnvironmentHandler().runWithAbility(ability, callback)
@@ -2862,8 +2862,8 @@ export default class VelociousConfiguration {
   /**
    * Runs run with request timing.
    * @param {import("./http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithRequestTiming(requestTiming, callback) {
     return await this.getEnvironmentHandler().runWithRequestTiming(requestTiming, callback)
@@ -2872,8 +2872,8 @@ export default class VelociousConfiguration {
   /**
    * Runs run with timezone.
    * @param {string} timeZone - IANA timezone identifier.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithTimezone(timeZone, callback) {
     return await this.getEnvironmentHandler().runWithTimezone(timeZone, callback)
@@ -2897,7 +2897,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get current tenant.
-   * @returns {?} - Current tenant from context.
+   * @returns {ReturnType<typeof JSON.parse>} - Current tenant from context.
    */
   getCurrentTenant() {
     return this.getEnvironmentHandler().getCurrentTenant()
@@ -2905,9 +2905,9 @@ export default class VelociousConfiguration {
 
   /**
    * Runs run with tenant.
-   * @param {?} tenant - Tenant.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithTenant(tenant, callback) {
     return await this.getEnvironmentHandler().runWithTenant(tenant, callback)
@@ -2916,11 +2916,11 @@ export default class VelociousConfiguration {
   /**
    * Runs resolve tenant.
    * @param {object} args - Tenant resolver args.
-   * @param {Record<string, ?>} args.params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Request params.
    * @param {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined} args.request - Request object.
    * @param {import("./http-server/client/response.js").default | undefined} args.response - Response object.
-   * @param {{channel: string, params?: Record<string, ?>}} [args.subscription] - Subscription metadata.
-   * @returns {Promise<?>} - Resolved tenant.
+   * @param {{channel: string, params?: Record<string, ReturnType<typeof JSON.parse>>}} [args.subscription] - Subscription metadata.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolved tenant.
    */
   async resolveTenant({params, request, response, subscription}) {
     const resolver = this.getTenantResolver()
@@ -3153,7 +3153,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs is missing current connection error.
-   * @param {?} error - Error thrown while looking up the current connection.
+   * @param {ReturnType<typeof JSON.parse>} error - Error thrown while looking up the current connection.
    * @returns {boolean} - Whether the error means no current connection is available.
    */
   isMissingCurrentConnectionError(error) {

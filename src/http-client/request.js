@@ -73,7 +73,7 @@ export default class Request {
 
   /**
    * Runs stream.
-   * @param {function(string) : void} callback - Callback function.
+   * @param {(arg: string) => void} callback - Callback function.
    * @returns {void} - No return value.
    */
   stream(callback) {

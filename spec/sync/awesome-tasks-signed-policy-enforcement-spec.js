@@ -15,8 +15,8 @@ import {
 
 /**
  * Builds a signed replay service with the proof ability factory.
- * @param {Record<string, ?>} fixtures - Fixture bundle.
- * @param {Record<string, ?>} [serviceArgs] - Extra service constructor args.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} fixtures - Fixture bundle.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [serviceArgs] - Extra service constructor args.
  * @returns {SignedSyncEnvelopeReplayService} Replay service.
  */
 function buildService(fixtures, serviceArgs = {}) {
@@ -33,9 +33,9 @@ function buildService(fixtures, serviceArgs = {}) {
 /**
  * Replays one signed Task update and returns the thrown error message.
  * @param {object} args - Replay args.
- * @param {Record<string, ?>} args.fixtures - Fixture bundle.
- * @param {Record<string, ?>} args.mutationOverrides - Mutation overrides.
- * @param {Record<string, ?>} [args.serviceArgs] - Extra service constructor args.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.fixtures - Fixture bundle.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.mutationOverrides - Mutation overrides.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.serviceArgs] - Extra service constructor args.
  * @param {number} args.taskId - Target task id.
  * @returns {Promise<string>} Thrown error message.
  */

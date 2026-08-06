@@ -92,7 +92,7 @@ export default class JsonSocket extends EventEmitter {
 
   /**
    * Runs send.
-   * @param {?} message - Message to send.
+   * @param {ReturnType<typeof JSON.parse>} message - Message to send.
    * @returns {void}
    */
   send(message) {

@@ -24,7 +24,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
   /**
    * Runs build.
-   * @param {Record<string, ?>} data - Data payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {

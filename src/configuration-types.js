@@ -5,23 +5,23 @@
  */
 
 /**
- * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default}): Promise<void>} CorsType
+ * @typedef {(args: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default}) => Promise<void>} CorsType
  */
 
 /**
- * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, subscription?: {channel: string, params?: Record<string, ?>}, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default, configuration: import("./configuration.js").default}): typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void | Promise<typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void>} WebsocketChannelResolverType
+ * @typedef {(args: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, subscription?: {channel: string, params?: Record<string, ReturnType<typeof JSON.parse>>}, client: import("./http-server/client/index.js").default, websocketSession: import("./http-server/client/websocket-session.js").default, configuration: import("./configuration.js").default}) => typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void | Promise<typeof import("./http-server/websocket-channel.js").default | import("./http-server/websocket-channel.js").default | void>} WebsocketChannelResolverType
  */
 
 /**
  * @typedef {object} WebsocketMessageHandler
- * @property {function({message: ?, session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onMessage] - Handler for incoming websocket messages.
- * @property {function({session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onOpen] - Handler when the websocket session opens.
- * @property {function({session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onClose] - Handler when the websocket session closes.
- * @property {function({error: Error, session: import("./http-server/client/websocket-session.js").default}) : Promise<void> | void} [onError] - Handler when a websocket message errors.
+ * @property {(args: {message: ReturnType<typeof JSON.parse>, session: import("./http-server/client/websocket-session.js").default}) => Promise<void> | void} [onMessage] - Handler for incoming websocket messages.
+ * @property {(args: {session: import("./http-server/client/websocket-session.js").default}) => Promise<void> | void} [onOpen] - Handler when the websocket session opens.
+ * @property {(args: {session: import("./http-server/client/websocket-session.js").default}) => Promise<void> | void} [onClose] - Handler when the websocket session closes.
+ * @property {(args: {error: Error, session: import("./http-server/client/websocket-session.js").default}) => Promise<void> | void} [onError] - Handler when a websocket message errors.
  */
 
 /**
- * @typedef {function({request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, configuration: import("./configuration.js").default}): WebsocketMessageHandler | void | Promise<WebsocketMessageHandler | void>} WebsocketMessageHandlerResolverType
+ * @typedef {(args: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, client: import("./http-server/client/index.js").default, configuration: import("./configuration.js").default}) => WebsocketMessageHandler | void | Promise<WebsocketMessageHandler | void>} WebsocketMessageHandlerResolverType
  */
 
 /**
@@ -31,7 +31,7 @@
  *   id: string
  * }} WebpackRequireContext
  * @typedef {{requireContext: WebpackRequireContext}} InitializersExportType
- * @typedef {function({configuration: import("./configuration.js").default}) : Promise<InitializersExportType>} InitializersType
+ * @typedef {(args: {configuration: import("./configuration.js").default}) => Promise<InitializersExportType>} InitializersType
  */
 
 /**
@@ -69,7 +69,7 @@
  * @property {number} [deadlockMaxWaitMs] - Cap (ms) on the deadlock retry backoff ceiling so the jittered wait stays bounded. Defaults to 1000.
  * @property {typeof import("./database/drivers/base.js").default} [driver] - Driver class to use for this database.
  * @property {typeof import("./database/pool/base.js").default} [poolType] - Pool class to use for this database.
- * @property {function() : ?} [getConnection] - Custom connection factory override.
+ * @property {() => ReturnType<typeof JSON.parse>} [getConnection] - Custom connection factory override.
  * @property {string} [host] - Database host.
  * @property {boolean} [migrations] - Whether migrations are enabled for this database.
  * @property {boolean} [multipleStatements] - (MySQL) Opt in to multi-statement queries so a whole structure SQL dump loads in one round-trip via `StructureSqlLoader`. Off by default; ordinary queries otherwise reject stacked statements.
@@ -106,7 +106,7 @@
 
 /**
  * @typedef {object} LoggingOutput
- * @property {function(LoggingOutputPayload): Promise<void> | void} write - Write a log entry.
+ * @property {(arg: LoggingOutputPayload) => Promise<void> | void} write - Write a log entry.
  * @property {LogLevel[]} [levels] - Default levels for this output.
  */
 
@@ -284,7 +284,7 @@
 
 /**
  * @typedef {object} ScheduledBackgroundJobConfiguration
- * @property {Array<?>} [args] - Arguments passed to the job when enqueued.
+ * @property {Array<ReturnType<typeof JSON.parse>>} [args] - Arguments passed to the job when enqueued.
  * @property {typeof import("./background-jobs/job.js").default} class - Job class to enqueue.
  * @property {string} [cron] - Crontab expression (5-field POSIX, plus `@hourly`/`@daily`/`@weekly`/`@monthly`/`@yearly`/`@midnight`). Mutually exclusive with `every`.
  * @property {boolean} [enabled] - Whether the schedule is enabled.
@@ -302,7 +302,7 @@
 
 /**
  * @typedef {object} ErrorRequestDetails
- * @property {?} [body] - Sanitized parsed request body, when available.
+ * @property {ReturnType<typeof JSON.parse>} [body] - Sanitized parsed request body, when available.
  * @property {string} httpMethod - Request HTTP method.
  * @property {string} path - Request path.
  */
@@ -320,12 +320,12 @@
  */
 
 /**
- * @typedef {function({
+ * @typedef {(args: {
  *   context: ClientErrorPayloadContext,
  *   error: Error,
  *   request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined,
  *   requestDetails: ErrorRequestDetails | null
- * }): Promise<ClientErrorPayloadReporterPayload | void> | ClientErrorPayloadReporterPayload | void} ClientErrorPayloadReporterType
+ * }) => Promise<ClientErrorPayloadReporterPayload | void> | ClientErrorPayloadReporterPayload | void} ClientErrorPayloadReporterType
  */
 
 /**
@@ -333,7 +333,7 @@
  */
 
 /**
- * @typedef {new (args: {attachmentName?: string, configuration: import("./configuration.js").default, modelClass?: typeof import("./database/record/index.js").default, name?: string, options?: Record<string, ?>}) => object} AttachmentDriverConstructor
+ * @typedef {new (args: {attachmentName?: string, configuration: import("./configuration.js").default, modelClass?: typeof import("./database/record/index.js").default, name?: string, options?: Record<string, ReturnType<typeof JSON.parse>>}) => object} AttachmentDriverConstructor
  */
 
 /**
@@ -342,27 +342,27 @@
  */
 
 /**
- * @typedef {function({configuration: import("./configuration.js").default}) : ScheduledBackgroundJobsConfiguration | Promise<ScheduledBackgroundJobsConfiguration>} ScheduledBackgroundJobsLoaderType
+ * @typedef {(args: {configuration: import("./configuration.js").default}) => ScheduledBackgroundJobsConfiguration | Promise<ScheduledBackgroundJobsConfiguration>} ScheduledBackgroundJobsLoaderType
  */
 
 /**
  * @typedef {object} AttachmentDriverConfiguration
- * @property {function({configuration: import("./configuration.js").default, name: string, options: Record<string, ?>}) : Record<string, ?>} [create] - Optional factory for a custom attachment driver instance.
+ * @property {(args: {configuration: import("./configuration.js").default, name: string, options: Record<string, ReturnType<typeof JSON.parse>>}) => Record<string, ReturnType<typeof JSON.parse>>} [create] - Optional factory for a custom attachment driver instance.
  * @property {AttachmentDriverConstructor} [driverClass] - Optional custom attachment driver class.
- * @property {Record<string, ?>} [instance] - Optional custom attachment driver instance.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} [instance] - Optional custom attachment driver instance.
  */
 
 /**
  * @typedef {object} AttachmentsConfiguration
  * @property {string} [defaultDriver] - Default attachment storage driver name.
- * @property {Record<string, AttachmentDriverConfiguration & Record<string, ?>>} [drivers] - Named attachment driver configurations.
+ * @property {Record<string, AttachmentDriverConfiguration & Record<string, ReturnType<typeof JSON.parse>>>} [drivers] - Named attachment driver configurations.
  * @property {boolean} [allowPathInput] - Whether `{path: ...}` attachment input is allowed.
  * @property {string[]} [allowedPathPrefixes] - Optional allowlist of directories for `{path: ...}` input.
  */
 
 /**
  * @typedef {object} MailerBackend
- * @property {function({payload: import("./mailer.js").MailerDeliveryPayload, configuration: import("./configuration.js").default}) : Promise<?> | ?} deliver - Deliver a mailer payload.
+ * @property {(args: {payload: import("./mailer.js").MailerDeliveryPayload, configuration: import("./configuration.js").default}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} deliver - Deliver a mailer payload.
  */
 
 
@@ -418,7 +418,7 @@
  * @typedef {object} FrontendModelResourceCustomCommandObject
  * @property {string} name - camelCase command method name.
  * @property {Array<{name: string, type: string}>} [args] - Typed command arguments; each generates a named, typed method parameter mapped positionally into the command payload. `type` is a JSDoc type string.
- * @property {string} [returnType] - JSDoc type for the command response. When set, the generated method is typed `Promise<returnType>` instead of `Promise<Record<string, ?>>`. Emitted verbatim into the generated frontend model, so it must resolve there.
+ * @property {string} [returnType] - JSDoc type for the command response. When set, the generated method is typed `Promise<returnType>` instead of `Promise<Record<string, ReturnType<typeof JSON.parse>>>`. Emitted verbatim into the generated frontend model, so it must resolve there.
  */
 
 /**
@@ -456,15 +456,15 @@
  * Client-side sync transport owning HTTP POSTs to the framework sync endpoints,
  * matching the frontend-model websocket client post contract.
  * @typedef {object} VelociousSyncClientTransport
- * @property {(path: string, body?: ?, options?: {headers?: Record<string, string>}) => Promise<{json: () => ?}>} post - Posts one request and resolves a response with a json accessor.
+ * @property {(path: string, body?: ReturnType<typeof JSON.parse>, options?: {headers?: Record<string, string>}) => Promise<{json: () => ReturnType<typeof JSON.parse>}>} post - Posts one request and resolves a response with a json accessor.
  */
 
 /**
  * Websocket client contract required from `sync.client.realtime.createClient`,
  * matching `VelociousWebsocketClient` / snapreq's websocket client.
  * @typedef {object} VelociousSyncRealtimeWebsocketClient
- * @property {() => Promise<?>} connect - Connects the websocket.
- * @property {(channelType: string, options?: {params?: Record<string, ?>, onMessage?: (body: ?) => void, onResume?: () => void, onClose?: (reason: string) => void}) => VelociousSyncRealtimeSubscription} subscribeChannel - Opens one channel subscription.
+ * @property {() => Promise<ReturnType<typeof JSON.parse>>} connect - Connects the websocket.
+ * @property {(channelType: string, options?: {params?: Record<string, ReturnType<typeof JSON.parse>>, onMessage?: (body: ReturnType<typeof JSON.parse>) => void, onResume?: () => void, onClose?: (reason: string) => void}) => VelociousSyncRealtimeSubscription} subscribeChannel - Opens one channel subscription.
  * @property {() => Promise<void>} disconnectAndStopReconnect - Closes the socket and stops auto-reconnect.
  */
 
@@ -480,7 +480,7 @@
  * One realtime channel subscription descriptor.
  * @typedef {object} VelociousSyncRealtimeChannelDescriptor
  * @property {string} channel - Server channel name to subscribe.
- * @property {Record<string, ?>} [params] - Subscribe params (runtime scope values). The framework injects `authenticationToken` automatically.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} [params] - Subscribe params (runtime scope values). The framework injects `authenticationToken` automatically.
  * @property {string} [resourceType] - Default resource/model name for pushed changes that do not carry their own resourceType.
  */
 
@@ -492,7 +492,7 @@
  * resource applier, echo suppression, and pull-on-reconnect - is derived.
  * @typedef {object} VelociousSyncClientRealtimeConfiguration
  * @property {() => VelociousSyncRealtimeWebsocketClient | Promise<VelociousSyncRealtimeWebsocketClient>} createClient - Builds the (unconnected) websocket client; the framework owns connect/disconnect.
- * @property {(context: ?) => Array<VelociousSyncRealtimeChannelDescriptor> | Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} [channels] - Deprecated legacy escape hatch: resolves extra app-channel descriptors from the `subscribeRealtime(context)` context. Declared pull scopes subscribe the framework sync channel automatically.
+ * @property {(context: ReturnType<typeof JSON.parse>) => Array<VelociousSyncRealtimeChannelDescriptor> | Promise<Array<VelociousSyncRealtimeChannelDescriptor>>} [channels] - Deprecated legacy escape hatch: resolves extra app-channel descriptors from the `subscribeRealtime(context)` context. Declared pull scopes subscribe the framework sync channel automatically.
  * @property {() => string | Promise<string>} [localOrigin] - Resolves this device's echo origin; pushed messages with a matching `echoOrigin` are dropped.
  * @property {boolean} [pullOnReconnect] - Fire a coalesced `pull()` when subscriptions become ready or resume after a drop, closing offline gaps. Defaults to true.
  */
@@ -566,13 +566,13 @@
 
 /**
  * @typedef {object} FrontendModelResourceServerConfiguration
- * @property {function({action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default}) : (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
- * @property {function({action: "index", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default}) : Promise<import("./database/record/index.js").default[]>} [records] - Records loader for frontendIndex.
- * @property {function({action: "index" | "find" | "create" | "update", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Record<string, ?> | Promise<Record<string, ?>>} [serialize] - Record serializer for response payloads.
- * @property {function({action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) : Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy/attach/download/url actions.
- * @property {function({action: "create", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, attributes: Record<string, ?>}) : Promise<import("./database/record/index.js").default>} [create] - Custom create callback.
- * @property {function({action: "update", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default, attributes: Record<string, ?>}) : Promise<import("./database/record/index.js").default | void>} [update] - Custom update callback.
- * @property {function({action: "destroy", controller: import("./controller.js").default, params: Record<string, ?>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) : Promise<void>} [destroy] - Custom destroy callback.
+ * @property {(args: {action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default}) => (boolean | void | Promise<boolean | void>)} [beforeAction] - Optional callback run before built-in frontend actions.
+ * @property {(args: {action: "index", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default}) => Promise<import("./database/record/index.js").default[]>} [records] - Records loader for frontendIndex.
+ * @property {(args: {action: "index" | "find" | "create" | "update", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) => Record<string, ReturnType<typeof JSON.parse>> | Promise<Record<string, ReturnType<typeof JSON.parse>>>} [serialize] - Record serializer for response payloads.
+ * @property {(args: {action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default, id: string | number}) => Promise<import("./database/record/index.js").default | null>} [find] - Record loader for find/update/destroy/attach/download/url actions.
+ * @property {(args: {action: "create", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default, attributes: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<import("./database/record/index.js").default>} [create] - Custom create callback.
+ * @property {(args: {action: "update", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default, attributes: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<import("./database/record/index.js").default | void>} [update] - Custom update callback.
+ * @property {(args: {action: "destroy", controller: import("./controller.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, modelClass: typeof import("./database/record/index.js").default, model: import("./database/record/index.js").default}) => Promise<void>} [destroy] - Custom destroy callback.
  */
 
 /**
@@ -603,7 +603,7 @@
 /**
  * @typedef {object} RouteResolverHookArgs
  * @property {import("./configuration.js").default} configuration - Configuration instance.
- * @property {Record<string, ?>} params - Mutable request params object.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} params - Mutable request params object.
  * @property {string} currentPath - Request path without query.
  * @property {boolean} [hasMatchingCustomRoute] - True when matching a configured custom route.
  * @property {import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default} request - Request object.
@@ -617,7 +617,7 @@
  * @property {string} controller - Controller path (for example `accounts`).
  * @property {typeof import("./controller.js").default} [controllerClass] - Optional controller class override.
  * @property {string} [controllerPath] - Optional absolute/relative controller file path override.
- * @property {Record<string, ?>} [params] - Extra params to merge for controller/action.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} [params] - Extra params to merge for controller/action.
  * @property {boolean} [skipAbilityResolution] - Whether to run the controller action without resolving request ability.
  * @property {boolean} [skipControllerConnections] - Whether to run the controller action without the automatic database checkout wrapper.
  * @property {boolean} [skipTenantResolution] - Whether to run the controller action without resolving request tenant.
@@ -625,7 +625,7 @@
  */
 
 /**
- * @typedef {function(RouteResolverHookArgs) : RouteResolverHookResult | null | Promise<RouteResolverHookResult | null>} RouteResolverHookType
+ * @typedef {(arg: RouteResolverHookArgs) => RouteResolverHookResult | null | Promise<RouteResolverHookResult | null>} RouteResolverHookType
  */
 
 /**
@@ -633,15 +633,15 @@
  */
 
 /**
- * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, ?>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined}) : import("./authorization/ability.js").default | void | Promise<import("./authorization/ability.js").default | void>} AbilityResolverType
+ * @typedef {(args: {configuration: import("./configuration.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined}) => import("./authorization/ability.js").default | void | Promise<import("./authorization/ability.js").default | void>} AbilityResolverType
  */
 
 /**
- * @typedef {function({configuration: import("./configuration.js").default, params: Record<string, ?>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined, subscription?: {channel: string, params?: Record<string, ?>}}) : ? | void | Promise<? | void>} TenantResolverType
+ * @typedef {(args: {configuration: import("./configuration.js").default, params: Record<string, ReturnType<typeof JSON.parse>>, request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default | undefined, response: import("./http-server/client/response.js").default | undefined, subscription?: {channel: string, params?: Record<string, ReturnType<typeof JSON.parse>>}}) => ReturnType<typeof JSON.parse> | void | Promise<ReturnType<typeof JSON.parse> | void>} TenantResolverType
  */
 
 /**
- * @typedef {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : DatabaseConfigurationType | Partial<DatabaseConfigurationType> | void} TenantDatabaseResolverType
+ * @typedef {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ReturnType<typeof JSON.parse>}) => DatabaseConfigurationType | Partial<DatabaseConfigurationType> | void} TenantDatabaseResolverType
  */
 
 /**
@@ -658,12 +658,12 @@
 
 /**
  * @typedef {object} TenantDatabaseProviderType
- * @property {function({configuration: import("./configuration.js").default, identifier: string}) : Array<?> | Promise<Array<?>>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
- * @property {function({configuration: import("./configuration.js").default, identifier: string}) : Array<?> | Promise<Array<?>>} [listRestrictTenants] - Lists existing tenants that should be checked for dependent restrict destroys. Defaults to listTenants.
- * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
- * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : void | Promise<void>} [dropDatabase] - Drops the tenant database/schema for one tenant.
- * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ?}) : void | Promise<void>} [checkTenant] - Checks one tenant database before generic connection validation.
- * @property {function({configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, migrationsApplied: number, tenant: ?}) : void | Promise<void>} [afterMigrateTenant] - Runs app-owned tenant work after generic migrations for one tenant. `migrationsApplied` is how many migrations actually ran (0 when the tenant was already up to date), so the app can skip expensive per-tenant work on no-op deploys.
+ * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
+ * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} [listRestrictTenants] - Lists existing tenants that should be checked for dependent restrict destroys. Defaults to listTenants.
+ * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
+ * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [dropDatabase] - Drops the tenant database/schema for one tenant.
+ * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [checkTenant] - Checks one tenant database before generic connection validation.
+ * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, migrationsApplied: number, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [afterMigrateTenant] - Runs app-owned tenant work after generic migrations for one tenant. `migrationsApplied` is how many migrations actually ran (0 when the tenant was already up to date), so the app can skip expensive per-tenant work on no-op deploys.
  */
 
 /**
@@ -691,9 +691,9 @@
  * @property {BeaconConfiguration} [beacon] - Beacon broadcast bus configuration.
  * @property {ScheduledBackgroundJobsConfiguration | ScheduledBackgroundJobsLoaderType} [scheduledBackgroundJobs] - Scheduled background jobs configuration.
  * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
- * @property {function({configuration: import("./configuration.js").default, type: string}) : void} initializeModels - Hook to register models for a given initialization type.
+ * @property {(args: {configuration: import("./configuration.js").default, type: string}) => void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.
- * @property {string | function() : string} locale - Default locale or locale resolver.
+ * @property {string | (() => string)} locale - Default locale or locale resolver.
  * @property {string[]} locales - Supported locales.
  * @property {LocaleFallbacksType} localeFallbacks - Locale fallback map.
  * @property {StructureSqlConfiguration} [structureSql] - Structure SQL generation configuration.

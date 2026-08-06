@@ -12,7 +12,7 @@ describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: true}
     class LeaseTrackingConfiguration extends Configuration {
       activeLeaseScopes = 0
 
-      /** @template T @param {?} optionsOrCallback - Connection options or callback. @param {?} [callback] - Connection callback. @returns {Promise<T>} Callback result. */
+      /** @template T @param {ReturnType<typeof JSON.parse>} optionsOrCallback - Connection options or callback. @param {ReturnType<typeof JSON.parse>} [callback] - Connection callback. @returns {Promise<T>} Callback result. */
       async ensureConnections(optionsOrCallback, callback) {
         const actualCallback = typeof optionsOrCallback === "function" ? optionsOrCallback : callback
 

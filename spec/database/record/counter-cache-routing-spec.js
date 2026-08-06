@@ -178,7 +178,7 @@ describe("Record - counterCache database routing", () => {
     const record = buildRecord()
 
     // Narrows the complete operation test double at the record ownership boundary.
-    record.bindDatabaseOperation(/** @type {?} */ (operation))
+    record.bindDatabaseOperation(/** @type {ReturnType<typeof JSON.parse>} */ (operation))
     await runCounterCacheCallback(record)
 
     expect(operation.modelClasses).toEqual([RoutingParent])
@@ -198,7 +198,7 @@ describe("Record - counterCache database routing", () => {
     const record = buildRecord()
 
     // Narrows the complete operation test double at the record ownership boundary.
-    record.bindDatabaseOperation(/** @type {?} */ (operation))
+    record.bindDatabaseOperation(/** @type {ReturnType<typeof JSON.parse>} */ (operation))
 
     await expect(async () => runCounterCacheCallback(record)).toThrowError("RoutingParent uses database \"parent\", not operation database \"child\"")
     expect(operationConnection.queries).toHaveLength(0)

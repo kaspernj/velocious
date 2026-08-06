@@ -118,7 +118,7 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
     })
 
     try {
-      let prunedJobRow = /** @type {Record<string, ?> | null} */ (null)
+      let prunedJobRow = /** @type {Record<string, ReturnType<typeof JSON.parse>> | null} */ (null)
       const deadline = Date.now() + 3000
 
       while (Date.now() < deadline) {
@@ -148,7 +148,7 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
     try {
       main.scheduler.scheduleJob({jobConfiguration: {class: QueuedTestJob, every: 50}, jobKey: "queuedTestJob"})
 
-      let enqueuedRow = /** @type {Record<string, ?> | null} */ (null)
+      let enqueuedRow = /** @type {Record<string, ReturnType<typeof JSON.parse>> | null} */ (null)
       const deadline = Date.now() + 3000
 
       while (Date.now() < deadline) {

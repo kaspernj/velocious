@@ -24,7 +24,7 @@ export default class VelociousCli {
 
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Resolves with the final command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the final command result.
    */
   async execute() {
     const commandGroups = await this.commandGroups()
@@ -48,7 +48,7 @@ export default class VelociousCli {
   /**
    * Runs execute command.
    * @param {string[]} processArgs - Process args for a single command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async executeCommand(processArgs) {
     if (!processArgs[0]) {

@@ -176,12 +176,12 @@ describe("server sequence allocator database routing", () => {
     })
     const harness = buildModelHarness({configuration, connection: modelConnection, databaseIdentifier: "default"})
     const allocator = new ServerSequenceAllocator({
-      configuration: /** @type {?} */ (configuration),
+      configuration: /** @type {ReturnType<typeof JSON.parse>} */ (configuration),
       databaseIdentifier: "sequences"
     })
 
-    withServerSequence(/** @type {?} */ (harness.ModelClass), {allocator})
-    await runBeforeCreate(/** @type {?} */ (harness.callbacks), /** @type {?} */ (harness.buildRecord()))
+    withServerSequence(/** @type {ReturnType<typeof JSON.parse>} */ (harness.ModelClass), {allocator})
+    await runBeforeCreate(/** @type {ReturnType<typeof JSON.parse>} */ (harness.callbacks), /** @type {ReturnType<typeof JSON.parse>} */ (harness.buildRecord()))
 
     expect(configuration.ensureConnectionCalls).toEqual([["sequences"], ["sequences"]])
     expect(allocatorConnection.queries).toEqual(["INSERT SERVER SEQUENCE"])
@@ -193,15 +193,15 @@ describe("server sequence allocator database routing", () => {
     const operationConnection = buildConnection()
     const configuration = new RoutingConfiguration({default: ordinaryConnection})
     const harness = buildModelHarness({configuration, connection: ordinaryConnection, databaseIdentifier: "default"})
-    const allocator = new ServerSequenceAllocator({configuration: /** @type {?} */ (configuration)})
+    const allocator = new ServerSequenceAllocator({configuration: /** @type {ReturnType<typeof JSON.parse>} */ (configuration)})
     const operation = buildOperation({
       configuration,
       connection: operationConnection,
       databaseIdentifier: "default"
     })
 
-    withServerSequence(/** @type {?} */ (harness.ModelClass), {allocator})
-    await runBeforeCreate(/** @type {?} */ (harness.callbacks), /** @type {?} */ (harness.buildRecord(operation)))
+    withServerSequence(/** @type {ReturnType<typeof JSON.parse>} */ (harness.ModelClass), {allocator})
+    await runBeforeCreate(/** @type {ReturnType<typeof JSON.parse>} */ (harness.callbacks), /** @type {ReturnType<typeof JSON.parse>} */ (harness.buildRecord(operation)))
 
     expect(operation.modelClasses).toEqual([harness.ModelClass])
     expect(operationConnection.queries).toEqual(["INSERT SERVER SEQUENCE"])
@@ -218,7 +218,7 @@ describe("server sequence allocator database routing", () => {
     })
     const harness = buildModelHarness({configuration, connection: operationConnection, databaseIdentifier: "default"})
     const allocator = new ServerSequenceAllocator({
-      configuration: /** @type {?} */ (configuration),
+      configuration: /** @type {ReturnType<typeof JSON.parse>} */ (configuration),
       databaseIdentifier: "sequences"
     })
     const operation = buildOperation({
@@ -227,10 +227,10 @@ describe("server sequence allocator database routing", () => {
       databaseIdentifier: "default"
     })
 
-    withServerSequence(/** @type {?} */ (harness.ModelClass), {allocator})
+    withServerSequence(/** @type {ReturnType<typeof JSON.parse>} */ (harness.ModelClass), {allocator})
 
     await expect(async () => {
-      await runBeforeCreate(/** @type {?} */ (harness.callbacks), /** @type {?} */ (harness.buildRecord(operation)))
+      await runBeforeCreate(/** @type {ReturnType<typeof JSON.parse>} */ (harness.callbacks), /** @type {ReturnType<typeof JSON.parse>} */ (harness.buildRecord(operation)))
     }).toThrowError("Server sequence allocator uses database \"sequences\", not operation model database \"default\"")
     expect(operationConnection.queries).toHaveLength(0)
     expect(allocatorConnection.queries).toHaveLength(0)
@@ -246,17 +246,17 @@ describe("server sequence allocator database routing", () => {
       connection: operationConnection,
       databaseIdentifier: "default"
     })
-    const allocator = new ServerSequenceAllocator({configuration: /** @type {?} */ (allocatorConfiguration)})
+    const allocator = new ServerSequenceAllocator({configuration: /** @type {ReturnType<typeof JSON.parse>} */ (allocatorConfiguration)})
     const operation = buildOperation({
       configuration: modelConfiguration,
       connection: operationConnection,
       databaseIdentifier: "default"
     })
 
-    withServerSequence(/** @type {?} */ (harness.ModelClass), {allocator})
+    withServerSequence(/** @type {ReturnType<typeof JSON.parse>} */ (harness.ModelClass), {allocator})
 
     await expect(async () => {
-      await runBeforeCreate(/** @type {?} */ (harness.callbacks), /** @type {?} */ (harness.buildRecord(operation)))
+      await runBeforeCreate(/** @type {ReturnType<typeof JSON.parse>} */ (harness.callbacks), /** @type {ReturnType<typeof JSON.parse>} */ (harness.buildRecord(operation)))
     }).toThrowError("Server sequence allocator belongs to another Velocious configuration")
     expect(operationConnection.queries).toHaveLength(0)
     expect(allocatorConnection.queries).toHaveLength(0)

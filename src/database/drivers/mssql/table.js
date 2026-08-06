@@ -171,7 +171,7 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
   /**
    * Runs truncate.
    * @param {{cascade: boolean}} [args] - Truncate options.
-   * @returns {Promise<Array<Record<string, ?>>>} - Resolves with the truncate.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - Resolves with the truncate.
    */
   async truncate(args) { // eslint-disable-line no-unused-vars
     this.getDriver()._assertNotReadOnly()

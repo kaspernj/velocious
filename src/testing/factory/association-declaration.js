@@ -15,7 +15,7 @@ export default class AssociationDeclaration {
    * @param {string} args.name - Relationship name on the owning model.
    * @param {string} [args.factory] - Factory name to run. Defaults to the relationship name.
    * @param {string[]} [args.traits] - Traits passed to the association factory.
-   * @param {Record<string, ?>} [args.overrides] - Overrides passed to the association factory.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.overrides] - Overrides passed to the association factory.
    * @param {"build" | "create" | undefined} [args.strategy] - Explicit strategy override.
    */
   constructor({name, factory, traits = [], overrides = {}, strategy}) {
@@ -39,7 +39,7 @@ export default class AssociationDeclaration {
     /** @type {string[]} - Traits passed to the association factory. */
     this.traits = traits
 
-    /** @type {Record<string, ?>} - Overrides passed to the association factory. */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} - Overrides passed to the association factory. */
     this.overrides = overrides
 
     /** @type {"build" | "create" | undefined} - Explicit strategy override. */

@@ -6,12 +6,12 @@ export default class VelociousHttpServerClientWebsocketRequest {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {?} [args.body] - Request body.
+   * @param {ReturnType<typeof JSON.parse>} [args.body] - Request body.
    * @param {Record<string, string>} [args.headers] - Header list.
-   * @param {Record<string, ?>} [args.metadata] - Session metadata.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.metadata] - Session metadata.
    * @param {string} args.method - HTTP method.
    * @param {string} args.path - Path.
-   * @param {Record<string, ?>} [args.params] - Parameters object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.params] - Parameters object.
    * @param {string} [args.remoteAddress] - Remote address.
    */
   constructor({body, headers, metadata, method, params, path, remoteAddress}) {
@@ -25,12 +25,12 @@ export default class VelociousHttpServerClientWebsocketRequest {
     this.headersMap = {}
     /**
      * Narrows the runtime value to the documented type.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     this.metadataObject = metadata ? {...metadata} : {}
     this.method = method.toUpperCase()
     /**
      * Narrows the runtime value to the documented type.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     this.paramsObject = {}
     this._path = path
     this.remoteAddressValue = remoteAddress
@@ -77,7 +77,7 @@ export default class VelociousHttpServerClientWebsocketRequest {
   /**
    * Runs metadata.
    * @param {string} [key] - Metadata key.
-   * @returns {?} - Metadata value for a key, or the full metadata object.
+   * @returns {ReturnType<typeof JSON.parse>} - Metadata value for a key, or the full metadata object.
    */
   metadata(key) {
     if (key !== undefined) return this.metadataObject[key]

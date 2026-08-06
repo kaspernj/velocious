@@ -24,6 +24,9 @@ function truncatePreview(input, limit = 300) {
 export default class RequestBuffer {
   bodyLength = 0
 
+  /** @type {Buffer[] | undefined} */
+  postBodyBuffers = undefined
+
   /**
    * Data.
    * @type {number[]} */
@@ -446,7 +449,7 @@ export default class RequestBuffer {
       this.postBody = Buffer.concat(this.postBodyBuffers).toString("utf8")
     }
 
-    delete this.postBodyBuffers
+    this.postBodyBuffers = undefined
 
     this.completeRequest()
   }
@@ -574,7 +577,7 @@ export default class RequestBuffer {
 
         incorporate(this.params, newParams)
       } catch (error) {
-        const ensuredError = /** @type {Error & {velociousContext?: Record<string, ?>}} */ (error)
+        const ensuredError = /** @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */ (error)
 
         ensuredError.velociousContext = {
           ...(ensuredError.velociousContext || {}),

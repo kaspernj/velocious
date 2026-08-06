@@ -18,7 +18,7 @@ class TaskPermitResource extends FrontendModelBaseResource {
 /**
  * Builds a frontend-model resource instance without the frontend-model pipeline.
  * @param {typeof FrontendModelBaseResource} ResourceClass - Resource class to instantiate.
- * @param {Record<string, ?>} params - Request params.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
  * @returns {FrontendModelBaseResource} Resource instance.
  */
 function buildResource(ResourceClass, params) {

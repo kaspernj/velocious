@@ -2,8 +2,8 @@
 
 /**
  * Runs error logger.
- * @param {(...args: Array<?>) => Promise<void>} callback - Callback function.
- * @returns {(...args: Array<?>) => Promise<void>} - The error logger.
+ * @param {(...args: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} callback - Callback function.
+ * @returns {(...args: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} - The error logger.
  */
 export default function errorLogger(callback) {
   return async function(...args) {

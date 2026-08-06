@@ -7,7 +7,7 @@ import {FactoryCycleError, UndefinedFactoryError, UndefinedTraitError} from "./e
  * A resolved attribute/transient/association slot in a compiled plan.
  * @typedef {object} Slot
  * @property {"attribute" | "transient" | "association"} slotKind - Slot nature.
- * @property {?} value - Literal/lazy value, override value, or AssociationDeclaration.
+ * @property {ReturnType<typeof JSON.parse>} value - Literal/lazy value, override value, or AssociationDeclaration.
  * @property {boolean} isOverride - Whether the value came from a call-site override.
  */
 
@@ -16,7 +16,7 @@ import {FactoryCycleError, UndefinedFactoryError, UndefinedTraitError} from "./e
  * @typedef {object} CompiledPlan
  * @property {string} factoryName - Target factory name.
  * @property {import("./factory-definition.js").default} factoryDefinition - Target definition.
- * @property {(new (attributes?: Record<string, ?>) => ?) | null} modelClass - Resolved model class.
+ * @property {(new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | null} modelClass - Resolved model class.
  * @property {string[]} chainNames - Inheritance chain names (child last) for sequence scope.
  * @property {Map<string, Slot>} resolved - Name→slot map (last declaration wins).
  * @property {Map<string, import("./declarations.js").CallbackDeclaration[]>} callbacks - Deduped callbacks by event.
@@ -44,7 +44,7 @@ export default class FactoryRunner {
    * Compiles a factory invocation into a plan.
    * @param {string} factoryName - Factory to run.
    * @param {string[]} requestedTraits - Traits requested at the call site, in order.
-   * @param {Record<string, ?>} overrides - Call-site overrides (highest precedence).
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} overrides - Call-site overrides (highest precedence).
    * @returns {CompiledPlan} - The compiled plan.
    */
   compile(factoryName, requestedTraits, overrides) {
@@ -83,7 +83,7 @@ export default class FactoryRunner {
   /**
    * Applies the current call-site overrides without mutating the reusable template.
    * @param {CompiledPlan} planTemplate - Reusable declaration plan.
-   * @param {Record<string, ?>} overrides - Current call-site overrides.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} overrides - Current call-site overrides.
    * @returns {CompiledPlan} - Per-invocation plan.
    */
   applyOverrides(planTemplate, overrides) {
@@ -148,7 +148,7 @@ export default class FactoryRunner {
   /**
    * Picks the nearest declared model class in the chain (child overrides parent).
    * @param {import("./factory-definition.js").default[]} chain - Inheritance chain.
-   * @returns {(new (attributes?: Record<string, ?>) => ?) | null} - The model class, or null.
+   * @returns {(new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | null} - The model class, or null.
    */
   _resolveModelClass(chain) {
     for (let index = chain.length - 1; index >= 0; index--) {
@@ -230,7 +230,7 @@ export default class FactoryRunner {
    * Folds flattened declarations into a reusable compiled plan.
    * @param {object} args - Options.
    * @param {Array<{decl: import("./declarations.js").Declaration}>} args.flattened - Flattened declarations.
-   * @param {(new (attributes?: Record<string, ?>) => ?) | null} args.modelClass - Resolved model class.
+   * @param {(new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | null} args.modelClass - Resolved model class.
    * @param {import("./factory-definition.js").default} args.target - Target factory definition.
    * @param {string[]} args.chainNames - Inheritance chain names.
    * @returns {CompiledPlan} - The compiled plan.
@@ -289,8 +289,8 @@ export default class FactoryRunner {
    * real foreign-key metadata. An explicit association object wins over its key;
    * otherwise an explicit key suppresses the factory-declared association.
    * @param {Map<string, Slot>} resolved - Folded slots.
-   * @param {Record<string, ?>} overrides - Call-site overrides.
-   * @param {(new (attributes?: Record<string, ?>) => ?) | null} modelClass - Resolved model class.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} overrides - Call-site overrides.
+   * @param {(new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | null} modelClass - Resolved model class.
    * @returns {void}
    */
   _arbitrateAssociationOverrides(resolved, overrides, modelClass) {

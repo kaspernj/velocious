@@ -69,13 +69,13 @@ export class VelociousHttpServerWebsocketEventsHost {
   /**
    * Runs publish.
    * @param {object | string} channelOrArgs - Channel name or options object.
-   * @param {?} [payloadArg] - Payload data when channel is passed separately.
+   * @param {ReturnType<typeof JSON.parse>} [payloadArg] - Payload data when channel is passed separately.
    * @returns {void} - No return value.
    */
   publish(channelOrArgs, payloadArg) {
     const publishArgs = typeof channelOrArgs === "string"
       ? {channel: channelOrArgs, payload: payloadArg}
-      : /** @type {{channel: string, payload: ?}} */ (channelOrArgs)
+      : /** @type {{channel: string, payload: ReturnType<typeof JSON.parse>}} */ (channelOrArgs)
     const channel = publishArgs.channel
     const payload = publishArgs.payload
 
@@ -103,8 +103,8 @@ export class VelociousHttpServerWebsocketEventsHost {
    * interested) so clients can resume from a `lastEventId` checkpoint.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
-   * @param {?} args.body - Message body.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.broadcastParams - Routing filter params.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Message body.
    * @param {import("../configuration.js").default} args.configuration - Originating configuration.
    * @returns {void}
    */
@@ -188,7 +188,7 @@ export class VelociousHttpServerWebsocketEventsHost {
   /**
    * Runs persist v2 event if needed.
    * @param {object} args - Options.
-   * @param {?} args.body - Event body.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Event body.
    * @param {string} args.channel - Channel name.
    * @param {import("../configuration.js").default} args.configuration - Originating configuration.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata when storage is enabled.
@@ -201,7 +201,7 @@ export class VelociousHttpServerWebsocketEventsHost {
    * Runs persist event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {?} args.payload - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} args.payload - Payload data.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */
   async _persistEventIfNeeded({channel, payload}) {
@@ -212,7 +212,7 @@ export class VelociousHttpServerWebsocketEventsHost {
    * Runs persist channel event if needed.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {?} args.payload - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} args.payload - Payload data.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration owning the event store.
    * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
    */

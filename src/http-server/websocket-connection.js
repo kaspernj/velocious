@@ -14,7 +14,7 @@ export default class VelociousWebsocketConnection {
    * Runs constructor.
    * @param {object} args - Owning session, connection parameters, and client identifier.
    * @param {string} args.connectionId - Client-assigned id, unique within the session.
-   * @param {Record<string, ?>} args.params - Opaque params from the `connection-open` message.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Opaque params from the `connection-open` message.
    * @param {import("./client/websocket-session.js").default} args.session - Owning session.
    */
   constructor({connectionId, params, session}) {
@@ -36,7 +36,7 @@ export default class VelociousWebsocketConnection {
    * Called for each `connection-message` the client sends to this
    * specific connection. Messages arriving before `onConnect` has
    * resolved are queued and delivered in order once it finishes.
-   * @param {?} body - Client-sent payload for this connection.
+   * @param {ReturnType<typeof JSON.parse>} body - Client-sent payload for this connection.
    * @returns {void | Promise<void>} - Completes after message handling.
    */
   onMessage(body) { void body }
@@ -72,7 +72,7 @@ export default class VelociousWebsocketConnection {
   /**
    * Sends a `connection-message` frame to the client side of this
    * connection. Throws if the connection has already been closed.
-   * @param {?} body - Connection payload to send to the client.
+   * @param {ReturnType<typeof JSON.parse>} body - Connection payload to send to the client.
    * @returns {void}
    */
   sendMessage(body) {

@@ -8,9 +8,9 @@ import {ModelContractError} from "./errors.js"
  * initialized backend Velocious `DatabaseRecord` subclass. Uninitialized backend
  * classes and non-backend classes (e.g. generated frontend models) are rejected
  * with a named, actionable error rather than failing deep inside construction.
- * @param {?} modelClass - The candidate model class.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - The candidate model class.
  * @param {string} factoryName - Factory name, for the error message.
- * @returns {new (attributes?: Record<string, ?>) => import("../../database/record/index.js").default} - The validated model class.
+ * @returns {new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => import("../../database/record/index.js").default} - The validated model class.
  */
 export function assertModelClass(modelClass, factoryName) {
   if (typeof modelClass !== "function") {
@@ -27,5 +27,5 @@ export function assertModelClass(modelClass, factoryName) {
     throw new ModelContractError(`Factory "${factoryName}" model ${backendModelClass.name} has not been initialized. Ensure the model class is initialized (e.g. via configuration.initialize()/ensureInitialized) before build/create.`)
   }
 
-  return /** @type {new (attributes?: Record<string, ?>) => import("../../database/record/index.js").default} */ (modelClass)
+  return /** @type {new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => import("../../database/record/index.js").default} */ (modelClass)
 }

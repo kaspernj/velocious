@@ -48,7 +48,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
     /**
      * Connect args.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const connectArgs = {}
 
     for (const forwardValue of forward) {
@@ -250,8 +250,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * Runs convert value.
-   * @param {?} value - Value to use.
-   * @returns {?} - The converted value.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The converted value.
    */
   _convertValue(value) {
     if (typeof value === "boolean") {
@@ -263,8 +263,8 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * Runs escape.
-   * @param {?} value - Value to use.
-   * @returns {?} - The escape.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The escape.
    */
   escape(value) {
     if (!this.connection) throw new Error("Can't escape before connected")
@@ -277,7 +277,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
   /**
    * Runs quote.
-   * @param {?} value - Value to use.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {

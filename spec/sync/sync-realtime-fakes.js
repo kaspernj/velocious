@@ -8,7 +8,7 @@
  * @param {object} [args] - Fake client args.
  * @param {boolean} [args.deferConnect] - Keep connect() pending until resolveConnect() is called.
  * @param {boolean} [args.deferReady] - Keep waitForReady() pending until each subscription's resolveReady() is called.
- * @returns {?} Fake websocket client.
+ * @returns {ReturnType<typeof JSON.parse>} Fake websocket client.
  */
 export function buildFakeWebsocketClient({deferConnect, deferReady} = {}) {
   const fakeWebsocketClient = {
@@ -32,8 +32,8 @@ export function buildFakeWebsocketClient({deferConnect, deferReady} = {}) {
     resolveConnect: null,
     /**
      * @param {string} channelType - Channel name.
-     * @param {{params?: Record<string, ?>, onMessage?: (body: ?) => void, onResume?: () => void}} [options] - Subscription options.
-     * @returns {?} Fake subscription.
+     * @param {{params?: Record<string, ReturnType<typeof JSON.parse>>, onMessage?: (body: ReturnType<typeof JSON.parse>) => void, onResume?: () => void}} [options] - Subscription options.
+     * @returns {ReturnType<typeof JSON.parse>} Fake subscription.
      */
     subscribeChannel: (channelType, {onMessage, onResume, params} = {}) => {
       const subscription = {
@@ -43,7 +43,7 @@ export function buildFakeWebsocketClient({deferConnect, deferReady} = {}) {
           subscription.closed = true
         },
         closed: false,
-        /** @param {?} body - Message body. @returns {void} */
+        /** @param {ReturnType<typeof JSON.parse>} body - Message body. @returns {void} */
         emitMessage: (body) => {
           if (onMessage) onMessage(body)
         },
@@ -70,7 +70,7 @@ export function buildFakeWebsocketClient({deferConnect, deferReady} = {}) {
 
       return subscription
     },
-    subscriptions: /** @type {Array<?>} */ ([])
+    subscriptions: /** @type {Array<ReturnType<typeof JSON.parse>>} */ ([])
   }
 
   return fakeWebsocketClient

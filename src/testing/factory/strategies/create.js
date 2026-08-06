@@ -15,11 +15,11 @@ export default class CreateStrategy extends BaseStrategy {
    * @param {object} args - Options.
    * @param {import("../factory-registry.js").default} args.registry - Owning registry.
    * @param {import("../factory-runner.js").CompiledPlan} args.plan - Compiled plan.
-   * @returns {Promise<?>} - The persisted record.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The persisted record.
    */
   async run({registry, plan}) {
     const context = this._newContext(registry, plan, "create")
-    /** @type {{record: ?, transients: Record<string, ?>}} */
+    /** @type {{record: ReturnType<typeof JSON.parse>, transients: Record<string, ReturnType<typeof JSON.parse>>}} */
     const runState = {record: undefined, transients: {}}
     const state = () => ({record: runState.record, transients: runState.transients, strategy: "create"})
 
@@ -49,9 +49,9 @@ export default class CreateStrategy extends BaseStrategy {
    * Persists the record via a custom `toCreate`, native `save()`, or not at all
    * when `skipCreate` is declared.
    * @param {import("../factory-runner.js").CompiledPlan} plan - Compiled plan.
-   * @param {?} record - The record to persist.
+   * @param {ReturnType<typeof JSON.parse>} record - The record to persist.
    * @param {import("../evaluation-context.js").default} context - Evaluation context.
-   * @param {Record<string, ?>} transients - Evaluated transients.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} transients - Evaluated transients.
    * @returns {Promise<void>} - Resolves when persistence completes.
    */
   async _persist(plan, record, context, transients) {

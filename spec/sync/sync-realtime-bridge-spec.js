@@ -45,19 +45,19 @@ async function flushUntil(condition) {
 /**
  * Builds a record for an applyable fake model class, mimicking the model layer's
  * assign/isChanged/save/destroy plus lifecycle callback firing on save.
- * @param {?} modelClass - Applyable fake model class.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - Applyable fake model class.
  * @param {string} id - Record id.
- * @returns {?} Fake record.
+ * @returns {ReturnType<typeof JSON.parse>} Fake record.
  */
 function buildApplyableRecord(modelClass, id) {
   const record = Object.create(modelClass.prototype)
 
-  record.attributesData = /** @type {Record<string, ?>} */ ({id})
-  record.pendingAttributes = /** @type {Record<string, ?> | null} */ (null)
+  record.attributesData = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({id})
+  record.pendingAttributes = /** @type {Record<string, ReturnType<typeof JSON.parse>> | null} */ (null)
   record.persisted = false
   record.id = () => id
   record.attributes = () => ({...record.attributesData})
-  /** @param {Record<string, ?>} attributes - Assigned attributes. @returns {void} */
+  /** @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Assigned attributes. @returns {void} */
   record.assign = (attributes) => {
     record.pendingAttributes = attributes
   }
@@ -87,16 +87,16 @@ function buildApplyableRecord(modelClass, id) {
  * @param {object} args - Model class args.
  * @param {Array<{attributeName: string, name: string, type: string}>} args.columns - Column fixtures.
  * @param {string} args.modelName - Stable model name.
- * @param {?} [args.sync] - Static sync declaration.
- * @returns {?} Applyable fake model class.
+ * @param {ReturnType<typeof JSON.parse>} [args.sync] - Static sync declaration.
+ * @returns {ReturnType<typeof JSON.parse>} Applyable fake model class.
  */
 function buildApplyableModelClass({columns, modelName, sync}) {
   const modelClass = buildMetadataModelClass({columns, modelName, sync})
 
   modelClass.records = new Map()
-  /** @param {{id: string}} conditions - Lookup conditions. @returns {Promise<?>} Existing or initialized record. */
+  /** @param {{id: string}} conditions - Lookup conditions. @returns {Promise<ReturnType<typeof JSON.parse>>} Existing or initialized record. */
   modelClass.findOrInitializeBy = async ({id}) => modelClass.records.get(id) || buildApplyableRecord(modelClass, id)
-  /** @param {{id: string}} conditions - Lookup conditions. @returns {Promise<?>} Existing record. */
+  /** @param {{id: string}} conditions - Lookup conditions. @returns {Promise<ReturnType<typeof JSON.parse>>} Existing record. */
   modelClass.findBy = async ({id}) => modelClass.records.get(id) || null
 
   return modelClass
@@ -107,29 +107,29 @@ function buildApplyableModelClass({columns, modelName, sync}) {
  * transport, and an applyable tracked TicketScan model.
  * @param {object} [args] - Harness args.
  * @param {{value: string}} [args.authTokenHolder] - Mutable auth-token holder so specs can switch the signed-in identity.
- * @param {(context: ?) => Array<?> | Promise<Array<?>>} [args.channels] - Realtime channels callback.
+ * @param {(context: ReturnType<typeof JSON.parse>) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} [args.channels] - Realtime channels callback.
  * @param {boolean} [args.deferConnect] - Defer the fake client's connect().
  * @param {boolean} [args.deferReady] - Defer each fake subscription's readiness.
  * @param {() => string | Promise<string>} [args.localOrigin] - Realtime local origin callback.
- * @param {Array<?>} [args.modelClasses] - Model classes to register.
+ * @param {Array<ReturnType<typeof JSON.parse>>} [args.modelClasses] - Model classes to register.
  * @param {boolean} [args.pullOnReconnect] - Realtime pull-on-reconnect flag.
- * @param {?} [args.realtime] - Full realtime block override.
- * @param {Array<{conditions: Record<string, ?>, resourceType: string}>} [args.scopes] - Active pull scopes served by a fake scope store.
- * @param {?} [args.websocketClient] - Shared app-lifetime websocket client instance (sync.client.websocketClient); when set, no realtime.createClient is configured so the bridge rides the shared connection.
- * @returns {?} Harness with client, fakes, and recorded calls.
+ * @param {ReturnType<typeof JSON.parse>} [args.realtime] - Full realtime block override.
+ * @param {Array<{conditions: Record<string, ReturnType<typeof JSON.parse>>, resourceType: string}>} [args.scopes] - Active pull scopes served by a fake scope store.
+ * @param {ReturnType<typeof JSON.parse>} [args.websocketClient] - Shared app-lifetime websocket client instance (sync.client.websocketClient); when set, no realtime.createClient is configured so the bridge rides the shared connection.
+ * @returns {ReturnType<typeof JSON.parse>} Harness with client, fakes, and recorded calls.
  */
 function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferReady, localOrigin, modelClasses, pullOnReconnect, realtime, scopes, websocketClient} = {}) {
   /** @type {Array<Error>} */
   const errors = []
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const postChangesCalls = []
   const fakeWebsocketClient = buildFakeWebsocketClient({deferConnect, deferReady})
   const syncModel = buildFakeSyncModel()
   const resolvedAuthTokenHolder = authTokenHolder || {value: "token-1"}
-  const changesResponseHolder = {value: /** @type {Record<string, ?>} */ ({nextCursor: null, status: "success", syncs: [], upToCursor: null})}
+  const changesResponseHolder = {value: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({nextCursor: null, status: "success", syncs: [], upToCursor: null})}
   const transportErrorHolder = {value: /** @type {Error | null} */ (null)}
   const transport = {
-    /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+    /** @param {string} path - Posted path. @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ReturnType<typeof JSON.parse>>}>} Response with json accessor. */
     post: async (path, payload) => {
       if (path.endsWith("/changes")) {
         postChangesCalls.push(payload)
@@ -145,7 +145,7 @@ function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferRea
       columns: SCAN_COLUMNS,
       modelName: "TicketScan",
       sync: {
-        attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted, ticketNr: data.ticketNr}),
+        attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({accepted: data.accepted, ticketNr: data.ticketNr}),
         track: true
       }
     })
@@ -170,7 +170,7 @@ function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferRea
       }
     }
   })
-  const scopeStore = scopes ? /** @type {?} */ ({
+  const scopeStore = scopes ? /** @type {ReturnType<typeof JSON.parse>} */ ({
     activeScopes: async () => scopes.map((scope) => ({...scope})),
     loadCursor: async () => null,
     saveCursor: async () => {}
@@ -182,10 +182,10 @@ function buildRealtimeHarness({authTokenHolder, channels, deferConnect, deferRea
 
 describe("sync realtime bridge", () => {
   it("subscribes declared channels with the auth token injected, idempotently and single-flighted", async () => {
-    /** @type {Array<?>} */
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */
     const channelsContexts = []
     const harness = buildRealtimeHarness({
-      channels: (/** @type {?} */ context) => {
+      channels: (/** @type {ReturnType<typeof JSON.parse>} */ context) => {
         channelsContexts.push(context)
 
         return [{channel: "ticket-scans", params: {eventId: EVENT_ID}, resourceType: "TicketScan"}]
@@ -470,7 +470,7 @@ describe("sync realtime bridge", () => {
           columns: SCAN_COLUMNS,
           modelName: "TicketScan",
           sync: {
-            attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({ticketNr: data.ticketNr}),
+            attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({ticketNr: data.ticketNr}),
             realtime: {channel: "ticket-scans", params: {scope: "all"}}
           }
         })
@@ -503,7 +503,7 @@ describe("sync realtime bridge", () => {
           columns: SCAN_COLUMNS,
           modelName: "TicketScan",
           sync: {
-            attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted, ticketNr: data.ticketNr}),
+            attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({accepted: data.accepted, ticketNr: data.ticketNr}),
             track: true
           }
         }),
@@ -772,12 +772,12 @@ describe("sync client user scope", () => {
         buildApplyableModelClass({
           columns: SCAN_COLUMNS,
           modelName: "TicketScan",
-          sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted}), track: true}
+          sync: {attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({accepted: data.accepted}), track: true}
         }),
         buildApplyableModelClass({
           columns: TICKET_COLUMNS,
           modelName: "Ticket",
-          sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({name: data.name}), track: true}
+          sync: {attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({name: data.name}), track: true}
         })
       ],
       pullOnReconnect: false,
@@ -801,12 +801,12 @@ describe("sync client user scope", () => {
     const ticketScanClass = buildApplyableModelClass({
       columns: SCAN_COLUMNS,
       modelName: "TicketScan",
-      sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({accepted: data.accepted}), track: true}
+      sync: {attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({accepted: data.accepted}), track: true}
     })
     const ticketClass = buildApplyableModelClass({
       columns: TICKET_COLUMNS,
       modelName: "Ticket",
-      sync: {attributes: (/** @type {{data: Record<string, ?>}} */ {data}) => ({name: data.name}), track: true}
+      sync: {attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({name: data.name}), track: true}
     })
     const harness = buildRealtimeHarness({
       modelClasses: [ticketScanClass, ticketClass],

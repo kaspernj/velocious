@@ -25,21 +25,21 @@
  * DeleteSqlArgsType type.
  * @typedef {object} DeleteSqlArgsType
  * @property {string} tableName - Table name to delete from.
- * @property {{[key: string]: ?}} conditions - Conditions used to build the delete WHERE clause.
+ * @property {{[key: string]: ReturnType<typeof JSON.parse>}} conditions - Conditions used to build the delete WHERE clause.
  */
 /**
  * InsertSqlArgsType type.
  * @typedef {object} InsertSqlArgsType
  * @property {string[]} [columns] - Column names for `rows` inserts.
- * @property {{[key: string]: ?}} [data] - Column/value pairs for a single-row insert.
+ * @property {{[key: string]: ReturnType<typeof JSON.parse>}} [data] - Column/value pairs for a single-row insert.
  * @property {boolean} [multiple] - Whether this insert should be treated as multi-row.
  * @property {string[]} [returnLastInsertedColumnNames] - Column names to return after insert.
- * @property {Array<Array<?>>} [rows] - Row values for a multi-row insert.
+ * @property {Array<Array<ReturnType<typeof JSON.parse>>>} [rows] - Row values for a multi-row insert.
  * @property {string} tableName - Table name to insert into.
  */
 /**
  * QueryRowType type.
- * @typedef {Record<string, ?>} QueryRowType
+ * @typedef {Record<string, ReturnType<typeof JSON.parse>>} QueryRowType
  * @typedef {Array<QueryRowType>} QueryResultType
  */
 /**
@@ -141,7 +141,7 @@ import {optionalPositiveInteger} from "typanic"
 class VelociousDatabaseAfterCommitCallbackError extends Error {
   /**
    * Runs constructor.
-   * @param {?} callbackError - Original callback failure.
+   * @param {ReturnType<typeof JSON.parse>} callbackError - Original callback failure.
    */
   constructor(callbackError) {
     super("Database afterCommit callback failed")
@@ -181,7 +181,7 @@ export default class VelociousDatabaseDriversBase {
   _transactionCallbackFrames
   /**
    * Narrows the runtime value to the documented type.
-   * @type {Map<string, Promise<?>>} */
+   * @type {Map<string, Promise<ReturnType<typeof JSON.parse>>>} */
   _schemaCache
   /**
    * Narrows the runtime value to the documented type.
@@ -490,8 +490,8 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Runs escape.
    * @abstract
-   * @param {?} value - Value to use.
-   * @returns {?} - The escape.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The escape.
    */
   escape(value) { // eslint-disable-line no-unused-vars
     throw new Error("'escape' not implemented")
@@ -654,8 +654,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs schema cache return value.
-   * @param {?} value - Cached value.
-   * @returns {?} - Value returned to callers.
+   * @param {ReturnType<typeof JSON.parse>} value - Cached value.
+   * @returns {ReturnType<typeof JSON.parse>} - Value returned to callers.
    */
   _schemaCacheReturnValue(value) {
     if (Array.isArray(value)) return value.slice()
@@ -770,7 +770,7 @@ export default class VelociousDatabaseDriversBase {
    * Runs insert multiple.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
-   * @param {Array<Array<?>>} rows - Rows to insert.
+   * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async insertMultiple(tableName, columns, rows) {
@@ -815,8 +815,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs convert value.
-   * @param {?} value - Value to use.
-   * @returns {?} - The convert value.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The convert value.
    */
   _convertValue(value) {
     if (typeof value === "boolean") {
@@ -846,7 +846,7 @@ export default class VelociousDatabaseDriversBase {
   /**
    * Whether a value is a plain object or array that should be JSON-encoded for a
    * JSON/text column. Excludes Buffers and class instances (e.g. model records).
-   * @param {?} value - Value to test.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to test.
    * @returns {boolean} - Whether to JSON-encode the value.
    */
   _isJsonEncodableValue(value) {
@@ -870,7 +870,7 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs quote.
-   * @param {?} value - Value to use.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
    * @returns {number | string} - The quote.
    */
   quote(value) {
@@ -1087,7 +1087,7 @@ export default class VelociousDatabaseDriversBase {
    * @template T
    * @param {() => Promise<T>} callback - Callback function.
    * @param {Pick<QueryOptions, "operationOwner">} options - Transaction ownership.
-   * @returns {Promise<?>} - Resolves with the transaction result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the transaction result.
    */
   async _runTransactionAttempt(callback, options) {
     const savePointName = this.generateSavePointName()
@@ -2002,8 +2002,8 @@ export default class VelociousDatabaseDriversBase {
 
   /**
    * Runs with disabled foreign keys.
-   * @param {function() : void} callback - Callback function.
-   * @returns {Promise<?>} - Resolves with the with disabled foreign keys.
+   * @param {() => void} callback - Callback function.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the with disabled foreign keys.
    */
   async withDisabledForeignKeys(callback) {
     await this.disableForeignKeys()

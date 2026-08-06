@@ -9,7 +9,7 @@ import EventEmitter from "../utils/event-emitter.js"
 
 /**
  * BeaconBroadcastHandler type.
- * @typedef {function(import("./types.js").BeaconBroadcastMessage): void} BeaconBroadcastHandler
+ * @typedef {(arg: import("./types.js").BeaconBroadcastMessage) => void} BeaconBroadcastHandler
  */
 const DEFAULT_RECONNECT_DELAY_MS = 1000
 const MAX_RECONNECT_DELAY_MS = 30_000
@@ -178,8 +178,8 @@ export default class BeaconClient extends EventEmitter {
    * unless the daemon is restarted mid-publish).
    * @param {object} args - Broadcast args.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, ?>} args.broadcastParams - Routing params.
-   * @param {?} args.body - Message body.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.broadcastParams - Routing params.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Message body.
    * @returns {boolean} - True if the publish was written to the socket. False if the client is currently disconnected.
    */
   publish({channel, broadcastParams, body}) {

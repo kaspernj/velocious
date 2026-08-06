@@ -50,12 +50,12 @@ function updateProcessTitle() {
 
 /**
  * Checks whether an IPC value is a runnable pooled job message.
- * @param {?} message - IPC message.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {message is {type: "job", payload: import("./types.js").BackgroundJobPayload & {id: string}}} - Whether this is a valid job message.
  */
 function isJobMessage(message) {
   if (!message || typeof message !== "object") return false
-  const record = /** @type {{type?: ?, payload?: ?}} */ (message)
+  const record = /** @type {{type?: ReturnType<typeof JSON.parse>, payload?: ReturnType<typeof JSON.parse>}} */ (message)
 
   return record.type === "job" && !!record.payload && typeof record.payload === "object" && typeof record.payload.id === "string"
 }
@@ -117,7 +117,7 @@ async function runJob(payload) {
 
 /**
  * Handles a job message, starting it alongside any concurrent siblings.
- * @param {?} message - IPC message.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {void}
  */
 function handleMessage(message) {

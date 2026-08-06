@@ -135,7 +135,7 @@ export default class VelociousDatabaseDriversBaseTable {
   /**
    * Runs truncate.
    * @param {{cascade: boolean}} [args] - Truncate options.
-   * @returns {Promise<Array<Record<string, ?>>>} - Resolves with the truncate.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - Resolves with the truncate.
    */
   async truncate(args) {
     this.getDriver()._assertNotReadOnly()

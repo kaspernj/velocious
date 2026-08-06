@@ -37,7 +37,7 @@ export default class VelociousCliBaseCommand {
   /**
    * Runs execute.
    * @abstract
-   * @returns {Promise<?>} - Resolves with the execute.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the execute.
    */
   execute() {
     throw new Error("execute not implemented")

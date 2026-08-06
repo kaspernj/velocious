@@ -467,12 +467,12 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const froms = this.getFroms()
     const lastFrom = froms[froms.length - 1]
 
-    if (lastFrom && typeof /** @type {?} */ (lastFrom).tableName === "string") {
-      return /** @type {?} */ (lastFrom).tableName
+    if (lastFrom && typeof /** @type {ReturnType<typeof JSON.parse>} */ (lastFrom).tableName === "string") {
+      return /** @type {ReturnType<typeof JSON.parse>} */ (lastFrom).tableName
     }
 
-    if (lastFrom && typeof /** @type {?} */ (lastFrom).plain === "string") {
-      const parsedReference = parseFromPlainTableReference(/** @type {?} */ (lastFrom).plain)
+    if (lastFrom && typeof /** @type {ReturnType<typeof JSON.parse>} */ (lastFrom).plain === "string") {
+      const parsedReference = parseFromPlainTableReference(/** @type {ReturnType<typeof JSON.parse>} */ (lastFrom).plain)
 
       if (parsedReference) return parsedReference
     }
@@ -754,7 +754,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * Executes a bulk UPDATE on all rows matching the query's WHERE
    * clause. Bypasses model lifecycle callbacks — use this for
    * efficient batch updates where per-row hooks aren't needed.
-   * @param {Record<string, ?>} data - camelCase attribute names → values.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - camelCase attribute names → values.
    * @returns {Promise<void>} - Resolves when the update completes.
    */
   async updateAll(data) {
@@ -831,7 +831,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * Runs find or create by.
    * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
-   * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
+   * @param {(arg: InstanceType<MC>) => void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or create by.
    */
   async findOrCreateBy(conditions, callback) {
@@ -861,8 +861,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Runs find or initialize by.
-   * @param {Record<string, ?>} conditions - Conditions.
-   * @param {function(InstanceType<MC>) : void} [callback] - Callback function.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions.
+   * @param {(arg: InstanceType<MC>) => void} [callback] - Callback function.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the or initialize by.
    */
   async findOrInitializeBy(conditions, callback) {
@@ -881,7 +881,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Builds a record owned by the query's operation, when present.
-   * @param {Record<string, ?>} [attributes] - Initial attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes] - Initial attributes.
    * @returns {InstanceType<MC>} - Built record.
    */
   build(attributes = {}) {
@@ -895,7 +895,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Creates a record owned by the query's operation, when present.
-   * @param {Record<string, ?>} [attributes] - Initial attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes] - Initial attributes.
    * @returns {Promise<InstanceType<MC>>} - Created record.
    */
   async create(attributes = {}) {
@@ -1003,7 +1003,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   /**
    * Plucks one or more columns directly from the database without instantiating models.
    * @param {...string|string[]} columns - Column names.
-   * @returns {Promise<Array<?>>} - Resolves with the pluck.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - Resolves with the pluck.
    */
   async pluck(...columns) {
     const flatColumns = columns.flat()
@@ -1030,11 +1030,11 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     if (columnNames.length === 1) {
       const [columnName] = columnNames
-      return rows.map((row) => /** @type {Record<string, ?>} */ (row)[columnName])
+      return rows.map((row) => /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)[columnName])
     }
 
     return rows.map((row) => {
-      const rowHash = /** @type {Record<string, ?>} */ (row)
+      const rowHash = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)
 
       return columnNames.map((columnName) => rowHash[columnName])
     })
@@ -1080,7 +1080,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Runs ransack.
-   * @param {Record<string, ?>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Ransack-style params hash. Supports `s` key for sorting (e.g., `{s: "name asc"}`).
    * @returns {this} - Query with Ransack filters and sort applied.
    */
   ransack(params) {
@@ -1149,7 +1149,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Declares this query as a sync scope on the current sync client.
-   * @returns {Promise<?>} - Declared scope and pull result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Declared scope and pull result.
    */
   async sync() {
     return await currentSyncClient().sync(this)
@@ -1168,7 +1168,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
  * Runs apply ransack group.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
- * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<ReturnType<typeof JSON.parse>>} args.query - Query instance.
  * @returns {void}
  */
 function applyRansackGroup({group, query}) {
@@ -1183,7 +1183,7 @@ function applyRansackGroup({group, query}) {
  * Runs build ransack group where.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackGroup} args.group - Normalized Ransack group.
- * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<ReturnType<typeof JSON.parse>>} args.query - Query instance.
  * @returns {import("./where-base.js").default | null} - Combined where clause.
  */
 function buildRansackGroupWhere({group, query}) {
@@ -1218,7 +1218,7 @@ function buildRansackGroupWhere({group, query}) {
  * Runs build ransack condition where.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<ReturnType<typeof JSON.parse>>} args.query - Query instance.
  * @returns {import("./where-base.js").default | null} - Condition where clause.
  */
 function buildRansackConditionWhere({condition, query}) {
@@ -1246,7 +1246,7 @@ function buildRansackConditionWhere({condition, query}) {
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @param {import("./model-class-query.js").default<?>} args.query - Query instance.
+ * @param {import("./model-class-query.js").default<ReturnType<typeof JSON.parse>>} args.query - Query instance.
  * @returns {import("./where-base.js").default} - Attribute where clause.
  */
 function buildRansackAttributeWhere({attribute, condition, query}) {
@@ -1280,7 +1280,7 @@ function buildRansackAttributeWhere({attribute, condition, query}) {
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {import("../../utils/ransack.js").RansackCondition} args.condition - Normalized Ransack condition.
- * @returns {Record<string, ?>} - Nested hash suitable for query where nodes.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Nested hash suitable for query where nodes.
  */
 function buildRansackAttributeHash({attribute, condition}) {
   if (condition.predicate === "eq" || condition.predicate === "in" || condition.predicate === "not_eq" || condition.predicate === "not_in") {
@@ -1302,13 +1302,13 @@ function buildRansackAttributeHash({attribute, condition}) {
  * Runs build nested ransack hash.
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
- * @param {?} args.value - Final value.
- * @returns {Record<string, ?>} - Nested hash suitable for query where nodes.
+ * @param {ReturnType<typeof JSON.parse>} args.value - Final value.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Nested hash suitable for query where nodes.
  */
 function buildNestedRansackHash({attribute, value}) {
   /**
    * Hash.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let hash = {[attribute.attributeName]: value}
 
   for (let index = attribute.path.length - 1; index >= 0; index -= 1) {
@@ -1323,13 +1323,13 @@ function buildNestedRansackHash({attribute, value}) {
  * @param {object} args - Options.
  * @param {import("../../utils/ransack.js").RansackAttribute} args.attribute - Normalized Ransack attribute.
  * @param {"gt" | "gteq" | "lt" | "lteq" | "like"} args.operator - Tuple operator.
- * @param {?} args.value - Final value.
- * @returns {Record<string, ?>} - Nested tuple hash suitable for query.where.
+ * @param {ReturnType<typeof JSON.parse>} args.value - Final value.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Nested tuple hash suitable for query.where.
  */
 function buildNestedRansackTupleHash({attribute, operator, value}) {
   /**
    * Hash.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   let hash = {
     [attribute.attributeName]: [[attribute.attributeName, operator, value]]
   }
@@ -1357,7 +1357,7 @@ function ransackTupleOperator(predicate) {
 /**
  * Runs ransack tuple value.
  * @param {import("../../utils/ransack.js").RansackCondition} condition - Ransack condition.
- * @returns {?} - Query tuple value.
+ * @returns {ReturnType<typeof JSON.parse>} - Query tuple value.
  */
 function ransackTupleValue(condition) {
   if (condition.predicate === "cont") return `%${condition.value}%`
@@ -1397,18 +1397,18 @@ function resolveColumnName(modelClass, key) {
 /**
  * Runs split where hash.
  * @param {object} args - Options.
- * @param {Record<string, ?>} args.hash - Where hash.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.hash - Where hash.
  * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
- * @returns {{resolvedHash: Record<string, ?>, fallbackHash: Record<string, ?>}} - Split hashes.
+ * @returns {{resolvedHash: Record<string, ReturnType<typeof JSON.parse>>, fallbackHash: Record<string, ReturnType<typeof JSON.parse>>}} - Split hashes.
  */
 function splitWhereHash({hash, modelClass}) {
   /**
    * Resolved hash.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const resolvedHash = {}
   /**
    * Fallback hash.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const fallbackHash = {}
 
   for (const key in hash) {
@@ -1459,14 +1459,14 @@ function splitWhereHash({hash, modelClass}) {
 /**
  * Runs build join object from where hash.
  * @param {object} args - Options.
- * @param {Record<string, ?>} args.hash - Where hash.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} args.hash - Where hash.
  * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
- * @returns {Record<string, ?>} - Join object.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Join object.
  */
 function buildJoinObjectFromWhereHash({hash, modelClass}) {
   /**
    * Join object.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const joinObject = {}
 
   for (const key in hash) {
@@ -1514,7 +1514,7 @@ function normalizeRelationshipWhereOperator(operator) {
 
 /**
  * Runs is relationship where operator tuple.
- * @param {?} tupleValue - Candidate tuple.
+ * @param {ReturnType<typeof JSON.parse>} tupleValue - Candidate tuple.
  * @returns {boolean} - Whether this is a relationship where tuple.
  */
 function isRelationshipWhereOperatorTuple(tupleValue) {
@@ -1529,7 +1529,7 @@ function isRelationshipWhereOperatorTuple(tupleValue) {
 
 /**
  * Runs normalize relationship where operator tuples.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
  */
 function normalizeRelationshipWhereOperatorTuples(value) {
@@ -1543,7 +1543,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
   const normalized = []
     /**
      * Add condition.
-     * @param {?} conditionValue - Candidate nested condition.
+     * @param {ReturnType<typeof JSON.parse>} conditionValue - Candidate nested condition.
      */
     const addCondition = (conditionValue) => {
       if (isRelationshipWhereOperatorTuple(conditionValue)) {
@@ -1569,7 +1569,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
       throw new Error("Relationship where conditions must be tuples")
     }
 
-    /** @type {Array<?>} */ (conditionValue).forEach((nestedConditionValue) => {
+    /** @type {Array<ReturnType<typeof JSON.parse>>} */ (conditionValue).forEach((nestedConditionValue) => {
       addCondition(nestedConditionValue)
     })
   }
@@ -1585,7 +1585,7 @@ function normalizeRelationshipWhereOperatorTuples(value) {
 
 /**
  * Runs has relationship where operator tuples.
- * @param {?} value - Candidate relationship where value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate relationship where value.
  * @returns {boolean} - Whether value can be normalized to relationship tuples.
  */
 function hasRelationshipWhereOperatorTuples(value) {

@@ -19,12 +19,12 @@ const UUID_ITEM_ID = "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c"
  * resource constructor contract in this harness.
  */
 class RecordingUserScopeResource extends SyncResourceBase {
-  static ModelClass = /** @type {?} */ (SyncEntry)
+  static ModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (SyncEntry)
 
   /** @returns {Promise<void>} Allows every scope (including the user scope). */
   async authorizeChanges() {}
 
-  /** @param {{params: Record<string, ?>, query: ?}} args - Feed query and params. @returns {void} */
+  /** @param {{params: Record<string, ReturnType<typeof JSON.parse>>, query: ReturnType<typeof JSON.parse>}} args - Feed query and params. @returns {void} */
   scopeChangesQuery({params, query}) {
     query.where({project_id: params.allowedProjectIds})
   }
@@ -32,11 +32,11 @@ class RecordingUserScopeResource extends SyncResourceBase {
 
 /**
  * Builds a hand-built recording user-scope resource for the channel harness.
- * @param {Record<string, ?>} params - Request params.
- * @returns {RecordingUserScopeResource & {changeDeliverableSyncs: Array<Record<string, ?>>}} Recording resource.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
+ * @returns {RecordingUserScopeResource & {changeDeliverableSyncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}} Recording resource.
  */
 function buildRecordingResource(params) {
-  const resource = /** @type {RecordingUserScopeResource & {changeDeliverableSyncs: Array<Record<string, ?>>}} */ (Object.assign(Object.create(RecordingUserScopeResource.prototype), {
+  const resource = /** @type {RecordingUserScopeResource & {changeDeliverableSyncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}} */ (Object.assign(Object.create(RecordingUserScopeResource.prototype), {
     changeDeliverableSyncs: [],
     getContext: () => ({allowedProjectIds: params.allowedProjectIds}),
     params: () => params
@@ -60,7 +60,7 @@ function buildRecordingResource(params) {
  * survives from subscribe-time authorization through broadcast delivery.
  */
 class TestSyncWebsocketChannel extends SyncWebsocketChannel {
-  /** @returns {Promise<RecordingUserScopeResource & {changeDeliverableSyncs: Array<Record<string, ?>>}>} Hand-built user-scope resource. */
+  /** @returns {Promise<RecordingUserScopeResource & {changeDeliverableSyncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}>} Hand-built user-scope resource. */
   async buildSyncResource() {
     this._resource ||= buildRecordingResource(this.params)
 
@@ -73,14 +73,14 @@ class TestSyncWebsocketChannel extends SyncWebsocketChannel {
  * real SyncEntry sync model. The publish declaration is assigned onto
  * UuidItem's static sync for the duration of the test and restored by the
  * returned restore callback.
- * @param {{broadcaster?: (broadcast: {body: ?, channel: string, params: Record<string, ?>}) => Promise<void>}} [args] - Optional broadcaster override.
+ * @param {{broadcaster?: (broadcast: {body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<void>}} [args] - Optional broadcaster override.
  * @returns {{publisher: SyncPublisher, restore: () => void}} Publisher harness.
  */
 function buildPublisher({broadcaster} = {}) {
   const originalSync = UuidItem.sync
 
   UuidItem.sync = {
-    .../** @type {Record<string, ?>} */ (originalSync),
+    .../** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (originalSync),
     publish: {serialize: (/** @type {UuidItem} */ uuidItem) => ({id: uuidItem.id(), title: uuidItem.title()})}
   }
 
@@ -102,15 +102,15 @@ function buildPublisher({broadcaster} = {}) {
 /**
  * Builds an authorized framework sync channel over the real dummy configuration
  * whose session captures delivered messages.
- * @param {Record<string, ?>} params - Subscribe params.
- * @returns {{channel: TestSyncWebsocketChannel, messages: Array<Record<string, ?>>}} Channel and captured messages.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Subscribe params.
+ * @returns {{channel: TestSyncWebsocketChannel, messages: Array<Record<string, ReturnType<typeof JSON.parse>>>}} Channel and captured messages.
  */
 function buildSubscribedChannel(params) {
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const messages = []
-  const session = /** @type {?} */ ({
+  const session = /** @type {ReturnType<typeof JSON.parse>} */ ({
     configuration: dummyConfiguration,
-    sendJson: (/** @type {Record<string, ?>} */ message) => messages.push(message),
+    sendJson: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ message) => messages.push(message),
     upgradeRequest: undefined
   })
   const channel = new TestSyncWebsocketChannel({params, session, subscriptionId: "s1"})

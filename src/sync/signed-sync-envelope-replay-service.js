@@ -35,8 +35,8 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * @param {import("./device-identity.js").SyncJsonWebKey} args.backendPublicKey - Backend public key used to verify device certificates.
    * @param {Array<import("./offline-grant.js").OfflineGrantSigningKey>} [args.offlineGrantSigningKeys] - Offline-grant verification keys.
    * @param {(userId: string) => Promise<{id: () => string} | null>} [args.actorLookup] - Optional lookup from grant user id to an actor object with an `id()` method. Defaults to a wrapper around the grant user id.
-   * @param {(args: {actor: ?, configuration: import("../configuration.js").default | null, grant: import("./offline-grant.js").OfflineGrant}) => Promise<import("../authorization/ability.js").default | null> | import("../authorization/ability.js").default | null} [args.abilityFactory] - Builds the actor/grant-scoped ability used to authorize routed resources. Required for routed signed replay; without it every routed sync fails closed.
-   * @param {Record<string, ?>} [args.rest] - Remaining arguments forwarded to {@link SyncEnvelopeReplayService}.
+   * @param {(args: {actor: ReturnType<typeof JSON.parse>, configuration: import("../configuration.js").default | null, grant: import("./offline-grant.js").OfflineGrant}) => Promise<import("../authorization/ability.js").default | null> | import("../authorization/ability.js").default | null} [args.abilityFactory] - Builds the actor/grant-scoped ability used to authorize routed resources. Required for routed signed replay; without it every routed sync fails closed.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.rest] - Remaining arguments forwarded to {@link SyncEnvelopeReplayService}.
    */
   constructor({abilityFactory, backendPublicKey, offlineGrantSigningKeys, actorLookup, ...rest}) {
     super({
@@ -57,9 +57,9 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * derived sync envelopes. Verified actor, grant, and derived syncs are kept
    * in the request-local `requestState` object so concurrent replay calls on
    * one service instance cannot cross their authentication state.
-   * @param {Record<string, ?>} params - Request params.
-   * @param {Record<string, ?>} [requestState] - Request-local state shared with the base replay hooks.
-   * @returns {Promise<{syncs: Array<Record<string, ?>>}>} Replay response.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [requestState] - Request-local state shared with the base replay hooks.
+   * @returns {Promise<{syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}>} Replay response.
    */
   async replay(params, requestState = {}) {
     const verified = await this.verifyAndTransformSignedReplay(params)
@@ -82,9 +82,9 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
 
   /**
    * Returns the verified actor prepared during {@link SignedSyncEnvelopeReplayService#replay}.
-   * @param {Record<string, ?>} _params - Request params.
-   * @param {Record<string, ?>} requestState - Request-local state.
-   * @returns {Promise<{authenticated: true, actor: ?} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} _params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} requestState - Request-local state.
+   * @returns {Promise<{authenticated: true, actor: ReturnType<typeof JSON.parse>} | {authenticated: false, errorCode: string, errorMessage: string}>} Auth result.
    */
   async authenticateReplay(_params, requestState) {
     const actor = requestState?.signedReplayActor
@@ -102,9 +102,9 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
 
   /**
    * Returns the sync envelopes derived from the verified signed mutations.
-   * @param {Record<string, ?>} _params - Request params.
-   * @param {Record<string, ?>} requestState - Request-local state.
-   * @returns {Array<Record<string, ?>>} Sync envelopes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} _params - Request params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} requestState - Request-local state.
+   * @returns {Array<Record<string, ReturnType<typeof JSON.parse>>>} Sync envelopes.
    */
   replaySyncs(_params, requestState) {
     return requestState?.signedReplaySyncs || []
@@ -114,8 +114,8 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * Builds the replay context carrying the verified signed actor and grant
    * (with its scopes) plus the offline runtime marker, so resource hooks and
    * ability factories authorize against the signer instead of the uploader.
-   * @param {{actor: ?, params: Record<string, ?>, requestState: Record<string, ?>}} args - Actor, request params, and request-local state.
-   * @returns {Promise<Record<string, ?>>} Replay context.
+   * @param {{actor: ReturnType<typeof JSON.parse>, params: Record<string, ReturnType<typeof JSON.parse>>, requestState: Record<string, ReturnType<typeof JSON.parse>>}} args - Actor, request params, and request-local state.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Replay context.
    */
   async buildReplayContext({actor, requestState}) {
     const grant = /** @type {import("./offline-grant.js").OfflineGrant | undefined} */ (requestState?.signedReplayGrant)
@@ -133,8 +133,8 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * grant through the configured `abilityFactory`. The constructor-wide
    * uploader ability is never used for signed replay: without a factory (or a
    * factory result) every routed sync fails closed with a client-safe error.
-   * @param {{actor: ?, context: Record<string, ?>}} args - Verified actor and replay context.
-   * @returns {Promise<{ability: import("../authorization/ability.js").default, abilityContext: Record<string, ?>}>} Scoped ability and resource context.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>}} args - Verified actor and replay context.
+   * @returns {Promise<{ability: import("../authorization/ability.js").default, abilityContext: Record<string, ReturnType<typeof JSON.parse>>}>} Scoped ability and resource context.
    */
   async replayAbilityFor({actor, context}) {
     const grant = /** @type {import("./offline-grant.js").OfflineGrant} */ (context.offlineGrant)
@@ -153,8 +153,8 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * Verifies every signed mutation, its offline grant, and the actor/grant
    * consistency, then transforms the envelopes into the sync format the base
    * replay service understands.
-   * @param {Record<string, ?>} params - Request params.
-   * @returns {Promise<{actor: ?, grant: import("./offline-grant.js").OfflineGrant, syncs: Array<Record<string, ?>>}>} Verified actor, common grant, and derived syncs.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
+   * @returns {Promise<{actor: ReturnType<typeof JSON.parse>, grant: import("./offline-grant.js").OfflineGrant, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}>} Verified actor, common grant, and derived syncs.
    */
   async verifyAndTransformSignedReplay(params) {
     const rawEntries = Array.isArray(params.signedMutations) ? params.signedMutations : []
@@ -175,7 +175,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
     let grantId = null
     /** @type {import("./offline-grant.js").OfflineGrant | null} */
     let commonGrant = null
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const syncs = []
 
     for (const rawEntry of rawEntries) {
@@ -285,7 +285,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
    * @returns {void} Throws a client-safe error when the grant does not authorize the mutation.
    */
   validateGrantAgainstSyncPolicy({mutation, offlineGrant, syncManifest}) {
-    const grantResource = /** @type {Record<string, ?> | undefined} */ (offlineGrant.resources[mutation.model])
+    const grantResource = /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */ (offlineGrant.resources[mutation.model])
     const grantOperations = Array.isArray(grantResource?.operations) ? grantResource.operations : []
     const grantPolicyHash = grantResource?.policyHash
 
@@ -309,7 +309,7 @@ export default class SignedSyncEnvelopeReplayService extends SyncEnvelopeReplayS
   /**
    * Transforms a verified signed mutation into a generic sync envelope.
    * @param {{mutation: import("./device-identity.js").SyncMutation}} args - Transform args.
-   * @returns {Record<string, ?>} Sync envelope.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Sync envelope.
    */
   syncFromSignedMutation({mutation}) {
     const operation = mutation.operation

@@ -66,9 +66,9 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
     const modelClass = /** @type {typeof import("./index.js").default} */ (record.constructor)
     const posColumn = modelClass.getColumnNameForAttributeName(positionColumn)
     const scopeCol = modelClass.getColumnNameForAttributeName(scope)
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const rawAttributes = record._attributes || {}
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const changes = record._changes || {}
     /** @type {Set<string>} */
     const assignedAttributeNames = record._assignedAttributeNames || new Set()

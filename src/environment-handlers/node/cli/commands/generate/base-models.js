@@ -317,7 +317,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @param {Record<string, ?>} [attributes]\n"
+          fileContent += "   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]\n"
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { void attributes; throw new Error("Not implemented") }\n`

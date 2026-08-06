@@ -9,13 +9,13 @@ describe("query sync sugar", {tags: ["dummy"]}, () => {
     /** @type {Array<string>} */
     const calls = []
     const fakeClient = {
-      /** @param {?} query - Declared query. @returns {Promise<?>} Fake result. */
+      /** @param {ReturnType<typeof JSON.parse>} query - Declared query. @returns {Promise<ReturnType<typeof JSON.parse>>} Fake result. */
       sync: async (query) => {
         calls.push(`sync:${query.getModelClass().getModelName()}`)
 
         return {pulled: null, scope: null}
       },
-      /** @param {?} query - Undeclared query. @returns {Promise<void>} */
+      /** @param {ReturnType<typeof JSON.parse>} query - Undeclared query. @returns {Promise<void>} */
       unsync: async (query) => {
         calls.push(`unsync:${query.getModelClass().getModelName()}`)
       }

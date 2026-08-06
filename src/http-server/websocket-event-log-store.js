@@ -112,8 +112,8 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * Runs append event.
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
-   * @param {?} args.payload - Event payload.
-   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ?}>} - Persisted event row.
+   * @param {ReturnType<typeof JSON.parse>} args.payload - Event payload.
+   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>}>} - Persisted event row.
    */
   async appendEvent({channel, payload}) {
     await this.ensureReady()
@@ -197,7 +197,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {string} args.id - Event id.
-   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ?, sequence: number} | null>} - Event row or null.
+   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number} | null>} - Event row or null.
    */
   async getEventById({channel, id}) {
     await this.ensureReady()
@@ -223,7 +223,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
         .order("sequence DESC")
         .limit(1)
         .results()
-      const row = /** @type {Record<string, ?> | undefined} */ (rows[0])
+      const row = /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */ (rows[0])
 
       if (!row) return null
 
@@ -237,7 +237,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {string} args.channel - Channel name.
    * @param {number} args.sequence - Lower bound sequence.
    * @param {number | null | undefined} [args.upToSequence] - Inclusive ceiling sequence.
-   * @returns {Promise<Array<{channel: string, createdAt: string, id: string, payload: ?, sequence: number}>>} - Ordered events.
+   * @returns {Promise<Array<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number}>>} - Ordered events.
    */
   async getEventsAfter({channel, sequence, upToSequence}) {
     await this.ensureReady()
@@ -352,7 +352,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {string} args.channel - Channel name.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
    * @param {string} args.id - Event id.
-   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ?, sequence: number} | null>} - Event row or null.
+   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number} | null>} - Event row or null.
    */
   async _getEventById({channel, db, id}) {
     const rows = /** @type {WebsocketEventRow[]} */ (await db
@@ -370,7 +370,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   /**
    * Runs normalize event row.
    * @param {WebsocketEventRow} row - Raw row.
-   * @returns {{channel: string, createdAt: string, id: string, payload: ?, sequence: number}} - Normalized row.
+   * @returns {{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number}} - Normalized row.
    */
   _normalizeEventRow(row) {
     const createdAtValue = row.created_at
@@ -406,8 +406,8 @@ export default class VelociousHttpServerWebsocketEventLogStore {
 
   /**
    * Runs with db.
-   * @param {(db: import("../database/drivers/base.js").default) => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async _withDb(callback) {
     return await this.configuration.ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Websocket event log store"}, async (dbs) => {

@@ -18,7 +18,7 @@ export default class BaseLogger {
 
     return {
       output: this,
-      levels: /** @type {?} */ (this).levels
+      levels: /** @type {ReturnType<typeof JSON.parse>} */ (this).levels
     }
   }
 

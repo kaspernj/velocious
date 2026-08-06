@@ -31,8 +31,8 @@ function requestErrorSummary(error, cleanedStackWithHeader) {
 
   if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
 
-  const errorCode = typeof /** @type {?} */ (error).code === "string"
-    ? /** @type {?} */ (error).code
+  const errorCode = typeof /** @type {ReturnType<typeof JSON.parse>} */ (error).code === "string"
+    ? /** @type {ReturnType<typeof JSON.parse>} */ (error).code
     : undefined
   const errorMessage = error.message || String(error)
 

@@ -8,7 +8,7 @@ export default class VelociousDatabaseDriversMysqlColumn extends BaseColumn {
   /**
    * Runs constructor.
    * @param {import("../base-table.js").default} table - Table.
-   * @param {Record<string, ?>} data - Data payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
    */
   constructor(table, data) {
     super()

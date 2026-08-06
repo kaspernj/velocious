@@ -86,7 +86,7 @@ export default class AuthenticationTokenBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/user.js").default}
    */
   buildUser(attributes) { void attributes; throw new Error("Not implemented") }

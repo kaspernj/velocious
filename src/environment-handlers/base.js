@@ -54,8 +54,8 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs run with timezone offset.
    * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
-   * @param {() => Promise<?>} callback - Callback to run.
-   * @returns {Promise<?>} - Result of the callback.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to run.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result of the callback.
    */
   async runWithTimezoneOffset(_offsetMinutes, callback) {
     if (!this.configuration) throw new Error("Configuration hasn't been set")
@@ -74,8 +74,8 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs run with timezone.
    * @param {string} timeZone - IANA timezone identifier.
-   * @param {() => Promise<?>} callback - Callback to run.
-   * @returns {Promise<?>} - Result of the callback.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to run.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result of the callback.
    */
   async runWithTimezone(timeZone, callback) {
     if (!this.configuration) throw new Error("Configuration hasn't been set")
@@ -149,8 +149,8 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs run with request timing.
    * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithRequestTiming(requestTiming, callback) {
     this._currentRequestTiming = requestTiming
@@ -173,8 +173,8 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs run with ability.
    * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithAbility(ability, callback) {
     this._currentAbility = ability
@@ -205,9 +205,9 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * Runs run with tenant.
-   * @param {?} tenant - Tenant to set for callback scope.
-   * @param {() => Promise<?>} callback - Callback.
-   * @returns {Promise<?>} - Callback result.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithTenant(tenant, callback) {
     this._currentTenant = tenant
@@ -221,7 +221,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * Runs set current tenant.
-   * @param {?} tenant - Tenant to set.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant to set.
    * @returns {void} - No return value.
    */
   setCurrentTenant(tenant) {
@@ -230,7 +230,7 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * Runs get current tenant.
-   * @returns {?} - Current tenant.
+   * @returns {ReturnType<typeof JSON.parse>} - Current tenant.
    */
   getCurrentTenant() {
     return this._currentTenant
@@ -238,7 +238,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands generate base models.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsGenerateBaseModels(_command) {
     throw new Error("cliCommandsGenerateBaseModels not implemented")
@@ -247,7 +247,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands generate frontend models.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsGenerateFrontendModels(_command) {
     throw new Error("cliCommandsGenerateFrontendModels not implemented")
@@ -256,7 +256,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands init.
    * @param {import("../cli/base-command.js").default} command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsInit(command) { // eslint-disable-line no-unused-vars
     throw new Error("cliCommandsInit not implemented")
@@ -265,7 +265,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands migration generate.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsMigrationGenerate(_command) {
     throw new Error("cliCommandsMigrationGenerate not implemented")
@@ -274,7 +274,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands migration destroy.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsMigrationDestroy(_command) {
     throw new Error("cliCommandsMigrationDestroy not implemented")
@@ -283,7 +283,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands generate model.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsGenerateModel(_command) {
     throw new Error("cliCommandsGenerateModel not implemented")
@@ -293,7 +293,7 @@ export default class VelociousEnvironmentHandlerBase {
    * Runs cli commands lint relationships.
    * @abstract
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsLintRelationships(_command) {
     throw new Error("cliCommandsLintRelationships not implemented")
@@ -303,7 +303,7 @@ export default class VelociousEnvironmentHandlerBase {
    * Runs cli commands routes.
    * @abstract
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsRoutes(_command) {
     throw new Error("cliCommandsRoutes not implemented")
@@ -312,7 +312,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands console.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsConsole(_command) {
     throw new Error("cliCommandsConsole not implemented")
@@ -321,7 +321,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands server.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsServer(_command) {
     throw new Error("cliCommandsServer not implemented")
@@ -330,7 +330,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands test.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsTest(_command) {
     throw new Error("cliCommandsTest not implemented")
@@ -339,7 +339,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands background jobs main.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsMain(_command) {
     throw new Error("cliCommandsBackgroundJobsMain not implemented")
@@ -348,7 +348,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands background jobs worker.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsWorker(_command) {
     throw new Error("cliCommandsBackgroundJobsWorker not implemented")
@@ -357,7 +357,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands background jobs runner.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBackgroundJobsRunner(_command) {
     throw new Error("cliCommandsBackgroundJobsRunner not implemented")
@@ -366,7 +366,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands beacon.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsBeacon(_command) {
     throw new Error("cliCommandsBeacon not implemented")
@@ -397,7 +397,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands db schema dump.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsDbSchemaDump(_command) {
     throw new Error("cliCommandsDbSchemaDump not implemented")
@@ -406,7 +406,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands db schema load.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsDbSchemaLoad(_command) {
     throw new Error("cliCommandsDbSchemaLoad not implemented")
@@ -415,7 +415,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands db seed.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsDbSeed(_command) {
     throw new Error("cliCommandsDbSeed not implemented")
@@ -424,7 +424,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands runner.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsRunner(_command) {
     throw new Error("cliCommandsRunner not implemented")
@@ -433,7 +433,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Runs cli commands run script.
    * @param {import("../cli/base-command.js").default} _command - Command.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async cliCommandsRunScript(_command) {
     throw new Error("cliCommandsRunScript not implemented")
@@ -457,7 +457,7 @@ export default class VelociousEnvironmentHandlerBase {
    * Runs forward command.
    * @param {import("../cli/base-command.js").default} command - Command.
    * @param {typeof import("../cli/base-command.js").default} CommandClass - Command class.
-   * @returns {Promise<?>} - Resolves with the command result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
    */
   async forwardCommand(command, CommandClass) {
     const newCommand = new CommandClass({

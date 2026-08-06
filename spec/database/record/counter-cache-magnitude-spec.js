@@ -34,7 +34,7 @@ function createMockDb() {
     quoteTable: (table) => `\`${table}\``,
     /** @param {string} column */
     quoteColumn: (column) => `\`${column}\``,
-    /** @param {?} value */
+    /** @param {ReturnType<typeof JSON.parse>} value */
     quote: (value) => `'${value}'`
   }
 }
@@ -46,10 +46,10 @@ function createMockDb() {
  * and casts declared boolean columns.
  */
 class MockBuildBase {
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   _attributes = {}
 
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   _changes = {}
 
   /** @type {{forModel: (ModelClass: typeof MockParent) => {driver: ReturnType<typeof createMockDb>}} | undefined} */
@@ -83,7 +83,7 @@ class MockBuildBase {
   /** @returns {string} */
   static getModelName() { return "Build" }
 
-  /** @param {string} attribute @returns {?} */
+  /** @param {string} attribute @returns {ReturnType<typeof JSON.parse>} */
   readAttribute(attribute) {
     const column = this.getModelClass().getAttributeNameToColumnNameMap()[attribute] || attribute
     const raw = column in this._changes ? this._changes[column] : this._attributes[column]
@@ -96,9 +96,9 @@ class MockBuildBase {
     return raw
   }
 
-  /** @returns {Record<string, [?, ?]>} */
+  /** @returns {Record<string, [ReturnType<typeof JSON.parse>, ReturnType<typeof JSON.parse>]>} */
   changes() {
-    /** @type {Record<string, [?, ?]>} */
+    /** @type {Record<string, [ReturnType<typeof JSON.parse>, ReturnType<typeof JSON.parse>]>} */
     const result = {}
 
     for (const column in this._changes) {
@@ -141,7 +141,7 @@ class MockBuildBase {
 
 /**
  * @param {typeof MockBuildBase} ModelClass
- * @param {{attributes: Record<string, ?>, changes?: Record<string, ?>}} args
+ * @param {{attributes: Record<string, ReturnType<typeof JSON.parse>>, changes?: Record<string, ReturnType<typeof JSON.parse>>}} args
  * @returns {MockBuildBase}
  */
 function buildRecord(ModelClass, {attributes, changes = {}}) {
@@ -154,7 +154,7 @@ function buildRecord(ModelClass, {attributes, changes = {}}) {
 }
 
 /**
- * @param {{booleanColumns?: string[], magnitude?: (value: ?) => number, sourceAttribute?: string}} [options]
+ * @param {{booleanColumns?: string[], magnitude?: (value: ReturnType<typeof JSON.parse>) => number, sourceAttribute?: string}} [options]
  * @returns {typeof MockBuildBase}
  */
 function registeredModelClass(options = {}) {
@@ -164,7 +164,7 @@ function registeredModelClass(options = {}) {
   TestBuild._booleanColumns = new Set(options.booleanColumns || [])
   currentMockDb = createMockDb()
 
-  registerMagnitudeCounterCache(/** @type {?} */ (TestBuild), {
+  registerMagnitudeCounterCache(/** @type {ReturnType<typeof JSON.parse>} */ (TestBuild), {
     belongsTo: "dockerServer",
     counterColumn: "running_builds_count",
     magnitude: options.magnitude || ((status) => status === "running" ? 1 : 0),

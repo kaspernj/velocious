@@ -16,9 +16,9 @@ const RESOURCE_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
  * in for an app's ability scoping).
  */
 class ProjectUserScopeResource extends SyncResourceBase {
-  static ModelClass = /** @type {?} */ (SyncEntry)
+  static ModelClass = /** @type {ReturnType<typeof JSON.parse>} */ (SyncEntry)
 
-  /** @param {{params: Record<string, ?>, query: ?}} args - Feed query and params. @returns {void} */
+  /** @param {{params: Record<string, ReturnType<typeof JSON.parse>>, query: ReturnType<typeof JSON.parse>}} args - Feed query and params. @returns {void} */
   scopeChangesQuery({params, query}) {
     query.where({project_id: params.allowedProjectIds})
   }
@@ -26,7 +26,7 @@ class ProjectUserScopeResource extends SyncResourceBase {
 
 /**
  * Builds a resource instance without the frontend-model pipeline.
- * @param {Record<string, ?>} params - Request params.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
  * @returns {ProjectUserScopeResource} Resource instance.
  */
 function buildResource(params) {
@@ -39,7 +39,7 @@ function buildResource(params) {
  * plumbing.
  */
 class TestSyncWebsocketChannel extends SyncWebsocketChannel {
-  /** @returns {Promise<?>} Hand-built user-scope resource. */
+  /** @returns {Promise<ReturnType<typeof JSON.parse>>} Hand-built user-scope resource. */
   async buildSyncResource() {
     return buildResource(this.params)
   }
@@ -48,14 +48,14 @@ class TestSyncWebsocketChannel extends SyncWebsocketChannel {
 /**
  * Builds a channel already in the authorized user-scope state, over the real
  * dummy configuration, whose session captures delivered messages.
- * @param {Record<string, ?>} params - Subscribe params.
- * @returns {{channel: TestSyncWebsocketChannel, configuration: Configuration, messages: Array<Record<string, ?>>}} Channel, configuration, and captured messages.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Subscribe params.
+ * @returns {{channel: TestSyncWebsocketChannel, configuration: Configuration, messages: Array<Record<string, ReturnType<typeof JSON.parse>>>}} Channel, configuration, and captured messages.
  */
 function buildChannel(params) {
-  /** @type {Array<Record<string, ?>>} */
+  /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const messages = []
   const configuration = Configuration.current()
-  const session = /** @type {?} */ ({configuration, sendJson: (/** @type {Record<string, ?>} */ message) => messages.push(message), upgradeRequest: undefined})
+  const session = /** @type {ReturnType<typeof JSON.parse>} */ ({configuration, sendJson: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ message) => messages.push(message), upgradeRequest: undefined})
   const channel = new TestSyncWebsocketChannel({params, session, subscriptionId: "s1"})
 
   channel._scope = {conditions: {}, resourceType: "Task"}

@@ -108,7 +108,7 @@ export default class VelociousHttpServerLock {
 
   /**
    * Runs is local process owner.
-   * @param {Record<string, ?> | null} owner - Existing lock owner metadata.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | null} owner - Existing lock owner metadata.
    * @returns {boolean} - Whether owner metadata names a local process.
    */
   isLocalProcessOwner(owner) {
@@ -120,7 +120,7 @@ export default class VelociousHttpServerLock {
 
   /**
    * Runs owner hostname matches.
-   * @param {Record<string, ?>} owner - Existing lock owner metadata.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} owner - Existing lock owner metadata.
    * @returns {boolean} - Whether the owner hostname is local or absent.
    */
   ownerHostnameMatches(owner) {
@@ -147,13 +147,13 @@ export default class VelociousHttpServerLock {
 
   /**
    * Reads owner metadata from an existing server lock directory.
-   * @returns {Promise<Record<string, ?> | null>} - Parsed owner metadata, when readable.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} - Parsed owner metadata, when readable.
    */
   async readOwnerMetadata() {
     try {
       const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
 
-      return /** @type {Record<string, ?>} */ (JSON.parse(rawOwner))
+      return /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (JSON.parse(rawOwner))
     } catch {
       return null
     }

@@ -32,7 +32,7 @@ export default class VelociousHttpServerInProcessHandler {
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
-    this.unregisterFromEventsHost = websocketEventsHost.register(/** @type {?} */ (this))
+    this.unregisterFromEventsHost = websocketEventsHost.register(/** @type {ReturnType<typeof JSON.parse>} */ (this))
     this._stopping = false
   }
 
@@ -117,7 +117,7 @@ export default class VelociousHttpServerInProcessHandler {
 
     // Create a message-port shim so ServerClient.onSocketData can route data
     // to the in-process HTTP Client without needing a real worker thread.
-    const messagePortShim = /** @type {import("worker_threads").Worker} */ (/** @type {?} */ ({
+    const messagePortShim = /** @type {import("worker_threads").Worker} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({
       postMessage: (/** @type {{command: string, chunk?: Buffer | Uint8Array | string, clientCount?: number}} */ data) => {
         if (data.command === "clientWrite" && data.chunk) {
           const chunk = typeof data.chunk === "string" ? Buffer.from(data.chunk) : Buffer.from(data.chunk)
@@ -178,8 +178,8 @@ export default class VelociousHttpServerInProcessHandler {
    * subscriptions on the shared configuration.
    * @param {object} args - Options object.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, ?>} args.broadcastParams - Routing filter params.
-   * @param {?} args.body - Message body.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.broadcastParams - Routing filter params.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Message body.
    * @param {string} [args.eventId] - Persisted event id for replay.
    * @returns {void}
    */
@@ -203,7 +203,7 @@ export default class VelociousHttpServerInProcessHandler {
    * @param {string} args.channel - Channel name.
    * @param {string} [args.createdAt] - Event creation time.
    * @param {string} [args.eventId] - Event identifier.
-   * @param {?} args.payload - Payload data.
+   * @param {ReturnType<typeof JSON.parse>} args.payload - Payload data.
    * @returns {void}
    */
   dispatchWebsocketEvent({channel, createdAt, eventId, payload}) {

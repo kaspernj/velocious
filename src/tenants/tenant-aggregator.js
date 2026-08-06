@@ -13,7 +13,7 @@ import Current from "../current.js"
 /**
  * @typedef {object} SubqueryContext
  * @property {(tableName: string) => string} table - Quotes a table for this tenant. In a cross-database `UNION ALL` it returns a `database`.`table` qualified identifier; when each tenant runs on its own connection it returns the plain quoted table name. Use it for every table the subquery reads so the same subquery works on both execution paths.
- * @property {((value: ?) => string) & {list: (values: Array<?>) => string}} quote - Quotes a value for the active connection. `quote.list(values)` quotes and comma-joins an array for `IN (...)` clauses.
+ * @property {((value: ReturnType<typeof JSON.parse>) => string) & {list: (values: Array<ReturnType<typeof JSON.parse>>) => string}} quote - Quotes a value for the active connection. `quote.list(values)` quotes and comma-joins an array for `IN (...)` clauses.
  * @property {object} tenant - The tenant descriptor this subquery is being built for.
  * @property {import("../database/drivers/base.js").default} connection - The driver the query will run on.
  */
@@ -22,7 +22,7 @@ import Current from "../current.js"
  * @typedef {object} TenantAggregateOptions
  * @property {string} identifier - Database identifier whose tenants are aggregated (for example `"projectTenant"`).
  * @property {object[]} [tenants] - Explicit tenant descriptors to aggregate. Defaults to every tenant the identifier's provider `listTenants` returns.
- * @property {(tenant: ?) => boolean} [filter] - Optional filter applied to the resolved tenant list.
+ * @property {(tenant: ReturnType<typeof JSON.parse>) => boolean} [filter] - Optional filter applied to the resolved tenant list.
  * @property {string[]} [keyColumns] - Columns the aggregate is grouped by (for example `["docker_server_id"]`). Empty means a single grand-total row.
  * @property {Record<string, AggregateSpec>} aggregates - Output column name to aggregate. `"SUM"` is shorthand for `{op: "SUM", column: <output name>}`; use `{op: "COUNT", column: "*"}` for `COUNT(*)`.
  * @property {AbortSignal} [signal] - Signal passed to each aggregate database query.
@@ -61,14 +61,14 @@ export default class TenantAggregator {
 
   /**
    * Resolves the tenant list, runs the aggregate per server, and merges everything.
-   * @returns {Promise<Array<Record<string, ?>>>} - One merged row per distinct key-column combination.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - One merged row per distinct key-column combination.
    */
   async run() {
     const resolvedTenants = await this._resolveTenants()
 
     if (resolvedTenants.length === 0) return []
 
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const rows = []
 
     for (const group of this._groupByServer(resolvedTenants)) {
@@ -157,7 +157,7 @@ export default class TenantAggregator {
    * connection scope that is released before the fan-out runs, so a `max: 1` tenant pool is never
    * asked for a second connection while the first is still held (which would deadlock).
    * @param {ResolvedTenant[]} group - Tenants sharing one server.
-   * @returns {Promise<Array<Record<string, ?>>>} - Rows produced for this server.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - Rows produced for this server.
    */
   async _runForServer(group) {
     const [firstTenant] = group
@@ -174,7 +174,7 @@ export default class TenantAggregator {
       })
     }
 
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const rows = []
 
     for (const resolvedTenant of group) {
@@ -244,11 +244,11 @@ export default class TenantAggregator {
    * treated as "no contribution" and skipped, not coerced to `0` — otherwise an empty tenant would
    * drag a `MAX` of negatives or a `MIN` of positives to `0`. A key whose every tenant contributed
    * `NULL` stays `NULL`, matching SQL aggregate semantics over no rows.
-   * @param {Array<Record<string, ?>>} rows - Rows collected from all servers/tenants.
-   * @returns {Array<Record<string, ?>>} - One merged row per distinct key-column combination.
+   * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} rows - Rows collected from all servers/tenants.
+   * @returns {Array<Record<string, ReturnType<typeof JSON.parse>>>} - One merged row per distinct key-column combination.
    */
   _mergeRows(rows) {
-    /** @type {Map<string, Record<string, ?>>} */
+    /** @type {Map<string, Record<string, ReturnType<typeof JSON.parse>>>} */
     const merged = new Map()
 
     for (const row of rows) {
@@ -303,7 +303,7 @@ export default class TenantAggregator {
    * `bigint`) as strings; an integer beyond `Number.MAX_SAFE_INTEGER` cannot be represented exactly
    * as a JS number, so cross-server merging would corrupt the result — throw instead. (Fractional
    * `DECIMAL`/`NUMERIC` values are still subject to normal floating-point representation.)
-   * @param {?} rawValue - Value returned by the driver for an aggregate column.
+   * @param {ReturnType<typeof JSON.parse>} rawValue - Value returned by the driver for an aggregate column.
    * @returns {number} - The value as a number.
    */
   _toExactNumber(rawValue) {
@@ -319,12 +319,12 @@ export default class TenantAggregator {
   /**
    * Builds the value quoter passed to subqueries, with a `.list` helper for `IN (...)` clauses.
    * @param {import("../database/drivers/base.js").default} connection - Driver whose quoting is used.
-   * @returns {((value: ?) => string) & {list: (values: Array<?>) => string}} - Value quoter with a `.list` helper.
+   * @returns {((value: ReturnType<typeof JSON.parse>) => string) & {list: (values: Array<ReturnType<typeof JSON.parse>>) => string}} - Value quoter with a `.list` helper.
    */
   _buildQuote(connection) {
     return Object.assign(
-      (/** @type {?} */ value) => String(connection.quote(value)),
-      {list: (/** @type {Array<?>} */ values) => values.map((value) => String(connection.quote(value))).join(", ")}
+      (/** @type {ReturnType<typeof JSON.parse>} */ value) => String(connection.quote(value)),
+      {list: (/** @type {Array<ReturnType<typeof JSON.parse>>} */ values) => values.map((value) => String(connection.quote(value))).join(", ")}
     )
   }
 

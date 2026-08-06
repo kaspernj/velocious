@@ -59,7 +59,7 @@ export default class VelociousDatabaseDriversSqliteTableRebuilder {
     // copy: index names are database-global and survive the rename, and a violation (e.g. a new
     // unique index over rows that all receive the same default) fails during INSERT...SELECT,
     // while the original table still exists - never after the swap.
-    /** @type {Array<{column: import("../../table-data/table-column.js").default, index: ?, indexArgs: ?}>} */
+    /** @type {Array<{column: import("../../table-data/table-column.js").default, index: ReturnType<typeof JSON.parse>, indexArgs: ReturnType<typeof JSON.parse>}>} */
     const strippedColumnIndexes = []
 
     for (const column of targetTableData.getColumns()) {

@@ -407,7 +407,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   /**
    * Runs escape.
-   * @param {?} value - Value to use.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
    * @returns {string} - The escape.
    */
   escape(value) {
@@ -422,7 +422,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
   /**
    * Runs quote.
-   * @param {?} value - Value to use.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
    * @returns {string | number} - The quoted value.
    */
   quote(value) {

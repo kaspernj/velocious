@@ -18,7 +18,7 @@ function repoRoot() {
 }
 
 /**
- * @param {?} message - IPC message.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {{type?: string, attempt?: number, jobId?: string, label?: string, acknowledged?: boolean, status?: string, error?: string}} - Narrowed IPC record.
  */
 function ipcRecord(message) {

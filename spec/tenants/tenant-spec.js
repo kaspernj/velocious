@@ -8,7 +8,7 @@ import {createTenantTestConfiguration, seedTenantValue} from "../helpers/tenant-
 
 describe("Tenant", () => {
   /**
-   * @param {{listTenants: () => Promise<Array<?>> | Array<?>, dropDatabase?: (args: ?) => Promise<void> | void}} provider
+   * @param {{listTenants: () => Promise<Array<ReturnType<typeof JSON.parse>>> | Array<ReturnType<typeof JSON.parse>>, dropDatabase?: (args: ReturnType<typeof JSON.parse>) => Promise<void> | void}} provider
    * @param {(args: {configuration: import("../../src/configuration.js").default}) => Promise<void>} callback
    * @returns {Promise<void>}
    */

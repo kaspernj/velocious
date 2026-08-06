@@ -20,7 +20,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * Runs build.
-   * @param {Record<string, ?>} data - Data payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -66,7 +66,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
       const foreignKeyValue = parentModel.readColumn(primaryKeyName)
       /**
        * Assign data.
-       * @type {Record<string, ?>} */
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const assignData = {}
 
       assignData[foreignKeyAttributeName] = foreignKeyValue
@@ -81,7 +81,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * Runs create.
-   * @param {Record<string, ?>} data - Data payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {

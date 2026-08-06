@@ -27,8 +27,8 @@ export default class BaseStrategy {
    * Builds the callback `context` object: evaluated transients exposed as plain
    * properties (no Proxy) plus the named evaluator methods.
    * @param {EvaluationContext} context - Evaluation context.
-   * @param {Record<string, ?>} transients - Evaluated transient values.
-   * @returns {Record<string, ?>} - The callback context.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} transients - Evaluated transient values.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The callback context.
    */
   _callbackContext(context, transients) {
     return Object.assign({}, transients, context.contextFor([]))
@@ -39,7 +39,7 @@ export default class BaseStrategy {
    * @param {EvaluationContext} context - Evaluation context.
    * @param {import("../factory-runner.js").CompiledPlan} plan - Compiled plan.
    * @param {string} event - Event name (e.g. "afterCreate").
-   * @param {{record: ?, transients: Record<string, ?>, strategy: string}} state - Current record/transients/strategy.
+   * @param {{record: ReturnType<typeof JSON.parse>, transients: Record<string, ReturnType<typeof JSON.parse>>, strategy: string}} state - Current record/transients/strategy.
    * @returns {Promise<void>} - Resolves when all callbacks complete.
    */
   async _runCallbacks(context, plan, event, state) {
@@ -60,14 +60,14 @@ export default class BaseStrategy {
    * is attached as a detail rather than masking it.
    * @param {EvaluationContext} context - Evaluation context.
    * @param {import("../factory-runner.js").CompiledPlan} plan - Compiled plan.
-   * @param {() => {record: ?, transients: Record<string, ?>, strategy: string}} state - Late-bound state accessor.
-   * @param {() => Promise<?>} body - The strategy body.
-   * @returns {Promise<?>} - The body's result.
+   * @param {() => {record: ReturnType<typeof JSON.parse>, transients: Record<string, ReturnType<typeof JSON.parse>>, strategy: string}} state - Late-bound state accessor.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} body - The strategy body.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The body's result.
    */
   async _runWithAfterAll(context, plan, state, body) {
-    /** @type {?} */
+    /** @type {ReturnType<typeof JSON.parse>} */
     let result
-    /** @type {?} */
+    /** @type {ReturnType<typeof JSON.parse>} */
     let primaryError
     let hasPrimaryError = false
 
@@ -78,7 +78,7 @@ export default class BaseStrategy {
       hasPrimaryError = true
     }
 
-    /** @type {?} */
+    /** @type {ReturnType<typeof JSON.parse>} */
     let cleanupError
     let hasCleanupError = false
 
@@ -102,8 +102,8 @@ export default class BaseStrategy {
 
   /**
    * Attaches an afterAll cleanup failure to the primary error without masking it.
-   * @param {?} primaryError - The original error that will propagate.
-   * @param {?} cleanupError - The afterAll cleanup failure.
+   * @param {ReturnType<typeof JSON.parse>} primaryError - The original error that will propagate.
+   * @param {ReturnType<typeof JSON.parse>} cleanupError - The afterAll cleanup failure.
    * @returns {void}
    */
   _attachCleanupFailure(primaryError, cleanupError) {
@@ -118,10 +118,10 @@ export default class BaseStrategy {
    * `initializeWith` constructor and never assigning constructor-consumed
    * attributes twice.
    * @param {import("../factory-runner.js").CompiledPlan} plan - Compiled plan.
-   * @param {Record<string, ?>} publicAttributes - Evaluated public attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} publicAttributes - Evaluated public attributes.
    * @param {EvaluationContext} context - Evaluation context.
-   * @param {Record<string, ?>} transients - Evaluated transients.
-   * @returns {Promise<?>} - The constructed record.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} transients - Evaluated transients.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The constructed record.
    */
   async _constructRecord(plan, publicAttributes, context, transients) {
     const ModelClass = assertModelClass(plan.modelClass, plan.factoryName)
@@ -138,11 +138,11 @@ export default class BaseStrategy {
    * the constructor consumed through its `get(name)` accessor and assigning only
    * the remaining public attributes afterwards.
    * @param {import("../factory-runner.js").CompiledPlan} plan - Compiled plan.
-   * @param {new (attributes?: Record<string, ?>) => import("../../../database/record/index.js").default} ModelClass - Validated declared model class.
-   * @param {Record<string, ?>} publicAttributes - Evaluated public attributes.
+   * @param {new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => import("../../../database/record/index.js").default} ModelClass - Validated declared model class.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} publicAttributes - Evaluated public attributes.
    * @param {EvaluationContext} context - Evaluation context.
-   * @param {Record<string, ?>} transients - Evaluated transients.
-   * @returns {Promise<?>} - The constructed record.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} transients - Evaluated transients.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The constructed record.
    */
   async _constructWithInitializer(plan, ModelClass, publicAttributes, context, transients) {
     /** @type {Set<string>} */
@@ -159,7 +159,7 @@ export default class BaseStrategy {
       throw new ModelContractError(`Factory "${plan.factoryName}" initializeWith must return an instance of ${ModelClass.name}, got: ${String(record)}`)
     }
 
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const remaining = {}
 
     for (const key of Object.keys(publicAttributes)) {
@@ -167,7 +167,7 @@ export default class BaseStrategy {
     }
 
     if (Object.keys(remaining).length > 0) {
-      /** @type {?} */ (record).assign(remaining)
+      /** @type {ReturnType<typeof JSON.parse>} */ (record).assign(remaining)
     }
 
     return record
@@ -176,8 +176,8 @@ export default class BaseStrategy {
   /**
    * Wires evaluated associations onto a record through public relationship
    * reflection and generated setters (never private caches or guessed keys).
-   * @param {?} record - The owning record.
-   * @param {Array<{name: string, record: ?}>} associations - Evaluated associations.
+   * @param {ReturnType<typeof JSON.parse>} record - The owning record.
+   * @param {Array<{name: string, record: ReturnType<typeof JSON.parse>}>} associations - Evaluated associations.
    * @returns {void}
    */
   _assignAssociations(record, associations) {
@@ -197,8 +197,8 @@ export default class BaseStrategy {
 
   /**
    * Normalizes a has-many association value into an array of records.
-   * @param {?} value - Association value (record, array, or null).
-   * @returns {Array<?>} - The normalized record array.
+   * @param {ReturnType<typeof JSON.parse>} value - Association value (record, array, or null).
+   * @returns {Array<ReturnType<typeof JSON.parse>>} - The normalized record array.
    */
   _toRecordArray(value) {
     if (value == null) return []

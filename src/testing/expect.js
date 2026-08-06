@@ -14,7 +14,7 @@ import {
 export default class Expect extends BaseExpect {
   /**
    * Runs constructor.
-   * @param {?} object - Object.
+   * @param {ReturnType<typeof JSON.parse>} object - Object.
    */
   constructor(object) {
     super()
@@ -28,7 +28,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs and change.
-   * @param {function(): Promise<number>} changeCallback - Change callback.
+   * @param {() => Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The and change.
    */
   andChange(changeCallback) {
@@ -47,7 +47,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to be.
-   * @param {?} result - Result.
+   * @param {ReturnType<typeof JSON.parse>} result - Result.
    * @returns {void} - No return value.
    */
   toBe(result) {
@@ -261,7 +261,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to be instance of.
-   * @param {new (...args: Array<?>) => ?} klass - Class constructor to check against (e.g. a built-in like Error).
+   * @param {new (...args: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>} klass - Class constructor to check against (e.g. a built-in like Error).
    * @returns {void} - No return value.
    */
   toBeInstanceOf(klass) {
@@ -324,7 +324,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to change.
-   * @param {function(): Promise<number>} changeCallback - Change callback.
+   * @param {() => Promise<number>} changeCallback - Change callback.
    * @returns {ExpectToChange} - The change.
    */
   toChange(changeCallback) {
@@ -339,7 +339,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to contain.
-   * @param {?} valueToContain - Value to contain.
+   * @param {ReturnType<typeof JSON.parse>} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContain(valueToContain) {
@@ -382,7 +382,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to contain equal.
-   * @param {?} valueToContain - Value to contain.
+   * @param {ReturnType<typeof JSON.parse>} valueToContain - Value to contain.
    * @returns {void} - No return value.
    */
   toContainEqual(valueToContain) {
@@ -407,7 +407,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to include.
-   * @param {?} valueToInclude - Value to include.
+   * @param {ReturnType<typeof JSON.parse>} valueToInclude - Value to include.
    * @returns {void} - No return value.
    */
   toInclude(valueToInclude) {
@@ -416,7 +416,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to equal.
-   * @param {?} result - Result.
+   * @param {ReturnType<typeof JSON.parse>} result - Result.
    * @returns {void} - No return value.
    */
   toEqual(result) {
@@ -454,7 +454,7 @@ export default class Expect extends BaseExpect {
     }
 
     if (isObjectContaining(result)) {
-      const expectedValue = /** @type {?} */ (result).value
+      const expectedValue = /** @type {ReturnType<typeof JSON.parse>} */ (result).value
       const {matches, differences} = matchObject(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -473,7 +473,7 @@ export default class Expect extends BaseExpect {
     }
 
     if (isArrayContaining(result)) {
-      const expectedValue = /** @type {Array<?>} */ (/** @type {?} */ (result).value)
+      const expectedValue = /** @type {Array<ReturnType<typeof JSON.parse>>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (result).value)
       const {matches, differences} = matchArrayContaining(this._object, expectedValue)
       const objectPrint = formatValue(this._object)
       const expectedPrint = formatValue(expectedValue)
@@ -569,7 +569,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to match object.
-   * @param {Record<string, ?> | Array<?>} expected - Expected partial object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | Array<ReturnType<typeof JSON.parse>>} expected - Expected partial object.
    * @returns {void} - No return value.
    */
   toMatchObject(expected) {
@@ -640,7 +640,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to throw.
-   * @param {string|RegExp|Error|((new (...args: Array<?>) => Error))} [expected] - Expected error.
+   * @param {string|RegExp|Error|((new (...args: Array<ReturnType<typeof JSON.parse>>) => Error))} [expected] - Expected error.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async toThrow(expected) {
@@ -705,7 +705,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Resolves with the execute.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the execute.
    */
   async execute() {
     for (const expectation of this.expectations) {
@@ -731,7 +731,7 @@ export default class Expect extends BaseExpect {
 
   /**
    * Runs to have attributes.
-   * @param {Record<string, ?>} result - Result.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} result - Result.
    * @returns {void} - No return value.
    */
   toHaveAttributes(result) {
@@ -739,16 +739,16 @@ export default class Expect extends BaseExpect {
 
     /**
      * Differences.
-     * @type {Record<string, Array<?>>} */
+     * @type {Record<string, Array<ReturnType<typeof JSON.parse>>>} */
     const differences = {}
-    const objectAsRecord = /** @type {Record<string, ?>} */ (this._object)
+    const objectAsRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this._object)
 
     for (const key in result) {
       const value = result[key]
 
       if (!(key in objectAsRecord)) throw new Error(`${this._object.constructor.name} doesn't respond to ${key}`)
 
-      const objectValue = /** @type {() => ?} */ (objectAsRecord[key])()
+      const objectValue = /** @type {() => ReturnType<typeof JSON.parse>} */ (objectAsRecord[key])()
 
       if (value != objectValue) {
         differences[key] = [value, objectValue]

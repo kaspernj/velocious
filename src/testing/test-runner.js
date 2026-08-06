@@ -44,7 +44,7 @@ import {clearDeliveries} from "../mailer.js"
  * @property {TestArgs} args - Arguments passed to the test.
  * @property {string} [filePath] - Source file path.
  * @property {number} [line] - Source line number.
- * @property {function(TestArgs) : (void|Promise<void>)} function - Test callback to execute.
+ * @property {(arg: TestArgs) => (void|Promise<void>)} function - Test callback to execute.
  */
 /**
  * FailedTestDetail type.
@@ -52,7 +52,7 @@ import {clearDeliveries} from "../mailer.js"
  * @property {string} fullDescription - Full test description.
  * @property {string} [filePath] - Source file path.
  * @property {number} [line] - Source line number.
- * @property {?} error - Failure error.
+ * @property {ReturnType<typeof JSON.parse>} error - Failure error.
  * @property {string} [consoleOutput] - Captured console output while test ran.
  * @property {string} [consoleLogPath] - Saved console log path.
  */
@@ -64,7 +64,7 @@ import {clearDeliveries} from "../mailer.js"
  */
 /**
  * Defines this typedef.
- * @typedef {function({configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) : (void|Promise<void>)} AfterBeforeEachCallbackType
+ * @typedef {(args: {configuration: import("../configuration.js").default, testArgs: TestArgs, testData: TestData}) => (void|Promise<void>)} AfterBeforeEachCallbackType
  */
 /**
  * AfterBeforeEachCallbackObjectType type.
@@ -73,7 +73,7 @@ import {clearDeliveries} from "../mailer.js"
  */
 /**
  * Defines this typedef.
- * @typedef {function({configuration: import("../configuration.js").default}) : (void|Promise<void>)} BeforeAfterAllCallbackType
+ * @typedef {(args: {configuration: import("../configuration.js").default}) => (void|Promise<void>)} BeforeAfterAllCallbackType
  */
 /**
  * BeforeAfterAllCallbackObjectType type.
@@ -108,10 +108,10 @@ import {clearDeliveries} from "../mailer.js"
  * The rejected error is tagged with `velociousTestTimeout` so the runner knows
  * the lifecycle (and its afterEach database cleanup) is still in flight and can
  * wait for it to settle before the next test reuses the shared connection.
- * @param {Promise<?> | ?} promise - Promise or value.
+ * @param {Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} promise - Promise or value.
  * @param {number} timeoutMs - Timeout in milliseconds.
  * @param {string} testDescription - Test description.
- * @returns {Promise<?>} - Resolves or rejects based on timeout or promise result.
+ * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves or rejects based on timeout or promise result.
  */
 function runWithTimeout(promise, timeoutMs, testDescription) {
   const timeoutSeconds = (timeoutMs / 1000).toFixed(3).replace(/\.?0+$/, "")
@@ -142,7 +142,7 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
  * top-level await when the timed-out lifecycle has no ref'd handles of its own
  * (for example a stalled mocked async API). Once the caller continues past this
  * await, the timer has already resolved and no longer anchors the event loop.
- * @param {Promise<?>} lifecycle - The abandoned per-test lifecycle promise.
+ * @param {Promise<ReturnType<typeof JSON.parse>>} lifecycle - The abandoned per-test lifecycle promise.
  * @param {number} graceMs - Maximum time to wait for the lifecycle to settle.
  * @returns {Promise<boolean>} - Whether the lifecycle settled within the grace period.
  */
@@ -965,21 +965,21 @@ export default class TestRunner {
           let shouldRetry = false
           /**
            * Defines caughtError.
-           * @type {?} */
+           * @type {ReturnType<typeof JSON.parse>} */
           let caughtError
           /**
            * Defines failedError.
-           * @type {?} */
+           * @type {ReturnType<typeof JSON.parse>} */
           let failedError
           /**
            * Defines lastError.
-           * @type {?} */
+           * @type {ReturnType<typeof JSON.parse>} */
           let lastError
           let willRetry = false
           /**
            * The per-test lifecycle promise, hoisted so the timeout branch can
            * still wait for it to settle after runWithTimeout has abandoned it.
-           * @type {Promise<?> | undefined} */
+           * @type {Promise<ReturnType<typeof JSON.parse>> | undefined} */
           let testLifecycle
           /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
           let testSharedConnectionRegistrations = []
@@ -1390,11 +1390,11 @@ export default class TestRunner {
     const lines = []
     /**
      * Console object.
-     * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
-    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */ (console)
+     * @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */
+    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */ (console)
     /**
      * Original console methods.
-     * @type {Record<ConsoleMethodName, (...args: Array<?>) => void>} */
+     * @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */
     const originalConsoleMethods = {
       debug: consoleObject.debug.bind(console),
       error: consoleObject.error.bind(console),

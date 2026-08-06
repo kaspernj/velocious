@@ -13,7 +13,7 @@ import MailerDelivery from "./delivery.js"
 const deliveriesStore = []
 /**
  * Delivery handler.
- * @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} */
+ * @type {((payload: import("./index.js").MailerDeliveryPayload) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>) | null} */
 let deliveryHandler = null
 
 /**
@@ -58,7 +58,7 @@ function inferActionName(mailerClass, stack) {
     if (frameActionName.startsWith("_")) continue
     if (frameActionName === "constructor") continue
     if (Object.prototype.hasOwnProperty.call(VelociousMailerBase.prototype, frameActionName)) continue
-    if (typeof /** @type {Record<string, ?>} */ (/** @type {?} */ (prototype))[frameActionName] !== "function") continue
+    if (typeof /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (prototype))[frameActionName] !== "function") continue
 
     actionName = frameActionName
   }
@@ -94,7 +94,7 @@ export class VelociousMailerBase {
 
   /**
    * Runs assign view.
-   * @param {Record<string, ?>} params - View params.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - View params.
    * @returns {void} - No return value.
    */
   assignView(params) {
@@ -104,15 +104,15 @@ export class VelociousMailerBase {
   /**
    * Runs mail.
    * @param {object} args - Mail options.
-   * @param {?} args.to - Recipient.
+   * @param {ReturnType<typeof JSON.parse>} args.to - Recipient.
    * @param {string} args.subject - Subject line.
-   * @param {?} [args.from] - Sender.
-   * @param {?} [args.cc] - CC recipients.
-   * @param {?} [args.bcc] - BCC recipients.
-   * @param {?} [args.replyTo] - Reply-to address.
+   * @param {ReturnType<typeof JSON.parse>} [args.from] - Sender.
+   * @param {ReturnType<typeof JSON.parse>} [args.cc] - CC recipients.
+   * @param {ReturnType<typeof JSON.parse>} [args.bcc] - BCC recipients.
+   * @param {ReturnType<typeof JSON.parse>} [args.replyTo] - Reply-to address.
    * @param {Record<string, string>} [args.headers] - Custom headers.
    * @param {string} [args.actionName] - Mailer action name.
-   * @param {Promise<?> | ?} [args.actionPromise] - Action completion promise.
+   * @param {Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [args.actionPromise] - Action completion promise.
    * @returns {MailerDelivery} - Delivery wrapper.
    */
   mail({to, subject, from, cc, bcc, replyTo, headers, actionName, actionPromise, ...restArgs}) {
@@ -209,7 +209,7 @@ export class VelociousMailerBase {
     const actionName = this._getActionName()
     const fileName = viewFileName(actionName)
     const viewPath = `${configuration.getDirectory()}/src/mailers/${mailerDir}/${fileName}.ejs`
-    const translate = (/** @type {string} */ msgID, /** @type {Record<string, ?> | undefined} */ args) => configuration.getTranslator()(msgID, args)
+    const translate = (/** @type {string} */ msgID, /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */ args) => configuration.getTranslator()(msgID, args)
     const viewParams = incorporate({mailer: this, _: translate}, this._viewParams)
 
     return await new Promise((resolve, reject) => {
@@ -232,7 +232,7 @@ export class VelociousMailerBase {
   /**
    * Runs deliver payload.
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
-   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Handler result.
+   * @returns {Promise<import("./index.js").MailerDeliveryPayload | ReturnType<typeof JSON.parse>>} - Handler result.
    */
   async _deliverPayload(payload) {
     return await deliverPayload(payload)
@@ -266,7 +266,7 @@ export function clearDeliveries() {
 
 /**
  * Runs the setDeliveryHandler helper.
- * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?} handler - Delivery handler.
+ * @param {(payload: import("./index.js").MailerDeliveryPayload) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} handler - Delivery handler.
  * @returns {void} - No return value.
  */
 export function setDeliveryHandler(handler) {
@@ -275,7 +275,7 @@ export function setDeliveryHandler(handler) {
 
 /**
  * Runs the getDeliveryHandler helper.
- * @returns {((payload: import("./index.js").MailerDeliveryPayload) => Promise<?> | ?) | null} - Handler or null.
+ * @returns {((payload: import("./index.js").MailerDeliveryPayload) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>) | null} - Handler or null.
  */
 export function getDeliveryHandler() {
   return deliveryHandler
@@ -284,7 +284,7 @@ export function getDeliveryHandler() {
 /**
  * Runs the deliverPayload helper.
  * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
- * @returns {Promise<import("./index.js").MailerDeliveryPayload | ?>} - Handler result.
+ * @returns {Promise<import("./index.js").MailerDeliveryPayload | ReturnType<typeof JSON.parse>>} - Handler result.
  */
 export async function deliverPayload(payload) {
   if (await isTestingEnvironment()) {

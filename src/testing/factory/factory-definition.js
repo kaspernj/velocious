@@ -11,7 +11,7 @@ export default class FactoryDefinition {
    * Builds a factory definition.
    * @param {object} args - Options.
    * @param {string} args.name - Factory name.
-   * @param {(new (attributes?: Record<string, ?>) => ?) | null} args.modelClass - Model class, or null to inherit from a parent.
+   * @param {(new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | null} args.modelClass - Model class, or null to inherit from a parent.
    * @param {string | null} args.parentName - Parent factory name, or null.
    * @param {string[]} args.aliases - Alias names that reference this same definition.
    * @param {import("./declarations.js").Declaration[]} args.declarations - Ordered own declarations.
@@ -21,7 +21,7 @@ export default class FactoryDefinition {
     /** @type {string} - Factory name. */
     this.name = name
 
-    /** @type {(new (attributes?: Record<string, ?>) => ?) | null} - Model class or null. */
+    /** @type {(new (attributes?: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | null} - Model class or null. */
     this.modelClass = modelClass
 
     /** @type {string | null} - Parent factory name or null. */

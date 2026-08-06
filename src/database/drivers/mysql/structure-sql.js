@@ -63,7 +63,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
   /**
    * Orders tables so referenced tables are created before their dependents.
    * @param {object} args - Options object.
-   * @param {Array<Record<string, ?>>} args.foreignKeyRows - Foreign key metadata rows.
+   * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} args.foreignKeyRows - Foreign key metadata rows.
    * @param {string[]} args.tableNames - Base table names in their existing order.
    * @returns {string[]} - Ordered table names.
    */
@@ -126,7 +126,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
 
   /**
    * Runs mysql create statement.
-   * @param {Record<string, ?> | undefined} row - Row data.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | undefined} row - Row data.
    * @returns {string | null} - SQL string.
    */
   _mysqlCreateStatement(row) {

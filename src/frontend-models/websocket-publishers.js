@@ -172,7 +172,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
  * transport serializer so Date/undefined/etc. survive the JSON hop.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @param {string} modelName - Model class name.
- * @param {{action: "create" | "update" | "destroy", id: ?, record?: Record<string, ?>}} event - Lifecycle event.
+ * @param {{action: "create" | "update" | "destroy", id: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {

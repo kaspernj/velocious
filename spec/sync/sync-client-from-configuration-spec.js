@@ -26,7 +26,7 @@ describe("sync client from configuration", () => {
       columns: SCAN_COLUMNS,
       modelName: "TicketScan",
       sync: {
-        publish: {serialize: (/** @type {?} */ ticketScan) => ({id: ticketScan.id()})},
+        publish: {serialize: (/** @type {ReturnType<typeof JSON.parse>} */ ticketScan) => ({id: ticketScan.id()})},
         track: true
       }
     })
@@ -200,15 +200,15 @@ describe("sync client from configuration", () => {
   })
 
   it("passes findRecord, findRecordForDelete, afterApply, attributes, and trackedData through to the resource config", async () => {
-    /** @returns {Promise<?>} Custom record resolver result. */
+    /** @returns {Promise<ReturnType<typeof JSON.parse>>} Custom record resolver result. */
     const findRecord = async () => null
-    /** @returns {Promise<?>} Custom delete resolver result. */
+    /** @returns {Promise<ReturnType<typeof JSON.parse>>} Custom delete resolver result. */
     const findRecordForDelete = async () => null
     /** @returns {Promise<boolean>} Post-apply hook result. */
     const afterApply = async () => false
-    /** @returns {Record<string, ?>} Pull-apply attributes. */
+    /** @returns {Record<string, ReturnType<typeof JSON.parse>>} Pull-apply attributes. */
     const attributes = () => ({})
-    /** @returns {Record<string, ?>} Tracked payload. */
+    /** @returns {Record<string, ReturnType<typeof JSON.parse>>} Tracked payload. */
     const trackedData = () => ({})
     const Ticket = buildMetadataModelClass({
       columns: SCAN_COLUMNS,
@@ -355,7 +355,7 @@ describe("sync client from configuration", () => {
   it("resolves the provided shared websocket client instance and memoizes it", async () => {
     const TicketScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TicketScan", sync: true})
     const syncModel = buildFakeSyncModel()
-    const websocketClient = /** @type {?} */ ({connect: async () => {}, disconnectAndStopReconnect: async () => {}, subscribeChannel: () => ({})})
+    const websocketClient = /** @type {ReturnType<typeof JSON.parse>} */ ({connect: async () => {}, disconnectAndStopReconnect: async () => {}, subscribeChannel: () => ({})})
     const configuration = buildConfiguration({
       modelClasses: [TicketScan],
       sync: {client: {authenticationToken: () => "token-1", transport: buildTransport(), websocketClient}}

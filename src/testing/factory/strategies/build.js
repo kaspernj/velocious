@@ -13,11 +13,11 @@ export default class BuildStrategy extends BaseStrategy {
    * @param {object} args - Options.
    * @param {import("../factory-registry.js").default} args.registry - Owning registry.
    * @param {import("../factory-runner.js").CompiledPlan} args.plan - Compiled plan.
-   * @returns {Promise<?>} - The built (unsaved) record.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The built (unsaved) record.
    */
   async run({registry, plan}) {
     const context = this._newContext(registry, plan, "build")
-    /** @type {{record: ?, transients: Record<string, ?>}} */
+    /** @type {{record: ReturnType<typeof JSON.parse>, transients: Record<string, ReturnType<typeof JSON.parse>>}} */
     const runState = {record: undefined, transients: {}}
     const state = () => ({record: runState.record, transients: runState.transients, strategy: "build"})
 

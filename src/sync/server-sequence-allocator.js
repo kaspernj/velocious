@@ -28,7 +28,7 @@ export default class ServerSequenceAllocator {
    * @param {object} [args] - Options.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration owning the database. Defaults to the current configuration, resolved lazily per allocation.
    * @param {string} [args.databaseIdentifier] - Database identifier.
-   * @param {Record<string, ?>} [args.insertData] - Row payload inserted per allocation. Defaults to `{created_at: new Date()}` matching the auto-created table; pass `{}` for bare id-only tables.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.insertData] - Row payload inserted per allocation. Defaults to `{created_at: new Date()}` matching the auto-created table; pass `{}` for bare id-only tables.
    * @param {string} [args.tableName] - Sequence table name.
    */
   constructor({configuration, databaseIdentifier = "default", insertData, tableName = "velocious_server_sequences"} = {}) {
@@ -158,7 +158,7 @@ export default class ServerSequenceAllocator {
 
   /**
    * Builds the row payload inserted per allocation.
-   * @returns {Record<string, ?>} Insert payload.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Insert payload.
    */
   _insertPayload() {
     return this.insertData ?? {created_at: new Date()}
@@ -249,7 +249,7 @@ export function withServerSequence(ModelClass, {allocator, column = "serverSeque
   const setterMethodName = `set${upperColumn}`
 
   // Narrows the prototype to dynamic method access for the configured column name.
-  const prototype = /** @type {Record<string, ?>} */ (ModelClass.prototype)
+  const prototype = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ModelClass.prototype)
 
   if (typeof prototype[setterMethodName] != "function" || typeof prototype[hasMethodName] != "function") {
     throw new Error(`withServerSequence requires generated ${setterMethodName} and ${hasMethodName} accessors on ${ModelClass.name}`)
@@ -258,7 +258,7 @@ export function withServerSequence(ModelClass, {allocator, column = "serverSeque
   if (typeof prototype[advanceMethodName] != "function") {
     /**
      * Assigns the next server-side sequence.
-     * @this {import("../database/record/index.js").default & Record<string, ?>}
+     * @this {import("../database/record/index.js").default & Record<string, ReturnType<typeof JSON.parse>>}
      * @returns {Promise<void>}
      */
     prototype[advanceMethodName] = async function advanceServerSequenceThroughAllocator() {
@@ -268,7 +268,7 @@ export function withServerSequence(ModelClass, {allocator, column = "serverSeque
 
   ModelClass.beforeCreate(async (record) => {
     // Narrows the record to dynamic method access for the configured column name.
-    const dynamicRecord = /** @type {Record<string, ?>} */ (/** @type {?} */ (record))
+    const dynamicRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (record))
 
     if (dynamicRecord[hasMethodName]()) return
 

@@ -83,7 +83,7 @@ export default class VelociousApplication {
 
   /**
    * Runs run.
-   * @param {function() : void} callback - Callback function.
+   * @param {() => void} callback - Callback function.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async run(callback) {
@@ -119,14 +119,14 @@ export default class VelociousApplication {
    * @param {object} args - HTTP server startup arguments.
    * @param {import("./configuration.js").default} args.configuration - Configuration instance.
    * @param {string} [args.host] - HTTP server host.
-   * @param {Record<string, ?>} args.httpServerConfiguration - Merged HTTP server configuration.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.httpServerConfiguration - Merged HTTP server configuration.
    * @param {number} args.port - HTTP server port.
    * @returns {Promise<void>} - Resolves after the HTTP server has started.
    */
   async startLockedHttpServer({configuration, host, httpServerConfiguration, port}) {
     try {
       if (!configuration.getWebsocketEvents()) {
-        configuration.setWebsocketEvents(/** @type {?} */ (websocketEventsHost))
+        configuration.setWebsocketEvents(/** @type {ReturnType<typeof JSON.parse>} */ (websocketEventsHost))
       }
 
       await configuration.connectBeacon({peerType: "server"})

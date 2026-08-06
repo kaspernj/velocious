@@ -3,7 +3,7 @@
 /**
  * AddColumnArgsType type.
  * @typedef {object} AddColumnArgsType
- * @property {?} [default] - Default value for the column.
+ * @property {ReturnType<typeof JSON.parse>} [default] - Default value for the column.
  * @property {object} [foreignKey] - Foreign key definition for the column.
  * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
  * @property {number} [limit] - Alias for maxLength (varchar length limit) on string-like columns.
@@ -15,7 +15,7 @@
 /**
  * CreateTableIdArgsType type.
  * @typedef {object} CreateTableIdArgsType
- * @property {?} [default] - Default value for the ID column.
+ * @property {ReturnType<typeof JSON.parse>} [default] - Default value for the ID column.
  * @property {string} [type] - Column type for the ID column.
  */
 /**

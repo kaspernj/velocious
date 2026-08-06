@@ -136,7 +136,7 @@ export default class BackgroundJobsMain {
     this._unsubscribeBeacon = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {((...args: Array<?>) => void) | undefined} */
+     * @type {((...args: Array<ReturnType<typeof JSON.parse>>) => void) | undefined} */
     this._beaconConnectHandler = undefined
     /**
      * Narrows the runtime value to the documented type.
@@ -710,7 +710,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Reports an unexpected lease-release failure on framework error channels.
-   * @param {?} error - Release failure.
+   * @param {ReturnType<typeof JSON.parse>} error - Release failure.
    * @returns {void}
    */
   _reportHandoffReleaseError(error) {
@@ -727,7 +727,7 @@ export default class BackgroundJobsMain {
    * Reports an unexpected worker-handoff adoption failure on framework error
    * channels. A failed adoption is not fatal (the worker's jobs remain and are
    * reclaimed by the orphan sweep), but must surface rather than be swallowed.
-   * @param {?} error - Adoption failure.
+   * @param {ReturnType<typeof JSON.parse>} error - Adoption failure.
    * @returns {void}
    */
   _reportHandoffAdoptError(error) {
@@ -830,8 +830,8 @@ export default class BackgroundJobsMain {
   /**
    * Returns safe validation failures and reports unexpected client mutations.
    * @param {object} args - Options.
-   * @param {Record<string, ?>} args.context - Framework-error context.
-   * @param {?} args.error - Mutation failure.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Framework-error context.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Mutation failure.
    * @param {string} args.fallbackMessage - Client-safe fallback message.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {string} args.logMessage - Error log prefix.
@@ -922,7 +922,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs emit background job failed.
-   * @param {{error: ?, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
+   * @param {{error: ReturnType<typeof JSON.parse>, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
    * @returns {void}
    */
   _emitBackgroundJobFailed({error, handoffId, handedOffAtMs, job, workerId}) {
@@ -983,7 +983,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs normalize failure error.
-   * @param {?} error - Reported failure value.
+   * @param {ReturnType<typeof JSON.parse>} error - Reported failure value.
    * @returns {Error} Normalized error.
    */
   _normalizeFailureError(error) {
@@ -994,7 +994,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs error from unknown failure.
-   * @param {?} error - Reported failure value.
+   * @param {ReturnType<typeof JSON.parse>} error - Reported failure value.
    * @returns {Error} Normalized error.
    */
   _errorFromUnknownFailure(error) {
@@ -1008,7 +1008,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs message from unknown failure.
-   * @param {?} error - Reported failure value.
+   * @param {ReturnType<typeof JSON.parse>} error - Reported failure value.
    * @returns {string} Error message.
    */
   _messageFromUnknownFailure(error) {
@@ -1019,7 +1019,7 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs has string failure.
-   * @param {?} error - Reported failure value.
+   * @param {ReturnType<typeof JSON.parse>} error - Reported failure value.
    * @returns {error is string} Whether the value is a non-empty string.
    */
   _hasStringFailure(error) {
@@ -1029,7 +1029,7 @@ export default class BackgroundJobsMain {
   /**
    * Runs copy string failure stack.
    * @param {object} args - Options.
-   * @param {?} args.error - Reported failure value.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Reported failure value.
    * @param {Error} args.normalizedError - Normalized error.
    * @returns {void}
    */

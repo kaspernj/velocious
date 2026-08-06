@@ -57,7 +57,7 @@ export default class TenantDatabaseCommandHelper {
 
   /**
    * Runs list tenants.
-   * @returns {Promise<Array<?>>} - Tenants.
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - Tenants.
    */
   async listTenants() {
     this.validateTenantDatabaseIdentifier()
@@ -79,7 +79,7 @@ export default class TenantDatabaseCommandHelper {
 
   /**
    * Runs each tenant.
-   * @param {function({databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ?}) : Promise<void>} callback - Callback.
+   * @param {(args: {databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ReturnType<typeof JSON.parse>}) => Promise<void>} callback - Callback.
    * @returns {Promise<number>} - Number of tenants processed.
    */
   async eachTenant(callback) {

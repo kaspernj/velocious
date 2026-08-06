@@ -31,7 +31,7 @@ export default class FilesystemAttachmentStorageDriver {
    * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../../../../configuration.js").default} args.configuration - Configuration instance.
-   * @param {Record<string, ?>} [args.options] - Driver options.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.options] - Driver options.
    */
   constructor({configuration, options = {}}) {
     this.configuration = configuration

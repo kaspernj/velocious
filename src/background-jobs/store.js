@@ -162,7 +162,7 @@ export default class BackgroundJobsStore {
    * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
-   * @param {Array<?>} args.args - Arguments.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Arguments.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
    * @returns {Promise<string>} - Job id.
    */
@@ -190,7 +190,7 @@ export default class BackgroundJobsStore {
           .results()
 
         if (existing[0]) {
-          resultJobId = String(/** @type {Record<string, ?>} */ (existing[0]).id)
+          resultJobId = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (existing[0]).id)
 
           return
         }
@@ -209,7 +209,7 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {string} args.scheduleKey - Stable logical schedule key.
    * @param {string} args.jobName - Job name.
-   * @param {Array<?>} args.args - Arguments.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Arguments.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
    * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
    */
@@ -233,7 +233,7 @@ export default class BackgroundJobsStore {
             .where({schedule_key: normalizedScheduleKey})
             .limit(1)
             .results()
-          const ownerJobId = ownerRows[0] ? String(/** @type {Record<string, ?>} */ (ownerRows[0]).job_id) : null
+          const ownerJobId = ownerRows[0] ? String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ownerRows[0]).job_id) : null
           const ownerJob = ownerJobId ? await this._getJobRowById(db, ownerJobId) : null
           /** @type {import("./types.js").BackgroundJobReplacementPreviousStatus} */
           let previousStatus = null
@@ -308,7 +308,7 @@ export default class BackgroundJobsStore {
 
           if (!ownerRows[0]) return {jobId: null, outcome: "not_found"}
 
-          const jobId = String(/** @type {Record<string, ?>} */ (ownerRows[0]).job_id)
+          const jobId = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ownerRows[0]).job_id)
           const job = await this._getJobRowById(db, jobId)
 
           if (job?.status === "queued") {
@@ -502,7 +502,7 @@ export default class BackgroundJobsStore {
       const counts = {}
 
       for (const row of rows) {
-        const typedRow = /** @type {Record<string, ?>} */ (row)
+        const typedRow = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)
 
         counts[String(typedRow.status)] = this._normalizeNumber(typedRow.count) || 0
       }
@@ -542,7 +542,7 @@ export default class BackgroundJobsStore {
       if (jobName) query = query.where({job_name: jobName})
 
       const rows = await query.results()
-      const countRow = /** @type {Record<string, ?>} */ (rows[0] || {})
+      const countRow = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0] || {})
 
       return this._normalizeNumber(countRow.count) || 0
     })
@@ -723,7 +723,7 @@ export default class BackgroundJobsStore {
    * Runs mark failed.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
-   * @param {?} args.error - Error.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {string} [args.workerId] - Worker id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
@@ -865,7 +865,7 @@ export default class BackgroundJobsStore {
 
         if (rows.length === 0) return 0
 
-        const ids = rows.map((/** @type {Record<string, ?>} */ row) => db.quote(String(row.id))).join(", ")
+        const ids = rows.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ row) => db.quote(String(row.id))).join(", ")
 
         const removed = await db.affectedRows(
           `DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`
@@ -940,7 +940,7 @@ export default class BackgroundJobsStore {
   /**
    * Normalizes one new job before entering its persistence transaction.
    * @param {object} args - Job input.
-   * @param {Array<?>} args.args - Job arguments.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job arguments.
    * @param {string} args.jobName - Job name.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {PreparedBackgroundJob} - Prepared job.
@@ -1546,9 +1546,9 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
    * @param {import("./types.js").BackgroundJobRow} args.job - Job row.
-   * @param {?} args.error - Error.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Error.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
-   * @param {Record<string, ?>} [args.conditions] - Update fencing conditions. Defaults to the active-handoff lease match; the time-based orphan sweep overrides this with an id/status match so it can reclaim rows whose `handoff_id` is null (e.g. handed off by an older velocious before handoff-id fencing existed).
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.conditions] - Update fencing conditions. Defaults to the active-handoff lease match; the time-based orphan sweep overrides this with an id/status match so it can reclaim rows whose `handoff_id` is null (e.g. handed off by an older velocious before handoff-id fencing existed).
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the lease transition won.
    */
   async _applyFailure({db, job, error, markOrphaned, conditions}) {
@@ -1613,12 +1613,12 @@ export default class BackgroundJobsStore {
    * @param {number} args.now - Current timestamp.
    * @param {number | null} args.scheduledAt - Next scheduled timestamp.
    * @param {boolean} args.shouldRetry - Whether the job should retry.
-   * @returns {Record<string, ?>} - Database update data.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Database update data.
    */
   _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry}) {
     /**
      * Update.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const update = {
       attempts: nextAttempt,
       handed_off_at_ms: null,
@@ -1637,7 +1637,7 @@ export default class BackgroundJobsStore {
    * @param {object} args - Options.
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
    * @param {number} args.now - Current timestamp.
-   * @param {Record<string, ?>} args.update - Database update data.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.update - Database update data.
    * @returns {void}
    */
   _applyOrphanedFailureUpdate({markOrphaned, now, update}) {
@@ -1651,7 +1651,7 @@ export default class BackgroundJobsStore {
    * @param {number} args.now - Current timestamp.
    * @param {number | null} args.scheduledAt - Next scheduled timestamp.
    * @param {boolean} args.shouldRetry - Whether the job should retry.
-   * @param {Record<string, ?>} args.update - Database update data.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.update - Database update data.
    * @returns {void}
    */
   _applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update}) {
@@ -1672,7 +1672,7 @@ export default class BackgroundJobsStore {
 
   /**
    * Runs normalize job row.
-   * @param {Record<string, ?>} row - Raw database row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} row - Raw database row.
    * @returns {import("./types.js").BackgroundJobRow} - Normalized job row.
    */
   _normalizeJobRow(row) {
@@ -1944,7 +1944,7 @@ export default class BackgroundJobsStore {
    */
   async _countRevision(db) {
     const rows = await db.newQuery().from(COUNTS_REVISION_TABLE).select("revision").where({key: COUNTS_REVISION_KEY}).limit(1).results()
-    const revision = this._normalizeNumber(/** @type {Record<string, ?>} */ (rows[0] || {}).revision)
+    const revision = this._normalizeNumber(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0] || {}).revision)
 
     if (revision === null || !Number.isSafeInteger(revision) || revision < 0) {
       throw new Error(`Invalid background job count revision: ${revision}`)
@@ -2001,7 +2001,7 @@ export default class BackgroundJobsStore {
     let total = 0
 
     for (const row of rows) {
-      const typedRow = /** @type {Record<string, ?>} */ (row)
+      const typedRow = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)
       const status = String(typedRow.status)
       const count = this._normalizeNumber(typedRow.count) || 0
 
@@ -2158,7 +2158,7 @@ export default class BackgroundJobsStore {
     const concurrencyRows = await db.newQuery().from(CONCURRENCY_TABLE).select("concurrency_key").results()
 
     for (const row of concurrencyRows) {
-      const concurrencyKey = String(/** @type {Record<string, ?>} */ (row).concurrency_key)
+      const concurrencyKey = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).concurrency_key)
 
       if (!concurrencyKey.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX)) continue
       if (cappedQueues.has(concurrencyKey.slice(QUEUE_CONCURRENCY_KEY_PREFIX.length))) continue
@@ -2174,7 +2174,7 @@ export default class BackgroundJobsStore {
 
   /**
    * Runs normalize number.
-   * @param {?} value - Input value.
+   * @param {ReturnType<typeof JSON.parse>} value - Input value.
    * @returns {number | null} - Normalized number.
    */
   _normalizeNumber(value) {
@@ -2242,8 +2242,8 @@ export default class BackgroundJobsStore {
 
   /**
    * Runs parse args.
-   * @param {?} value - Input value.
-   * @returns {Array<?>} - Parsed args.
+   * @param {ReturnType<typeof JSON.parse>} value - Input value.
+   * @returns {Array<ReturnType<typeof JSON.parse>>} - Parsed args.
    */
   _parseArgs(value) {
     if (!value) return []

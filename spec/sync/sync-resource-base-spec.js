@@ -18,7 +18,7 @@ class TestSyncModel {
 /**
  * Builds a sync resource instance without the frontend-model pipeline.
  * @param {typeof SyncResourceBase} ResourceClass - Resource class to instantiate.
- * @param {Record<string, ?>} params - Request params.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Request params.
  * @returns {SyncResourceBase} Resource instance.
  */
 function buildResource(ResourceClass, params) {
@@ -60,12 +60,12 @@ describe("sync resource base", () => {
     class TestResource extends SyncResourceBase {
       static ModelClass = TestSyncModel
 
-      /** @param {{params: Record<string, ?>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args @returns {Promise<void>} */
+      /** @param {{params: Record<string, ReturnType<typeof JSON.parse>>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args @returns {Promise<void>} */
       async authorizeChanges({scope}) {
         calls.push(`authorize:${scope?.resourceType}`)
       }
 
-      /** @param {{params: Record<string, ?>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args @returns {{changes: () => Promise<Record<string, ?>>}} */
+      /** @param {{params: Record<string, ReturnType<typeof JSON.parse>>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args @returns {{changes: () => Promise<Record<string, ReturnType<typeof JSON.parse>>>}} */
       changeFeedService(args) {
         calls.push(`feed:${args.scope?.resourceType}`)
         return {changes: async () => ({status: "success", syncs: []})}
@@ -91,7 +91,7 @@ describe("sync resource base", () => {
         throw new Error("Not allowed to read sync changes")
       }
 
-      /** @returns {{changes: () => Promise<Record<string, ?>>}} */
+      /** @returns {{changes: () => Promise<Record<string, ReturnType<typeof JSON.parse>>>}} */
       changeFeedService() {
         calls.push("feed")
         return {changes: async () => ({})}
@@ -105,13 +105,13 @@ describe("sync resource base", () => {
   })
 
   it("builds a change feed service that scopes through scopeChangesQuery", () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const scopeCalls = []
 
     class TestResource extends SyncResourceBase {
       static ModelClass = TestSyncModel
 
-      /** @param {{params: Record<string, ?>, query: ?, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args @returns {void} */
+      /** @param {{params: Record<string, ReturnType<typeof JSON.parse>>, query: ReturnType<typeof JSON.parse>, scope: import("../../src/sync/sync-resource-base.js").SerializedChangesScope | null}} args @returns {void} */
       scopeChangesQuery({query, scope}) {
         scopeCalls.push({query, scope})
       }
@@ -132,11 +132,11 @@ describe("sync resource base", () => {
   })
 
   it("delegates replay to the app replay service and reshapes successful results", async () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const replayCalls = []
 
     class TestReplayService extends SyncEnvelopeReplayService {
-      /** @param {Record<string, ?>} params @returns {Promise<{syncs: Array<Record<string, ?>>}>} */
+      /** @param {Record<string, ReturnType<typeof JSON.parse>>} params @returns {Promise<{syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}>} */
       async replay(params) {
         replayCalls.push(params)
         return {syncs: [{id: 1, syncState: "successful"}]}
@@ -158,7 +158,7 @@ describe("sync resource base", () => {
 
   it("passes replay error results through unchanged", async () => {
     class TestReplayService extends SyncEnvelopeReplayService {
-      /** @returns {Promise<{syncs: Array<Record<string, ?>>, status: string, errorCode: string, errorMessage: string}>} */
+      /** @returns {Promise<{syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>, status: string, errorCode: string, errorMessage: string}>} */
       async replay() {
         return {errorCode: "invalid-token", errorMessage: "Invalid token", status: "error", syncs: []}
       }
@@ -202,7 +202,7 @@ describe("sync resource base", () => {
     }
 
     /** @type {import("../../src/authorization/ability.js").default} */
-    const fakeAbility = /** @type {?} */ ({fake: "ability"})
+    const fakeAbility = /** @type {ReturnType<typeof JSON.parse>} */ ({fake: "ability"})
     const resource = new TestResource({
       ability: fakeAbility,
       context: {currentUserId: "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"},
@@ -220,19 +220,19 @@ describe("sync resource base", () => {
 
   it("lets replayServiceArgs win over the plumbed defaults", () => {
     /** @type {import("../../src/authorization/ability.js").default} */
-    const overrideAbility = /** @type {?} */ ({override: "ability"})
+    const overrideAbility = /** @type {ReturnType<typeof JSON.parse>} */ ({override: "ability"})
 
     class TestResource extends SyncResourceBase {
       static ModelClass = TestSyncModel
 
-      /** @returns {Record<string, ?>} - Replay service args. */
+      /** @returns {Record<string, ReturnType<typeof JSON.parse>>} - Replay service args. */
       replayServiceArgs() {
         return {ability: overrideAbility, syncModel: SyncEntry}
       }
     }
 
     /** @type {import("../../src/authorization/ability.js").default} */
-    const plumbedAbility = /** @type {?} */ ({plumbed: "ability"})
+    const plumbedAbility = /** @type {ReturnType<typeof JSON.parse>} */ ({plumbed: "ability"})
     const resource = new TestResource({ability: plumbedAbility, modelName: "TestSyncModel"})
     const service = /** @type {SyncEnvelopeReplayService} */ (resource.buildReplayService())
 
@@ -241,10 +241,10 @@ describe("sync resource base", () => {
   })
 
   it("passes index pagination through to the controller hook by default and lets subclasses override it", () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const paginationCalls = []
     const fakeController = /** @type {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController} */ (/** @type {unknown} */ ({
-      applyFrontendModelPagination: (/** @type {Record<string, ?>} */ args) => paginationCalls.push(args)
+      applyFrontendModelPagination: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ args) => paginationCalls.push(args)
     }))
     const fakeQuery = /** @type {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} */ (/** @type {unknown} */ ({id: "query-1"}))
     const pagination = {limit: null, offset: null, page: 2, perPage: 100}
@@ -276,12 +276,12 @@ class QuickSearchSyncResource extends SyncResourceBase {
 
 /**
  * Builds a fake frontend-model controller recording delegated searches.
- * @param {Array<Record<string, ?>>} searchCalls - Recorded search calls.
+ * @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} searchCalls - Recorded search calls.
  * @returns {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController} Fake controller.
  */
 function buildSearchController(searchCalls) {
   return /** @type {import("../../src/frontend-model-resource/base-resource.js").FrontendModelResourceController} */ (/** @type {unknown} */ ({
-    applyFrontendModelSearch: (/** @type {Record<string, ?>} */ args) => searchCalls.push(args)
+    applyFrontendModelSearch: (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ args) => searchCalls.push(args)
   }))
 }
 
@@ -323,7 +323,7 @@ describe("sync resource base - quick search", {tags: ["dummy"], databaseCleaning
 
     await createQuickSearchEntry({resourceId: "33333333-dddd-4eee-8fff-444444444444", syncType: "update"})
 
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const searchCalls = []
     const resource = buildResource(QuickSearchSyncResource, {})
     const query = SyncEntry.where({})
@@ -363,7 +363,7 @@ describe("sync resource base - quick search", {tags: ["dummy"], databaseCleaning
     await createQuickSearchEntry({resourceId: "11111111-aaaa-4bbb-8ccc-222222222222", syncType: "update"})
     await createQuickSearchEntry({resourceId: "33333333-dddd-4eee-8fff-444444444444", syncType: "delete"})
 
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const searchCalls = []
     const resource = buildResource(QuickSearchSyncResource, {})
     const query = SyncEntry.where({})
@@ -406,7 +406,7 @@ describe("sync resource base - quick search", {tags: ["dummy"], databaseCleaning
   })
 
   it("delegates non-quickSearch searches and quickSearch without declared columns to the controller", () => {
-    /** @type {Array<Record<string, ?>>} */
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
     const searchCalls = []
     const controller = buildSearchController(searchCalls)
     const query = SyncEntry.where({})

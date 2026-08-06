@@ -12,7 +12,7 @@ const PUSHED_ITEM_ID = "7d444840-9dc0-11d1-b245-5ffdce74fad2"
 /**
  * Builds a sync client wired to a fake websocket client and transport while the
  * registered UuidItem model applies against the real dummy-app database.
- * @returns {{client: SyncClient, fakeWebsocketClient: ?, syncModel: ?}} Realtime harness against the dummy database.
+ * @returns {{client: SyncClient, fakeWebsocketClient: ReturnType<typeof JSON.parse>, syncModel: ReturnType<typeof JSON.parse>}} Realtime harness against the dummy database.
  */
 function buildDummyRealtimeHarness() {
   const fakeWebsocketClient = buildFakeWebsocketClient()

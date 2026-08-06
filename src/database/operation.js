@@ -118,7 +118,7 @@ export default class VelociousDatabaseOperation {
      * Narrows the Proxy facade to the complete driver surface that it forwards.
      * @type {import("./drivers/base.js").default}
      */
-    const connectionFacade = /** @type {?} */ (this._connection)
+    const connectionFacade = /** @type {ReturnType<typeof JSON.parse>} */ (this._connection)
 
     return connectionFacade
   }

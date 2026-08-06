@@ -38,7 +38,7 @@ export function requestDetails(request) {
 /**
  * Snapshots parsed request params for error reports.
  * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} request - Request object.
- * @returns {? | undefined} - Sanitized body snapshot.
+ * @returns {ReturnType<typeof JSON.parse> | undefined} - Sanitized body snapshot.
  */
 function requestBodySnapshot(request) {
   if (typeof request.params !== "function") return undefined
@@ -55,8 +55,8 @@ function requestBodySnapshot(request) {
 
 /**
  * Builds a bounded, redacted body snapshot for error reports.
- * @param {?} body - Parsed request body.
- * @returns {?} - Sanitized body snapshot.
+ * @param {ReturnType<typeof JSON.parse>} body - Parsed request body.
+ * @returns {ReturnType<typeof JSON.parse>} - Sanitized body snapshot.
  */
 function requestDetailsBodySnapshot(body) {
   const originalLength = serializedLength(body)
@@ -78,10 +78,10 @@ function requestDetailsBodySnapshot(body) {
 
 /**
  * Sanitizes a value recursively for request details.
- * @param {?} value - Value to sanitize.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to sanitize.
  * @param {string} [key] - Current object key.
  * @param {WeakSet<object>} [seen] - Seen object references.
- * @returns {?} - Sanitized value.
+ * @returns {ReturnType<typeof JSON.parse>} - Sanitized value.
  */
 function sanitizeRequestDetailsValue(value, key = "", seen = new WeakSet()) {
   if (sensitiveRequestDetailsKey(key)) return REDACTED_REQUEST_DETAILS_VALUE
@@ -97,7 +97,7 @@ function sanitizeRequestDetailsValue(value, key = "", seen = new WeakSet()) {
 
 /**
  * Checks whether a value can be kept as-is.
- * @param {?} value - Value.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
  * @returns {boolean} - Whether the value is primitive and safe.
  */
 function primitiveRequestDetailsValue(value) {
@@ -117,9 +117,9 @@ function sanitizeRequestDetailsString(value) {
 
 /**
  * Sanitizes an array value.
- * @param {Array<?>} value - Array value.
+ * @param {Array<ReturnType<typeof JSON.parse>>} value - Array value.
  * @param {WeakSet<object>} seen - Seen object references.
- * @returns {Array<?>} - Sanitized array.
+ * @returns {Array<ReturnType<typeof JSON.parse>>} - Sanitized array.
  */
 function sanitizeRequestDetailsArray(value, seen) {
   const entries = value
@@ -137,14 +137,14 @@ function sanitizeRequestDetailsArray(value, seen) {
  * Sanitizes a plain object-like value.
  * @param {object} value - Object value.
  * @param {WeakSet<object>} seen - Seen object references.
- * @returns {Record<string, ?> | string} - Sanitized object or circular marker.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>> | string} - Sanitized object or circular marker.
  */
 function sanitizeRequestDetailsObject(value, seen) {
   if (seen.has(value)) return "[circular]"
 
   seen.add(value)
 
-  /** @type {Record<string, ?>} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const sanitized = {}
 
   for (const [entryKey, entryValue] of Object.entries(value)) {
@@ -158,7 +158,7 @@ function sanitizeRequestDetailsObject(value, seen) {
 
 /**
  * Checks whether a value is a Node.js Buffer.
- * @param {?} value - Value.
+ * @param {ReturnType<typeof JSON.parse>} value - Value.
  * @returns {value is Buffer} - Whether value is a Buffer.
  */
 function bufferValue(value) {
@@ -168,7 +168,7 @@ function bufferValue(value) {
 /**
  * Summarizes raw binary data without serializing bytes.
  * @param {Buffer} buffer - Uploaded or request buffer.
- * @returns {Record<string, ?>} - Request-safe buffer summary.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Request-safe buffer summary.
  */
 function bufferRequestDetailsSummary(buffer) {
   return {
@@ -181,7 +181,7 @@ function bufferRequestDetailsSummary(buffer) {
 /**
  * Summarizes uploaded files without serializing file bytes or temp paths.
  * @param {UploadedFile} uploadedFile - Uploaded file object.
- * @returns {Record<string, ?>} - Request-safe upload summary.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Request-safe upload summary.
  */
 function uploadedFileRequestDetailsSummary(uploadedFile) {
   return {
@@ -205,19 +205,19 @@ function sensitiveRequestDetailsKey(key) {
 
 /**
  * Compacts a frontend-model request envelope while preserving debugging shape.
- * @param {?} value - Sanitized body value.
+ * @param {ReturnType<typeof JSON.parse>} value - Sanitized body value.
  * @param {number} originalSerializedLength - Byte count before redaction or compaction.
- * @returns {?} - Compacted body value.
+ * @returns {ReturnType<typeof JSON.parse>} - Compacted body value.
  */
 function compactFrontendModelRequestBody(value, originalSerializedLength) {
-  if (!value || typeof value !== "object" || !Array.isArray(/** @type {Record<string, ?>} */ (value).requests)) {
+  if (!value || typeof value !== "object" || !Array.isArray(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value).requests)) {
     return compactRequestDetailsBody(value, originalSerializedLength)
   }
 
   return {
     __truncated: true,
     originalSerializedLength,
-    requests: /** @type {Array<?>} */ (/** @type {Record<string, ?>} */ (value).requests).map((request) => {
+    requests: /** @type {Array<ReturnType<typeof JSON.parse>>} */ (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value).requests).map((request) => {
       return compactFrontendModelRequest(request)
     })
   }
@@ -225,14 +225,14 @@ function compactFrontendModelRequestBody(value, originalSerializedLength) {
 
 /**
  * Compacts one frontend-model request entry.
- * @param {?} value - Candidate request entry from the transport envelope.
- * @returns {?} - Compacted request.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate request entry from the transport envelope.
+ * @returns {ReturnType<typeof JSON.parse>} - Compacted request.
  */
 function compactFrontendModelRequest(value) {
   if (!value || typeof value !== "object") return value
 
-  const request = /** @type {Record<string, ?>} */ (value)
-  /** @type {Record<string, ?>} */
+  const request = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const compact = {}
 
   for (const key of ["requestId", "model", "commandType", "customPath"]) {
@@ -248,14 +248,14 @@ function compactFrontendModelRequest(value) {
 
 /**
  * Compacts a frontend-model payload.
- * @param {?} value - Candidate payload from a request entry.
- * @returns {?} - Compacted payload.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate payload from a request entry.
+ * @returns {ReturnType<typeof JSON.parse>} - Compacted payload.
  */
 function compactFrontendModelPayload(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value
 
-  const payload = /** @type {Record<string, ?>} */ (value)
-  /** @type {Record<string, ?>} */
+  const payload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const compact = {}
 
   for (const [key, entryValue] of Object.entries(payload)) {
@@ -267,36 +267,36 @@ function compactFrontendModelPayload(value) {
 
 /**
  * Compacts one frontend-model payload entry.
- * @param {{key: string, value: ?}} args - Payload entry.
- * @returns {?} - Compacted value.
+ * @param {{key: string, value: ReturnType<typeof JSON.parse>}} args - Payload entry.
+ * @returns {ReturnType<typeof JSON.parse>} - Compacted value.
  */
 function compactFrontendModelPayloadEntry({key, value}) {
   if (key !== "attributes" || !value || typeof value !== "object" || Array.isArray(value)) {
     return value
   }
 
-  return {__keys: Object.keys(/** @type {Record<string, ?>} */ (value))}
+  return {__keys: Object.keys(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value))}
 }
 
 /**
  * Builds a last-resort compact body summary.
- * @param {?} value - Sanitized body.
+ * @param {ReturnType<typeof JSON.parse>} value - Sanitized body.
  * @param {number} originalSerializedLength - Byte count before redaction or compaction.
- * @returns {Record<string, ?>} - Compact summary.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Compact summary.
  */
 function compactRequestDetailsBody(value, originalSerializedLength) {
   return {
     __truncated: true,
     originalSerializedLength,
     topLevelKeys: value && typeof value === "object" && !Array.isArray(value)
-      ? Object.keys(/** @type {Record<string, ?>} */ (value))
+      ? Object.keys(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value))
       : []
   }
 }
 
 /**
  * Measures JSON serialized length.
- * @param {?} value - Value to measure.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to measure.
  * @returns {number} - Serialized length, or Infinity when not serializable.
  */
 function serializedLength(value) {

@@ -3,7 +3,7 @@
 /**
  * SequenceFormatter type. Receives the synchronously-allocated numeric value and
  * returns the formatted value (optionally asynchronously).
- * @typedef {(args: {value: number}) => (? | Promise<?>)} SequenceFormatter
+ * @typedef {(args: {value: number}) => (ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>)} SequenceFormatter
  */
 
 /**
@@ -54,7 +54,7 @@ export default class Sequence {
    * Advances the sequence and returns the formatted value. The numeric value is
    * consumed synchronously before awaiting the formatter, so a rejected formatter
    * still advances the counter.
-   * @returns {Promise<?>} - The formatted value.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - The formatted value.
    */
   async next() {
     const value = this._allocate()

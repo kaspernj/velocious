@@ -51,7 +51,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     const args = this.getArgs()
     /**
      * Connect args.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const connectArgs = {}
     const forward = ["database", "host", "password"]
 
@@ -72,7 +72,7 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
-   * @returns {Promise<Record<string, ?>[]>} - Query result rows.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Query result rows.
    */
   async _queryActual(sql) {
     return await this._queryMutex.sync(() => {

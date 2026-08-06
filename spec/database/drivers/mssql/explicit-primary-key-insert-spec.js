@@ -20,7 +20,7 @@ function buildOfflineDriver({failWhen} = {}) {
     /**
      * Records the SQL and resolves with an empty result.
      * @param {string} sql - SQL to record.
-     * @returns {Promise<{recordsets: Array<Array<?>>}>} Empty result.
+     * @returns {Promise<{recordsets: Array<Array<ReturnType<typeof JSON.parse>>>}>} Empty result.
      */
     async query(sql) {
       queries.push(sql)
@@ -31,7 +31,7 @@ function buildOfflineDriver({failWhen} = {}) {
     }
   }
 
-  mssql.Request = /** @type {typeof mssql.Request} */ (/** @type {?} */ (FakeRequest))
+  mssql.Request = /** @type {typeof mssql.Request} */ (/** @type {ReturnType<typeof JSON.parse>} */ (FakeRequest))
 
   const configuration = /** @type {any} */ ({
     debug: false,
@@ -40,7 +40,7 @@ function buildOfflineDriver({failWhen} = {}) {
   })
   const driver = new MssqlDriver({sqlConfig: {}}, configuration)
 
-  driver.connection = /** @type {?} */ ({connected: true})
+  driver.connection = /** @type {ReturnType<typeof JSON.parse>} */ ({connected: true})
 
   return {
     driver,

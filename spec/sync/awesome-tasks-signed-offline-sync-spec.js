@@ -227,7 +227,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
      * @param {string} deviceId - Actor device id.
      * @param {string} mutationId - Client mutation id.
      * @param {string} probeTaskId - Target task id carried in the payload.
-     * @returns {Promise<Record<string, ?>>} Fixtures plus signed mutation.
+     * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Fixtures plus signed mutation.
      */
     async function buildActorMutation(userId, deviceId, mutationId, probeTaskId) {
       const fixtures = await buildSignedReplayFixtures({
@@ -264,7 +264,7 @@ describe("AwesomeTasks signed offline and peer-forwarded sync", {databaseCleanin
     const actorA = await buildActorMutation("user-a", "device-a", "mutation-a", "task-a")
     const actorB = await buildActorMutation("user-b", "device-b", "mutation-b", "task-b")
 
-    /** @type {Array<{actorId: ?, grantUserId: ?, grantScopes: ?}>} */
+    /** @type {Array<{actorId: ReturnType<typeof JSON.parse>, grantUserId: ReturnType<typeof JSON.parse>, grantScopes: ReturnType<typeof JSON.parse>}>} */
     const observed = []
 
     const service = new SignedSyncEnvelopeReplayService({

@@ -89,8 +89,8 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   /**
    * Runs with connection.
    * @template T
-   * @param {import("./base.js").ConnectionCheckoutOptions | function(import("../drivers/base.js").default) : Promise<T>} optionsOrCallback - Checkout options or callback function.
-   * @param {function(import("../drivers/base.js").default) : Promise<T>} [callback] - Callback function.
+   * @param {import("./base.js").ConnectionCheckoutOptions | ((arg: import("../drivers/base.js").default) => Promise<T>)} optionsOrCallback - Checkout options or callback function.
+   * @param {(arg: import("../drivers/base.js").default) => Promise<T>} [callback] - Callback function.
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnection(optionsOrCallback, callback) {

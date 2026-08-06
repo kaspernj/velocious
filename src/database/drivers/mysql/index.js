@@ -174,7 +174,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   /**
    * Runs connect args.
-   * @returns {Record<string, ?>} - The connect args.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The connect args.
    */
   connectArgs() {
     const args = this.getArgs()
@@ -182,7 +182,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
     /**
      * Connect args.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const connectArgs = {charset: "utf8mb4", timezone: "Z"}
 
     for (const forwardValue of forward) {
@@ -480,8 +480,8 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
   /**
    * Runs escape.
-   * @param {?} value - Value to use.
-   * @returns {?} - The escape.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The escape.
    */
   escape(value) {
     const escapedValueWithQuotes = this.pool

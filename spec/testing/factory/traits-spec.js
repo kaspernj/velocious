@@ -3,7 +3,7 @@ import {describe, expect, it} from "../../../src/testing/test.js"
 
 class ModelDouble {
   /**
-   * @param {Record<string, ?>} attributes - Assigned attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Assigned attributes.
    */
   constructor(attributes = {}) {
     Object.assign(this, attributes)

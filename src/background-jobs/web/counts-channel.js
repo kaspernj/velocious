@@ -55,7 +55,7 @@ export default class BackgroundJobCountsChannel extends VelociousWebsocketChanne
   matches(broadcastParams) {
     if (!broadcastParams || typeof broadcastParams !== "object" || Array.isArray(broadcastParams)) return false
 
-    return String(/** @type {Record<string, ?>} */ (broadcastParams).databaseIdentifier) === this.databaseIdentifier
+    return String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (broadcastParams).databaseIdentifier) === this.databaseIdentifier
   }
 
   /**

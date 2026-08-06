@@ -63,7 +63,7 @@ export default class Dummy {
   }
 
   /**
-   * @param {function(): Promise<any>} callback - Callback function.
+   * @param {() => Promise<any>} callback - Callback function.
    * @param {object} [options] - Options.
    * @param {boolean} [options.fresh] - Tear down any existing dummy and start a new one.
    * @returns {Promise<void>} - Resolves when complete.
@@ -82,7 +82,7 @@ export default class Dummy {
   }
 
   /**
-   * @param {function(): Promise<void>} callback - Callback function.
+   * @param {() => Promise<void>} callback - Callback function.
    * @param {object} [options] - Options.
    * @param {boolean} [options.fresh] - Force a full stop + restart before running.
    * @returns {Promise<void>} - Resolves when complete.

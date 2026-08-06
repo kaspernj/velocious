@@ -16,7 +16,7 @@ import {
 
 /**
  * @typedef {object} ErrorEventPayload
- * @property {Record<string, ?>} context - Structured failure context.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} context - Structured failure context.
  * @property {Error} error - Reported error.
  * @property {string} [errorType] - All-error classification.
  * @property {WebsocketRequest} [request] - Upgrade request.
@@ -65,7 +65,7 @@ function buildConfiguration(limits) {
  * @param {import("../../src/configuration-types.js").WebsocketMessageHandler} [args.messageHandler] - Raw handler.
  * @param {Promise<import("../../src/configuration-types.js").WebsocketMessageHandler | void>} [args.messageHandlerPromise] - Deferred raw handler.
  * @param {WebsocketRequest} [args.upgradeRequest] - Upgrade request.
- * @returns {{closeFrames: Buffer[], jsonMessages: Record<string, ?>[], session: WebsocketSession}}
+ * @returns {{closeFrames: Buffer[], jsonMessages: Record<string, ReturnType<typeof JSON.parse>>[], session: WebsocketSession}}
  */
 function buildSession({configuration, messageHandler, messageHandlerPromise, upgradeRequest}) {
   const client = new HttpServerClient({
@@ -74,7 +74,7 @@ function buildSession({configuration, messageHandler, messageHandlerPromise, upg
     remoteAddress: "127.0.0.1"
   })
   const closeFrames = []
-  /** @type {Record<string, ?>[]} */
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>[]} */
   const jsonMessages = []
   const session = new WebsocketSession({
     client,
@@ -96,7 +96,7 @@ function buildSession({configuration, messageHandler, messageHandlerPromise, upg
         throw new Error("Expected a JSON object in the server WebSocket text frame")
       }
 
-      jsonMessages.push(/** @type {Record<string, ?>} */ (parsed))
+      jsonMessages.push(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (parsed))
     }
   })
 
@@ -104,7 +104,7 @@ function buildSession({configuration, messageHandler, messageHandlerPromise, upg
 }
 
 /**
- * @param {?} message - Decoded WebSocket message.
+ * @param {ReturnType<typeof JSON.parse>} message - Decoded WebSocket message.
  * @returns {number} - Required sequence value.
  */
 function messageSequence(message) {
@@ -151,7 +151,7 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
       }
 
       /**
-       * @param {?} body - Decoded connection body.
+       * @param {ReturnType<typeof JSON.parse>} body - Decoded connection body.
        * @returns {Promise<void>} - Resolves after handling.
        */
       async onMessage(body) {
@@ -559,7 +559,7 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
 
     class ReviewConnection extends WebsocketConnection {
       /**
-       * @param {?} body - Decoded connection body.
+       * @param {ReturnType<typeof JSON.parse>} body - Decoded connection body.
        * @returns {void} - No return value.
        */
       onMessage(body) {

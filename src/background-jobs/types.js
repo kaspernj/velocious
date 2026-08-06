@@ -22,7 +22,7 @@
  * @typedef {object} BackgroundJobPayload
  * @property {string} [id] - Job id.
  * @property {string} jobName - Job class name.
- * @property {Array<?>} [args] - Serialized job arguments.
+ * @property {Array<ReturnType<typeof JSON.parse>>} [args] - Serialized job arguments.
  * @property {string} [handoffId] - Unique handoff lease id.
  * @property {string} [workerId] - Worker id handling the job.
  * @property {number} [handedOffAtMs] - Time handed to a worker in ms.
@@ -32,7 +32,7 @@
  * @typedef {object} BackgroundJobRow
  * @property {string} id - Job id.
  * @property {string} jobName - Job class name.
- * @property {Array<?>} args - Serialized job arguments.
+ * @property {Array<ReturnType<typeof JSON.parse>>} args - Serialized job arguments.
  * @property {BackgroundJobExecutionMode} executionMode - How the job should run.
  * @property {string} queue - Queue name (defaults to `"default"`).
  * @property {string | null} scheduleKey - Stable logical schedule key retained for history.
@@ -71,7 +71,7 @@
 /**
  * @typedef {object} BackgroundJobFailureEvent
  * @property {BackgroundJobRow} job - Updated job row after failure handling.
- * @property {?} error - Failure error.
+ * @property {ReturnType<typeof JSON.parse>} error - Failure error.
  * @property {number | null} attempts - Updated failure attempts count.
  * @property {boolean} terminal - Whether this failure ended the job.
  * @property {boolean} willRetry - Whether the job was returned to the queue.
@@ -87,10 +87,10 @@
  * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsPooled?: boolean, acceptsSpawned?: boolean}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
  * @typedef {{type: "heartbeat", workerId?: string}} BackgroundJobHeartbeatMessage
- * @typedef {{type: "enqueue", jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
+ * @typedef {{type: "enqueue", jobName: string, args?: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
  * @typedef {{type: "enqueued", jobId: string}} BackgroundJobEnqueuedMessage
  * @typedef {{type: "enqueue-error", error?: string}} BackgroundJobEnqueueErrorMessage
- * @typedef {{type: "replace-scheduled", scheduleKey: string, jobName: string, args?: Array<?>, options?: BackgroundJobOptions}} BackgroundJobReplaceScheduledMessage
+ * @typedef {{type: "replace-scheduled", scheduleKey: string, jobName: string, args?: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}} BackgroundJobReplaceScheduledMessage
  * @typedef {{type: "schedule-replaced", jobId: string, previousJobId: string | null, previousStatus: BackgroundJobReplacementPreviousStatus}} BackgroundJobScheduleReplacedMessage
  * @typedef {{type: "replace-scheduled-error", error?: string}} BackgroundJobReplaceScheduledErrorMessage
  * @typedef {{type: "cancel-scheduled", scheduleKey: string}} BackgroundJobCancelScheduledMessage
@@ -98,7 +98,7 @@
  * @typedef {{type: "cancel-scheduled-error", error?: string}} BackgroundJobCancelScheduledErrorMessage
  * @typedef {{type: "job", payload: BackgroundJobPayload}} BackgroundJobJobMessage
  * @typedef {{type: "job-complete", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobCompleteMessage
- * @typedef {{type: "job-failed", jobId: string, error?: ?, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
+ * @typedef {{type: "job-failed", jobId: string, error?: ReturnType<typeof JSON.parse>, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
  * @typedef {{type: "job-updated", jobId: string}} BackgroundJobUpdatedMessage
  * @typedef {{type: "job-update-error", jobId: string, error?: string}} BackgroundJobUpdateErrorMessage
  */

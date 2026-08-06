@@ -24,8 +24,8 @@ function summarizeRequestData(data) {
 
 /**
  * Runs bad request details.
- * @param {Error & {velociousContext?: Record<string, ?>}} error - Error instance.
- * @returns {Record<string, ?>} - Safe bad-request details for logs.
+ * @param {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} error - Error instance.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Safe bad-request details for logs.
  */
 function badRequestDetails(error) {
   return {
@@ -121,7 +121,7 @@ export default class VeoliciousHttpServerClient {
    * @returns {void} - No return value.
    */
   handleBadRequest(error) {
-    this.logger.warn(() => ["Failed to parse HTTP request", badRequestDetails(/** @type {Error & {velociousContext?: Record<string, ?>}} */ (error))])
+    this.logger.warn(() => ["Failed to parse HTTP request", badRequestDetails(/** @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */ (error))])
 
     if (this.currentRequest && "getRequestParser" in this.currentRequest) {
       const httpRequest = /** @type {import("./request.js").default} */ (this.currentRequest)
@@ -288,7 +288,7 @@ export default class VeoliciousHttpServerClient {
         request: this.currentRequest
       })
 
-      const resolvedThenable = /** @type {{then?: (...args: Array<?>) => ?}} */ (resolvedHandler)
+      const resolvedThenable = /** @type {{then?: (...args: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>}} */ (resolvedHandler)
 
       if (resolvedThenable?.then) {
         messageHandlerPromise = /** @type {Promise<import("../../configuration-types.js").WebsocketMessageHandler | void>} */ (resolvedHandler)

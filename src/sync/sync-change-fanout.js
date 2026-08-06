@@ -5,11 +5,11 @@
  * replay service resolves it with replay args ({actor, applyResult, mutation,
  * ...}) and the sync publisher with publish args
  * ({@link import("./sync-publisher-types.js").SyncPublishBroadcastArgs}).
- * @template [Args=Record<string, ?>]
+ * @template [Args=Record<string, ReturnType<typeof JSON.parse>>]
  * @typedef {object} DeclaredBroadcast
  * @property {string | ((args: Args) => string)} channel - Channel name or resolver.
- * @property {(args: Args) => Record<string, ?>} broadcastParams - Channel routing params.
- * @property {(args: Args) => ?} body - Broadcast body.
+ * @property {(args: Args) => Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Channel routing params.
+ * @property {(args: Args) => ReturnType<typeof JSON.parse>} body - Broadcast body.
  * @property {(args: Args) => boolean} [when] - Optional gate; skipped when it returns false.
  */
 
@@ -21,8 +21,8 @@
  * (creates allocate their sequence through the model's own hooks). Shared by
  * the replay service's model-backed persistence and the server sync
  * publisher.
- * @param {{attributes: Record<string, ?>, existingSync: ?, syncModel: ?}} args - Row attributes, existing row for the resource identity, and the sync model.
- * @returns {Promise<?>} Upserted sync row.
+ * @param {{attributes: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, syncModel: ReturnType<typeof JSON.parse>}} args - Row attributes, existing row for the resource identity, and the sync model.
+ * @returns {Promise<ReturnType<typeof JSON.parse>>} Upserted sync row.
  */
 export async function upsertSyncRow({attributes, existingSync, syncModel}) {
   if (existingSync) {
@@ -42,7 +42,7 @@ export async function upsertSyncRow({attributes, existingSync, syncModel}) {
  * from the caller's args. Shared by the replay service's default
  * afterReplayMutation and the server sync publisher.
  * @template Args
- * @param {{args: Args, broadcaster: (broadcast: {channel: string, params: Record<string, ?>, body: ?}) => Promise<void>, broadcasts: Array<DeclaredBroadcast<Args>>}} deliveryArgs - Broadcast resolver args, broadcaster, and declared broadcasts.
+ * @param {{args: Args, broadcaster: (broadcast: {channel: string, params: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>}) => Promise<void>, broadcasts: Array<DeclaredBroadcast<Args>>}} deliveryArgs - Broadcast resolver args, broadcaster, and declared broadcasts.
  * @returns {Promise<void>}
  */
 export async function deliverDeclaredBroadcasts({args, broadcaster, broadcasts}) {

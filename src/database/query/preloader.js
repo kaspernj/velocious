@@ -94,7 +94,7 @@ export default class VelociousDatabaseQueryPreloader {
     // instead of duplicating it here.
     const query = isQuery
       ? /** @type {import("./model-class-query.js").default} */ (queryOrSpec)
-      : modelClass.preload(/** @type {?} */ (queryOrSpec))
+      : modelClass.preload(/** @type {ReturnType<typeof JSON.parse>} */ (queryOrSpec))
 
     const preloader = new VelociousDatabaseQueryPreloader({
       modelClass,

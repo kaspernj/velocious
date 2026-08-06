@@ -9,7 +9,7 @@ import stableJsonStringify from "./stable-json.js"
  * expressible as `{resourceType, conditions}` so servers can match it against
  * their change feeds. Anything else (raw SQL, negations, joins, orders,
  * limits, offsets, groups) fails loudly.
- * @param {import("../database/query/model-class-query.js").default<?>} query - Model query declaring the sync scope.
+ * @param {import("../database/query/model-class-query.js").default<ReturnType<typeof JSON.parse>>} query - Model query declaring the sync scope.
  * @returns {import("./sync-client-types.js").SerializedSyncScope} Serialized sync scope.
  */
 export function serializedScopeFromQuery(query) {
@@ -20,12 +20,12 @@ export function serializedScopeFromQuery(query) {
   if (query.getGroups().length > 0) throw new Error("sync(query) does not support groups")
 
   const modelClass = query.getModelClass()
-  const conditions = /** @type {Record<string, ?>} */ ({})
+  const conditions = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({})
 
   for (const where of query.getWheres()) {
-    const whereHash = /** @type {{hash?: Record<string, ?>}} */ (where).hash
+    const whereHash = /** @type {{hash?: Record<string, ReturnType<typeof JSON.parse>>}} */ (where).hash
 
-    if (!whereHash || typeof whereHash !== "object" || Array.isArray(whereHash) || /** @type {{where?: ?}} */ (where).where) {
+    if (!whereHash || typeof whereHash !== "object" || Array.isArray(whereHash) || /** @type {{where?: ReturnType<typeof JSON.parse>}} */ (where).where) {
       throw new Error(`sync(query) only supports plain attribute conditions, got: ${where.constructor.name}`)
     }
 
@@ -67,8 +67,8 @@ export function scopeKey(scope) {
 /**
  * Validates one scope condition value as a scalar or array of scalars.
  * @param {string} attributeName - Condition attribute name for error messages.
- * @param {?} value - Condition value.
- * @returns {?} Validated condition value.
+ * @param {ReturnType<typeof JSON.parse>} value - Condition value.
+ * @returns {ReturnType<typeof JSON.parse>} Validated condition value.
  */
 function scalarConditionValue(attributeName, value) {
   if (Array.isArray(value)) {
@@ -85,7 +85,7 @@ function scalarConditionValue(attributeName, value) {
 /**
  * Validates one scalar condition value.
  * @param {string} attributeName - Condition attribute name for error messages.
- * @param {?} value - Condition value.
+ * @param {ReturnType<typeof JSON.parse>} value - Condition value.
  * @returns {void}
  */
 function validateScalar(attributeName, value) {

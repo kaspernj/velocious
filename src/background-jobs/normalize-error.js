@@ -2,7 +2,7 @@
 
 /**
  * Runs normalize background job error.
- * @param {?} error - Error input.
+ * @param {ReturnType<typeof JSON.parse>} error - Error input.
  * @returns {string} - Normalized error string.
  */
 export default function normalizeBackgroundJobError(error) {
@@ -14,7 +14,7 @@ export default function normalizeBackgroundJobError(error) {
 
 /**
  * Runs stringify unknown error.
- * @param {?} error - Error input.
+ * @param {ReturnType<typeof JSON.parse>} error - Error input.
  * @returns {string} - Stringified error.
  */
 function stringifyUnknownError(error) {

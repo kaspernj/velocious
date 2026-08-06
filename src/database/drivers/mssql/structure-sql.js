@@ -71,7 +71,7 @@ export default class VelociousDatabaseDriversMssqlStructureSql {
 
   /**
    * Runs column definition.
-   * @param {Record<string, ?>} column - Column.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} column - Column.
    * @returns {string | null} - The column definition.
    */
   _columnDefinition(column) {

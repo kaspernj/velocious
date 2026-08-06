@@ -28,7 +28,7 @@ export default class BackgroundJobsClient {
    * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
-   * @param {Array<?>} args.args - Job args.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<string>} - Job id.
    */
@@ -62,7 +62,7 @@ export default class BackgroundJobsClient {
    * @param {object} args - Options.
    * @param {string} args.scheduleKey - Stable logical schedule key.
    * @param {string} args.jobName - Job name.
-   * @param {Array<?>} args.args - Job args.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
    * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
    */

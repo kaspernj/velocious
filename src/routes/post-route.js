@@ -6,7 +6,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 /**
  * Runs assign action and controller.
- * @param {Record<string, ?>} params - Route params object.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Route params object.
  * @param {string} name - Route name.
  * @returns {void} - No return value.
  */
@@ -48,7 +48,7 @@ class VelociousRoutePostRoute extends BaseRoute {
   /**
    * Runs match with path.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.params - Parameters object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Parameters object.
    * @param {string} args.path - Path.
    * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
    * @returns {{restPath: string} | undefined} - REST path metadata for this route.

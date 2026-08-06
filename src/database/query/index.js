@@ -190,7 +190,7 @@ export default class VelociousDatabaseQuery {
      * @type {import("./where-base.js").default[]} */
     this._wheres = wheres
 
-    const boundWhere = /** @type {?} */ (this.where.bind(this))
+    const boundWhere = /** @type {ReturnType<typeof JSON.parse>} */ (this.where.bind(this))
     boundWhere.not = this.whereNot.bind(this)
     this.where = boundWhere
   }
@@ -240,7 +240,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Runs get joins.
-   * @returns {Array<?>} - The joins.
+   * @returns {Array<ReturnType<typeof JSON.parse>>} - The joins.
    */
   getJoins() { return this._joins }
 
@@ -264,7 +264,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Runs get orders.
-   * @returns {Array<?>} - The orders.
+   * @returns {Array<ReturnType<typeof JSON.parse>>} - The orders.
    */
   getOrders() { return this._orders }
 

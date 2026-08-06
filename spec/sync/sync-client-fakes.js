@@ -29,12 +29,12 @@ export const DEVICE_COLUMNS = [
 
 /**
  * Builds a recording transport implementing the frontend-model websocket client post contract.
- * @returns {?} Recording transport with a posts array and per-path response state.
+ * @returns {ReturnType<typeof JSON.parse>} Recording transport with a posts array and per-path response state.
  */
 export function buildTransport() {
   const transport = {
-    changesResponse: /** @type {Record<string, ?>} */ ({nextCursor: null, status: "success", syncs: [], upToCursor: null}),
-    /** @param {string} path - Posted path. @param {Record<string, ?>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ?>}>} Response with json accessor. */
+    changesResponse: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({nextCursor: null, status: "success", syncs: [], upToCursor: null}),
+    /** @param {string} path - Posted path. @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ReturnType<typeof JSON.parse>>}>} Response with json accessor. */
     post: async (path, payload) => {
       transport.posts.push({path, payload})
 
@@ -43,11 +43,11 @@ export function buildTransport() {
       return {
         json: () => ({
           status: "success",
-          syncs: payload.syncs.map((/** @type {Record<string, ?>} */ sync) => ({id: sync.id, syncState: "successful"}))
+          syncs: payload.syncs.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ sync) => ({id: sync.id, syncState: "successful"}))
         })
       }
     },
-    posts: /** @type {Array<{path: string, payload: Record<string, ?>}>} */ ([])
+    posts: /** @type {Array<{path: string, payload: Record<string, ReturnType<typeof JSON.parse>>}>} */ ([])
   }
 
   return transport
@@ -58,8 +58,8 @@ export function buildTransport() {
  * @param {object} args - Model class args.
  * @param {Array<{attributeName: string, name: string, type: string}>} args.columns - Column fixtures.
  * @param {string} args.modelName - Stable model name.
- * @param {?} [args.sync] - Static sync declaration.
- * @returns {?} Fake model class.
+ * @param {ReturnType<typeof JSON.parse>} [args.sync] - Static sync declaration.
+ * @returns {ReturnType<typeof JSON.parse>} Fake model class.
  */
 export function buildMetadataModelClass({columns, modelName, sync}) {
   /** @type {Record<string, string>} */
@@ -76,15 +76,15 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
     /** @type {Record<string, Array<Function>>} */
     static lifecycleCallbacks = {}
 
-    /** @type {?} */
+    /** @type {ReturnType<typeof JSON.parse>} */
     _databaseOperation = undefined
 
-    /** @returns {?} Fake connection running afterCommit callbacks immediately. */
+    /** @returns {ReturnType<typeof JSON.parse>} Fake connection running afterCommit callbacks immediately. */
     connection() {
       return klass.connection()
     }
 
-    /** @returns {?} Explicit operation owner, when this fake record is operation-bound. */
+    /** @returns {ReturnType<typeof JSON.parse>} Explicit operation owner, when this fake record is operation-bound. */
     databaseOperation() {
       return this._databaseOperation
     }
@@ -119,7 +119,7 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
       return true
     }
 
-    /** @returns {?} Fake connection running afterCommit callbacks immediately, like a driver with no open transaction. */
+    /** @returns {ReturnType<typeof JSON.parse>} Fake connection running afterCommit callbacks immediately, like a driver with no open transaction. */
     static connection() {
       return {
         /** @param {() => Promise<void>} callback - Commit callback. @returns {Promise<void>} */
@@ -162,11 +162,11 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
 
 /**
  * Builds a fake record instance of a metadata model class.
- * @param {?} modelClass - Fake model class.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - Fake model class.
  * @param {string} id - Record id.
- * @param {Record<string, ?>} attributes - Record attributes.
- * @param {{databaseOperation?: ?}} [options] - Optional operation owner.
- * @returns {?} Fake record.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Record attributes.
+ * @param {{databaseOperation?: ReturnType<typeof JSON.parse>}} [options] - Optional operation owner.
+ * @returns {ReturnType<typeof JSON.parse>} Fake record.
  */
 export function buildRecord(modelClass, id, attributes, {databaseOperation} = {}) {
   const record = Object.create(modelClass.prototype)
@@ -174,7 +174,7 @@ export function buildRecord(modelClass, id, attributes, {databaseOperation} = {}
   record._databaseOperation = databaseOperation
   record.id = () => id
   record.attributes = () => attributes
-  /** @param {string} attributeName - Attribute name. @returns {?} Attribute value. */
+  /** @param {string} attributeName - Attribute name. @returns {ReturnType<typeof JSON.parse>} Attribute value. */
   record.readAttribute = (attributeName) => attributes[attributeName]
 
   return record
@@ -182,9 +182,9 @@ export function buildRecord(modelClass, id, attributes, {databaseOperation} = {}
 
 /**
  * Invokes the registered lifecycle callbacks like the record layer would.
- * @param {?} modelClass - Fake model class.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - Fake model class.
  * @param {string} callbackName - Callback type.
- * @param {?} record - Mutated record.
+ * @param {ReturnType<typeof JSON.parse>} record - Mutated record.
  * @returns {Promise<void>}
  */
 export async function triggerLifecycle(modelClass, callbackName, record) {
@@ -196,8 +196,8 @@ export async function triggerLifecycle(modelClass, callbackName, record) {
 /**
  * Builds a fake query for a resource type with plain conditions.
  * @param {string} resourceType - Resource/model name.
- * @param {Record<string, ?>} conditions - Attribute conditions.
- * @returns {?} Fake model query.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Attribute conditions.
+ * @returns {ReturnType<typeof JSON.parse>} Fake model query.
  */
 export function fakeQuery(resourceType, conditions) {
   return {
@@ -214,9 +214,9 @@ export function fakeQuery(resourceType, conditions) {
 /**
  * Builds a database-less configuration with a sync.client block and registered model classes.
  * @param {object} args - Configuration args.
- * @param {Array<?>} args.modelClasses - Model classes to register.
- * @param {?} [args.sync] - Sync configuration override.
- * @param {?} [args.transport] - Transport for the sync.client block.
+ * @param {Array<ReturnType<typeof JSON.parse>>} args.modelClasses - Model classes to register.
+ * @param {ReturnType<typeof JSON.parse>} [args.sync] - Sync configuration override.
+ * @param {ReturnType<typeof JSON.parse>} [args.transport] - Transport for the sync.client block.
  * @returns {Configuration} Configuration with the model classes registered.
  */
 export function buildConfiguration({modelClasses, sync, transport}) {

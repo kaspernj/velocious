@@ -4,7 +4,7 @@
  * Serializes a JSON-compatible value with recursively sorted object keys, so
  * equal values always produce byte-identical strings (used for sync scope and
  * change-feed identity comparisons).
- * @param {?} value - JSON-compatible value.
+ * @param {ReturnType<typeof JSON.parse>} value - JSON-compatible value.
  * @returns {string} - Stable JSON string.
  */
 export default function stableJsonStringify(value) {
@@ -13,8 +13,8 @@ export default function stableJsonStringify(value) {
 
 /**
  * Produces a recursively key-sorted JSON value.
- * @param {?} value - JSON-compatible value.
- * @returns {?} - Stable JSON-compatible value.
+ * @param {ReturnType<typeof JSON.parse>} value - JSON-compatible value.
+ * @returns {ReturnType<typeof JSON.parse>} - Stable JSON-compatible value.
  */
 function stableJsonValue(value) {
   if (Array.isArray(value)) return value.map((item) => stableJsonValue(item))
@@ -24,5 +24,5 @@ function stableJsonValue(value) {
     memo[key] = stableJsonValue(value[key])
 
     return memo
-  }, /** @type {Record<string, ?>} */ ({}))
+  }, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({}))
 }

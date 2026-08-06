@@ -38,7 +38,7 @@ class TaskBoardSyncResource extends FrontendModelBaseResource {
    * mutated by `.where(...)`, so each independent query starts from a fresh
    * operation-bound scope.
    * @param {import("../../../../src/database/operation.js").default} operation - Database operation.
-   * @returns {?} Operation-bound TaskBoardCard query.
+   * @returns {ReturnType<typeof JSON.parse>} Operation-bound TaskBoardCard query.
    */
   cardQuery(operation) {
     return operation.forModel(TaskBoardCard)

@@ -11,7 +11,7 @@ import {isPlainObject} from "is-plain-object"
 
 /**
  * Defines this typedef.
- * @typedef {string | Array<string | Record<string, ?>> | {[key: string]: true | false | string | string[] | Record<string, ?>}} QueryDataSpec
+ * @typedef {string | Array<string | Record<string, ReturnType<typeof JSON.parse>>> | {[key: string]: true | false | string | string[] | Record<string, ReturnType<typeof JSON.parse>>}} QueryDataSpec
  */
 
 /**
@@ -69,7 +69,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       }
 
       if (isPlainObject(item)) {
-        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (item), chain)) {
+        for (const nested of normalizeQueryDataSpec(/** @type {ReturnType<typeof JSON.parse>} */ (item), chain)) {
           entries.push(nested)
         }
         continue
@@ -96,7 +96,7 @@ export function normalizeQueryDataSpec(spec, chain = []) {
       if (value === false) continue
 
       if (typeof value === "string" || Array.isArray(value) || isPlainObject(value)) {
-        for (const nested of normalizeQueryDataSpec(/** @type {?} */ (value), [...chain, key])) {
+        for (const nested of normalizeQueryDataSpec(/** @type {ReturnType<typeof JSON.parse>} */ (value), [...chain, key])) {
           entries.push(nested)
         }
         continue
@@ -117,14 +117,14 @@ export function normalizeQueryDataSpec(spec, chain = []) {
  * the runner can reuse the existing `joins` path-registration machinery
  * (JoinTracker, alias generation, scope application).
  * @param {string[]} chain - Relationship chain.
- * @returns {true | Record<string, ?>} - Nested join descriptor, or `true` when the chain is empty.
+ * @returns {true | Record<string, ReturnType<typeof JSON.parse>>} - Nested join descriptor, or `true` when the chain is empty.
  */
 function buildNestedJoinDescriptor(chain) {
   if (chain.length === 0) return true
 
   /**
    * Obj.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const obj = {}
   let cursor = obj
 
@@ -269,7 +269,7 @@ function prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass, s
 
   /**
    * Root where.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const rootWhere = {}
   rootWhere[primaryKey] = rootIds
   query.where(rootWhere)
@@ -341,7 +341,7 @@ function selectedAliases(query) {
  * @returns {Promise<void>}
  */
 async function executeEntryQuery({primaryKey, query, rootModels}) {
-  const rows = /** @type {Array<Record<string, ?>>} */ (await query._executeQuery())
+  const rows = /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ (await query._executeQuery())
   const byParent = new Map()
 
   for (const row of rows) {

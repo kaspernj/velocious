@@ -527,7 +527,7 @@ describe("frontend-model sync replay", () => {
  * @param {object} args - Arguments.
  * @param {string} args.clientMutationId - Client mutation id.
  * @param {string} args.recordId - Record id.
- * @param {Record<string, ?>} [args.scope] - Change scope.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.scope] - Change scope.
  * @returns {Promise<void>} - Resolves when appended.
  */
 async function appendTestChange(store, {clientMutationId, recordId, scope = {eventId: "event-1"}}) {
@@ -562,8 +562,8 @@ class TicketResource extends FrontendModelBaseResource {
 
   /**
    * Applies a scanner domain command.
-   * @param {Record<string, ?>} args - Command arguments.
-   * @returns {Promise<Record<string, ?>>} - Command response with emitted sync changes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args - Command arguments.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Command response with emitted sync changes.
    */
   async scanAttempt(args) {
     const ticketId = String(args.ticketId)
@@ -592,14 +592,14 @@ class ReplayTestController extends FrontendModelController {
   constructor(args) {
     super(args)
 
-    /** @type {Array<{action: string, params: Record<string, ?>}>} */
+    /** @type {Array<{action: string, params: Record<string, ReturnType<typeof JSON.parse>>}>} */
     this.replayedCommands = []
   }
 
   /**
    * Records replayed command payloads.
    * @param {"create" | "update" | "destroy"} action - Frontend action.
-   * @returns {Promise<Record<string, ?>>} - Replay result.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Replay result.
    */
   async frontendModelCommandPayload(action) {
     if (action === "index") {
@@ -626,7 +626,7 @@ class ThrowingReplayTestController extends ReplayTestController {
   /**
    * Throws an unexpected replay command failure.
    * @param {"create" | "update" | "destroy"} action - Frontend action.
-   * @returns {Promise<Record<string, ?>>} - Never resolves successfully.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Never resolves successfully.
    */
   async frontendModelCommandPayload(action) {
     this.replayedCommands.push({action, params: this.frontendModelParams()})

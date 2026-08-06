@@ -5,7 +5,7 @@ import Controller from "../controller.js"
 
 /**
  * Runs valid asset file name.
- * @param {?} assetFileName - Asset file name.
+ * @param {ReturnType<typeof JSON.parse>} assetFileName - Asset file name.
  * @returns {boolean} - Whether asset file name is safe.
  */
 function validAssetFileName(assetFileName) {

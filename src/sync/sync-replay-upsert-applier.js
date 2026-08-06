@@ -7,7 +7,7 @@ import SyncApiClient from "./sync-api-client.js"
 /**
  * Coercers for the declarative sync field types. All are present-key based:
  * a field is only applied when its key exists in the mutation data.
- * @type {Record<string, (value: ?, label: string) => ?>}
+ * @type {Record<string, (value: ReturnType<typeof JSON.parse>, label: string) => ReturnType<typeof JSON.parse>>}
  */
 const FIELD_TYPES = {
   booleanOrNull: (value, label) => SyncApiClient.optionalBooleanSyncValue(value, label),
@@ -20,7 +20,7 @@ const FIELD_TYPES = {
 
 /**
  * Parses an optional date value, failing loudly on invalid input.
- * @param {?} value - Date, parseable string, or epoch number.
+ * @param {ReturnType<typeof JSON.parse>} value - Date, parseable string, or epoch number.
  * @param {string} label - Field label for error messages.
  * @returns {Date | null} Parsed date or null when absent.
  */
@@ -51,13 +51,13 @@ export default class SyncReplayUpsertApplier {
   /**
    * Creates a declarative upsert applier.
    * @param {object} args - Applier configuration.
-   * @param {?} args.modelClass - Model class receiving the mutations.
-   * @param {Record<string, string | {type: string, column?: string} | ((value: ?, label: string) => ?)>} args.fields - Data-key → field-type map: a named type, a {type, column} rename spec, "ignored" for accepted-but-dropped keys, or a custom coercer function.
-   * @param {(args: {data: Record<string, ?>, mutation: ?, context: Record<string, ?>}) => Promise<?>} [args.findRecord] - Custom record resolver. Defaults to findBy({id: mutation.resourceId}).
-   * @param {(args: {mutation: ?, context: Record<string, ?>}) => Promise<?>} [args.findRecordForDelete] - Custom delete resolver. Defaults to findRecord.
+   * @param {ReturnType<typeof JSON.parse>} args.modelClass - Model class receiving the mutations.
+   * @param {Record<string, string | {type: string, column?: string} | ((value: ReturnType<typeof JSON.parse>, label: string) => ReturnType<typeof JSON.parse>)>} args.fields - Data-key → field-type map: a named type, a {type, column} rename spec, "ignored" for accepted-but-dropped keys, or a custom coercer function.
+   * @param {(args: {data: Record<string, ReturnType<typeof JSON.parse>>, mutation: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<ReturnType<typeof JSON.parse>>} [args.findRecord] - Custom record resolver. Defaults to findBy({id: mutation.resourceId}).
+   * @param {(args: {mutation: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<ReturnType<typeof JSON.parse>>} [args.findRecordForDelete] - Custom delete resolver. Defaults to findRecord.
    * @param {"error" | "ignore"} [args.restArgs] - Unknown data-key handling. Defaults to "error".
-   * @param {(args: {mappedAttributes: Record<string, ?>, mutation: ?, context: Record<string, ?>, record: ?}) => Promise<Record<string, ?> | void>} [args.afterApply] - Domain tail; its returned object merges into the apply result.
-   * @param {(args: {mutation: ?, context: Record<string, ?>, record: ?}) => Promise<Record<string, ?>> | Record<string, ?>} [args.serialize] - Snapshot serializer; result lands on applyResult.serializedData.
+   * @param {(args: {mappedAttributes: Record<string, ReturnType<typeof JSON.parse>>, mutation: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, record: ReturnType<typeof JSON.parse>}) => Promise<Record<string, ReturnType<typeof JSON.parse>> | void>} [args.afterApply] - Domain tail; its returned object merges into the apply result.
+   * @param {(args: {mutation: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, record: ReturnType<typeof JSON.parse>}) => Promise<Record<string, ReturnType<typeof JSON.parse>>> | Record<string, ReturnType<typeof JSON.parse>>} [args.serialize] - Snapshot serializer; result lands on applyResult.serializedData.
    */
   constructor({afterApply, fields, findRecord, findRecordForDelete, modelClass, restArgs = "error", serialize}) {
     if (!modelClass) throw new Error("SyncReplayUpsertApplier requires a modelClass")
@@ -87,8 +87,8 @@ export default class SyncReplayUpsertApplier {
 
   /**
    * Applies one normalized replay mutation to the declared model.
-   * @param {{actor: ?, context: Record<string, ?>, existingSync: ?, mutation: ?}} args - Replay apply arguments.
-   * @returns {Promise<Record<string, ?>>} Apply result with the record, created/deleted flags, optional serializedData, and afterApply extras.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: ReturnType<typeof JSON.parse>}} args - Replay apply arguments.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Apply result with the record, created/deleted flags, optional serializedData, and afterApply extras.
    */
   async apply({context, mutation}) {
     if (mutation.syncType === "delete") return await this.applyDelete({context, mutation})
@@ -97,7 +97,7 @@ export default class SyncReplayUpsertApplier {
     const record = this.findRecord
       ? await this.findRecord({context, data: mutation.data, mutation})
       : await this.modelClass.findBy({id: mutation.resourceId})
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const result = {created: false, deleted: false, record: null}
 
     if (record) {
@@ -122,8 +122,8 @@ export default class SyncReplayUpsertApplier {
 
   /**
    * Applies a delete mutation to the declared model.
-   * @param {{context: Record<string, ?>, mutation: ?}} args - Delete arguments.
-   * @returns {Promise<Record<string, ?>>} Apply result with the deleted flag.
+   * @param {{context: Record<string, ReturnType<typeof JSON.parse>>, mutation: ReturnType<typeof JSON.parse>}} args - Delete arguments.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Apply result with the deleted flag.
    */
   async applyDelete({context, mutation}) {
     const resolveRecord = this.findRecordForDelete || this.findRecord
@@ -140,11 +140,11 @@ export default class SyncReplayUpsertApplier {
 
   /**
    * Maps present data keys through the declared field types.
-   * @param {Record<string, ?>} data - Normalized mutation data.
-   * @returns {Record<string, ?>} Coerced attributes keyed by column name.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Normalized mutation data.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Coerced attributes keyed by column name.
    */
   mappedAttributes(data) {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const mappedAttributes = {}
     /** @type {string[]} */
     const unknownKeys = []

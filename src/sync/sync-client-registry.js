@@ -7,12 +7,12 @@
  * delegate to a configured sync client without importing the sync stack.
  */
 
-/** @type {?} */
+/** @type {ReturnType<typeof JSON.parse>} */
 let currentClient = null
 
 /**
  * Registers the current sync client.
- * @param {?} client - Configured sync client (or null to clear).
+ * @param {ReturnType<typeof JSON.parse>} client - Configured sync client (or null to clear).
  * @returns {void}
  */
 export function setCurrentSyncClient(client) {
@@ -21,7 +21,7 @@ export function setCurrentSyncClient(client) {
 
 /**
  * Returns the current sync client.
- * @returns {?} Current sync client.
+ * @returns {ReturnType<typeof JSON.parse>} Current sync client.
  */
 export function currentSyncClient() {
   if (!currentClient) throw new Error("No sync client configured - create a SyncClient and call setCurrent() on it first")

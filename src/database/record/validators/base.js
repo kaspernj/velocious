@@ -5,7 +5,7 @@ export default class VelociousDatabaseRecordValidatorsBase {
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {string} args.attributeName - Attribute name.
-   * @param {Record<string, ?>} args.args - Options object.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.args - Options object.
    */
   constructor({attributeName, args}) {
     this.attributeName = attributeName

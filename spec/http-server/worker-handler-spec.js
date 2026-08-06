@@ -137,7 +137,7 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const serverClient = new ServerClient({clientCount: 100, configuration, socket})
 
     handler.addSocketConnection(serverClient)
-    handler.clients[100].httpClient.websocketSession = /** @type {?} */ ({})
+    handler.clients[100].httpClient.websocketSession = /** @type {ReturnType<typeof JSON.parse>} */ ({})
     handler.clients[100].httpClient.events.emit("output", "HTTP/1.1 101 Switching Protocols\r\n\r\n")
     handler.clients[100].httpClient.events.emit("output", Buffer.from([0x81, 0x00]), {websocketFrame: true})
 
@@ -392,7 +392,7 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const handler = new InProcessHandler({configuration: buildHandlerConfiguration(), workerCount: 0})
     const serverClientEvents = new EventEmitter()
     let socketClosed = false
-    const serverClient = /** @type {import("../../src/http-server/server-client.js").default} */ (/** @type {?} */ ({
+    const serverClient = /** @type {import("../../src/http-server/server-client.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({
       clientCount: 12,
       end: async () => {
         if (socketClosed) return

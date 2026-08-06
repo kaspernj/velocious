@@ -115,7 +115,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { void attributes; throw new Error("Not implemented") }
@@ -145,7 +145,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildReviewProject(attributes) { void attributes; throw new Error("Not implemented") }
@@ -203,7 +203,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
   buildPrimaryInteraction(attributes) { void attributes; throw new Error("Not implemented") }

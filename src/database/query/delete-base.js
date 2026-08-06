@@ -6,7 +6,7 @@ export default class VelociousDatabaseQueryDeleteBase extends QueryBase {
   /**
    * Runs constructor.
    * @param {object} args - Options object.
-   * @param {Record<string, ?>} args.conditions - Conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.conditions - Conditions.
    * @param {import("../drivers/base.js").default} args.driver - Database driver instance.
    * @param {string} args.tableName - Table name.
    */

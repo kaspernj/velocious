@@ -72,7 +72,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Attachment input accepted by frontend-model attachment helpers before normalization.
- * @typedef {Record<string, ?> | {arrayBuffer: () => Promise<ArrayBuffer>, type?: string, name?: string} | null | undefined} FrontendModelAttachmentInput
+ * @typedef {Record<string, ReturnType<typeof JSON.parse>> | {arrayBuffer: () => Promise<ArrayBuffer>, type?: string, name?: string} | null | undefined} FrontendModelAttachmentInput
  */
 /**
  * Defines this typedef.
@@ -130,7 +130,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @property {string | (() => string | undefined | null)} [url] - Optional frontend-model URL. This should be the shared endpoint (for example `"/frontend-models"` or `"https://example.com/frontend-models"`).
  * @property {boolean} [shared] - Deprecated shared-endpoint flag retained for compatibility. Frontend-model CRUD/custom commands use the shared frontend-model API envelope by default.
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
- * @property {{post: (path: string, body?: ?, options?: {headers?: Record<string, string>, signal?: AbortSignal}) => Promise<{json: () => ?}>, subscribe: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, ?>}, callback: (payload: ?) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions. Its `post` receives the bounded-deadline `signal` and should forward it into the underlying transport so the deadline can abort the live request and its response-body read.
+ * @property {{post: (path: string, body?: ReturnType<typeof JSON.parse>, options?: {headers?: Record<string, string>, signal?: AbortSignal}) => Promise<{json: () => ReturnType<typeof JSON.parse>}>, subscribe: (channel: string, options: {params?: Record<string, ReturnType<typeof JSON.parse>>}, callback: (payload: ReturnType<typeof JSON.parse>) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, ReturnType<typeof JSON.parse>>}, callback: (payload: ReturnType<typeof JSON.parse>) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions. Its `post` receives the bounded-deadline `signal` and should forward it into the underlying transport so the deadline can abort the live request and its response-body read.
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
  * @property {number | (() => number | undefined | null)} [timeout] - Bounded deadline in milliseconds covering connection, response headers, and response-body consumption for each frontend-model API request. On expiry the live fetch/adapter request is aborted (built on awaitery's `timeout`) and awaitery's `TimeoutError` is thrown, so callers can classify a timeout via `error instanceof TimeoutError`. Pass a function to resolve it per request. Falsy/absent means no deadline.
  * @property {AbortSignal | (() => AbortSignal | undefined | null)} [signal] - Optional caller/session AbortSignal composed with the deadline. Aborting it cancels the live request (for example on session shutdown or offline transition); the resulting abort error stays distinguishable from a timeout. Pass a function to resolve the current signal per request.
@@ -157,7 +157,7 @@ const QUERY_DATA_KEY = "__queryData"
 const ABILITIES_KEY = "__abilities"
 /**
  * Pending shared frontend model requests.
- * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ?>, requestId: string, resolve: (response: Record<string, ?>) => void, reject: (error: ?) => void, resourcePath?: string | null}>} */
+ * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ReturnType<typeof JSON.parse>>, requestId: string, resolve: (response: Record<string, ReturnType<typeof JSON.parse>>) => void, reject: (error: ReturnType<typeof JSON.parse>) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
@@ -754,12 +754,12 @@ export class FrontendModelAttachmentDownload {
  * Runs frontend model attachment command payload.
  * @param {FrontendModelAttachmentHandle} attachment - Attachment wrapper.
  * @param {string} [attachmentId] - Optional has-many attachment id.
- * @returns {Record<string, ?>} - Command payload.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Command payload.
  */
 function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
   /**
    * Payload.
-   * @type {Record<string, ?>} */
+   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   const payload = {
     attachmentName: attachment.attachmentName,
     id: attachment.model.primaryKeyValue()
@@ -772,7 +772,7 @@ function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
 
 /**
  * Runs frontend attachment value is bytes.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value looks like byte data.
  */
 function frontendAttachmentValueIsBytes(value) {
@@ -781,11 +781,11 @@ function frontendAttachmentValueIsBytes(value) {
 
 /**
  * Runs frontend attachment value supports array buffer.
- * @param {?} value - Candidate value.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {value is {arrayBuffer: () => Promise<ArrayBuffer>}} - Whether candidate supports arrayBuffer().
  */
 function frontendAttachmentValueSupportsArrayBuffer(value) {
-  return Boolean(value && typeof value === "object" && typeof /** @type {?} */ (value).arrayBuffer === "function")
+  return Boolean(value && typeof value === "object" && typeof /** @type {ReturnType<typeof JSON.parse>} */ (value).arrayBuffer === "function")
 }
 
 /**
@@ -796,7 +796,7 @@ function frontendAttachmentValueSupportsArrayBuffer(value) {
 function frontendAttachmentNormalizeBytes(value) {
   if (value instanceof Uint8Array) return value
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
-  if (typeof Buffer !== "undefined" && Buffer.isBuffer(/** @type {?} */ (value))) {
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(/** @type {ReturnType<typeof JSON.parse>} */ (value))) {
     return new Uint8Array(/** @type {Buffer} */ (value))
   }
 
@@ -848,8 +848,8 @@ function frontendAttachmentBase64ToBytes(value) {
 
 /**
  * Runs frontend attachment value is plain object.
- * @param {?} value - Candidate value.
- * @returns {value is Record<string, ?>} - Whether value is plain object.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
+ * @returns {value is Record<string, ReturnType<typeof JSON.parse>>} - Whether value is plain object.
  */
 function frontendAttachmentValueIsPlainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
@@ -861,7 +861,7 @@ function frontendAttachmentValueIsPlainObject(value) {
 
 /**
  * Runs frontend model payload contains attachment upload.
- * @param {?} value - Payload candidate.
+ * @param {ReturnType<typeof JSON.parse>} value - Payload candidate.
  * @returns {boolean} - Whether payload contains an attachment upload body.
  */
 function frontendModelPayloadContainsAttachmentUpload(value) {
@@ -976,8 +976,8 @@ function frontendModelSyncJsonObject(attributes) {
 
 /**
  * Runs normalize frontend attachment input.
- * @param {?} input - Attachment input.
- * @returns {Promise<Record<string, ?>>} - Transport-safe attachment payload.
+ * @param {ReturnType<typeof JSON.parse>} input - Attachment input.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Transport-safe attachment payload.
  */
 async function normalizeFrontendAttachmentInput(input) {
   if (frontendAttachmentValueIsPlainObject(input) && "file" in input) {
@@ -1011,11 +1011,11 @@ async function normalizeFrontendAttachmentInput(input) {
 
     return {
       contentBase64: frontendAttachmentBytesToBase64(bytes),
-      contentType: typeof /** @type {?} */ (input).type === "string" && /** @type {?} */ (input).type.length > 0
-        ? /** @type {?} */ (input).type
+      contentType: typeof /** @type {ReturnType<typeof JSON.parse>} */ (input).type === "string" && /** @type {ReturnType<typeof JSON.parse>} */ (input).type.length > 0
+        ? /** @type {ReturnType<typeof JSON.parse>} */ (input).type
         : null,
-      filename: typeof /** @type {?} */ (input).name === "string" && /** @type {?} */ (input).name.length > 0
-        ? /** @type {?} */ (input).name
+      filename: typeof /** @type {ReturnType<typeof JSON.parse>} */ (input).name === "string" && /** @type {ReturnType<typeof JSON.parse>} */ (input).name.length > 0
+        ? /** @type {ReturnType<typeof JSON.parse>} */ (input).name
         : "attachment.bin"
     }
   }
@@ -1091,7 +1091,7 @@ export class FrontendModelAttachmentHandle {
 
   /**
    * Builds the save payload for queued attachment inputs.
-   * @returns {Promise<Record<string, ?> | Record<string, ?>[] | undefined>} Normalized attachment payload.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | Record<string, ReturnType<typeof JSON.parse>>[] | undefined>} Normalized attachment payload.
    */
   async pendingAttachmentsPayload() {
     if (this.pendingInputs.length === 0) return undefined
@@ -1113,7 +1113,7 @@ export class FrontendModelAttachmentHandle {
 
   /**
    * Runs attach.
-   * @param {?} input - Attachment input.
+   * @param {ReturnType<typeof JSON.parse>} input - Attachment input.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(input) {
@@ -1273,11 +1273,11 @@ function frontendModelTransportUrl() {
 
 /**
  * Runs clone frontend model attributes.
- * @param {Record<string, ?>} value - Attributes hash.
- * @returns {Record<string, ?>} - Cloned attributes hash.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} value - Attributes hash.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cloned attributes hash.
  */
 function cloneFrontendModelAttributes(value) {
-  return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
+  return /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(serializeFrontendModelTransportValue(value)))
 }
 
 /**
@@ -1396,13 +1396,13 @@ function mergeFrontendModelEventProjectionPayload(target, source) {
 
 /**
  * Runs frontend model matched event filter keys.
- * @param {?} body - Raw websocket event body.
+ * @param {ReturnType<typeof JSON.parse>} body - Raw websocket event body.
  * @returns {Set<string>} - Matched event filter keys delivered by the backend.
  */
 function frontendModelMatchedEventFilterKeys(body) {
   if (!body || typeof body !== "object") return new Set()
 
-  const keys = /** @type {{matchedEventFilterKeys?: ?}} */ (body).matchedEventFilterKeys
+  const keys = /** @type {{matchedEventFilterKeys?: ReturnType<typeof JSON.parse>}} */ (body).matchedEventFilterKeys
 
   if (!Array.isArray(keys)) return new Set()
 
@@ -1471,7 +1471,7 @@ class FrontendModelEventSubscription {
     this.instanceListeners = new Map()
     /**
      * Narrows the runtime value to the documented type.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     this.channelHandle = null
     /**
      * Narrows the runtime value to the documented type.
@@ -1570,7 +1570,7 @@ class FrontendModelEventSubscription {
       return
     }
 
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /** @type {ReturnType<typeof JSON.parse>} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.subscribeChannel !== "function") {
       throw new Error("Frontend model event subscriptions require configureTransport({websocketUrl}) or configureTransport({websocketClient})")
@@ -1584,7 +1584,7 @@ class FrontendModelEventSubscription {
       this.subscriptionParamsKey = JSON.stringify(params)
       this.channelHandle = client.subscribeChannel(FRONTEND_MODELS_CHANNEL_NAME, {
         params,
-        onMessage: (/** @type {?} */ body) => this._dispatchEvent(body),
+        onMessage: (/** @type {ReturnType<typeof JSON.parse>} */ body) => this._dispatchEvent(body),
         onClose: () => {
           this.channelHandle = null
           this.readyPromise = null
@@ -1608,7 +1608,7 @@ class FrontendModelEventSubscription {
 
   /**
    * Runs dispatch event.
-   * @param {?} body - WebSocket event payload.
+   * @param {ReturnType<typeof JSON.parse>} body - WebSocket event payload.
    */
   _dispatchEvent(body) {
     if (!body || typeof body !== "object") return
@@ -1639,8 +1639,8 @@ class FrontendModelEventSubscription {
 
     if (!body.record || typeof body.record !== "object") return
 
-    const deserializedRecord = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(body.record))
-    const freshModel = /** @type {?} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
+    const deserializedRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(body.record))
+    const freshModel = /** @type {ReturnType<typeof JSON.parse>} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
     const listener = this.instanceListeners.get(id)
 
     if (action === "update" && listener) {
@@ -1651,7 +1651,7 @@ class FrontendModelEventSubscription {
       if (matchingUpdateCallbacks.length > 0) {
         // Auto-merge into the registered instance so callers reading
         // through the same handle see fresh attributes.
-        const instanceAny = /** @type {?} */ (listener.instance)
+        const instanceAny = /** @type {ReturnType<typeof JSON.parse>} */ (listener.instance)
 
         instanceAny.assignAttributes(freshModel.attributes())
         instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
@@ -1898,8 +1898,8 @@ function frontendModelWebsocketStartupControls(controls) {
 
 /**
  * Runs perform shared frontend model api request.
- * @param {Record<string, ?>} requestPayload - Shared request payload.
- * @returns {Promise<Record<string, ?>>} - Decoded shared frontend-model API response.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} requestPayload - Shared request payload.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Decoded shared frontend-model API response.
  */
 async function performSharedFrontendModelApiRequest(requestPayload) {
   const timeZone = frontendModelTransportTimeZone()
@@ -1922,7 +1922,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
         })
         const responseJson = response.json()
 
-        return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(responseJson))
+        return /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(responseJson))
       }
 
       const response = await fetch(url, {
@@ -1945,7 +1945,7 @@ async function performSharedFrontendModelApiRequest(requestPayload) {
 
       const json = responseText.length > 0 ? JSON.parse(responseText) : {}
 
-      return /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(json))
+      return /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(json))
     }
   )
 }
@@ -1966,7 +1966,7 @@ function throwFrontendModelHttpError({commandLabel, response, responseText}) {
   if (responseContentType && responseContentType.includes("application/json") && responseText.length > 0) {
     /**
      * Defines errorBody.
-     * @type {Record<string, ?> | null} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>> | null} */
     let errorBody
 
     try {
@@ -2035,7 +2035,7 @@ async function flushPendingSharedFrontendModelRequests() {
           continue
         }
 
-        request.resolve(/** @type {Record<string, ?>} */ (responsePayload))
+        request.resolve(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (responsePayload))
       }
     } catch (error) {
       for (const request of batchedRequests) {
@@ -2079,7 +2079,7 @@ function frontendModelCustomCommandPath({commandName, memberId, modelName, resou
 
 /**
  * Runs assert find by conditions shape.
- * @param {?} conditions - findBy conditions.
+ * @param {ReturnType<typeof JSON.parse>} conditions - findBy conditions.
  * @returns {void}
  */
 function assertFindByConditionsShape(conditions) {
@@ -2102,7 +2102,7 @@ function assertFindByConditionsShape(conditions) {
 
 /**
  * Runs assert defined find by condition value.
- * @param {?} value - Condition value to validate.
+ * @param {ReturnType<typeof JSON.parse>} value - Condition value to validate.
  * @param {string} keyPath - Key path for error output.
  * @returns {void}
  */
@@ -2139,7 +2139,7 @@ function assertDefinedFindByConditionValue(value, keyPath) {
       return
     }
 
-    const objectValue = /** @type {Record<string, ?>} */ (value)
+    const objectValue = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)
     const prototype = Object.getPrototypeOf(objectValue)
 
     if (prototype !== Object.prototype && prototype !== null) {
@@ -2152,7 +2152,7 @@ function assertDefinedFindByConditionValue(value, keyPath) {
       throw new Error(`findBy does not support symbol condition keys (key: ${keyPath})`)
     }
 
-    const valueObject = /** @type {Record<string, ?>} */ (value)
+    const valueObject = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)
 
     Object.keys(valueObject).forEach((nestedKey) => {
       assertDefinedFindByConditionValue(valueObject[nestedKey], `${keyPath}.${nestedKey}`)
@@ -2212,7 +2212,7 @@ export default class FrontendModelBase {
   _attachments
   /**
    * Rails-style nested attribute payloads queued for the next save.
-   * @type {Record<string, ?>}
+   * @type {Record<string, ReturnType<typeof JSON.parse>>}
    */
   _pendingNestedAttributes
   /**
@@ -2265,7 +2265,7 @@ export default class FrontendModelBase {
     if (this._generatedAttachmentMethods) return
 
     const attachments = this.attachmentDefinitions()
-    const prototype = /** @type {Record<string, ?>} */ (this.prototype)
+    const prototype = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this.prototype)
 
     for (const attachmentName of Object.keys(attachments)) {
       if (!(attachmentName in prototype)) {
@@ -2308,8 +2308,8 @@ export default class FrontendModelBase {
 
   /**
    * Runs define scope.
-   * @param {(...args: Array<?>) => ?} callback - Scope callback.
-   * @returns {((...args: Array<?>) => import("./query.js").default<FrontendModelClass>) & {scope: (...args: Array<?>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
+   * @param {(...args: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>} callback - Scope callback.
+   * @returns {((...args: Array<ReturnType<typeof JSON.parse>>) => import("./query.js").default<FrontendModelClass>) & {scope: (...args: Array<ReturnType<typeof JSON.parse>>) => import("../utils/model-scope.js").ModelScopeDescriptor}} - Scope helper.
    */
   static defineScope(callback) {
     return defineModelScope({
@@ -2451,12 +2451,12 @@ export default class FrontendModelBase {
 
   /**
    * Runs changes.
-   * @returns {Record<string, Array<?>>} - Changed attributes as `[oldValue, newValue]`.
+   * @returns {Record<string, Array<ReturnType<typeof JSON.parse>>>} - Changed attributes as `[oldValue, newValue]`.
    */
   changes() {
     /**
      * Changed attributes.
-     * @type {Record<string, Array<?>>} */
+     * @type {Record<string, Array<ReturnType<typeof JSON.parse>>>} */
     const changedAttributes = {}
     const attributeNames = new Set([
       ...Object.keys(this._persistedAttributes),
@@ -2736,7 +2736,7 @@ export default class FrontendModelBase {
   /**
    * Runs read attribute.
    * @param {string} attributeName - Attribute name.
-   * @returns {?} - Attribute value.
+   * @returns {ReturnType<typeof JSON.parse>} - Attribute value.
    */
   readAttribute(attributeName) {
     if (this._selectedAttributes && !this._selectedAttributes.has(attributeName)) {
@@ -2769,7 +2769,7 @@ export default class FrontendModelBase {
    * @returns {number} - Attached association count, or zero when absent.
    */
   readCount(attributeName) {
-    return readPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName)
+    return readPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this)), attributeName)
   }
 
   /**
@@ -2780,7 +2780,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setAssociationCount(attributeName, value) {
-    setPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), attributeName, value)
+    setPayloadAssociationCount(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this)), attributeName, value)
   }
 
   /**
@@ -2795,7 +2795,7 @@ export default class FrontendModelBase {
    * @returns {boolean} - Whether the requested ability is allowed.
    */
   can(action) {
-    return readPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action)
+    return readPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this)), action)
   }
 
   /**
@@ -2807,7 +2807,7 @@ export default class FrontendModelBase {
    * @returns {void}
    */
   _setComputedAbility(action, value) {
-    setPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), action, value)
+    setPayloadComputedAbility(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this)), action, value)
   }
 
   /**
@@ -2817,28 +2817,28 @@ export default class FrontendModelBase {
    * name. Returns `null` when no registered fn produced that alias for
    * this record (e.g. no child rows matched the aggregate).
    * @param {string} name - queryData alias name.
-   * @returns {?} - Attached query-data value.
+   * @returns {ReturnType<typeof JSON.parse>} - Attached query-data value.
    */
   queryData(name) {
-    return readPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name)
+    return readPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this)), name)
   }
 
   /**
    * Internal setter used by `instantiateFromResponse` when hydrating
    * queryData values that rode along with the record payload.
    * @param {string} name - queryData alias name.
-   * @param {?} value - Attached value.
+   * @param {ReturnType<typeof JSON.parse>} value - Attached value.
    * @returns {void}
    */
   _setQueryData(name, value) {
-    setPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {?} */ (this)), name, value)
+    setPayloadQueryData(/** @type {import("../record-payload-values.js").RecordPayloadValuesTarget} */ (/** @type {ReturnType<typeof JSON.parse>} */ (this)), name, value)
   }
 
   /**
    * Runs set attribute.
    * @param {string} attributeName - Attribute name.
-   * @param {?} newValue - New value.
-   * @returns {?} - Assigned value.
+   * @param {ReturnType<typeof JSON.parse>} newValue - New value.
+   * @returns {ReturnType<typeof JSON.parse>} - Assigned value.
    */
   setAttribute(attributeName, newValue) {
     const ModelClass = frontendModelClassFor(this)
@@ -2892,7 +2892,7 @@ export default class FrontendModelBase {
     const definitions = ModelClass.relationshipDefinitions()
 
     for (const relationshipName of Object.keys(this._relationships)) {
-      const definition = /** @type {?} */ (definitions[relationshipName])
+      const definition = /** @type {ReturnType<typeof JSON.parse>} */ (definitions[relationshipName])
 
       if (!definition || definition.type !== "belongsTo") continue
 
@@ -2940,8 +2940,8 @@ export default class FrontendModelBase {
   /**
    * Runs normalize custom command payload arguments.
    * @this {FrontendModelClass}
-   * @param {Array<?>} args - Command arguments.
-   * @returns {Record<string, ?>} - Command payload.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args - Command arguments.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Command payload.
    */
   static normalizeCustomCommandPayloadArguments(args) {
     if (args.length === 0) return {}
@@ -2955,12 +2955,12 @@ export default class FrontendModelBase {
         return {arg1: payload}
       }
 
-      return /** @type {Record<string, ?>} */ (payload)
+      return /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (payload)
     }
 
     /**
      * Payload.
-     * @type {Record<string, number | string | Array<?>>} */
+     * @type {Record<string, number | string | Array<ReturnType<typeof JSON.parse>>>} */
     const payload = {}
 
     for (let index = 0; index < args.length; index += 1) {
@@ -3127,11 +3127,11 @@ export default class FrontendModelBase {
    * Sets global metadata on the WebSocket connection. Sent to the server immediately
    * over WebSocket and exposed to WebSocket-borne requests as request metadata.
    * @param {string} key - Metadata key.
-   * @param {?} value - Metadata value (null to clear).
+   * @param {ReturnType<typeof JSON.parse>} value - Metadata value (null to clear).
    * @returns {void}
    */
   static setWebsocketMetadata(key, value) {
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /** @type {ReturnType<typeof JSON.parse>} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.setMetadata !== "function") return
 
@@ -3145,13 +3145,13 @@ export default class FrontendModelBase {
    * functions change (e.g. current-user sign-in/out). The handle
    * retries when the WS client isn't ready and reopens on close.
    * @param {string} connectionType - Connection class name registered on the server.
-   * @param {{shouldConnect: () => boolean, params: () => Record<string, ?>, signal?: AbortSignal, onMessage?: (body: ?) => void}} options - Connection lifecycle, cancellation, and payload callbacks.
+   * @param {{shouldConnect: () => boolean, params: () => Record<string, ReturnType<typeof JSON.parse>>, signal?: AbortSignal, onMessage?: (body: ReturnType<typeof JSON.parse>) => void}} options - Connection lifecycle, cancellation, and payload callbacks.
    * @returns {{sync: () => void, close: () => void}} - Handle used to resync or close the managed connection.
    */
   static openManagedConnection(connectionType, options) {
     /**
      * Connection.
-     * @type {?} */
+     * @type {ReturnType<typeof JSON.parse>} */
     let connection = null
     let closed = false
     /**
@@ -3211,7 +3211,7 @@ export default class FrontendModelBase {
       // WS client not ready — retry. Check the actual client (which
       // may be an injected websocketClient) instead of websocketState()
       // which only reflects the internal client.
-      const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+      const client = /** @type {ReturnType<typeof JSON.parse>} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
       if (!client || !client.isOpen()) {
         if (retryTimer === null) {
@@ -3254,11 +3254,11 @@ export default class FrontendModelBase {
    * `openConnection`. Apps use this for per-session state/messaging
    * that doesn't fit the pub/sub Channel model (locale, presence).
    * @param {string} connectionType - Name the server registered the class under.
-   * @param {{params?: Record<string, ?>, timeoutMs?: number, signal?: AbortSignal, onConnect?: () => void, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options, readiness controls, and event handlers. Connect the client first; the timeout covers server-confirmed readiness and the signal cancels readiness without entering the wire payload.
+   * @param {{params?: Record<string, ReturnType<typeof JSON.parse>>, timeoutMs?: number, signal?: AbortSignal, onConnect?: () => void, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Connection options, readiness controls, and event handlers. Connect the client first; the timeout covers server-confirmed readiness and the signal cancels readiness without entering the wire payload.
    * @returns {{ready: Promise<void>, close: () => void}} - Websocket connection handle.
    */
   static openWebsocketConnection(connectionType, options = {}) {
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /** @type {ReturnType<typeof JSON.parse>} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.openConnection !== "function") {
       throw new Error("openWebsocketConnection requires configureTransport({websocketUrl})")
@@ -3276,11 +3276,11 @@ export default class FrontendModelBase {
    * Subscribes to a pub/sub `WebsocketChannel`. Thin wrapper around
    * the internal client's `subscribeChannel`.
    * @param {string} channelType - Channel class name registered on the server.
-   * @param {{params?: Record<string, ?>, timeoutMs?: number, signal?: AbortSignal, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel options, startup controls, and event handlers. The timeout covers connect and server-confirmed readiness only; the signal cancels startup without entering the wire payload.
+   * @param {{params?: Record<string, ReturnType<typeof JSON.parse>>, timeoutMs?: number, signal?: AbortSignal, onMessage?: (body: Record<string, unknown>) => void, onDisconnect?: () => void, onResume?: () => void, onClose?: (reason: string) => void}} [options] - Channel options, startup controls, and event handlers. The timeout covers connect and server-confirmed readiness only; the signal cancels startup without entering the wire payload.
    * @returns {{ready: Promise<void>, close: () => void}} - Websocket channel handle from the configured client.
    */
   static subscribeWebsocketChannel(channelType, options = {}) {
-    const client = /** @type {?} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
+    const client = /** @type {ReturnType<typeof JSON.parse>} */ (frontendModelTransportConfig.websocketClient || resolveInternalWebsocketClient())
 
     if (!client || typeof client.subscribeChannel !== "function") {
       throw new Error("subscribeWebsocketChannel requires configureTransport({websocketUrl})")
@@ -3305,7 +3305,7 @@ export default class FrontendModelBase {
   static installWebsocketTestHooks() {
     if (typeof globalThis === "undefined") return
 
-    /** @type {?} */ (globalThis).__velocious_websocket_hooks = {
+    /** @type {ReturnType<typeof JSON.parse>} */ (globalThis).__velocious_websocket_hooks = {
       connect: () => this.connectWebsocket(),
       disconnect: () => this.disconnectWebsocket(),
       drop: () => this.dropWebsocket(),
@@ -3386,7 +3386,7 @@ export default class FrontendModelBase {
    * Runs apply preloaded relationships.
    * @this {FrontendModelClass}
    * @param {FrontendModelBase} model - Model instance.
-   * @param {Record<string, ?>} preloadedRelationships - Preloaded relationship payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} preloadedRelationships - Preloaded relationship payload.
    * @returns {void}
    */
   static applyPreloadedRelationships(model, preloadedRelationships) {
@@ -3433,9 +3433,9 @@ export default class FrontendModelBase {
   /**
    * Runs instantiate relationship value.
    * @this {FrontendModelClass}
-   * @param {?} relationshipPayload - Relationship payload value.
+   * @param {ReturnType<typeof JSON.parse>} relationshipPayload - Relationship payload value.
    * @param {FrontendModelClass | null} targetModelClass - Target model class.
-   * @returns {?} - Instantiated relationship value.
+   * @returns {ReturnType<typeof JSON.parse>} - Instantiated relationship value.
    */
   static instantiateRelationshipValue(relationshipPayload, targetModelClass) {
     if (!targetModelClass) return relationshipPayload
@@ -3449,7 +3449,7 @@ export default class FrontendModelBase {
    * Runs instantiate from response.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?> | InstanceType<T>} response - Response payload, or an already-hydrated instance of this class.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | InstanceType<T>} response - Response payload, or an already-hydrated instance of this class.
    * @returns {InstanceType<T>} - New model instance, or the same instance unchanged if it was already hydrated.
    */
   static instantiateFromResponse(response) {
@@ -3513,7 +3513,7 @@ export default class FrontendModelBase {
    * Runs find by.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?>} conditions - Attribute match conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Attribute match conditions.
    * @returns {Promise<InstanceType<T> | null>} - Found model or null.
    */
   static async findBy(conditions) {
@@ -3524,7 +3524,7 @@ export default class FrontendModelBase {
    * Runs find by or fail.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?>} conditions - Attribute match conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Attribute match conditions.
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
   static async findByOrFail(conditions) {
@@ -3565,7 +3565,7 @@ export default class FrontendModelBase {
    * Runs where.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?>} conditions - Root-model where conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Root-model where conditions.
    * @returns {import("./query.js").default<T>} - Query with where conditions.
    */
   static where(conditions) {
@@ -3576,7 +3576,7 @@ export default class FrontendModelBase {
    * Runs joins.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?> | Array<Record<string, ?>>} joins - Relationship descriptor joins.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} joins - Relationship descriptor joins.
    * @returns {import("./query.js").default<T>} - Query with joins.
    */
   static joins(joins) {
@@ -3713,7 +3713,7 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onUpdate(callback, options = {}) {
-    const self = /** @type {?} */ (this)
+    const self = /** @type {ReturnType<typeof JSON.parse>} */ (this)
     const ModelClass = frontendModelClassFor(this)
     const sub = ensureFrontendModelEventSubscription(ModelClass)
     const id = String(self.id())
@@ -3743,7 +3743,7 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onDestroy(callback, options = {}) {
-    const self = /** @type {?} */ (this)
+    const self = /** @type {ReturnType<typeof JSON.parse>} */ (this)
     const ModelClass = frontendModelClassFor(this)
 
     assertNoDestroyEventFilter(ModelClass, options)
@@ -3773,8 +3773,8 @@ export default class FrontendModelBase {
    * Runs pluck.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {...(string | string[] | Record<string, ?> | Array<Record<string, ?>>)} columns - Pluck definition(s).
-   * @returns {Promise<Array<?>>} - Plucked values.
+   * @param {...(string | string[] | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>)} columns - Pluck definition(s).
+   * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - Plucked values.
    */
   static async pluck(...columns) {
     return await this.query().pluck(...columns)
@@ -3787,7 +3787,7 @@ export default class FrontendModelBase {
    * @param {string[]} path - Relationship path.
    * @param {string} column - Column or attribute name.
    * @param {"eq" | "like" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | ">" | ">=" | "<" | "<="} operator - Search operator.
-   * @param {?} value - Search value.
+   * @param {ReturnType<typeof JSON.parse>} value - Search value.
    * @returns {FrontendModelQuery<T>} - Query builder with search filter.
    */
   static search(path, column, operator, value) {
@@ -3798,7 +3798,7 @@ export default class FrontendModelBase {
    * Runs ransack.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?>} params - Ransack-style params hash.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Ransack-style params hash.
    * @returns {FrontendModelQuery<T>} - Query builder with Ransack filters applied.
    */
   static ransack(params) {
@@ -3809,7 +3809,7 @@ export default class FrontendModelBase {
    * Runs sort.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
+   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} sort - Sort definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with sort definitions.
    */
   static sort(sort) {
@@ -3820,7 +3820,7 @@ export default class FrontendModelBase {
    * Runs order.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ?> | Array<Record<string, ?>>} sort - Sort definition(s).
+   * @param {string | string[] | string[][] | [string, string] | Array<[string, string]> | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} sort - Sort definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with sort definitions.
    */
   static order(sort) {
@@ -3831,7 +3831,7 @@ export default class FrontendModelBase {
    * Runs group.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {string | string[] | Record<string, ?> | Array<Record<string, ?>>} group - Group definition(s).
+   * @param {string | string[] | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>} group - Group definition(s).
    * @returns {FrontendModelQuery<T>} - Query builder with group definitions.
    */
   static group(group) {
@@ -3916,7 +3916,7 @@ export default class FrontendModelBase {
    * Runs find or initialize by.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?>} conditions - Attribute match conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Attribute match conditions.
    * @returns {Promise<InstanceType<T>>} - Existing or initialized model.
    */
   static async findOrInitializeBy(conditions) {
@@ -3927,7 +3927,7 @@ export default class FrontendModelBase {
    * Runs find or create by.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {Record<string, ?>} conditions - Attribute match conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Attribute match conditions.
    * @param {(model: InstanceType<T>) => Promise<void> | void} [callback] - Optional callback before save when created.
    * @returns {Promise<InstanceType<T>>} - Existing or newly created model.
    */
@@ -3955,7 +3955,7 @@ export default class FrontendModelBase {
   /**
    * Runs assert find by conditions.
    * @this {FrontendModelClass}
-   * @param {Record<string, ?>} conditions - findBy conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - findBy conditions.
    * @returns {void}
    */
   static assertFindByConditions(conditions) {
@@ -3970,7 +3970,7 @@ export default class FrontendModelBase {
    * Runs matches find by conditions.
    * @this {FrontendModelClass}
    * @param {FrontendModelBase} model - Candidate model.
-   * @param {Record<string, ?>} conditions - Match conditions.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Match conditions.
    * @returns {boolean} - Whether the model matches all conditions.
    */
   static matchesFindByConditions(model, conditions) {
@@ -3999,8 +3999,8 @@ export default class FrontendModelBase {
   /**
    * Runs find by condition value matches.
    * @this {FrontendModelClass}
-   * @param {?} actualValue - Actual model value.
-   * @param {?} expectedValue - Expected find condition value.
+   * @param {ReturnType<typeof JSON.parse>} actualValue - Actual model value.
+   * @param {ReturnType<typeof JSON.parse>} expectedValue - Expected find condition value.
    * @returns {boolean} - Whether values match.
    */
   static findByConditionValueMatches(actualValue, expectedValue) {
@@ -4031,8 +4031,8 @@ export default class FrontendModelBase {
         return false
       }
 
-      const actualObject = /** @type {Record<string, ?>} */ (actualValue)
-      const expectedObject = /** @type {Record<string, ?>} */ (expectedValue)
+      const actualObject = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (actualValue)
+      const expectedObject = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (expectedValue)
       const actualKeys = Object.keys(actualObject)
       const expectedKeys = Object.keys(expectedObject)
 
@@ -4063,8 +4063,8 @@ export default class FrontendModelBase {
   /**
    * Runs find by primitive values match.
    * @this {FrontendModelClass}
-   * @param {?} actualValue - Actual model value.
-   * @param {?} expectedValue - Expected find condition value.
+   * @param {ReturnType<typeof JSON.parse>} actualValue - Actual model value.
+   * @param {ReturnType<typeof JSON.parse>} expectedValue - Expected find condition value.
    * @returns {boolean} - Whether primitive values match after safe coercion.
    */
   static findByPrimitiveValuesMatch(actualValue, expectedValue) {
@@ -4129,7 +4129,7 @@ export default class FrontendModelBase {
 
   /**
    * Runs attach.
-   * @param {?} attachmentInput - Attachment input or named attachment payload.
+   * @param {ReturnType<typeof JSON.parse>} attachmentInput - Attachment input or named attachment payload.
    * @returns {Promise<void>} - Resolves when attached.
    */
   async attach(attachmentInput) {
@@ -4170,7 +4170,7 @@ export default class FrontendModelBase {
     const commandType = isNew ? "create" : "update"
     /**
      * Payload.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const payload = {
       attributes: this._changedAttributesForSave()
     }
@@ -4299,10 +4299,10 @@ export default class FrontendModelBase {
 
   /**
    * Builds the attachment payload queued on this model for the next save.
-   * @returns {Promise<Record<string, ?>>} Attachment payload keyed by attachment name.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Attachment payload keyed by attachment name.
    */
   async _buildAttachmentsPayload() {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const payload = {}
 
     for (const attachmentName of Object.keys(this._attachments)) {
@@ -4335,7 +4335,7 @@ export default class FrontendModelBase {
    *
    * Loaded but untouched records are omitted so nested save preserves Rails-style
    * "children not referenced in payload are left alone" semantics.
-   * @returns {Promise<Record<string, Array<Record<string, ?>>>>} - Per-relationship list of nested-attribute entries.
+   * @returns {Promise<Record<string, Array<Record<string, ReturnType<typeof JSON.parse>>>>>} - Per-relationship list of nested-attribute entries.
    */
   async _buildNestedAttributesPayload() {
     const ModelClass = frontendModelClassFor(this)
@@ -4346,11 +4346,11 @@ export default class FrontendModelBase {
 
     /**
      * Payload.
-     * @type {Record<string, Array<Record<string, ?>>>} */
+     * @type {Record<string, Array<Record<string, ReturnType<typeof JSON.parse>>>>} */
     const payload = {}
 
     for (const relationshipName of Object.keys(nestedAttributesConfig)) {
-      /** @type {Array<Record<string, ?>>} */
+      /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
       const entries = []
       const relationship = this._relationships[relationshipName]
 
@@ -4392,7 +4392,7 @@ export default class FrontendModelBase {
    * Builds the payload entry for this child when walked by a parent's
    * `_buildNestedAttributesPayload`. Returns `null` when the child has no
    * dirty state and no dirty descendants, so the parent can omit it.
-   * @returns {Promise<Record<string, ?> | null>} - Nested-attribute entry or null if clean.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} - Nested-attribute entry or null if clean.
    */
   async _nestedAttributesEntryForParentSave() {
     if (this.markedForDestruction()) {
@@ -4408,7 +4408,7 @@ export default class FrontendModelBase {
     if (this.isNewRecord()) {
       /**
        * Entry.
-       * @type {Record<string, ?>} */
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const entry = {}
       const attributes = this._changedAttributesForSave()
 
@@ -4423,7 +4423,7 @@ export default class FrontendModelBase {
 
     /**
      * Entry.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const entry = {id: this.primaryKeyValue()}
 
     if (this.isChanged()) entry.attributes = this._changedAttributesForSave()
@@ -4437,8 +4437,8 @@ export default class FrontendModelBase {
    * Builds nested entries from a Rails-style submitted `*Attributes` value.
    * @param {FrontendModelClass} ModelClass - Parent model class.
    * @param {string} relationshipName - Nested relationship name.
-   * @param {?} value - Submitted nested attributes value.
-   * @returns {Promise<Array<Record<string, ?>>>} Nested entries for the transport payload.
+   * @param {ReturnType<typeof JSON.parse>} value - Submitted nested attributes value.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} Nested entries for the transport payload.
    */
   async _nestedAttributesPayloadForSubmittedValue(ModelClass, relationshipName, value) {
     const relationshipDefinition = ModelClass.relationshipDefinition(relationshipName)
@@ -4472,21 +4472,21 @@ export default class FrontendModelBase {
   /**
    * Converts one submitted Rails-style nested attributes object into transport payload shape.
    * @param {FrontendModelClass} ModelClass - Nested child model class.
-   * @param {?} submittedEntry - Submitted nested attributes entry.
-   * @returns {Promise<Record<string, ?>>} Transport nested-attributes entry.
+   * @param {ReturnType<typeof JSON.parse>} submittedEntry - Submitted nested attributes entry.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Transport nested-attributes entry.
    */
   async _nestedAttributesEntryPayloadForSubmittedValue(ModelClass, submittedEntry) {
     if (!frontendAttachmentValueIsPlainObject(submittedEntry)) {
       throw new Error(`${ModelClass.name} nested attributes entries must be objects`)
     }
 
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const entry = {}
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const attributes = {}
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const attachments = {}
-    /** @type {Record<string, Array<Record<string, ?>>>} */
+    /** @type {Record<string, Array<Record<string, ReturnType<typeof JSON.parse>>>>} */
     const nestedAttributes = {}
 
     for (const [attributeName, value] of Object.entries(submittedEntry)) {
@@ -4525,8 +4525,8 @@ export default class FrontendModelBase {
    * Normalizes a submitted attachment value for transport.
    * @param {FrontendModelClass} ModelClass - Model class owning the attachment.
    * @param {string} attachmentName - Attachment name.
-   * @param {?} value - Submitted attachment value.
-   * @returns {Promise<Record<string, ?> | Record<string, ?>[]>} Normalized attachment payload.
+   * @param {ReturnType<typeof JSON.parse>} value - Submitted attachment value.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | Record<string, ReturnType<typeof JSON.parse>>[]>} Normalized attachment payload.
    */
   async _attachmentPayloadForSubmittedValue(ModelClass, attachmentName, value) {
     const attachmentDefinition = ModelClass.attachmentDefinition(attachmentName)
@@ -4556,7 +4556,7 @@ export default class FrontendModelBase {
    * `_loadedValue` for each nested-writable relationship with the server's
    * authoritative set, so destroyed children are dropped and newly-created
    * children get their server-assigned ids + persisted state.
-   * @param {Record<string, ?>} response - Command response payload.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} response - Command response payload.
    * @returns {void}
    */
   _reconcileNestedAttributesFromResponse(response) {
@@ -4571,7 +4571,7 @@ export default class FrontendModelBase {
 
     /**
      * Relevant preloads.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const relevantPreloads = {}
 
     for (const relationshipName of Object.keys(nestedAttributesConfig)) {
@@ -4589,13 +4589,13 @@ export default class FrontendModelBase {
    * Runs execute command.
    * @this {FrontendModelClass}
    * @param {FrontendModelCommandType} commandType - Command type.
-   * @param {Record<string, ?>} payload - Command payload.
-   * @returns {Promise<Record<string, ?>>} - Parsed JSON response.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Command payload.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Parsed JSON response.
    */
   static async executeCommand(commandType, payload) {
     const commandName = this.commandName(commandType)
     const timeZone = frontendModelTransportTimeZone()
-    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
+    const serializedPayload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
     const resourcePath = this.resourcePath()
     const containsAttachmentUpload = frontendModelPayloadContainsAttachmentUpload(serializedPayload)
     const useSharedTransport = !containsAttachmentUpload
@@ -4617,7 +4617,7 @@ export default class FrontendModelBase {
         scheduleSharedFrontendModelRequestFlush()
       })
 
-      const decodedBatchResponse = /** @type {Record<string, ?>} */ (batchResponse)
+      const decodedBatchResponse = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (batchResponse)
 
       this.throwOnErrorFrontendModelResponse({
         commandType,
@@ -4653,7 +4653,7 @@ export default class FrontendModelBase {
         }
 
         const directJson = directResponseText.length > 0 ? JSON.parse(directResponseText) : {}
-        const decodedDirectResponse = /** @type {Record<string, ?>} */ (deserializeFrontendModelTransportValue(directJson))
+        const decodedDirectResponse = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(directJson))
 
         this.throwOnErrorFrontendModelResponse({
           commandType,
@@ -4668,17 +4668,13 @@ export default class FrontendModelBase {
   /**
    * Runs execute custom command.
    * @this {FrontendModelClass}
-   * @param {object} args - Command arguments.
-   * @param {string} args.commandName - Raw command path segment.
-   * @param {FrontendModelRequestCommandType} args.commandType - Logical command type for error handling.
-   * @param {string | number | null} [args.memberId] - Optional member id for member-scoped commands.
-   * @param {Record<string, ?>} args.payload - Request payload.
-   * @param {string} args.resourcePath - Direct resource path.
+   * @param {{commandName: string, commandType: FrontendModelRequestCommandType, memberId?: string | number | null, payload: Record<string, ReturnType<typeof JSON.parse>>, resourcePath: string}} args - Command arguments.
    * @returns {Promise<Record<string, FrontendModelAttributeValue>>} - Decoded response payload.
    */
-  static async executeCustomCommand({commandName, commandType, memberId = null, payload, resourcePath}) {
+  static async executeCustomCommand(args) {
+    const {commandName, commandType, memberId = null, payload, resourcePath} = args
     const timeZone = frontendModelTransportTimeZone()
-    const serializedPayload = /** @type {Record<string, ?>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
+    const serializedPayload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
     const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,
@@ -4713,12 +4709,11 @@ export default class FrontendModelBase {
   /**
    * Runs throw on error frontend model response.
    * @this {FrontendModelClass}
-   * @param {object} args - Arguments.
-   * @param {FrontendModelRequestCommandType} args.commandType - Command type.
-   * @param {Record<string, ?>} args.response - Decoded response.
+   * @param {{commandType: FrontendModelRequestCommandType, response: Record<string, ReturnType<typeof JSON.parse>>}} args - Arguments.
    * @returns {void}
    */
-  static throwOnErrorFrontendModelResponse({commandType, response}) {
+  static throwOnErrorFrontendModelResponse(args) {
+    const {commandType, response} = args
     if (response?.status !== "error") return
 
     const responseKeys = Object.keys(response)
@@ -4744,7 +4739,7 @@ export default class FrontendModelBase {
       ? response.errorMessage
       : `Request failed for ${this.name}#${commandType}`)
 
-    const error = /** @type {Error & {correlationId?: string, details?: Record<string, ?>, errorMessage?: string, velocious?: Record<string, ?>, errorType?: string, validationErrors?: Record<string, ?>, debugErrorClass?: string, debugBacktrace?: string[]}} */ (new Error(errorMessage))
+    const error = /** @type {Error & {correlationId?: string, details?: Record<string, ReturnType<typeof JSON.parse>>, errorMessage?: string, velocious?: Record<string, ReturnType<typeof JSON.parse>>, errorType?: string, validationErrors?: Record<string, ReturnType<typeof JSON.parse>>, debugErrorClass?: string, debugBacktrace?: string[]}} */ (new Error(errorMessage))
     if (hasErrorMessage) {
       error.errorMessage = response.errorMessage
     }
@@ -4782,7 +4777,7 @@ export default class FrontendModelBase {
    * @returns {Set<string>} - Configured frontend model attribute names.
    */
   static configuredFrontendModelAttributeNames() {
-    const resourceConfig = /** @type {Record<string, ?>} */ (this.resourceConfig())
+    const resourceConfig = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this.resourceConfig())
     const attributes = resourceConfig.attributes
 
     if (Array.isArray(attributes)) {

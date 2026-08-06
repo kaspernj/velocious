@@ -8,7 +8,7 @@ import {createTenantTestConfiguration} from "../helpers/tenant-test-helpers.js"
 
 describe("Tenant.aggregateAcross", () => {
   /**
-   * @param {{listTenants: () => Promise<Array<?>> | Array<?>}} provider - Tenant database provider.
+   * @param {{listTenants: () => Promise<Array<ReturnType<typeof JSON.parse>>> | Array<ReturnType<typeof JSON.parse>>}} provider - Tenant database provider.
    * @param {(args: {configuration: import("../../src/configuration.js").default}) => Promise<void>} callback - Test body.
    * @returns {Promise<void>}
    */
@@ -58,7 +58,7 @@ describe("Tenant.aggregateAcross", () => {
   /**
    * @param {(args: SubqueryContextLike) => string} [subqueryOverride] - Optional subquery override.
    * @returns {(context: SubqueryContextLike) => string} - Subquery builder summing estimated_cpu_usage per docker server.
-   * @typedef {{table: (name: string) => string, quote: ((value: ?) => string) & {list: (values: ?[]) => string}}} SubqueryContextLike
+   * @typedef {{table: (name: string) => string, quote: ((value: ReturnType<typeof JSON.parse>) => string) & {list: (values: ?[]) => string}}} SubqueryContextLike
    */
   function reservedCpuSubquery(subqueryOverride) {
     return subqueryOverride ?? (({quote, table}) => `

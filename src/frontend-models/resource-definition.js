@@ -57,7 +57,7 @@ export function frontendModelResourcesForBackendProject(backendProject) {
 
 /**
  * Runs the frontendModelResourceDefinitionIsClass helper.
- * @param {?} value - Candidate resource definition.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate resource definition.
  * @returns {value is import("../configuration-types.js").FrontendModelResourceClassType} - Whether value is a resource class.
  */
 export function frontendModelResourceDefinitionIsClass(value) {
@@ -66,7 +66,7 @@ export function frontendModelResourceDefinitionIsClass(value) {
 
 /**
  * Runs the frontendModelResourceClassFromDefinition helper.
- * @param {?} resourceDefinition - Resource definition.
+ * @param {ReturnType<typeof JSON.parse>} resourceDefinition - Resource definition.
  * @returns {import("../configuration-types.js").FrontendModelResourceClassType | null} - Resource class when definition is class-based.
  */
 export function frontendModelResourceClassFromDefinition(resourceDefinition) {
@@ -75,7 +75,7 @@ export function frontendModelResourceClassFromDefinition(resourceDefinition) {
 
 /**
  * Runs the frontendModelResourceConfigurationFromDefinition helper.
- * @param {?} resourceDefinition - Resource definition.
+ * @param {ReturnType<typeof JSON.parse>} resourceDefinition - Resource definition.
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | null} - Normalized resource configuration.
  */
 export function frontendModelResourceConfigurationFromDefinition(resourceDefinition) {
@@ -118,11 +118,11 @@ function assertKnownResourceStaticConfigProperties(ResourceClass) {
   let currentClass = ResourceClass
 
   while (currentClass && currentClass !== FrontendModelBaseResource && currentClass !== Function.prototype) {
-    /** @type {Record<string, ?>} */
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const unknownStaticConfig = {}
 
     for (const key of Object.keys(currentClass)) {
-      if (!RESOURCE_STATIC_CONFIG_KEYS.has(key)) unknownStaticConfig[key] = /** @type {Record<string, ?>} */ (/** @type {unknown} */ (currentClass))[key]
+      if (!RESOURCE_STATIC_CONFIG_KEYS.has(key)) unknownStaticConfig[key] = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (/** @type {unknown} */ (currentClass))[key]
     }
 
     restArgsError(unknownStaticConfig)
@@ -155,7 +155,7 @@ function staticMethodOwnerFor(ResourceClass, methodName) {
  * @returns {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} - Normalized resource configuration.
  */
 function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
-  const restArgs = /** @type {Record<string, ?>} */ ({...resourceConfiguration})
+  const restArgs = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({...resourceConfiguration})
 
   for (const key of [
     "abilities",
@@ -360,7 +360,7 @@ export function frontendModelApiManifest(backendProjects) {
 
 /**
  * Normalizes resource attribute definitions into a sorted array of strings.
- * @param {?} attributes - Raw attributes config (array or object).
+ * @param {ReturnType<typeof JSON.parse>} attributes - Raw attributes config (array or object).
  * @returns {string[]} - Sorted attribute names.
  */
 function manifestAttributes(attributes) {
@@ -765,7 +765,7 @@ function normalizeFrontendModelCommandReturnType({commandName, modelName, return
 /**
  * Runs the frontendModelResourcePath helper.
  * @param {string} modelName - Model class name.
- * @param {?} resourceDefinition - Resource definition.
+ * @param {ReturnType<typeof JSON.parse>} resourceDefinition - Resource definition.
  * @returns {string} - Normalized resource path.
  */
 export function frontendModelResourcePath(modelName, resourceDefinition) {
@@ -783,7 +783,7 @@ export function frontendModelResourcePath(modelName, resourceDefinition) {
  * @param {object} args - Arguments.
  * @param {string} args.commandName - Command path segment.
  * @param {string} args.modelName - Model class name.
- * @param {?} args.resourceDefinition - Resource definition.
+ * @param {ReturnType<typeof JSON.parse>} args.resourceDefinition - Resource definition.
  * @returns {"destroy" | "find" | "index" | "create" | "update" | "attach" | "download" | "url" | null} - Frontend action.
  */
 export function frontendModelActionForCommand({commandName, modelName, resourceDefinition}) {

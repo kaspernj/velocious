@@ -7,7 +7,7 @@ import {publishToInProcessPeers, registerInProcessPeer} from "./in-process-broke
 
 /**
  * BeaconBroadcastHandler type.
- * @typedef {function(import("./types.js").BeaconBroadcastMessage): void} BeaconBroadcastHandler
+ * @typedef {(arg: import("./types.js").BeaconBroadcastMessage) => void} BeaconBroadcastHandler
  */
 
 /**
@@ -85,8 +85,8 @@ export default class InProcessBeaconClient extends EventEmitter {
    * `BeaconClient` semantics.
    * @param {object} args - Broadcast args.
    * @param {string} args.channel - Channel name.
-   * @param {Record<string, ?>} args.broadcastParams - Routing params.
-   * @param {?} args.body - Message body.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.broadcastParams - Routing params.
+   * @param {ReturnType<typeof JSON.parse>} args.body - Message body.
    * @returns {boolean} - True when the broadcast was queued.
    */
   publish({channel, broadcastParams, body}) {

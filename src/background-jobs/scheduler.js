@@ -67,7 +67,7 @@ export default class BackgroundJobsScheduler {
    * Runs constructor.
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
-   * @param {function({args: Array<?>, jobClass: typeof import("./job.js").default, jobKey: string, options: import("./types.js").BackgroundJobOptions}) : Promise<void>} args.enqueueJob - Enqueue callback.
+   * @param {(args: {args: Array<ReturnType<typeof JSON.parse>>, jobClass: typeof import("./job.js").default, jobKey: string, options: import("./types.js").BackgroundJobOptions}) => Promise<void>} args.enqueueJob - Enqueue callback.
    */
   constructor({configuration, enqueueJob}) {
     this.configuration = configuration

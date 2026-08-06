@@ -11,7 +11,7 @@ import toImportSpecifier from "../../../../utils/to-import-specifier.js"
 /**
  * Runs import run script function.
  * @param {string} filePath - Absolute path to script file.
- * @returns {Promise<(context: RunScriptContext) => Promise<?>>} - The default-exported async function.
+ * @returns {Promise<(context: RunScriptContext) => Promise<ReturnType<typeof JSON.parse>>>} - The default-exported async function.
  */
 async function importRunScriptFunction(filePath) {
   const scriptImport = await import(toImportSpecifier(filePath))
@@ -28,7 +28,7 @@ async function importRunScriptFunction(filePath) {
 export default class RunScriptCommand extends BaseCommand {
   /**
    * Runs execute.
-   * @returns {Promise<?>} - Resolves with the script function result.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the script function result.
    */
   async execute() {
     const configuration = this.getConfiguration()

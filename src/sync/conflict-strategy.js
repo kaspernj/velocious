@@ -21,7 +21,7 @@ const CONFLICT_STRATEGIES = new Set(["optimisticVersion", "serverWins", "lastWri
  * Evaluates a replay mutation against server/base state using a sync conflict strategy.
  * @param {object} args - Arguments.
  * @param {SyncConflictRecord | null} [args.baseRecord] - Record state observed when the mutation was made.
- * @param {function(object): (SyncConflictResult | Promise<SyncConflictResult>)} [args.customHandler] - Resource-specific conflict hook.
+ * @param {(arg: object) => (SyncConflictResult | Promise<SyncConflictResult>)} [args.customHandler] - Resource-specific conflict hook.
  * @param {import("./device-identity.js").SyncMutation} args.mutation - Replayed mutation.
  * @param {SyncConflictRecord | null} [args.serverRecord] - Current authoritative server record.
  * @param {string} [args.strategy] - Conflict strategy.

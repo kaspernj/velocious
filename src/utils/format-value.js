@@ -4,7 +4,7 @@ const MAX_STRINGIFY_DEPTH = 5
 
 /**
  * Runs is plain object.
- * @param {?} value - Value to use.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to use.
  * @returns {boolean} - Whether plain object.
  */
 function isPlainObject(value) {
@@ -17,7 +17,7 @@ function isPlainObject(value) {
 
 /**
  * Minified stringify with circular and depth protection.
- * @param {?} value - Value to use.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to use.
  * @returns {string} - The minified stringify.
  */
 function minifiedStringify(value) {
@@ -25,9 +25,9 @@ function minifiedStringify(value) {
 
   /**
    * Runs serialize.
-   * @param {?} current - Current.
+   * @param {ReturnType<typeof JSON.parse>} current - Current.
    * @param {number} depth - Depth.
-   * @returns {?} - The serialize.
+   * @returns {ReturnType<typeof JSON.parse>} - The serialize.
    */
   function serialize(current, depth) {
     if (depth > MAX_STRINGIFY_DEPTH) return "[MaxDepth]"
@@ -51,7 +51,7 @@ function minifiedStringify(value) {
 
     /**
      * Output.
-     * @type {Record<string, ?>} */
+     * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const output = {}
 
     for (const key of Object.keys(current)) {
@@ -70,7 +70,7 @@ function minifiedStringify(value) {
 
 /**
  * Runs format value.
- * @param {?} value - Value to use.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to use.
  * @returns {string} - The value.
  */
 function formatValue(value) {

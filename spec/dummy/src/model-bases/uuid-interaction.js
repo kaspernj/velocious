@@ -98,7 +98,7 @@ export default class UuidInteractionBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ?>} [attributes]
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
   buildSubject(attributes) { void attributes; throw new Error("Not implemented") }
