@@ -52,6 +52,13 @@ Keys in the object form become the attribute name as-is. `true` is
 shorthand for "count this relationship, store under `<name>Count`";
 `{relationship, where}` lets you rename, filter, or both.
 
+The caller-supplied `where` is always combined with Velocious's
+mandatory relationship cohort using `AND`. It cannot replace the
+foreign-key restriction to the parent IDs actually loaded or, for a
+polymorphic relationship, the owning model's type restriction. A
+conflicting foreign-key or polymorphic-type filter therefore returns
+zero instead of widening or retargeting the aggregate.
+
 ## How it runs
 
 After the main query's rows come back, Velocious builds one grouped
@@ -61,8 +68,8 @@ count query per requested entry:
 SELECT foo_id AS parent_id, COUNT(*) AS count_value
 FROM foos
 WHERE foo_id IN (<loaded parent PKs>)
-  [AND <your where clause>]
   [AND <polymorphic type column> = '<parent model name>']
+  [AND <your where clause>]
 GROUP BY foo_id
 ```
 

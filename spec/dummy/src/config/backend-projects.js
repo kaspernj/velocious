@@ -5,7 +5,9 @@ import Interaction from "../models/interaction.js"
 import Project from "../models/project.js"
 import SyncUuidItemResource from "../resources/sync-uuid-item-resource.js"
 import Task from "../models/task.js"
+import TaskBoardSyncResource from "../resources/task-board-sync-resource.js"
 import User from "../models/user.js"
+import VelociousError from "../../../../src/velocious-error.js"
 
 /** @import {SharedEchoResponse} from "../../shared/frontend-command-types.js" */
 /** @import {default as ImportedUser} from "../models/user.js" */
@@ -14,6 +16,8 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Task
 
     static attributes = ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", {name: "projectId", selectedByDefault: false}, {name: "createdAt", selectedByDefault: false}, "updatedAt"]
+
+  static sync = {operations: ["index", "find", "create", "update"]}
 
   static attachments = {
         descriptionFile: {type: "hasOne"},
@@ -27,6 +31,9 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   static relationships = ["project", "comments"]
 
   static primaryKey = "id"
+
+  /** @type {string[]} */
+  static writableAttributes = ["isDone", "name", "projectId"]
 
   /**
    * Virtual attribute: returns the task name in uppercase.
@@ -136,6 +143,7 @@ class UserFrontendResource extends FrontendModelBaseResource {
         "lookupByEmail",
         "delayedLookupByEmail",
         "echoMessage",
+        "rejectDomainOperation",
         "echoObjectStyle",
         "echoOptional",
         "multiLineReturn",
@@ -163,6 +171,15 @@ class UserFrontendResource extends FrontendModelBaseResource {
    */
   async echoMessage(args) {
     return {echoed: args.message, length: args.times}
+  }
+
+  /** @returns {never} - Always rejects with a safe domain error. */
+  rejectDomainOperation() {
+    throw VelociousError.safe("Domain operation was rejected.", {
+      code: "domain-operation-rejected",
+      details: {reason: "conflict"},
+      errorType: "application_error"
+    })
   }
 
   /**
@@ -275,6 +292,9 @@ class SystemTestCommentFrontendResource extends FrontendModelBaseResource {
 
   static builtInMemberCommands = ["find"]
 
+  /** @type {string[]} */
+  static writableAttributes = ["body", "taskId"]
+
   /** @returns {Array<string>} - Permit spec for Comment writes. */
   permittedParams() {
     return ["body"]
@@ -305,6 +325,7 @@ const backendProjects = [
       Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,
+      TaskBoard: TaskBoardSyncResource,
       User: UserFrontendResource,
       UuidItem: SyncUuidItemResource
     }

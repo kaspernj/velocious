@@ -1,0 +1,34 @@
+# Canonical development Compose setup for Velocious.
+#
+# One ordinary `dev` service with a complete development-home bind and one
+# authorized read-only GitHub CLI configuration bind. The development home
+# (DEV_HOME_PATH) already contains this repository's checkout at
+# $DEV_HOME_PATH/velocious plus any sibling checkouts, installed
+# dependencies, caches, and tool state. Nothing else is mounted.
+#
+# Concurrent isolated instances use standard Compose project naming plus a
+# distinct DEV_HOME_PATH per instance, e.g.:
+#
+#   COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
+#     docker compose up --build --detach
+name: velocious
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    user: "1000:1000"
+    working_dir: /home/dev/velocious
+    environment:
+      GH_CONFIG_DIR: /home/dev/.config/gh
+      HOME: /home/dev
+      NODE_ENV: development
+    volumes:
+      # One configurable development home: the Velocious checkout at
+      # $DEV_HOME_PATH/velocious plus any sibling repositories, caches,
+      # settings, and node_modules all persist naturally under /home/dev.
+      - ${DEV_HOME_PATH:-/home/dev}:/home/dev
+      - ${GH_CONFIG_SOURCE_PATH:?Set GH_CONFIG_SOURCE_PATH in .env}:/home/dev/.config/gh:ro
+    command: ["sleep", "infinity"]

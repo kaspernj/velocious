@@ -69,6 +69,13 @@ configuration.broadcastToChannel("GameChat", {gameId: "abc"}, {from: "alice", te
 - `broadcastToChannel(name, broadcastParams, body)` iterates all active subscriptions to `name`, calls `instance.matches(broadcastParams)` on each, and sends the body to those that match. Routing, not authorization.
 - By default the broadcast only reaches subscribers in the *current* process. To deliver broadcasts across processes (HTTP server, background-jobs worker, sidecars, etc.) run a [Beacon broker](beacon.md) daemon and configure each peer to connect to it.
 
+### Publish ordering and failure semantics
+
+- Broadcasts for one channel are persisted (when the channel is replay-logged) and dispatched in strict FIFO order; an event's persistence always completes before the next broadcast on that same channel is dispatched.
+- Each channel has its own ordered queue, so a slow or failing publish on one channel never blocks publishes on unrelated channels.
+- A failed publish is logged and rethrown to anyone awaiting `awaitPendingBroadcasts()`. Items already queued behind the failure on that same channel do not run; work on other channels is unaffected.
+- `configuration.awaitPendingBroadcasts()` is a global snapshot barrier: it waits until every publish accepted before the call — across all channels, including work still queued behind earlier same-channel items — has settled, then rethrows the first failure. Work enqueued after the call is not awaited.
+
 ## Auth model — locked in
 
 **At subscribe time**, once:

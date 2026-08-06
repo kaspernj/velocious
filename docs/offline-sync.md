@@ -2,6 +2,8 @@
 
 This document records the target architecture for Velocious local-first sync. It is an implementation plan and compatibility contract for building reusable offline sync in Velocious and then migrating downstream apps such as Printyourticket/ticket-app and AwesomeTasks onto the framework primitives.
 
+For a source-verified adoption path, current implementation boundaries, and a migration checklist, see the [shared-resource sync developer guide](shared-resource-sync-guide.md). Concepts in this architecture are not necessarily implemented unless an implemented slice below or the developer guide says they are.
+
 ## Goals
 
 - Let frontend apps keep working for long periods with no backend connection.
@@ -256,6 +258,8 @@ AwesomeTasks is a good proof target for generic resource sync:
 
 The proof should validate that shared resources, offline grants, local mutation logs, peer forwarding, server replay, and server-sequenced changes are usable outside ticket-app.
 
+The implemented proof is documented in [`docs/awesome-tasks-offline-sync-proof.md`](awesome-tasks-offline-sync-proof.md).
+
 ## Open implementation decisions
 
 - Exact signing algorithm and key rotation strategy.
@@ -471,7 +475,7 @@ The pre-framework-channel declaration forms keep working but are deprecated: `ev
 
 #### User scope (server-enumerated) and per-delivery access
 
-A subscription with **empty conditions** is a *user scope* — "everything my ability can see". Its `authorizeChanges` runs with an empty-conditions scope (the app decides whether user scopes are allowed), and because it declares no conditions it matches every broadcast of its resource type. Broadcast routing therefore re-checks record access **per delivery** for user scopes: each published change is filtered through the sync resource's `changeDeliverable({params, scope, sync})`, whose default reuses the app's `scopeChangesQuery` — applying it to the change-feed model (which for an empty-conditions scope falls back to ability scoping) and checking whether the published change's feed row is visible in that scope. Scoped subscriptions (with explicit conditions) already routed through `matches()`, so they deliver unchanged with no extra query. Two subscribers with disjoint access each receive only their own changes over one connection (precedent: the frontend-models channel's per-delivery access check). The per-delivery re-check runs in the broadcast's ambient tenant/connection context; the feed's own scope columns and the app's ability scoping bound what each subscriber sees.
+A subscription with **empty conditions** is a *user scope* — "everything my ability can see". Its `authorizeChanges` runs with an empty-conditions scope (the app decides whether user scopes are allowed), and because it declares no conditions it matches every broadcast of its resource type. Broadcast routing therefore re-checks record access **per delivery** for user scopes: each published change is filtered through the sync resource's `changeDeliverable({params, scope, sync})`, whose default reuses the app's `scopeChangesQuery` — applying it to the change-feed model (which for an empty-conditions scope falls back to ability scoping) and checking whether the published change's feed row is visible in that scope. The `sync` argument is the **complete broadcast sync entry** — immutable sync-row `id`, actor-specific metadata, and every other publisher field — with only `resourceId`/`resourceType` normalized to strings (on a copy; the published entry is never mutated), so an override can authorize two entries for the same resource identity independently by their exact-row identity. Scoped subscriptions (with explicit conditions) already routed through `matches()`, so they deliver unchanged with no extra query. Two subscribers with disjoint access each receive only their own changes over one connection (precedent: the frontend-models channel's per-delivery access check). The per-delivery re-check runs in the broadcast's ambient tenant/connection context; the feed's own scope columns and the app's ability scoping bound what each subscriber sees.
 
 On the client, `syncClient().subscribeUserScope()` declares an empty-conditions scope for every pullable resource type, subscribes their `velocious-sync` channels, and pulls (the empty-conditions pull scope makes `scopeChangesQuery` fall back to ability scoping with per-scope cursor continuity). `unsubscribeUserScope()` deactivates the scopes and closes the subscriptions without disconnecting the shared connection.
 

@@ -41,11 +41,13 @@ export async function exportPeerMutationBundle({deviceCertificate, devicePrivate
     mutations.push({
       localRecordId: record.id,
       localSequence: record.sequence,
-      signedMutation: await createSignedMutation({
-        deviceCertificate,
-        devicePrivateKey,
-        mutation: record.mutation
-      })
+      signedMutation: record.signedMutation
+        ? /** @type {import("./device-identity.js").SignedSyncMutation} */ (record.signedMutation)
+        : await createSignedMutation({
+          deviceCertificate,
+          devicePrivateKey,
+          mutation: record.mutation
+        })
     })
   }
 
@@ -94,7 +96,7 @@ export async function importPeerMutationBundle({backendPublicKey, bundle, mutati
       continue
     }
 
-    const record = await mutationLog.append({mutation})
+    const record = await mutationLog.append({mutation, signedMutation: entry.signedMutation})
     const updated = await mutationLog.updateStatus({id: record.id, status: "peer-applied"})
     existingByIdempotencyKey.set(idempotencyKey, updated)
     imported.push({clientMutationId: mutation.clientMutationId, idempotencyKey, localRecordId: updated.id})

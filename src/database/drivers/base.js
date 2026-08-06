@@ -962,6 +962,23 @@ export default class VelociousDatabaseDriversBase {
   supportsDefaultPrimaryKeyUUID() { return false }
 
   /**
+   * Executes an insert that carries an explicit primary-key value
+   * (client-generated offline-sync ids). Drivers whose auto-increment columns
+   * reject explicit values (MSSQL IDENTITY) override this to run the insert
+   * with identity insert enabled in a single request.
+   * @param {object} args - Options object.
+   * @param {QueryOptions} args.options - Query options for the standard query path.
+   * @param {string} args.sql - Generated insert SQL.
+   * @param {string} args.tableName - Table being inserted into.
+   * @returns {Promise<QueryResultType>} - Insert result.
+   */
+  async insertWithExplicitPrimaryKey({options, sql, tableName}) {
+    void tableName
+
+    return await this.query(sql, options)
+  }
+
+  /**
    * Runs supports insert into returning.
    * @abstract
    * @returns {boolean} - Whether supports insert into returning.

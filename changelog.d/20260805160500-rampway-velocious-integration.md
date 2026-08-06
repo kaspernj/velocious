@@ -1,0 +1,1 @@
+- Add documented and real dummy-app compatibility coverage for the package-owned `rampway@0.4.0` durable deployment control plane, make route-hook `controllerClass` authoritative so an app-local controller cannot shadow a mounted package controller, and require Velocious 1.0.577 or newer for the mounted integration despite Rampway's broader declared peer range.

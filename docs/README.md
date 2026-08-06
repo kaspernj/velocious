@@ -10,15 +10,18 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
 - `docs/cli.md`: CLI process exit behavior for successful and rejected commands.
 - `docs/database-migrations.md`: Migration helpers, UTC datetime storage, implicit primary keys, and reference column defaults.
+- `docs/docker-development-environment.md`: Canonical `dev` Compose service, development-home bind contract, credential boundary, and the static contract verifier.
 - `docs/operation-scoped-transactions.md`: Explicit singular-database transactions with operation-bound models, records, savepoints, commit callbacks, and pool isolation.
-- `docs/http-server.md`: HTTP server worker configuration and socket distribution behavior.
+- `docs/http-server.md`: HTTP server worker configuration, socket distribution behavior, buffered response compression, and HEAD response semantics.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
+- `docs/rampway-integration.md`: Mounting and operating Rampway's package-owned durable deployment control plane in a Velocious application.
 - `docs/logging.md`: Rails-style request and database query logging behavior.
 - `docs/mailers.md`: EJS mailer templates, direct delivery, background delivery, and payload rendering.
 - `docs/model-initialization.md`: Eager and lazy record/frontend-model initialization behavior.
 - `docs/offline-sync.md`: Target architecture for local-first shared-resource sync, offline grants, peer transfer, and server-sequenced replay.
+- `docs/shared-resource-sync-guide.md`: Source-verified developer guide and gated migration checklist for shared resources, signed/P2P replay, and server catch-up.
 - `docs/live-queries.md`: `useLiveQuery` reactive local-model-change queries, the record-change bus, batching, and the invalidation cost model.
 - `docs/sync-envelope-replay-service.md`: Server-side sync envelope replay hook contract for app-owned sync receivers.
 - `docs/schema-metadata-cache.md`: Driver schema metadata caching, invalidation, and disabling.

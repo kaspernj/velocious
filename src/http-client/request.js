@@ -65,7 +65,9 @@ export default class Request {
    */
   prepare() {
     if (this.body) {
-      this.addHeader("Content-Length", Buffer.from(this.body).byteLength)
+      // Buffer.byteLength computes the UTF-8 length of strings without copying and
+      // returns .byteLength unchanged for Buffer/Uint8Array bodies.
+      this.addHeader("Content-Length", Buffer.byteLength(this.body, "utf8"))
     }
   }
 

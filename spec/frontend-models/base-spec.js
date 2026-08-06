@@ -822,6 +822,57 @@ describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () =
     }
   })
 
+  it("preserves safe frontend-model error fields on the thrown Error", async () => {
+    const User = buildTestModelClass()
+    const originalFetch = globalThis.fetch
+    /** @type {FetchCall[]} */
+    const calls = []
+
+    try {
+      globalThis.fetch = /** @type {typeof fetch} */ (async (url, options) => {
+        const body = recordSharedFrontendModelFetchCall(calls, url, options)
+
+        return {
+          ok: true,
+          status: 200,
+          /** @returns {Promise<string>} */
+          text: async () => JSON.stringify(sharedFrontendModelResponse(body, {
+            correlationId: "30c8be88-e2fb-42fe-8a2a-fcb02eeb282d",
+            details: {code: "task_not_found"},
+            errorMessage: "Task was not found.",
+            errorType: "record_not_found",
+            status: "error",
+            velocious: {code: "task-not-found"}
+          }))
+        }
+      })
+
+      let captured
+
+      try {
+        await User.executeCustomCommand({
+          commandName: "place",
+          commandType: "place",
+          payload: {},
+          resourcePath: "/task-boards"
+        })
+      } catch (error) {
+        captured = error
+      }
+
+      expect(captured instanceof Error).toEqual(true)
+      expect(captured.message).toEqual("Task was not found.")
+      expect(captured.errorMessage).toEqual("Task was not found.")
+      expect(captured.errorType).toEqual("record_not_found")
+      expect(captured.details).toEqual({code: "task_not_found"})
+      expect(captured.correlationId).toEqual("30c8be88-e2fb-42fe-8a2a-fcb02eeb282d")
+      expect(captured.velocious).toEqual({code: "task-not-found"})
+    } finally {
+      resetFrontendModelTransport()
+      globalThis.fetch = originalFetch
+    }
+  })
+
   it("normalizes custom command arguments", () => {
     const User = buildTestModelClass()
 

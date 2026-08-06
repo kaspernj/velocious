@@ -6,6 +6,7 @@ import dummyConfiguration from "../../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import uniqunize from "uniqunize"
 
@@ -44,6 +45,7 @@ describe("Cli - Commands - db:migrate", () => {
     const internalTables = new Set([
       "background_job_count_revisions",
       "background_job_concurrency",
+      "background_job_schedule_keys",
       "background_jobs",
       "velocious_attachments",
       "velocious_internal_migrations",
@@ -76,6 +78,8 @@ describe("Cli - Commands - db:migrate", () => {
         "string_subject_interactions",
         "string_subjects",
         "sync_entries",
+        "task_board_cards",
+        "task_boards",
         "tasks",
         "users",
         "uuid_acts_as_list_items",
@@ -200,6 +204,8 @@ describe("Cli - Commands - db:migrate", () => {
           "string_subject_interactions",
           "string_subjects",
           "sync_entries",
+          "task_board_cards",
+          "task_boards",
           "tasks",
           "users",
           "uuid_acts_as_list_items",
@@ -229,7 +235,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20260629160000",
         "20260702150000",
         "20260706120000",
-        "20260726132000"
+        "20260726132000",
+        "20260803120000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
@@ -250,6 +257,8 @@ describe("Cli - Commands - db:migrate", () => {
           "string_subject_interactions",
           "string_subjects",
           "sync_entries",
+          "task_board_cards",
+          "task_boards",
           "tasks",
           "users",
           "uuid_acts_as_list_items",
@@ -279,13 +288,14 @@ describe("Cli - Commands - db:migrate", () => {
         "20260629160000",
         "20260702150000",
         "20260706120000",
-        "20260726132000"
+        "20260726132000",
+        "20260803120000"
       ])
     }
   })
 
   it("writes structure sql for sqlite", {databaseCleaning: {transaction: false}}, async () => {
-    const directory = dummyDirectory()
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-db-migrate-with-structure-"))
     const configuration = new Configuration({
       database: dummyConfiguration.database,
       directory,
@@ -307,54 +317,59 @@ describe("Cli - Commands - db:migrate", () => {
       testing: true
     })
 
-    if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
-      console.warn(`Skipping structure sql assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
-      return
-    }
-
-    await cli.getConfiguration().ensureConnections(async (dbs) => {
-      await cli.execute()
-
-      const structurePath = path.join(directory, "db", "structure-default.sql")
-      const actual = await fs.readFile(structurePath, "utf8")
-      const rows = await dbs.default.query("SELECT type, sql, name FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      const tables = []
-      const views = []
-      const indexes = []
-      const triggers = []
-      const others = []
-
-      for (const row of rows) {
-        const rawSql = row.sql || row.SQL
-        const rawType = row.type || row.TYPE
-        const statement = rawSql ? normalizeSqlStatement(String(rawSql)) : ""
-
-        if (!statement) continue
-
-        const normalizedType = rawType ? String(rawType).toLowerCase() : ""
-
-        if (normalizedType === "table") {
-          tables.push(statement)
-        } else if (normalizedType === "view") {
-          views.push(statement)
-        } else if (normalizedType === "index") {
-          indexes.push(statement)
-        } else if (normalizedType === "trigger") {
-          triggers.push(statement)
-        } else {
-          others.push(statement)
-        }
+    try {
+      if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
+        console.warn(`Skipping structure sql assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
+        return
       }
 
-      const expected = [...tables, ...views, ...indexes, ...triggers, ...others].join("\n\n") + "\n"
-      const ddlOnly = actual.split("\n").filter((l) => !l.startsWith("INSERT INTO schema_migrations")).join("\n")
+      await cli.getConfiguration().ensureConnections(async (dbs) => {
+        await cli.execute()
 
-      expect(ddlOnly).toEqual(expected)
-    })
+        const structurePath = path.join(directory, "db", "structure-default.sql")
+        const actual = await fs.readFile(structurePath, "utf8")
+        const rows = await dbs.default.query("SELECT type, sql, name FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        const tables = []
+        const views = []
+        const indexes = []
+        const triggers = []
+        const others = []
+
+        for (const row of rows) {
+          const rawSql = row.sql || row.SQL
+          const rawType = row.type || row.TYPE
+          const statement = rawSql ? normalizeSqlStatement(String(rawSql)) : ""
+
+          if (!statement) continue
+
+          const normalizedType = rawType ? String(rawType).toLowerCase() : ""
+
+          if (normalizedType === "table") {
+            tables.push(statement)
+          } else if (normalizedType === "view") {
+            views.push(statement)
+          } else if (normalizedType === "index") {
+            indexes.push(statement)
+          } else if (normalizedType === "trigger") {
+            triggers.push(statement)
+          } else {
+            others.push(statement)
+          }
+        }
+
+        const expected = [...tables, ...views, ...indexes, ...triggers, ...others].join("\n\n") + "\n"
+        const ddlOnly = actual.split("\n").filter((l) => !l.startsWith("INSERT INTO schema_migrations")).join("\n")
+
+        expect(ddlOnly).toEqual(expected)
+      })
+    } finally {
+      await cli.getConfiguration().closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
+    }
   })
 
   it("skips writing structure sql by default in test", {databaseCleaning: {transaction: false}}, async () => {
-    const directory = dummyDirectory()
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-db-migrate-without-structure-"))
     const configuration = new Configuration({
       database: dummyConfiguration.database,
       directory,
@@ -373,20 +388,24 @@ describe("Cli - Commands - db:migrate", () => {
       testing: true
     })
 
-    if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
-      console.warn(`Skipping structure sql disable assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
-      return
+    try {
+      if (cli.getConfiguration().getDatabaseType("default") != "sqlite") {
+        console.warn(`Skipping structure sql disable assertion: default database is ${cli.getConfiguration().getDatabaseType("default")}`)
+        return
+      }
+
+      await cli.getConfiguration().ensureConnections(async () => {
+        const structurePath = path.join(directory, "db", "structure-default.sql")
+
+        await cli.execute()
+
+        await expect(async () => {
+          await fs.readFile(structurePath, "utf8")
+        }).toThrow(/ENOENT/i)
+      })
+    } finally {
+      await cli.getConfiguration().closeDatabaseConnections()
+      await fs.rm(directory, {force: true, recursive: true})
     }
-
-    await cli.getConfiguration().ensureConnections(async () => {
-      const structurePath = path.join(directory, "db", "structure-default.sql")
-
-      await fs.rm(structurePath, {force: true})
-      await cli.execute()
-
-      await expect(async () => {
-        await fs.readFile(structurePath, "utf8")
-      }).toThrow(/ENOENT/i)
-    })
   })
 })

@@ -19,6 +19,7 @@ import TestRunner from "../src/testing/test-runner.js"
 import {normalizeExamplePatterns, parseFilters} from "../src/testing/test-filter-parser.js"
 import fileExists from "../src/utils/file-exists.js"
 import dummyDirectory from "../spec/dummy/dummy-directory.js"
+import {withSourcePeerPackage} from "../src/environment-handlers/node/source-peer-package.js"
 
 const rootDir = process.cwd()
 const distDir = path.join(rootDir, "dist")
@@ -353,7 +354,7 @@ async function startBrowserBackendServer(configuration, port) {
   return application
 }
 
-async function main() {
+async function runBrowserTests() {
   const processArgs = ["test:browser", ...process.argv.slice(2)]
 
   process.env.VELOCIOUS_BROWSER_TESTS = "true"
@@ -451,6 +452,10 @@ async function main() {
       await backendApplication.stop()
     }
   }
+}
+
+async function main() {
+  await withSourcePeerPackage(rootDir, runBrowserTests)
 }
 
 /**

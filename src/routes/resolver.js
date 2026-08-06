@@ -18,39 +18,6 @@ function normalizeActionName(actionName) {
   return inflection.camelize(actionName.replaceAll("-", "_").replaceAll("/", "_"), true)
 }
 
-/**
- * Runs missing module specifier from error.
- * @param {Error} error - Import error.
- * @returns {string | undefined} - Missing module specifier from an ERR_MODULE_NOT_FOUND message.
- */
-function missingModuleSpecifierFromError(error) {
-  const firstLine = error.message.split("\n")[0] || ""
-  const match = firstLine.match(/^Cannot find (?:module|package) ['"](.+?)['"] imported from /)
-
-  return match?.[1]
-}
-
-/**
- * Runs is missing target module error.
- * @param {object} args - Arguments.
- * @param {Error} args.error - Import error.
- * @param {string} args.targetPath - Target controller path.
- * @param {string} args.targetImportSpecifier - Target controller import specifier.
- * @returns {boolean} - True when the missing module is the target controller file.
- */
-function isMissingTargetModuleError({error, targetPath, targetImportSpecifier}) {
-  const ensuredError = ensureError(error)
-  const isModuleNotFoundError = "code" in ensuredError && ensuredError.code === "ERR_MODULE_NOT_FOUND"
-
-  if (!isModuleNotFoundError) return false
-
-  const missingSpecifier = missingModuleSpecifierFromError(ensuredError)
-
-  if (!missingSpecifier) return false
-
-  return missingSpecifier === targetPath || missingSpecifier === targetImportSpecifier
-}
-
 export default class VelociousRoutesResolver {
   /**
    * Narrows the runtime value to the documented type.
@@ -274,25 +241,11 @@ export default class VelociousRoutesResolver {
    * @returns {Promise<typeof import("../controller.js").default>} - The resolved controller class.
    */
   async resolveControllerClass({controllerPath}) {
+    if (this.routeHookControllerClass) return this.routeHookControllerClass
+
     const controllerImportSpecifier = toImportSpecifier(controllerPath)
 
-    if (!this.routeHookControllerClass) {
-      return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
-    }
-
-    try {
-      return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
-    } catch (error) {
-      const isMissingControllerFileError = isMissingTargetModuleError({
-        error: ensureError(error),
-        targetImportSpecifier: controllerImportSpecifier,
-        targetPath: controllerPath
-      })
-
-      if (!isMissingControllerFileError) throw ensureError(error)
-
-      return /** @type {typeof import("../controller.js").default} */ (this.routeHookControllerClass)
-    }
+    return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
   }
 
   /**

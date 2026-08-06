@@ -112,6 +112,44 @@ describe("sync peer mutation import/export", () => {
     ])
   })
 
+  it("stores the original signed mutation envelope on imported peer-applied records", async () => {
+    const backendKeys = await generateSyncSigningKeyPair()
+    const peerKeys = await generateSyncSigningKeyPair()
+    const peerCertificate = await buildDeviceCertificate({
+      actorDeviceId: "peer-device-1",
+      actorUserId: "peer-user-1",
+      backendKeys,
+      deviceKeys: peerKeys
+    })
+    const mutationLog = new LocalMutationLog({idGenerator: () => "import-1", storage: buildMemoryStorage()})
+    const signedMutation = await createSignedMutation({
+      deviceCertificate: peerCertificate,
+      devicePrivateKey: peerKeys.privateKey,
+      mutation: buildMutation({
+        actorDeviceId: "peer-device-1",
+        actorUserId: "peer-user-1",
+        clientMutationId: "peer-mutation-1"
+      })
+    })
+
+    await importPeerMutationBundle({
+      backendPublicKey: backendKeys.publicKey,
+      bundle: {
+        exportedAt: "2026-06-25T10:00:00.000Z",
+        format: "velocious.sync.peer-mutation-bundle.v1",
+        mutations: [{signedMutation}]
+      },
+      mutationLog,
+      now: new Date("2026-06-25T10:00:00.000Z")
+    })
+
+    const records = await mutationLog.records()
+
+    expect(records).toHaveLength(1)
+    expect(records[0].status).toEqual("peer-applied")
+    expect(records[0].signedMutation).toEqual(signedMutation)
+  })
+
   it("rejects invalid peer mutations without appending them", async () => {
     const backendKeys = await generateSyncSigningKeyPair()
     const peerKeys = await generateSyncSigningKeyPair()

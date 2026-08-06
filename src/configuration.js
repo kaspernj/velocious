@@ -120,6 +120,10 @@ const DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES = 256
 const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_BYTES = 16 * 1024 * 1024
 const DEFAULT_WEBSOCKET_OUTBOUND_MAX_PENDING_FRAMES = 256
 
+const DEFAULT_COMPRESSION_THRESHOLD = 1024
+const DEFAULT_COMPRESSION_BROTLI_QUALITY = 4
+const DEFAULT_COMPRESSION_GZIP_LEVEL = 6
+
 /**
  * Validates a positive safe integer configuration value.
  * @param {?} value - Configured positive safe integer.
@@ -134,6 +138,63 @@ function positiveSafeInteger(value, name, defaultValue) {
   }
 
   return value
+}
+
+/**
+ * Validates an integer configuration value inside an inclusive range.
+ * @param {?} value - Configured integer.
+ * @param {string} name - Configuration key.
+ * @param {number} min - Minimum accepted value (inclusive).
+ * @param {number} max - Maximum accepted value (inclusive).
+ * @param {number} defaultValue - Default value.
+ * @returns {number} - Validated configured or default value.
+ */
+function integerInRange(value, name, min, max, defaultValue) {
+  if (value === undefined) return defaultValue
+  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+    throw new TypeError(`${name} must be an integer between ${min} and ${max}`)
+  }
+
+  return value
+}
+
+/**
+ * Normalizes the buffered HTTP response compression configuration. Compression is
+ * enabled by default when the setting is absent; `false` or `{enabled: false}`
+ * disables it globally.
+ * @param {boolean | import("./configuration-types.js").HttpCompressionConfiguration | undefined} value - Configured compression value.
+ * @returns {import("./configuration-types.js").NormalizedHttpCompressionConfiguration} - Normalized compression configuration.
+ */
+function normalizeHttpCompression(value) {
+  if (value === undefined || value === true) {
+    return {enabled: true, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
+  }
+
+  if (value === false) {
+    return {enabled: false, threshold: DEFAULT_COMPRESSION_THRESHOLD, brotliQuality: DEFAULT_COMPRESSION_BROTLI_QUALITY, gzipLevel: DEFAULT_COMPRESSION_GZIP_LEVEL}
+  }
+
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError(`httpServer.compression must be a boolean or an object, got: ${String(value)}`)
+  }
+
+  const {brotliQuality, enabled, gzipLevel, threshold, ...restCompression} = value
+  const restCompressionKeys = Object.keys(restCompression)
+
+  if (restCompressionKeys.length > 0) {
+    throw new TypeError(`httpServer.compression received unknown keys: ${restCompressionKeys.join(", ")} (supported: brotliQuality, enabled, gzipLevel, threshold)`)
+  }
+
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    throw new TypeError(`httpServer.compression.enabled must be a boolean, got: ${String(enabled)}`)
+  }
+
+  return {
+    enabled: enabled ?? true,
+    threshold: positiveSafeInteger(threshold, "httpServer.compression.threshold", DEFAULT_COMPRESSION_THRESHOLD),
+    brotliQuality: integerInRange(brotliQuality, "httpServer.compression.brotliQuality", 0, 11, DEFAULT_COMPRESSION_BROTLI_QUALITY),
+    gzipLevel: integerInRange(gzipLevel, "httpServer.compression.gzipLevel", 0, 9, DEFAULT_COMPRESSION_GZIP_LEVEL)
+  }
 }
 
 export default class VelociousConfiguration {
@@ -225,6 +286,19 @@ export default class VelociousConfiguration {
     }
 
     this._isInitialized = false
+    this._modelsInitialized = false
+    /**
+     * Invalidates model phases that started before database connections closed.
+     * @type {number}
+     */
+    this._modelInitializationGeneration = 0
+    /**
+     * In-progress `initializeModels()` promise. Model initialization is an
+     * atomic bootstrap phase: concurrent callers share it, and a rejection
+     * leaves the phase eligible for a later complete attempt.
+     * @type {Promise<void> | undefined}
+     */
+    this._initializeModelsPromise = undefined
     /**
      * In-progress `initialize()` promise, memoized so concurrent callers await
      * the same bootstrap. Reset to undefined if initialization fails.
@@ -236,6 +310,7 @@ export default class VelociousConfiguration {
 
     this.httpServer = {
       ...(httpServer || {}),
+      compression: normalizeHttpCompression(httpServer?.compression),
       websocketInboundQueue: {
         maxPendingBytes: positiveSafeInteger(websocketInboundQueue?.maxPendingBytes, "httpServer.websocketInboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_BYTES),
         maxPendingMessages: positiveSafeInteger(websocketInboundQueue?.maxPendingMessages, "httpServer.websocketInboundQueue.maxPendingMessages", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES)
@@ -498,6 +573,14 @@ export default class VelociousConfiguration {
    */
   getCors() {
     return this.cors
+  }
+
+  /**
+   * Runs get http server compression.
+   * @returns {import("./configuration-types.js").NormalizedHttpCompressionConfiguration} - Normalized buffered response compression configuration.
+   */
+  getHttpServerCompression() {
+    return this.httpServer.compression
   }
 
   /**
@@ -1950,25 +2033,39 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeModels(args = {type: "server"}) {
-    if (!this._modelsInitialized) {
-      this._modelsInitialized = true
+    if (this._modelsInitialized) return
+    if (this._initializeModelsPromise) return await this._initializeModelsPromise
 
+    const modelInitializationGeneration = this._modelInitializationGeneration
+    const initializeModelsPromise = (async () => {
       const shouldSkipDummyModelInitialization = process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
         && process.env.VELOCIOUS_BROWSER_TESTS === "true"
         && this.getEnvironment() === "test"
 
-      if (shouldSkipDummyModelInitialization) {
-        return
+      if (!shouldSkipDummyModelInitialization) {
+        if (this._initializeModels) {
+          await this._initializeModels({configuration: this, type: args.type})
+        }
+
+        await this.getEnvironmentHandler().initializePackageModels(this)
+        await initializeAuditedModelRelationships(this)
+
+        await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
       }
 
-      if (this._initializeModels) {
-        await this._initializeModels({configuration: this, type: args.type})
+      if (this._modelInitializationGeneration === modelInitializationGeneration) {
+        this._modelsInitialized = true
       }
+    })()
 
-      await this.getEnvironmentHandler().initializePackageModels(this)
-      await initializeAuditedModelRelationships(this)
+    this._initializeModelsPromise = initializeModelsPromise
 
-      await this.getEnvironmentHandler().initializeFrontendModelWebsocketPublishers(this)
+    try {
+      await initializeModelsPromise
+    } finally {
+      if (this._initializeModelsPromise === initializeModelsPromise) {
+        this._initializeModelsPromise = undefined
+      }
     }
   }
 
@@ -2003,6 +2100,12 @@ export default class VelociousConfiguration {
 
     this._initializePromise = (async () => {
       await this.initializeModels({type})
+
+      // Model initialization can be invalidated by a concurrent connection close.
+      // If models are not ready, stop without marking the configuration initialized
+      // so the next caller retries a full bootstrap.
+      if (!this._modelsInitialized) return
+
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
       this._validateResourceRelationshipsOnModels()
@@ -2033,6 +2136,13 @@ export default class VelociousConfiguration {
       // caller awaiting the same cached rejection.
       this._initializePromise = undefined
       throw error
+    }
+
+    // If the inner IIFE returned without marking the configuration initialized
+    // (e.g. because models were invalidated mid-bootstrap), clear the promise so
+    // a later call retries a full bootstrap.
+    if (!this._isInitialized) {
+      this._initializePromise = undefined
     }
   }
 
@@ -3174,8 +3284,10 @@ export default class VelociousConfiguration {
           PoolClass.clearGlobalConnections(this)
         }
 
-        // Allow models to be re-initialized after connections are closed.
+        // Allow full re-initialization after connections are closed.
+        this._modelInitializationGeneration += 1
         this._modelsInitialized = false
+        this._isInitialized = false
       }
     })()
 

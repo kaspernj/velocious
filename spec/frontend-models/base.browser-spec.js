@@ -16,7 +16,7 @@ class User extends FrontendModelBase {
       attributes: ["id", "email", "createdAt"],
       builtInCollectionCommands: ["index"],
       builtInMemberCommands: ["find"],
-      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail"],
+      collectionCommands: ["currentSessionCookie", "setSessionCookie", "lookupByEmail", "delayedLookupByEmail", "rejectDomainOperation"],
       modelName: "User",
       primaryKey: "id"
     }
@@ -66,6 +66,16 @@ class User extends FrontendModelBase {
       commandName: "delayed-lookup-by-email",
       commandType: "delayed-lookup-by-email",
       payload,
+      resourcePath: this.resourcePath()
+    }))
+  }
+
+  /** @returns {Promise<never>} - Always rejects with a safe domain error. */
+  static async rejectDomainOperation() {
+    return /** @type {Promise<never>} */ (this.executeCustomCommand({
+      commandName: "reject-domain-operation",
+      commandType: "reject-domain-operation",
+      payload: {},
       resourcePath: this.resourcePath()
     }))
   }
@@ -444,6 +454,32 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
       const user = await MinifiedUserTransportModel.findBy({email: "john@example.com"})
 
       expect(user?.email()).toEqual("john@example.com")
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("preserves safe custom-command error fields over real browser HTTP requests", async () => {
+    if (!runBrowserHttpIntegration()) return
+
+    configureBrowserTransport()
+
+    try {
+      await seedUsers()
+      let captured
+
+      try {
+        await User.rejectDomainOperation()
+      } catch (error) {
+        captured = error
+      }
+
+      expect(captured instanceof Error).toEqual(true)
+      expect(captured.message).toEqual("Domain operation was rejected.")
+      expect(captured.errorMessage).toEqual("Domain operation was rejected.")
+      expect(captured.errorType).toEqual("application_error")
+      expect(captured.details).toEqual({reason: "conflict"})
+      expect(captured.velocious).toEqual({code: "domain-operation-rejected"})
     } finally {
       resetFrontendModelTransport()
     }

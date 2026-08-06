@@ -161,22 +161,22 @@ function queryForEntry({entry, modelClass, parentIds, sourceModel}) {
 
   const foreignKey = relationship.getForeignKey()
   /**
-   * Where conditions.
+   * Mandatory cohort conditions.
    * @type {Record<string, ?>} */
-  const whereConditions = {[foreignKey]: parentIds}
+  const mandatoryWhereConditions = {[foreignKey]: parentIds}
 
   if (relationship.getPolymorphic && relationship.getPolymorphic()) {
     const typeColumn = relationship.getPolymorphicTypeColumn()
-    whereConditions[typeColumn] = modelClass.getModelName()
-  }
-
-  if (entry.where) {
-    Object.assign(whereConditions, entry.where)
+    mandatoryWhereConditions[typeColumn] = modelClass.getModelName()
   }
 
   const baseQuery = sourceModel.queryForModel(targetModelClass)
   baseQuery._forceQualifyBaseTable = true
-  baseQuery.where(whereConditions)
+  baseQuery.where(mandatoryWhereConditions)
+
+  if (entry.where) {
+    baseQuery.where(entry.where)
+  }
 
   const countQuery = relationship.applyScope(baseQuery)
 

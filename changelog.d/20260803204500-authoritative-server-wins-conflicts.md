@@ -1,0 +1,1 @@
+Server-wins routed replay conflicts now include resource-serialized authoritative server values for affected fields that are both writable and readable, alongside record identity and version. Peers can converge those returned fields locally without another backend read, while unaffected, writable-but-hidden, unpermitted, and private fields stay out of the response.

@@ -198,6 +198,91 @@ describe("Record - advisory lock hold timeout", () => {
     ])
   })
 
+  it("uses a dedicated advisory-lock connection via dedicatedConnection without a hold timeout", async () => {
+    const events = []
+    const appConnection = {
+      async releaseAdvisoryLock() {
+        events.push("app release")
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock() {
+        events.push("app acquire")
+
+        return true
+      }
+    }
+    const lockConnection = {
+      async close() {
+        events.push("lock close")
+      },
+
+      getArgs() {
+        return {}
+      },
+
+      async releaseAdvisoryLock(name) {
+        events.push(`lock release ${name}`)
+
+        return true
+      },
+
+      async tryAcquireAdvisoryLock(name) {
+        events.push(`lock acquire ${name}`)
+
+        return true
+      }
+    }
+    const lockPool = {
+      async spawnConnection() {
+        events.push("spawn lock connection")
+
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (lockConnection)
+      }
+    }
+    const configuration = {
+      getDatabasePool(identifier) {
+        events.push(`pool ${identifier}`)
+
+        return /** @type {import("../../../src/database/pool/base.js").default} */ (lockPool)
+      },
+      registerAdvisoryLockConnection() {},
+      unregisterAdvisoryLockConnection() {}
+    }
+    class DedicatedConnectionRecord extends VelociousDatabaseRecord {
+      static async ensureInitialized() {}
+
+      static _getConfiguration() {
+        return /** @type {import("../../../src/configuration.js").default} */ (configuration)
+      }
+
+      static connection() {
+        return /** @type {import("../../../src/database/drivers/base.js").default} */ (appConnection)
+      }
+
+      static getDatabaseIdentifier() {
+        return "default"
+      }
+    }
+
+    const result = await DedicatedConnectionRecord.withAdvisoryLockOrFail("dedicated-lock", async () => {
+      events.push(DedicatedConnectionRecord.connection() === appConnection ? "callback app connection" : "callback lock connection")
+
+      return "done"
+    }, {dedicatedConnection: true})
+
+    expect(result).toEqual("done")
+    expect(events).toEqual([
+      "pool default",
+      "spawn lock connection",
+      "lock acquire dedicated-lock",
+      "callback app connection",
+      "lock release dedicated-lock",
+      "lock close"
+    ])
+  })
+
   it("does not close externally-owned advisory-lock connections", async () => {
     const events = []
     const externalConnection = {}

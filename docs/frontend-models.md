@@ -1,5 +1,7 @@
 # Frontend Models
 
+Projects sharing resource policy between backend and local/offline runtimes should also read the [shared-resource sync developer guide](shared-resource-sync-guide.md), including its permit and portable-query boundaries.
+
 ## Core transport
 - Frontend models run over HTTP transport, not local database connections.
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
@@ -11,12 +13,12 @@
 ## Error payloads
 
 ### Unexpected errors
-- Unexpected frontend-model endpoint failures return `errorMessage: "Request failed."` by default so internal exception details are not exposed to clients.
+- Unexpected frontend-model endpoint failures return `errorType: "internal_error"`, `errorMessage: "Request failed."`, and a server-generated `correlationId` so clients can reference the matching server report without receiving internal exception details.
 - `development` and `test` responses also include `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` for faster browser/system-test diagnosis.
 - Other non-production environments, such as `staging`, can opt into the same debug fields with `exposeInternalErrorsToClients: true` on the app `Configuration`.
 - `production` always keeps the generic response, even if `exposeInternalErrorsToClients` is set.
 - `configuration.addClientErrorPayloadReporter(...)` can append client-safe metadata to the error payload. For frontend-model endpoint failures, the reporter `context` includes `frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. Reporters also receive `requestDetails` with `httpMethod`, `path`, and a sanitized parsed `body` snapshot when available.
-- Unexpected frontend-model failures are emitted on `configuration.getErrorEvents()` as `framework-error` and `all-error`. These event payloads include the raw `request` for compatibility plus the same sanitized `requestDetails` snapshot. Expected user-flow errors, including validation errors, `safeToExpose` errors, `error.velocious` metadata, and non-empty `error.errorType`, are not emitted as framework errors.
+- Unexpected frontend-model failures are emitted on `configuration.getErrorEvents()` as `framework-error` and `all-error`. These event payloads include the same `correlationId` returned to the client, the raw `request` for compatibility, and the same sanitized `requestDetails` snapshot. Expected user-flow errors, including validation errors, `safeToExpose` errors, and `error.velocious` metadata, are not emitted as framework errors. A raw `error.errorType` property is not a safety marker and does not suppress reporting.
 - `requestDetails.body` redacts common secret keys, truncates large strings and arrays, summarizes uploaded files and buffers without bytes, and compacts oversized frontend-model batches while preserving `requestId`, `model`, `commandType` / `customPath`, and payload shape.
 - Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `preload`, `group`, `sort`, `pluck`, or Ransack attributes, are frontend-model query errors. They return the specific query error message and `velocious.code: "frontend-model-query-error"` instead of being emitted as framework errors.
 - Polymorphic relationships can be preloaded directly, but nested preloads through a polymorphic relationship are query errors because there is no single target model to validate against.
@@ -41,6 +43,23 @@
 - `validationErrors` is keyed by attribute name; each entry is an array of objects with `type` (validator name), `message` (short description), and `fullMessage` (human-readable error including the attribute label).
 - Unlike unexpected errors, validation errors are safe to expose in all environments (including production) because they only carry user-fixable input errors.
 - Internal details (stack traces, SQL errors) are never leaked through validation error responses.
+
+### Safe application errors
+- Backend code can throw `VelociousError.safe(message, {errorType, details, code})` when the message and optional structured details are explicitly safe for clients.
+- Supported stable `errorType` values are `application_error`, `authorization_error`, `record_not_found`, and `validation_error`. Built-in missing or authorization-scoped records use `record_not_found` so the response does not reveal whether an inaccessible record exists.
+- Existing `velocious.code` metadata remains available for compatibility. Explicit `details` are copied to the top-level response without copying arbitrary properties, causes, stacks, SQL, or other exception internals.
+- `RecordNotFoundError` is classified as `record_not_found`, but its backend diagnostic message is replaced with `Record not found.` so model internals and identifiers are not exposed. Ordinary `Error` instances remain unexpected even if application code attaches an `errorType` property.
+- The frontend-model caller throws an `Error` whose `message` is the displayed message and preserves `errorMessage`, `errorType`, `details`, `correlationId`, `validationErrors`, and `velocious` when supplied by the server.
+
+```js
+import VelociousError from "velocious/build/src/velocious-error.js"
+
+throw VelociousError.safe("Task placement was rejected.", {
+  code: "task-placement-rejected",
+  details: {reason: "conflict"},
+  errorType: "application_error"
+})
+```
 
 ## Frontend vs backend model API differences
 - Frontend models expose a narrower query surface (mainly `find`, `findBy`, `findByOrFail`, `findOrInitializeBy`, `findOrCreateBy`, `toArray`, `where`, `joins`, `sort`, `order`, `group`, `distinct`, `pluck`, `count`, `limit`, `offset`, `page`, `perPage`) and do not expose the full backend query API (raw SQL joins, etc.).

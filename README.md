@@ -9,23 +9,26 @@
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
+* Optional Rampway-owned durable deployment control plane mounted through the standard routes DSL on Velocious 1.0.577 or newer (see [docs/rampway-integration.md](docs/rampway-integration.md))
 * Controllers and views for HTTP endpoints
 * Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md) and [docs/websocket-channels.md](docs/websocket-channels.md))
-* Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see [docs/offline-sync.md](docs/offline-sync.md))
-* Declarative client sync scopes with per-scope cursors, automatic mutation tracking, realtime delivery, and `sync`/`pull` progress reporting for "X of Y" import screens (see [docs/sync-client.md](docs/sync-client.md))
+* Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see the [shared-resource sync developer guide](docs/shared-resource-sync-guide.md) and [offline sync architecture](docs/offline-sync.md))
+* Declarative client sync scopes with per-scope cursors, automatic mutation tracking, realtime delivery whose per-recipient authorization hook receives the complete persisted sync envelope, and `sync`/`pull` progress reporting for "X of Y" import screens (see [docs/sync-client.md](docs/sync-client.md) and [docs/offline-sync.md](docs/offline-sync.md))
 * Reactive `useLiveQuery(Model.where(...))` queries that stay current from committed local model changes across local writes, pulls, and realtime (see [docs/live-queries.md](docs/live-queries.md))
-* Server-side sync envelope replay orchestration for app-owned sync receivers (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
+* Server-side sync envelope replay orchestration for app-owned sync receivers, including allowlisted authoritative values for conflict resolution (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
+* AwesomeTasks-shaped offline sync proof using routed resources, domain commands, signed offline grants, and peer-forwarded mutations (see the [developer guide](docs/shared-resource-sync-guide.md) and [proof](docs/awesome-tasks-offline-sync-proof.md))
 * SQLite web persistence that automatically prefers OPFS, then IndexedDB, and migrates legacy persisted bytes when possible (see [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, and linting (see [docs/factories.md](docs/factories.md))
-* Per-row association counts via `.withCount(...)`, including safe batching of structurally identical aggregates, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
+* Per-row association counts via `.withCount(...)`, including cohort-safe intersected filters and safe batching of structurally identical aggregates, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)`, with compatible projections sharing a roundtrip while preserving declared alias-overwrite order, on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
+* Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
 * Background jobs with failure events for production reporting and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md) and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
@@ -92,6 +95,45 @@ npm run test:expo
 ```
 
 Maintainers cutting a package release must follow the [Velocious release runbook](docs/releasing.md); `npm run release:patch` commits, pushes, and publishes rather than acting as a local-only version command.
+
+# Docker development environment
+
+The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` service used by humans, CI, and agent systems alike (see [docs/docker-development-environment.md](docs/docker-development-environment.md)). The image is Ubuntu 26.04 LTS (pinned by digest) with Node.js 24.x from signed NodeSource, the universal apt coding/debugging baseline, and the newest published provider CLIs; it is source-independent — no project source is copied and no project dependencies are installed at image build time.
+
+Prerequisites: Docker with the Compose v2 plugin, and this repository checked out at `$DEV_HOME_PATH/velocious` (default `DEV_HOME_PATH`: `/home/dev`).
+
+First-use setup: copy `.env.example` to the git-ignored `.env` and set `GH_CONFIG_SOURCE_PATH` to an existing host GitHub CLI config directory:
+
+```bash
+cp .env.example .env
+```
+
+`$DEV_HOME_PATH` must be a dedicated development home that already exists, holds no credentials or secrets, and is owned by (or at least writable by) UID/GID 1000 — the in-container `dev` user. Do not point it at a general host home directory, and do not recursively chown an existing home; the external environment owns safe initial provisioning.
+
+Normal usage:
+
+```bash
+docker compose up --build --detach dev
+docker compose exec dev bash
+scripts/docker-run.sh npm ci   # one-off command in a disposable container
+```
+
+The dev service preserves the complete `$DEV_HOME_PATH` bind at `/home/dev`, so dependencies, caches, settings, and `node_modules` persist naturally across runs. Install dependencies with the normal package commands inside the service (for example `docker compose exec dev npm ci`), never at image build time.
+
+Concurrent isolated instances use the standard Compose project-name contract plus a distinct development home per instance:
+
+```bash
+COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
+  docker compose up --build --detach dev
+```
+
+GitHub CLI authentication is the sole authorized credential boundary: the host config directory named by `GH_CONFIG_SOURCE_PATH` is mounted read-only at `/home/dev/.config/gh`, with container-side `GH_CONFIG_DIR` pointing there. Do not add SSH keys or other credential mounts. Kimi (and other provider) credentials are intentionally kept out of the tracked Compose files — they are an external operational override layered on by the calling environment. Threadwire is not installed in the image or the project; it remains parent orchestration resolved through unversioned `npx` outside the container.
+
+After changing the Docker artifacts, run the checked-in static contract verifier:
+
+```bash
+npm run verify:docker-dev-environment
+```
 
 # Code quality (fallow)
 
@@ -699,7 +741,7 @@ Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle
 
 Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
-Unexpected frontend-model endpoint failures stay client-safe in production with `errorMessage: "Request failed."`.
+Unexpected frontend-model endpoint failures stay client-safe in production with `errorType: "internal_error"`, `errorMessage: "Request failed."`, and a server-generated `correlationId` shared with the matching framework-error report. Expected application failures can use `VelociousError.safe(message, {errorType, details, code})`; generated frontend-model callers preserve the server's safe error fields. See [docs/frontend-models.md](docs/frontend-models.md#error-payloads).
 Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `preload`, `group`, `sort`, `pluck`, or Ransack attributes, return the specific frontend-model query error message with `velocious.code: "frontend-model-query-error"` and are not emitted as framework errors.
 Invalid frontend-model write attributes and attachment names, including attributes rejected by `permittedParams()`, return the specific safe error message with `velocious.code: "frontend-model-attribute-error"` and are not emitted as framework errors.
 In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
@@ -827,6 +869,51 @@ Supported route helpers:
 - `routes.get(path, {to: [ControllerClass, "action"], params?})`
 - `routes.post(path, {to: [ControllerClass, "action"], params?})`
 
+## Rampway deployment control plane
+
+Applications can install `rampway@^0.4.0` and mount its package-owned Velocious
+control plane through the existing routes DSL. Keep bearer tokens in backend
+secrets and provide explicit allowlisted config paths and release branches:
+
+```sh
+npm install rampway@^0.4.0 velocious@^1.0.577
+```
+
+Rampway 0.4.0 declares `velocious ^1.0.574` as its peer range, but applications
+mounting this API must use Velocious 1.0.577 or newer. Versions 1.0.574 through
+1.0.576 attempted an app-local controller import before the package-supplied
+`controllerClass`, allowing a same-named app controller to shadow Rampway's
+authenticated controller.
+
+```js
+import RampwayDeploymentApi from "rampway/velocious"
+import deploymentSecrets from "./secrets/deployments.js"
+
+routes.draw((route) => {
+  route.mount(RampwayDeploymentApi, {
+    accessTokens: deploymentSecrets.rampwayAccessTokens,
+    at: "/rampway/deployments",
+    projects: {
+      "my-app": {
+        stages: {
+          production: {
+            configPath: "/srv/my-app/control/rampway.config.mjs",
+            releaseBranch: "main"
+          }
+        }
+      }
+    },
+    workerBootstrapPath: "/srv/my-app/control/rampway-velocious-worker.mjs"
+  })
+})
+```
+
+Rampway owns authentication, deployment execution, idempotency, durable runs,
+audits, reconciliation, and the detached worker. Velocious supplies its normal
+route, request, error-event, and database abstractions. See
+[docs/rampway-integration.md](docs/rampway-integration.md) for bootstrap,
+persistence, security, and rollback requirements.
+
 
 ```js
 import Record from "velocious/build/src/database/record/index.js"
@@ -847,7 +934,8 @@ Translated models also get a `currentTranslation` `hasOne` relationship scoped t
 
 Async class APIs initialize record metadata on first use when a model has not
 already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)
-for the eager and lazy initialization behavior.
+for the eager and lazy initialization behavior, including atomic shared bootstrap
+and complete recovery after an eager initialization failure.
 
 ## Lifecycle callbacks
 
@@ -1260,7 +1348,7 @@ If you need to regenerate missing structure files without rerunning migrations, 
 npx velocious db:schema:dump
 ```
 
-`db:schema:dump` generates a structure SQL file for each configured database identifier under `db/structure-<identifier>.sql`. It only writes files when one or more expected files are missing. The generated file includes the full DDL (tables, indexes, views, triggers, etc.) followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every currently applied migration version. This preserves the migration ledger in the checked-in snapshot so fresh databases loaded from it do not re-run migrations that already shaped the schemas in the file.
+`db:schema:dump` generates a structure SQL file for each configured database identifier under `db/structure-<identifier>.sql`. It only writes files when one or more expected files are missing. The generated file includes the full DDL (tables, indexes, views, triggers, etc.) followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every currently applied migration version. MySQL and MariaDB dumps place same-schema referenced base tables before their dependent tables. The migration ledger preserves applied versions in the checked-in snapshot so fresh databases loaded from it do not re-run migrations that already shaped the schemas in the file.
 
 If you need to load the checked-in structure files for each configured database, use:
 
@@ -1770,7 +1858,7 @@ configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
 })
 ```
 
-Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `Request failed.` response, but it also emits them as `framework-error`/`all-error` (with `context.frontendModelEndpoint === true`) so they are reported instead of being silently swallowed. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` / `errorType`-marked errors keep their expected-error status — none of these reach the error bus.
+Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return a client-safe `internal_error` response with `Request failed.` and a correlation ID, then emits them as `framework-error`/`all-error` with the same correlation ID and `context.frontendModelEndpoint === true`. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` errors keep their expected-error status. A raw `errorType` property alone is not considered safe and does not suppress reporting.
 
 Unexpected inbound decoded WebSocket dispatch failures emit one `framework-error` and one matching `all-error`. Established expected client-flow errors remain excluded from both events.
 
@@ -1830,6 +1918,8 @@ const {channel, payload} = this.getParams() // or compose your own payload
 this.getConfiguration().getWebsocketEvents().publish(channel, payload)
 this.renderJsonArg({status: "published"})
 ```
+
+Publishes are queued per channel: events on the same channel are persisted and dispatched in FIFO order, while a slow or failing channel never delays unrelated channels. `configuration.awaitPendingBroadcasts()` settles once every broadcast accepted before the call has settled. See [docs/websocket-channels.md](docs/websocket-channels.md#publish-ordering-and-failure-semantics) for the full ordering and failure contract.
 
 ## Websocket channels
 
@@ -2137,6 +2227,11 @@ VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS=5400000
 
 New jobs default to `executionMode: "pooled"`: a worker runs them in warm, reusable Node child runners. `pooledRunnerCount` (default: `4`) bounds this independent per-worker pool, and `pooledRunnerConcurrency` (default: `1`) sets how many jobs each child runs at once on its own event loop, so total pooled capacity is `pooledRunnerCount × pooledRunnerConcurrency` — raise concurrency for I/O-bound jobs to get high throughput from a bounded, isolated set of processes. `pooledRunnerCount`, `pooledRunnerConcurrency`, and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. A child is recycled after an acknowledged job when it reaches `pooledRunnerMaxJobs` (default: `100`), `pooledRunnerMaxRssBytes` (default: `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` (default: `3600000`, or one hour). `execution_mode` is the single source of truth for a job's runtime — pooled rows persist as `execution_mode = "pooled"` directly. See [execution modes and pooled runners](docs/background-jobs.md#execution-modes-and-pooled-runners).
 
+Cold pooled jobs share one atomic model-bootstrap phase. If that phase fails, all
+waiting jobs receive the failure; a later job in the surviving child cannot run
+until a complete model-initialization phase succeeds. The pool's configured
+concurrency and per-job connection scopes are unchanged.
+
 `maxConcurrentForkedJobs` (default: `4`) caps how many out-of-process `executionMode: "forked"` or `executionMode: "spawned"` jobs one worker may keep in flight. Forked jobs use `child_process.fork()` with an attached IPC channel. After the main process acknowledges their durable status report, forked and spawned one-shot runners exit without waiting for graceful Beacon/database teardown; the OS closes their process-owned resources. A missing or rejected status acknowledgement makes the runner exit as failed instead of reporting clean success. Spawned jobs use the legacy `background-jobs-runner` CLI process via `child_process.spawn()` and are only for callers that intentionally want that spawned behavior.
 
 `jobTimeoutMs` (or `VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS`, milliseconds; default: disabled) is a wall-clock backstop for `"forked"` and `"pooled"` jobs. A job still running after the timeout is terminated (`SIGTERM`, then `SIGKILL` after the reaping grace) and reported `failed`, so a genuinely-hung job can't pin a worker's capacity — and its whole-app boot and DB connections — indefinitely (notably a retired-release worker draining after a deploy). For a **pooled** job the whole child running it is killed, so its concurrent in-flight siblings on that child are also reported `failed` and requeued — a hung JS job can't be cancelled any other way — before a replacement child is spawned. It's a coarse safety net, not per-job tuning: it applies to every forked and pooled job, so set it well above the longest legitimate job. Omit it, or set `null`/`<= 0`, to disable. `"inline"` jobs are not covered — they share the worker's process and can't be killed without killing the worker. See [docs/background-jobs.md](docs/background-jobs.md#job-timeout-hung-runner-backstop).
@@ -2204,6 +2299,20 @@ await MyJob.performLaterWithOptions({
 ```
 
 Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
+
+Use a durable stable key when the same logical one-off schedule must be moved or cancelled without retaining its transient job id:
+
+```js
+const result = await MyJob.replaceScheduled({
+  scheduleKey: `event:${eventId}:reminder:24h`,
+  args: [eventId, reminderRevision],
+  options: {scheduledAtMs: reminderAtMs}
+})
+
+await MyJob.cancelScheduled(`event:${eventId}:reminder:24h`)
+```
+
+A queued owner is atomically cancelled during replacement/cancellation. A `previousStatus` or cancellation `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
 Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
 
@@ -2364,6 +2473,8 @@ npx velocious server --host 0.0.0.0 --port 8082
 When the server runs in the `development` environment, Velocious watches application `src/` trees and hot-reloads by recycling HTTP workers after `.js`/`.mjs`/`.cjs`/`.json`/`.ejs` changes. That picks up edited controllers, models, resources, routes, and views without a manual server restart while keeping production/test behavior unchanged.
 
 Starting the HTTP server creates `tmp/server.lock` under the configured application directory before Beacon, workers, or the TCP listener start. A second server for the same app fails fast with the lock owner details instead of partially starting. Normal shutdown removes the lock; stale locks with a dead local PID are reclaimed automatically, while locks from another host or unreadable metadata should be removed manually only after confirming no server is running. See [docs/http-server.md](docs/http-server.md#server-lock).
+
+Buffered string and `Uint8Array` responses are compressed with Brotli (`br`) or gzip by default whenever request negotiation and response eligibility allow — no opt-in is required. Disable compression globally with `httpServer.compression: false` or `httpServer.compression: {enabled: false}`, and tune it with `threshold`/`brotliQuality`/`gzipLevel` overrides. Negotiation honors `Accept-Encoding` q-values, wildcards, and identity semantics (empty `406` when no acceptable representation exists), merges `Accept-Encoding` into `Vary`, and skips streamed `sendFile` responses, already-encoded or `no-transform` responses, server-sent events, partial/range responses, bodyless statuses, and non-allowlisted content types. Transformation is additionally excluded automatically for credentialed traffic and validator-carrying responses — requests with `Authorization`/`Cookie` and responses with `Set-Cookie`, `ETag`, `Digest`, or `Content-Digest` are never compressed (compression-oracle protection, and validators stay application-owned). Controllers opt out per response with `response.disableCompression()`, and HEAD requests compute GET-equivalent representation headers without emitting a body. See [docs/http-server.md](docs/http-server.md#response-compression).
 
 # Authorization (CanCan-style)
 

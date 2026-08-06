@@ -11,6 +11,19 @@ import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-track
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 /**
+ * Clears only framework background-job persistence.
+ * @returns {Promise<BackgroundJobsStore>} - Cleared background jobs store.
+ */
+export async function clearBackgroundJobs() {
+  dummyConfiguration.setCurrent()
+  const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+
+  await store.clearAll()
+
+  return store
+}
+
+/**
  * @param {object} [args] - Options.
  * @param {ConstructorParameters<typeof BackgroundJobsWorker>[0]} [args.workerOptions] - Worker constructor options.
  * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, worker: BackgroundJobsWorker}>} - Started background job processes.
@@ -48,11 +61,9 @@ export async function startBackgroundJobs({workerOptions = {}} = {}) {
  * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, stopped: (service: string) => Promise<void>}>} - Started main process and cleared store.
  */
 export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop = false} = {}) {
-  dummyConfiguration.setCurrent()
   if (backgroundJobsConfig) dummyConfiguration.setBackgroundJobsConfig(backgroundJobsConfig)
 
-  const store = new BackgroundJobsStore({configuration: dummyConfiguration})
-  await store.clearAll()
+  const store = await clearBackgroundJobs()
 
   const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
 

@@ -238,7 +238,7 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
     expect(combinedWrites).not.toMatch(/Frontend model endpoint request failed/)
   })
 
-  it("suppresses framework-error events for frontend-model custom command errors with errorType", async () => {
+  it("keeps raw custom-command errorType markers generic and reported", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: dummyDirectory(),
@@ -296,6 +296,9 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
 
     expect(responsePayload.responses[0].response.status).toEqual("error")
     expect(responsePayload.responses[0].response.errorMessage).toEqual("Request failed.")
-    expect(allErrors.length).toEqual(0)
+    expect(responsePayload.responses[0].response.errorType).toEqual("internal_error")
+    expect(responsePayload.responses[0].response.correlationId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(allErrors.length).toEqual(1)
+    expect(allErrors[0].correlationId).toEqual(responsePayload.responses[0].response.correlationId)
   })
 })

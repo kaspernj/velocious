@@ -1,0 +1,5 @@
+Pass the complete broadcast sync entry through to the user-scope per-delivery access re-check. The framework sync channel's `SyncWebsocketChannel#_userScopeDeliverableBody()` previously called the app sync resource's `changeDeliverable({params, scope, sync})` with a newly constructed two-field `{resourceId, resourceType}` object, irreversibly dropping the immutable sync-row `id` and actor-specific metadata from the published entry — so concurrent targeted and shared broadcasts for the same resource identity could not be authorized independently.
+
+`changeDeliverable` now receives the complete broadcast sync entry with only `resourceId`/`resourceType` normalized to strings. Normalization happens on a copy: neither the published entry nor sibling entries in the same envelope are mutated, and single-entry/array envelope behavior is unchanged. Overrides that only read `resourceId`/`resourceType` keep working unchanged; overrides that authorize by exact-row identity (the new `ChangeDeliverableSyncEntry` contract) can now accept or reject two entries for the same resource identity independently.
+
+See `docs/sync-client.md` and `docs/offline-sync.md`.

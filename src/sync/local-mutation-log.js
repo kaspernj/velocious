@@ -34,12 +34,15 @@
  * @property {LocalMutationDependency[]} dependencies - Other local mutations that must replay first.
  * @property {string} id - Local log record id.
  * @property {import("./device-identity.js").SyncMutation} mutation - Device mutation payload.
+ * @property {import("./device-identity.js").SignedSyncMutation} [signedMutation] - Original signed mutation envelope, retained for peer-forwarded mutations.
  * @property {number} sequence - Monotonic local sequence.
  * @property {LocalMutationStatus} status - Local replay/apply status.
  * @property {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} [syncResult] - Backend replay/result metadata.
  * @property {string} updatedAt - ISO timestamp when the record was last changed.
  */
 // @ts-check
+
+import stableJsonStringify from "./stable-json.js"
 
 const DEFAULT_STORAGE_KEY = "velocious.sync.localMutationLog"
 const PENDING_STATUS_VALUES = /** @type {LocalMutationStatus[]} */ (["pending", "applied-locally", "peer-applied"])
@@ -75,9 +78,14 @@ export default class LocalMutationLog {
    * @param {object} args - Arguments.
    * @param {LocalMutationDependency[]} [args.dependencies] - Mutation dependencies.
    * @param {import("./device-identity.js").SyncMutation} args.mutation - Mutation payload.
+   * @param {import("./device-identity.js").SignedSyncMutation} [args.signedMutation] - Original signed mutation envelope, retained for peer-forwarded mutations.
    * @returns {Promise<LocalMutationLogRecord>} - Created log record.
    */
-  async append({dependencies = [], mutation}) {
+  async append({dependencies = [], mutation, signedMutation}) {
+    if (signedMutation !== undefined && stableJsonStringify(signedMutation.mutation) !== stableJsonStringify(mutation)) {
+      throw new Error("Signed mutation payload does not match the mutation")
+    }
+
     return await withStorageKeyLock(this.storageKey, async () => {
       const timestamp = this.currentTimestamp()
       const record = normalizeRecord({
@@ -86,6 +94,7 @@ export default class LocalMutationLog {
         id: this.idGenerator(),
         mutation,
         sequence: await this.storage.nextSequence(this.storageKey),
+        signedMutation,
         status: "pending",
         updatedAt: timestamp
       })
@@ -287,12 +296,17 @@ function normalizeRecord(value) {
     updatedAt: requiredIsoTimestamp(record.updatedAt, "updatedAt")
   }
 
-  if (record.syncResult === undefined) return baseRecord
+  if (record.signedMutation === undefined && record.syncResult === undefined) return baseRecord
 
-  return {
-    ...baseRecord,
-    syncResult: cloneJsonObject(record.syncResult, "syncResult")
+  /** @type {LocalMutationLogRecord} */
+  const normalizedRecord = {...baseRecord}
+
+  if (record.signedMutation !== undefined) {
+    normalizedRecord.signedMutation = /** @type {import("./device-identity.js").SignedSyncMutation} */ (cloneJsonObject(record.signedMutation, "signedMutation"))
   }
+  if (record.syncResult !== undefined) normalizedRecord.syncResult = cloneJsonObject(record.syncResult, "syncResult")
+
+  return normalizedRecord
 }
 
 /**

@@ -35,6 +35,9 @@ import UUID from "pure-uuid"
 const APPLOCK_NOT_HELD_ERROR_NUMBER = 1223
 
 export default class VelociousDatabaseDriversMssql extends Base{
+  /** @type {import("mssql").Transaction | null} */
+  _advisoryLockTransaction = null
+
   async connect() {
     const args = this.getArgs()
     const sqlConfig = digg(args, "sqlConfig")
@@ -65,12 +68,22 @@ export default class VelociousDatabaseDriversMssql extends Base{
     this.connection = undefined
     this._currentTransaction = null
     this._transactionsCount = 0
+    /** @type {Error | undefined} */
+    let sessionError
+
+    try {
+      await this._closeAdvisoryLockTransaction()
+    } catch (error) {
+      sessionError = error instanceof Error ? error : new Error("Failed to close MSSQL advisory-lock session", {cause: error})
+    }
 
     try {
       await timeout({timeout: 2000}, () => connection.close())
     } catch (error) {
       this.logger.warn("Failed to close MSSQL connection cleanly", {error})
     }
+
+    if (sessionError) throw sessionError
   }
 
   /**
@@ -363,6 +376,36 @@ export default class VelociousDatabaseDriversMssql extends Base{
   supportsDefaultPrimaryKeyUUID() { return true }
 
   /**
+   * Runs an explicit primary-key insert as one batch request: SQL Server scopes
+   * IDENTITY_INSERT to the session, and node-mssql pool-backed requests may use
+   * a different physical session per query, so enabling it in a separate query
+   * can leave the actual INSERT on another session. A single batch keeps the
+   * whole sequence on one session by construction: enable, insert, disable on
+   * success, and a CATCH that disables and rethrows the original error.
+   * @param {object} args - Options object.
+   * @param {import("../base.js").QueryOptions} args.options - Query options for the standard query path.
+   * @param {string} args.sql - Generated insert SQL.
+   * @param {string} args.tableName - Table being inserted into.
+   * @returns {Promise<import("../base.js").QueryResultType>} - Insert result.
+   */
+  async insertWithExplicitPrimaryKey({options, sql, tableName}) {
+    const quotedTable = this.quoteTable(tableName)
+    const batch = [
+      `SET IDENTITY_INSERT ${quotedTable} ON;`,
+      "BEGIN TRY",
+      `${sql};`,
+      `SET IDENTITY_INSERT ${quotedTable} OFF;`,
+      "END TRY",
+      "BEGIN CATCH",
+      `SET IDENTITY_INSERT ${quotedTable} OFF;`,
+      "THROW;",
+      "END CATCH"
+    ].join("\n")
+
+    return await this.query(batch, options)
+  }
+
+  /**
    * Runs escape.
    * @param {?} value - Value to use.
    * @returns {string} - The escape.
@@ -632,12 +675,15 @@ export default class VelociousDatabaseDriversMssql extends Base{
    */
   async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
     const timeoutValue = typeof timeoutMs === "number" && timeoutMs >= 0 ? Math.ceil(timeoutMs) : -1
-    const rows = await this.query(
+    const rows = await this._advisoryLockQuery(
       `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_getapplock @Resource = ${this.quote(name)}, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = ${timeoutValue}; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
     )
     const result = Number(rows?.[0]?.velocious_advisory_lock_result)
 
     if (result === 0 || result === 1) return true
+
+    await this._closeAdvisoryLockTransaction()
+
     if (result === -1) return false
 
     throw new Error(`sp_getapplock returned ${result} for advisory lock ${JSON.stringify(name)} (see SQL Server documentation for sp_getapplock return codes)`)
@@ -668,18 +714,97 @@ export default class VelociousDatabaseDriversMssql extends Base{
     let rows
 
     try {
-      rows = await this.query(
+      rows = await this._advisoryLockQuery(
         `DECLARE @velocious_advisory_lock_result INT; EXEC @velocious_advisory_lock_result = sp_releaseapplock @Resource = ${this.quote(name)}, @LockOwner = 'Session'; SELECT @velocious_advisory_lock_result AS velocious_advisory_lock_result`
       )
     } catch (error) {
-      if (this._isApplockNotHeldError(error)) return false
+      if (this._isApplockNotHeldError(error)) {
+        await this._closeAdvisoryLockTransactionIfFinalRelease()
+
+        return false
+      }
 
       throw error
     }
 
     const result = Number(rows?.[0]?.velocious_advisory_lock_result)
 
+    await this._closeAdvisoryLockTransactionIfFinalRelease()
+
     return result === 0
+  }
+
+  /**
+   * Runs an advisory-lock statement through one transaction request parent.
+   * node-mssql reserves one physical session for a Transaction, whereas
+   * separate ConnectionPool requests may check out different sessions. The
+   * transaction contains only application-lock statements; caller/model work
+   * continues through its original connection.
+   * @param {string} sql - Advisory-lock SQL.
+   * @returns {Promise<import("../base.js").QueryResultType>} - Result rows.
+   */
+  async _advisoryLockQuery(sql) {
+    const transaction = await this._ensureAdvisoryLockTransaction()
+
+    try {
+      const request = new mssql.Request(transaction)
+      const result = await request.query(sql)
+
+      return Array.isArray(result.recordsets) ? result.recordsets[0] || [] : []
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Query failed '${error.message}': ${sql}`, {cause: error})
+      }
+
+      throw new Error(`Query failed '${error}': ${sql}`, {cause: error})
+    }
+  }
+
+  /**
+   * Starts the transaction request parent that reserves the advisory-lock
+   * session until the final release or driver close.
+   * @returns {Promise<import("mssql").Transaction>} - Session-affine parent.
+   */
+  async _ensureAdvisoryLockTransaction() {
+    if (this._advisoryLockTransaction) return this._advisoryLockTransaction
+    if (!this.connection) await this.connect()
+    if (!this.connection) throw new Error("MSSQL connection unavailable for advisory lock")
+
+    const transaction = new mssql.Transaction(this.connection)
+
+    await transaction.begin()
+    this._advisoryLockTransaction = transaction
+
+    return transaction
+  }
+
+  /**
+   * Releases the reserved session after the last tracked lock release.
+   * Base untracks the current release after the driver hook returns, so a
+   * current total of one means this is the final release.
+   * @returns {Promise<void>} - Resolves after cleanup when this is final.
+   */
+  async _closeAdvisoryLockTransactionIfFinalRelease() {
+    let heldCount = 0
+
+    for (const count of this._heldAdvisoryLocks.values()) heldCount += count
+
+    if (heldCount <= 1) await this._closeAdvisoryLockTransaction()
+  }
+
+  /**
+   * Rolls back the otherwise-empty transaction and returns its physical
+   * session to node-mssql. Rollback is cleanup only; advisory locks are
+   * explicitly released first whenever their release statement succeeds.
+   * @returns {Promise<void>} - Resolves after session cleanup.
+   */
+  async _closeAdvisoryLockTransaction() {
+    const transaction = this._advisoryLockTransaction
+
+    if (!transaction) return
+
+    this._advisoryLockTransaction = null
+    await transaction.rollback()
   }
 
   /**

@@ -38,6 +38,10 @@ function buildBroadcastingPublisher({modelClass, scopeAttributes}) {
  * Builds a fake server sync/change model implementing the shared Sync-row
  * upsert contract (where().first(), create, assign/advanceServerSequence/save)
  * while recording rows and sequence advances.
+ *
+ * Returned rows honor the real Sync-row model contract used by canonical
+ * broadcast construction: generated typed accessors for id, serverSequence,
+ * updatedAt, and any declared scope attributes.
  * @param {object} [args] - Sync model args.
  * @param {string[]} [args.scopeAttributes] - Declared static syncScopeAttributes.
  * @returns {?} Fake server sync model with a rows array.
@@ -45,29 +49,54 @@ function buildBroadcastingPublisher({modelClass, scopeAttributes}) {
 function buildFakeServerSyncModel({scopeAttributes} = {}) {
   /** @type {Array<?>} */
   const rows = []
+  let nextId = 1
+  let nextServerSequence = 1
+  const persistedUpdatedAt = new Date("2030-01-01T14:00:00.000Z")
+  const getAttributeNameToColumnNameMap = () => ({accountId: "account_id", eventId: "event_id"})
 
   return {
     /** @returns {Record<string, string>} Attribute-to-column map like a real model class. */
-    getAttributeNameToColumnNameMap: () => ({accountId: "account_id", eventId: "event_id"}),
+    getAttributeNameToColumnNameMap,
     syncScopeAttributes: scopeAttributes,
     /** @param {Record<string, ?>} attributes - Row attributes. @returns {Promise<?>} Created row. */
     create: async (attributes) => {
+      const rowId = `00000000-0000-0000-0000-${String(nextId++).padStart(12, "0")}`
+      let serverSequence = nextServerSequence++
+      const columnNameByAttribute = getAttributeNameToColumnNameMap()
+
+      attributes.id = rowId
+
       const row = {
         advanceServerSequenceCalls: 0,
         /** @returns {Promise<void>} Advances the fake server sequence. */
         advanceServerSequence: async () => {
           row.advanceServerSequenceCalls++
+          serverSequence = nextServerSequence++
         },
         /** @param {Record<string, ?>} newAttributes - Assigned attributes. @returns {void} */
         assign: (newAttributes) => {
           Object.assign(row.attributes, newAttributes)
         },
         attributes,
+        /** @returns {string} Persisted row id. */
+        id: () => row.attributes.id,
         /** @returns {Promise<void>} Saves the fake row. */
         save: async () => {
           row.saveCalls++
         },
-        saveCalls: 0
+        saveCalls: 0,
+        /** @returns {number} Persisted server sequence. */
+        serverSequence: () => serverSequence,
+        /** @returns {Date} Persisted updated-at timestamp. */
+        updatedAt: () => persistedUpdatedAt
+      }
+
+      for (const scopeAttribute of scopeAttributes || []) {
+        const columnName = columnNameByAttribute[scopeAttribute]
+
+        if (columnName) {
+          row[scopeAttribute] = () => row.attributes[columnName]
+        }
       }
 
       rows.push(row)
@@ -169,10 +198,14 @@ describe("sync publisher from configuration", () => {
     expect(broadcasts[0].body).toEqual({
       echoOrigin: null,
       syncs: [{
+        accountId: ACCOUNT_ID,
         data: {id: SCAN_ID, ticketNr: "T-1"},
+        id: "00000000-0000-0000-0000-000000000001",
         resourceId: SCAN_ID,
         resourceType: "PublishedScan",
-        syncType: "update"
+        serverSequence: 1,
+        syncType: "update",
+        updatedAt: "2030-01-01T14:00:00.000Z"
       }]
     })
   })

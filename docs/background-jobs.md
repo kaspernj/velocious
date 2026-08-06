@@ -10,11 +10,22 @@ WebSocket/Beacon delta contract, see the
 
 New enqueues default to `executionMode: "pooled"`. Each worker owns a local pool of warm Node child processes; a child runs up to `pooledRunnerConcurrency` jobs at a time on its own event loop and is reused for sequential jobs. Completion still flows through the runner's durable status reporter, so the main process and database acknowledgement remain authoritative. Pooled capacity is advertised explicitly and is separate from inline and forked/spawned capacity. The `execution_mode` column is the single source of truth for a job's runtime — pooled rows persist as `execution_mode = "pooled"` directly.
 
+Concurrent jobs entering a cold pooled child share one complete configuration and
+model-bootstrap promise. A bootstrap error is reported to every job waiting on
+that attempt and is not hidden or converted into job success. If the warm child
+later receives more work, configuration initialization starts a complete new model
+phase before loading or performing the job; a failed earlier phase cannot leave
+the child marked model-ready. This preserves configured pooled concurrency while
+preventing synchronous queries such as `Model.where(...)` from observing partial
+record metadata.
+
 Set `backgroundJobs.pooledRunnerCount` (default `4`) to bound the per-worker pool. Set `backgroundJobs.pooledRunnerConcurrency` (default `1`) to run several jobs on each child at once: total per-worker pooled capacity is `pooledRunnerCount × pooledRunnerConcurrency`. `1` keeps each child serial; raise it for I/O-bound jobs so a bounded set of isolated processes handles high concurrency (like the inline lane) without one process per concurrent job. A single job's unexpected failure is reported for reclamation without taking down the child or its concurrent siblings; only a process-level crash fails the whole in-flight set. `pooledRunnerCount`, `pooledRunnerConcurrency`, and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. Invalid values fall back to their defaults. A runner is retired after an acknowledged terminal report when it reaches `pooledRunnerMaxJobs` (default `100`), child-measured `pooledRunnerMaxRssBytes` (default `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` from child creation (default `3600000`, or one hour). Retirement never interrupts in-flight jobs: the child stops receiving new work, its replacement is spawned immediately (1-for-1, so capacity does not wait for the drain), and the retiring child is terminated only once its in-flight set drains. Exited, unacknowledged, or unhealthy runners are replaced lazily on the next dispatch. A pooled slot remains occupied until the main/DB accepts or rejects the terminal report or the parent fallback report settles, preventing reuse while terminal state is unresolved. Graceful worker shutdown stops advertising capacity, drains current pooled jobs and reports, and then terminates every idle child within the existing shutdown bounds.
 
 Set the runtime explicitly with `executionMode` — `"pooled"` (default), `"inline"`, `"forked"`, or `"spawned"`. There is no `forked` option; a store upgrade migrates any legacy `forked`-flagged rows to their `execution_mode` and drops the column.
 
 For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-background-job-enqueue.md). Recurring schedules use the separate `scheduledBackgroundJobs` configuration described in the [README](../README.md#scheduled-jobs).
+
+Logical one-off schedules that may be moved or cancelled can use `replaceScheduled` and `cancelScheduled` with a durable stable key. Queued replacement/cancellation is atomic across processes; a `handed_off` result is explicitly best-effort because running JavaScript is not interrupted. Consumers must pair the API with their own generation/revision check immediately before side effects. See [Replacing or cancelling a logical schedule](scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
 ## Database connection scopes
 

@@ -21,6 +21,7 @@ Without a resource definition, frontend models should not silently work.
 - Resource `attachments` defines attachment helpers generated on frontend models.
 
 ## Shared resource fallback
+- See the [shared-resource sync developer guide](shared-resource-sync-guide.md) for a complete shared recipe, backend/local wrappers, security boundaries, and migration gates.
 - Environment-specific resources may declare `static SharedResource = SharedModelResource` to reuse a bundled shared resource recipe.
 - Static frontend-model config resolves in this order: environment resource value, inherited environment resource value, shared resource value, framework default.
 - Default instance methods such as `permittedParams`, normalization hooks, mutation hooks, `runMutationTransaction`, `beforeAction`, and `abilities` fall back to the shared resource only when the environment resource does not override the method.
@@ -61,6 +62,7 @@ Without a resource definition, frontend models should not silently work.
   - `args` is an array of `{name, type}` objects. Each becomes a named, typed method parameter, mapped positionally into the command payload. `type` is a JSDoc type string (for example `"number"`, `"string | null"`).
   - `returnType` is a JSDoc type string for the command response. When set, the generated method is typed `Promise<returnType>` instead of the generic `Promise<Record<string, FrontendModelAttributeValue>>` (a command result is a deserialized transport payload, so its values are `FrontendModelAttributeValue` — the closed transport-value union). The type is emitted verbatim into the generated frontend model, so it must resolve there (a self-contained inline type or a name the model can import).
 - Both forms can be mixed in the same array; string entries are unchanged and stay variadic (`async refresh(...commandArguments)`).
+- Custom commands should throw `VelociousError.safe(message, {errorType, details, code})` for expected client-visible failures. The shared frontend-model endpoint preserves those safe fields for generated JavaScript callers; ordinary exceptions remain generic in production and are reported with a correlation ID. See [Frontend-model error payloads](frontend-models.md#error-payloads).
 
 ```js
 static attributes = ["id"]
