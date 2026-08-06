@@ -107,6 +107,28 @@ describe("Drivers - structure sql - mysql", () => {
     expect(result).toEqual("CREATE TABLE `audit_actions` (`id` int);\n\nCREATE TABLE `audit_auditable_types` (`id` int);\n\nCREATE TABLE `audits` (`id` int, `action_id` int, `auditable_type_id` int, CONSTRAINT `audits_action_id_fk` FOREIGN KEY (`action_id`) REFERENCES `audit_actions` (`id`), CONSTRAINT `audits_auditable_type_id_fk` FOREIGN KEY (`auditable_type_id`) REFERENCES `audit_auditable_types` (`id`));\n")
   })
 
+  it("ignores self-referencing foreign keys when ordering dependent tables", async () => {
+    const db = buildMysqlDb({
+      version: "8.0.33",
+      tables: [
+        {table_name: "account_memberships", table_type: "BASE TABLE"},
+        {table_name: "users", table_type: "BASE TABLE"}
+      ],
+      foreignKeys: [
+        {table_name: "account_memberships", referenced_table_name: "users"},
+        {table_name: "users", referenced_table_name: "users"}
+      ],
+      creates: {
+        account_memberships: {type: "table", sql: "CREATE TABLE `account_memberships` (`id` int, `user_id` int, CONSTRAINT `account_memberships_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`))"},
+        users: {type: "table", sql: "CREATE TABLE `users` (`id` int, `manager_id` int, CONSTRAINT `users_manager_id_fk` FOREIGN KEY (`manager_id`) REFERENCES `users` (`id`))"}
+      }
+    })
+
+    const result = await new MysqlStructureSql({driver: db}).toSql()
+
+    expect(result).toEqual("CREATE TABLE `users` (`id` int, `manager_id` int, CONSTRAINT `users_manager_id_fk` FOREIGN KEY (`manager_id`) REFERENCES `users` (`id`));\n\nCREATE TABLE `account_memberships` (`id` int, `user_id` int, CONSTRAINT `account_memberships_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`));\n")
+  })
+
   it("treats MariaDB system views as views", async () => {
     const db = buildMysqlDb({
       version: "10.4.0-MariaDB",

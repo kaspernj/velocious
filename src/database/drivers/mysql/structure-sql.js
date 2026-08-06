@@ -83,7 +83,7 @@ export default class VelociousDatabaseDriversMysqlStructureSql {
       const tableName = tableNameValue ? String(tableNameValue) : ""
       const referencedTableName = referencedTableNameValue ? String(referencedTableNameValue) : ""
 
-      if (!pendingTableNames.has(tableName) || !pendingTableNames.has(referencedTableName)) continue
+      if (tableName == referencedTableName || !pendingTableNames.has(tableName) || !pendingTableNames.has(referencedTableName)) continue
 
       dependenciesByTableName[tableName].add(referencedTableName)
     }
