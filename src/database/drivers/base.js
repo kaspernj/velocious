@@ -767,7 +767,42 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Maximum rows per `INSERT ... VALUES (...), (...), ...` statement. Drivers
+   * that build multi-value inserts must stay below database-specific limits
+   * (SQLite's `MAX_VARIABLE_NUMBER`, SQL Server's 2100 parameters, PostgreSQL's
+   * 65535 parameters, and so on). 500 rows is safely under every major engine
+   * for tables with a moderate number of columns and keeps generated SQL small.
+   * @returns {number} - Maximum rows per insert statement.
+   */
+  maxRowsPerInsert() {
+    return 500
+  }
+
+  /**
+   * Splits `rows` into chunks of at most {@link maxRowsPerInsert} rows while
+   * preserving order.
+   * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
+   * @returns {Array<Array<Array<ReturnType<typeof JSON.parse>>>>} - Row chunks.
+   */
+  _insertMultipleChunks(rows) {
+    const chunks = []
+    const maxRows = this.maxRowsPerInsert()
+
+    for (let index = 0; index < rows.length; index += maxRows) {
+      chunks.push(rows.slice(index, index + maxRows))
+    }
+
+    return chunks
+  }
+
+  /**
    * Runs insert multiple.
+   *
+   * Large row sets are split into multiple statements of at most
+   * {@link maxRowsPerInsert} rows so the generated SQL stays within database
+   * parameter limits. When called outside a transaction each chunk commits
+   * independently; callers that need all-or-nothing semantics should wrap the
+   * call in {@link transaction}.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
    * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
@@ -776,9 +811,13 @@ export default class VelociousDatabaseDriversBase {
   async insertMultiple(tableName, columns, rows) {
     this._assertNotReadOnly()
 
-    const sql = this.insertSql({columns, tableName, rows})
+    const chunks = this._insertMultipleChunks(rows)
 
-    await this.query(sql)
+    for (const chunk of chunks) {
+      const sql = this.insertSql({columns, tableName, rows: chunk})
+
+      await this.query(sql)
+    }
   }
 
   /**

@@ -210,6 +210,16 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Maximum rows per `INSERT ... VALUES (...), (...), ...` statement. SQLite
+   * ships with `MAX_VARIABLE_NUMBER=32766` in the bundled sqlite3 build, so 500
+   * rows is safely under the limit even for wide tables.
+   * @returns {number} - Maximum rows per insert statement.
+   */
+  maxRowsPerInsert() {
+    return 500
+  }
+
+  /**
    * Runs insert multiple with single insert.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
@@ -218,9 +228,14 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
     this._assertNotReadOnly()
-    const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
 
-    await this.query(sql)
+    const chunks = this._insertMultipleChunks(rows)
+
+    for (const chunk of chunks) {
+      const sql = new Insert({columns, driver: this, rows: chunk, tableName}).toSql()
+
+      await this.query(sql)
+    }
   }
 
   /**
