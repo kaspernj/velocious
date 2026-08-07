@@ -8,6 +8,10 @@ import * as inflection from "inflection"
  * @typedef {(query: import("../../query/model-class-query.js").default<typeof import("../index.js").default>) => (import("../../query/model-class-query.js").default<typeof import("../index.js").default> | void)} RelationshipScopeCallback
  */
 /**
+ * RelationshipRecordResolver type.
+ * @typedef {(record: import("../index.js").default) => VelociousDatabaseRecordBaseRelationship} RelationshipRecordResolver
+ */
+/**
  * RelationshipBaseArgsType type.
  * @typedef {object} RelationshipBaseArgsType
  * @property {boolean} [autoload] - Whether to auto-batch-preload siblings when this relationship is lazy-loaded. Default true.
@@ -56,6 +60,24 @@ export default class VelociousDatabaseRecordBaseRelationship {
     this._scope = scope
     this.through = through
     this.type = type
+  }
+
+  /**
+   * Installs metadata selection for relationships whose physical definition varies by record operation.
+   * @param {RelationshipRecordResolver} resolver - Record-owned relationship resolver.
+   * @returns {void}
+   */
+  setRecordResolver(resolver) {
+    this._recordResolver = resolver
+  }
+
+  /**
+   * Resolves this relationship for a record's captured physical database identity.
+   * @param {import("../index.js").default} record - Record owning the relationship access.
+   * @returns {VelociousDatabaseRecordBaseRelationship} - Physical relationship metadata.
+   */
+  resolveForRecord(record) {
+    return this._recordResolver ? this._recordResolver(record) : this
   }
 
   /**

@@ -131,7 +131,14 @@ export default class VelociousDatabaseQueryPreloader {
 
   async run() {
     for (const preloadRelationshipName in this.preload) {
-      const relationship = this.modelClass.getRelationshipByName(preloadRelationshipName)
+      const modelClassRelationship = this.modelClass.getRelationshipByName(preloadRelationshipName)
+      const relationship = this.models.length > 0 ? modelClassRelationship.resolveForRecord(this.models[0]) : modelClassRelationship
+
+      for (const model of this.models) {
+        if (modelClassRelationship.resolveForRecord(model) !== relationship) {
+          throw new Error(`Cannot preload ${this.modelClass.name}#${preloadRelationshipName} across physical database identities`)
+        }
+      }
       let preloadResult
 
       if (relationship.getType() == "belongsTo") {

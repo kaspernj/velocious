@@ -68,7 +68,11 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       await connection.releaseHeldAdvisoryLocks()
       await connection.clearConnectionCheckoutName()
     } catch (error) {
-      await this.removeAndCloseEntry(entry)
+      try {
+        await this.removeAndCloseEntry(entry)
+      } catch (closeError) {
+        throw new AggregateError([error, closeError], "Database checkout cleanup and connection close both failed", {cause: closeError})
+      }
       throw error
     }
 
@@ -458,7 +462,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   getDebugSnapshot() {
     const connections = [...this.connectionEntries.values()].map((entry) => this.debugConnectionSnapshot(entry.connection, {
       activeCheckoutCount: entry.activeCheckoutCount,
-      state: entry.activeCheckoutCount > 0 ? "in-use" : "idle"
+      state: entry.retained ? "shared" : entry.activeCheckoutCount > 0 ? "in-use" : "idle"
     }))
     const now = Date.now()
 

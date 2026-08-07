@@ -1,6 +1,7 @@
 // @ts-check
 
 import UUID from "pure-uuid"
+import HasManyRelationship from "./relationships/has-many.js"
 
 /**
  * Global audit event bus matching ActiveRecordAuditable::Events.
@@ -66,6 +67,9 @@ const auditTableDataByModel = new WeakMap()
 const auditClassCache = new Map()
 
 const generatedAuditRelationships = new WeakSet()
+
+/** @type {WeakMap<AuditedModelClass, Map<string, HasManyRelationship>>} */
+const auditRelationshipsByModel = new WeakMap()
 
 // ---------------------------------------------------------------------------
 // Global event bus (like ActiveRecordAuditable::Events)
@@ -167,7 +171,10 @@ async function resolveAuditTableData(modelClass, connection, operation) {
 
   const cachedTableData = tableDataByIdentity.get(databaseIdentity)
 
-  if (cachedTableData) return cachedTableData
+  if (cachedTableData) {
+    registerAuditRelationship(modelClass, cachedTableData, databaseIdentity)
+    return cachedTableData
+  }
 
   const tableData = await buildAuditTableData(modelClass, resolvedConnection, databaseIdentity)
   const configuration = modelClass._getConfiguration()
@@ -179,7 +186,7 @@ async function resolveAuditTableData(modelClass, connection, operation) {
   modelClass._auditTableResolved = true
   tableDataByIdentity.set(databaseIdentity, tableData)
 
-  registerAuditRelationship(modelClass, tableData)
+  registerAuditRelationship(modelClass, tableData, databaseIdentity)
 
   return tableData
 }
@@ -492,19 +499,15 @@ function shouldResolveAuditTableData(modelClass) {
  * Registers the audits relationship without forcing audit table detection.
  * @param {AuditedModelClass} modelClass - Model class to audit.
  * @param {AuditTableData} [tableData] - Resolved audit table data when available.
+ * @param {string} [databaseIdentity] - Resolved physical database identity.
  * @returns {void}
  */
-function registerAuditRelationship(modelClass, tableData = defaultAuditRelationshipTableData(modelClass)) {
+function registerAuditRelationship(modelClass, tableData = defaultAuditRelationshipTableData(modelClass), databaseIdentity) {
   if (modelClass._relationshipExists("audits")) {
     const relationship = modelClass.getRelationshipByName("audits")
 
-    if (generatedAuditRelationships.has(relationship)) {
-      relationship.className = undefined
-      relationship.klass = tableData.auditClass
-      relationship.foreignKey = tableData.foreignKey
-      relationship._explicitForeignKey = tableData.foreignKey
-      relationship._polymorphic = !tableData.dedicated
-      relationship._polymorphicTypeColumn = undefined
+    if (generatedAuditRelationships.has(relationship) && databaseIdentity) {
+      auditRelationshipMap(modelClass).set(databaseIdentity, buildAuditRelationship(modelClass, tableData))
     }
 
     return
@@ -515,7 +518,54 @@ function registerAuditRelationship(modelClass, tableData = defaultAuditRelations
     klass: tableData.auditClass,
     polymorphic: !tableData.dedicated
   })
-  generatedAuditRelationships.add(modelClass.getRelationshipByName("audits"))
+  const relationship = modelClass.getRelationshipByName("audits")
+
+  generatedAuditRelationships.add(relationship)
+  relationship.setRecordResolver((record) => {
+    const relationships = auditRelationshipMap(modelClass)
+    const operation = record.databaseOperation()
+
+    if (operation) return relationships.get(operation.databaseIdentity()) || relationship
+    if (relationships.size === 1) return [...relationships.values()][0]
+
+    const identity = auditDatabaseIdentity(modelClass, record.connection())
+
+    return relationships.get(identity) || relationship
+  })
+}
+
+/**
+ * Returns physical audit relationship variants for a model.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {Map<string, HasManyRelationship>} - Relationships keyed by physical database identity.
+ */
+function auditRelationshipMap(modelClass) {
+  let relationships = auditRelationshipsByModel.get(modelClass)
+
+  if (!relationships) {
+    relationships = new Map()
+    auditRelationshipsByModel.set(modelClass, relationships)
+  }
+
+  return relationships
+}
+
+/**
+ * Builds immutable-by-ownership audit relationship metadata for one physical database.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {AuditTableData} tableData - Resolved audit table data.
+ * @returns {HasManyRelationship} - Physical relationship definition.
+ */
+function buildAuditRelationship(modelClass, tableData) {
+  return new HasManyRelationship({
+    foreignKey: tableData.foreignKey,
+    klass: tableData.auditClass,
+    modelClass,
+    polymorphic: !tableData.dedicated,
+    relationshipName: "audits",
+    scope: auditRelationshipScope,
+    type: "hasMany"
+  })
 }
 
 /**

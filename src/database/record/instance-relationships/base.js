@@ -245,7 +245,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
    * Runs get relationship.
    * @returns {import("../relationships/base.js").default} The relationship object that this instance relationship is based on
    */
-  getRelationship() { return this.relationship }
+  getRelationship() { return this.relationship.resolveForRecord(this.model) }
 
   /**
    * Runs apply scope.

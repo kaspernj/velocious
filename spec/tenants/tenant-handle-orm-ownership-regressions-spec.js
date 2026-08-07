@@ -124,6 +124,25 @@ describe("Tenant handle ORM producer ownership regressions", () => {
           }
         })
       }
+
+      for (const slug of ["alpha", "beta"]) {
+        const handle = new TenantHandle({configuration, tenant: {slug}})
+
+        await handle.databaseOperation({databaseIdentifier: "projectTenant"}, async (operation) => {
+          const widget = await operation.forModel(Widget).findByOrFail({name: slug})
+          const lazyAudits = await widget.getRelationshipByName("audits").toArray()
+          const preloadedWidget = await operation
+            .forModel(Widget)
+            .preload({audits: true})
+            .findByOrFail({id: widget.id()})
+          const preloadedAudits = preloadedWidget.getRelationshipByName("audits").loaded()
+
+          expect(lazyAudits).toHaveLength(1)
+          expect(preloadedAudits).toHaveLength(1)
+          expect(lazyAudits[0].getModelClass().tableName()).toEqual(slug === "alpha" ? "widget_audits" : "audits")
+          expect(preloadedAudits[0].getModelClass().tableName()).toEqual(slug === "alpha" ? "widget_audits" : "audits")
+        })
+      }
     })
   })
 

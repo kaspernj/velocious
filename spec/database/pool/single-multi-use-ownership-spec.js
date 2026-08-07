@@ -17,6 +17,10 @@ import {deferred, waitFor} from "awaitery"
 /** @type {ControlledConnect[]} */
 let controlledConnects = []
 let controlledConnectCount = 0
+/** @type {Error | undefined} */
+let controlledCheckoutCleanupError
+/** @type {Error | undefined} */
+let controlledCloseError
 
 class ControlledSinglePoolDriver extends DatabaseDriver {
   /** @returns {Promise<void>} - Runs a deterministic controlled connect. */
@@ -29,6 +33,18 @@ class ControlledSinglePoolDriver extends DatabaseDriver {
     controlledConnect.started()
     await controlledConnect.canFinish
     if (controlledConnect.error) throw controlledConnect.error
+  }
+
+  /** @returns {Promise<void>} - Runs deterministic checkout-name cleanup. */
+  async clearConnectionCheckoutName() {
+    if (controlledCheckoutCleanupError) throw controlledCheckoutCleanupError
+
+    await super.clearConnectionCheckoutName()
+  }
+
+  /** @returns {Promise<void>} - Runs deterministic physical close. */
+  async _close() {
+    if (controlledCloseError) throw controlledCloseError
   }
 }
 
@@ -53,6 +69,8 @@ describe("SingleMultiUsePool captured ownership", () => {
   function resetControlledConnects() {
     controlledConnectCount = 0
     controlledConnects = []
+    controlledCheckoutCleanupError = undefined
+    controlledCloseError = undefined
   }
 
   it("atomically reserves capacity before different physical databases spawn", async () => {
@@ -187,6 +205,38 @@ describe("SingleMultiUsePool captured ownership", () => {
       await pool.checkin(existingConnection)
       await pool.closeAll()
       resetControlledConnects()
+    }
+  })
+
+  it("preserves both checkout cleanup and connection close failures", async () => {
+    const pool = new SingleMultiUsePool({configuration: dummyConfiguration, identifier: "default"})
+    const connection = await pool.checkoutForConfiguration(databaseConfiguration("cleanup-close-errors"), {name: "failing checkout"}, {retain: false})
+
+    controlledCheckoutCleanupError = new Error("controlled checkout cleanup failure")
+    controlledCloseError = new Error("controlled connection close failure")
+
+    try {
+      /** @type {Error | undefined} */
+      let checkinError
+
+      try {
+        await pool.checkin(connection)
+      } catch (error) {
+        checkinError = error instanceof Error ? error : new Error("Unexpected checkin rejection", {cause: error})
+      }
+
+      expect(checkinError instanceof AggregateError).toBe(true)
+
+      const errors = checkinError instanceof AggregateError ? checkinError.errors : []
+
+      expect(errors.map((error) => error.message)).toEqual([
+        "controlled checkout cleanup failure",
+        "controlled connection close failure"
+      ])
+      expect(pool.getDebugSnapshot().connections).toEqual([])
+    } finally {
+      resetControlledConnects()
+      await pool.closeAll()
     }
   })
 })

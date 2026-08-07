@@ -1122,7 +1122,9 @@ class VelociousDatabaseRecord {
    */
   getRelationshipByName(relationshipName) {
     if (!(relationshipName in this._instanceRelationships)) {
-      const modelClassRelationship = this.getModelClass().getRelationshipByName(relationshipName)
+      const modelClassRelationship = this.getModelClass()
+        .getRelationshipByName(relationshipName)
+        .resolveForRecord(this)
       const relationshipType = modelClassRelationship.getType()
       let instanceRelationship
 
