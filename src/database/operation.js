@@ -11,16 +11,23 @@ export default class VelociousDatabaseOperation {
    * Runs constructor.
    * @param {object} args - Operation ownership.
    * @param {import("../configuration.js").default} args.configuration - Owning configuration.
+   * @param {boolean} [args.enforceCurrentTenantReuseKey] - Whether ambient tenant changes invalidate this legacy operation.
+   * @param {import("../configuration-types.js").DatabaseConfigurationType} [args.databaseConfiguration] - Captured resolved physical database configuration.
    * @param {string} args.configurationReuseKey - Physical database configuration key captured at checkout.
    * @param {import("./drivers/base.js").default} args.connection - Pinned physical connection.
    * @param {string} args.databaseIdentifier - Singular database identifier.
    * @param {symbol} args.owner - Opaque pool lease owner.
+   * @param {object | undefined} args.tenant - Tenant descriptor captured by the owning handle.
    */
-  constructor({configuration, configurationReuseKey, connection, databaseIdentifier, owner}) {
+  constructor({configuration, databaseConfiguration, configurationReuseKey, connection, databaseIdentifier, enforceCurrentTenantReuseKey = true, owner, tenant}) {
     this._active = true
     this._configuration = configuration
+    this._databaseConfiguration = databaseConfiguration || configuration.resolveDatabaseConfiguration(databaseIdentifier, tenant)
     this._configurationReuseKey = configurationReuseKey
     this._databaseIdentifier = databaseIdentifier
+    this._enforceCurrentTenantReuseKey = enforceCurrentTenantReuseKey
+    this._physicalConnection = connection
+    this._tenant = tenant
     this._connection = new OperationConnection({
       connection,
       operation: this,
@@ -54,7 +61,7 @@ export default class VelociousDatabaseOperation {
       throw new Error(`${ModelClass.getModelName()} belongs to another Velocious configuration`)
     }
 
-    const modelDatabaseIdentifier = ModelClass.getDatabaseIdentifier()
+    const modelDatabaseIdentifier = ModelClass.getDatabaseIdentifier({tenant: this._tenant})
 
     if (modelDatabaseIdentifier !== this._databaseIdentifier) {
       throw new Error(`${ModelClass.getModelName()} uses database ${JSON.stringify(modelDatabaseIdentifier)}, not operation database ${JSON.stringify(this._databaseIdentifier)}`)
@@ -124,18 +131,64 @@ export default class VelociousDatabaseOperation {
   }
 
   /**
+   * Returns the tenant descriptor captured by the immutable handle.
+   * @returns {Record<string, unknown> | undefined} - Captured tenant descriptor.
+   */
+  tenant() {
+    return /** @type {Record<string, unknown> | undefined} */ (this._tenant)
+  }
+
+  /**
+   * Returns the logical database identifier owned by this operation.
+   * @returns {string} - Database identifier.
+   */
+  databaseIdentifier() {
+    return this._databaseIdentifier
+  }
+
+  /**
+   * Returns a stable physical-database identity suitable for operation-aware caches.
+   * @returns {string} - Physical database identity.
+   */
+  databaseIdentity() {
+    return `${this._databaseIdentifier}:${this._configurationReuseKey}`
+  }
+
+  /**
+   * Initializes a model through this operation's captured connection.
+   * @param {typeof import("./record/index.js").default} ModelClass - Model class.
+   * @returns {Promise<void>} - Resolves when initialized.
+   */
+  async ensureModelInitialized(ModelClass) {
+    this.assertActive()
+
+    if (ModelClass.isInitialized()) this.assertModel(ModelClass)
+
+    await ModelClass.ensureInitialized({
+      configuration: this._configuration,
+      connection: this.connection()
+    })
+    this.assertModel(ModelClass)
+  }
+
+  /**
    * Raises when an operation handle has left its callback.
    * @returns {void}
    */
   assertActive() {
     if (!this._active) throw new Error("Database operation has completed")
 
-    const currentReuseKey = this
+    const pool = this
       ._configuration
       .getDatabasePool(this._databaseIdentifier)
-      .getConfigurationReuseKey()
+    const capturedReuseKey = pool.getConfigurationReuseKey(this._databaseConfiguration)
+    const connectionReuseKey = pool.getConnectionConfigurationReuseKey(this._physicalConnection)
 
-    if (currentReuseKey !== this._configurationReuseKey) {
+    if (capturedReuseKey !== this._configurationReuseKey || connectionReuseKey !== this._configurationReuseKey) {
+      throw new Error(`Database operation for ${JSON.stringify(this._databaseIdentifier)} belongs to a different physical database than its captured tenant handle`)
+    }
+
+    if (this._enforceCurrentTenantReuseKey && pool.getConfigurationReuseKey() !== this._configurationReuseKey) {
       throw new Error(`Database operation for ${JSON.stringify(this._databaseIdentifier)} belongs to a different physical database than the current tenant context`)
     }
   }

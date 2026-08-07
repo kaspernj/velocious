@@ -55,6 +55,7 @@ import ValidatorsLength from "./validators/length.js"
 import ValidatorsPresence from "./validators/presence.js"
 import ValidatorsUniqueness from "./validators/uniqueness.js"
 import registerActsAsListCallbacks from "./acts-as-list.js"
+import TenantModelScope from "../../tenants/tenant-model-scope.js"
 import UUID from "pure-uuid"
 
 /**
@@ -1121,7 +1122,9 @@ class VelociousDatabaseRecord {
    */
   getRelationshipByName(relationshipName) {
     if (!(relationshipName in this._instanceRelationships)) {
-      const modelClassRelationship = this.getModelClass().getRelationshipByName(relationshipName)
+      const modelClassRelationship = this.getModelClass()
+        .getRelationshipByName(relationshipName)
+        .resolveForRecord(this)
       const relationshipType = modelClassRelationship.getType()
       let instanceRelationship
 
@@ -1546,7 +1549,7 @@ class VelociousDatabaseRecord {
       }
     }
 
-    await this._defineTranslationMethods()
+    await this._defineTranslationMethods(connection)
     await initializeAuditing(this)
     this._initialized = true
   }
@@ -1555,11 +1558,11 @@ class VelociousDatabaseRecord {
    * Initializes the model class the first time an async record API needs table
    * metadata. Concurrent callers share the same initialization promise, and a
    * failed initialization can be retried by a later call.
-   * @param {{configuration?: import("../../configuration.js").default}} [args] - Optional configuration override.
+   * @param {{configuration?: import("../../configuration.js").default, connection?: import("../drivers/base.js").default}} [args] - Optional configuration and explicit metadata connection.
    * @returns {Promise<void>} - Resolves when the model class is initialized.
    */
   static async ensureInitialized(args = {}) {
-    const {configuration, ...restArgs} = args
+    const {configuration, connection, ...restArgs} = args
 
     restArgsError(restArgs)
 
@@ -1572,7 +1575,7 @@ class VelociousDatabaseRecord {
 
     const resolvedConfiguration = configuration || this._configuration || Configuration.current()
 
-    const initializeRecordPromise = this.initializeRecord({configuration: resolvedConfiguration})
+    const initializeRecordPromise = this.initializeRecord({configuration: resolvedConfiguration, connection})
 
     this._initializeRecordPromise = initializeRecordPromise
 
@@ -1622,13 +1625,22 @@ class VelociousDatabaseRecord {
     throw new Error(`${this.name} used before initialization. Call ${this.name}.initializeRecord(...) or configuration.initialize().`)
   }
 
-  static async _defineTranslationMethods() {
+  /**
+   * Defines translation accessors and initializes the generated translation
+   * class through the same metadata connection as the translated model.
+   * @param {import("../drivers/base.js").default} connection - Metadata connection.
+   * @returns {Promise<void>} - Resolves when translation metadata is ready.
+   */
+  static async _defineTranslationMethods(connection) {
     if (this._translations && Object.keys(this._translations).length > 0) {
       const locales = this._getConfiguration().getLocales()
 
       if (!locales) throw new Error("Locales hasn't been set in the configuration")
 
-      await this.getTranslationClass().initializeRecord({configuration: this._getConfiguration()})
+      await this.getTranslationClass().initializeRecord({
+        configuration: this._getConfiguration(),
+        connection
+      })
 
       for (const name in this._translations) {
         const nameCamelized = inflection.camelize(name)
@@ -1703,12 +1715,12 @@ class VelociousDatabaseRecord {
    * Runs get database identifier.
    * @param {object} [args] - Options.
    * @param {boolean} [args.enforceTenantDatabaseScope] - Whether tenant-switched models must resolve a tenant database identifier.
+   * @param {object} [args.tenant] - Explicit tenant descriptor instead of the ambient tenant.
    * @returns {string} - The database identifier.
    */
-  static getDatabaseIdentifier({enforceTenantDatabaseScope = true, ...restArgs} = {}) {
+  static getDatabaseIdentifier({enforceTenantDatabaseScope = true, tenant = Current.tenant(), ...restArgs} = {}) {
     restArgsError(restArgs)
 
-    const tenant = Current.tenant()
     const tenantDatabaseIdentifier = this.getTenantDatabaseIdentifier(tenant)
 
     if (tenantDatabaseIdentifier) {
@@ -2461,7 +2473,7 @@ class VelociousDatabaseRecord {
     const isNewRecord = this.isNewRecord()
     let result
 
-    await this._getConfiguration().ensureConnections({name: `${this.getModelClass().name} save`}, async () => {
+    const save = async () => {
       await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
@@ -2499,7 +2511,13 @@ class VelociousDatabaseRecord {
       } else {
         await this.getModelClass().transaction(saveInTransaction)
       }
-    })
+    }
+
+    if (this._databaseOperation) {
+      await save()
+    } else {
+      await this._getConfiguration().ensureConnections({name: `${this.getModelClass().name} save`}, save)
+    }
 
     this._assignedAttributeNames = undefined
 
@@ -3237,47 +3255,20 @@ class VelociousDatabaseRecord {
   }
 
   /**
-   * Returns a scope whose eager finders run against an explicit `tenant` (and
-   * therefore its database) instead of whatever tenant is ambient in
-   * `Current.tenant()`. Use it to read a model that may live in a specific
-   * tenant or in the default database from another tenant context — for example
-   * `GithubWebhook.usingTenant(tenant).findBy({id})` — without depending on
-   * which tenant happens to be active. The target tenant's connections are
-   * ensured for the duration of each query.
+   * Returns an immutable tenant-bound model scope. Eager helpers and explicit
+   * databaseOperation/transaction callbacks execute from a captured physical
+   * database configuration instead of ambient tenant state.
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant descriptor to scope the queries to (as accepted by `configuration.runWithTenant`).
-   * @returns {{find: (recordId: ReturnType<typeof JSON.parse>) => Promise<InstanceType<MC> | null>, findBy: (conditions: {[key: string]: string | number}) => Promise<InstanceType<MC> | null>, findByOrFail: (conditions: {[key: string]: string | number}) => Promise<InstanceType<MC>>}} - Eager finders scoped to the given tenant.
+   * @param {object} tenant - Ordinary or null-prototype JSON-compatible tenant descriptor to scope the model to.
+   * @returns {TenantModelScope<MC>} - Model scope bound to the captured tenant database.
    */
   static usingTenant(tenant) {
-    const ModelClass = this
-
-    return {
-      find: (recordId) => ModelClass._runUsingTenant(tenant, () => ModelClass.find(recordId)),
-      findBy: (conditions) => ModelClass._runUsingTenant(tenant, () => ModelClass.findBy(conditions)),
-      findByOrFail: (conditions) => ModelClass._runUsingTenant(tenant, () => ModelClass.findByOrFail(conditions))
-    }
-  }
-
-  /**
-   * Runs `callback` with the tenant switched to `tenant` and that tenant's
-   * connections ensured. Backs `usingTenant`.
-   * @template T
-   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant descriptor.
-   * @param {() => Promise<T>} callback - Query to run under the tenant.
-   * @returns {Promise<T>} - Resolves with the callback's result.
-   */
-  static async _runUsingTenant(tenant, callback) {
-    const configuration = this._getConfiguration()
-
-    // Do NOT ensureInitialized() out here: for a tenant-switched model whose
-    // first initialization would resolve metadata from the ambient tenant's
-    // database, that must happen under the requested tenant. The finders inside
-    // `callback` call ensureInitialized() themselves, now within this scope.
-    return await configuration.runWithTenant(tenant, () => configuration.ensureConnections({
-      databaseIdentifiers: [this.getDatabaseIdentifier()],
-      name: `usingTenant: ${this.getModelName()}`
-    }, callback))
+    return new TenantModelScope({
+      configuration: this._getConfiguration(),
+      modelClass: this,
+      tenant
+    })
   }
 
   /**
@@ -3485,6 +3476,22 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Releases this record from a completed eager-helper operation while
+   * preserving the legacy ambient follow-up behavior of `usingTenant` finders.
+   * @param {import("../operation.js").default} operation - Releasing operation.
+   * @returns {this} - Record.
+   */
+  releaseDatabaseOperation(operation) {
+    if (this._databaseOperation !== operation) {
+      throw new Error("Record is not bound to the releasing database operation")
+    }
+
+    this._databaseOperation = undefined
+
+    return this
+  }
+
+  /**
    * Returns the explicit operation owning this record, if any.
    * @returns {import("../operation.js").default | undefined} - Owning operation.
    */
@@ -3514,6 +3521,22 @@ class VelociousDatabaseRecord {
     if (this._databaseOperation) return this._databaseOperation.forModel(ModelClass)
 
     return ModelClass._newQuery()
+  }
+
+  /**
+   * Initializes a relationship/preload target without dropping this record's
+   * explicit operation connection.
+   * @param {typeof VelociousDatabaseRecord} ModelClass - Target model class.
+   * @param {import("../../configuration.js").default} configuration - Owning configuration.
+   * @returns {Promise<void>} - Resolves when initialized.
+   */
+  async ensureModelClassInitialized(ModelClass, configuration) {
+    if (this._databaseOperation) {
+      await this._databaseOperation.ensureModelInitialized(ModelClass)
+      return
+    }
+
+    await ModelClass.ensureInitialized({configuration})
   }
 
   /**

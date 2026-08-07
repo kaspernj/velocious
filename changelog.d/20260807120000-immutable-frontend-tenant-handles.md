@@ -1,0 +1,1 @@
+Add deeply immutable, prototype-safe tenant handles and tenant-bound model scopes that pin browser/native ORM operations, SQL.js persistence, ORM helper initialization, auditing, attachments, and transactions to atomically bounded pool-owned checkouts for captured physical database configurations.

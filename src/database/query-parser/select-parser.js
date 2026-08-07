@@ -56,7 +56,7 @@ export default class VelociousDatabaseQueryParserSelectParser {
       // @ts-expect-error
       if (query.constructor.name == "VelociousDatabaseQueryModelClassQuery" && query.modelClass) {
         // @ts-expect-error
-        sql += `${query.modelClass.connection().quoteTable(query.modelClass.tableName())}.*`
+        sql += `${query.driver.quoteTable(query.modelClass.tableName())}.*`
       } else {
         sql += "*"
       }

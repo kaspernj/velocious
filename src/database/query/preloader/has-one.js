@@ -85,7 +85,7 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
       whereArgs[typeColumn] = this.relationship.getModelClass().getModelName()
     }
 
-    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
+    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), this.models[0])
 
     // Load target models to be preloaded on the given models
     let query = preloadQueryForModel(this.models, targetModelClass).where(whereArgs)

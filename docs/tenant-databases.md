@@ -16,6 +16,8 @@ The tenant is an app-defined value: Velocious stores and restores whatever objec
 - **Reading** — `Current.tenant()` returns `Record<string, unknown> | undefined`, so consumers can read and narrow their own fields without casting `unknown`.
 - **Resolver callback** — the `switchesTenantDatabase((args) => ...)` callback receives `args.tenant` typed `Record<string, unknown> | null | undefined`. It can be invoked outside a tenant scope (with a nullish tenant) before the fail-closed `TenantDatabaseScopeError` path runs, so resolvers must narrow rather than read a field directly:
 
+Ambient Node APIs retain any application object accepted by this contract. `Tenant.handle(...)` has the narrower immutable-boundary contract described below: its descriptor must be an ordinary or null-prototype JSON-compatible object so Velocious can copy it without retaining mutable aliases.
+
 ```js
 ProjectRecord.switchesTenantDatabase(({tenant}) => {
   const databaseIdentifiers = tenant?.databaseIdentifiers
@@ -137,6 +139,20 @@ await Tenant.with({slug: "alpha"}, async () => {
   Tenant.current() // => {slug: "alpha"}
 })
 
+// Browser/native UI work should capture a handle when the project is selected.
+const projectTenant = Tenant.handle({slug: "alpha"})
+
+await projectTenant.databaseOperation({databaseIdentifier: "projectTenant"}, async (operation) => {
+  const project = await operation.forModel(Project).findByOrFail({id: projectId})
+
+  project.assign({name: "Renamed"})
+  await project.save()
+})
+
+await projectTenant.transaction({databaseIdentifier: "projectTenant"}, async (operation) => {
+  await operation.forModel(Task).create({name: "Pinned write"})
+})
+
 // Run a callback within every tenant the provider lists, optionally filtered
 // and a few at a time. Returns how many tenants the callback ran for.
 await Tenant.each({
@@ -151,6 +167,18 @@ await Tenant.drop({identifier: "projectTenant", tenant: {slug: "alpha"}})
 ```
 
 `Tenant.with` switches the async-context tenant (via `Current`) and runs the callback inside `ensureConnections`, so the global database and the tenant's own database both have a checked-out connection for the callback's duration. Before the callback runs, it initializes registered tenant-switched model classes whose base and declared translation tables exist. Concurrent entries share each model's initialization promise, so synchronous query builders cannot observe partially initialized metadata; models for absent optional tables remain deferred. Entering a tenant therefore makes its existing models immediately queryable without the caller establishing connections or calling `ensureInitialized()` (apartment-style "switch" semantics). Already-open connections are reused, so nesting `Tenant.with` does not double-connect. `Tenant.with` is generic over its callback's return type, so a value returned from inside the tenant context is passed straight back to the caller with its type preserved (no cast needed). `Tenant.each` establishes each tenant's connections and model metadata the same way before running the callback. (The `db:tenants:*` CLI commands deliberately do **not** pre-establish the tenant connection per tenant, because `db:tenants:create` must run before the tenant database exists; that lifecycle path manages its own connections.) `Tenant.current` delegates to `Current`; `Tenant.each` is the runtime counterpart of the `db:tenants:*` per-tenant iteration and shares its iteration engine; `Tenant.drop` refuses to run for a tenant that does not resolve to an active tenant database, so an unresolved descriptor can never drop the base/template database. `each` and `drop` default to the current configuration but accept an explicit `configuration` for non-global use. Raw `configuration.runWithTenant(...)` only changes the tenant context; use the `Tenant` facade when the callback requires connections and initialized tenant models.
+
+### Immutable handles for browser and native UI work
+
+`Tenant.handle(tenant)` takes a deep immutable snapshot of an ordinary or null-prototype JSON-compatible tenant descriptor, resolves every active logical database identifier immediately, and deeply captures the resulting physical connection configurations. Captured objects define every key as an immutable own data property, so JSON keys such as `__proto__`, `constructor`, and `prototype` remain enumerable data and cannot introduce inherited routing fields. Caller mutation, mutation attempts through `handle.tenant()` / `operation.tenant()`, later configuration changes, `Current.setTenant(...)`, navigation, or another overlapping handle cannot reroute the operation. Cyclic descriptors, custom-prototype/class instances such as `Date`, functions, `undefined`, and other non-JSON mutable values are rejected with the offending descriptor path instead of being retained by reference.
+
+Its `databaseOperation({databaseIdentifier}, callback)` and `transaction({databaseIdentifier}, callback)` methods use pool-owned bounded checkouts for that captured configuration. They obey the configured pool maximum, checkout timeout, queue/debug accounting, and `closeAll` lifecycle. SQL.js web databases reuse one pool-owned in-memory image per physical database, so same-tenant operations cannot overwrite one another's persisted snapshots and handle work observes pending writes on the normal pooled connection. Different physical tenant databases are queued independently rather than serialized behind one process-global mutex.
+
+Use the operation's `forModel(ModelClass)` scope for queries and creates, and keep loaded records, association queries, preloads, updates, destroys, and raw `operation.connection()` work inside the callback. A model or record already owned by another operation is rejected, and an operation expires when its callback finishes. Missing/inactive identifiers fail before checkout. `operation.tenant()` returns the descriptor captured by the handle for application-level checks; routing uses the already-captured physical configuration rather than re-resolving that descriptor.
+
+`Tenant.with` remains the convenient ambient API for Node request/job code, where `AsyncLocalStorage` isolates concurrent callbacks. Browser/native runtimes do not provide that async-context isolation, so asynchronous UI code should carry a handle or `Model.usingTenant(...)` scope explicitly instead of relying on `Current.tenant()` across awaits. Browser ambient scope bookkeeping removes completed scopes correctly even when overlapping callbacks finish out of order, but ambient reads still observe the most recently started active scope and are not an async-context substitute.
+
+This foundation intentionally does not add a long-lived per-tenant connection LRU/open-close-delete policy, per-tenant migration or model-metadata caches, tenant-aware live-query/event routing, or tenant-scoped `SyncClient` instances. Temporary operation checkouts are bounded and pool-owned; those longer-lived layers must use the captured handle identity when added.
 
 Provisioning a tenant database from the default/template database is mechanism the framework also provides: `SchemaCloner` clones table structure and baselines the `schema_migrations` ledger, and `DataCopier` copies a tenant's owned rows following a `TenantTablePlan`. Call these from your provider's `createDatabase`/migration hooks to materialize a new tenant. When an existing tenant table is missing an auto-increment column backed by a separate source unique index, the cloner adds the column and index in the same schema alteration so MySQL-compatible databases accept the definition.
 
@@ -222,7 +250,7 @@ If the targeted identifier is disabled with `VELOCIOUS_DISABLED_DATABASE_IDENTIF
 
 Some models can live in more than one database — a per-tenant row in a project's tenant database, or a shared row in the default database (for example a model the tenant table-plan marks `allowDefaultDatabase`). A plain `Model.findBy(...)` resolves its database from the ambient `Current.tenant()`, so code running inside one tenant cannot see a row that lives in another tenant or the default database, and it cannot rely on whichever tenant happens to be active.
 
-`Model.usingTenant(tenant)` returns a scope whose eager finders run against an explicit tenant (and therefore its database), ensuring that tenant's connections for the duration of each query:
+`Model.usingTenant(tenant)` returns an immutable model scope backed by `Tenant.handle(tenant)`. Its eager helpers execute against the captured physical database rather than ambient `Current.tenant()`:
 
 ```js
 // Look in a specific project tenant first, then fall back to the default database —
@@ -231,4 +259,27 @@ const inTenant = await GithubWebhook.usingTenant(projectTenant).findBy({id})
 const webhook = inTenant || await GithubWebhook.usingTenant(defaultTenant).findBy({id})
 ```
 
-`usingTenant(tenant)` supports `find`, `findBy`, and `findByOrFail`. The `tenant` argument is any descriptor accepted by `configuration.runWithTenant(...)`; pass a descriptor whose `databaseIdentifiers` is empty to target the default database. First-time initialization for a tenant-switched model happens inside the requested tenant, so a model whose table only exists in the tenant database initializes from the correct schema.
+The scope supports `find`, `findBy`, `findByOrFail`, `create`, `count`, and `toArray`. Eager helpers detach returned records before their temporary checkout closes, preserving the previous Node behavior: attributes remain readable and follow-up record operations work inside an explicit ambient `Tenant.with(...)` / `configuration.runWithTenant(...)` scope. Outside such a scope, tenant-switched follow-up persistence still fails closed rather than using the wrong database. For browser/native follow-up work, general queries, associations/preloads, multiple writes, or raw database work, use the callback APIs so every database action stays inside the immutable operation lifetime:
+
+```js
+const projectTasks = Task.usingTenant(projectTenant)
+
+const names = await projectTasks.databaseOperation(async (tasks, operation) => {
+  const pending = tasks
+    .where({status: "pending"})
+    .preload({assignee: true})
+
+  // Another project may run here; pending remains pinned to projectTenant.
+  await otherProjectTasks.databaseOperation(async (otherTasks) => {
+    await otherTasks.create({name: "Other project"})
+  })
+
+  return (await pending.toArray()).map((task) => task.name())
+})
+
+await projectTasks.transaction(async (tasks) => {
+  await tasks.create({name: "Atomic tenant write"})
+})
+```
+
+The callback receives the operation-bound base query and the `DatabaseOperation` as its second argument. First-time base/translation/preload-target initialization, auditing metadata, and attachment store selection all use that operation's captured connection and physical cache identity. Records created or loaded inside the callback remain operation-owned and fail closed after it ends; return plain values from callback-based browser/native work.

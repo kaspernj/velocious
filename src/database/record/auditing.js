@@ -1,6 +1,7 @@
 // @ts-check
 
 import UUID from "pure-uuid"
+import HasManyRelationship from "./relationships/has-many.js"
 
 /**
  * Global audit event bus matching ActiveRecordAuditable::Events.
@@ -56,13 +57,19 @@ import UUID from "pure-uuid"
  * @property {typeof import("./index.js").default} auditClass - The audit model class to use.
  */
 
-/** @type {Map<string, boolean>} */
-const dedicatedTableCache = new Map()
+/** @type {WeakMap<import("../../configuration.js").default, Map<string, boolean>>} */
+const dedicatedTableCacheByConfiguration = new WeakMap()
+
+/** @type {WeakMap<AuditedModelClass, Map<string, AuditTableData>>} */
+const auditTableDataByModel = new WeakMap()
 
 /** @type {Map<string, typeof import("./index.js").default>} */
 const auditClassCache = new Map()
 
 const generatedAuditRelationships = new WeakSet()
+
+/** @type {WeakMap<AuditedModelClass, Map<string, HasManyRelationship>>} */
+const auditRelationshipsByModel = new WeakMap()
 
 // ---------------------------------------------------------------------------
 // Global event bus (like ActiveRecordAuditable::Events)
@@ -149,15 +156,27 @@ function dedicatedAuditTableName(modelClass) {
  * Called lazily on first createAudit / withoutAudit / relationship usage.
  * @param {AuditedModelClass} modelClass - Audited model class.
  * @param {import("../drivers/base.js").default} [connection] - Explicit record-owned connection.
+ * @param {import("../operation.js").default} [operation] - Explicit record operation.
  * @returns {Promise<AuditTableData>} Resolved audit table metadata.
  */
-async function resolveAuditTableData(modelClass, connection) {
-  if (modelClass._auditTableResolved && modelClass._auditTableData) {
-    return modelClass._auditTableData
+async function resolveAuditTableData(modelClass, connection, operation) {
+  const resolvedConnection = connection || modelClass.connection()
+  const databaseIdentity = auditDatabaseIdentity(modelClass, resolvedConnection, operation)
+  let tableDataByIdentity = auditTableDataByModel.get(modelClass)
+
+  if (!tableDataByIdentity) {
+    tableDataByIdentity = new Map()
+    auditTableDataByModel.set(modelClass, tableDataByIdentity)
   }
 
-  const resolvedConnection = connection || modelClass.connection()
-  const tableData = await buildAuditTableData(modelClass, resolvedConnection)
+  const cachedTableData = tableDataByIdentity.get(databaseIdentity)
+
+  if (cachedTableData) {
+    registerAuditRelationship(modelClass, cachedTableData, databaseIdentity)
+    return cachedTableData
+  }
+
+  const tableData = await buildAuditTableData(modelClass, resolvedConnection, databaseIdentity)
   const configuration = modelClass._getConfiguration()
 
   tableData.auditClass.registerRecordClass({configuration})
@@ -165,8 +184,9 @@ async function resolveAuditTableData(modelClass, connection) {
 
   modelClass._auditTableData = tableData
   modelClass._auditTableResolved = true
+  tableDataByIdentity.set(databaseIdentity, tableData)
 
-  registerAuditRelationship(modelClass, tableData)
+  registerAuditRelationship(modelClass, tableData, databaseIdentity)
 
   return tableData
 }
@@ -177,11 +197,12 @@ async function resolveAuditTableData(modelClass, connection) {
  * dynamic class.
  * @param {AuditedModelClass} modelClass - Audited model class.
  * @param {import("../drivers/base.js").default} connection - Explicit record-owned connection.
+ * @param {string} databaseIdentity - Captured physical database identity.
  * @returns {Promise<AuditTableData>} Audit table metadata.
  */
-async function buildAuditTableData(modelClass, connection) {
+async function buildAuditTableData(modelClass, connection, databaseIdentity) {
   const dedicatedTable = dedicatedAuditTableName(modelClass)
-  const dedicatedExists = await dedicatedTableExistsForConnection(modelClass, dedicatedTable, connection)
+  const dedicatedExists = await dedicatedTableExistsForConnection(modelClass, dedicatedTable, connection, databaseIdentity)
 
   if (dedicatedExists) {
     const auditClass = dedicatedAuditClass(modelClass, dedicatedTable)
@@ -218,14 +239,22 @@ async function buildAuditTableData(modelClass, connection) {
 
 /**
  * Checks whether a dedicated audit table exists for a model's connection.
- * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {AuditedModelClass} modelClass - Audited model class owning the Configuration.
  * @param {string} tableName - Dedicated audit table name to check.
  * @param {import("../drivers/base.js").default} connection - Explicit record-owned connection.
+ * @param {string} databaseIdentity - Captured physical database identity.
  * @returns {Promise<boolean>} Whether the table exists.
  */
-async function dedicatedTableExistsForConnection(modelClass, tableName, connection) {
-  const databaseIdentifier = modelClass.getDatabaseIdentifier()
-  const cacheKey = `${databaseIdentifier}:${tableName}`
+async function dedicatedTableExistsForConnection(modelClass, tableName, connection, databaseIdentity) {
+  const configuration = modelClass._getConfiguration()
+  const cacheKey = `${databaseIdentity}:${tableName}`
+  let dedicatedTableCache = dedicatedTableCacheByConfiguration.get(configuration)
+
+  if (!dedicatedTableCache) {
+    dedicatedTableCache = new Map()
+    dedicatedTableCacheByConfiguration.set(configuration, dedicatedTableCache)
+  }
+
   const cached = dedicatedTableCache.get(cacheKey)
 
   if (typeof cached === "boolean") {
@@ -238,6 +267,24 @@ async function dedicatedTableExistsForConnection(modelClass, tableName, connecti
   dedicatedTableCache.set(cacheKey, exists)
 
   return exists
+}
+
+/**
+ * Resolves a cache identity from explicit operation ownership or the actual
+ * stamped pool connection. Ambient tenant state is never used when an
+ * operation is available.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {import("../drivers/base.js").default} connection - Actual connection.
+ * @param {import("../operation.js").default} [operation] - Explicit operation.
+ * @returns {string} - Physical database identity.
+ */
+function auditDatabaseIdentity(modelClass, connection, operation) {
+  if (operation) return operation.databaseIdentity()
+
+  const databaseIdentifier = modelClass.getDatabaseIdentifier()
+  const pool = modelClass._getConfiguration().getDatabasePool(databaseIdentifier)
+
+  return `${databaseIdentifier}:${pool.getConnectionConfigurationReuseKey(connection)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -452,19 +499,15 @@ function shouldResolveAuditTableData(modelClass) {
  * Registers the audits relationship without forcing audit table detection.
  * @param {AuditedModelClass} modelClass - Model class to audit.
  * @param {AuditTableData} [tableData] - Resolved audit table data when available.
+ * @param {string} [databaseIdentity] - Resolved physical database identity.
  * @returns {void}
  */
-function registerAuditRelationship(modelClass, tableData = defaultAuditRelationshipTableData(modelClass)) {
+function registerAuditRelationship(modelClass, tableData = defaultAuditRelationshipTableData(modelClass), databaseIdentity) {
   if (modelClass._relationshipExists("audits")) {
     const relationship = modelClass.getRelationshipByName("audits")
 
-    if (generatedAuditRelationships.has(relationship)) {
-      relationship.className = undefined
-      relationship.klass = tableData.auditClass
-      relationship.foreignKey = tableData.foreignKey
-      relationship._explicitForeignKey = tableData.foreignKey
-      relationship._polymorphic = !tableData.dedicated
-      relationship._polymorphicTypeColumn = undefined
+    if (generatedAuditRelationships.has(relationship) && databaseIdentity) {
+      auditRelationshipMap(modelClass).set(databaseIdentity, buildAuditRelationship(modelClass, tableData))
     }
 
     return
@@ -475,7 +518,54 @@ function registerAuditRelationship(modelClass, tableData = defaultAuditRelations
     klass: tableData.auditClass,
     polymorphic: !tableData.dedicated
   })
-  generatedAuditRelationships.add(modelClass.getRelationshipByName("audits"))
+  const relationship = modelClass.getRelationshipByName("audits")
+
+  generatedAuditRelationships.add(relationship)
+  relationship.setRecordResolver((record) => {
+    const relationships = auditRelationshipMap(modelClass)
+    const operation = record.databaseOperation()
+
+    if (operation) return relationships.get(operation.databaseIdentity()) || relationship
+    if (relationships.size === 1) return [...relationships.values()][0]
+
+    const identity = auditDatabaseIdentity(modelClass, record.connection())
+
+    return relationships.get(identity) || relationship
+  })
+}
+
+/**
+ * Returns physical audit relationship variants for a model.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {Map<string, HasManyRelationship>} - Relationships keyed by physical database identity.
+ */
+function auditRelationshipMap(modelClass) {
+  let relationships = auditRelationshipsByModel.get(modelClass)
+
+  if (!relationships) {
+    relationships = new Map()
+    auditRelationshipsByModel.set(modelClass, relationships)
+  }
+
+  return relationships
+}
+
+/**
+ * Builds immutable-by-ownership audit relationship metadata for one physical database.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @param {AuditTableData} tableData - Resolved audit table data.
+ * @returns {HasManyRelationship} - Physical relationship definition.
+ */
+function buildAuditRelationship(modelClass, tableData) {
+  return new HasManyRelationship({
+    foreignKey: tableData.foreignKey,
+    klass: tableData.auditClass,
+    modelClass,
+    polymorphic: !tableData.dedicated,
+    relationshipName: "audits",
+    scope: auditRelationshipScope,
+    type: "hasMany"
+  })
 }
 
 /**
@@ -532,6 +622,9 @@ function canResolveAuditTableData(modelClass) {
  */
 async function createAudit(record, args) {
   const modelClass = /** @type {AuditedModelClass} */ (record.getModelClass())
+  const operation = record.databaseOperation()
+
+  if (operation) return await createAuditWithCurrentConnection(record, args, modelClass)
 
   return await modelClass._getConfiguration().ensureConnections({name: `${modelClass.getModelName()} audit`}, async () => {
     return await createAuditWithCurrentConnection(record, args, modelClass)
@@ -550,7 +643,7 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
   if (!record.isPersisted()) throw new Error(`Cannot audit unpersisted ${modelClass.getModelName()} record`)
 
   const db = record.connection()
-  const tableData = await resolveAuditTableData(modelClass, db)
+  const tableData = await resolveAuditTableData(modelClass, db, record.databaseOperation())
   const action = normalizeAction(args.action)
   const auditedChanges = args.auditedChanges === undefined ? null : args.auditedChanges
   const params = args.params === undefined ? null : args.params
@@ -739,14 +832,15 @@ function auditChangesForDestroy(record) {
  */
 function withoutAudit(modelClass, action) {
   const db = modelClass.connection()
+  const databaseIdentity = auditDatabaseIdentity(modelClass, db)
+  const tableData = auditTableDataByModel.get(modelClass)?.get(databaseIdentity)
   const modelTableSql = db.quoteTable(modelClass.tableName())
   const auditActionsTableSql = db.quoteTable("audit_actions")
   const modelPrimaryKeySql = `${modelTableSql}.${db.quoteColumn(modelClass.primaryKey())}`
   const auditActionsIdSql = `${auditActionsTableSql}.${db.quoteColumn("id")}`
   const auditActionsActionSql = `${auditActionsTableSql}.${db.quoteColumn("action")}`
 
-  if (modelClass._auditTableResolved && modelClass._auditTableData?.dedicated) {
-    const tableData = modelClass._auditTableData
+  if (tableData?.dedicated) {
     const modelKey = modelParamKey(modelClass)
     const auditsTableSql = db.quoteTable(tableData.tableName)
     const auditActionIdSql = `${auditsTableSql}.${db.quoteColumn("audit_action_id")}`

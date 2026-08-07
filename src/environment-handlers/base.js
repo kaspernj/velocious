@@ -20,6 +20,21 @@ import {validateTimeZone} from "../time-zone.js"
 
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * Mutable ambient tenant used by runtimes without async-context storage.
+   * @type {ReturnType<typeof JSON.parse> | undefined}
+   */
+  _currentTenant = undefined
+
+  /**
+   * Active ambient scopes in start order. This prevents a scope that completes
+   * out of order from restoring a tenant belonging to an already-completed scope.
+   * Ambient reads are still shared in browser runtimes; immutable handles remain
+   * the concurrency-safe database API.
+   * @type {Array<{owner: symbol, tenant: ReturnType<typeof JSON.parse>}>}
+   */
+  _tenantScopes = []
+
+  /**
    * Runs debug endpoint token matches.
    * @param {string} providedToken - Token from the request.
    * @param {string} expectedToken - Configured token.
@@ -210,12 +225,16 @@ export default class VelociousEnvironmentHandlerBase {
    * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
    */
   async runWithTenant(tenant, callback) {
-    this._currentTenant = tenant
+    const scope = {owner: Symbol("browser-tenant-scope"), tenant}
+
+    this._tenantScopes.push(scope)
 
     try {
       return await callback()
     } finally {
-      this._currentTenant = undefined
+      const scopeIndex = this._tenantScopes.findIndex((candidate) => candidate.owner === scope.owner)
+
+      if (scopeIndex !== -1) this._tenantScopes.splice(scopeIndex, 1)
     }
   }
 
@@ -233,7 +252,7 @@ export default class VelociousEnvironmentHandlerBase {
    * @returns {ReturnType<typeof JSON.parse>} - Current tenant.
    */
   getCurrentTenant() {
-    return this._currentTenant
+    return this._tenantScopes[this._tenantScopes.length - 1]?.tenant ?? this._currentTenant
   }
   /**
    * Runs cli commands generate base models.
