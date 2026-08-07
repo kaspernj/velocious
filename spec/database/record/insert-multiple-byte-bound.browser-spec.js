@@ -12,46 +12,61 @@ import {describe, expect, it} from "../../../src/testing/test.js"
  * this same file against mariadb, pgsql, and mssql as well.
  */
 describe("Record - insertMultiple byte bound", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
-  it("splits text/JSON-heavy batches by serialized SQL bytes", async () => {
+  /**
+   * Builds a batch of task rows with a text/JSON-heavy description.
+   * @param {Project} project - Parent project.
+   * @param {string} namePrefix - Prefix for generated task names.
+   * @param {number} count - Number of rows to build.
+   * @returns {Array<Array<ReturnType<typeof JSON.parse>>>} - Rows ready for insertMultiple.
+   */
+  function buildRows(project, namePrefix, count) {
+    const createdAtIso = "2025-12-26T16:18:50.641Z"
+    const rows = []
+
+    for (let index = 0; index < count; index++) {
+      const description = JSON.stringify({
+        index,
+        payload: "x".repeat(2000)
+      })
+
+      rows.push([String(project.id()), `${namePrefix}-${String(index).padStart(2, "0")}`, createdAtIso, createdAtIso, description])
+    }
+
+    return rows
+  }
+
+  it("splits text/JSON-heavy batches by serialized SQL bytes and persists every row", async () => {
     const configuration = Configuration.current()
 
     await configuration.ensureConnections(async () => {
       const driver = Task.connection()
       const originalArgsMaxInsertSqlBytes = driver.getArgs().maxInsertSqlBytes
-      const originalQuery = driver.query.bind(driver)
-      const insertQueries = []
-
-      driver.query = async (sql, options) => {
-        if (typeof sql === "string" && /^INSERT INTO\s+[`"']?tasks[`"']?/i.test(sql)) {
-          insertQueries.push(sql)
-        }
-
-        return originalQuery(sql, options)
-      }
+      const maxInsertSqlBytes = 4096
+      const columns = ["project_id", "name", "created_at", "updated_at", "description"]
+      const tableName = Task.tableName()
 
       try {
-        driver.getArgs().maxInsertSqlBytes = 4096
+        driver.getArgs().maxInsertSqlBytes = maxInsertSqlBytes
 
         const project = await Project.create({name: "Byte-bound project"})
-        const createdAtIso = "2025-12-26T16:18:50.641Z"
-        const rows = []
+        const rows = buildRows(project, "byte-task", 20)
+        const buildSql = (chunkRows) => driver.insertSql({columns, tableName, rows: chunkRows})
+        const chunks = driver._insertMultipleChunks(rows, buildSql)
 
-        for (let index = 0; index < 20; index++) {
-          const description = JSON.stringify({
-            index,
-            payload: "x".repeat(2000)
-          })
+        expect(chunks.length).toBeGreaterThan(1)
 
-          rows.push([String(project.id()), `byte-task-${String(index).padStart(2, "0")}`, createdAtIso, createdAtIso, description])
+        for (const chunk of chunks) {
+          const sql = buildSql(chunk)
+          const byteLength = Buffer.byteLength(sql, "utf8")
+
+          // A single oversized row is allowed to overflow on its own; the
+          // chunker only guarantees that multi-row chunks fit.
+          if (chunk.length > 1) {
+            expect(byteLength).toBeLessThanOrEqual(maxInsertSqlBytes)
+          }
         }
 
-        await Task.insertMultiple(
-          ["project_id", "name", "created_at", "updated_at", "description"],
-          rows,
-          {cast: true}
-        )
-
-        expect(insertQueries.length).toBeGreaterThan(1)
+        await Task.insertMultiple(columns, rows, {cast: true})
 
         const tasks = await Task.where({projectId: project.id()}).order("name").toArray()
 
@@ -59,8 +74,6 @@ describe("Record - insertMultiple byte bound", {tags: ["dummy"], databaseCleanin
         expect(tasks[0].name()).toEqual("byte-task-00")
         expect(tasks[19].name()).toEqual("byte-task-19")
       } finally {
-        driver.query = originalQuery
-
         if (originalArgsMaxInsertSqlBytes === undefined) {
           delete driver.getArgs().maxInsertSqlBytes
         } else {
@@ -76,32 +89,19 @@ describe("Record - insertMultiple byte bound", {tags: ["dummy"], databaseCleanin
     await configuration.ensureConnections(async () => {
       const driver = Task.connection()
       const originalArgsMaxInsertSqlBytes = driver.getArgs().maxInsertSqlBytes
-      const originalQuery = driver.query.bind(driver)
-      const insertQueries = []
-
-      driver.query = async (sql, options) => {
-        if (typeof sql === "string" && /^INSERT INTO\s+[`"']?tasks[`"']?/i.test(sql)) {
-          insertQueries.push(sql)
-        }
-
-        return originalQuery(sql, options)
-      }
+      const maxInsertSqlBytes = 4096
+      const columns = ["project_id", "name", "created_at", "updated_at", "description"]
+      const tableName = Task.tableName()
 
       try {
-        driver.getArgs().maxInsertSqlBytes = 4096
+        driver.getArgs().maxInsertSqlBytes = maxInsertSqlBytes
 
         const project = await Project.create({name: "Byte-bound rollback project"})
-        const createdAtIso = "2025-12-26T16:18:50.641Z"
-        const rows = []
+        const rows = buildRows(project, "rollback-byte-task", 20)
+        const buildSql = (chunkRows) => driver.insertSql({columns, tableName, rows: chunkRows})
+        const chunks = driver._insertMultipleChunks(rows, buildSql)
 
-        for (let index = 0; index < 20; index++) {
-          const description = JSON.stringify({
-            index,
-            payload: "x".repeat(2000)
-          })
-
-          rows.push([String(project.id()), `rollback-byte-task-${String(index).padStart(2, "0")}`, createdAtIso, createdAtIso, description])
-        }
+        expect(chunks.length).toBeGreaterThan(1)
 
         // Force a failure in a later chunk so the test would leak earlier chunks
         // if the driver committed them outside the caller's transaction.
@@ -111,25 +111,18 @@ describe("Record - insertMultiple byte bound", {tags: ["dummy"], databaseCleanin
 
         try {
           await Task.transaction(async () => {
-            await Task.insertMultiple(
-              ["project_id", "name", "created_at", "updated_at", "description"],
-              rows,
-              {cast: true}
-            )
+            await Task.insertMultiple(columns, rows, {cast: true})
           })
         } catch (caughtError) {
           error = caughtError
         }
 
         expect(error).toBeInstanceOf(Error)
-        expect(insertQueries.length).toBeGreaterThan(1)
 
         const tasks = await Task.where({projectId: project.id()}).toArray()
 
         expect(tasks.length).toEqual(0)
       } finally {
-        driver.query = originalQuery
-
         if (originalArgsMaxInsertSqlBytes === undefined) {
           delete driver.getArgs().maxInsertSqlBytes
         } else {
