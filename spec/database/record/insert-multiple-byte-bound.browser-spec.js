@@ -15,8 +15,8 @@ describe("Record - insertMultiple byte bound", {tags: ["dummy"], databaseCleanin
   it("splits text/JSON-heavy batches by serialized SQL bytes", async () => {
     const configuration = Configuration.current()
 
-    await configuration.ensureConnections(async (dbs) => {
-      const driver = dbs.default
+    await configuration.ensureConnections(async () => {
+      const driver = Task.connection()
       const originalArgsMaxInsertSqlBytes = driver.getArgs().maxInsertSqlBytes
       const originalQuery = driver.query.bind(driver)
       const insertQueries = []
@@ -73,8 +73,8 @@ describe("Record - insertMultiple byte bound", {tags: ["dummy"], databaseCleanin
   it("rolls back every byte-limited chunk when the caller is inside a transaction and one chunk fails", async () => {
     const configuration = Configuration.current()
 
-    await configuration.ensureConnections(async (dbs) => {
-      const driver = dbs.default
+    await configuration.ensureConnections(async () => {
+      const driver = Task.connection()
       const originalArgsMaxInsertSqlBytes = driver.getArgs().maxInsertSqlBytes
       const originalQuery = driver.query.bind(driver)
       const insertQueries = []
