@@ -218,9 +218,14 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    */
   async insertMultipleWithSingleInsert(tableName, columns, rows) {
     this._assertNotReadOnly()
-    const sql = new Insert({columns, driver: this, rows, tableName}).toSql()
 
-    await this.query(sql)
+    const chunks = this._insertMultipleChunks(rows, (chunkRows) => new Insert({columns, driver: this, rows: chunkRows, tableName}).toSql())
+
+    for (const chunk of chunks) {
+      const sql = new Insert({columns, driver: this, rows: chunk, tableName}).toSql()
+
+      await this.query(sql)
+    }
   }
 
   /**

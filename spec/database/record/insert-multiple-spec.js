@@ -7,6 +7,64 @@ import User from "../../dummy/src/models/user.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
 describe("Record - insertMultiple", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
+  it("inserts large batches in bounded chunks while preserving order and transaction semantics", async () => {
+    const project = await Project.create({name: "InsertMultiple chunk project"})
+    const createdAtIso = "2025-12-26T16:18:50.641Z"
+    const rows = []
+
+    for (let index = 0; index < 2000; index++) {
+      rows.push([String(project.id()), `chunk-task-${String(index).padStart(4, "0")}`, createdAtIso, createdAtIso])
+    }
+
+    await Task.insertMultiple(
+      ["project_id", "name", "created_at", "updated_at"],
+      rows,
+      {cast: true}
+    )
+
+    const tasks = await Task.where({projectId: project.id()}).order("name").toArray()
+
+    expect(tasks.length).toEqual(2000)
+    expect(tasks[0].name()).toEqual("chunk-task-0000")
+    expect(tasks[1999].name()).toEqual("chunk-task-1999")
+  })
+
+  it("rolls back every chunk when the caller is inside a transaction and one chunk fails", async () => {
+    const project = await Project.create({name: "InsertMultiple rollback project"})
+    const createdAtIso = "2025-12-26T16:18:50.641Z"
+    const rows = []
+
+    for (let index = 0; index < 2000; index++) {
+      rows.push([String(project.id()), `rollback-task-${String(index).padStart(4, "0")}`, createdAtIso, createdAtIso])
+    }
+
+    // Force a failure on the second chunk by making a value violate the
+    // project_id NOT NULL constraint. SQLite checks this on every row insert,
+    // so the second chunk fails; before the fix only the failing chunk would
+    // roll back and leave part of the batch committed.
+    rows[1500][0] = null
+
+    let error
+
+    try {
+      await Task.transaction(async () => {
+        await Task.insertMultiple(
+          ["project_id", "name", "created_at", "updated_at"],
+          rows,
+          {cast: true}
+        )
+      })
+    } catch (caughtError) {
+      error = caughtError
+    }
+
+    expect(error).toBeInstanceOf(Error)
+
+    const tasks = await Task.where({projectId: project.id()}).toArray()
+
+    expect(tasks.length).toEqual(0)
+  })
+
   it("casts insertMultiple values based on column types", async () => {
     const project = await Project.create({name: "InsertMultiple project"})
     const createdAtIso = "2025-12-26T16:18:50.641Z"

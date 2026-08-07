@@ -767,7 +767,93 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Maximum rows per `INSERT ... VALUES (...), (...), ...` statement. Drivers
+   * that build multi-value inserts must stay below database-specific limits
+   * (SQLite's `MAX_VARIABLE_NUMBER`, SQL Server's 2100 parameters, PostgreSQL's
+   * 65535 parameters, and so on). 500 rows is safely under every major engine
+   * for tables with a moderate number of columns and keeps generated SQL small.
+   *
+   * Override via `maxRowsPerInsert` in the database configuration.
+   * @returns {number} - Maximum rows per insert statement.
+   */
+  maxRowsPerInsert() {
+    return optionalPositiveInteger(this.getArgs().maxRowsPerInsert, "maxRowsPerInsert") ?? 500
+  }
+
+  /**
+   * Maximum serialized SQL size, in bytes, for a single `INSERT ... VALUES`
+   * statement. Large text/JSON payloads can push a modest row count well beyond
+   * database wire/protocol limits, so chunking also stops when the next row
+   * would push the generated string over this threshold.
+   *
+   * Override via `maxInsertSqlBytes` in the database configuration.
+   * @returns {number} - Maximum bytes per insert statement.
+   */
+  maxInsertSqlBytes() {
+    return optionalPositiveInteger(this.getArgs().maxInsertSqlBytes, "maxInsertSqlBytes") ?? 1048576
+  }
+
+  /**
+   * Splits `rows` into chunks that stay within both {@link maxRowsPerInsert}
+   * and {@link maxInsertSqlBytes} while preserving order.
+   *
+   * A chunk always contains at least one row, even if that single row exceeds
+   * the byte limit, so progress is guaranteed.
+   * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
+   * @param {(rows: Array<Array<ReturnType<typeof JSON.parse>>>) => string} buildSql - Function that builds the full SQL for a candidate chunk; called with `[]` to measure the statement prefix and with `[row]` to measure each row's values tuple.
+   * @returns {Array<Array<Array<ReturnType<typeof JSON.parse>>>>} - Row chunks.
+   */
+  _insertMultipleChunks(rows, buildSql) {
+    const chunks = []
+    const maxRows = this.maxRowsPerInsert()
+    const maxBytes = this.maxInsertSqlBytes()
+    const emptySql = buildSql([])
+    const prefix = `${emptySql} VALUES `
+    const baseByteLength = Buffer.byteLength(prefix, "utf8")
+
+    let currentChunk = []
+    let currentBytes = 0
+
+    for (const row of rows) {
+      const singleRowSql = buildSql([row])
+      const rowValuesSql = singleRowSql.slice(prefix.length)
+      const rowValuesSqlBytes = Buffer.byteLength(rowValuesSql, "utf8")
+
+      if (currentChunk.length > 0) {
+        const candidateRows = currentChunk.length + 1
+        const candidateBytes = currentBytes + 2 + rowValuesSqlBytes // ", " separator
+
+        if (candidateRows > maxRows || candidateBytes > maxBytes) {
+          chunks.push(currentChunk)
+          currentChunk = []
+          currentBytes = 0
+        }
+      }
+
+      if (currentChunk.length === 0) {
+        currentBytes = baseByteLength + rowValuesSqlBytes
+      } else {
+        currentBytes += 2 + rowValuesSqlBytes
+      }
+
+      currentChunk.push(row)
+    }
+
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk)
+    }
+
+    return chunks
+  }
+
+  /**
    * Runs insert multiple.
+   *
+   * Large row sets are split into multiple statements that each stay within
+   * {@link maxRowsPerInsert} rows and {@link maxInsertSqlBytes} serialized
+   * bytes so the generated SQL stays within database parameter and wire limits.
+   * When called outside a transaction each chunk commits independently; callers
+   * that need all-or-nothing semantics should wrap the call in {@link transaction}.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.
    * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
@@ -776,9 +862,13 @@ export default class VelociousDatabaseDriversBase {
   async insertMultiple(tableName, columns, rows) {
     this._assertNotReadOnly()
 
-    const sql = this.insertSql({columns, tableName, rows})
+    const chunks = this._insertMultipleChunks(rows, (chunkRows) => this.insertSql({columns, tableName, rows: chunkRows}))
 
-    await this.query(sql)
+    for (const chunk of chunks) {
+      const sql = this.insertSql({columns, tableName, rows: chunk})
+
+      await this.query(sql)
+    }
   }
 
   /**
