@@ -15,6 +15,12 @@ import baseMethodsForward from "./base-methods-forward.js"
  * @property {string} [name] - Human-readable name for the checked-out connection.
  */
 /**
+ * CapturedConnectionOptions type.
+ * @typedef {object} CapturedConnectionOptions
+ * @property {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Resolved physical database configuration captured by the caller.
+ * @property {string} [name] - Human-readable name for the checked-out connection.
+ */
+/**
  * DatabasePoolPendingCheckoutDebugSnapshot type.
  * @typedef {object} DatabasePoolPendingCheckoutDebugSnapshot
  * @property {string | undefined} checkoutName - Human-readable checkout name.
@@ -216,11 +222,10 @@ class VelociousDatabasePoolBase {
 
   /**
    * Runs get configuration reuse key.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} [databaseConfiguration] - Resolved configuration to identify.
    * @returns {string} - Reuse key for the currently resolved database configuration.
    */
-  getConfigurationReuseKey() {
-    const databaseConfiguration = this.getConfiguration()
-
+  getConfigurationReuseKey(databaseConfiguration = this.getConfiguration()) {
     return stableStringify({
       database: databaseConfiguration.database,
       host: databaseConfiguration.host,
@@ -310,13 +315,24 @@ class VelociousDatabasePoolBase {
 
     this.logger.debug("spawnConnection", {identifier: this.identifier, databaseConfig})
 
-    const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
+    return await this.spawnConnectionForConfiguration(databaseConfig)
+  }
 
+  /**
+   * Spawns a connection for an already-resolved physical database configuration.
+   * The reuse identity is derived only from that captured configuration.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Captured resolved configuration.
+   * @returns {Promise<import("../drivers/base.js").default>} - Connected and identity-stamped driver.
+   */
+  async spawnConnectionForConfiguration(databaseConfiguration) {
+    const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
+    const connection = await this.spawnConnectionWithConfiguration(databaseConfiguration)
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
-    connectionWithPoolKey[POOL_CONFIGURATION_KEY] = this.getConfigurationReuseKey()
+
+    connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
     connection.setSchemaCacheInvalidator(() => {
       this.clearSchemaCache()
-      this.configuration.clearSchemaCachesForReuseKey(this.getConfigurationReuseKey())
+      this.configuration.clearSchemaCachesForReuseKey(reuseKey)
     })
 
     return connection
@@ -380,6 +396,21 @@ class VelociousDatabasePoolBase {
     const owner = Symbol("database-operation-owner")
 
     return await this.withConnection(options, async (connection) => await callback(connection, owner))
+  }
+
+  /**
+   * Runs work through a pool-owned checkout for an immutable, already-resolved
+   * physical configuration. Concrete pools must preserve their capacity,
+   * timeout, queue, debug, and closeAll ownership on this path.
+   * @template T
+   * @param {CapturedConnectionOptions} options - Captured checkout options.
+   * @param {(connection: import("../drivers/base.js").default, owner: symbol) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async withCapturedOperationConnection(options, callback) {
+    void options
+    void callback
+    throw new Error("'withCapturedOperationConnection' not implemented")
   }
 
   /**

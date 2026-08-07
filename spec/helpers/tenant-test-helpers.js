@@ -16,9 +16,10 @@ import path from "path"
  * @param {string} prefix - Temp-path prefix.
  * @param {object} [args] - Options.
  * @param {boolean} [args.enforceTenantDatabaseScopes] - Whether tenant-switched model queries require a resolved tenant database.
+ * @param {import("../../src/environment-handlers/base.js").default} [args.environmentHandler] - Environment handler override.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
  */
-export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true} = {}) {
+export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true, environmentHandler = new EnvironmentHandlerNode()} = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
 
   const configuration = new Configuration({
@@ -51,7 +52,7 @@ export async function createTenantTestConfiguration(prefix, {enforceTenantDataba
     directory,
     enforceTenantDatabaseScopes,
     environment: "test",
-    environmentHandler: new EnvironmentHandlerNode(),
+    environmentHandler,
     initializeModels: async () => {},
     locale: "en",
     localeFallbacks: {en: ["en"]},

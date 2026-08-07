@@ -233,6 +233,33 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Checks out a connection for an already-resolved physical configuration
+   * without consulting ambient tenant state.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfig - Captured database configuration.
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
+   * @returns {Promise<import("../drivers/base.js").default>} - Activated pooled connection.
+   */
+  async checkoutForConfiguration(databaseConfig, options = {}) {
+    const reuseKey = this.getConfigurationReuseKey(databaseConfig)
+    let connection = this.takeIdleConnectionForReuseKey(reuseKey)
+
+    if (connection) return await this.activateConnection(connection, options)
+
+    await this.reapIdleConnections()
+    connection = this.takeIdleConnectionForReuseKey(reuseKey)
+
+    if (connection) return await this.activateConnection(connection, options)
+
+    if (this.canSpawnConnection(databaseConfig)) {
+      connection = await this.spawnConnectionForCheckout(databaseConfig, reuseKey)
+
+      return await this.activateConnection(connection, options)
+    }
+
+    return await this.waitForCheckout(databaseConfig, reuseKey, options)
+  }
+
+  /**
    * Runs take idle connection for reuse key.
    * @param {string} reuseKey - Database configuration reuse key.
    * @param {object} [args] - Options.
@@ -295,10 +322,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs max connections.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} [databaseConfig] - Configuration whose pool maximum applies.
    * @returns {number | null} - Configured max live connections.
    */
-  maxConnections() {
-    const value = this.getConfiguration().pool?.max
+  maxConnections(databaseConfig = this.getConfiguration()) {
+    const value = databaseConfig.pool?.max
 
     if (value === null) return null
     if (this.validMaxConnections(value)) return value
@@ -308,10 +336,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs checkout timeout millis.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} [databaseConfig] - Configuration whose timeout applies.
    * @returns {number | null} - Pending checkout timeout in milliseconds, or null when disabled.
    */
-  checkoutTimeoutMillis() {
-    const value = this.getConfiguration().pool?.checkoutTimeoutMillis
+  checkoutTimeoutMillis(databaseConfig = this.getConfiguration()) {
+    const value = databaseConfig.pool?.checkoutTimeoutMillis
 
     if (value === null) return null
     if (this.validCheckoutTimeoutMillis(value)) return value
@@ -353,10 +382,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /**
    * Runs can spawn connection.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} [databaseConfig] - Configuration whose pool maximum applies.
    * @returns {boolean} - Whether a new connection can be spawned.
    */
-  canSpawnConnection() {
-    const maxConnections = this.maxConnections()
+  canSpawnConnection(databaseConfig = this.getConfiguration()) {
+    const maxConnections = this.maxConnections(databaseConfig)
 
     return maxConnections === null || this.liveConnectionCount() < maxConnections
   }
@@ -396,7 +426,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   async waitForCheckout(databaseConfig, reuseKey, options = {}) {
     return await new Promise((resolve, reject) => {
       const enqueuedAt = Date.now()
-      const timeoutMillis = this.checkoutTimeoutMillis()
+      const timeoutMillis = this.checkoutTimeoutMillis(databaseConfig)
       /** @type {PendingCheckout} */
       const checkout = {
         databaseConfig,
@@ -451,7 +481,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
       if (await this.closeIdleConnectionForPendingCheckoutCapacity(checkout)) continue
       if (!this.pendingCheckouts.includes(checkout)) continue
-      if (this.canSpawnConnection()) {
+      if (this.canSpawnConnection(checkout.databaseConfig)) {
         this.removePendingCheckoutAt(0)
         await this.spawnAndResolvePendingCheckout(checkout)
         continue
@@ -623,7 +653,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (this.findIdleConnectionForReuseKey(checkout.reuseKey)) return false
 
-    return this.canSpawnConnection() ? false : await this.closeOneIdleConnectionForCapacity()
+    return this.canSpawnConnection(checkout.databaseConfig) ? false : await this.closeOneIdleConnectionForCapacity()
   }
 
   /**
@@ -719,6 +749,27 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     return await this.asyncLocalStorage.run(id, async () => {
       try {
         return await actualCallback(connection)
+      } finally {
+        await this.checkin(connection)
+      }
+    })
+  }
+
+  /**
+   * Runs a captured operation through the normal bounded pool lifecycle.
+   * @template T
+   * @param {import("./base.js").CapturedConnectionOptions} options - Captured checkout options.
+   * @param {(connection: import("../drivers/base.js").default, owner: symbol) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async withCapturedOperationConnection({databaseConfiguration, name}, callback) {
+    const connection = await this.checkoutForConfiguration(databaseConfiguration, {name})
+    const id = connection.getIdSeq()
+    const owner = Symbol("captured-database-operation-owner")
+
+    return await this.asyncLocalStorage.run(id, async () => {
+      try {
+        return await callback(connection, owner)
       } finally {
         await this.checkin(connection)
       }

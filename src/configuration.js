@@ -3023,19 +3023,62 @@ export default class VelociousConfiguration {
       throw new Error(`Unknown or inactive database identifier: ${databaseIdentifier}`)
     }
 
+    const tenant = this.getCurrentTenant()
+    const databaseConfiguration = this.resolveDatabaseConfiguration(databaseIdentifier, tenant)
     const pool = this.getDatabasePool(databaseIdentifier)
 
     return await pool.withOperationConnection({name}, async (connection, owner) => {
       const operation = new DatabaseOperation({
         configuration: this,
+        databaseConfiguration,
         configurationReuseKey: pool.getConnectionConfigurationReuseKey(connection),
         connection,
         databaseIdentifier,
-        owner
+        owner,
+        tenant
       })
 
       try {
         return await operation.transaction(async () => await callback(operation))
+      } finally {
+        operation.complete()
+      }
+    })
+  }
+
+  /**
+   * Runs explicit model work on one connection selected from a captured physical
+   * database configuration. No ambient tenant value is read during checkout or
+   * execution.
+   * @template T
+   * @param {{databaseConfiguration: import("./configuration-types.js").DatabaseConfigurationType, databaseIdentifier: string, name?: string, tenant?: object}} options - Captured operation options.
+   * @param {(operation: DatabaseOperation) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async withDatabaseOperation({databaseConfiguration, databaseIdentifier, name = "Configuration.withDatabaseOperation", tenant, ...restArgs}, callback) {
+    restArgsError(restArgs)
+
+    if (!databaseIdentifier) throw new Error("Configuration.withDatabaseOperation requires a databaseIdentifier")
+    if (!databaseConfiguration) throw new Error("Configuration.withDatabaseOperation requires a databaseConfiguration")
+    if (typeof callback != "function") throw new Error("Configuration.withDatabaseOperation requires a callback")
+
+    const pool = this.getDatabasePool(databaseIdentifier)
+    const configurationReuseKey = pool.getConfigurationReuseKey(databaseConfiguration)
+
+    return await pool.withCapturedOperationConnection({databaseConfiguration, name}, async (connection, owner) => {
+      const operation = new DatabaseOperation({
+        configuration: this,
+        databaseConfiguration,
+        configurationReuseKey,
+        connection,
+        databaseIdentifier,
+        enforceCurrentTenantReuseKey: false,
+        owner,
+        tenant
+      })
+
+      try {
+        return await callback(operation)
       } finally {
         operation.complete()
       }

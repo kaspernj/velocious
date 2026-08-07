@@ -3,6 +3,7 @@
 import Current from "../current.js"
 import {dropTenantDatabase} from "./default-tenant-database-provisioning.js"
 import TenantAggregator from "./tenant-aggregator.js"
+import TenantHandle from "./tenant-handle.js"
 import TenantIterator from "./tenant-iterator.js"
 
 /**
@@ -18,6 +19,18 @@ import TenantIterator from "./tenant-iterator.js"
  * app's tenant database provider hooks.
  */
 export default class Tenant {
+  /**
+   * Captures an immutable tenant/database handle for explicit browser/native
+   * ORM operations. Physical database configurations are resolved now and are
+   * never recomputed from later ambient tenant changes.
+   * @param {object} tenant - Ordinary or null-prototype JSON-compatible descriptor understood by the app's tenant database resolver.
+   * @param {import("../configuration.js").default} [configuration] - Owning configuration.
+   * @returns {TenantHandle} - Immutable captured handle.
+   */
+  static handle(tenant, configuration = Current.configuration()) {
+    return new TenantHandle({configuration, tenant})
+  }
+
   /**
    * Runs `callback` with `tenant` as the current tenant, restoring the previous tenant after.
    * The callback runs inside `ensureConnections`, so every database identifier the tenant

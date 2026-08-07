@@ -124,8 +124,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
     const configuration = this.relationship.getConfiguration()
 
-    await ensureModelClassInitialized(throughModelClass, configuration)
-    await ensureModelClassInitialized(targetModelClass, configuration)
+    await ensureModelClassInitialized(throughModelClass, configuration, modelsToLoad[0])
+    await ensureModelClassInitialized(targetModelClass, configuration, modelsToLoad[0])
 
     const throughForeignKey = throughRelationship.getForeignKey()
 
@@ -298,7 +298,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       whereArgs[typeColumn] = this.relationship.getModelClass().getModelName()
     }
 
-    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
+    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), modelsToLoad[0])
 
     let query = preloadQueryForModel(modelsToLoad, targetModelClass).where(whereArgs)
 

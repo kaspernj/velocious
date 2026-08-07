@@ -28,6 +28,10 @@ function generateUUID() {
  * @returns {string} - Store key.
  */
 function storeKeyForModel(model) {
+  const operation = model.databaseOperation()
+
+  if (operation) return operation.databaseIdentity()
+
   return `${model.getModelClass().getDatabaseIdentifier()}`
 }
 
@@ -52,7 +56,7 @@ export function recordAttachmentsStoreForModel(model) {
 
   store = new RecordAttachmentsStore({
     configuration,
-    databaseIdentifier: model.getModelClass().getDatabaseIdentifier()
+    databaseIdentifier: model.databaseOperation()?.databaseIdentifier() || model.getModelClass().getDatabaseIdentifier()
   })
 
   storesByDatabaseIdentifier.set(key, store)

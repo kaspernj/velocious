@@ -85,7 +85,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
     // Only query when at least one model has a non-null foreign key.
     if (foreignKeyValues.size > 0) {
-      await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration())
+      await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), modelsToLoad[0])
 
       /**
        * Where args.
@@ -203,7 +203,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     for (const targetType in foreignKeyValuesByType) {
       const targetModelClass = configuration.getModelClass(targetType)
 
-      await ensureModelClassInitialized(targetModelClass, configuration)
+      await ensureModelClassInitialized(targetModelClass, configuration, this.models[0])
 
       /**
        * Where args.
