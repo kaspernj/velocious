@@ -1,28 +1,47 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Dummy from "../dummy/index.js"
 import Comment from "../dummy/src/models/comment.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 
-const sharedApiUrl = "http://localhost:3006/frontend-models"
-
 /**
- * Builds a shared frontend-model index request body.
- * @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Index payload.
- * @returns {string} - JSON request body.
+ * Builds a controller for direct serialization testing.
+ *
+ * The request path is intentionally not a frontend-model ability route so that
+ * ability-related authorization queries are skipped; this keeps the test
+ * deterministic and free of extra database round-trips.
+ *
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Frontend-model params.
+ * @returns {FrontendModelController} - Controller instance.
  */
-function indexRequestBody(payload) {
-  return JSON.stringify({
-    requests: [{
-      commandType: "index",
-      model: "Task",
-      payload,
-      requestId: "1"
-    }]
+function buildSerializationController(params) {
+  const request = {
+    baseURL: () => "http://localhost:3006",
+    header: () => undefined,
+    headers: () => ({}),
+    httpMethod: () => "POST",
+    params: () => params,
+    path: () => "/test-serialization"
+  }
+  const response = {}
+  const controller = new FrontendModelController({
+    action: "test",
+    configuration: dummyConfiguration,
+    controller: "test",
+    params,
+    request,
+    response,
+    viewPath: dummyConfiguration.getDirectory()
   })
+
+  // Bypass transport deserialization so the test can feed plain params directly.
+  controller._frontendModelParams = params
+
+  return controller
 }
 
 /**
@@ -68,20 +87,13 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
       await Comment.create({body: "Comment one", task: taskOne})
       await Comment.create({body: "Comment two", task: taskTwo})
 
-      const body = indexRequestBody({
-        limit: 10,
+      const tasks = await Task.where({id: [taskOne.id(), taskTwo.id()]}).preload(["project", "comments"]).toArray()
+      const controller = buildSerializationController({
+        model: "Task",
         preload: ["project", "comments"]
       })
       const resourcesByModelClassName = await captureSerializationResources(async () => {
-        const response = await fetch(sharedApiUrl, {
-          body,
-          headers: {"content-type": "application/json"},
-          method: "POST"
-        })
-
-        if (!response.ok) {
-          throw new Error(`Frontend-model index failed: ${response.status} ${await response.text()}`)
-        }
+        await controller.serializeFrontendModels(tasks)
       })
 
       expect(resourcesByModelClassName.get("Task")?.size).toEqual(1)
@@ -97,28 +109,14 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
 
       await Comment.create({body: "A comment", task})
 
-      const body = indexRequestBody({
-        limit: 10,
+      const tasks = await Task.where({id: task.id()}).preload(["comments"]).toArray()
+      const controller = buildSerializationController({
+        model: "Task",
         preload: ["comments"],
         select: {Comment: ["id", "body", "requestBaseUrl"]}
       })
-      const response = await fetch(sharedApiUrl, {
-        body,
-        headers: {"content-type": "application/json"},
-        method: "POST"
-      })
-
-      if (!response.ok) {
-        throw new Error(`Frontend-model index failed: ${response.status} ${await response.text()}`)
-      }
-
-      const json = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (await response.json())
-      const firstResponse = json.responses?.[0]
-      const models = firstResponse?.response?.models
-
-      expect(models).toBeInstanceOf(Array)
-
-      const firstTask = models[0]
+      const serialized = await controller.serializeFrontendModels(tasks)
+      const firstTask = serialized[0]
       const comments = firstTask?.__preloadedRelationships?.comments
 
       expect(comments).toBeInstanceOf(Array)
@@ -126,17 +124,22 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
     })
   })
 
-  it("does not share serialization resource instances across requests", async () => {
+  it("does not share serialization resource instances across controllers", async () => {
     await Dummy.run(async () => {
       const project = await Project.create({name: "Cross-request project"})
+      const task = await Task.create({name: "Task A", project})
 
-      await Task.create({name: "Task A", project})
+      const tasks = await Task.where({id: task.id()}).preload(["project"]).toArray()
 
       /**
-       * @param {string} _requestId - Request identifier.
+       * @param {string} _label - Controller label.
        * @returns {Promise<import("../../src/frontend-model-resource/base-resource.js").default | undefined>} - Root Task resource instance.
        */
-      async function fetchRootResource(_requestId) {
+      async function captureRootResource(_label) {
+        const controller = buildSerializationController({
+          model: "Task",
+          preload: ["project"]
+        })
         let rootResource
         const original = FrontendModelController.prototype._serializationResourceInstanceForModel
 
@@ -151,15 +154,7 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
         }
 
         try {
-          const response = await fetch(sharedApiUrl, {
-            body: indexRequestBody({limit: 10, preload: ["project"]}),
-            headers: {"content-type": "application/json"},
-            method: "POST"
-          })
-
-          if (!response.ok) {
-            throw new Error(`Frontend-model index failed: ${response.status} ${await response.text()}`)
-          }
+          await controller.serializeFrontendModels(tasks)
         } finally {
           FrontendModelController.prototype._serializationResourceInstanceForModel = original
         }
@@ -167,8 +162,8 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
         return rootResource
       }
 
-      const firstResource = await fetchRootResource("first")
-      const secondResource = await fetchRootResource("second")
+      const firstResource = await captureRootResource("first")
+      const secondResource = await captureRootResource("second")
 
       expect(firstResource).toBeTruthy()
       expect(secondResource).toBeTruthy()
