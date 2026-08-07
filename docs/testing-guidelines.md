@@ -45,6 +45,24 @@ run. Each line shows the duration, full description and `file:line`.
 `TestRunner#getSlowestTests(limit = 10)` exposes the same data programmatically
 (slowest first; `limit` of `0` returns every recorded test).
 
+## Duration-aware parallel sharding
+Pass `--timing-manifest=<path>` together with `--groups` and `--group-number` to
+weight discovered test files by recorded wall-clock duration. The JSON object maps
+normalized project-relative test paths to positive finite numbers:
+
+```json
+{
+  "spec/system/sign-in-spec.js": 42.7,
+  "spec/controller/accounts-spec.js": 8.1
+}
+```
+
+Forward slashes are the portable manifest format; leading `./` and backslashes are
+normalized when reading keys. A valid duration takes precedence over the static
+directory/browser heuristic for that file. Missing paths, unknown paths, non-number,
+non-positive, or non-finite durations fall back per file. Missing, unreadable, or
+malformed JSON manifests also leave the existing deterministic heuristic intact.
+
 ## Avoiding fixed sleeps
 Never `await wait(<fixed ms>)` to let something async settle — it is both slow and
 flaky (too short and it races, too long and it wastes wall-clock). Wait for the real

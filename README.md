@@ -289,10 +289,26 @@ npx velocious test --groups=4 --group-number=2
 
 # Combine with tags
 npx velocious test --groups=3 --group-number=1 --tag fast
+
+# Prefer recorded file durations when balancing groups
+npx velocious test --groups=4 --group-number=1 --timing-manifest=tmp/test-timings.json
 ```
 
 Files are distributed using a greedy load-balancing algorithm. Each file is
-weighted by its spec directory (`system/` = 20, `frontend-models/` = 10,
+primarily weighted by a positive finite duration from the optional timing
+manifest. Manifest keys are normalized project-relative test paths using `/`
+separators:
+
+```json
+{
+  "spec/system/sign-in-spec.js": 42.7,
+  "spec/controller/accounts-spec.js": 8.1
+}
+```
+
+Files absent from the manifest, unknown files, invalid duration values, and
+unreadable or malformed JSON all fall back to the existing deterministic
+heuristic. The heuristic weights files by spec directory (`system/` = 20, `frontend-models/` = 10,
 `controller/` = 3, default = 1) with a 2x multiplier for `.browser-spec.js`
 files. The heaviest files are assigned first to the group with the least
 accumulated weight, producing balanced wall-clock times across groups.

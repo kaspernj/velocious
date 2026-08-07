@@ -5,6 +5,19 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 describe("parseFilters", {databaseCleaning: {transaction: true}}, () => {
   describe("group splitting flags", () => {
+    it("parses and strips a timing manifest path", () => {
+      const result = parseFilters(["test", "--groups=4", "--group-number=2", "--timing-manifest", "tmp/timings.json", "spec/testing/"])
+
+      expect(result.timingManifestPath).toBe("tmp/timings.json")
+      expect(result.filteredProcessArgs).toEqual(["test", "spec/testing/"])
+    })
+
+    it("parses a timing manifest path with equals syntax", () => {
+      const result = parseFilters(["test", "--timing-manifest=tmp/timings.json"])
+
+      expect(result.timingManifestPath).toBe("tmp/timings.json")
+    })
+
     it("parses --groups and --group-number with = syntax", () => {
       const result = parseFilters(["test", "--groups=4", "--group-number=2"])
 

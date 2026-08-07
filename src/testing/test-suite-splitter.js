@@ -46,8 +46,9 @@ export default class TestSuiteSplitter {
    * @param {number} args.groupNumber - Which group to return (1-indexed).
    * @param {string[]} args.testFiles - All discovered test file paths.
    * @param {string} [args.baseDirectory] - Base directory for relative path computation.
+   * @param {ReturnType<typeof JSON.parse>} [args.timingManifest] - Relative test paths mapped to durations.
    */
-  constructor({groups, groupNumber, testFiles, baseDirectory, ...restArgs}) {
+  constructor({groups, groupNumber, testFiles, baseDirectory, timingManifest, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!Number.isInteger(groups) || groups < 1) {
@@ -62,6 +63,7 @@ export default class TestSuiteSplitter {
     this._groupNumber = groupNumber
     this._testFiles = testFiles
     this._baseDirectory = baseDirectory || process.cwd()
+    this._timingManifest = this.normalizeTimingManifest(timingManifest)
   }
 
   /**
@@ -93,7 +95,13 @@ export default class TestSuiteSplitter {
    * @returns {number} - Weight value.
    */
   computeWeight(filePath) {
-    const relativePath = path.relative(this._baseDirectory, filePath).split(path.sep).join("/")
+    const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
+    const duration = this._timingManifest[relativePath]
+
+    if (duration !== undefined) {
+      return duration
+    }
+
     let weight = DEFAULT_WEIGHT
 
     // Extract the type directory from the relative path.
@@ -114,6 +122,37 @@ export default class TestSuiteSplitter {
     }
 
     return weight
+  }
+
+  /**
+   * Keeps only usable positive finite duration entries keyed by normalized relative path.
+   * @param {ReturnType<typeof JSON.parse>} timingManifest - Parsed timing manifest.
+   * @returns {Record<string, number>} - Valid normalized duration weights.
+   */
+  normalizeTimingManifest(timingManifest) {
+    /** @type {Record<string, number>} */
+    const normalized = {}
+
+    if (!timingManifest || typeof timingManifest !== "object" || Array.isArray(timingManifest)) {
+      return normalized
+    }
+
+    for (const [filePath, duration] of Object.entries(timingManifest)) {
+      if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+        normalized[this.normalizeRelativePath(filePath)] = duration
+      }
+    }
+
+    return normalized
+  }
+
+  /**
+   * Normalizes a relative test path to the manifest's portable slash format.
+   * @param {string} filePath - Relative test path.
+   * @returns {string} - Normalized relative test path.
+   */
+  normalizeRelativePath(filePath) {
+    return filePath.replaceAll("\\", "/").replace(/^\.\//, "")
   }
 
   /**

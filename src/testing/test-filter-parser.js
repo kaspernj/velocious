@@ -7,6 +7,7 @@
  * @property {string[]} filteredProcessArgs - Remaining process args with filter flags removed.
  * @property {number | undefined} groups - Total number of groups for test splitting.
  * @property {number | undefined} groupNumber - Which group to run (1-indexed).
+ * @property {string | undefined} timingManifestPath - JSON timing manifest path.
  */
 // @ts-check
 
@@ -15,6 +16,7 @@ const EXCLUDE_TAG_FLAGS = new Set(["--exclude-tag", "--skip-tag", "-x"])
 const EXAMPLE_FLAGS = new Set(["--example", "--name", "-e"])
 const GROUPS_FLAGS = new Set(["--groups"])
 const GROUP_NUMBER_FLAGS = new Set(["--group-number"])
+const TIMING_MANIFEST_FLAGS = new Set(["--timing-manifest"])
 
 /**
  * Runs split tags.
@@ -79,6 +81,8 @@ export function parseFilters(processArgs) {
    * Defines groupNumber.
    * @type {number | undefined} */
   let groupNumber
+  /** @type {string | undefined} */
+  let timingManifestPath
 
   let inRestArgs = false
 
@@ -181,6 +185,21 @@ export function parseFilters(processArgs) {
         groupNumber = parseInt(arg.slice("--group-number=".length), 10)
         continue
       }
+
+      if (TIMING_MANIFEST_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (nextValue && !nextValue.startsWith("-")) {
+          timingManifestPath = nextValue
+          i++
+        }
+        continue
+      }
+
+      if (arg.startsWith("--timing-manifest=")) {
+        timingManifestPath = arg.slice("--timing-manifest=".length)
+        continue
+      }
     }
 
     filteredProcessArgs.push(arg)
@@ -192,6 +211,7 @@ export function parseFilters(processArgs) {
     examplePatterns,
     filteredProcessArgs,
     groups,
-    groupNumber
+    groupNumber,
+    timingManifestPath
   }
 }

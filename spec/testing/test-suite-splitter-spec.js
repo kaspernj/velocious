@@ -220,4 +220,65 @@ describe("TestSuiteSplitter", {databaseCleaning: {transaction: true}}, () => {
     expect(byPath["/project/spec/controller/routes-spec.js"]).toBe(3)
     expect(byPath["/project/spec/utils/string-spec.js"]).toBe(1)
   })
+
+  it("uses normalized relative timing manifest durations as primary weights", () => {
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles: [
+        "/project/spec/system/slow-spec.js",
+        "/project/spec/utils/measured-spec.js"
+      ],
+      baseDirectory: "/project",
+      timingManifest: {
+        "./spec/system/slow-spec.js": 2,
+        "spec\\utils\\measured-spec.js": 45.5
+      }
+    })
+
+    expect(splitter.computeWeightedFiles()).toEqual([
+      {filePath: "/project/spec/system/slow-spec.js", weight: 2},
+      {filePath: "/project/spec/utils/measured-spec.js", weight: 45.5}
+    ])
+  })
+
+  it("falls back per file for malformed unknown and unusable timing entries", () => {
+    const testFiles = [
+      "/project/spec/system/zero-spec.js",
+      "/project/spec/frontend-models/infinite-spec.js",
+      "/project/spec/controller/text-spec.js",
+      "/project/spec/utils/unknown-spec.js"
+    ]
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles,
+      baseDirectory: "/project",
+      timingManifest: {
+        "spec/system/zero-spec.js": 0,
+        "spec/frontend-models/infinite-spec.js": Infinity,
+        "spec/controller/text-spec.js": "12",
+        "spec/other/not-discovered-spec.js": 100
+      }
+    })
+
+    expect(splitter.computeWeightedFiles()).toEqual([
+      {filePath: testFiles[0], weight: 20},
+      {filePath: testFiles[1], weight: 10},
+      {filePath: testFiles[2], weight: 3},
+      {filePath: testFiles[3], weight: 1}
+    ])
+  })
+
+  it("falls back to heuristics for a malformed manifest root", () => {
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles: ["/project/spec/system/login-spec.js"],
+      baseDirectory: "/project",
+      timingManifest: [20]
+    })
+
+    expect(splitter.computeWeightedFiles()[0].weight).toBe(20)
+  })
 })
