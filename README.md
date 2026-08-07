@@ -1178,6 +1178,30 @@ const results = await Task.insertMultiple(
 console.log(results.succeededRows, results.failedRows, results.errors)
 ```
 
+Large batches are split into multiple `INSERT ... VALUES` statements so each
+statement stays within database limits. Two database-configuration keys control
+the splitting:
+
+- `maxRowsPerInsert` — maximum rows per statement (default: `500`).
+- `maxInsertSqlBytes` — maximum serialized SQL size in bytes per statement
+  (default: `1048576`, i.e. 1 MiB).
+
+A new chunk is started when the next row would exceed either limit. Row order is
+preserved across chunks.
+
+**Important:** when `insertMultiple` is called outside a transaction, each chunk
+commits independently. If a later chunk fails, earlier chunks remain persisted.
+Wrap the call in a transaction when you need all-or-nothing semantics:
+
+```js
+await Task.transaction(async () => {
+  await Task.insertMultiple(
+    ["project_id", "name", "created_at", "updated_at"],
+    thousandsOfTasks
+  )
+})
+```
+
 ### Find or create records
 
 ```js
