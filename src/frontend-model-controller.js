@@ -603,6 +603,12 @@ export default class FrontendModelController extends Controller {
    * own arguments rather than the route metadata. Only set on the shared-endpoint path.
    * @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
   _frontendModelCustomCommandClientArguments = undefined
+  /**
+   * Request-scoped cache for serialization resource instances.
+   * Keyed by model class, then by whether the resource is for a related model
+   * (so self-referential relationships do not accidentally reuse root params).
+   * @type {Map<typeof import("./database/record/index.js").default, Map<boolean, import("./frontend-model-resource/base-resource.js").default>> | undefined} */
+  _frontendModelSerializationResourceInstances = undefined
 
   /**
    * Runs frontend model params.
@@ -628,15 +634,18 @@ export default class FrontendModelController extends Controller {
   async withFrontendModelParams(params, callback) {
     const previousOverride = this._frontendModelParamsOverride
     const previousParams = this._frontendModelParams
+    const previousSerializationResourceInstances = this._frontendModelSerializationResourceInstances
 
     this._frontendModelParamsOverride = params
     this._frontendModelParams = undefined
+    this._frontendModelSerializationResourceInstances = undefined
 
     try {
       return await callback()
     } finally {
       this._frontendModelParamsOverride = previousOverride
       this._frontendModelParams = previousParams
+      this._frontendModelSerializationResourceInstances = previousSerializationResourceInstances
     }
   }
 
@@ -2793,20 +2802,69 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Returns the request-scoped serialization resource instance cache.
+   * @returns {Map<typeof import("./database/record/index.js").default, Map<boolean, import("./frontend-model-resource/base-resource.js").default>>} - Cache.
+   */
+  _frontendModelSerializationResourceInstancesMap() {
+    if (!this._frontendModelSerializationResourceInstances) {
+      this._frontendModelSerializationResourceInstances = new Map()
+    }
+
+    return this._frontendModelSerializationResourceInstances
+  }
+
+  /**
+   * Looks up a cached serialization resource instance.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @param {boolean} isRelated - Whether the resource is for a related (non-root) model.
+   * @returns {import("./frontend-model-resource/base-resource.js").default | undefined} - Cached resource or undefined.
+   */
+  _cachedSerializationResourceInstance(modelClass, isRelated) {
+    return this._frontendModelSerializationResourceInstancesMap().get(modelClass)?.get(isRelated)
+  }
+
+  /**
+   * Stores a serialization resource instance in the request-scoped cache.
+   * @param {typeof import("./database/record/index.js").default} modelClass - Model class.
+   * @param {boolean} isRelated - Whether the resource is for a related (non-root) model.
+   * @param {import("./frontend-model-resource/base-resource.js").default} resource - Resource instance.
+   * @returns {void}
+   */
+  _setCachedSerializationResourceInstance(modelClass, isRelated, resource) {
+    const byClass = this._frontendModelSerializationResourceInstancesMap()
+    let byRelated = byClass.get(modelClass)
+
+    if (!byRelated) {
+      byRelated = new Map()
+      byClass.set(modelClass, byRelated)
+    }
+
+    byRelated.set(isRelated, resource)
+  }
+
+  /**
    * Runs serialization resource instance for model.
    * @param {import("./database/record/index.js").default} model - Model instance.
    * @returns {import("./frontend-model-resource/base-resource.js").default | null} - Resource instance or null.
    */
   _serializationResourceInstanceForModel(model) {
-    const resource = this.frontendModelResourceInstance()
+    const modelClass = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor)
+    const isRelated = modelClass !== this.frontendModelClass()
+    const cachedResource = this._cachedSerializationResourceInstance(modelClass, isRelated)
 
-    if (resource.modelClass() === model.constructor) {
+    if (cachedResource) return cachedResource
+
+    if (!isRelated) {
+      const resource = this.frontendModelResourceInstance()
+
+      this._setCachedSerializationResourceInstance(modelClass, false, resource)
+
       return resource
     }
 
     const configuration = this.getConfiguration()
     const backendProjects = configuration.getBackendProjects()
-    const modelClassName = /** @type {typeof import("./database/record/index.js").default} */ (model.constructor).getModelName()
+    const modelClassName = modelClass.getModelName()
 
     for (const backendProject of backendProjects) {
       const resources = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)
@@ -2814,7 +2872,7 @@ export default class FrontendModelController extends Controller {
       const resourceClass = resourceDefinition ? frontendModelResourceClassFromDefinition(resourceDefinition) : null
 
       if (resourceClass) {
-        return new resourceClass({
+        const resource = new resourceClass({
           ability: this.currentAbility(),
           // Propagate the controller so a related/preloaded model's serialization
           // resource can use request context (e.g. `requestBaseUrl()` for signed
@@ -2824,11 +2882,15 @@ export default class FrontendModelController extends Controller {
           controller: this,
           context: this.currentAbility()?.getContext() || {},
           locals: this.currentAbility()?.getLocals() || {},
-          modelClass: /** @type {typeof import("./database/record/index.js").default} */ (model.constructor),
+          modelClass,
           modelName: modelClassName,
           params: {},
           resourceConfiguration: resourceClass.resourceConfig()
         })
+
+        this._setCachedSerializationResourceInstance(modelClass, true, resource)
+
+        return resource
       }
     }
 

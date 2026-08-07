@@ -1,0 +1,1 @@
+- Cache frontend-model resource instances per request during serialization to reduce instance churn on large index responses while keeping mutation resources fresh and request-isolated.
