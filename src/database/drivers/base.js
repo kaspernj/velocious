@@ -134,6 +134,11 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
 import {optionalPositiveInteger} from "typanic"
 
+/** Maximum characters inspected when building the debug SQL preview. */
+const SQL_PREVIEW_SCAN_LIMIT = 4096
+/** Maximum characters inspected when deciding whether a statement invalidates schema metadata. */
+const SCHEMA_INVALIDATION_SCAN_LIMIT = 8192
+
 /**
  * Marks a callback failure that happened after the owning transaction was durably committed.
  * The public transaction boundary unwraps it before deadlock classification.
@@ -1605,12 +1610,24 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Returns a bounded prefix of `sql` for lightweight diagnostic scanning.
+   * @param {string} sql - SQL string.
+   * @param {number} limit - Maximum code units to inspect.
+   * @returns {string} - Prefix of `sql`.
+   */
+  _diagnosticSqlPrefix(sql, limit) {
+    return sql.length <= limit ? sql : sql.slice(0, limit)
+  }
+
+  /**
    * Runs debug sql preview.
    * @param {string} sql - SQL to preview.
    * @returns {string} - Normalized truncated SQL preview for diagnostics.
    */
   _debugSqlPreview(sql) {
-    return sql
+    const prefix = this._diagnosticSqlPrefix(sql, SQL_PREVIEW_SCAN_LIMIT)
+
+    return prefix
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 500)
@@ -1670,12 +1687,13 @@ export default class VelociousDatabaseDriversBase {
    * @returns {boolean} - Whether the SQL should invalidate schema metadata.
    */
   _schemaCacheInvalidatingSql(sql) {
-    const normalized = sql
-      .trim()
+    const prefix = this._diagnosticSqlPrefix(sql, SCHEMA_INVALIDATION_SCAN_LIMIT)
+    const normalized = prefix
       .replace(/^\ufeff/, "")
       .replace(/\/\*[\s\S]*?\*\//g, " ")
       .replace(/--[^\n]*(\n|$)/g, " ")
       .replace(/\s+/g, " ")
+      .trim()
       .toLowerCase()
 
     if (!normalized) return false

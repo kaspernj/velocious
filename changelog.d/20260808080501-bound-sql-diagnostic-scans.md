@@ -1,0 +1,1 @@
+- Bound SQL diagnostic scans in `DatabaseDriversBase#_debugSqlPreview` and `#_schemaCacheInvalidatingSql` to constant-size prefixes, preserving the 500-character preview and BOM/comment-prefixed DDL schema-invalidation behavior while reducing CPU and allocation for large statements.
