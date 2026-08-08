@@ -72,28 +72,36 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
 
     if (modelsPrimaryKeyValues.size == 0) return satisfiedTargets
 
-    /**
-     * Where args.
-     * @type {Record<string, string | number | Array<string | number>>} */
-    const whereArgs = {}
+    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), this.models[0])
 
-    whereArgs[foreignKey] = [...modelsPrimaryKeyValues]
+    // Load target models to be preloaded on the given models.
+    // Build the query once with the polymorphic type constant (when present),
+    // relationship scope, and selection. The parent ID IN-list is cloned per cohort
+    // so the generated SQL stays within driver limits.
+    let baseQuery = preloadQueryForModel(this.models, targetModelClass)
 
     if (this.relationship.getPolymorphic()) {
       const typeColumn = this.relationship.getPolymorphicTypeColumn()
 
-      whereArgs[typeColumn] = this.relationship.getModelClass().getModelName()
+      baseQuery = baseQuery.where({[typeColumn]: this.relationship.getModelClass().getModelName()})
     }
 
-    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), this.models[0])
+    baseQuery = this.relationship.applyScope(baseQuery)
+    baseQuery = this.selection.applyToQuery({query: baseQuery, targetModelClass, mappingColumns: [foreignKey]})
 
-    // Load target models to be preloaded on the given models
-    let query = preloadQueryForModel(this.models, targetModelClass).where(whereArgs)
+    /**
+     * Target models.
+     * @type {import("../../record/index.js").default[]} */
+    const targetModels = []
+    const driver = baseQuery.driver
+    const cohorts = driver.chunkValues([...modelsPrimaryKeyValues], (chunk) => baseQuery.clone().where({[foreignKey]: chunk}).toSql())
 
-    query = this.relationship.applyScope(query)
-    query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [foreignKey]})
+    for (const cohort of cohorts) {
+      const cohortQuery = baseQuery.clone().where({[foreignKey]: cohort})
+      const foundTargetModels = await cohortQuery.toArray()
 
-    const targetModels = await query.toArray()
+      targetModels.push(...foundTargetModels)
+    }
 
     for (const targetModel of targetModels) {
       const foreignKeyValue = /** @type {string | number} */ (targetModel.readColumn(foreignKey))

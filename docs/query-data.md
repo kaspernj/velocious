@@ -97,10 +97,10 @@ For each leaf entry the runner:
 1. Walks the relationship chain from the root model to find the
    target model class and its registered fn. Unknown names raise a
    clear error naming the missing registration.
-2. Starts a fresh query on the root model class, applies `WHERE
-   root.pk IN (<loaded parent PKs>)` and `LEFT JOIN`s down the
-   chain, groups by the root primary key, and pre-selects it as
-   `parent_id`.
+2. Starts a fresh query on the root model class, joins down the chain,
+   groups by the root primary key, and pre-selects it as `parent_id`.
+   The root PK filter is applied per cohort so large parent sets stay
+   within driver `IN (...)` limits.
 3. Invokes the registered fn so it can add its own SELECTs / joins.
 4. Combines entries only when their rendered joins, predicates, and
    grouping are identical and all selected aliases are explicit and
@@ -111,6 +111,12 @@ For each leaf entry the runner:
 6. Records without a matching row (or rows where an aggregate
    returned NULL, e.g. `SUM(...)` over zero child rows) keep
    `record.queryData(alias) === null`.
+
+When the loaded root PK set exceeds the driver's `IN (...)` limit, the
+same grouped query runs once per cohort and the rows are merged before
+mapping back to root records. Cohorts are bounded by `maxInClauseValues`
+(default `999`) and `maxQuerySqlBytes` (default `1_048_576`), configurable
+per database in `config/database.js`.
 
 Compatible entries share one grouped query. Compatibility is based on
 the fully rendered non-projection SQL, so per-entry relationship

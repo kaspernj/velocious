@@ -67,11 +67,17 @@ count query per requested entry:
 ```sql
 SELECT foo_id AS parent_id, COUNT(*) AS count_value
 FROM foos
-WHERE foo_id IN (<loaded parent PKs>)
+WHERE foo_id IN (<one cohort of loaded parent PKs>)
   [AND <polymorphic type column> = '<parent model name>']
   [AND <your where clause>]
 GROUP BY foo_id
 ```
+
+When there are more parent PKs than the driver allows in one `IN (...)`
+clause, Velocious issues the same grouped count query once per cohort and
+merges the per-parent counts. Cohorts are bounded by `maxInClauseValues`
+(default `999`) and `maxQuerySqlBytes` (default `1_048_576`), configurable
+per database in `config/database.js`.
 
 Entries whose rendered aggregate SQL is identical (for example, two
 aliases for the same relationship and predicate) share that roundtrip.

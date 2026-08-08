@@ -227,7 +227,7 @@ export async function runQueryData({rootModelClass, rootModels, entries}) {
   }
 
   for (const {query} of queryGroups) {
-    await executeEntryQuery({primaryKey, query, rootModels})
+    await executeChunkedEntryQuery({primaryKey, query, rootIds, rootModels})
   }
 }
 
@@ -266,13 +266,6 @@ function prepareEntry({entry, entryIndex, primaryKey, rootIds, rootModelClass, s
   const driver = query.driver
   const rootTable = rootModelClass.tableName()
   const rootPkSql = `${driver.quoteTable(rootTable)}.${driver.quoteColumn(primaryKey)}`
-
-  /**
-   * Root where.
-   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-  const rootWhere = {}
-  rootWhere[primaryKey] = rootIds
-  query.where(rootWhere)
 
   const joinDescriptor = buildNestedJoinDescriptor(entry.chain)
 
@@ -368,5 +361,27 @@ async function executeEntryQuery({primaryKey, query, rootModels}) {
 
       model._setQueryData(columnName, value)
     }
+  }
+}
+
+/**
+ * Executes one compatible queryData group in cohorts so the root ID IN-list
+ * stays within driver limits, attaching each selected alias to the matching
+ * root record.
+ * @param {object} args - Options.
+ * @param {string} args.primaryKey - Root model primary key column.
+ * @param {import("./model-class-query.js").default} args.query - Prepared grouped query.
+ * @param {Array<string | number>} args.rootIds - Root primary-key values.
+ * @param {import("../record/index.js").default[]} args.rootModels - Loaded root records.
+ * @returns {Promise<void>}
+ */
+async function executeChunkedEntryQuery({primaryKey, query, rootIds, rootModels}) {
+  const driver = query.driver
+  const cohorts = driver.chunkValues(rootIds, (chunk) => query.clone().where({[primaryKey]: chunk}).toSql())
+
+  for (const cohort of cohorts) {
+    const cohortQuery = query.clone().where({[primaryKey]: cohort})
+
+    await executeEntryQuery({primaryKey, query: cohortQuery, rootModels})
   }
 }

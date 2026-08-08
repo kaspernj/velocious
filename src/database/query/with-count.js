@@ -115,19 +115,19 @@ export async function runWithCount({models, modelClass, entries}) {
   const queryGroups = new Map()
 
   for (const entry of entries) {
-    const countQuery = queryForEntry({entry, modelClass, parentIds, sourceModel})
-    const sql = countQuery.toSql()
+    const {baseQuery, foreignKey} = queryForEntry({entry, modelClass, sourceModel})
+    const sql = baseQuery.toSql()
     const existingGroup = queryGroups.get(sql)
 
     if (existingGroup) {
       existingGroup.entries.push(entry)
     } else {
-      queryGroups.set(sql, {countQuery, entries: [entry]})
+      queryGroups.set(sql, {baseQuery, entries: [entry], foreignKey})
     }
   }
 
-  for (const {countQuery, entries: groupedEntries} of queryGroups.values()) {
-    const counts = await executeCountQuery(countQuery)
+  for (const {baseQuery, entries: groupedEntries, foreignKey} of queryGroups.values()) {
+    const counts = await executeChunkedCountQuery({baseQuery, foreignKey, parentIds})
 
     for (const entry of groupedEntries) attachCounts({counts, entry, models, primaryKey})
   }
@@ -135,14 +135,16 @@ export async function runWithCount({models, modelClass, entries}) {
 
 /**
  * Builds the grouped count query for an entry.
+ *
+ * The returned query does NOT yet filter by parent IDs; callers chunk the
+ * parent cohort and apply the foreign-key IN clause per chunk.
  * @param {object} args - Options.
  * @param {WithCountEntry} args.entry - Entry being evaluated.
  * @param {typeof import("../record/index.js").default} args.modelClass - Parent model class.
- * @param {Array<string | number>} args.parentIds - Primary keys of the loaded parents.
  * @param {import("../record/index.js").default} args.sourceModel - Loaded operation owner.
- * @returns {import("./model-class-query.js").default} - Prepared count query.
+ * @returns {{baseQuery: import("./model-class-query.js").default, foreignKey: string}} - Prepared count query and its foreign key.
  */
-function queryForEntry({entry, modelClass, parentIds, sourceModel}) {
+function queryForEntry({entry, modelClass, sourceModel}) {
   const relationship = modelClass.getRelationshipByName(entry.relationshipName)
 
   if (!relationship) {
@@ -163,7 +165,7 @@ function queryForEntry({entry, modelClass, parentIds, sourceModel}) {
   /**
    * Mandatory cohort conditions.
    * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-  const mandatoryWhereConditions = {[foreignKey]: parentIds}
+  const mandatoryWhereConditions = {}
 
   if (relationship.getPolymorphic && relationship.getPolymorphic()) {
     const typeColumn = relationship.getPolymorphicTypeColumn()
@@ -171,8 +173,12 @@ function queryForEntry({entry, modelClass, parentIds, sourceModel}) {
   }
 
   const baseQuery = sourceModel.queryForModel(targetModelClass)
+
   baseQuery._forceQualifyBaseTable = true
-  baseQuery.where(mandatoryWhereConditions)
+
+  if (Object.keys(mandatoryWhereConditions).length > 0) {
+    baseQuery.where(mandatoryWhereConditions)
+  }
 
   if (entry.where) {
     baseQuery.where(entry.where)
@@ -192,7 +198,7 @@ function queryForEntry({entry, modelClass, parentIds, sourceModel}) {
   countQuery.select(`${qualifiedForeignKey} AS parent_id`)
   countQuery.select("COUNT(*) AS count_value")
 
-  return countQuery
+  return {baseQuery: countQuery, foreignKey}
 }
 
 /**
@@ -214,6 +220,36 @@ async function executeCountQuery(countQuery) {
     const parentId = /** @type {string | number} */ (row.parent_id)
     const countValue = Number(row.count_value) || 0
     counts.set(parentId, countValue)
+  }
+
+  return counts
+}
+
+/**
+ * Executes a grouped count query in cohorts so the parent ID IN-list stays
+ * within driver limits, merging per-parent counts across chunks.
+ * @param {object} args - Options.
+ * @param {import("./model-class-query.js").default} args.baseQuery - Prepared count query without parent IDs.
+ * @param {string} args.foreignKey - Foreign key used to join to the parents.
+ * @param {Array<string | number>} args.parentIds - Primary keys of the loaded parents.
+ * @returns {Promise<Map<string | number, number>>} - Map of parent pk → count.
+ */
+async function executeChunkedCountQuery({baseQuery, foreignKey, parentIds}) {
+  const driver = baseQuery.driver
+  const cohorts = driver.chunkValues(parentIds, (chunk) => baseQuery.clone().where({[foreignKey]: chunk}).toSql())
+
+  /**
+   * Counts.
+   * @type {Map<string | number, number>} */
+  const counts = new Map()
+
+  for (const cohort of cohorts) {
+    const cohortQuery = baseQuery.clone().where({[foreignKey]: cohort})
+    const cohortCounts = await executeCountQuery(cohortQuery)
+
+    for (const [parentId, count] of cohortCounts) {
+      counts.set(parentId, count)
+    }
   }
 
   return counts
