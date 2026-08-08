@@ -1,17 +1,16 @@
-import {performance} from "node:perf_hooks"
+import { performance } from "node:perf_hooks"
 import path from "node:path"
-import {fileURLToPath} from "node:url"
+import { fileURLToPath } from "node:url"
 import dummyConfiguration from "../spec/dummy/src/config/configuration.js"
 import Dummy from "../spec/dummy/index.js"
 import Comment from "../spec/dummy/src/models/comment.js"
 import FrontendModelController from "../src/frontend-model-controller.js"
 import Project from "../spec/dummy/src/models/project.js"
 import Task from "../spec/dummy/src/models/task.js"
-import {withSourcePeerPackage} from "../src/environment-handlers/node/source-peer-package.js"
+import { withSourcePeerPackage } from "../src/environment-handlers/node/source-peer-package.js"
 
 const modelCount = 500
 const iterations = 20
-const url = "http://localhost:3006/frontend-models"
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 dummyConfiguration.setEnvironment("test")
@@ -22,35 +21,33 @@ function p95(values) {
 }
 
 /**
- * Instruments resource-resolution counters for the duration of a callback.
- * @param {() => Promise<void>} callback - Measured work.
- * @returns {Promise<{resourceInstanceResolutions: number}>} - Counters.
+ * Builds a controller for direct serialization benchmarking.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} params - Frontend-model params.
+ * @returns {FrontendModelController} - Controller instance.
  */
-async function measureResourceResolutions(callback) {
-  let resourceInstanceResolutions = 0
-  const originalSerializationResourceInstanceForModel = FrontendModelController.prototype._serializationResourceInstanceForModel
-  const originalFrontendModelResourceInstance = FrontendModelController.prototype.frontendModelResourceInstance
-
-  FrontendModelController.prototype._serializationResourceInstanceForModel = function(model) {
-    resourceInstanceResolutions += 1
-
-    return originalSerializationResourceInstanceForModel.call(this, model)
+function buildBenchmarkController(params) {
+  const request = {
+    baseURL: () => "http://localhost:3006",
+    header: () => undefined,
+    headers: () => ({}),
+    httpMethod: () => "POST",
+    params: () => params,
+    path: () => "/benchmark-serialization"
   }
+  const controller = new FrontendModelController({
+    action: "index",
+    configuration: dummyConfiguration,
+    controller: "frontend_models",
+    params,
+    request,
+    response: {},
+    viewPath: dummyConfiguration.getDirectory()
+  })
 
-  FrontendModelController.prototype.frontendModelResourceInstance = function() {
-    resourceInstanceResolutions += 1
+  // Bypass transport deserialization so the benchmark can feed plain params directly.
+  controller._frontendModelParams = params
 
-    return originalFrontendModelResourceInstance.call(this)
-  }
-
-  try {
-    await callback()
-  } finally {
-    FrontendModelController.prototype._serializationResourceInstanceForModel = originalSerializationResourceInstanceForModel
-    FrontendModelController.prototype.frontendModelResourceInstance = originalFrontendModelResourceInstance
-  }
-
-  return {resourceInstanceResolutions}
+  return controller
 }
 
 await withSourcePeerPackage(projectDirectory, async () => {
@@ -67,49 +64,37 @@ await withSourcePeerPackage(projectDirectory, async () => {
       await Comment.create({body: `Comment ${index}`, task})
     }
 
-    const body = JSON.stringify({
-      requests: [{
-        commandType: "index",
-        model: "Task",
-        payload: {
-          limit: modelCount,
-          preload: ["project", "comments"]
-        },
-        requestId: "1"
-      }]
-    })
-
-    // Warm-up request to prime connections and caches.
-    const warmUpResponse = await fetch(url, {
-      body,
-      headers: {"content-type": "application/json"},
-      method: "POST"
-    })
-
-    if (!warmUpResponse.ok) {
-      throw new Error(`Frontend-model warm-up failed: ${warmUpResponse.status} ${await warmUpResponse.text()}`)
+    const tasks = await Task.where({}).preload(["project", "comments"]).toArray()
+    const params = {
+      model: "Task",
+      preload: ["project", "comments"]
     }
+
+    // Warm-up serialization to prime caches.
+    const warmUpController = buildBenchmarkController(params)
+
+    await warmUpController.serializeFrontendModels(tasks)
 
     const latencies = []
     let totalResourceInstanceResolutions = 0
 
     for (let iteration = 0; iteration < iterations; iteration += 1) {
-      const counters = await measureResourceResolutions(async () => {
-        const startedAt = performance.now()
-        const response = await fetch(url, {
-          body,
-          headers: {"content-type": "application/json"},
-          method: "POST"
-        })
-
-        if (!response.ok) {
-          throw new Error(`Frontend-model index failed: ${response.status} ${await response.text()}`)
-        }
-
-        latencies.push(performance.now() - startedAt)
+      const controller = buildBenchmarkController(params)
+      let resourceInstanceResolutions = 0
+      const cleanup = controller.setSerializationResourceInstanceHook(() => {
+        resourceInstanceResolutions += 1
       })
 
-      totalResourceInstanceResolutions += counters.resourceInstanceResolutions
+      try {
+        const startedAt = performance.now()
+
+        await controller.serializeFrontendModels(tasks)
+        latencies.push(performance.now() - startedAt)
+      } finally {
+        cleanup()
+      }
+
+      totalResourceInstanceResolutions += resourceInstanceResolutions
     }
 
     console.log("models\titerations\tp95 ms\tresource-instance resolutions/op")

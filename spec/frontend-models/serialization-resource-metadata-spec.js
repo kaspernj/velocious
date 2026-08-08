@@ -1,6 +1,6 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
+import { describe, expect, it } from "../../src/testing/test.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Dummy from "../dummy/index.js"
 import Comment from "../dummy/src/models/comment.js"
@@ -46,16 +46,14 @@ function buildSerializationController(params) {
 
 /**
  * Captures resource instances resolved during serialization.
+ * @param {FrontendModelController} controller - Controller whose serialization is captured.
  * @param {() => Promise<void>} callback - Callback whose serialization is captured.
  * @returns {Promise<Map<string, Set<import("../../src/frontend-model-resource/base-resource.js").default>>>} - Resource instances grouped by model class name.
  */
-async function captureSerializationResources(callback) {
+async function captureSerializationResources(controller, callback) {
   /** @type {Map<string, Set<import("../../src/frontend-model-resource/base-resource.js").default>>} */
   const resourcesByModelClassName = new Map()
-  const original = FrontendModelController.prototype._serializationResourceInstanceForModel
-
-  FrontendModelController.prototype._serializationResourceInstanceForModel = function(model) {
-    const resource = original.call(this, model)
+  const cleanup = controller.setSerializationResourceInstanceHook((model, resource) => {
     const modelClassName = /** @type {typeof import("../../src/database/record/index.js").default} */ (model.constructor).getModelName()
 
     if (resource) {
@@ -64,14 +62,12 @@ async function captureSerializationResources(callback) {
       set.add(resource)
       resourcesByModelClassName.set(modelClassName, set)
     }
-
-    return resource
-  }
+  })
 
   try {
     await callback()
   } finally {
-    FrontendModelController.prototype._serializationResourceInstanceForModel = original
+    cleanup()
   }
 
   return resourcesByModelClassName
@@ -92,7 +88,7 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
         model: "Task",
         preload: ["project", "comments"]
       })
-      const resourcesByModelClassName = await captureSerializationResources(async () => {
+      const resourcesByModelClassName = await captureSerializationResources(controller, async () => {
         await controller.serializeFrontendModels(tasks)
       })
 
@@ -141,22 +137,16 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
           preload: ["project"]
         })
         let rootResource
-        const original = FrontendModelController.prototype._serializationResourceInstanceForModel
-
-        FrontendModelController.prototype._serializationResourceInstanceForModel = function(model) {
-          const resource = original.call(this, model)
-
+        const cleanup = controller.setSerializationResourceInstanceHook((model, resource) => {
           if (model.constructor === Task && !rootResource) {
             rootResource = resource
           }
-
-          return resource
-        }
+        })
 
         try {
           await controller.serializeFrontendModels(tasks)
         } finally {
-          FrontendModelController.prototype._serializationResourceInstanceForModel = original
+          cleanup()
         }
 
         return rootResource
@@ -168,6 +158,39 @@ describe("FrontendModel serialization resource metadata", {databaseCleaning: {tr
       expect(firstResource).toBeTruthy()
       expect(secondResource).toBeTruthy()
       expect(firstResource).not.toBe(secondResource)
+    })
+  })
+
+  it("only fires the serialization resource hook on the controller that installed it", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Hook isolation project"})
+      const task = await Task.create({name: "Hook isolation task", project})
+      const tasks = await Task.where({id: task.id()}).preload(["project"]).toArray()
+
+      const hookedController = buildSerializationController({
+        model: "Task",
+        preload: ["project"]
+      })
+      const unhookedController = buildSerializationController({
+        model: "Task",
+        preload: ["project"]
+      })
+
+      /** @type {string[]} */
+      const hookedModelClassNames = []
+      const cleanup = hookedController.setSerializationResourceInstanceHook((model) => {
+        hookedModelClassNames.push(/** @type {typeof import("../../src/database/record/index.js").default} */ (model.constructor).getModelName())
+      })
+
+      try {
+        await hookedController.serializeFrontendModels(tasks)
+        await unhookedController.serializeFrontendModels(tasks)
+      } finally {
+        cleanup()
+      }
+
+      expect(hookedModelClassNames).toContain("Task")
+      expect(hookedModelClassNames).toContain("Project")
     })
   })
 })
