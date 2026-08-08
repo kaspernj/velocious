@@ -1,6 +1,7 @@
 // @ts-check
 
 import BaseCommand from "../../../../cli/base-command.js"
+import fs from "fs/promises"
 import picocolors from "picocolors"
 import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestRunner from "../../../../testing/test-runner.js"
@@ -26,7 +27,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       directories.push(`${this.directory()}/spec`)
     }
 
-    const {includeTags, excludeTags, examplePatterns, filteredProcessArgs, groups, groupNumber} = parseFilters(this.processArgs || [])
+    const {includeTags, excludeTags, examplePatterns, filteredProcessArgs, groups, groupNumber, timingManifestPath} = parseFilters(this.processArgs || [])
     const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
     let testFiles = await testFilesFinder.findTestFiles()
 
@@ -35,7 +36,8 @@ export default class VelociousCliCommandsTest extends BaseCommand {
         throw new Error("Both --groups and --group-number must be provided together")
       }
 
-      const splitter = new TestSuiteSplitter({groups, groupNumber, testFiles, baseDirectory: directory})
+      const timingManifest = await loadTimingManifest(timingManifestPath)
+      const splitter = new TestSuiteSplitter({groups, groupNumber, testFiles, baseDirectory: directory, timingManifest})
 
       testFiles = splitter.getGroupFiles()
       console.log(picocolors.cyan(`Running group ${groupNumber} of ${groups} (${testFiles.length} files)`))
@@ -135,6 +137,23 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       console.log(picocolors.green(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`))
       process.exit(0)
     }
+  }
+}
+
+/**
+ * Loads an optional JSON timing manifest. Unreadable or malformed input intentionally falls back to heuristics.
+ * @param {string | undefined} timingManifestPath - Timing manifest path.
+ * @returns {Promise<ReturnType<typeof JSON.parse> | undefined>} - Parsed manifest when readable and valid JSON.
+ */
+export async function loadTimingManifest(timingManifestPath) {
+  if (!timingManifestPath) return undefined
+
+  try {
+    return JSON.parse(await fs.readFile(timingManifestPath, "utf8"))
+  } catch (error) {
+    if (error instanceof Error) return undefined
+
+    throw error
   }
 }
 
