@@ -242,6 +242,22 @@ describe("TestSuiteSplitter", {databaseCleaning: {transaction: true}}, () => {
     ])
   })
 
+  it("uses project-relative timing manifest durations with a configured test subdirectory", () => {
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles: ["/project/spec/system/slow-spec.js"],
+      baseDirectory: "/project/spec",
+      timingManifest: {
+        "spec/system/slow-spec.js": 2
+      }
+    })
+
+    expect(splitter.computeWeightedFiles()).toEqual([
+      {filePath: "/project/spec/system/slow-spec.js", weight: 2}
+    ])
+  })
+
   it("falls back per file for malformed unknown and unusable timing entries", () => {
     const testFiles = [
       "/project/spec/system/zero-spec.js",

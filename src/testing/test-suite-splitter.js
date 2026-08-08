@@ -96,7 +96,8 @@ export default class TestSuiteSplitter {
    */
   computeWeight(filePath) {
     const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
-    const duration = this._timingManifest[relativePath]
+    const projectRelativePath = this.normalizeRelativePath(path.join(path.basename(this._baseDirectory), relativePath))
+    const duration = this._timingManifest[relativePath] ?? this._timingManifest[projectRelativePath]
 
     if (duration !== undefined) {
       return duration
@@ -152,7 +153,9 @@ export default class TestSuiteSplitter {
    * @returns {string} - Normalized relative test path.
    */
   normalizeRelativePath(filePath) {
-    return filePath.replaceAll("\\", "/").replace(/^\.\//, "")
+    return filePath
+      .replaceAll("\\", "/")
+      .replace(/^\.\//, "")
   }
 
   /**
