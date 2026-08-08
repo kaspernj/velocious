@@ -1,4 +1,6 @@
 import BaseCommand from "../../../../../../cli/base-command.js"
+import commandArguments from "../../../../../../cli/command-arguments.js"
+import DatabaseGenerationContext from "../../../../../../database/generation-context.js"
 import fileExists from "../../../../../../utils/file-exists.js"
 import path from "path"
 
@@ -8,6 +10,29 @@ export default class DbSchemaDump extends BaseCommand {
    * Runs execute.
    * @returns {Promise<void>} */
   async execute() {
+    const parsedArguments = commandArguments({
+      definition: {valueOptions: ["--tenant"]},
+      processArgs: this.processArgs || []
+    })
+    const tenantDatabaseIdentifier = parsedArguments.tenant
+
+    if (typeof tenantDatabaseIdentifier === "string") {
+      const context = await DatabaseGenerationContext.resolve({
+        configuration: this.getConfiguration(),
+        databaseIdentifier: tenantDatabaseIdentifier
+      })
+
+      await context.run({name: "DB selected tenant schema dump", callback: async (db) => {
+        const dbs = {[context.databaseIdentifier()]: db}
+        const shouldGenerate = await this.shouldGenerateStructureSql({dbs})
+
+        if (!shouldGenerate) return
+
+        await this.getEnvironmentHandler().afterMigrations({dbs, reason: "schemaDump"})
+      }})
+      return
+    }
+
     await this.getConfiguration().ensureConnections({name: "DB schema dump"}, async (dbs) => {
       const shouldGenerate = await this.shouldGenerateStructureSql({dbs})
 

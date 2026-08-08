@@ -91,6 +91,8 @@ npx velocious db:tenants:migrate projectTenant
 npx velocious db:tenants:drop projectTenant
 ```
 
+Schema introspection and generated model bases can target one provider-resolved tenant database with `--tenant <identifier>`. This is a singular, fail-closed selection rather than a lifecycle scan; see [tenant-selected database generation](tenant-selected-database-generation.md).
+
 `db:tenants:drop` drops every listed tenant's database through the provider's `dropDatabase` hook. Like the other lifecycle commands it honors `--parallel`.
 
 `createDatabase`/`dropDatabase` are optional. When a provider omits them, `db:tenants:create`, `db:tenants:drop`, and `Tenant.drop` fall back to the framework default (`src/tenants/default-tenant-database-provisioning.js`): file-backed drivers (sqlite) create by ensuring the tenant connection and treat drop as a no-op, while server drivers (mysql, pgsql, …) connect to the maintenance database (`useDatabase`) and run the driver's own `createDatabaseSql`/`dropDatabaseSql` after validating the tenant database name. Define your own hook only when you need custom provisioning.

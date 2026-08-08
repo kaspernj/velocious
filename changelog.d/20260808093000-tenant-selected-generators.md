@@ -1,0 +1,1 @@
+Added an immutable, fail-closed tenant database generation context, targeted provider resolution, and `--tenant <identifier>` support for base-model generation and schema dump/load, including tenant-scoped model initialization and command-name-safe tenant values.
