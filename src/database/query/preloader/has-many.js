@@ -155,10 +155,11 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
     }
 
-    // Step 1: Query the through table to build parent→target ID mapping
-    const throughModels = await preloadQueryForModel(modelsToLoad, throughModelClass)
-      .where({[throughForeignKey]: [...modelsPrimaryKeyValues]})
-      .toArray()
+    // Step 1: Query the through table to build parent→target ID mapping.
+    // Chunk the parent PK cohort so the through query's IN-list stays bounded.
+    const throughBaseQuery = preloadQueryForModel(modelsToLoad, throughModelClass)
+    const throughDriver = throughBaseQuery.driver
+    const throughCohorts = throughDriver.chunkValues([...modelsPrimaryKeyValues], (chunk) => throughBaseQuery.clone().where({[throughForeignKey]: chunk}).toSql())
 
     /**
      * Parent to target ids.
@@ -170,28 +171,43 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
      * @type {Set<string | number>} */
     const allTargetIds = new Set()
 
-    for (const throughModel of throughModels) {
-      const parentId = /** @type {string | number} */ (throughModel.readColumn(throughForeignKey))
-      const throughId = /** @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
+    for (const cohort of throughCohorts) {
+      const throughQuery = throughBaseQuery.clone().where({[throughForeignKey]: cohort})
+      const throughModels = await throughQuery.toArray()
 
-      if (!(parentId in parentToTargetIds)) parentToTargetIds[parentId] = []
+      for (const throughModel of throughModels) {
+        const parentId = /** @type {string | number} */ (throughModel.readColumn(throughForeignKey))
+        const throughId = /** @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
 
-      parentToTargetIds[parentId].push(throughId)
-      allTargetIds.add(throughId)
+        if (!(parentId in parentToTargetIds)) parentToTargetIds[parentId] = []
+
+        parentToTargetIds[parentId].push(throughId)
+        allTargetIds.add(throughId)
+      }
     }
 
-    // Step 2: Load target models by the foreign key that points to the through table
+    // Step 2: Load target models by the foreign key that points to the through table.
+    // Chunk the target ID cohort so the target query's IN-list stays bounded.
     /**
      * Target models.
      * @type {import("../../record/index.js").default[]} */
     let targetModels = []
 
     if (allTargetIds.size > 0) {
-      let query = preloadQueryForModel(modelsToLoad, targetModelClass).where({[targetForeignKey]: [...allTargetIds]})
+      let targetBaseQuery = preloadQueryForModel(modelsToLoad, targetModelClass)
 
-      query = this.relationship.applyScope(query)
-      query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [targetForeignKey]})
-      targetModels = await query.toArray()
+      targetBaseQuery = this.relationship.applyScope(targetBaseQuery)
+      targetBaseQuery = this.selection.applyToQuery({query: targetBaseQuery, targetModelClass, mappingColumns: [targetForeignKey]})
+
+      const targetDriver = targetBaseQuery.driver
+      const targetCohorts = targetDriver.chunkValues([...allTargetIds], (chunk) => targetBaseQuery.clone().where({[targetForeignKey]: chunk}).toSql())
+
+      for (const cohort of targetCohorts) {
+        const cohortQuery = targetBaseQuery.clone().where({[targetForeignKey]: cohort})
+        const foundTargetModels = await cohortQuery.toArray()
+
+        targetModels.push(...foundTargetModels)
+      }
     }
 
     // Step 3: Index target models by their foreign key (maps to through model ID)
@@ -285,27 +301,35 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
       modelsByPrimaryKeyValue[primaryKeyValue].push(model)
     }
 
-    /**
-     * Where args.
-     * @type {Record<string, string | number | Array<string | number>>} */
-    const whereArgs = {}
+    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), modelsToLoad[0])
 
-    whereArgs[foreignKey] = [...modelsPrimaryKeyValues]
+    // Build the query once with the polymorphic type constant (when present),
+    // relationship scope, and selection. The parent ID IN-list is cloned per cohort
+    // so the generated SQL stays within driver limits.
+    let baseQuery = preloadQueryForModel(modelsToLoad, targetModelClass)
 
     if (this.relationship.getPolymorphic()) {
       const typeColumn = this.relationship.getPolymorphicTypeColumn()
 
-      whereArgs[typeColumn] = this.relationship.getModelClass().getModelName()
+      baseQuery = baseQuery.where({[typeColumn]: this.relationship.getModelClass().getModelName()})
     }
 
-    await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), modelsToLoad[0])
+    baseQuery = this.relationship.applyScope(baseQuery)
+    baseQuery = this.selection.applyToQuery({query: baseQuery, targetModelClass, mappingColumns: [foreignKey]})
 
-    let query = preloadQueryForModel(modelsToLoad, targetModelClass).where(whereArgs)
+    /**
+     * Target models.
+     * @type {import("../../record/index.js").default[]} */
+    const targetModels = []
+    const driver = baseQuery.driver
+    const cohorts = driver.chunkValues([...modelsPrimaryKeyValues], (chunk) => baseQuery.clone().where({[foreignKey]: chunk}).toSql())
 
-    query = this.relationship.applyScope(query)
-    query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [foreignKey]})
+    for (const cohort of cohorts) {
+      const cohortQuery = baseQuery.clone().where({[foreignKey]: cohort})
+      const foundTargetModels = await cohortQuery.toArray()
 
-    const targetModels = await query.toArray()
+      targetModels.push(...foundTargetModels)
+    }
 
     for (const targetModel of targetModels) {
       const foreignKeyValue = /** @type {string | number} */ (targetModel.readColumn(foreignKey))

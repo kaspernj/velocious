@@ -170,6 +170,27 @@ The batch preloader for through relationships uses a two-query strategy:
 
 This avoids JOIN-based column projection issues and works consistently across all supported database drivers (MySQL/MariaDB, PostgreSQL, SQLite, MSSQL).
 
+### Large IN cohorts
+
+When a batch preload is asked to resolve many parents at once, the parent primary keys are split into deterministic cohorts that stay within driver limits:
+
+* Each cohort is bounded by `maxInClauseValues` (default `999`) and `maxQuerySqlBytes` (default `1_048_576`).
+* Cohorts preserve input order and avoid partially splitting a value across chunks.
+* Results from all cohorts are merged before the relationship cache is populated, so `projects[0].tasksLoaded()` still contains the same rows as a single unchunked query.
+
+These limits apply to `belongsTo`, `hasMany` (direct and `:through`), `hasOne`, `.withCount(...)`, and `.queryData(...)`.
+You can tune them per database in `config/database.js`:
+
+```js
+{
+  development: {
+    adapter: "sqlite3",
+    maxInClauseValues: 500,
+    maxQuerySqlBytes: 524288
+  }
+}
+```
+
 ## Preloading onto already-loaded records
 
 `Query#preload` loads relationships while a query runs. The same machinery can be pointed at records you already have in memory, so the loaded data lands on the relationship cache and later accessors reuse it instead of issuing their own identical queries.

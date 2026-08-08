@@ -87,25 +87,27 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     if (foreignKeyValues.size > 0) {
       await ensureModelClassInitialized(targetModelClass, this.relationship.getConfiguration(), modelsToLoad[0])
 
-      /**
-       * Where args.
-       * @type {Record<string, string | number | Array<string | number>>} */
-      const whereArgs = {}
+      // Build the query once with scope and selection, then clone it per cohort so
+      // the IN-list size stays within driver limits without rebuilding shared state.
+      let baseQuery = preloadQueryForModel(modelsToLoad, targetModelClass)
 
-      whereArgs[primaryKey] = [...foreignKeyValues]
+      baseQuery = this.relationship.applyScope(baseQuery)
+      baseQuery = this.selection.applyToQuery({query: baseQuery, targetModelClass, mappingColumns: [primaryKey]})
 
-      // Load target models to be preloaded on the given models
-      let query = preloadQueryForModel(modelsToLoad, targetModelClass).where(whereArgs)
+      const driver = baseQuery.driver
+      const cohorts = driver.chunkValues([...foreignKeyValues], (chunk) => baseQuery.clone().where({[primaryKey]: chunk}).toSql())
 
-      query = this.relationship.applyScope(query)
-      query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [primaryKey]})
+      for (const cohort of cohorts) {
+        const cohortQuery = baseQuery.clone().where({[primaryKey]: cohort})
+        const foundTargetModels = await cohortQuery.toArray()
 
-      targetModels = await query.toArray()
+        targetModels.push(...foundTargetModels)
 
-      for (const targetModel of targetModels) {
-        const primaryKeyValue = /** @type {string | number} */ (targetModel.readColumn(primaryKey))
+        for (const targetModel of foundTargetModels) {
+          const primaryKeyValue = /** @type {string | number} */ (targetModel.readColumn(primaryKey))
 
-        targetModelsById[primaryKeyValue] = targetModel
+          targetModelsById[primaryKeyValue] = targetModel
+        }
       }
     }
 
@@ -205,33 +207,32 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
 
       await ensureModelClassInitialized(targetModelClass, configuration, this.models[0])
 
-      /**
-       * Where args.
-       * @type {Record<string, string | number | Array<string | number>>} */
-      const whereArgs = {}
+      let baseQuery = preloadQueryForModel(this.models, targetModelClass)
 
-      whereArgs[primaryKey] = [...foreignKeyValuesByType[targetType]]
+      baseQuery = this.relationship.applyScope(baseQuery)
+      baseQuery = this.selection.applyToQuery({query: baseQuery, targetModelClass, mappingColumns: [primaryKey]})
 
-      let query = preloadQueryForModel(this.models, targetModelClass).where(whereArgs)
-
-      query = this.relationship.applyScope(query)
-      query = this.selection.applyToQuery({query, targetModelClass, mappingColumns: [primaryKey]})
-
-      const foundTargetModels = await query.toArray()
-
-      targetModels.push(...foundTargetModels)
-
-      const className = targetModelClass.getModelName()
-
-      if (!targetModelsByClassName[className]) targetModelsByClassName[className] = []
-      targetModelsByClassName[className].push(...foundTargetModels)
+      const driver = baseQuery.driver
+      const cohorts = driver.chunkValues([...foreignKeyValuesByType[targetType]], (chunk) => baseQuery.clone().where({[primaryKey]: chunk}).toSql())
 
       targetModelsByTypeAndId[targetType] = {}
 
-      for (const targetModel of foundTargetModels) {
-        const primaryKeyValue = /** @type {string | number} */ (targetModel.readColumn(primaryKey))
+      for (const cohort of cohorts) {
+        const cohortQuery = baseQuery.clone().where({[primaryKey]: cohort})
+        const foundTargetModels = await cohortQuery.toArray()
 
-        targetModelsByTypeAndId[targetType][primaryKeyValue] = targetModel
+        targetModels.push(...foundTargetModels)
+
+        const className = targetModelClass.getModelName()
+
+        if (!targetModelsByClassName[className]) targetModelsByClassName[className] = []
+        targetModelsByClassName[className].push(...foundTargetModels)
+
+        for (const targetModel of foundTargetModels) {
+          const primaryKeyValue = /** @type {string | number} */ (targetModel.readColumn(primaryKey))
+
+          targetModelsByTypeAndId[targetType][primaryKeyValue] = targetModel
+        }
       }
     }
 

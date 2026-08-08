@@ -807,8 +807,80 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Maximum values in a single `IN (...)` cohort used by preloads, association
+   * counts, and queryData aggregates. The default stays under SQLite's default
+   * `MAX_VARIABLE_NUMBER` compile-time limit.
+   *
+   * Override via `maxInClauseValues` in the database configuration.
+   * @returns {number} - Maximum values per IN clause cohort.
+   */
+  maxInClauseValues() {
+    return optionalPositiveInteger(this.getArgs().maxInClauseValues, "maxInClauseValues") ?? 999
+  }
+
+  /**
+   * Maximum serialized SQL size, in bytes, for a single cohort query used by
+   * preloads, association counts, and queryData aggregates. Cohort chunking
+   * stops when the next value would push the generated string over this threshold.
+   *
+   * Override via `maxQuerySqlBytes` in the database configuration.
+   * @returns {number} - Maximum bytes per cohort query.
+   */
+  maxQuerySqlBytes() {
+    return optionalPositiveInteger(this.getArgs().maxQuerySqlBytes, "maxQuerySqlBytes") ?? 1048576
+  }
+
+  /**
+   * Splits `values` into cohort chunks that stay within both `maxCount` and
+   * `maxBytes` while preserving order.
+   *
+   * A chunk always contains at least one value, even if that single value exceeds
+   * the byte limit, so progress is guaranteed.
+   * @template T
+   * @param {Array<T>} values - Values to chunk.
+   * @param {(values: Array<T>) => string} buildSql - Function that builds the full SQL for a candidate chunk.
+   * @param {{maxCount?: number, maxBytes?: number}} [options] - Chunking bounds.
+   * @returns {Array<Array<T>>} - Value cohorts.
+   */
+  chunkValues(values, buildSql, {maxCount = this.maxInClauseValues(), maxBytes = this.maxQuerySqlBytes()} = {}) {
+    if (values.length === 0) return []
+
+    /**
+     * Chunks.
+     * @type {Array<Array<T>>} */
+    const chunks = []
+    /**
+     * Current chunk.
+     * @type {Array<T>} */
+    let currentChunk = []
+
+    for (const value of values) {
+      const candidate = [...currentChunk, value]
+      const candidateBytes = Buffer.byteLength(buildSql(candidate), "utf8")
+
+      if (currentChunk.length > 0 && (candidate.length > maxCount || candidateBytes > maxBytes)) {
+        chunks.push(currentChunk)
+        currentChunk = [value]
+      } else {
+        currentChunk = candidate
+      }
+    }
+
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk)
+    }
+
+    return chunks
+  }
+
+  /**
    * Splits `rows` into chunks that stay within both {@link maxRowsPerInsert}
    * and {@link maxInsertSqlBytes} while preserving order.
+   *
+   * Byte accounting is incremental: `buildSql` is called once with `[]` to
+   * measure the statement prefix and once per row with `[row]` to measure the
+   * row's values tuple. This keeps chunking linear in the number of rows
+   * instead of rebuilding the full multi-row SQL for every candidate.
    *
    * A chunk always contains at least one row, even if that single row exceeds
    * the byte limit, so progress is guaranteed.
@@ -824,6 +896,9 @@ export default class VelociousDatabaseDriversBase {
     const prefix = `${emptySql} VALUES `
     const baseByteLength = Buffer.byteLength(prefix, "utf8")
 
+    /**
+     * Current chunk.
+     * @type {Array<Array<ReturnType<typeof JSON.parse>>>} */
     let currentChunk = []
     let currentBytes = 0
 
