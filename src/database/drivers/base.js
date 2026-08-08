@@ -118,6 +118,14 @@
  * @property {string[]} updateColumns - Columns to update on conflict.
  */
 
+/**
+ * SqlTokenResult type.
+ * @typedef {object} SqlTokenResult
+ * @property {boolean} incomplete - Whether the scan hit its bound before finishing trivia/token parsing.
+ * @property {string | undefined} token - Lowercased token when parsing completed; undefined when no token was found.
+ * @property {number} index - Index immediately after the parsed token or trivia.
+ */
+
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import { getDatabaseAnnotations } from "../annotations.js"
 import { formatDateForDatabase } from "../datetime-storage.js"
@@ -133,6 +141,11 @@ import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
 import {optionalPositiveInteger} from "typanic"
+
+/** Maximum characters inspected when building the debug SQL preview. */
+const SQL_PREVIEW_SCAN_LIMIT = 4096
+/** Maximum characters inspected when deciding whether a statement invalidates schema metadata. */
+const SCHEMA_INVALIDATION_SCAN_LIMIT = 8192
 
 /**
  * Marks a callback failure that happened after the owning transaction was durably committed.
@@ -1605,12 +1618,24 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Returns a bounded prefix of `sql` for lightweight diagnostic scanning.
+   * @param {string} sql - SQL string.
+   * @param {number} limit - Maximum code units to inspect.
+   * @returns {string} - Prefix of `sql`.
+   */
+  _diagnosticSqlPrefix(sql, limit) {
+    return sql.length <= limit ? sql : sql.slice(0, limit)
+  }
+
+  /**
    * Runs debug sql preview.
    * @param {string} sql - SQL to preview.
    * @returns {string} - Normalized truncated SQL preview for diagnostics.
    */
   _debugSqlPreview(sql) {
-    return sql
+    const prefix = this._diagnosticSqlPrefix(sql, SQL_PREVIEW_SCAN_LIMIT)
+
+    return prefix
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 500)
@@ -1665,24 +1690,120 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Reads the next SQL token starting at `startIndex`, skipping leading trivia
+   * (BOM, whitespace, block comments, line comments). If the scan cannot finish
+   * skipping trivia before `limit`, the result is marked incomplete so callers
+   * can conservatively treat the statement as schema-invalidating.
+   * @param {string} sql - SQL string.
+   * @param {number} startIndex - Index to start scanning.
+   * @param {number} limit - Maximum absolute index to scan while skipping leading trivia.
+   * @returns {SqlTokenResult} - Token result.
+   */
+  _readSqlToken(sql, startIndex, limit) {
+    let i = startIndex
+    const len = sql.length
+
+    while (i < len && i < limit) {
+      const char = sql[i]
+
+      if (char === "\ufeff" || /\s/.test(char)) {
+        i++
+        continue
+      }
+
+      if (char === "/" && sql[i + 1] === "*") {
+        const close = sql.indexOf("*/", i + 2)
+
+        if (close === -1 || close + 2 > limit) {
+          return {incomplete: true, index: i, token: undefined}
+        }
+
+        i = close + 2
+        continue
+      }
+
+      if (char === "-" && sql[i + 1] === "-") {
+        const newline = sql.indexOf("\n", i + 2)
+
+        if (newline === -1) {
+          return {incomplete: false, index: len, token: undefined}
+        }
+
+        if (newline + 1 > limit) {
+          return {incomplete: true, index: i, token: undefined}
+        }
+
+        i = newline + 1
+        continue
+      }
+
+      let token = ""
+
+      while (i < len) {
+        const c = sql[i]
+
+        if (/\s/.test(c) || c === "\ufeff") break
+        if (c === "/" && sql[i + 1] === "*") break
+        if (c === "-" && sql[i + 1] === "-") break
+
+        token += c
+        i++
+      }
+
+      return {incomplete: false, token: token.toLowerCase(), index: i}
+    }
+
+    if (i >= len) {
+      return {incomplete: false, index: len, token: undefined}
+    }
+
+    return {incomplete: true, index: i, token: undefined}
+  }
+
+  /**
    * Runs schema cache invalidating sql.
    * @param {string} sql - SQL string.
    * @returns {boolean} - Whether the SQL should invalidate schema metadata.
    */
   _schemaCacheInvalidatingSql(sql) {
-    const normalized = sql
-      .trim()
-      .replace(/^\ufeff/, "")
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .replace(/--[^\n]*(\n|$)/g, " ")
-      .replace(/\s+/g, " ")
-      .toLowerCase()
+    const first = this._readSqlToken(sql, 0, SCHEMA_INVALIDATION_SCAN_LIMIT)
 
-    if (!normalized) return false
-    if (/^(create|alter|drop|rename)\b/.test(normalized)) return true
-    if (/^comment\s+on\b/.test(normalized)) return true
-    if (/^exec(?:ute)?\s+sp_rename\b/.test(normalized)) return true
-    if (/^if\b[\s\S]*\bbegin\s+(create|alter|drop|rename)\b/.test(normalized)) return true
+    if (first.incomplete) return true
+
+    const firstToken = first.token
+
+    if (!firstToken) return false
+    if (/^(create|alter|drop|rename)$/.test(firstToken)) return true
+
+    if (firstToken === "comment") {
+      const next = this._readSqlToken(sql, first.index, SCHEMA_INVALIDATION_SCAN_LIMIT)
+
+      return next.incomplete || next.token === "on"
+    }
+
+    if (firstToken === "exec" || firstToken === "execute") {
+      const next = this._readSqlToken(sql, first.index, SCHEMA_INVALIDATION_SCAN_LIMIT)
+
+      return next.incomplete || next.token === "sp_rename"
+    }
+
+    if (firstToken === "if") {
+      let index = first.index
+
+      while (true) {
+        const result = this._readSqlToken(sql, index, SCHEMA_INVALIDATION_SCAN_LIMIT)
+
+        if (result.incomplete) return true
+        if (!result.token) return false
+        if (result.token === "begin") {
+          const ddlResult = this._readSqlToken(sql, result.index, SCHEMA_INVALIDATION_SCAN_LIMIT)
+
+          return ddlResult.incomplete || /^(create|alter|drop|rename)$/.test(ddlResult.token || "")
+        }
+
+        index = result.index
+      }
+    }
 
     return false
   }
