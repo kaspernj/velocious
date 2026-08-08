@@ -183,6 +183,29 @@ describe("Database drivers - SQL diagnostic scans", {databaseCleaning: {transact
       expect(driver._schemaCacheInvalidatingSql("/* CREATE TABLE */ SELECT 1")).toBe(false)
     })
 
+    it("returns true for DDL after more than 8192 characters of leading whitespace/comment trivia", async () => {
+      const driver = new DiagnosticScanDriver({}, buildConfiguration())
+      const trivia = `${" ".repeat(8192)}/* more */ -- line\n`
+
+      expect(driver._schemaCacheInvalidatingSql(`${trivia}CREATE TABLE tasks (id int)`)).toBe(true)
+    })
+
+    it("returns true when the scan bound cuts off inside an unterminated block comment", async () => {
+      const driver = new DiagnosticScanDriver({}, buildConfiguration())
+      const sql = `/* ${"x".repeat(10000)}CREATE TABLE tasks (id int)`
+
+      expect(driver._schemaCacheInvalidatingSql(sql)).toBe(true)
+    })
+
+    it("returns false for ordinary large DML statements", async () => {
+      const driver = new DiagnosticScanDriver({}, buildConfiguration())
+      const values = ", ('x')".repeat(4000)
+      const sql = `INSERT INTO tasks (name) VALUES ${values}`
+
+      expect(sql.length).toBeGreaterThan(8192)
+      expect(driver._schemaCacheInvalidatingSql(sql)).toBe(false)
+    })
+
     it("scans only a bounded prefix of large statements", async () => {
       const driver = new DiagnosticScanDriver({}, buildConfiguration())
       const sql = largeSelectSql()
