@@ -1,31 +1,34 @@
 // @ts-check
 
-import Configuration from "../../../src/configuration.js"
 import DatabaseDriverBase from "../../../src/database/drivers/base.js"
 
 class InsertChunkTestDriver extends DatabaseDriverBase {
   /**
    * Minimal insert SQL implementation for the chunking tests.
-   * Real chunking tests pass a custom buildSql; this just satisfies the driver contract.
+   *
+   * Matches the real driver contract: an empty row set returns the statement
+   * without the `VALUES` clause so `_insertMultipleChunks` can measure the
+   * prefix and each row's values tuple separately.
    * @param {import("../../../src/database/drivers/base.js").InsertSqlArgsType} args - Insert args.
    * @returns {string} - SQL string.
    */
   insertSql(args) {
-    const columnsPart = args.columns ? `(${args.columns.join(", ")})` : ""
+    const columnsPart = args.columns ? `(${args.columns.map((column) => `"${column}"`).join(", ")})` : ""
+    let sql = `INSERT INTO "${args.tableName}"${columnsPart}`
 
     if (!args.rows || args.rows.length === 0) {
-      return `INSERT INTO ${args.tableName}${columnsPart} VALUES`
+      return sql
     }
 
     const values = args.rows.map((row) => `(${row.join(", ")})`).join(", ")
 
-    return `INSERT INTO ${args.tableName}${columnsPart} VALUES ${values}`
+    return `${sql} VALUES ${values}`
   }
 }
 
 describe("database driver base - insertMultiple chunking", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("accounts bytes incrementally and chunks by row count", () => {
-    const driver = new InsertChunkTestDriver({maxRowsPerInsert: 10, maxInsertSqlBytes: 1_000_000}, Configuration.current())
+    const driver = new InsertChunkTestDriver({maxRowsPerInsert: 10, maxInsertSqlBytes: 1_000_000}, {})
     const rows = Array.from({length: 100}, (_value, index) => [index])
     let buildSqlCalls = 0
 
@@ -51,10 +54,10 @@ describe("database driver base - insertMultiple chunking", {databaseCleaning: {t
   })
 
   it("splits chunks when the next row would exceed the byte limit", () => {
-    // Base prefix is "INSERT INTO tests(a) VALUES " (29 bytes). Each small row is "(0)" (3 bytes).
-    // With a separator of ", " (2 bytes), three rows fit in 29 + 3 + 2 + 3 + 2 + 3 = 42 bytes.
-    // Four rows add another "(0)" + ", " = 5 bytes -> 47, which exceeds the 45-byte limit.
-    const driver = new InsertChunkTestDriver({maxRowsPerInsert: 100, maxInsertSqlBytes: 45}, Configuration.current())
+    // Prefix is `INSERT INTO "tests"("a") VALUES ` (32 bytes). Each small row is "(0)" (3 bytes).
+    // With a separator of ", " (2 bytes), three rows produce 32 + 3 + 2 + 3 + 2 + 3 = 45 bytes,
+    // which exactly fits; four rows exceed the limit, so the fourth row starts a new chunk.
+    const driver = new InsertChunkTestDriver({maxRowsPerInsert: 100, maxInsertSqlBytes: 45}, {})
     const rows = Array.from({length: 8}, (_value, index) => [index])
 
     /**
@@ -66,8 +69,9 @@ describe("database driver base - insertMultiple chunking", {databaseCleaning: {t
 
     const chunks = driver._insertMultipleChunks(rows, buildSql)
 
-    expect(chunks.length).toEqual(2)
+    expect(chunks.length).toEqual(3)
     expect(chunks[0].length).toEqual(3)
-    expect(chunks[1].length).toEqual(5)
+    expect(chunks[1].length).toEqual(3)
+    expect(chunks[2].length).toEqual(2)
   })
 })
