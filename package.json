@@ -17,6 +17,7 @@
   "scripts": {
     "all-checks": "npm run lint && npm run test",
     "benchmark:factory-plan-reuse": "node benchmark/factory-plan-reuse.js",
+    "benchmark:insert-multiple-chunking": "node benchmark/insert-multiple-chunking.js",
     "benchmark:preloader-id-dedup": "node benchmark/preloader-id-dedup.js",
     "benchmark:mysql-result-row-materialization": "node benchmark/mysql-result-row-materialization.js",
     "benchmark:query-roundtrip-batching": "node benchmark/query-roundtrip-batching.js",

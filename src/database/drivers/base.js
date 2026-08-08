@@ -877,17 +877,61 @@ export default class VelociousDatabaseDriversBase {
    * Splits `rows` into chunks that stay within both {@link maxRowsPerInsert}
    * and {@link maxInsertSqlBytes} while preserving order.
    *
+   * Byte accounting is incremental: `buildSql` is called once with `[]` to
+   * measure the statement prefix and once per row with `[row]` to measure the
+   * row's values tuple. This keeps chunking linear in the number of rows
+   * instead of rebuilding the full multi-row SQL for every candidate.
+   *
    * A chunk always contains at least one row, even if that single row exceeds
    * the byte limit, so progress is guaranteed.
    * @param {Array<Array<ReturnType<typeof JSON.parse>>>} rows - Rows to insert.
-   * @param {(rows: Array<Array<ReturnType<typeof JSON.parse>>>) => string} buildSql - Function that builds the full SQL for a candidate chunk.
+   * @param {(rows: Array<Array<ReturnType<typeof JSON.parse>>>) => string} buildSql - Function that builds the full SQL for a candidate chunk; called with `[]` to measure the statement prefix and with `[row]` to measure each row's values tuple.
    * @returns {Array<Array<Array<ReturnType<typeof JSON.parse>>>>} - Row chunks.
    */
   _insertMultipleChunks(rows, buildSql) {
-    return this.chunkValues(rows, buildSql, {
-      maxCount: this.maxRowsPerInsert(),
-      maxBytes: this.maxInsertSqlBytes()
-    })
+    const chunks = []
+    const maxRows = this.maxRowsPerInsert()
+    const maxBytes = this.maxInsertSqlBytes()
+    const emptySql = buildSql([])
+    const prefix = `${emptySql} VALUES `
+    const baseByteLength = Buffer.byteLength(prefix, "utf8")
+
+    /**
+     * Current chunk.
+     * @type {Array<Array<ReturnType<typeof JSON.parse>>>} */
+    let currentChunk = []
+    let currentBytes = 0
+
+    for (const row of rows) {
+      const singleRowSql = buildSql([row])
+      const rowValuesSql = singleRowSql.slice(prefix.length)
+      const rowValuesSqlBytes = Buffer.byteLength(rowValuesSql, "utf8")
+
+      if (currentChunk.length > 0) {
+        const candidateRows = currentChunk.length + 1
+        const candidateBytes = currentBytes + 2 + rowValuesSqlBytes // ", " separator
+
+        if (candidateRows > maxRows || candidateBytes > maxBytes) {
+          chunks.push(currentChunk)
+          currentChunk = []
+          currentBytes = 0
+        }
+      }
+
+      if (currentChunk.length === 0) {
+        currentBytes = baseByteLength + rowValuesSqlBytes
+      } else {
+        currentBytes += 2 + rowValuesSqlBytes
+      }
+
+      currentChunk.push(row)
+    }
+
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk)
+    }
+
+    return chunks
   }
 
   /**
