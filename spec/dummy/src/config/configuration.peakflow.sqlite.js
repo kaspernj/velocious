@@ -73,6 +73,8 @@ function resolveTaskFrontendModelAbility({configuration, params, request, respon
   })
 }
 
+const generatorTenant = Object.freeze({slug: "generator"})
+
 const configuration = new Configuration({
   attachments: {
     defaultDriver: "filesystem",
@@ -92,6 +94,14 @@ const configuration = new Configuration({
         type: "sqlite",
         name: "test-db",
         migrations: true
+      },
+      projectTenant: {
+        driver: SqliteDriver,
+        migrations: true,
+        name: "test-db-project-tenant-template",
+        poolType: SingleMultiUsePool,
+        tenantOnly: true,
+        type: "sqlite"
       },
       mssql: {
         driver: MssqlDriver,
@@ -135,6 +145,7 @@ const configuration = new Configuration({
         }
 
         if (modelClass.getConfiguredDatabaseIdentifier() !== "default") {
+          modelClass.registerRecordClass({configuration})
           continue
         }
 
@@ -161,6 +172,19 @@ const configuration = new Configuration({
     en: ["en", "de"]
   },
   locales: ["de", "en"],
+  tenantDatabaseProviders: {
+    projectTenant: {
+      listTenants: async () => [generatorTenant],
+      resolveGenerationTenant: async () => generatorTenant
+    }
+  },
+  tenantDatabaseResolver: ({identifier, tenant}) => {
+    if (identifier !== "projectTenant") return
+    if (!tenant || typeof tenant !== "object") return
+    if (/** @type {{slug?: string}} */ (tenant).slug !== generatorTenant.slug) return
+
+    return {name: "test-db-project-tenant-generator"}
+  },
   testing: `${dummyDirectory()}/src/config/testing.js`,
   websocketMessageHandlerResolver,
 })

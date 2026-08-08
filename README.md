@@ -8,6 +8,7 @@
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
+* Tenant-selected base-model and structure generation with one immutable, fail-closed physical database context (see [docs/tenant-selected-database-generation.md](docs/tenant-selected-database-generation.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Optional Rampway-owned durable deployment control plane mounted through the standard routes DSL on Velocious 1.0.577 or newer (see [docs/rampway-integration.md](docs/rampway-integration.md))
 * Controllers and views for HTTP endpoints

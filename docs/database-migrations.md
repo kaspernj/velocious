@@ -132,6 +132,8 @@ await this.migrateLegacyLocalDateTimesToUtcStorage({
 
 `db:schema:dump` generates `db/structure-<identifier>.sql` files from the current database state. Each file contains the full DDL for tables, indexes, views, and triggers, followed by `INSERT INTO schema_migrations (version) VALUES (...)` for every applied migration version. MySQL and MariaDB dumps place same-schema referenced base tables before their dependent tables. The migration ledger is embedded directly in the checked-in snapshot.
 
+For a tenant-only identifier, `db:schema:dump --tenant <identifier>` and `db:schema:load --tenant <identifier>` resolve exactly one tenant through its provider and use the same `structure-<identifier>.sql` name. They never fall back to the template/default database or iterate, drop, or reset tenants. See [tenant-selected database generation](tenant-selected-database-generation.md) for the selection and failure contract.
+
 When a fresh database is created from a structure file via `db:schema:load`, those insert rows repopulate the `schema_migrations` table so the loaded database knows exactly which migrations have already been applied. Subsequent `db:migrate` calls see those versions and skip them.
 
 Without the embedded ledger rows, loading a structure dump would produce a database with all the post-migration tables but an empty `schema_migrations` table. The next `db:migrate` would then attempt to re-run every migration, causing duplicate-table errors or migration-version conflicts against the already-present schema.

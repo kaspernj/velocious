@@ -661,6 +661,7 @@
 /**
  * @typedef {object} TenantDatabaseProviderType
  * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
+ * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => ReturnType<typeof JSON.parse> | void | Promise<ReturnType<typeof JSON.parse> | void>} [resolveGenerationTenant] - Resolves one explicit tenant descriptor for schema/base-model generation without enumerating lifecycle tenants.
  * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} [listRestrictTenants] - Lists existing tenants that should be checked for dependent restrict destroys. Defaults to listTenants.
  * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [createDatabase] - Creates the tenant database/schema for one tenant.
  * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [dropDatabase] - Drops the tenant database/schema for one tenant.

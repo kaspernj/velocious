@@ -1,6 +1,8 @@
 // @ts-check
 
 import BaseCommand from "../../../../../cli/base-command.js"
+import commandArguments from "../../../../../cli/command-arguments.js"
+import DatabaseGenerationContext from "../../../../../database/generation-context.js"
 import deburrColumnName from "../../../../../utils/deburr-column-name.js"
 import fileExists from "../../../../../utils/file-exists.js"
 import fs from "fs/promises"
@@ -62,15 +64,64 @@ function generatedRelationshipMethod({abstract = false, body, name, param, retur
 
 export default class DbGenerateModel extends BaseCommand {
   async execute() {
+    const parsedArguments = commandArguments({
+      definition: {
+        booleanOptions: ["--allow-missing-tables"],
+        valueOptions: ["--tenant"]
+      },
+      processArgs: this.processArgs || []
+    })
+    const allowMissingTables = parsedArguments["allow-missing-tables"] === true
+    const tenantDatabaseIdentifier = parsedArguments.tenant
+
+    if (typeof tenantDatabaseIdentifier === "string") {
+      const context = await DatabaseGenerationContext.resolve({
+        configuration: this.getConfiguration(),
+        databaseIdentifier: tenantDatabaseIdentifier
+      })
+      const selectedModelClasses = Object.values(this.getConfiguration().getModelClasses()).filter((modelClass) => {
+        const databaseIdentifier = modelClass.getDatabaseIdentifier({
+          enforceTenantDatabaseScope: false,
+          tenant: context.tenant()
+        })
+
+        if (databaseIdentifier !== context.databaseIdentifier()) return false
+
+        return modelClass.getDatabaseIdentifier({tenant: context.tenant()}) === context.databaseIdentifier()
+      })
+
+      try {
+        return await context.run({name: "Generate selected tenant base models", callback: async (connection) => {
+          await this.generateBaseModels({allowMissingTables, connections: {[context.databaseIdentifier()]: connection}, context})
+        }})
+      } finally {
+        for (const modelClass of selectedModelClasses) modelClass.resetRecordMetadata()
+      }
+    }
+
     await this.getConfiguration().initializeModels()
 
-    const enforceTenantDatabaseScopes = this.getConfiguration().getEnforceTenantDatabaseScopes()
+    return await this.getConfiguration().ensureConnections({name: "Generate base models"}, async (connections) => {
+      await this.generateBaseModels({allowMissingTables, connections})
+    })
+  }
 
+  /**
+   * Generates model bases from explicit connections.
+   * @param {object} args - Generation arguments.
+   * @param {boolean} args.allowMissingTables - Whether absent tables are skipped.
+   * @param {Record<string, import("../../../../../database/drivers/base.js").default>} args.connections - Connections keyed by logical identifier.
+   * @param {DatabaseGenerationContext} [args.context] - Selected tenant database context.
+   * @returns {Promise<void>} - Resolves after writing generated bases.
+   */
+  async generateBaseModels({allowMissingTables, connections, context}) {
     const rootDirectory = this.directory()
     const modelsDir = `${rootDirectory}/src/models`
     const baseModelsDir = `${rootDirectory}/src/model-bases`
     const modelClasses = this.getConfiguration().getModelClasses()
-    const allowMissingTables = Boolean(this.processArgs?.includes("--allow-missing-tables"))
+    const regenerateCommand = context
+      ? `${BASE_MODELS_REGENERATE_COMMAND} --tenant ${context.databaseIdentifier()}`
+      : BASE_MODELS_REGENERATE_COMMAND
     let devMode = false
 
     if (baseModelsDir.includes("/spec/dummy/src/model-bases")) {
@@ -81,19 +132,41 @@ export default class DbGenerateModel extends BaseCommand {
       await fs.mkdir(baseModelsDir, {recursive: true})
     }
 
-    this.getConfiguration().setEnforceTenantDatabaseScopes(false)
-
-    try {
-      await this.getConfiguration().ensureConnections({name: "Generate base models"}, async () => {
-        for (const modelClassName in modelClasses) {
+    for (const modelClassName in modelClasses) {
         const modelClass = modelClasses[modelClassName]
-        const table = await modelClass.connection().getTableByName(modelClass.tableName(), {throwError: !allowMissingTables})
+        let databaseIdentifier
+
+        if (context) {
+          databaseIdentifier = modelClass.getDatabaseIdentifier({
+            enforceTenantDatabaseScope: false,
+            tenant: context.tenant()
+          })
+
+          if (databaseIdentifier !== context.databaseIdentifier()) continue
+
+          databaseIdentifier = modelClass.getDatabaseIdentifier({tenant: context.tenant()})
+        } else {
+          databaseIdentifier = modelClass.getConfiguredDatabaseIdentifier()
+        }
+
+        if (context && databaseIdentifier !== context.databaseIdentifier()) continue
+
+        const connection = connections[databaseIdentifier]
+
+        // Default generation continues to ignore inactive tenant-only identifiers.
+        if (!connection) continue
+
+        if (context) modelClass.resetRecordMetadata()
+
+        const table = await connection.getTableByName(modelClass.tableName(), {throwError: !allowMissingTables})
 
         if (!table) {
           console.warn(`Skipping base model for '${modelClass.name}': table '${modelClass.tableName()}' was not found (--allow-missing-tables). Keeping any existing base model.`)
 
           continue
         }
+
+        await modelClass.ensureInitialized({configuration: this.getConfiguration(), connection})
 
         const modelName = inflection.dasherize(modelClassName)
         const modelNameCamelized = inflection.camelize(modelName.replaceAll("-", "_"))
@@ -111,7 +184,7 @@ export default class DbGenerateModel extends BaseCommand {
           sourceModelFilePath = "velocious/build/src/database/record/index.js"
         }
 
-        let fileContent = generatedFileBanner(BASE_MODELS_REGENERATE_COMMAND)
+        let fileContent = generatedFileBanner(regenerateCommand)
         let velociousPath
 
         if (devMode) {
@@ -454,10 +527,6 @@ export default class DbGenerateModel extends BaseCommand {
       fileContent += "}\n"
 
         await fs.writeFile(modelPath, fileContent)
-        }
-      })
-    } finally {
-      this.getConfiguration().setEnforceTenantDatabaseScopes(enforceTenantDatabaseScopes)
     }
   }
 

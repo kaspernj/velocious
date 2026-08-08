@@ -40,6 +40,8 @@ CREATE TABLE `task_boards` (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGI
 
 CREATE TABLE "tasks" (`id` INTEGER PRIMARY KEY NOT NULL, `project_id` BIGINT NOT NULL, `name` VARCHAR(255), `description` TEXT, `created_at` DATETIME, `updated_at` DATETIME, `is_done` BOOLEAN, CONSTRAINT `tasks_project_id_0` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`));
 
+CREATE TABLE `tenant_generator_records` (`id` UUID PRIMARY KEY NOT NULL, `control_name` VARCHAR(255) NOT NULL);
+
 CREATE TABLE `users` (`id` INTEGER PRIMARY KEY NOT NULL, `email` VARCHAR(255) NOT NULL, `encrypted_password` VARCHAR(255) NOT NULL, `reference` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
 CREATE TABLE `uuid_acts_as_list_items` (`id` UUID PRIMARY KEY NOT NULL, `scope_id` INTEGER NOT NULL, `position` INTEGER, `name` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
@@ -162,3 +164,4 @@ INSERT INTO schema_migrations (version) VALUES ('20260702150000');
 INSERT INTO schema_migrations (version) VALUES ('20260706120000');
 INSERT INTO schema_migrations (version) VALUES ('20260726132000');
 INSERT INTO schema_migrations (version) VALUES ('20260803120000');
+INSERT INTO schema_migrations (version) VALUES ('20260808090000');
