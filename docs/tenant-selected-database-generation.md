@@ -24,6 +24,8 @@ Selection is fail-closed. The identifier must exist, be enabled, have `tenantOnl
 
 The resolved descriptor is copied and frozen by `TenantHandle`, and the logical identifier plus resolved physical database configuration remain pinned for the entire command. Base-model generation includes only models whose configured or `switchesTenantDatabase(...)` identifier resolves to the selection. Tenant-only models are therefore generated, and tenant-switched models are introspected from the tenant schema rather than their ordinary control-schema fallback. No-selector generation retains its existing behavior and ignores inactive tenant-only identifiers.
 
+The default require-context initializer registers inactive tenant-only models without eagerly loading their table metadata. Selected base-model generation then initializes those models inside the resolved tenant scope with the captured tenant connection, so startup never tries to read tenant-only metadata through an ordinary/default connection.
+
 Selected structure commands use the logical name `db/structure-<identifier>.sql`; for example, `projectTenant` reads or writes `db/structure-projectTenant.sql`. Dump and load touch only the captured selected connection. Loading executes the structure file as-is through `StructureSqlLoader`; it does not scan, drop, reset, or provision other tenant databases.
 
 Unknown flags and positionals are rejected for all three commands instead of being ignored. `generate:base-models` additionally accepts the existing `--allow-missing-tables` flag.

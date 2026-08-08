@@ -1,5 +1,7 @@
 // @ts-check
 
+const COMMAND_VALUE_OPTIONS = new Set(["--tenant"])
+
 export default class VelociousCli {
   /**
    * Runs constructor.
@@ -94,6 +96,7 @@ export default class VelociousCli {
      * Current group.
      * @type {string[]} */
     let currentGroup = []
+    let expectsOptionValue = false
 
     for (const processArg of processArgs) {
       if (currentGroup.length == 0) {
@@ -103,11 +106,18 @@ export default class VelociousCli {
         continue
       }
 
+      if (expectsOptionValue) {
+        currentGroup.push(processArg)
+        expectsOptionValue = false
+        continue
+      }
+
       if (!processArg.startsWith("-") && commandNames.has(processArg)) {
         groups.push(currentGroup)
         currentGroup = [processArg]
       } else {
         currentGroup.push(processArg)
+        expectsOptionValue = COMMAND_VALUE_OPTIONS.has(processArg)
       }
     }
 

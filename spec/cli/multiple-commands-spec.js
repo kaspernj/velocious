@@ -53,7 +53,7 @@ class FakeEnvironmentHandler {
 
   /** @returns {Promise<Array<{name: string}>>} - Available commands. */
   async findCommands() {
-    return [{name: "failing"}, {name: "first"}, {name: "second"}]
+    return [{name: "failing"}, {name: "first"}, {name: "second"}, {name: "test"}]
   }
 
   /**
@@ -66,6 +66,7 @@ class FakeEnvironmentHandler {
 
     if (commandName == "first") return FirstCommand
     if (commandName == "second") return SecondCommand
+    if (commandName == "test") return SecondCommand
     if (commandName == "failing") return FailingCommand
 
     throw new Error(`Unknown command: ${commandName}`)
@@ -170,5 +171,18 @@ describe("Cli - Multiple commands", () => {
     await cli.execute()
 
     expect(configuration.state.executions).toEqual([["first"], ["second"]])
+  })
+
+  it("keeps a command-named tenant value in the current command", async () => {
+    const configuration = createConfiguration()
+    const cli = new Cli({
+      configuration: /** @type {import("../../src/configuration.js").default} */ (configuration),
+      processArgs: ["first", "--tenant", "test"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    expect(configuration.state.executions).toEqual([["first", "--tenant", "test"]])
   })
 })

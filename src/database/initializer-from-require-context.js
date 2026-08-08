@@ -43,6 +43,13 @@ export default class VelociousDatabaseInitializerFromRequireContext {
 
       if (!modelClass) throw new Error(`Model wasn't exported from: ${fileName}`)
 
+      const configuredDatabase = configuration.getDatabaseConfiguration()[modelClass.getConfiguredDatabaseIdentifier()]
+
+      if (configuredDatabase?.tenantOnly && !configuration.isDatabaseIdentifierActive(modelClass.getConfiguredDatabaseIdentifier())) {
+        modelClass.registerRecordClass({configuration})
+        continue
+      }
+
       if (!modelClass.getEagerLoadRecordMetadata()) {
         modelClass.registerRecordClass({configuration})
         await this._bestEffortInitializeDeferredModel({configuration, modelClass})

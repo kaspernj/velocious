@@ -35,6 +35,7 @@ describe("Cli - Commands - db:migrate", () => {
       testing: true
     })
 
+    let databaseIdentifiers = []
     let defaultDatabaseType
 
     /** @type {string[]} */
@@ -59,6 +60,7 @@ describe("Cli - Commands - db:migrate", () => {
     let projectForeignKey
 
     await cli.getConfiguration().ensureConnections(async (dbs) => {
+      databaseIdentifiers = Object.keys(dbs)
       defaultDatabaseType = dbs.default.getType()
 
       const tableNames = [
@@ -81,6 +83,7 @@ describe("Cli - Commands - db:migrate", () => {
         "task_board_cards",
         "task_boards",
         "tasks",
+        "tenant_generator_records",
         "users",
         "uuid_acts_as_list_items",
         "uuid_default_test",
@@ -207,6 +210,7 @@ describe("Cli - Commands - db:migrate", () => {
           "task_board_cards",
           "task_boards",
           "tasks",
+          "tenant_generator_records",
           "users",
           "uuid_acts_as_list_items",
           "uuid_interactions",
@@ -236,12 +240,13 @@ describe("Cli - Commands - db:migrate", () => {
         "20260702150000",
         "20260706120000",
         "20260726132000",
-        "20260803120000"
+        "20260803120000",
+        "20260808090000"
       ])
     } else {
       expect(filteredTables.sort()).toEqual(
         [
-          "accounts",
+          ...(databaseIdentifiers.includes("mssql") ? ["accounts"] : []),
           "acts_as_list_items",
           "audit_actions",
           "audit_auditable_types",
@@ -252,7 +257,7 @@ describe("Cli - Commands - db:migrate", () => {
           "project_details",
           "project_translations",
           "projects",
-          "schema_migrations",
+          ...(databaseIdentifiers.includes("mssql") ? ["schema_migrations"] : []),
           "schema_migrations",
           "string_subject_interactions",
           "string_subjects",
@@ -260,6 +265,7 @@ describe("Cli - Commands - db:migrate", () => {
           "task_board_cards",
           "task_boards",
           "tasks",
+          "tenant_generator_records",
           "users",
           "uuid_acts_as_list_items",
           "uuid_interactions",
@@ -271,7 +277,7 @@ describe("Cli - Commands - db:migrate", () => {
         "20230728075328",
         "20230728075329",
         "20250605133926",
-        "20250903112845",
+        ...(databaseIdentifiers.includes("mssql") ? ["20250903112845"] : []),
         "20250912183605",
         "20250912183606",
         "20250915085450",
@@ -289,7 +295,8 @@ describe("Cli - Commands - db:migrate", () => {
         "20260702150000",
         "20260706120000",
         "20260726132000",
-        "20260803120000"
+        "20260803120000",
+        "20260808090000"
       ])
     }
   })

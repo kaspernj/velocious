@@ -52,6 +52,7 @@ describe("Cli - generate - base-models selected tenant database", () => {
       const tenantOnlyContents = await fs.readFile(path.join(app.directory, "src", "model-bases", "tenant-only-widget.js"), "utf8")
       const switchedContents = await fs.readFile(path.join(app.directory, "src", "model-bases", "tenant-switched-widget.js"), "utf8")
 
+      expect(app.getTenantOnlyInitializationTenants()).toEqual([app.selectedTenant])
       expect(tenantOnlyContents).toContain("tenantName()")
       expect(switchedContents).toContain("tenantName()")
       expect(switchedContents).toContain("routingEpoch()")

@@ -5,6 +5,7 @@ import Configuration from "../../src/configuration.js"
 import DatabaseRecord from "../../src/database/record/index.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import fs from "fs/promises"
+import InitializerFromRequireContext from "../../src/database/initializer-from-require-context.js"
 import os from "os"
 import path from "path"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
@@ -20,6 +21,7 @@ import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
  *   cleanup: () => Promise<void>,
  *   configuration: Configuration,
  *   directory: string,
+ *   getTenantOnlyInitializationTenants: () => {slug: string}[],
  *   getTenantListCalls: () => number,
  *   selectedTenant: {slug: string},
  *   setTenantCandidates: (tenants: {slug: string}[]) => void
@@ -31,8 +33,22 @@ export async function createTenantDatabaseGenerationTestApp(prefix, {missingMode
   /** @type {{slug: string}[]} */
   let tenantCandidates = [selectedTenant]
   let tenantListCalls = 0
+  /** @type {{slug: string}[]} */
+  const tenantOnlyInitializationTenants = []
 
-  class TenantOnlyWidget extends DatabaseRecord {}
+  class TenantOnlyWidget extends DatabaseRecord {
+    /**
+     * Records the active tenant when real require-context initialization reaches this model.
+     * @param {object} args - Initialization arguments.
+     * @param {Configuration} args.configuration - Test configuration.
+     * @param {import("../../src/database/drivers/base.js").default} [args.connection] - Explicit metadata connection.
+     * @returns {Promise<void>} - Resolves when initialized.
+     */
+    static async initializeRecord({configuration, connection}) {
+      tenantOnlyInitializationTenants.push(configuration.getCurrentTenant())
+      await super.initializeRecord({configuration, connection})
+    }
+  }
   class TenantSwitchedWidget extends DatabaseRecord {}
   class MissingDefaultWidget extends DatabaseRecord {}
   class MissingTenantWidget extends DatabaseRecord {}
@@ -51,7 +67,10 @@ export async function createTenantDatabaseGenerationTestApp(prefix, {missingMode
   MissingDefaultWidget.setTableName("missing_default_widgets")
   MissingTenantWidget.setTableName("missing_tenant_widgets")
   MissingTenantWidget.setDatabaseIdentifier("projectTenant")
+  MissingDefaultWidget.setEagerLoadRecordMetadata(false)
+  MissingTenantWidget.setEagerLoadRecordMetadata(false)
   UnrelatedTenantSwitchedWidget.setTableName("unrelated_tenant_switched_widgets")
+  UnrelatedTenantSwitchedWidget.setEagerLoadRecordMetadata(false)
   UnrelatedTenantSwitchedWidget.switchesTenantDatabase(({tenant}) => {
     if (!tenant) return
 
@@ -94,13 +113,26 @@ export async function createTenantDatabaseGenerationTestApp(prefix, {missingMode
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
     initializeModels: async ({configuration}) => {
-      TenantOnlyWidget.registerRecordClass({configuration})
-      TenantSwitchedWidget.registerRecordClass({configuration})
-      if (missingModels) {
-        MissingDefaultWidget.registerRecordClass({configuration})
-        MissingTenantWidget.registerRecordClass({configuration})
+      /** @type {Record<string, {default: typeof DatabaseRecord}>} */
+      const models = {
+        "./tenant-only-widget.js": {default: TenantOnlyWidget},
+        "./tenant-switched-widget.js": {default: TenantSwitchedWidget},
+        ...(missingModels ? {
+          "./missing-default-widget.js": {default: MissingDefaultWidget},
+          "./missing-tenant-widget.js": {default: MissingTenantWidget}
+        } : {}),
+        ...(multipleConditionalSlots ? {
+          "./unrelated-tenant-switched-widget.js": {default: UnrelatedTenantSwitchedWidget}
+        } : {})
       }
-      if (multipleConditionalSlots) UnrelatedTenantSwitchedWidget.registerRecordClass({configuration})
+      const requireContext = /** @type {import("../../src/database/initializer-from-require-context.js").ModelClassRequireContextType} */ ((fileName) => models[fileName])
+
+      requireContext.keys = () => Object.keys(models)
+      requireContext.id = "tenant-database-generation-test-helper"
+
+      await configuration.ensureConnections({name: "Initialize tenant generator test models"}, async () => {
+        await new InitializerFromRequireContext({requireContext}).initialize({configuration})
+      })
     },
     locale: "en",
     localeFallbacks: {en: ["en"]},
@@ -159,6 +191,7 @@ export async function createTenantDatabaseGenerationTestApp(prefix, {missingMode
     },
     configuration,
     directory,
+    getTenantOnlyInitializationTenants: () => [...tenantOnlyInitializationTenants],
     getTenantListCalls: () => tenantListCalls,
     selectedTenant,
     setTenantCandidates: (tenants) => {
