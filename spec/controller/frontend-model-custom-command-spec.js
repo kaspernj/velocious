@@ -41,7 +41,7 @@ class CustomFrontendModelCommandController extends Controller {
   }
 }
 
-describe("Controller frontend model custom commands", {databaseCleaning: {transaction: true}}, () => {
+describe("Controller frontend model custom commands", () => {
   it("dispatches custom frontend-model command paths through configured routes", async () => {
     const configuration = new Configuration({
       database: {test: {}},
@@ -92,7 +92,7 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
     expect(response.receivedName).toEqual("John")
   })
 
-  it("returns debug details for unexpected custom frontend-model command failures in test", async () => {
+  it("masks unexpected custom frontend-model command failures in secure mode", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: dummyDirectory(),
@@ -101,7 +101,8 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
       initializeModels: async () => {},
       locale: "en",
       localeFallbacks: {en: ["en"]},
-      locales: ["en"]
+      locales: ["en"],
+      secureFrontendModelErrors: true
     })
 
     configuration.routes((routes) => {
@@ -238,7 +239,7 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
     expect(combinedWrites).not.toMatch(/Frontend model endpoint request failed/)
   })
 
-  it("keeps raw custom-command errorType markers generic and reported", async () => {
+  it("forwards raw custom-command error messages by default and reports them", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: dummyDirectory(),
@@ -295,7 +296,7 @@ describe("Controller frontend model custom commands", {databaseCleaning: {transa
     const responsePayload = JSON.parse(String(response.getBody()))
 
     expect(responsePayload.responses[0].response.status).toEqual("error")
-    expect(responsePayload.responses[0].response.errorMessage).toEqual("Request failed.")
+    expect(responsePayload.responses[0].response.errorMessage).toEqual("Typed custom command rejection")
     expect(responsePayload.responses[0].response.errorType).toEqual("internal_error")
     expect(responsePayload.responses[0].response.correlationId).toMatch(/^[0-9a-f-]{36}$/)
     expect(allErrors.length).toEqual(1)

@@ -277,9 +277,10 @@ function frontendModelVelociousMetadataForError(error) {
 /**
  * Runs frontend model client message for error.
  * @param {unknown} error - Caught error.
+ * @param {boolean} secureFrontendModelErrors - Whether only explicitly safe messages may be exposed.
  * @returns {string} - Message safe to return to API clients.
  */
-function frontendModelClientMessageForError(error) {
+function frontendModelClientMessageForError(error, secureFrontendModelErrors) {
   if (error instanceof RecordNotFoundError) {
     return "Record not found."
   }
@@ -299,6 +300,8 @@ function frontendModelClientMessageForError(error) {
   if (frontendModelErrorHasVelociousMetadata(error) && error instanceof Error) {
     return error.message
   }
+
+  if (!secureFrontendModelErrors && error instanceof Error) return error.message
 
   return frontendModelClientSafeErrorMessage
 }
@@ -3310,7 +3313,7 @@ export default class FrontendModelController extends Controller {
 
     return {
       ...reporterPayload,
-      ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error)),
+      ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error, this.getConfiguration().getSecureFrontendModelErrors())),
       ...frontendModelDebugPayloadForError({
         configuration: this.getConfiguration(),
         environment: this.getConfiguration().getEnvironment(),
