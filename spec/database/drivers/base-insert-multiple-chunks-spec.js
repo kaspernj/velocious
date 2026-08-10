@@ -74,4 +74,24 @@ describe("database driver base - insertMultiple chunking", {databaseCleaning: {t
     expect(chunks[1].length).toEqual(3)
     expect(chunks[2].length).toEqual(2)
   })
+
+  it("chunks without Node's Buffer global so browser and React Native bundles work", () => {
+    const bufferGlobal = globalThis.Buffer
+
+    // Simulate the browser/RN bundle environment where no Buffer polyfill exists.
+    // @ts-expect-error - the global is deleted deliberately and restored in finally.
+    delete globalThis.Buffer
+
+    try {
+      const driver = new InsertChunkTestDriver({maxRowsPerInsert: 10, maxInsertSqlBytes: 1_000_000}, {})
+      const rows = Array.from({length: 25}, (_value, index) => [index])
+      const chunks = driver._insertMultipleChunks(rows, (chunkRows) => driver.insertSql({columns: ["a"], rows: chunkRows, tableName: "tests"}))
+
+      expect(chunks.length).toEqual(3)
+      expect(chunks[0]).toHaveLength(10)
+      expect(chunks[2]).toHaveLength(5)
+    } finally {
+      globalThis.Buffer = bufferGlobal
+    }
+  })
 })

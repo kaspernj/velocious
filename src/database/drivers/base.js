@@ -134,6 +134,7 @@ import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import QueryAbortedError from "../query-aborted-error.js"
 import Handler from "../handler.js"
+import { utf8ByteLength } from "../../utils/utf8-byte-length.js"
 import Mutex from "epic-locks/build/mutex.js"
 import UUID from "pure-uuid"
 import TableData from "../table-data/index.js"
@@ -856,7 +857,7 @@ export default class VelociousDatabaseDriversBase {
 
     for (const value of values) {
       const candidate = [...currentChunk, value]
-      const candidateBytes = Buffer.byteLength(buildSql(candidate), "utf8")
+      const candidateBytes = utf8ByteLength(buildSql(candidate))
 
       if (currentChunk.length > 0 && (candidate.length > maxCount || candidateBytes > maxBytes)) {
         chunks.push(currentChunk)
@@ -894,7 +895,7 @@ export default class VelociousDatabaseDriversBase {
     const maxBytes = this.maxInsertSqlBytes()
     const emptySql = buildSql([])
     const prefix = `${emptySql} VALUES `
-    const baseByteLength = Buffer.byteLength(prefix, "utf8")
+    const baseByteLength = utf8ByteLength(prefix)
 
     /**
      * Current chunk.
@@ -905,7 +906,7 @@ export default class VelociousDatabaseDriversBase {
     for (const row of rows) {
       const singleRowSql = buildSql([row])
       const rowValuesSql = singleRowSql.slice(prefix.length)
-      const rowValuesSqlBytes = Buffer.byteLength(rowValuesSql, "utf8")
+      const rowValuesSqlBytes = utf8ByteLength(rowValuesSql)
 
       if (currentChunk.length > 0) {
         const candidateRows = currentChunk.length + 1

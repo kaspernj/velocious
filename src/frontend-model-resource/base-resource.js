@@ -80,6 +80,7 @@ import VelociousError from "../velocious-error.js"
  * FrontendModelResourceAbilityArgs type.
  * @typedef {object} FrontendModelResourceAbilityArgs
  * @property {import("../authorization/ability.js").default} [ability] - Ability instance when the resource is used directly for authorization.
+ * @property {import("../configuration.js").default} [configuration] - Velocious configuration for controller-less construction (for example the sync websocket channel); the controller path derives it from the controller instead.
  * @property {import("../configuration-types.js").VelociousLooseObject} [context] - Ability context.
  * @property {import("../configuration-types.js").VelociousLooseObject} [locals] - Ability locals.
  * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
@@ -226,6 +227,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const defaultResourceConfiguration = /** @type {import("../configuration-types.js").FrontendModelResourceConfiguration} */ ({attributes: []})
 
     this.controller = "controller" in args ? args.controller : undefined
+    this.configurationValue = "configuration" in args ? args.configuration : undefined
     this.modelClassValue = "modelClass" in args ? args.modelClass : ResourceClass.modelClass()
     this.modelNameValue = "modelName" in args ? args.modelName : this.modelClass().getModelName()
     this.paramsValue = "params" in args ? args.params : undefined
@@ -440,6 +442,19 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (!this.controller) throw new Error(`${this.constructor.name} requires a controller instance.`)
 
     return this.controller
+  }
+
+  /**
+   * Returns the Velocious configuration: the controller's when the resource
+   * serves a controller request, otherwise the constructor-injected
+   * configuration (for example a sync websocket channel's resource).
+   * @returns {import("../configuration.js").default} - Velocious configuration.
+   */
+  configuration() {
+    if (this.controller) return this.controllerInstance().getConfiguration()
+    if (this.configurationValue) return this.configurationValue
+
+    throw new Error(`${this.constructor.name} requires a controller or an injected configuration.`)
   }
 
   /**

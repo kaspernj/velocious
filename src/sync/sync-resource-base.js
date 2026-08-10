@@ -233,7 +233,7 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
    * @returns {import("./sync-upstream-importer.js").default} Shared importer for the current configuration.
    */
   syncUpstreamImporter() {
-    return syncUpstreamImporterForConfiguration(this.controllerInstance().getConfiguration())
+    return syncUpstreamImporterForConfiguration(this.configuration())
   }
 
   /**

@@ -83,6 +83,7 @@ export default class SyncWebsocketChannel extends VelociousWebsocketChannel {
 
     return new ResourceClass({
       ability,
+      configuration,
       context: {
         ...(ability?.getContext() || {}),
         params,
