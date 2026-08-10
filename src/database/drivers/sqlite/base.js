@@ -20,6 +20,21 @@ import Update from "./sql/update.js"
 
 export default class VelociousDatabaseDriversSqliteBase extends Base {
   /**
+   * Process-wide state for the SQLite advisory lock emulation. Shared across
+   * every SQLite driver instance (native, web, sql.js) because there is no
+   * concept of "connection" to distinguish them at the SQLite level.
+   *
+   * `ownersByName` maps each held lock name to the driver instance that
+   * acquired it so `releaseAdvisoryLock` can reject releases from drivers
+   * that do not own the lock.
+   * @type {{ownersByName: Map<string, VelociousDatabaseDriversSqliteBase>, waitersByName: Map<string, Array<() => void>>}}
+   */
+  static _advisoryLockState = {
+    ownersByName: new Map(),
+    waitersByName: new Map()
+  }
+
+  /**
    * Version major.
    * @type {number | undefined} */
   versionMajor = undefined
@@ -497,19 +512,4 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   async isAdvisoryLockHeld(name) {
     return VelociousDatabaseDriversSqliteBase._advisoryLockState.ownersByName.has(name)
   }
-}
-
-/**
- * Process-wide state for the SQLite advisory lock emulation. Shared across
- * every SQLite driver instance (native, web, sql.js) because there is no
- * concept of "connection" to distinguish them at the SQLite level.
- *
- * `ownersByName` maps each held lock name to the driver instance that
- * acquired it so `releaseAdvisoryLock` can reject releases from drivers
- * that do not own the lock.
- * @type {{ownersByName: Map<string, VelociousDatabaseDriversSqliteBase>, waitersByName: Map<string, Array<() => void>>}}
- */
-VelociousDatabaseDriversSqliteBase._advisoryLockState = {
-  ownersByName: new Map(),
-  waitersByName: new Map()
 }
