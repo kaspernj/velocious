@@ -211,7 +211,7 @@ new Configuration({
 })
 ```
 
-- **`websocketUrl`** (string or `() => string`): the framework builds one reconnecting `VelociousWebsocketClient`, connected on first use and memoized for the app's lifetime.
+- **`websocketUrl`** (string or `() => string`): the framework builds one reconnecting `VelociousWebsocketClient`, connected on first use and memoized for the app's lifetime. `websocketUrlFromHttpBase(httpBase)` (`src/http-client/websocket-url-from-http-base.js`) derives the URL from the backend HTTP base (scheme swap plus the framework's `/websocket` mount path).
 - **`websocketClient`** (the low-level form): pass an already-built websocket client instance instead. Give it the **same** instance your frontend-model transport uses (`configureTransport({websocketClient})`) so a single socket carries frontend-model traffic *and* sync — the frontend-model client can *be* the shared connection.
 - `syncClient().syncConnection()` returns the shared connection (or null when none is configured), building it once.
 - With a shared connection, the realtime bridge **rides it without owning its lifecycle**: `unsubscribeRealtime()` closes only its channel subscriptions and leaves the socket open (a subsequent subscribe resubscribes over the same socket). Low-level reconnect/backoff stays in the websocket client.
@@ -248,5 +248,7 @@ Screens do not subscribe to the sync client to stay current. Because pulls and r
 ## Server side
 
 The server counterpart is `SyncResourceBase` (`src/sync/sync-resource-base.js`) plus the auto-mounted sync endpoints (`sync.api` configuration option) — see `docs/offline-sync.md`.
+
+When serving the feed needs an upstream import first (a slow legacy database import that keeps the feed fresh), the server runs it inside the sync resource's `authorizeChanges` through the framework's coalescing/throttling importer — see [docs/sync-upstream-imports.md](sync-upstream-imports.md).
 
 The server mirror of automatic mutation tracking is `SyncPublisher` (`src/sync/sync-publisher.js`): server models declare a `publish` config in the same `static sync` declaration (the client ignores the key), and server-side writes publish to the sync change feed and broadcast the standard sync envelope on the framework `velocious-sync` channel automatically once their transaction commits — see the server publish-by-default and framework sync channel slice in `docs/offline-sync.md`.

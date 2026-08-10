@@ -5,6 +5,7 @@ import {forcedNonBlankString} from "typanic"
 import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
 import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
+import {syncUpstreamImporterForConfiguration} from "./sync-upstream-importer.js"
 import VelociousError from "../velocious-error.js"
 
 /**
@@ -222,6 +223,17 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
     if (!modelClass) throw new Error(`${this.constructor.name} must define static ModelClass`)
 
     return modelClass
+  }
+
+  /**
+   * Returns the shared upstream importer for this resource's configuration. Apps
+   * use it inside {@link SyncResourceBase#authorizeChanges} (or a legacy trigger
+   * endpoint) to run the upstream import that keeps the feed self-sustaining,
+   * with coalescing and throttling owned by the framework.
+   * @returns {import("./sync-upstream-importer.js").default} Shared importer for the current configuration.
+   */
+  syncUpstreamImporter() {
+    return syncUpstreamImporterForConfiguration(this.controllerInstance().getConfiguration())
   }
 
   /**
