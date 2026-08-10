@@ -501,7 +501,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   getDebugSnapshot() {
     const connections = [...this.connectionEntries.values()].map((entry) => this.debugConnectionSnapshot(entry.connection, {
       activeCheckoutCount: entry.activeCheckoutCount,
-      state: entry.activeCheckoutCount > 0 ? "in-use" : entry.lifecycleRetained ? "lifecycle-retained" : entry.retained ? "shared" : "idle"
+      state: entry.retained ? "shared" : entry.activeCheckoutCount > 0 ? "in-use" : entry.lifecycleRetained ? "lifecycle-retained" : "idle"
     }))
     const now = Date.now()
 
