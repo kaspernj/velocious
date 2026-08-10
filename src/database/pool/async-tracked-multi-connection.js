@@ -755,6 +755,43 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     })
   }
 
+  async openCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const connection = await this.checkoutForConfiguration(databaseConfiguration, {name: "Frontend tenant SQLite open"})
+    await this.checkin(connection)
+  }
+
+  async flushCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
+    const connection = this.connections.find((candidate) => this.getConnectionConfigurationReuseKey(candidate) === reuseKey)
+    if (connection) await connection.flushPendingWrites()
+  }
+
+  async closeCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
+    if (this.capturedConnectionInUse(databaseConfiguration)) throw new Error("Cannot close an in-use frontend tenant SQLite handle")
+    const connections = this.connections.filter((candidate) => this.getConnectionConfigurationReuseKey(candidate) === reuseKey)
+    this.connections = this.connections.filter((candidate) => this.getConnectionConfigurationReuseKey(candidate) !== reuseKey)
+    for (const connection of connections) await this.closeConnection(connection)
+  }
+
+  async deleteCapturedDatabase(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    await this.closeCapturedConnection(databaseConfiguration)
+    const DriverClass = databaseConfiguration.driver || this.driverClass
+    if (!DriverClass) throw new Error("No driver class configured for frontend tenant SQLite deletion")
+    await new DriverClass(databaseConfiguration, this.configuration).deleteDatabaseStorage()
+  }
+
+  capturedConnectionInUse(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
+    return Object.values(this.connectionsInUse).some((connection) => this.getConnectionConfigurationReuseKey(connection) === reuseKey)
+  }
+
+  capturedConnectionHasPendingWrites(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
+    const connections = [...this.connections, ...Object.values(this.connectionsInUse)]
+    return connections.some((connection) => this.getConnectionConfigurationReuseKey(connection) === reuseKey && connection.hasPendingWrites())
+  }
+
   /**
    * Runs a captured operation through the normal bounded pool lifecycle.
    * @template T

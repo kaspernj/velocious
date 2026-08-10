@@ -1,0 +1,1 @@
+Add framework-owned bounded frontend tenant SQLite lifecycle APIs for open, flush, close, delete, safe inspection, clean-only LRU eviction, and scoped pins across SQL.js, Expo SQLite, and Node SQLite.

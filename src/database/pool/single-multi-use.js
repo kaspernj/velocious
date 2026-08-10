@@ -252,6 +252,41 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     }
   }
 
+  async openCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const connection = await this.checkoutForConfiguration(databaseConfiguration, {name: "Frontend tenant SQLite open"}, {retain: true})
+    await this.checkin(connection)
+  }
+
+  async flushCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    if (entry) await entry.connection.flushPendingWrites()
+  }
+
+  async closeCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    if (!entry) return
+    if (entry.activeCheckoutCount > 0) throw new Error("Cannot close an in-use frontend tenant SQLite handle")
+    await this.removeAndCloseEntry(entry)
+  }
+
+  async deleteCapturedDatabase(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    await this.closeCapturedConnection(databaseConfiguration)
+    const DriverClass = databaseConfiguration.driver || this.driverClass
+    if (!DriverClass) throw new Error("No driver class configured for frontend tenant SQLite deletion")
+    const driver = new DriverClass(databaseConfiguration, this.configuration)
+    await driver.deleteDatabaseStorage()
+  }
+
+  capturedConnectionInUse(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    return Boolean(entry && entry.activeCheckoutCount > 0)
+  }
+
+  capturedConnectionHasPendingWrites(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    return Boolean(entry?.connection.hasPendingWrites())
+  }
+
   /**
    * Runs a legacy ambient operation under one pool-wide FIFO lease.
    * @template T

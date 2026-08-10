@@ -1,5 +1,7 @@
 # Declarative sync client
 
+Project-scoped clients backed by separate SQLite replicas should hold a scoped lifecycle pin while a client owns pending work; see [frontend tenant SQLite lifecycle](frontend-tenant-sqlite-lifecycle.md).
+
 `SyncClient` (`src/sync/sync-client.js`) is the declarative client-side sync driver. Models declare sync, one configuration block carries the genuinely app-owned hooks, and Velocious derives everything else: the resource map, the sync endpoints, scope persistence, per-scope cursors, pull paging and apply, local queueing, and online-gated replay. There is no hand-written resource map, transport POSTer, or endpoint wiring in app code.
 
 ## Declaring sync on models

@@ -64,6 +64,14 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
     }
   }
 
+  hasPendingWrites() {
+    return Boolean(!this.args?.getConnection && this._connection?.hasPendingDatabaseSave())
+  }
+
+  async deleteDatabaseStorage() {
+    await deleteSqliteWebPersistences({databaseName: this.databaseName()})
+  }
+
   /**
    * Starts an outer transaction after draining SQL.js persistence admission.
    * @param {Pick<import("../base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
