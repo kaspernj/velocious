@@ -13,7 +13,7 @@ Projects sharing resource policy between backend and local/offline runtimes shou
 ## Error payloads
 
 ### Unexpected errors
-- Unexpected frontend-model endpoint failures return `errorType: "internal_error"`, `errorMessage: "Request failed."`, and a server-generated `correlationId` so clients can reference the matching server report without receiving internal exception details.
+- Unexpected frontend-model endpoint failures return their original message by default with `errorType: "internal_error"` and a server-generated `correlationId`. Set `secureFrontendModelErrors: true` to expose only explicitly safe messages and otherwise return `errorMessage: "Request failed."`.
 - `development` and `test` responses also include `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` for faster browser/system-test diagnosis.
 - Other non-production environments, such as `staging`, can opt into the same debug fields with `exposeInternalErrorsToClients: true` on the app `Configuration`.
 - `production` always keeps the generic response, even if `exposeInternalErrorsToClients` is set.
