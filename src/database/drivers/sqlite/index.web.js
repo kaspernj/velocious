@@ -168,7 +168,7 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    * @returns {string} - Database name.
    */
   databaseName() {
-    const name = this.args?.name
+    const name = this.getArgs().name
 
     if (typeof name !== "string" || name.length < 1) throw new Error("No name given in arguments for SQLite Web database")
 

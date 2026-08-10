@@ -59,6 +59,18 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   connections = []
 
   /**
+   * Physical identities requested to remain resident by the frontend tenant lifecycle.
+   * @type {Set<string>}
+   */
+  lifecycleRetainedReuseKeys = new Set()
+
+  /**
+   * Parked lifecycle-owned connections keyed by physical identity.
+   * @type {Map<string, import("../drivers/base.js").default>}
+   */
+  lifecycleRetainedConnections = new Map()
+
+  /**
    * Connections in use.
    * @type {Record<number, import("../drivers/base.js").default>} */
   connectionsInUse = {}
@@ -144,8 +156,21 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     }
 
     this.untrackConnectionInUse(connection, id)
-    trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
+    const reuseKey = this.getConnectionConfigurationReuseKey(connection)
+
+    if (this.lifecycleRetainedReuseKeys.has(reuseKey)) {
+      const retainedConnection = this.lifecycleRetainedConnections.get(reuseKey)
+
+      if (!retainedConnection || retainedConnection === connection || retainedConnection.getIdSeq() !== undefined) {
+        delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
+        this.lifecycleRetainedConnections.set(reuseKey, connection)
+        await this.drainPendingCheckouts()
+        return
+      }
+    }
+
+    trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT] = Date.now()
     this.connections.push(connection)
     await this.drainPendingCheckouts()
     if (this.connections.includes(connection)) await this.handleCheckedInIdleConnection()
@@ -241,6 +266,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   async checkoutForConfiguration(databaseConfig, options = {}) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfig)
+    const lifecycleRetainedConnection = this.lifecycleRetainedConnections.get(reuseKey)
+
+    if (lifecycleRetainedConnection && lifecycleRetainedConnection.getIdSeq() === undefined) {
+      return await this.activateConnection(lifecycleRetainedConnection, options)
+    }
+
     let connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
     if (connection) return await this.activateConnection(connection, options)
@@ -374,6 +405,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const connections = new Set([
       ...this.connections,
       ...Object.values(this.connectionsInUse),
+      ...this.lifecycleRetainedConnections.values(),
       this.getGlobalConnectionForIdentifier()
     ].filter(Boolean))
 
@@ -756,21 +788,35 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   async openCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
-    const connection = await this.checkoutForConfiguration(databaseConfiguration, {name: "Frontend tenant SQLite open"})
-    await this.checkin(connection)
+    const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
+    const wasRetained = this.lifecycleRetainedReuseKeys.has(reuseKey)
+
+    this.lifecycleRetainedReuseKeys.add(reuseKey)
+    try {
+      const connection = await this.checkoutForConfiguration(databaseConfiguration, {name: "Frontend tenant SQLite open"})
+      await this.checkin(connection)
+    } catch (error) {
+      if (!wasRetained) this.lifecycleRetainedReuseKeys.delete(reuseKey)
+      throw error
+    }
   }
 
   async flushCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
-    const connection = this.connections.find((candidate) => this.getConnectionConfigurationReuseKey(candidate) === reuseKey)
+    const connection = this.lifecycleRetainedConnections.get(reuseKey)
+      || this.connections.find((candidate) => this.getConnectionConfigurationReuseKey(candidate) === reuseKey)
     if (connection) await connection.flushPendingWrites()
   }
 
   async closeCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
     if (this.capturedConnectionInUse(databaseConfiguration)) throw new Error("Cannot close an in-use frontend tenant SQLite handle")
+    const retainedConnection = this.lifecycleRetainedConnections.get(reuseKey)
+    this.lifecycleRetainedReuseKeys.delete(reuseKey)
+    this.lifecycleRetainedConnections.delete(reuseKey)
     const connections = this.connections.filter((candidate) => this.getConnectionConfigurationReuseKey(candidate) === reuseKey)
     this.connections = this.connections.filter((candidate) => this.getConnectionConfigurationReuseKey(candidate) !== reuseKey)
+    if (retainedConnection) connections.push(retainedConnection)
     for (const connection of connections) await this.closeConnection(connection)
   }
 
@@ -788,7 +834,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   capturedConnectionHasPendingWrites(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
-    const connections = [...this.connections, ...Object.values(this.connectionsInUse)]
+    const connections = [...this.connections, ...Object.values(this.connectionsInUse), ...this.lifecycleRetainedConnections.values()]
     return connections.some((connection) => this.getConnectionConfigurationReuseKey(connection) === reuseKey && connection.hasPendingWrites())
   }
 
@@ -1001,7 +1047,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       ...snapshot,
       connections,
       connectionsBeingSpawned: this.connectionsBeingSpawned,
-      idleCount: this.connections.length,
+      idleCount: this.connections.length + [...this.lifecycleRetainedConnections.values()].filter((connection) => connection.getIdSeq() === undefined).length,
       inUseCount: Object.keys(this.connectionsInUse).length,
       pendingCheckouts: this.pendingCheckoutDebugSnapshots(now),
       pendingCheckoutCount: this.pendingCheckouts.length
@@ -1022,6 +1068,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     this.addInUseDebugConnectionSnapshots({connections, now, seenConnections})
     this.addIdleDebugConnectionSnapshots({connections, now, seenConnections})
+    for (const connection of this.lifecycleRetainedConnections.values()) {
+      this.addDebugConnectionSnapshotIfUnseen({connection, connections, reapable: false, seenConnections, state: "lifecycle-retained"})
+    }
     this.addFallbackDebugConnectionSnapshots({connections, seenConnections})
 
     return {connections, seenConnections}
@@ -1378,6 +1427,10 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
+    for (const [reuseKey, retainedConnection] of this.lifecycleRetainedConnections) {
+      if (retainedConnection === connection) this.lifecycleRetainedConnections.delete(reuseKey)
+    }
+
     trackedConnection[CLOSED_CONNECTION] = true
     delete trackedConnection[CONNECTION_CHECKED_OUT_AT]
     delete trackedConnection[IDLE_CONNECTION_CHECKED_IN_AT]
@@ -1417,12 +1470,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const connections = new Set([
       ...this.connections,
       ...Object.values(this.connectionsInUse),
+      ...this.lifecycleRetainedConnections.values(),
       this.getGlobalConnectionForIdentifier(),
       this._testSharedConnection
     ].filter(Boolean))
 
     this.connections = []
     this.connectionsInUse = {}
+    this.lifecycleRetainedConnections.clear()
+    this.lifecycleRetainedReuseKeys.clear()
     this.clearTestSharedConnection()
     this.clearGlobalConnectionForIdentifier()
 

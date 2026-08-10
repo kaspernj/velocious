@@ -20,6 +20,21 @@ describe("frontend tenant SQLite lifecycle - Node", {databaseCleaning: {transact
     }
   })
 
+  it("retains lifecycle-open identities outside ordinary async idle reaping", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-lifecycle-async-retention")
+    configuration.getDatabaseConfiguration().projectTenant.pool = {idleTimeoutMillis: 0, max: 10}
+    const handle = Tenant.handle({slug: "alpha"}, configuration)
+
+    try {
+      await handle.open({databaseIdentifier: "projectTenant"})
+
+      expect(configuration.getDatabasePool("projectTenant").getDebugSnapshot().connections.length).toEqual(1)
+      expect(handle.inspect({databaseIdentifier: "projectTenant"}).state).toEqual("open")
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("persists through close and removes storage through delete", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-lifecycle-persistence")
     const handle = Tenant.handle({slug: "alpha"}, configuration)

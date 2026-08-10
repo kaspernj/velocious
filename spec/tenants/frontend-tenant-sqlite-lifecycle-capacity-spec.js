@@ -11,6 +11,26 @@ class PendingWritesSqliteDriver extends SqliteDriver {
 }
 
 describe("frontend tenant SQLite lifecycle - capacity", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("retains every lifecycle-open identity in a single multi-use pool", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-lifecycle-single-retention", {frontendTenantSqlite: {maxOpenHandles: 2}})
+    const databaseConfiguration = configuration.getDatabaseConfiguration().projectTenant
+
+    databaseConfiguration.poolType = SingleMultiUsePool
+    const alpha = Tenant.handle({slug: "alpha"}, configuration)
+    const beta = Tenant.handle({slug: "beta"}, configuration)
+
+    try {
+      await alpha.open({databaseIdentifier: "projectTenant"})
+      await beta.open({databaseIdentifier: "projectTenant"})
+
+      expect(configuration.getDatabasePool("projectTenant").getDebugSnapshot().connections.length).toEqual(2)
+      expect(alpha.inspect({databaseIdentifier: "projectTenant"}).state).toEqual("open")
+      expect(beta.inspect({databaseIdentifier: "projectTenant"}).state).toEqual("open")
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("refuses to evict dirty handles and coalesces concurrent opens", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-lifecycle-dirty", {frontendTenantSqlite: {maxOpenHandles: 1}})
     const databaseConfiguration = configuration.getDatabaseConfiguration().projectTenant
