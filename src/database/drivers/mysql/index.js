@@ -65,7 +65,19 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _close() {
-    await this.pool?.end()
+    const pool = this.pool
+
+    if (!pool) return
+
+    await new Promise((resolve, reject) => {
+      pool.end((error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(undefined)
+        }
+      })
+    })
     this.pool = undefined
     this.resetCurrentSessionTimeZone()
   }
