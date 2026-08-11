@@ -32,7 +32,6 @@ import Update from "./sql/update.js"
  */
 const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
 const INNODB_DEADLOCK_CAPTURE_TIMEOUT_MS = 250
-const INNODB_DEADLOCK_EXCERPT_MAX_CHARS = 2048
 
 export default class VelociousDatabaseDriversMysql extends Base{
   /** @type {import("mysql").Pool | undefined} */
@@ -400,8 +399,15 @@ export default class VelociousDatabaseDriversMysql extends Base{
     const captureConfig = connectionConfig || this.connectArgs()
 
     return await new Promise((resolve, reject) => {
+      /** @type {import("mysql").Connection | undefined} */
       let connection
       let settled = false
+      /**
+       * Finishes the status capture once and destroys its temporary connection.
+       * @param {Error | undefined} error - Capture error, when present.
+       * @param {string} [status] - Captured status.
+       * @returns {void}
+       */
       const finish = (error, status = "") => {
         if (settled) return
         settled = true

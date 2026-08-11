@@ -154,12 +154,44 @@ const SCHEMA_INVALIDATION_SCAN_LIMIT = 8192
  * @returns {string} - Bounded fingerprint.
  */
 function sqlFingerprint(sql) {
-  const normalized = sql
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/--[^\r\n]*/g, " ")
-    .replace(/#[^\r\n]*/g, " ")
-    .replace(/'(?:''|\\.|[^'])*'/g, "?")
-    .replace(/"(?:""|\\.|[^"])*"/g, "?")
+  let fingerprintInput = ""
+
+  for (let index = 0; index < sql.length;) {
+    const character = sql[index]
+    const nextCharacter = sql[index + 1]
+
+    if (character == "'" || character == '"') {
+      const quote = character
+      fingerprintInput += "?"
+      index++
+
+      while (index < sql.length) {
+        if (sql[index] == "\\") {
+          index += 2
+        } else if (sql[index] == quote && sql[index + 1] == quote) {
+          index += 2
+        } else if (sql[index] == quote) {
+          index++
+          break
+        } else {
+          index++
+        }
+      }
+    } else if (character == "/" && nextCharacter == "*") {
+      const commentEnd = sql.indexOf("*/", index + 2)
+      fingerprintInput += " "
+      index = commentEnd == -1 ? sql.length : commentEnd + 2
+    } else if ((character == "-" && nextCharacter == "-") || character == "#") {
+      const lineEnd = sql.indexOf("\n", index + 1)
+      fingerprintInput += " "
+      index = lineEnd == -1 ? sql.length : lineEnd + 1
+    } else {
+      fingerprintInput += character
+      index++
+    }
+  }
+
+  const normalized = fingerprintInput
     .replace(/\b(?:0x[0-9a-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)\b/gi, "?")
     .replace(/\s+/g, " ")
     .trim()
@@ -1261,8 +1293,9 @@ export default class VelociousDatabaseDriversBase {
         return await this._runTransactionAttempt(callback, options)
       } catch (error) {
         if (error instanceof VelociousDatabaseAfterCommitCallbackError) throw error.callbackError
+        if (!(error instanceof Error)) throw error
 
-        const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
+        const retryInfo = this.retryableDatabaseError(error)
 
         if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
           this._reportDeadlockRetryDiagnostic({attempt, error, maxAttempts})
@@ -1339,7 +1372,23 @@ export default class VelociousDatabaseDriversBase {
           this.logger.warn("Database deadlock retry all-error listener failed", {error: eventError})
         }
       })
-      .catch(() => {})
+      .catch((diagnosticError) => {
+        const normalizedError = diagnosticError instanceof Error
+          ? diagnosticError
+          : new Error("Database deadlock retry diagnostic failed", {cause: diagnosticError})
+        const payload = {
+          context: {stage: "database-deadlock-retry-diagnostic"},
+          error: normalizedError
+        }
+
+        try {
+          const errorEvents = this.configuration.getErrorEvents()
+          errorEvents.emit("framework-error", payload)
+          errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+        } catch (reportingError) {
+          this.logger.warn("Database deadlock retry diagnostic pipeline failed", {error: normalizedError, reportingError})
+        }
+      })
   }
 
   /**

@@ -1,25 +1,39 @@
 // @ts-check
 
-import EventEmitter from "eventemitter3"
+import Configuration from "../../../../src/configuration.js"
+import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import MysqlDriver from "../../../../src/database/drivers/mysql/index.js"
-import {describe, expect, it} from "../../../../src/testing/test.js"
+import { describe, expect, it } from "../../../../src/testing/test.js"
 
 const SECRET_SQL = "UPDATE `accounts` SET `token` = 'secret-token-91827' WHERE `email` = 'owner@example.test' AND `balance` = 12345"
 
 function configuration() {
-  const errorEvents = new EventEmitter()
-
-  return /** @type {import("../../../../src/configuration.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({
-    debug: false,
-    getCurrentRequestTiming: () => undefined,
-    getErrorEvents: () => errorEvents,
-    getQueryLoggingEnabled: () => false
-  }))
+  return new Configuration({
+    database: {test: {}},
+    directory: process.cwd(),
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
 }
 
 class DiagnosticMysqlDriver extends MysqlDriver {
   attempts = 0
   captureFailure = false
+  diagnosticPipelineFailure = false
+
+  /** @returns {Promise<void>} - Resolves without a real retry delay. */
+  async _waitMs() {}
+
+  /** @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Safe diagnostic context. */
+  async _deadlockDiagnosticContext() {
+    if (this.diagnosticPipelineFailure) throw new Error("simulated diagnostic pipeline failure")
+
+    return await super._deadlockDiagnosticContext()
+  }
 
   /** @returns {Promise<import("../../../../src/database/drivers/base.js").QueryResultType>} - Query result. */
   async _queryActual(sql) {
@@ -53,7 +67,7 @@ ${"ignored status line\n".repeat(500)}`
   }
 }
 
-describe("Database - drivers - mysql deadlock diagnostics", {databaseCleaning: {transaction: false, truncate: false}, tags: ["dummy"]}, () => {
+describe("Database - drivers - mysql deadlock diagnostics", () => {
   it("reports bounded redacted context without changing the retry budget", async () => {
     const appConfiguration = configuration()
     const driver = new DiagnosticMysqlDriver({deadlockBaseWaitMs: 1, deadlockMaxRetries: 2}, appConfiguration)
@@ -61,7 +75,6 @@ describe("Database - drivers - mysql deadlock diagnostics", {databaseCleaning: {
     const diagnosticReported = new Promise((resolve) => appConfiguration.getErrorEvents().once("database-deadlock-retry", resolve))
 
     driver.setDesiredSessionTimeZone(null)
-    driver._waitMs = async () => {}
     appConfiguration.getErrorEvents().on("database-deadlock-retry", (payload) => diagnostics.push(payload))
 
     await driver.transaction(async () => await driver.query(SECRET_SQL))
@@ -94,7 +107,6 @@ describe("Database - drivers - mysql deadlock diagnostics", {databaseCleaning: {
 
     driver.captureFailure = true
     driver.setDesiredSessionTimeZone(null)
-    driver._waitMs = async () => {}
     appConfiguration.getErrorEvents().on("database-deadlock-retry", (payload) => diagnostics.push(payload))
 
     await driver.transaction(async () => await driver.query(SECRET_SQL))
@@ -104,5 +116,42 @@ describe("Database - drivers - mysql deadlock diagnostics", {databaseCleaning: {
     expect(diagnostics.length).toEqual(1)
     expect(diagnostics[0].context.statusCapture).toEqual("failed")
     expect(JSON.stringify(diagnostics[0])).not.toContain("do-not-report")
+  })
+
+  it("normalizes comment markers inside quoted literals before fingerprinting", async () => {
+    const fingerprints = []
+
+    for (const token of ["alpha--suffix#one", "beta--suffix#two"]) {
+      const appConfiguration = configuration()
+      const driver = new DiagnosticMysqlDriver({deadlockBaseWaitMs: 1, deadlockMaxRetries: 2}, appConfiguration)
+      const diagnosticReported = new Promise((resolve) => appConfiguration.getErrorEvents().once("database-deadlock-retry", resolve))
+
+      driver.setDesiredSessionTimeZone(null)
+      appConfiguration.getErrorEvents().once("database-deadlock-retry", (payload) => fingerprints.push(payload.context.sqlFingerprint))
+      await driver.transaction(async () => await driver.query(`UPDATE accounts SET token = '${token}' WHERE id = 42`))
+      await diagnosticReported
+    }
+
+    expect(fingerprints.length).toEqual(2)
+    expect(fingerprints[0]).toEqual(fingerprints[1])
+  })
+
+  it("surfaces unexpected diagnostic pipeline failures without stopping retries", async () => {
+    const appConfiguration = configuration()
+    const driver = new DiagnosticMysqlDriver({deadlockBaseWaitMs: 1, deadlockMaxRetries: 2}, appConfiguration)
+    const frameworkErrors = []
+    const frameworkErrorReported = new Promise((resolve) => appConfiguration.getErrorEvents().once("framework-error", resolve))
+
+    driver.diagnosticPipelineFailure = true
+    driver.setDesiredSessionTimeZone(null)
+    appConfiguration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
+
+    await driver.transaction(async () => await driver.query(SECRET_SQL))
+    await frameworkErrorReported
+
+    expect(driver.attempts).toEqual(2)
+    expect(frameworkErrors.length).toEqual(1)
+    expect(frameworkErrors[0].context.stage).toEqual("database-deadlock-retry-diagnostic")
+    expect(frameworkErrors[0].error.message).toEqual("simulated diagnostic pipeline failure")
   })
 })
