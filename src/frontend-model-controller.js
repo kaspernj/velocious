@@ -277,10 +277,10 @@ function frontendModelVelociousMetadataForError(error) {
 /**
  * Runs frontend model client message for error.
  * @param {unknown} error - Caught error.
- * @param {boolean} secureFrontendModelErrors - Whether only explicitly safe messages may be exposed.
+ * @param {boolean} forwardUnexpectedErrorMessage - Whether unexpected error messages may be exposed.
  * @returns {string} - Message safe to return to API clients.
  */
-function frontendModelClientMessageForError(error, secureFrontendModelErrors) {
+function frontendModelClientMessageForError(error, forwardUnexpectedErrorMessage) {
   if (error instanceof RecordNotFoundError) {
     return "Record not found."
   }
@@ -301,7 +301,7 @@ function frontendModelClientMessageForError(error, secureFrontendModelErrors) {
     return error.message
   }
 
-  if (!secureFrontendModelErrors && error instanceof Error) return error.message
+  if (forwardUnexpectedErrorMessage && error instanceof Error) return error.message
 
   return frontendModelClientSafeErrorMessage
 }
@@ -3259,9 +3259,10 @@ export default class FrontendModelController extends Controller {
    * Runs frontend model client error payload for error.
    * @param {unknown} error - Caught error.
    * @param {FrontendModelEndpointErrorContext | undefined} [endpointErrorContext] - Frontend-model endpoint error context.
+   * @param {{forwardUnexpectedErrorMessage?: boolean}} [options] - Client error rendering options.
    * @returns {Promise<import("./configuration-types.js").ClientErrorPayloadReporterPayload>} - Client payload for the current environment.
    */
-  async frontendModelClientErrorPayloadForError(error, endpointErrorContext) {
+  async frontendModelClientErrorPayloadForError(error, endpointErrorContext, {forwardUnexpectedErrorMessage = false} = {}) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)
     const normalizedError = error instanceof Error ? error : new Error(String(error))
     /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
@@ -3313,7 +3314,10 @@ export default class FrontendModelController extends Controller {
 
     return {
       ...reporterPayload,
-      ...this.frontendModelErrorPayload(frontendModelClientMessageForError(error, this.getConfiguration().getSecureFrontendModelErrors())),
+      ...this.frontendModelErrorPayload(frontendModelClientMessageForError(
+        error,
+        forwardUnexpectedErrorMessage && !this.getConfiguration().getSecureFrontendModelErrors()
+      )),
       ...frontendModelDebugPayloadForError({
         configuration: this.getConfiguration(),
         environment: this.getConfiguration().getEnvironment(),
@@ -4393,7 +4397,9 @@ export default class FrontendModelController extends Controller {
 
         responses.push({
           requestId,
-          response: await this.frontendModelClientErrorPayloadForError(error, errorContext)
+          response: await this.frontendModelClientErrorPayloadForError(error, errorContext, {
+            forwardUnexpectedErrorMessage: !isBuiltInCommand
+          })
         })
       }
     }
@@ -4617,7 +4623,9 @@ export default class FrontendModelController extends Controller {
       await this.frontendModelLogEndpointError({error, errorContext})
 
       await this.render({
-        json: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext), this.transportSerializationOptions()))
+        json: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext, {
+          forwardUnexpectedErrorMessage: true
+        }), this.transportSerializationOptions()))
       })
     }
   }
