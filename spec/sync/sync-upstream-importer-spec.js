@@ -92,8 +92,7 @@ describe("SyncUpstreamImporter", () => {
     expect(runs).toEqual(2)
   })
 
-  it("propagates failures to every coalesced awaiter and does not start the throttle window", async () => {
-    const importer = buildImporter()
+  it("propagates failures to every coalesced awaiter and does not start the throttle window", async () => {    const importer = buildImporter()
     let runs = 0
     const failing = async () => {
       runs++
@@ -117,5 +116,26 @@ describe("SyncUpstreamImporter", () => {
     expect(/** @type {Error} */ (firstError).message).toEqual("upstream down")
     expect(/** @type {Error} */ (secondError).message).toEqual("upstream down")
     expect(runs).toEqual(2)
+  })
+
+  it("evicts success timestamps older than the maximum age so keys do not accumulate forever", async () => {
+    let now = 1000
+    const importer = new SyncUpstreamImporter({maxSuccessAgeMs: 60000, now: () => now})
+
+    await importer.import({key: "tickets:1", importer: async () => {}})
+
+    now += 1000
+
+    await importer.import({key: "tickets:2", importer: async () => {}})
+
+    expect(importer.lastSuccessAtByKey.size).toEqual(2)
+
+    now += 60001
+
+    // The next successful import sweeps tickets:1 and tickets:2, both older than the window.
+    await importer.import({key: "tickets:3", importer: async () => {}})
+
+    expect(importer.lastSuccessAtByKey.size).toEqual(1)
+    expect(importer.lastSuccessAtByKey.has("tickets:3")).toBe(true)
   })
 })

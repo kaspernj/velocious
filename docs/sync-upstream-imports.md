@@ -24,6 +24,31 @@ class SyncResource extends SyncResourceBase {
 - **Throttling**: with `throttleMs`, a call skips the run when the last successful import for the key finished inside the window — frequent background pulls (auto-resync, statistics screens) stay cheap because the feed already holds everything the last import found. Omit `throttleMs` for callers that must always import (for example a legacy explicit-sync endpoint kept for old clients); its successful run still freshens the shared timestamp, so throttled pulls right after it see the feed as fresh.
 - **Failures**: a failed run rejects every awaiting caller and never starts the throttle window, so the next call retries the import.
 
+## User-initiated pulls bypass the throttle
+
+A throttle window that is right for background pulls is wrong for an explicit Sync button: when the operator refreshes right after an automatic pull, the window would suppress the import and the fresh upstream change would stay invisible until the window expires. The client marks user-initiated pulls so the server can skip the window:
+
+```js
+// App sync button / pull-to-refresh:
+await syncClient().sync(Ticket.where({eventId}), {upstreamRefresh: true})
+
+// In the app sync resource:
+async authorizeChanges({params, scope}) {
+  // ...authorization...
+  await this.syncUpstreamImporter().import({
+    key: `tickets:${event.id()}`,
+    throttleMs: params.upstreamRefresh === true ? undefined : 60000, // user-initiated pulls always import
+    importer: async () => await new SyncTicketsFromLegacy().sync({event})
+  })
+}
+```
+
+`sync(query, {upstreamRefresh: true})` and `pull({upstreamRefresh: true})` send `upstreamRefresh: true` on the changes request(s); background pulls omit it and stay throttled. An unthrottled manual import still freshens the shared timestamp, so the background pull right after a manual refresh stays cheap.
+
+## Memory bound
+
+Success timestamps are swept once they exceed `maxSuccessAgeMs` (default 24 hours, far beyond any sane throttle window), so a long-lived server does not accumulate one map entry per key ever imported (for example `tickets:<eventId>` over thousands of events).
+
 The call resolves `{imported, result}` — `imported` is `false` only when the throttle window suppressed the run, and `result` carries the importer's return value (for example import counts a legacy endpoint must return).
 
 ## Sharing one importer

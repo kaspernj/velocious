@@ -33,9 +33,11 @@ export default class SyncUpstreamImporter {
   /**
    * Runs constructor.
    * @param {object} [args] - Options.
+   * @param {number} [args.maxSuccessAgeMs] - How long a success timestamp is retained before being swept on the next successful import (default 24 hours, far beyond any sane throttle window). Bounds the shared importer's memory when keys vary over the server lifetime (for example `tickets:<eventId>`).
    * @param {() => number} [args.now] - Clock override for specs.
    */
-  constructor({now = () => Date.now()} = {}) {
+  constructor({maxSuccessAgeMs = 86400000, now = () => Date.now()} = {}) {
+    this.maxSuccessAgeMs = maxSuccessAgeMs
     this.now = now
 
     /** @type {Map<string, Promise<SyncUpstreamImportResult<unknown>>>} In-flight import per key; the cast back to the caller's T happens at the await site. */
@@ -72,6 +74,7 @@ export default class SyncUpstreamImporter {
       const result = await importer()
 
       this.lastSuccessAtByKey.set(key, this.now())
+      this.sweepStaleSuccessTimestamps()
 
       return {imported: true, result}
     })()
@@ -80,6 +83,20 @@ export default class SyncUpstreamImporter {
     this.inFlightByKey.set(key, trackedPromise)
 
     return await trackedPromise
+  }
+
+  /**
+   * Drops success timestamps past the maximum age. Runs on each successful
+   * import so long-lived processes do not accumulate one map entry per key
+   * ever imported.
+   * @returns {void}
+   */
+  sweepStaleSuccessTimestamps() {
+    const now = this.now()
+
+    for (const [key, at] of this.lastSuccessAtByKey) {
+      if (now - at >= this.maxSuccessAgeMs) this.lastSuccessAtByKey.delete(key)
+    }
   }
 }
 

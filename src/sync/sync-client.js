@@ -362,9 +362,10 @@ export default class SyncClient {
    * @param {import("../database/query/model-class-query.js").default<ReturnType<typeof JSON.parse>>} query - Query declaring the sync scope.
    * @param {object} [options] - Sync options.
    * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [options.onProgress] - Called per applied page of the pull this declaration triggers, so the initial import of a newly declared scope can drive a "syncedCount of total" progress bar. See `pull()`.
+   * @param {boolean} [options.upstreamRefresh] - Marks the changes request(s) as a user-initiated refresh, so the server can bypass upstream-import throttle windows. See `pull()`.
    * @returns {Promise<{scope: import("./sync-client-types.js").SerializedSyncScope, pulled: import("./sync-api-client-types.js").SyncChangesResult | null}>} Declared scope and pull result (null while offline).
    */
-  async sync(query, {onProgress} = {}) {
+  async sync(query, {onProgress, upstreamRefresh} = {}) {
     const scope = serializedScopeFromQuery(query)
     const scopeStore = this.scopeStore()
     const scopeRow = await scopeStore.findOrCreateScope(scope)
@@ -376,7 +377,7 @@ export default class SyncClient {
       if (legacyCursor) await scopeStore.saveCursor(scopeRow, legacyCursor)
     }
 
-    return {pulled: await this.pull({onProgress}), scope}
+    return {pulled: await this.pull({onProgress, upstreamRefresh}), scope}
   }
 
   /**
@@ -392,9 +393,10 @@ export default class SyncClient {
    * Pulls changes for every active scope with per-scope cursors (single-flighted, online-gated).
    * @param {object} [options] - Pull options.
    * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [options.onProgress] - Called per applied page with cumulative `{pages, syncedCount, total}` across the pulled scopes, for rendering a "syncedCount of total" progress bar (e.g. a full-import screen). Optional; omitting it keeps the existing behavior.
+   * @param {boolean} [options.upstreamRefresh] - Sends `upstreamRefresh: true` on the changes request(s), telling the server this pull is user-initiated so it can bypass upstream-import throttle windows (see docs/sync-upstream-imports.md). Background pulls omit it and stay throttled.
    * @returns {Promise<import("./sync-api-client-types.js").SyncChangesResult | null>} Combined pull result, or null while offline.
    */
-  async pull({onProgress} = {}) {
+  async pull({onProgress, upstreamRefresh} = {}) {
     if (!(await this.isOnline())) return null
 
     /** @type {import("./sync-api-client-types.js").SyncChangesResult | null} */
@@ -437,7 +439,8 @@ export default class SyncClient {
               conditions: scopeRow.conditions,
               resourceType: scopeRow.resourceType,
               ...(scopeRow.resourceType === null ? {resourceTypes: this.userScopeResourceTypes()} : {})
-            }
+            },
+            ...(upstreamRefresh ? {upstreamRefresh: true} : {})
           }),
           saveCursor: async (cursor) => await scopeStore.saveCursor(scopeRow, cursor)
         })
