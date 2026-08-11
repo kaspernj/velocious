@@ -101,6 +101,12 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       await pool.reapIdleConnections()
 
       expect(checkedInConnection.connection).toEqual(undefined)
+      expect(pool.getDebugSnapshot().telemetry).toEqual({
+        checkoutWaitCount: 0,
+        checkoutWaitMaxMs: 0,
+        checkoutWaitTotalMs: 0,
+        idleReapDisposalCount: 1
+      })
     } finally {
       await cleanup()
     }
@@ -189,6 +195,34 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       })
 
       expect(pool.connections.includes(checkedInConnection)).toBe(false)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("records cumulative checkout queue waits without retaining checkout labels", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-wait-telemetry")
+
+    try {
+      configuration.getDatabaseConfiguration().default.pool = {idleTimeoutMillis: 60000, max: 1}
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) return
+
+      const holder = await pool.checkout({name: "holder"})
+      const queuedCheckout = pool.checkout({name: "tenant-sensitive-label"})
+
+      await wait(5)
+      await pool.checkin(holder)
+      const queuedConnection = await queuedCheckout
+      await pool.checkin(queuedConnection)
+
+      const telemetry = pool.getDebugSnapshot().telemetry
+
+      expect(telemetry?.checkoutWaitCount).toEqual(1)
+      expect(telemetry?.checkoutWaitMaxMs).toBeGreaterThanOrEqual(0)
+      expect(telemetry?.checkoutWaitTotalMs).toBeGreaterThanOrEqual(0)
+      expect(JSON.stringify(telemetry).includes("tenant-sensitive-label")).toBe(false)
     } finally {
       await cleanup()
     }

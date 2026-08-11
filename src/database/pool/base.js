@@ -44,6 +44,7 @@ import baseMethodsForward from "./base-methods-forward.js"
  * @property {Array<DatabasePoolPendingCheckoutDebugSnapshot>} [pendingCheckouts] - Waiting checkout snapshots.
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
  * @property {string} poolClass - Pool class name.
+ * @property {{checkoutWaitCount: number, checkoutWaitMaxMs: number, checkoutWaitTotalMs: number, idleReapDisposalCount: number}} [telemetry] - Cumulative pool lifecycle telemetry.
  */
 export const POOL_CONFIGURATION_KEY = Symbol("velociousPoolConfigurationKey")
 

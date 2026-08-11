@@ -113,6 +113,14 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   connectionClosePromises = new WeakMap()
 
+  /** Cumulative low-cardinality pool telemetry. */
+  telemetry = {
+    checkoutWaitCount: 0,
+    checkoutWaitMaxMs: 0,
+    checkoutWaitTotalMs: 0,
+    idleReapDisposalCount: 0
+  }
+
   idSeq = 0
 
   /**
@@ -559,8 +567,22 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const checkout = this.pendingCheckouts.splice(index, 1)[0]
 
     this.clearPendingCheckoutTimeout(checkout)
+    this.recordCheckoutWait(checkout)
 
     return checkout
+  }
+
+  /**
+   * Records a completed queue wait without retaining per-checkout labels or samples.
+   * @param {PendingCheckout} checkout - Checkout leaving the pending queue.
+   * @returns {void}
+   */
+  recordCheckoutWait(checkout) {
+    const waitedForMs = Math.max(0, Date.now() - checkout.enqueuedAt)
+
+    this.telemetry.checkoutWaitCount++
+    this.telemetry.checkoutWaitTotalMs += waitedForMs
+    this.telemetry.checkoutWaitMaxMs = Math.max(this.telemetry.checkoutWaitMaxMs, waitedForMs)
   }
 
   /**
@@ -1051,7 +1073,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       idleCount: this.connections.length + [...this.lifecycleRetainedConnections.values()].filter((connection) => connection.getIdSeq() === undefined).length,
       inUseCount: Object.keys(this.connectionsInUse).length,
       pendingCheckouts: this.pendingCheckoutDebugSnapshots(now),
-      pendingCheckoutCount: this.pendingCheckouts.length
+      pendingCheckoutCount: this.pendingCheckouts.length,
+      telemetry: {...this.telemetry}
     }
   }
 
@@ -1307,6 +1330,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   async closeExpiredIdleConnections(expiredConnections) {
     for (const connection of expiredConnections) {
       await this.closeConnection(connection)
+      this.telemetry.idleReapDisposalCount++
     }
   }
 
