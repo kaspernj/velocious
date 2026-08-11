@@ -186,6 +186,11 @@ export default class BackgroundJobsStore {
       try {
         await this._reconcileQueueConcurrency(db)
         await this._reconcileConcurrency(db)
+
+        // Latch the memo only after BOTH steps succeed: if the count rebuild
+        // fails after adoption, a retry on this store must re-enter and repair
+        // the counts (adoption itself is idempotent).
+        this._queueConcurrencyReconciled = true
       } finally {
         await db.releaseAdvisoryLock(lockName)
       }
@@ -2146,12 +2151,14 @@ export default class BackgroundJobsStore {
   }
 
   /**
-   * Reconciles queue-derived concurrency with the current configuration, once
-   * per process. Only invoked through {@link reconcileQueueConcurrency} — the
-   * explicit lifecycle path run at main-process startup under a cross-process
-   * advisory lock — never from schema/tenant checks or routine connection
-   * initialization, which stay read-only regarding queued job rows. Enqueue
-   * only consults config for new jobs, so a cap added, removed, or changed
+   * Reconciles queue-derived concurrency with the current configuration. Only
+   * invoked through {@link reconcileQueueConcurrency} — the explicit lifecycle
+   * path run at main-process startup under a cross-process advisory lock —
+   * never from schema/tenant checks or routine connection initialization,
+   * which stay read-only regarding queued job rows. The per-process memo is
+   * latched by {@link reconcileQueueConcurrency} only after the following
+   * count rebuild also succeeds, so a failed rebuild re-enters here on retry
+   * (the adoption UPDATEs below are idempotent). Enqueue only consults config for new jobs, so a cap added, removed, or changed
    * while a backlog exists otherwise leaves persisted rows stale: pre-cap jobs
    * keep a null key and bypass the cap, post-removal jobs stay capped under a
    * now-unconfigured key, and a changed numeric cap stays stale until the next
@@ -2204,8 +2211,6 @@ export default class BackgroundJobsStore {
         `WHERE ${keyColumn} = ${db.quote(concurrencyKey)} AND ${nonTerminal}`
       )
     }
-
-    this._queueConcurrencyReconciled = true
   }
 
   /**

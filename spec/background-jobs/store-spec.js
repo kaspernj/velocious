@@ -99,6 +99,36 @@ class ScriptedBackgroundJobsStore extends BackgroundJobsStore {
   async _recordCountDelta() {}
 }
 
+/**
+ * A store whose count rebuild fails once — but only on the rebuild that runs
+ * right after queue adoption inside the explicit reconciliation path, so a
+ * spec can prove a failed rebuild does not latch the reconciled memo.
+ */
+class FlakyCountRebuildStore extends BackgroundJobsStore {
+  /** @param {object} args - Options forwarded to the store constructor. */
+  constructor(args) {
+    super(args)
+    this.adoptionRan = false
+    this.rebuildFailureThrown = false
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<void>} - Resolves when reconciled. */
+  async _reconcileQueueConcurrency(db) {
+    await super._reconcileQueueConcurrency(db)
+    this.adoptionRan = true
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<void>} - Resolves when rebuilt. */
+  async _reconcileConcurrency(db) {
+    if (this.adoptionRan && !this.rebuildFailureThrown) {
+      this.rebuildFailureThrown = true
+      throw new Error("Simulated count rebuild failure")
+    }
+
+    await super._reconcileConcurrency(db)
+  }
+}
+
 /** @returns {import("../../src/background-jobs/types.js").BackgroundJobRow} - Active concurrency-limited job. */
 function activeConcurrencyJob() {
   return {
@@ -457,6 +487,43 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       await releaseStore.reconcileQueueConcurrency()
 
       expect((await getJobOrFail({jobId, store: releaseStore})).concurrencyKey).toEqual(null)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("repairs the count rebuild when a retry follows a failed reconciliation", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
+    const handoff = await store.markHandedOff({jobId, workerId: "w1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    try {
+      // The handed-off job was enqueued before the cap existed, so adoption
+      // moves it onto the new `queue:builds` key; the count rebuild afterward
+      // is what charges the key for it.
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
+      const flakyStore = new FlakyCountRebuildStore({configuration: dummyConfiguration})
+      let firstError = /** @type {Error | null} */ (null)
+
+      try {
+        await flakyStore.reconcileQueueConcurrency()
+      } catch (newError) {
+        firstError = /** @type {Error} */ (newError)
+      }
+
+      expect(firstError?.message).toEqual("Simulated count rebuild failure")
+      expect(flakyStore.adoptionRan).toEqual(true)
+
+      // Adoption seeded the key with a zero count and the failed rebuild never
+      // charged it; the memo must not latch, so this retry repairs the count.
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+
+      await flakyStore.reconcileQueueConcurrency()
+
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(1)
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }
