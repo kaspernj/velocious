@@ -52,6 +52,49 @@ async function withMysqlConnection(callback) {
 }
 
 describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transaction: true}}, () => {
+  it("waits for the pool end callback before completing close", async () => {
+    const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+    let endCallback
+    let closeCompleted = false
+
+    mysql.pool = /** @type {import("mysql").Pool} */ ({
+      end(callback) {
+        endCallback = callback
+      }
+    })
+
+    const closePromise = mysql._close().then(() => {
+      closeCompleted = true
+    })
+
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(closeCompleted).toBe(false)
+    expect(mysql.pool).not.toBe(undefined)
+
+    if (!endCallback) throw new Error("Expected pool end callback")
+    endCallback()
+    await closePromise
+
+    expect(closeCompleted).toBe(true)
+    expect(mysql.pool).toBe(undefined)
+  })
+
+  it("propagates pool end callback failures", async () => {
+    const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
+    const closeError = new Error("Pool end failed")
+
+    mysql.pool = /** @type {import("mysql").Pool} */ ({
+      end(callback) {
+        callback(closeError)
+      }
+    })
+
+    await expect(async () => {
+      await mysql._close()
+    }).toThrowError("Pool end failed")
+    expect(mysql.pool).not.toBe(undefined)
+  })
+
   it("connects", async () => {
     await withMysqlConnection(async (mysql) => {
       const result = await mysql.query("SELECT \"1\" AS test1, \"2\" AS test2")
@@ -75,6 +118,22 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
       result = await mysql.query("SELECT @velocious_connection_checkout_name AS checkout_name")
 
       expect(result).toEqual([{checkout_name: null}])
+    })
+  })
+
+  it("preserves raw state until checkout cleanup and reconnects without it", async () => {
+    await withMysqlConnection(async (mysql) => {
+      const firstSession = await mysql.query("SELECT CONNECTION_ID() AS id")
+
+      await mysql.query("SET @velocious_raw_session_hygiene = 'checkout-owned'")
+      expect(await mysql.query("SELECT @velocious_raw_session_hygiene AS value")).toEqual([{value: "checkout-owned"}])
+
+      await mysql.cleanupSessionStateAfterCheckout()
+
+      const secondSession = await mysql.query("SELECT CONNECTION_ID() AS id, @velocious_raw_session_hygiene AS value")
+
+      expect(secondSession[0].id).not.toEqual(firstSession[0].id)
+      expect(secondSession[0].value).toBe(null)
     })
   })
 

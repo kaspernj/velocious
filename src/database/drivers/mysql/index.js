@@ -65,9 +65,32 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _close() {
-    await this.pool?.end()
+    const pool = this.pool
+
+    if (!pool) return
+
+    await new Promise((resolve, reject) => {
+      pool.end((error) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(undefined)
+        }
+      })
+    })
     this.pool = undefined
     this.resetCurrentSessionTimeZone()
+  }
+
+  /**
+   * Disposes the physical MySQL session after each logical pool checkout.
+   * MySQL exposes open-ended session state, so reconnecting is safer than trying
+   * to enumerate and reset variables, temporary tables, prepared statements,
+   * SQL modes, and other caller-controlled state.
+   * @returns {Promise<void>} - Resolves after the physical session is closed.
+   */
+  async cleanupSessionStateAfterCheckout() {
+    await this._close()
   }
 
   /**

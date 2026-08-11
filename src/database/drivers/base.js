@@ -234,6 +234,13 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Cleans driver-specific session state before this logical connection is reusable.
+   * Drivers whose physical sessions cannot be safely reset should dispose them here.
+   * @returns {Promise<void>} - Resolves when the next checkout cannot observe prior session state.
+   */
+  async cleanupSessionStateAfterCheckout() {}
+
+  /**
    * Runs add foreign key.
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.

@@ -38,6 +38,10 @@ When every allowed connection is checked out, additional checkouts wait for a co
 
 MySQL/MariaDB callers can cancel queued and in-flight statements with an `AbortSignal`, including ORM model queries and cross-tenant aggregates. See [Database Query Cancellation](database-query-cancellation.md) for the API and driver-specific behavior.
 
+MySQL/MariaDB raw SQL may intentionally use session-scoped features during one checked-out connection scope. Session variables, temporary tables, prepared statements, and changes such as `SET SESSION sql_mode = ...` remain available to later statements in that same `withConnections` callback. When the callback returns or throws, Velocious first rolls back any transaction left open, releases tracked advisory locks, and clears its checkout label. It then closes the underlying MySQL session instead of attempting unsafe blanket reset SQL. A later checkout can reuse the same logical pool entry and tenant/database identity, but its first query reconnects on a fresh physical session and cannot observe arbitrary state from the prior checkout. If either ordinary cleanup or physical-session disposal fails, the logical connection is removed from the reusable pool and the cleanup error is surfaced.
+
+This boundary does not make session state portable across separate `withConnections` calls. Code that needs a temporary table or another raw session feature must create and consume it within one connection scope.
+
 Velocious adds checkout names and active database annotations to SQL comments while a query is executing. This makes active queries easier to identify in process/activity views such as `SHOW FULL PROCESSLIST`, PostgreSQL `pg_stat_activity.query`, and SQL Server request SQL text:
 
 ```sql
@@ -58,7 +62,7 @@ await configuration.withConnections({name: "report export"}, async (dbs) => {
 
 Nested annotations are joined in order, for example `annotations="report export > invoice batch"`.
 
-For MySQL and MariaDB, Velocious also writes the active checkout name to the session variable `@velocious_connection_checkout_name`. The variable is reset to `NULL` when the connection is checked in, so inspecting server-side connection/session state can identify the code currently using a checked-out connection. MySQL/MariaDB do not expose a reliable dynamically-changeable idle process-list name through the current driver, so process-list checkout names are visible on active queries through the SQL comment.
+For MySQL and MariaDB, Velocious also writes the active checkout name to the session variable `@velocious_connection_checkout_name`. The variable is reset to `NULL` during check-in before the physical session is disposed, so inspecting server-side connection/session state can identify the code currently using a checked-out connection. MySQL/MariaDB do not expose a reliable dynamically-changeable idle process-list name through the current driver, so process-list checkout names are visible on active queries through the SQL comment.
 
 For PostgreSQL, Velocious sets `application_name` to the active checkout name and resets it when the connection is checked in. This exposes the checkout owner in `pg_stat_activity.application_name`, including idle checked-out sessions.
 
