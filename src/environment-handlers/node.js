@@ -1052,12 +1052,11 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     // `db:tenants:migrate <tenant>`, which migrates only tenant databases — the
     // framework store lives elsewhere (typically the default DB) and was already
     // ensured by the plain `db:migrate` that precedes it. Reaching into it here would
-    // open a fresh connection to that shared database and re-run the concurrency
-    // reconcile UPDATEs; under `db:tenants:migrate --parallel N` that happens once per
-    // tenant worker, and the concurrent auto-committed UPDATEs on the shared
-    // background_jobs / background_job_concurrency rows InnoDB-deadlock
-    // (ER_LOCK_DEADLOCK). So skip when the framework DB isn't in this set; the runtime
-    // store still creates it lazily if a plain migrate never ran.
+    // open a fresh connection to that shared database once per tenant worker for
+    // schema work that is already applied. So skip when the framework DB isn't in
+    // this set; the runtime store still creates it lazily if a plain migrate never
+    // ran. Queue-cap reconciliation never runs on this path at all — it belongs to
+    // main-process startup (`BackgroundJobsStore#reconcileQueueConcurrency`).
     if (!frameworkDb) return
 
     // Reuse the connection db:migrate already holds for this database; opening a

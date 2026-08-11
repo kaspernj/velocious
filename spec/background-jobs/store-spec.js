@@ -401,6 +401,37 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(error?.message).toContain("reserved")
   })
 
+  it("keeps schema and connection initialization read-only for queued jobs", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
+
+    // No cap configured yet, so the queued job carries no concurrency key.
+    expect((await getJobOrFail({jobId, store})).concurrencyKey).toEqual(null)
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
+
+      // Routine store boot and schema/tenant checks must not mutate queued jobs:
+      // under concurrent tenant initialization those broad adoption UPDATEs
+      // deadlock against active job processes.
+      const bootStore = new BackgroundJobsStore({configuration: dummyConfiguration})
+      await bootStore.ensureReady()
+      await bootStore.ensureSchema()
+
+      expect((await getJobOrFail({jobId, store: bootStore})).concurrencyKey).toEqual(null)
+
+      // The explicit reconciliation path still adopts the backlog onto the queue key.
+      await bootStore.reconcileQueueConcurrency()
+      const adopted = await getJobOrFail({jobId, store: bootStore})
+
+      expect(adopted.concurrencyKey).toEqual("queue:builds")
+      expect(adopted.maxConcurrency).toEqual(2)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
   it("reconciles queue caps against the persisted backlog on startup", async () => {
     dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     const store = await createClearedStore()
@@ -410,19 +441,20 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect((await getJobOrFail({jobId, store})).concurrencyKey).toEqual(null)
 
     try {
-      // Adding a cap adopts the existing backlog onto the queue key on startup.
+      // Adding a cap adopts the existing backlog onto the queue key through the
+      // explicit reconciliation path (run at main-process startup).
       dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
       const adoptStore = new BackgroundJobsStore({configuration: dummyConfiguration})
-      await adoptStore.ensureReady()
+      await adoptStore.reconcileQueueConcurrency()
       const adopted = await getJobOrFail({jobId, store: adoptStore})
 
       expect(adopted.concurrencyKey).toEqual("queue:builds")
       expect(adopted.maxConcurrency).toEqual(2)
 
-      // Removing the cap releases the backlog from the queue key on startup.
+      // Removing the cap releases the backlog from the queue key.
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
       const releaseStore = new BackgroundJobsStore({configuration: dummyConfiguration})
-      await releaseStore.ensureReady()
+      await releaseStore.reconcileQueueConcurrency()
 
       expect((await getJobOrFail({jobId, store: releaseStore})).concurrencyKey).toEqual(null)
     } finally {

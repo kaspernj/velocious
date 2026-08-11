@@ -155,6 +155,12 @@ export default class BackgroundJobsMain {
     await this.configuration.initialize({type: "background-jobs-main"})
     await this.configuration.connectBeacon({peerType: "background-jobs-main"})
     await this.store.ensureReady()
+    // Queue-cap changes are reconciled against the persisted backlog here, at
+    // main-process startup — the explicit lifecycle for applying queue
+    // configuration changes. The store serializes the adoption/release UPDATEs
+    // across processes with a database advisory lock, so concurrently started
+    // mains cannot interleave them.
+    await this.store.reconcileQueueConcurrency()
     const server = net.createServer((socket) => this._handleConnection(socket))
     this.server = server
 

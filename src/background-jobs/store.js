@@ -159,6 +159,40 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Reconciles queue-derived concurrency with the current configuration: the
+   * explicit lifecycle path that adopts/releases persisted queued jobs onto
+   * queue concurrency keys when `queues[name].maxConcurrent` is added, removed,
+   * or changed. Called by the background-jobs main process on startup — the
+   * deploy-time moment queue configuration changes take effect. Schema/tenant
+   * checks and routine connection initialization deliberately never run this:
+   * they stay read-only regarding queued job rows, because the broad
+   * adoption/release UPDATEs deadlock against active job processes under
+   * concurrent tenant initialization. Serialized across processes with a
+   * database advisory lock so concurrently started mains cannot interleave the
+   * UPDATEs; the per-instance memo only skips repeat work within this process.
+   * @returns {Promise<void>} - Resolves when reconciled.
+   */
+  async reconcileQueueConcurrency() {
+    if (this._queueConcurrencyReconciled) return
+
+    await this.ensureReady()
+
+    await this._withDb(async (db) => {
+      const lockName = "background-jobs:queue-concurrency-reconcile"
+      const acquired = await db.acquireAdvisoryLock(lockName)
+
+      if (!acquired) throw new Error("Failed to acquire background job queue-concurrency reconcile lock")
+
+      try {
+        await this._reconcileQueueConcurrency(db)
+        await this._reconcileConcurrency(db)
+      } finally {
+        await db.releaseAdvisoryLock(lockName)
+      }
+    })
+  }
+
+  /**
    * Runs enqueue.
    * @param {object} args - Options.
    * @param {string} args.jobName - Job name.
@@ -1119,7 +1153,6 @@ export default class BackgroundJobsStore {
       await this._ensureScheduleKeysTable(db)
       await this._ensureConcurrencyTable(db)
       await this._ensureCountRevisionTable(db)
-      await this._reconcileQueueConcurrency(db)
       await this._reconcileConcurrency(db)
 
       return
@@ -1130,7 +1163,6 @@ export default class BackgroundJobsStore {
     await this._ensureScheduleKeysTable(db)
     await this._ensureConcurrencyTable(db)
     await this._ensureCountRevisionTable(db)
-    await this._reconcileQueueConcurrency(db)
     await this._reconcileConcurrency(db)
 
     if (alreadyApplied) return
@@ -2115,15 +2147,19 @@ export default class BackgroundJobsStore {
 
   /**
    * Reconciles queue-derived concurrency with the current configuration, once
-   * per process. Enqueue only consults config for new jobs, so a cap added,
-   * removed, or changed while a backlog exists otherwise leaves persisted rows
-   * stale: pre-cap jobs keep a null key and bypass the cap, post-removal jobs
-   * stay capped under a now-unconfigured key, and a changed numeric cap stays
-   * stale until the next enqueue. Bring the durable state in line with config:
-   * sync each configured queue's stored cap, adopt not-yet-keyed non-terminal
-   * jobs onto their queue key, and release non-terminal jobs from queue keys
-   * whose queue is no longer capped. Runs before {@link _reconcileConcurrency}
-   * so the rebuilt active counts reflect the adopted/released keys.
+   * per process. Only invoked through {@link reconcileQueueConcurrency} — the
+   * explicit lifecycle path run at main-process startup under a cross-process
+   * advisory lock — never from schema/tenant checks or routine connection
+   * initialization, which stay read-only regarding queued job rows. Enqueue
+   * only consults config for new jobs, so a cap added, removed, or changed
+   * while a backlog exists otherwise leaves persisted rows stale: pre-cap jobs
+   * keep a null key and bypass the cap, post-removal jobs stay capped under a
+   * now-unconfigured key, and a changed numeric cap stays stale until the next
+   * enqueue. Bring the durable state in line with config: sync each configured
+   * queue's stored cap, adopt not-yet-keyed non-terminal jobs onto their queue
+   * key, and release non-terminal jobs from queue keys whose queue is no
+   * longer capped. Runs before {@link _reconcileConcurrency} so the rebuilt
+   * active counts reflect the adopted/released keys.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when reconciled.
    */
