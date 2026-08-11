@@ -8,6 +8,7 @@
 
 /**
  * @typedef {object} IdleReapingSample
+ * @property {ServerMetrics} baselineServerMetrics - MySQL status after prepare and before the first idle interval.
  * @property {number} checkoutWaitMs - Time spent acquiring the outer-pool connection.
  * @property {number} firstQueryMs - Checkout plus first-query latency after an idle interval.
  * @property {number | null} idleTimeoutMillis - Configured outer-pool idle timeout.
@@ -35,7 +36,7 @@ export function percentile(values, percentile) {
  * @param {object} args - Runner dependencies.
  * @param {number[]} args.idleIntervalsMillis - Idle intervals applied in order.
  * @param {Array<number | null>} args.idleTimeoutsMillis - Timeout variants.
- * @param {(idleTimeoutMillis: number | null) => Promise<void>} args.prepare - Applies a variant and primes its pool.
+ * @param {(idleTimeoutMillis: number | null) => Promise<ServerMetrics>} args.prepare - Applies a variant, primes its pool, and captures pre-idle server status.
  * @param {(idleTimeoutMillis: number | null) => Promise<Omit<IdleReapingSample, "idleTimeoutMillis">>} args.sample - Executes the first query after an idle interval.
  * @param {(milliseconds: number) => Promise<void>} args.sleep - Wait implementation.
  * @returns {Promise<Array<IdleReapingSample>>} - Samples in deterministic variant/interval order.
@@ -44,11 +45,11 @@ export async function runIdleReapingBenchmark({idleIntervalsMillis, idleTimeouts
   const samples = []
 
   for (const idleTimeoutMillis of idleTimeoutsMillis) {
-    await prepare(idleTimeoutMillis)
+    const baselineServerMetrics = await prepare(idleTimeoutMillis)
 
     for (const idleIntervalMillis of idleIntervalsMillis) {
       await sleep(idleIntervalMillis)
-      samples.push({idleTimeoutMillis, ...await sample(idleTimeoutMillis)})
+      samples.push({baselineServerMetrics, idleTimeoutMillis, ...await sample(idleTimeoutMillis)})
     }
   }
 
@@ -67,7 +68,7 @@ export function summarizeIdleReapingSamples(samples) {
     const matching = samples.filter(({idleTimeoutMillis}) => (idleTimeoutMillis === null ? "disabled" : String(idleTimeoutMillis)) === timeoutLabel)
     const firstQuery = matching.map(({firstQueryMs}) => firstQueryMs)
     const checkoutWait = matching.map(({checkoutWaitMs}) => checkoutWaitMs)
-    const firstServerMetrics = matching[0].serverMetrics
+    const baselineServerMetrics = matching[0].baselineServerMetrics
     const lastServerMetrics = matching[matching.length - 1].serverMetrics
 
     return {
@@ -78,9 +79,9 @@ export function summarizeIdleReapingSamples(samples) {
       idleTimeoutMillis: timeoutLabel,
       threadsConnectedAfter: lastServerMetrics.threadsConnected,
       threadsCreatedAfter: lastServerMetrics.threadsCreated,
-      threadsCreatedDelta: firstServerMetrics.threadsCreated === null || lastServerMetrics.threadsCreated === null
+      threadsCreatedDelta: baselineServerMetrics.threadsCreated === null || lastServerMetrics.threadsCreated === null
         ? null
-        : lastServerMetrics.threadsCreated - firstServerMetrics.threadsCreated
+        : lastServerMetrics.threadsCreated - baselineServerMetrics.threadsCreated
     }
   })
 }

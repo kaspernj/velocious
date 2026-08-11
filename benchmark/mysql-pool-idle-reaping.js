@@ -120,6 +120,7 @@ try {
       if (!(candidatePool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected AsyncTrackedMultiConnection")
       pool = candidatePool
       await pool.withConnection(async (connection) => { await connection.query("SELECT 1") })
+      return await readServerMetrics(observerPool)
     },
     sample: async () => {
       if (!pool) throw new Error("Benchmark pool was not prepared")
