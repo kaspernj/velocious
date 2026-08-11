@@ -6,11 +6,10 @@ The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` se
 
 - Docker with the Compose v2 plugin.
 - This repository checked out at `$DEV_HOME_PATH/velocious` (default `DEV_HOME_PATH`: `/home/dev`).
-- Copy `.env.example` to the git-ignored `.env`, set `GH_CONFIG_SOURCE_PATH` to an existing host GitHub CLI config directory, and confirm Hermes' shared provider runtime exists:
+- Copy `.env.example` to the git-ignored `.env` and set `GH_CONFIG_SOURCE_PATH` to an existing host GitHub CLI config directory:
 
 ```bash
 cp .env.example .env
-test -d /opt/hermes-dind-shared/auth/provider-runtime
 ```
 
 `$DEV_HOME_PATH` must be a dedicated development home that already exists, holds no credentials or secrets, and is owned by (or at least writable by) UID/GID 1000 — the in-container `dev` user. Do not point it at a general host home directory, and do not recursively chown an existing home; the external environment owns safe initial provisioning.
@@ -36,7 +35,7 @@ COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
 
 ## Credential boundary
 
-GitHub CLI configuration mounts read-only at `/home/dev/.config/gh`. Provider authorization comes from the single external `/opt/hermes-dind-shared/auth/provider-runtime` bind; the UID/GID-1000 bootstrap links `/home/dev/.codex`, `/home/dev/.local/share/opencode`, `/home/dev/.opencode`, and `/home/dev/.kimi-code` to their matching directories below that root. It never copies credentials, changes host ownership, or uses root. Existing non-symlink paths fail closed so local state is not overwritten. Threadwire remains parent orchestration resolved through unversioned `npx` outside the container.
+GitHub CLI authentication is the sole authorized credential mount: the host config directory named by `GH_CONFIG_SOURCE_PATH` is mounted read-only at `/home/dev/.config/gh`, with container-side `GH_CONFIG_DIR` pointing there. Do not add SSH keys or other credential mounts to the tracked Compose files. Kimi (and other provider) credentials are intentionally kept out of the tracked Compose files — they are an external operational override layered on by the calling environment. Threadwire is not installed in the image or the project; it remains parent orchestration resolved through unversioned `npx` outside the container.
 
 ## Contract verification
 

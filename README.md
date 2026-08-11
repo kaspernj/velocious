@@ -105,11 +105,10 @@ The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` se
 
 Prerequisites: Docker with the Compose v2 plugin, and this repository checked out at `$DEV_HOME_PATH/velocious` (default `DEV_HOME_PATH`: `/home/dev`).
 
-First-use setup: copy `.env.example` to the git-ignored `.env`, set `GH_CONFIG_SOURCE_PATH`, and ensure Hermes' shared provider runtime exists:
+First-use setup: copy `.env.example` to the git-ignored `.env` and set `GH_CONFIG_SOURCE_PATH` to an existing host GitHub CLI config directory:
 
 ```bash
 cp .env.example .env
-test -d /opt/hermes-dind-shared/auth/provider-runtime
 ```
 
 `$DEV_HOME_PATH` must be a dedicated development home that already exists, holds no credentials or secrets, and is owned by (or at least writable by) UID/GID 1000 — the in-container `dev` user. Do not point it at a general host home directory, and do not recursively chown an existing home; the external environment owns safe initial provisioning.
@@ -131,7 +130,7 @@ COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
   docker compose up --build --detach dev
 ```
 
-GitHub CLI configuration mounts read-only at `/home/dev/.config/gh`. The single external `/opt/hermes-dind-shared/auth/provider-runtime` bind owns provider authorization; a UID/GID-1000 bootstrap links the standard Codex, OpenCode, and Kimi home paths to it without copying credentials or changing host ownership. Threadwire is not installed in the image or project and remains parent orchestration.
+GitHub CLI authentication is the sole authorized credential boundary: the host config directory named by `GH_CONFIG_SOURCE_PATH` is mounted read-only at `/home/dev/.config/gh`, with container-side `GH_CONFIG_DIR` pointing there. Do not add SSH keys or other credential mounts. Kimi (and other provider) credentials are intentionally kept out of the tracked Compose files — they are an external operational override layered on by the calling environment. Threadwire is not installed in the image or the project; it remains parent orchestration resolved through unversioned `npx` outside the container.
 
 After changing the Docker artifacts, run the checked-in static contract verifier:
 

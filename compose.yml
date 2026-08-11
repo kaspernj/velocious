@@ -1,8 +1,7 @@
 # Canonical development Compose setup for Velocious.
 #
-# One ordinary `dev` service with a complete development-home bind, one
-# read-only GitHub CLI configuration bind, and Hermes' shared provider runtime.
-# The development home
+# One ordinary `dev` service with a complete development-home bind and one
+# authorized read-only GitHub CLI configuration bind. The development home
 # (DEV_HOME_PATH) already contains this repository's checkout at
 # $DEV_HOME_PATH/velocious plus any sibling checkouts, installed
 # dependencies, caches, and tool state. Nothing else is mounted.
@@ -32,6 +31,4 @@ services:
       # settings, and node_modules all persist naturally under /home/dev.
       - ${DEV_HOME_PATH:-/home/dev}:/home/dev
       - ${GH_CONFIG_SOURCE_PATH:?Set GH_CONFIG_SOURCE_PATH in .env}:/home/dev/.config/gh:ro
-      - ${PROVIDER_RUNTIME_SOURCE_PATH:-/opt/hermes-dind-shared/auth/provider-runtime}:/opt/hermes-dind-shared/auth/provider-runtime
-    entrypoint: ["/home/dev/velocious/scripts/provider-runtime-bootstrap.sh"]
     command: ["sleep", "infinity"]
