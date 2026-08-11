@@ -72,6 +72,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     await fs.mkdir(temporaryDirectoryParent, {recursive: true})
 
     const temporaryDirectory = await fs.mkdtemp(path.join(temporaryDirectoryParent, "git-install-spec-"))
+    const npmCacheDirectory = path.join(temporaryDirectory, "npm-cache")
     const sourceDirectory = path.join(temporaryDirectory, "source")
     const consumerDirectory = path.join(temporaryDirectory, "consumer")
     const npmExecutable = process.env.npm_execpath
@@ -105,6 +106,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
         "install",
         "--allow-git=all",
         "--allow-remote=all",
+        "--cache", npmCacheDirectory,
         "--no-audit",
         "--no-fund"
       ], {cwd: consumerDirectory})
