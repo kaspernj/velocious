@@ -78,6 +78,22 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     })
   })
 
+  it("preserves raw state until checkout cleanup and reconnects without it", async () => {
+    await withMysqlConnection(async (mysql) => {
+      const firstSession = await mysql.query("SELECT CONNECTION_ID() AS id")
+
+      await mysql.query("SET @velocious_raw_session_hygiene = 'checkout-owned'")
+      expect(await mysql.query("SELECT @velocious_raw_session_hygiene AS value")).toEqual([{value: "checkout-owned"}])
+
+      await mysql.cleanupSessionStateAfterCheckout()
+
+      const secondSession = await mysql.query("SELECT CONNECTION_ID() AS id, @velocious_raw_session_hygiene AS value")
+
+      expect(secondSession[0].id).not.toEqual(firstSession[0].id)
+      expect(secondSession[0].value).toBe(null)
+    })
+  })
+
   it("does not tag checkout-name session variable queries with process-list comments", async () => {
     const mysql = new QueryCapturingMysqlDriver(mysqlConfig, configuration)
 

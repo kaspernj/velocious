@@ -39,7 +39,7 @@
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
 * Planned local-first shared-resource sync architecture (see [docs/offline-sync.md](docs/offline-sync.md))
-* Selective named database connection checkouts, bounded pool waits, and debugging held connections (see [docs/database-connections.md](docs/database-connections.md))
+* Selective named database connection checkouts, bounded pool waits, debugging held connections, and checkout-scoped MySQL/MariaDB raw session state (see [docs/database-connections.md](docs/database-connections.md))
 * Explicit singular-database operation transactions whose model scopes preserve ownership through records, relationships, lifecycle work, nested savepoints, pre-commit guards, and commit callbacks (see [docs/operation-scoped-transactions.md](docs/operation-scoped-transactions.md))
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))

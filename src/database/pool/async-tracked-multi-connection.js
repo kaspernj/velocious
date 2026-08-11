@@ -150,6 +150,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       await this.rollbackLeftOpenTransaction(connection)
       await connection.releaseHeldAdvisoryLocks()
       await connection.clearConnectionCheckoutName()
+      await connection.cleanupSessionStateAfterCheckout()
     } catch (error) {
       await this.closeCheckedOutConnectionAfterCheckinFailure(connection, id, error)
       throw error

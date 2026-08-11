@@ -14,11 +14,20 @@ class CheckoutNameCapturingMysqlDriver extends MysqlDriver {
   /** @type {boolean} */
   static failClear = false
 
+  /** @type {boolean} */
+  static failSessionCleanup = false
+
   /** @type {string[]} */
   checkoutNameQueries = []
 
   /** @type {boolean} */
   closed = false
+
+  /** @type {string | undefined} */
+  rawSessionValue = undefined
+
+  /** @type {number} */
+  sessionGeneration = 1
 
   /** @returns {Promise<void>} - Resolves when connected. */
   async connect() {
@@ -28,6 +37,14 @@ class CheckoutNameCapturingMysqlDriver extends MysqlDriver {
   /** @returns {Promise<void>} - Resolves when closed. */
   async close() {
     this.closed = true
+  }
+
+  /** @returns {Promise<void>} - Disposes the physical session while preserving the logical driver. */
+  async cleanupSessionStateAfterCheckout() {
+    if (CheckoutNameCapturingMysqlDriver.failSessionCleanup) throw new Error("Session cleanup failed")
+
+    this.rawSessionValue = undefined
+    this.sessionGeneration++
   }
 
   /**
@@ -81,12 +98,61 @@ async function withMysqlCheckoutNamePool(callback) {
     await callback(pool)
   } finally {
     CheckoutNameCapturingMysqlDriver.failClear = false
+    CheckoutNameCapturingMysqlDriver.failSessionCleanup = false
     await configuration.closeDatabaseConnections()
     await fs.rm(directory, {force: true, recursive: true})
   }
 }
 
-describe("database - pool - async tracked multi connection MySQL checkout names", () => {
+describe("database - pool - async tracked multi connection MySQL checkout names", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("keeps raw session state within a checkout and disposes it before logical connection reuse", async () => {
+    await withMysqlCheckoutNamePool(async (pool) => {
+      let firstConnection
+      let firstSessionGeneration
+
+      try {
+        await pool.withConnection(async (connection) => {
+          firstConnection = /** @type {CheckoutNameCapturingMysqlDriver} */ (connection)
+          firstConnection.rawSessionValue = "checkout-owned"
+          firstSessionGeneration = firstConnection.sessionGeneration
+
+          expect(firstConnection.rawSessionValue).toBe("checkout-owned")
+
+          throw new Error("Raw session callback failed")
+        })
+      } catch (error) {
+        expect(forcedError(error).message).toBe("Raw session callback failed")
+      }
+
+      const secondConnection = /** @type {CheckoutNameCapturingMysqlDriver} */ (await pool.checkout())
+
+      expect(secondConnection).toBe(firstConnection)
+      expect(secondConnection.rawSessionValue).toBe(undefined)
+      expect(secondConnection.sessionGeneration).toBe(firstSessionGeneration + 1)
+
+      await pool.checkin(secondConnection)
+    })
+  })
+
+  it("disposes the logical connection when physical session disposal fails", async () => {
+    await withMysqlCheckoutNamePool(async (pool) => {
+      const connection = /** @type {CheckoutNameCapturingMysqlDriver} */ (await pool.checkout())
+
+      CheckoutNameCapturingMysqlDriver.failSessionCleanup = true
+
+      try {
+        await pool.checkin(connection)
+        throw new Error("Check-in unexpectedly succeeded")
+      } catch (error) {
+        expect(forcedError(error).message).toBe("Session cleanup failed")
+      }
+
+      expect(connection.closed).toBe(true)
+      expect(pool.connections).toEqual([])
+      expect(pool.connectionsInUse).toEqual({})
+    })
+  })
+
   it("does not issue checkout-name SQL for an unnamed lease", async () => {
     await withMysqlCheckoutNamePool(async (pool) => {
       const connection = /** @type {CheckoutNameCapturingMysqlDriver} */ (await pool.checkout())

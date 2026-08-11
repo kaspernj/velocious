@@ -1,0 +1,1 @@
+MySQL/MariaDB pooled check-in now disposes the physical session after transaction, advisory-lock, and checkout-name cleanup, preventing arbitrary raw session state from leaking into a later checkout while preserving logical tenant-aware pool reuse.

@@ -71,6 +71,17 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
+   * Disposes the physical MySQL session after each logical pool checkout.
+   * MySQL exposes open-ended session state, so reconnecting is safer than trying
+   * to enumerate and reset variables, temporary tables, prepared statements,
+   * SQL modes, and other caller-controlled state.
+   * @returns {Promise<void>} - Resolves after the physical session is closed.
+   */
+  async cleanupSessionStateAfterCheckout() {
+    await this._close()
+  }
+
+  /**
    * Runs set connection checkout name.
    * @param {string | undefined} name - Human-readable name for this active checkout.
    * @returns {Promise<void>} - Resolves when complete.
