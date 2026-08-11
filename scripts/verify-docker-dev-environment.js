@@ -18,6 +18,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const APPROVED_BASE_DIGEST = "sha256:3131b4cc82a783df6c9df078f86e01819a13594b865c2cad47bd1bca2b7063bb"
 const PROVIDER_PACKAGES = ["@moonshot-ai/kimi-code", "@openai/codex", "@anthropic-ai/claude-code", "opencode-ai"]
 const PROVIDER_RUNTIME_BIND = "${PROVIDER_RUNTIME_SOURCE_PATH:-/opt/hermes-dind-shared/auth/provider-runtime}:/opt/hermes-dind-shared/auth/provider-runtime"
+const COMPOSE_CREDENTIAL_VALUE_PATTERN = /^\s+[A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)[A-Z0-9_]*:\s*\S.*$/mu
 
 // The complete universal apt coding/debugging baseline shared with the
 // current awesome_tasks canonical image.
@@ -333,6 +334,14 @@ function verifyCompose(content) {
     problems.push(`compose.yml must declare exactly one dev service (found: ${serviceNames ? serviceNames.join(", ") : "none"})`)
   }
 
+  if (COMPOSE_CREDENTIAL_VALUE_PATTERN.test(content)) {
+    problems.push(`compose.yml must not contain credential values (matched: ${content.match(COMPOSE_CREDENTIAL_VALUE_PATTERN)?.[0].trim()})`)
+  }
+
+  if (/threadwire/iu.test(content)) {
+    problems.push("compose.yml must not couple the development service to Threadwire")
+  }
+
   if (!/^\s+init:\s*true\s*$/mu.test(content)) {
     problems.push("The dev service must set init: true")
   }
@@ -505,6 +514,16 @@ function negativeProbes(contents) {
       name: "compose provider credential mount regression",
       problems: verifyCompose(contents.compose.replace(PROVIDER_RUNTIME_BIND, `${PROVIDER_RUNTIME_BIND}\n      - $` + "{HOME}/.kimi:/home/dev/.kimi")),
       expected: "mount exactly"
+    },
+    {
+      name: "compose credential value regression",
+      problems: verifyCompose(contents.compose.replace("      HOME: /home/dev", "      HOME: /home/dev\n      KIMI_API_KEY: secret")),
+      expected: "credential values"
+    },
+    {
+      name: "compose Threadwire coupling regression",
+      problems: verifyCompose(contents.compose.replace("      HOME: /home/dev", "      HOME: /home/dev\n      THREADWIRE_TOKEN: secret")),
+      expected: "Threadwire"
     },
     {
       name: "compose second service regression",
