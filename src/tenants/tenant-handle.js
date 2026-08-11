@@ -5,6 +5,7 @@
  * @typedef {null | boolean | number | string | TenantDescriptorValue[] | {[key: string]: TenantDescriptorValue}} TenantDescriptorValue
  */
 /** @typedef {{[key: string]: TenantDescriptorValue}} TenantDescriptor */
+/** @typedef {{databaseIdentifier: string, dirty: boolean, lastUsed: number, pinCount: number, state: "closed" | "closing" | "deleting" | "open" | "opening"}} TenantSqliteLifecycleSnapshot */
 
 /**
  * Returns a readable path for a captured descriptor/configuration value.
@@ -219,6 +220,67 @@ export default class TenantHandle {
   }
 
   /**
+   * Opens this captured SQLite identity.
+   * @param {{databaseIdentifier: string}} options - Lifecycle options.
+   * @returns {Promise<Readonly<TenantSqliteLifecycleSnapshot>>} - Safe lifecycle snapshot.
+   */
+  async open(options) {
+    const {databaseIdentifier} = options
+    return await this._configuration.getFrontendTenantSqliteLifecycle().open(databaseIdentifier, this.databaseConfiguration(databaseIdentifier))
+  }
+
+  /**
+   * Flushes this captured SQLite identity.
+   * @param {{databaseIdentifier: string}} options - Lifecycle options.
+   * @returns {Promise<Readonly<TenantSqliteLifecycleSnapshot>>} - Safe lifecycle snapshot.
+   */
+  async flush(options) {
+    const {databaseIdentifier} = options
+    return await this._configuration.getFrontendTenantSqliteLifecycle().flush(databaseIdentifier, this.databaseConfiguration(databaseIdentifier))
+  }
+
+  /**
+   * Closes this captured SQLite identity.
+   * @param {{databaseIdentifier: string, flush?: boolean}} options - Lifecycle options.
+   * @returns {Promise<Readonly<TenantSqliteLifecycleSnapshot>>} - Safe lifecycle snapshot.
+   */
+  async close(options) {
+    const {databaseIdentifier, flush = false} = options
+    return await this._configuration.getFrontendTenantSqliteLifecycle().close(databaseIdentifier, this.databaseConfiguration(databaseIdentifier), {flush})
+  }
+
+  /**
+   * Deletes this captured SQLite identity.
+   * @param {{databaseIdentifier: string}} options - Lifecycle options.
+   * @returns {Promise<Readonly<TenantSqliteLifecycleSnapshot>>} - Closed lifecycle snapshot.
+   */
+  async delete(options) {
+    const {databaseIdentifier} = options
+    return await this._configuration.getFrontendTenantSqliteLifecycle().delete(databaseIdentifier, this.databaseConfiguration(databaseIdentifier))
+  }
+
+  /**
+   * Inspects this captured SQLite identity.
+   * @param {{databaseIdentifier: string}} options - Lifecycle options.
+   * @returns {Readonly<TenantSqliteLifecycleSnapshot>} - Safe lifecycle snapshot.
+   */
+  inspect(options) {
+    const {databaseIdentifier} = options
+    return this._configuration.getFrontendTenantSqliteLifecycle().inspect(databaseIdentifier, this.databaseConfiguration(databaseIdentifier))
+  }
+
+  /**
+   * Runs work while this captured SQLite identity is protected from eviction.
+   * @template T
+   * @param {{databaseIdentifier: string}} options - Lifecycle options.
+   * @param {() => Promise<T>} callback - Pinned work.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async withPin({databaseIdentifier}, callback) {
+    return await this._configuration.getFrontendTenantSqliteLifecycle().withPin(databaseIdentifier, this.databaseConfiguration(databaseIdentifier), callback)
+  }
+
+  /**
    * Runs explicit ORM work on one pinned connection for this handle's captured
    * physical database. Use `operation.forModel(ModelClass)` for queries and
    * writes; loaded records and association/preload work retain that operation.
@@ -228,12 +290,13 @@ export default class TenantHandle {
    * @returns {Promise<T>} - Callback result.
    */
   async databaseOperation({databaseIdentifier, name = "TenantHandle.databaseOperation"}, callback) {
-    return await this._configuration.withDatabaseOperation({
-      databaseConfiguration: this.databaseConfiguration(databaseIdentifier),
+    const databaseConfiguration = this.databaseConfiguration(databaseIdentifier)
+    return await this._configuration.getFrontendTenantSqliteLifecycle().databaseOperation(databaseIdentifier, databaseConfiguration, async () => await this._configuration.withDatabaseOperation({
+      databaseConfiguration,
       databaseIdentifier,
       name,
       tenant: this._tenant
-    }, callback)
+    }, callback))
   }
 
   /**

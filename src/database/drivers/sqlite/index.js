@@ -26,7 +26,7 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   async connect() {
     const args = this.getArgs()
     const databaseDir = `${this.getConfiguration().getDirectory()}/db`
-    const databasePath = `${databaseDir}/${this.localStorageName()}.sqlite`
+    const databasePath = this.databasePath()
 
     if (!await fileExists(databaseDir)) {
       await fs.mkdir(databaseDir, {recursive: true})
@@ -62,9 +62,23 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     return `VelociousDatabaseDriversSqlite---${args.name}`
   }
 
+  databasePath() {
+    return `${this.getConfiguration().getDirectory()}/db/${this.localStorageName()}.sqlite`
+  }
+
   async _close() {
     await this.connection?.close()
     this.connection = undefined
+  }
+
+  async deleteDatabaseStorage() {
+    for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+      try {
+        await fs.unlink(`${this.databasePath()}${suffix}`)
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
+      }
+    }
   }
 
   /**

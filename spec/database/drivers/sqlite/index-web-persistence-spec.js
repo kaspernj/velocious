@@ -1,6 +1,8 @@
 import {describe, expect, it} from "../../../../src/testing/test.js"
 import {createSqliteWebPersistence, deleteSqliteWebPersistences, sqliteWebPersistenceKey} from "../../../../src/database/drivers/sqlite/web-persistence.js"
 import BetterLocalStorage from "better-localstorage"
+import Configuration from "../../../../src/configuration.js"
+import SqliteWebDriver from "../../../../src/database/drivers/sqlite/index.web.js"
 
 describe("database - drivers - sqlite web persistence", () => {
   it("chooses OPFS persistence when the browser storage directory is usable", async () => {
@@ -112,6 +114,12 @@ describe("database - drivers - sqlite web persistence", () => {
 
     expect(await readOpfsBytes(environment, "app")).toEqual(undefined)
     expect(await readIndexedDbBytes(environment, "app")).toEqual(undefined)
+  })
+
+  it("deletes storage from a fresh unconnected driver", async () => {
+    const driver = new SqliteWebDriver({name: "unconnected-delete"}, Configuration.current())
+
+    await driver.deleteDatabaseStorage()
   })
 })
 

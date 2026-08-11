@@ -29,6 +29,7 @@ import restArgsError from "./utils/rest-args-error.js"
 import {validateTimeZone} from "./time-zone.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 import VelociousPackage from "./packages/velocious-package.js"
+import FrontendTenantSqliteLifecycle from "./tenants/frontend-tenant-sqlite-lifecycle.js"
 
 export {CurrentConfigurationNotSetError}
 
@@ -223,7 +224,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -413,6 +414,7 @@ export default class VelociousConfiguration {
      * Stores the database pools value.
      * @type {{[key: string]: import("./database/pool/base.js").default}} */
     this.databasePools = {}
+    this._frontendTenantSqliteLifecycle = new FrontendTenantSqliteLifecycle({configuration: this, maxOpenHandles: frontendTenantSqlite?.maxOpenHandles})
 
     /**
      * Stores the model classes value.
@@ -1055,6 +1057,18 @@ export default class VelociousConfiguration {
 
     return digg(this, "databasePools", identifier)
   }
+
+  /**
+   * Returns the framework-owned frontend tenant SQLite lifecycle.
+   * @returns {FrontendTenantSqliteLifecycle} - Lifecycle owner.
+   */
+  getFrontendTenantSqliteLifecycle() { return this._frontendTenantSqliteLifecycle }
+
+  /**
+   * Returns safe frontend tenant SQLite diagnostics.
+   * @returns {ReturnType<FrontendTenantSqliteLifecycle["inspectAll"]>} - Lifecycle diagnostics.
+   */
+  inspectFrontendTenantSqliteHandles() { return this._frontendTenantSqliteLifecycle.inspectAll() }
 
   /**
    * Runs get database identifier.
@@ -3326,6 +3340,8 @@ export default class VelociousConfiguration {
         for (const PoolClass of constructors) {
           PoolClass.clearGlobalConnections(this)
         }
+
+        this._frontendTenantSqliteLifecycle.reset()
 
         // Allow full re-initialization after connections are closed.
         this._modelInitializationGeneration += 1

@@ -9,6 +9,7 @@ import OperationLease from "../operation-lease.js"
  * @property {number} activeCheckoutCount - Active users of the connection.
  * @property {string[]} checkoutNames - Nested checkout names.
  * @property {import("../drivers/base.js").default} connection - Owned driver.
+ * @property {boolean} lifecycleRetained - Whether frontend tenant lifecycle ownership retains this entry.
  * @property {boolean} retained - Whether normal ambient use retains this idle entry.
  * @property {string} reuseKey - Physical configuration reuse key.
  */
@@ -76,7 +77,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       throw error
     }
 
-    if (!entry.retained || this.capacityWaiters.size > 0) await this.removeAndCloseEntry(entry)
+    if (!entry.lifecycleRetained && (!entry.retained || this.capacityWaiters.size > 0)) await this.removeAndCloseEntry(entry)
   }
 
   /**
@@ -147,7 +148,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
         if (previousEntry) {
           previousEntry.retained = false
-          if (previousEntry.activeCheckoutCount === 0) await this.removeAndCloseEntry(previousEntry)
+          if (previousEntry.activeCheckoutCount === 0 && !previousEntry.lifecycleRetained) await this.removeAndCloseEntry(previousEntry)
         }
       }
     }
@@ -168,7 +169,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    */
   async reserveConnectionCapacity(databaseConfiguration, options) {
     while (true) {
-      const idleEntry = [...this.connectionEntries.values()].find((entry) => entry.activeCheckoutCount === 0)
+      const idleEntry = [...this.connectionEntries.values()].find((entry) => entry.activeCheckoutCount === 0 && !entry.lifecycleRetained)
 
       if (idleEntry) {
         await this.removeAndCloseEntry(idleEntry)
@@ -250,6 +251,44 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     } finally {
       await this.checkin(connection)
     }
+  }
+
+  async openCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const connection = await this.checkoutForConfiguration(databaseConfiguration, {name: "Frontend tenant SQLite open"}, {retain: false})
+    const entry = this.entryForConnection(connection)
+    if (!entry) throw new Error("Frontend tenant SQLite connection entry disappeared during open")
+    entry.lifecycleRetained = true
+    await this.checkin(connection)
+  }
+
+  async flushCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    if (entry) await entry.connection.flushPendingWrites()
+  }
+
+  async closeCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    if (!entry) return
+    if (entry.activeCheckoutCount > 0) throw new Error("Cannot close an in-use frontend tenant SQLite handle")
+    await this.removeAndCloseEntry(entry)
+  }
+
+  async deleteCapturedDatabase(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    await this.closeCapturedConnection(databaseConfiguration)
+    const DriverClass = databaseConfiguration.driver || this.driverClass
+    if (!DriverClass) throw new Error("No driver class configured for frontend tenant SQLite deletion")
+    const driver = new DriverClass(databaseConfiguration, this.configuration)
+    await driver.deleteDatabaseStorage()
+  }
+
+  capturedConnectionInUse(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    return Boolean(entry && entry.activeCheckoutCount > 0)
+  }
+
+  capturedConnectionHasPendingWrites(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
+    const entry = this.connectionEntries.get(this.getConfigurationReuseKey(databaseConfiguration))
+    return Boolean(entry?.connection.hasPendingWrites())
   }
 
   /**
@@ -462,7 +501,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   getDebugSnapshot() {
     const connections = [...this.connectionEntries.values()].map((entry) => this.debugConnectionSnapshot(entry.connection, {
       activeCheckoutCount: entry.activeCheckoutCount,
-      state: entry.retained ? "shared" : entry.activeCheckoutCount > 0 ? "in-use" : "idle"
+      state: entry.retained ? "shared" : entry.activeCheckoutCount > 0 ? "in-use" : entry.lifecycleRetained ? "lifecycle-retained" : "idle"
     }))
     const now = Date.now()
 
@@ -565,7 +604,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       }
 
       /** @type {SinglePoolConnectionEntry} */
-      const entry = {activeCheckoutCount: 0, checkoutNames: [], connection, retained: false, reuseKey}
+      const entry = {activeCheckoutCount: 0, checkoutNames: [], connection, lifecycleRetained: false, retained: false, reuseKey}
 
       this.connectionEntries.set(reuseKey, entry)
 

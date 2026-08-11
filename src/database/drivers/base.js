@@ -358,6 +358,18 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Returns whether delayed persistence writes remain.
+   * @returns {boolean} - Whether writes remain.
+   */
+  hasPendingWrites() { return false }
+
+  /**
+   * Deletes this driver's physical database storage without opening it.
+   * @returns {Promise<void>} - Resolves after deletion.
+   */
+  async deleteDatabaseStorage() { throw new Error(`Database storage deletion is not supported by ${this.constructor.name}`) }
+
+  /**
    * Runs set connection checkout name.
    * @param {string | undefined} name - Human-readable name for this active checkout.
    * @returns {Promise<void>} - Resolves when complete.

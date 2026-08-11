@@ -44,6 +44,10 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
     await this.flushDatabaseSave()
   }
 
+  hasPendingDatabaseSave() {
+    return Boolean(this.saveDatabaseDebounce.isPending || this.databaseSaveDeferred)
+  }
+
   /**
    * Drains active and queued persistence before atomically starting an outer transaction.
    * @param {() => Promise<void>} callback - Starts the SQL transaction.

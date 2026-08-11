@@ -413,6 +413,13 @@ class VelociousDatabasePoolBase {
     throw new Error("'withCapturedOperationConnection' not implemented")
   }
 
+  async openCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ _databaseConfiguration) { throw new Error("Frontend tenant SQLite lifecycle requires a keyed single-connection pool") }
+  async flushCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ _databaseConfiguration) { throw new Error("Frontend tenant SQLite lifecycle requires a keyed single-connection pool") }
+  async closeCapturedConnection(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ _databaseConfiguration) { throw new Error("Frontend tenant SQLite lifecycle requires a keyed single-connection pool") }
+  async deleteCapturedDatabase(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ _databaseConfiguration) { throw new Error("Frontend tenant SQLite lifecycle requires a keyed single-connection pool") }
+  capturedConnectionInUse(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ _databaseConfiguration) { return false }
+  capturedConnectionHasPendingWrites(/** @type {import("../../configuration-types.js").DatabaseConfigurationType} */ _databaseConfiguration) { return false }
+
   /**
    * Ensures a reusable connection exists for contexts where AsyncLocalStorage isn't set.
    * Default implementation just checks out a connection.

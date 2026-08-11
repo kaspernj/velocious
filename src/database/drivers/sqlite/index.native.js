@@ -69,6 +69,16 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     this.connection = undefined
   }
 
+  async deleteDatabaseStorage() {
+    const databaseName = this.getArgs().name
+    if (!databaseName) throw new Error("No name given for SQLite Native")
+    try {
+      await SQLite.deleteDatabaseAsync(databaseName)
+    } catch (error) {
+      if (!(error instanceof Error && error.message.match(/Database '(.+)' not found/))) throw error
+    }
+  }
+
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.

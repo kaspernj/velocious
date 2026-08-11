@@ -1,5 +1,7 @@
 # SQLite web persistence
 
+For applications keeping many physical tenant databases, use the framework-owned [frontend tenant SQLite lifecycle](frontend-tenant-sqlite-lifecycle.md). Its delete operation closes the live SQL.js image before clearing OPFS, IndexedDB, and legacy localStorage bytes.
+
 Velocious's web SQLite driver uses `sql.js` for the in-browser SQLite runtime. The driver automatically chooses a durable browser persistence backend; application code does not need to configure a persistence strategy.
 
 Selection order:
