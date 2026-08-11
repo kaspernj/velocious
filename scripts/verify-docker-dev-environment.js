@@ -17,7 +17,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 const APPROVED_BASE_DIGEST = "sha256:3131b4cc82a783df6c9df078f86e01819a13594b865c2cad47bd1bca2b7063bb"
 const PROVIDER_PACKAGES = ["@moonshot-ai/kimi-code", "@openai/codex", "@anthropic-ai/claude-code", "opencode-ai"]
-const COMPOSE_FORBIDDEN_PATTERN = /hermes|kimi|threadwire|codex|claude|opencode/iu
+const PROVIDER_RUNTIME_BIND = "${PROVIDER_RUNTIME_SOURCE_PATH:-/opt/hermes-dind-shared/auth/provider-runtime}:/opt/hermes-dind-shared/auth/provider-runtime"
 
 // The complete universal apt coding/debugging baseline shared with the
 // current awesome_tasks canonical image.
@@ -327,10 +327,6 @@ function verifyCompose(content) {
     problems.push("compose.yml must declare the standard Compose project name: velocious")
   }
 
-  if (COMPOSE_FORBIDDEN_PATTERN.test(content)) {
-    problems.push(`compose.yml must not contain provider/orchestrator coupling (matched: ${content.match(COMPOSE_FORBIDDEN_PATTERN)?.[0]})`)
-  }
-
   const serviceNames = composeServiceNames(content)
 
   if (!serviceNames || serviceNames.length != 1 || serviceNames[0] != "dev") {
@@ -357,12 +353,17 @@ function verifyCompose(content) {
 
   const expectedVolumes = [
     "${DEV_HOME_PATH:-/home/dev}:/home/dev",
-    "${GH_CONFIG_SOURCE_PATH:?Set GH_CONFIG_SOURCE_PATH in .env}:/home/dev/.config/gh:ro"
+    "${GH_CONFIG_SOURCE_PATH:?Set GH_CONFIG_SOURCE_PATH in .env}:/home/dev/.config/gh:ro",
+    PROVIDER_RUNTIME_BIND
   ]
   const actualVolumes = composeServiceVolumes(content)
 
   if (actualVolumes.length != expectedVolumes.length || !expectedVolumes.every((volume) => actualVolumes.includes(volume))) {
-    problems.push(`The dev service must mount exactly the development-home and read-only GH config binds (found: ${actualVolumes.join(", ") || "none"})`)
+    problems.push(`The dev service must mount exactly the development home, read-only GH config, and shared provider runtime (found: ${actualVolumes.join(", ") || "none"})`)
+  }
+
+  if (!/^\s+entrypoint:\s*\["\/home\/dev\/velocious\/scripts\/provider-runtime-bootstrap\.sh"\]\s*$/mu.test(content)) {
+    problems.push("The dev service must run the provider-runtime bootstrap entrypoint")
   }
 
   if (!/^\s+command:\s*(\[\s*"sleep",\s*"infinity"\s*\]|sleep\s+infinity)\s*$/mu.test(content)) {
@@ -399,6 +400,10 @@ function verifyEnvExample(content) {
 
   if (!content.includes("DEV_HOME_PATH")) {
     problems.push(".env.example must document DEV_HOME_PATH")
+  }
+
+  if (!content.includes("PROVIDER_RUNTIME_SOURCE_PATH=/opt/hermes-dind-shared/auth/provider-runtime")) {
+    problems.push(".env.example must document the shared provider runtime")
   }
 
   return problems
@@ -498,8 +503,8 @@ function negativeProbes(contents) {
     },
     {
       name: "compose provider credential mount regression",
-      problems: verifyCompose(contents.compose.replace("    command:", "      - ${HOME}/.kimi:/home/dev/.kimi\n    command:")),
-      expected: "kimi"
+      problems: verifyCompose(contents.compose.replace(PROVIDER_RUNTIME_BIND, `${PROVIDER_RUNTIME_BIND}\n      - $` + "{HOME}/.kimi:/home/dev/.kimi")),
+      expected: "mount exactly"
     },
     {
       name: "compose second service regression",
@@ -544,12 +549,26 @@ function main() {
   }
 
   const dockerRunPath = path.join(repoRoot, "scripts", "docker-run.sh")
+  const providerBootstrapPath = path.join(repoRoot, "scripts", "provider-runtime-bootstrap.sh")
 
   if (fs.existsSync(dockerRunPath) && process.platform != "win32") {
     const mode = fs.statSync(dockerRunPath).mode
 
     if ((mode & 0o111) == 0) {
       problems.push("scripts/docker-run.sh must be executable")
+    }
+  }
+
+  if (!fs.existsSync(providerBootstrapPath)) {
+    problems.push("Missing required file: scripts/provider-runtime-bootstrap.sh")
+  } else {
+    const bootstrap = fs.readFileSync(providerBootstrapPath, "utf8")
+    for (const required of ["id -u", "id -g", "/opt/hermes-dind-shared/auth/provider-runtime", ".codex", ".local/share/opencode", ".opencode", ".kimi-code"]) {
+      if (!bootstrap.includes(required)) problems.push(`Provider-runtime bootstrap is missing: ${required}`)
+    }
+    if (/\bchown\b|10000/u.test(bootstrap)) problems.push("Provider-runtime bootstrap must not use chown or UID 10000")
+    if (process.platform != "win32" && (fs.statSync(providerBootstrapPath).mode & 0o111) == 0) {
+      problems.push("scripts/provider-runtime-bootstrap.sh must be executable")
     }
   }
 
