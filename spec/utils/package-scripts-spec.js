@@ -53,6 +53,19 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     expect(scripts.prepack).toEqual("npm run build")
   })
 
+  it("emits a valid SQLite base driver declaration", {timeoutSeconds: 180}, async () => {
+    const npmExecutable = process.env.npm_execpath
+
+    if (!npmExecutable) throw new Error("Expected npm_execpath while running the declaration build spec")
+
+    await execFileAsync(process.execPath, [npmExecutable, "run", "build"], {cwd: repositoryDirectory()})
+
+    const declarationPath = path.join(repositoryDirectory(), "build", "src", "database", "drivers", "sqlite", "base.d.ts")
+    const typescriptExecutable = path.join(repositoryDirectory(), "node_modules", "typescript", "bin", "tsc")
+
+    await execFileAsync(process.execPath, [typescriptExecutable, "--ignoreConfig", "--noEmit", "--skipLibCheck", declarationPath])
+  })
+
   it("builds the declared package entry points when installed from Git", {timeoutSeconds: 180}, async () => {
     const temporaryDirectoryParent = path.join(repositoryDirectory(), "tmp")
 
