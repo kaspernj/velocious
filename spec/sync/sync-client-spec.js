@@ -143,8 +143,25 @@ describe("sync client", () => {
     expect(harness.postChangesCalls.length).toEqual(1)
     expect(harness.postChangesCalls[0].authenticationToken).toEqual("token-1")
     expect(harness.postChangesCalls[0].scope).toEqual({conditions: {partner_id: 5}, resourceType: "Ticket"})
+    expect(harness.postChangesCalls[0].upstreamRefresh).toBeUndefined()
     expect(harness.ticketRecord.assignedAttributes).toEqual({name: "New name"})
     expect(result.pulled?.syncedCount).toEqual(1)
+  })
+
+  it("marks changes requests with upstreamRefresh when the pull is user-initiated", async () => {
+    const harness = buildHarness()
+
+    harness.state.changesResponses.push({
+      nextCursor: null,
+      status: "success",
+      syncs: [],
+      upToCursor: null
+    })
+
+    await harness.client.sync(fakeQuery("Ticket", {partner_id: 5}), {upstreamRefresh: true})
+
+    expect(harness.postChangesCalls.length).toEqual(1)
+    expect(harness.postChangesCalls[0].upstreamRefresh).toBe(true)
   })
 
   it("sends the persisted scope cursor on subsequent pulls", async () => {
