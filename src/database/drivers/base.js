@@ -148,6 +148,33 @@ const SQL_PREVIEW_SCAN_LIMIT = 4096
 const SCHEMA_INVALIDATION_SCAN_LIMIT = 8192
 
 /**
+ * Builds a non-reversible, stable SQL fingerprint without retaining SQL text. Literal spelling is
+ * normalized first so the same statement shape produces the same fingerprint across values.
+ * @param {string} sql - SQL to fingerprint.
+ * @returns {string} - Bounded fingerprint.
+ */
+function sqlFingerprint(sql) {
+  const normalized = sql
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\r\n]*/g, " ")
+    .replace(/#[^\r\n]*/g, " ")
+    .replace(/'(?:''|\\.|[^'])*'/g, "?")
+    .replace(/"(?:""|\\.|[^"])*"/g, "?")
+    .replace(/\b(?:0x[0-9a-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)\b/gi, "?")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+  let hash = 0xcbf29ce484222325n
+
+  for (let index = 0; index < normalized.length; index++) {
+    hash ^= BigInt(normalized.charCodeAt(index))
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n)
+  }
+
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`
+}
+
+/**
  * Marks a callback failure that happened after the owning transaction was durably committed.
  * The public transaction boundary unwraps it before deadlock classification.
  */
@@ -208,6 +235,8 @@ export default class VelociousDatabaseDriversBase {
    * Active query.
    * @type {ActiveQueryState | null} */
   _activeQuery = null
+  /** @type {WeakMap<Error, {sqlFingerprint: string, sqlOperation: string}>} */
+  _failedQueryDiagnostics = new WeakMap()
   /** @type {Map<string, number>} */
   _heldAdvisoryLocks = new Map()
   /**
@@ -1236,6 +1265,8 @@ export default class VelociousDatabaseDriversBase {
         const retryInfo = error instanceof Error ? this.retryableDatabaseError(error) : {retry: false, reconnect: false}
 
         if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
+          this._reportDeadlockRetryDiagnostic({attempt, error, maxAttempts})
+
           // An explicitly-configured base wins so the tuning knob is effective even on drivers
           // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
           // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
@@ -1268,6 +1299,55 @@ export default class VelociousDatabaseDriversBase {
    */
   async _waitMs(ms) {
     await wait(ms)
+  }
+
+  /**
+   * Starts best-effort deadlock diagnostics without joining the retry control flow. Subclasses may
+   * add bounded driver-specific context; capture and event-listener failures cannot affect retry.
+   * @param {{attempt: number, error: Error, maxAttempts: number}} args - Retry metadata.
+   * @returns {void}
+   */
+  _reportDeadlockRetryDiagnostic({attempt, error, maxAttempts}) {
+    const queryDiagnostic = this._failedQueryDiagnostics.get(error)
+
+    void this._deadlockDiagnosticContext()
+      .then((driverContext) => {
+        const context = {
+          attempt,
+          driverType: this.getType(),
+          maxAttempts,
+          stage: "database-deadlock-retry",
+          willRetry: true,
+          ...queryDiagnostic,
+          ...driverContext
+        }
+        const payload = {
+          context,
+          error: new Error("Database transaction deadlock will be retried")
+        }
+        const errorEvents = this.configuration.getErrorEvents()
+
+        try {
+          errorEvents.emit("database-deadlock-retry", payload)
+        } catch (eventError) {
+          this.logger.warn("Database deadlock retry diagnostic listener failed", {error: eventError})
+        }
+
+        try {
+          errorEvents.emit("all-error", {...payload, errorType: "database-deadlock-retry"})
+        } catch (eventError) {
+          this.logger.warn("Database deadlock retry all-error listener failed", {error: eventError})
+        }
+      })
+      .catch(() => {})
+  }
+
+  /**
+   * Builds driver-specific deadlock context. The base driver has no server diagnostic source.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Safe context fields.
+   */
+  async _deadlockDiagnosticContext() {
+    return {}
   }
 
   /**
@@ -1547,6 +1627,11 @@ export default class VelociousDatabaseDriversBase {
         return await this._queryActualWithLogging({originalSql: sql, querySql}, {...options, logQuery, sourceStack}, requestTiming, tries)
       } catch (error) {
         if (!(error instanceof Error)) throw error
+
+        this._failedQueryDiagnostics.set(error, {
+          sqlFingerprint: sqlFingerprint(sql),
+          sqlOperation: sql.trim().split(/\s+/, 1)[0]?.toUpperCase() || "UNKNOWN"
+        })
 
         // A deliberately-aborted query must never be silently re-run — its
         // connection was destroyed on purpose, so treat it as terminal.

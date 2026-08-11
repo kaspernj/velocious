@@ -1904,6 +1904,11 @@ Genuinely unexpected frontend-model command failures reach this bus too. The fro
 
 Unexpected inbound decoded WebSocket dispatch failures emit one `framework-error` and one matching `all-error`. Established expected client-flow errors remain excluded from both events.
 
+MySQL/MariaDB transaction deadlock retries emit a structured `database-deadlock-retry` event (also
+mirrored to `all-error`) with retry metadata, a redacted SQL fingerprint when available, and a
+best-effort bounded/redacted InnoDB deadlock excerpt. Diagnostic capture never joins the retry
+control flow. See [deadlock retry diagnostics](docs/logging.md#deadlock-retry-diagnostics).
+
 ## Use the Websocket client API (HTTP-like)
 
 ```js

@@ -17,3 +17,27 @@ Model-backed reads use names such as `Task Load`, `Task Count`, and `Task Pluck`
 The source arrow is included only when Velocious can identify application code. Dependency and framework frames, including `node_modules`, are filtered out; if no application frame is available, Velocious logs only the timed SQL line.
 
 Query logs use the same configured logger outputs as other Velocious logs and are skipped when no output emits `info`. Disable them with `logging: {queryLogging: false}` or by removing `info` from your configured levels. Enable them in tests with `logging: {queryLogging: true}` and choose the output you want, such as `console: true` for local debugging or `file: true` for a test log file.
+
+## Deadlock retry diagnostics
+
+When the outer transaction boundary will retry a MySQL/MariaDB deadlock or lock-wait timeout,
+Velocious emits `database-deadlock-retry` on `configuration.getErrorEvents()`. The same payload is
+mirrored to `all-error` with `errorType: "database-deadlock-retry"`.
+
+```js
+configuration.getErrorEvents().on("database-deadlock-retry", ({context}) => {
+  console.warn("Database deadlock retry", context)
+})
+```
+
+The bounded context contains `stage`, `driverType`, `attempt`, `maxAttempts`, and `willRetry`, plus
+the SQL operation and an `fnv1a64:` SQL fingerprint when the deadlock came from the standard query
+path. The fingerprint is computed after SQL comments and literal spellings are normalized; SQL text
+and bound or interpolated values are never included.
+
+For MySQL/MariaDB, Velocious also attempts `SHOW ENGINE INNODB STATUS` on a bounded, separate
+connection. `statusCapture` is `captured` or `failed`; a captured `innodbDeadlockSummary` contains only
+the transaction count and victim transaction ordinal. Raw SQL, identifiers, values, and physical-record
+dumps are discarded. Collection is asynchronous and
+best-effort: capture errors and diagnostic listeners cannot change the existing retry count,
+eligibility, backoff, or error result.

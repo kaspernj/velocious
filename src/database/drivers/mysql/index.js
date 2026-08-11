@@ -31,6 +31,8 @@ import Update from "./sql/update.js"
  * realistic critical section) instead.
  */
 const MYSQL_INDEFINITE_LOCK_TIMEOUT_SECONDS = 60 * 60 * 24 * 365
+const INNODB_DEADLOCK_CAPTURE_TIMEOUT_MS = 250
+const INNODB_DEADLOCK_EXCERPT_MAX_CHARS = 2048
 
 export default class VelociousDatabaseDriversMysql extends Base{
   /** @type {import("mysql").Pool | undefined} */
@@ -367,6 +369,90 @@ export default class VelociousDatabaseDriversMysql extends Base{
       reconnect: shouldReconnect,
       waitMs: 50
     }
+  }
+
+  /**
+   * Adds a redacted, bounded excerpt from MySQL's latest InnoDB deadlock report. Capture uses a
+   * separate short-lived connection so it cannot queue ahead of rollback or the next retry on this
+   * driver's single-connection pool.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Safe diagnostic context.
+   */
+  async _deadlockDiagnosticContext() {
+    try {
+      const status = await this._captureInnodbDeadlockStatus()
+
+      return {
+        innodbDeadlockSummary: this._innodbDeadlockSummary(status),
+        statusCapture: "captured"
+      }
+    } catch {
+      return {statusCapture: "failed"}
+    }
+  }
+
+  /**
+   * Captures SHOW ENGINE INNODB STATUS on a bounded throwaway connection.
+   * @returns {Promise<string>} - Raw server status, retained only inside the redaction path.
+   */
+  async _captureInnodbDeadlockStatus() {
+    const poolWithConfig = /** @type {{config?: {connectionConfig?: ReturnType<typeof JSON.parse>}} | undefined} */ (this.pool)
+    const connectionConfig = poolWithConfig?.config?.connectionConfig
+    const captureConfig = connectionConfig || this.connectArgs()
+
+    return await new Promise((resolve, reject) => {
+      let connection
+      let settled = false
+      const finish = (error, status = "") => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        if (connection) connection.destroy()
+        if (error) reject(error)
+        else resolve(status)
+      }
+      const timeout = setTimeout(() => finish(new Error("InnoDB status capture timed out")), INNODB_DEADLOCK_CAPTURE_TIMEOUT_MS)
+
+      try {
+        connection = mysql.createConnection(captureConfig)
+        connection.on("error", (error) => finish(error))
+        connection.query("SHOW ENGINE INNODB STATUS", (error, rows) => {
+          if (error) {
+            finish(error)
+            return
+          }
+
+          const firstRow = Array.isArray(rows) ? rows[0] : undefined
+          const status = firstRow && typeof firstRow.Status == "string" ? firstRow.Status : ""
+
+          finish(undefined, status)
+        })
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error("InnoDB status capture failed"))
+      }
+    })
+  }
+
+  /**
+   * Extracts only fixed-format deadlock counters. The server report contains raw SQL, identifiers,
+   * and physical record data, so no source text is ever included in an application diagnostic.
+   * @param {string} status - SHOW ENGINE INNODB STATUS text.
+   * @returns {{transactions: number, victimTransaction: number | null}} - Structural deadlock summary.
+   */
+  _innodbDeadlockSummary(status) {
+    const deadlockStart = status.indexOf("LATEST DETECTED DEADLOCK")
+    const candidate = deadlockStart >= 0 ? status.slice(deadlockStart) : status
+    let transactions = 0
+    /** @type {number | null} */
+    let victimTransaction = null
+
+    for (const line of candidate.split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (/^\*\*\* \(\d+\) TRANSACTION:$/.test(trimmed)) transactions++
+      const victimMatch = /^\*\*\* WE ROLL BACK TRANSACTION \((\d+)\)$/.exec(trimmed)
+      if (victimMatch) victimTransaction = Number(victimMatch[1])
+    }
+
+    return {transactions, victimTransaction}
   }
 
   /**
