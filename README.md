@@ -1755,6 +1755,8 @@ database: {
 
 `pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
 
+Debug snapshots also expose cumulative checkout-wait and idle-reaper disposal telemetry. The [MySQL idle-reaping benchmark and methodology](docs/mysql-pool-idle-reaping-research.md) compare the 5-second default with 60 seconds and disabled reaping under a fixed cap; absent representative measured evidence, retain the 5-second default.
+
 # Websockets
 
 Velocious includes a lightweight websocket entry point for API-style calls and server-side events.

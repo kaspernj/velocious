@@ -201,7 +201,7 @@ export default class VelociousDatabaseDriversMysql extends Base{
    */
   connectArgs() {
     const args = this.getArgs()
-    const forward = ["database", "host", "password"]
+    const forward = ["database", "host", "password", "port"]
 
     /**
      * Connect args.

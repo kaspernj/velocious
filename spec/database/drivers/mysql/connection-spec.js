@@ -52,6 +52,12 @@ async function withMysqlConnection(callback) {
 }
 
 describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transaction: true}}, () => {
+  it("forwards a configured non-default port to the MySQL client", () => {
+    const mysql = new DatabaseDriversMysql({...mysqlConfig, port: 13306}, configuration)
+
+    expect(mysql.connectArgs().port).toEqual(13306)
+  })
+
   it("waits for the pool end callback before completing close", async () => {
     const mysql = new DatabaseDriversMysql(mysqlConfig, configuration)
     let endCallback

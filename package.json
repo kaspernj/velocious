@@ -20,6 +20,7 @@
     "benchmark:insert-multiple-chunking": "node benchmark/insert-multiple-chunking.js",
     "benchmark:preloader-id-dedup": "node benchmark/preloader-id-dedup.js",
     "benchmark:mysql-result-row-materialization": "node benchmark/mysql-result-row-materialization.js",
+    "benchmark:mysql-pool-idle-reaping": "node benchmark/mysql-pool-idle-reaping.js",
     "benchmark:query-roundtrip-batching": "node benchmark/query-roundtrip-batching.js",
     "benchmark:websocket-outbound-queue": "node benchmark/websocket-outbound-queue.js",
     "benchmark:websocket-frame-buffering": "node benchmark/websocket-frame-buffering.js",
