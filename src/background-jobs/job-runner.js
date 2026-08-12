@@ -119,7 +119,8 @@ export default async function runJobPayload(payload, {closeConnections = true, m
             handoffId: payload.handoffId,
             workerId: payload.workerId,
             handedOffAtMs: payload.handedOffAtMs,
-            maxDurationMs: 30000
+            maxDurationMs: 30000,
+            retryPersistErrors: true
           })
         }
 
