@@ -3,6 +3,7 @@
 import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobRegistry from "./job-registry.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
+import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 
 const BEACON_READY_TIMEOUT_MS = 5000
 
@@ -79,7 +80,7 @@ function runnerProcessTitle(JobClass, payload) {
  * @param {object} [options] - Runner options.
  * @param {boolean} [options.closeConnections] - Whether to gracefully close framework connections after the job.
  * @param {boolean} [options.manageProcessTitle] - Whether to set the per-job process title and restore it afterwards. Off for concurrent pooled runners, where interleaved snapshot/restore of the single process-wide `process.title` would corrupt it; the pooled child owns an aggregate title instead.
- * @returns {Promise<void>} - Resolves when complete.
+ * @returns {Promise<"completed" | "rescheduled">} - Acknowledged outcome.
  */
 export default async function runJobPayload(payload, {closeConnections = true, manageProcessTitle = true} = {}) {
   const configuration = await configurationResolver()
@@ -109,6 +110,22 @@ export default async function runJobPayload(payload, {closeConnections = true, m
         await perform.apply(jobInstance, payload.args || [])
       })
     } catch (error) {
+      if (error instanceof BackgroundJobRescheduleSignal) {
+        if (payload.id) {
+          await reporter.reportWithRetry({
+            jobId: payload.id,
+            status: "rescheduled",
+            delayMs: error.delayMs,
+            handoffId: payload.handoffId,
+            workerId: payload.workerId,
+            handedOffAtMs: payload.handedOffAtMs,
+            maxDurationMs: 30000
+          })
+        }
+
+        return "rescheduled"
+      }
+
       const performedError = error instanceof Error ? error : new Error(String(error))
       if (payload.id) {
         await reporter.reportWithRetry({
@@ -135,6 +152,7 @@ export default async function runJobPayload(payload, {closeConnections = true, m
         maxDurationMs: 30000
       })
     }
+    return "completed"
   } finally {
     // Restore the runner's base title so a lingering/idle runner (or a reused
     // one) doesn't misreport a finished job as still running.

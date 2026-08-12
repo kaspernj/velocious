@@ -9,6 +9,7 @@ import BackgroundJobsStatusReporter from "./status-reporter.js"
 import {randomUUID} from "crypto"
 import {fileURLToPath} from "node:url"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
+import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 
 /**
  * Per-forked-child timeout bookkeeping.
@@ -574,6 +575,18 @@ export default class BackgroundJobsWorker {
         workerId: payload.workerId || this.workerId
       })
     } catch (error) {
+      if (error instanceof BackgroundJobRescheduleSignal) {
+        this._reportJobResultInBackground({
+          jobId: payload.id,
+          status: "rescheduled",
+          delayMs: error.delayMs,
+          handoffId: payload.handoffId,
+          handedOffAtMs: payload.handedOffAtMs,
+          workerId: payload.workerId || this.workerId
+        })
+        return
+      }
+
       this._reportJobResultInBackground({
         jobId: payload.id,
         status: "failed",
@@ -1233,14 +1246,15 @@ export default class BackgroundJobsWorker {
    * Runs report job result.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
-   * @param {"completed" | "failed"} args.status - Status.
+   * @param {"completed" | "failed" | "rescheduled"} args.status - Status.
+   * @param {number} [args.delayMs] - Reschedule delay in milliseconds.
    * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async _reportJobResult({jobId, status, error, handoffId, handedOffAtMs, workerId}) {
+  async _reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
     if (!this.statusReporter) return
 
     try {
@@ -1248,7 +1262,7 @@ export default class BackgroundJobsWorker {
       // long-lived and cannot exit to trigger orphan reclaim, so dropping the
       // completion here would strand the job in `handed_off` forever — fatal for a
       // `max_concurrency: 1` job (a stranded row blocks every future run).
-      await this.statusReporter.reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId, retryPersistErrors: true})
+      await this.statusReporter.reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, retryPersistErrors: true})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }
@@ -1260,20 +1274,21 @@ export default class BackgroundJobsWorker {
    * graceful `stop()` can drain in-flight reports before closing the socket.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
-   * @param {"completed" | "failed"} args.status - Status.
+   * @param {"completed" | "failed" | "rescheduled"} args.status - Status.
+   * @param {number} [args.delayMs] - Reschedule delay in milliseconds.
    * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {void}
    */
-  _reportJobResultInBackground({jobId, status, error, handoffId, handedOffAtMs, workerId}) {
+  _reportJobResultInBackground({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
     /**
      * Defines report.
      * @type {Promise<void>} */
     let report
 
-    report = this._reportJobResult({jobId, status, error, handoffId, handedOffAtMs, workerId}).finally(() => {
+    report = this._reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}).finally(() => {
       this.inflightReports.delete(report)
     })
 

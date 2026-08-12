@@ -65,7 +65,7 @@ function isJobMessage(message) {
  * @param {object} args - Outcome.
  * @param {string} args.jobId - Job id.
  * @param {boolean} args.acknowledged - Whether the terminal report was acknowledged.
- * @param {"completed" | "failed"} [args.status] - Acknowledged terminal status.
+ * @param {"completed" | "failed" | "rescheduled"} [args.status] - Acknowledged outcome.
  * @param {Error} [args.error] - Reporting error when acknowledgement was not obtained.
  * @returns {Promise<void>} - Resolves after IPC accepts the message.
  */
@@ -99,8 +99,8 @@ function sendOutcome({jobId, acknowledged, status, error}) {
  */
 async function runJob(payload) {
   try {
-    await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
-    await sendOutcome({jobId: payload.id, acknowledged: true, status: "completed"})
+    const status = await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+    await sendOutcome({jobId: payload.id, acknowledged: true, status})
   } catch (error) {
     if (error instanceof BackgroundJobPerformedFailure) {
       await sendOutcome({jobId: payload.id, acknowledged: true, status: "failed"})

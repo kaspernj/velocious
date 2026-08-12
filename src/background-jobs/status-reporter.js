@@ -36,14 +36,15 @@ export default class BackgroundJobsStatusReporter {
    * Runs report.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
-   * @param {"completed" | "failed"} args.status - Status.
+   * @param {"completed" | "failed" | "rescheduled"} args.status - Status.
+   * @param {number} [args.delayMs] - Reschedule delay in milliseconds.
    * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async report({jobId, status, error, handoffId, handedOffAtMs, workerId}) {
+  async report({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
@@ -57,8 +58,9 @@ export default class BackgroundJobsStatusReporter {
         signal: control.signal,
         onConnect: (jsonSocket) => {
           jsonSocket.send({
-            type: status === "completed" ? "job-complete" : "job-failed",
+            type: status === "completed" ? "job-complete" : status === "rescheduled" ? "job-reschedule" : "job-failed",
             jobId,
+            delayMs,
             handoffId,
             workerId,
             handedOffAtMs,
@@ -83,7 +85,8 @@ export default class BackgroundJobsStatusReporter {
    * Runs report with retry.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
-   * @param {"completed" | "failed"} args.status - Status.
+   * @param {"completed" | "failed" | "rescheduled"} args.status - Status.
+   * @param {number} [args.delayMs] - Reschedule delay in milliseconds.
    * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
@@ -92,13 +95,13 @@ export default class BackgroundJobsStatusReporter {
    * @param {boolean} [args.retryPersistErrors] - Retry a `BackgroundJobUpdateError` (main's `job-update-error`, i.e. a transient DB failure while persisting the terminal status) instead of throwing immediately. Off by default so short-lived forked/spawned runners keep failing loudly and exit non-zero to be reclaimed; on for the long-lived worker, which cannot exit-to-reclaim and would otherwise strand the job in `handed_off`.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async reportWithRetry({jobId, status, error, handoffId, handedOffAtMs, workerId, maxDurationMs, retryPersistErrors = false}) {
+  async reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, maxDurationMs, retryPersistErrors = false}) {
     let attempt = 0
     const startTime = Date.now()
 
     while (true) {
       try {
-        await this.report({jobId, status, error, handoffId, handedOffAtMs, workerId})
+        await this.report({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId})
         return
       } catch (error) {
         // A `BackgroundJobUpdateError` means main answered `job-update-error`, which it

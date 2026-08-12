@@ -601,6 +601,11 @@ export default class BackgroundJobsMain {
 
     if (message?.type === "job-failed") {
       this._handleJobFailed({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "job-reschedule") {
+      this._handleJobReschedule({jsonSocket, message})
     }
   }
 
@@ -881,6 +886,34 @@ export default class BackgroundJobsMain {
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
     } catch (error) {
       this.logger.error(() => ["Failed to update job completion:", error])
+      jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Failed to update job"})
+    }
+  }
+
+  /**
+   * Persists a normal job reschedule outcome and wakes scheduled dispatch.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobRescheduleMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleJobReschedule({jsonSocket, message}) {
+    try {
+      const accepted = await this.store.markRescheduled({
+        jobId: message.jobId,
+        delayMs: message.delayMs,
+        handoffId: message.handoffId,
+        workerId: message.workerId,
+        handedOffAtMs: message.handedOffAtMs
+      })
+      if (accepted && message.handoffId) {
+        this._forgetHandoff({handoffId: message.handoffId, jobId: message.jobId})
+      }
+      jsonSocket.send({type: "job-updated", jobId: message.jobId})
+      this._notifyEnqueued()
+      await this._drain()
+    } catch (error) {
+      this.logger.error(() => ["Failed to update job reschedule:", error])
       jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Failed to update job"})
     }
   }
