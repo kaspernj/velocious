@@ -83,6 +83,11 @@ export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWork
     if (pool instanceof AsyncTrackedMultiConnectionPool) {
       pool.clearTestSharedConnection()
       AsyncTrackedMultiConnectionPool.clearGlobalConnections(dummyConfiguration)
+    } else if (pool.getCurrentConnection().insideTransaction()) {
+      // TestRunner owns this physical connection and rolls it back after the
+      // background-job broker has drained. Closing it here would implicitly end
+      // SQLite's transaction before the test lifecycle can roll back child work.
+      return
     } else {
       await dummyConfiguration.closeDatabaseConnections()
       await dummyConfiguration.initializeModels()

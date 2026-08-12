@@ -792,7 +792,7 @@ export default class BackgroundJobsWorker {
     const config = configuration.getBackgroundJobsConfig()
     const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
       cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
-      env: Object.assign({}, process.env, {VELOCIOUS_ENV: configuration.getEnvironment(), VELOCIOUS_BACKGROUND_JOBS_HOST: config.host, VELOCIOUS_BACKGROUND_JOBS_PORT: `${config.port}`})
+      env: Object.assign({}, process.env, {VELOCIOUS_BACKGROUND_JOB_CHILD: "1", VELOCIOUS_ENV: configuration.getEnvironment(), VELOCIOUS_BACKGROUND_JOBS_HOST: config.host, VELOCIOUS_BACKGROUND_JOBS_PORT: `${config.port}`})
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
@@ -989,6 +989,7 @@ export default class BackgroundJobsWorker {
       execArgv: [],
       stdio: ["ignore", "ignore", "ignore", "ipc"],
       env: Object.assign({}, process.env, {
+        VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
         VELOCIOUS_ENV: configuration.getEnvironment(),
         VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
         VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`
@@ -1216,6 +1217,7 @@ export default class BackgroundJobsWorker {
       detached: true,
       stdio: "ignore",
       env: Object.assign({}, process.env, {
+        VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
         VELOCIOUS_ENV: configuration.getEnvironment(),
         VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
         VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`,

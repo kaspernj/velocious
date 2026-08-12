@@ -36,6 +36,7 @@ import InitializerFromRequireContext from "../database/initializer-from-require-
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
 import AttachmentPathSource from "./node/attachment-path-source.js"
+import { createSharedTransactionProxyDriver, sharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
 /**
  * Defines this typedef.
@@ -63,6 +64,17 @@ function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
 }
 
 export default class VelociousEnvironmentHandlerNode extends Base{
+  /**
+   * Creates a test-only child proxy when TestRunner supplied an active broker.
+   * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string}} args - Connection details.
+   * @returns {Promise<import("../database/drivers/base.js").default | undefined>} - Optional proxy.
+   */
+  async createTestSharedTransactionConnection({DriverClass, config, configuration, databaseIdentifier}) {
+    const brokerConfig = sharedTransactionBrokerConfig(databaseIdentifier)
+    if (!brokerConfig) return undefined
+    return createSharedTransactionProxyDriver(DriverClass, config, configuration, databaseIdentifier, brokerConfig)
+  }
+
   /**
    * Timezone async local storage.
    * @type {import("node:async_hooks").AsyncLocalStorage<TimezoneStore> | undefined} */
