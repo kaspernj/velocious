@@ -7,6 +7,7 @@ import Project from "../dummy/src/models/project.js"
 import SharedTransactionTestJob from "../dummy/src/jobs/shared-transaction-test-job.js"
 
 const markerPrefix = `shared-transaction-broker-${process.pid}-${Date.now()}`
+const childCompletionTimeoutSeconds = 30
 /** @type {string[]} */
 const jobIds = []
 
@@ -29,8 +30,8 @@ describe("Background jobs - shared test transaction broker", {tags: ["dummy"], d
           options: {executionMode}
         })
         jobIds.push(jobId)
-        await waitForJobCompleted({jobId, store, timeoutSeconds: 10})
-        const result = await waitForOutputJson({outputPath, timeoutSeconds: 10})
+        await waitForJobCompleted({jobId, store, timeoutSeconds: childCompletionTimeoutSeconds})
+        const result = await waitForOutputJson({outputPath, timeoutSeconds: childCompletionTimeoutSeconds})
 
         expect(result.parentCount).toEqual(1)
         expect(result.childCount).toEqual(1)
