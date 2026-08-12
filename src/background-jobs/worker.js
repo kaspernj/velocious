@@ -693,11 +693,24 @@ export default class BackgroundJobsWorker {
 
       state.inflight.set(payload.id, {payload, resolve, timeoutTimer})
       try {
-        child.send({type: "job", payload})
+        child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
       } catch (error) {
         void this._handlePooledChildFailure({child, error})
       }
     })
+  }
+
+  /**
+   * Captures the current test attempt's broker mode at dispatch time. A warm
+   * pooled child must never rely on its immutable fork-time environment.
+   * @returns {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} - Per-job broker configuration.
+   */
+  _pooledJobSharedTransactionBrokerConfig() {
+    const serialized = process.env.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
+    if (!serialized) return {expected: false}
+
+    const config = JSON.parse(Buffer.from(serialized, "base64url").toString("utf8"))
+    return {...config, expected: true}
   }
 
   /**

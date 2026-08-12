@@ -32,6 +32,13 @@ job's application writes and its background-job persistence rows. Only active
 non-tenant database connections are shared, and multiple databases are matched by
 their configured identifiers.
 
+Reusable pooled runners receive broker mode and capability with every job dispatch,
+so a warm child can safely cross test-attempt boundaries. A capability change closes
+the child's retained proxy state before the next job; missing coordinates fail closed
+when that dispatch expects transactional sharing. Concurrent child transactions are
+leased FIFO for their complete root-savepoint lifetime, rather than interleaving
+savepoints one WebSocket call at a time.
+
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
 child/request work continues to use independent physical connections. Tenant-only

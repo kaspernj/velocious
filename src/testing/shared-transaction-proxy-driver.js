@@ -1,9 +1,26 @@
+/** @typedef {{address?: string, capability?: string, databaseIdentifiers?: string[], expected: boolean}} SharedTransactionBrokerJobConfig */
+
 // @ts-check
 
 import SharedTransactionBrokerClient from "./shared-transaction-broker-client.js"
+import { AsyncLocalStorage } from "node:async_hooks"
 
 export const SHARED_TRANSACTION_BROKER_ENV = "VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER"
 export const BACKGROUND_JOB_CHILD_ENV = "VELOCIOUS_BACKGROUND_JOB_CHILD"
+
+/** @type {AsyncLocalStorage<SharedTransactionBrokerJobConfig>} */
+const pooledJobBrokerConfig = new AsyncLocalStorage()
+
+/**
+ * Runs one pooled job with dispatch-time broker configuration.
+ * @template T
+ * @param {SharedTransactionBrokerJobConfig} config - Per-job broker mode and coordinates.
+ * @param {() => T} callback - Job callback.
+ * @returns {T} - Callback result.
+ */
+export function runWithSharedTransactionBrokerConfig(config, callback) {
+  return pooledJobBrokerConfig.run(config, callback)
+}
 
 /**
  * Escapes a PostgreSQL literal without requiring a live child connection.
@@ -35,15 +52,33 @@ function pgEscapeLiteral(value) {
  * @returns {{address: string, capability: string} | undefined} - Broker coordinates.
  */
 export function sharedTransactionBrokerConfig(databaseIdentifier) {
+  const contextualConfig = pooledJobBrokerConfig.getStore()
+  if (contextualConfig) return validatedBrokerConfig(contextualConfig, databaseIdentifier)
   if (process.env[BACKGROUND_JOB_CHILD_ENV] !== "1") return undefined
+
   const serialized = process.env[SHARED_TRANSACTION_BROKER_ENV]
   if (!serialized) return undefined
 
-  const config = /** @type {{address?: ReturnType<typeof JSON.parse>, capability?: ReturnType<typeof JSON.parse>, databaseIdentifiers?: ReturnType<typeof JSON.parse>}} */ (JSON.parse(Buffer.from(serialized, "base64url").toString("utf8")))
+  return validatedBrokerConfig(JSON.parse(Buffer.from(serialized, "base64url").toString("utf8")), databaseIdentifier)
+}
+
+/**
+ * Validates dispatch-time broker configuration and fails closed when expected.
+ * @param {SharedTransactionBrokerJobConfig} config - Candidate configuration.
+ * @param {string} databaseIdentifier - Logical database identifier.
+ * @returns {{address: string, capability: string} | undefined} - Broker coordinates.
+ */
+function validatedBrokerConfig(config, databaseIdentifier) {
+  if (config.expected && (!config.address || !config.capability || !config.databaseIdentifiers)) {
+    throw new Error("Transactional pooled job expected shared transaction broker coordinates")
+  }
+  if (!config.expected) return undefined
   if (typeof config.address !== "string" || typeof config.capability !== "string" || !Array.isArray(config.databaseIdentifiers)) {
     throw new Error("Invalid shared transaction broker child configuration")
   }
-  if (!config.databaseIdentifiers.includes(databaseIdentifier)) return undefined
+  if (!config.databaseIdentifiers.includes(databaseIdentifier)) {
+    throw new Error(`Transactional pooled job expected broker database identifier: ${databaseIdentifier}`)
+  }
 
   return {address: config.address, capability: config.capability}
 }
@@ -78,6 +113,12 @@ export function createSharedTransactionProxyDriver(DriverClass, config, configur
      */
     async _close() { await this.sharedTransactionClient.close() }
     /**
+     * Keeps a broker proxy transport alive across logical MySQL checkouts.
+     * Parent TestRunner owns physical session cleanup and rollback.
+     * @returns {Promise<void>} - Resolves without closing the transport.
+     */
+    async cleanupSessionStateAfterCheckout() {}
+    /**
      * Routes a physical query.
      * @param {string} sql - SQL statement.
      * @returns {Promise<import("../database/drivers/base.js").QueryResultType>} - Rows.
@@ -96,7 +137,7 @@ export function createSharedTransactionProxyDriver(DriverClass, config, configur
      */
     async _startTransactionAction() {
       this.sharedTransactionRootSavePoint = this.generateSavePointName()
-      await this.sharedTransactionClient.call("startSavePoint", [this.sharedTransactionRootSavePoint])
+      await this.sharedTransactionClient.call("rootTransactionStart", [this.sharedTransactionRootSavePoint])
     }
 
     /**
@@ -105,7 +146,7 @@ export function createSharedTransactionProxyDriver(DriverClass, config, configur
      */
     async _commitTransactionAction() {
       if (!this.sharedTransactionRootSavePoint) throw new Error("Shared transaction proxy has no root savepoint")
-      await this.sharedTransactionClient.call("releaseSavePoint", [this.sharedTransactionRootSavePoint])
+      await this.sharedTransactionClient.call("rootTransactionRelease", [this.sharedTransactionRootSavePoint])
       this.sharedTransactionRootSavePoint = undefined
     }
 
@@ -115,7 +156,7 @@ export function createSharedTransactionProxyDriver(DriverClass, config, configur
      */
     async _rollbackTransactionAction() {
       if (!this.sharedTransactionRootSavePoint) throw new Error("Shared transaction proxy has no root savepoint")
-      await this.sharedTransactionClient.call("rollbackSavePoint", [this.sharedTransactionRootSavePoint])
+      await this.sharedTransactionClient.call("rootTransactionRollback", [this.sharedTransactionRootSavePoint])
       this.sharedTransactionRootSavePoint = undefined
     }
 

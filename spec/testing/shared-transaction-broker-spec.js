@@ -33,6 +33,10 @@ class FakeConnection {
       this.active--
     }
   }
+
+  async startSavePoint(name) { this.calls.push(`start:${name}`) }
+  async releaseSavePoint(name) { this.calls.push(`release:${name}`) }
+  async rollbackSavePoint(name) { this.calls.push(`rollback:${name}`) }
 }
 
 describe("Shared transaction broker protocol", {databaseCleaning: {transaction: false, truncate: false}}, () => {
@@ -119,5 +123,74 @@ describe("Shared transaction broker protocol", {databaseCleaning: {transaction: 
     await expect(() => stale.call("query", ["after teardown"])).toThrow(/connect|closed|refused/i)
     expect(connection.calls).toEqual(["blocked"])
     await stale.close()
+  })
+
+  it("leases a physical connection from root savepoint start through release", async () => {
+    const connection = new FakeConnection()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const first = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+    const second = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+
+    try {
+      await first.call("rootTransactionStart", ["first"])
+      const secondStart = second.call("rootTransactionStart", ["second"])
+      await first.call("query", ["first write"])
+      expect(connection.calls).toEqual(["start:first", "first write"])
+      await first.call("rootTransactionRelease", ["first"])
+      await secondStart
+      await second.call("query", ["second write"])
+      await second.call("rootTransactionRollback", ["second"])
+
+      expect(connection.calls).toEqual([
+        "start:first",
+        "first write",
+        "release:first",
+        "start:second",
+        "second write",
+        "rollback:second",
+        "release:second"
+      ])
+    } finally {
+      await first.close()
+      await second.close()
+      await broker.close()
+    }
+  })
+
+  it("rolls back and releases a disconnected root transaction holder", async () => {
+    const connection = new FakeConnection()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const first = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+    const second = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+
+    try {
+      await first.call("rootTransactionStart", ["abandoned"])
+      const secondStart = second.call("rootTransactionStart", ["next"])
+      await first.close()
+      await secondStart
+      await second.call("rootTransactionRelease", ["next"])
+      expect(connection.calls).toEqual(["start:abandoned", "rollback:abandoned", "release:abandoned", "start:next", "release:next"])
+    } finally {
+      await second.close()
+      await broker.close()
+    }
+  })
+
+  it("rejects nested root leases and mismatched completion without releasing ownership", async () => {
+    const connection = new FakeConnection()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const client = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+
+    try {
+      await client.call("rootTransactionStart", ["owned"])
+      await expect(() => client.call("rootTransactionStart", ["nested"])).toThrow(/already active/i)
+      await expect(() => client.call("rootTransactionRelease", ["wrong"])).toThrow(/does not match/i)
+      await client.call("query", ["still owned"])
+      await client.call("rootTransactionRollback", ["owned"])
+      expect(connection.calls).toEqual(["start:owned", "still owned", "rollback:owned", "release:owned"])
+    } finally {
+      await client.close()
+      await broker.close()
+    }
   })
 })

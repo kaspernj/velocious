@@ -6,6 +6,8 @@ import { EventEmitter } from "node:events"
 import { WebSocketServer } from "ws"
 import { decodeBrokerValue, encodeBrokerValue } from "./shared-transaction-codec.js"
 
+/** @typedef {{queue: Promise<void>, rootSessions: Set<import("ws").WebSocket>, lease?: {operations: Promise<void>, release: () => void, savePointName: string, socket: import("ws").WebSocket}}} ConnectionState */
+
 const ALLOWED_METHODS = new Set([
   "query",
   "affectedRows",
@@ -17,7 +19,10 @@ const ALLOWED_METHODS = new Set([
   "startSavePoint",
   "releaseSavePoint",
   "rollbackSavePoint",
-  "getConnectionScopedValue"
+  "getConnectionScopedValue",
+  "rootTransactionStart",
+  "rootTransactionRelease",
+  "rootTransactionRollback"
 ])
 
 /**
@@ -42,15 +47,18 @@ export default class SharedTransactionBroker extends EventEmitter {
     this.connections = connections
     this.secret = randomBytes(32).toString("base64url")
     this.accepting = true
-    /** @type {Map<object, Promise<void>>} */
-    this.connectionQueues = new Map()
+    /** @type {Map<object, ConnectionState>} */
+    this.connectionStates = new Map()
     /** @type {Set<import("ws").WebSocket>} */
     this.sessions = new Set()
     this.httpServer = createServer()
     this.websocketServer = new WebSocketServer({server: this.httpServer, maxPayload: 16 * 1024 * 1024})
     this.websocketServer.on("connection", (socket) => {
       this.sessions.add(socket)
-      socket.once("close", () => this.sessions.delete(socket))
+      socket.once("close", () => {
+        this.sessions.delete(socket)
+        void this.releaseDisconnectedLeases(socket)
+      })
       socket.on("message", (data) => void this.handleRequest(socket, `${data}`))
     })
   }
@@ -104,10 +112,21 @@ export default class SharedTransactionBroker extends EventEmitter {
       const args = decodeBrokerValue(request.args)
       if (!Array.isArray(args)) throw new TypeError("Shared transaction broker arguments must be an array")
       this.emit("work-queued", {connection, databaseIdentifier: request.databaseIdentifier, method: request.method})
-      const result = await this.serialize(connection, async () => {
+      const result = await this.runConnectionRequest({connection, method: request.method, savePointName: typeof args[0] === "string" ? args[0] : undefined, socket}, async () => {
         if (!this.accepting) throw new Error("Shared transaction broker capability has been revoked")
+        if (request.method === "rootTransactionRollback") {
+          await this.rollbackRootSavePoint(connection, /** @type {string} */ (args[0]))
+          return undefined
+        }
+        const physicalMethod = request.method === "rootTransactionStart"
+          ? "startSavePoint"
+          : request.method === "rootTransactionRelease"
+            ? "releaseSavePoint"
+            : request.method === "rootTransactionRollback"
+              ? "rollbackSavePoint"
+              : request.method
         const connectionMethods = /** @type {Record<string, (...methodArgs: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>>} */ (connection)
-        const method = connectionMethods[request.method]
+        const method = connectionMethods[physicalMethod]
         if (typeof method !== "function") throw new Error(`Connection does not support shared transaction method: ${request.method}`)
         return await method.apply(connection, args)
       })
@@ -119,14 +138,163 @@ export default class SharedTransactionBroker extends EventEmitter {
   }
 
   /**
-   * Serializes work by physical connection across all sessions and identifiers.
-   * @template T
-   * @param {object} connection - Parent-owned physical connection.
-   * @param {() => Promise<T>} callback - Work.
-   * @returns {Promise<T>} - Serialized result.
+   * Gets mutable serialization state for one physical connection.
+   * @param {object} connection - Physical connection.
+   * @returns {ConnectionState} - Connection state.
    */
-  async serialize(connection, callback) {
-    const previous = this.connectionQueues.get(connection) || Promise.resolve()
+  connectionState(connection) {
+    let state = this.connectionStates.get(connection)
+    if (!state) {
+      state = {queue: Promise.resolve(), rootSessions: new Set()}
+      this.connectionStates.set(connection, state)
+    }
+    return state
+  }
+
+  /**
+   * Runs a validated request with root transaction lease semantics.
+   * @template T
+   * @param {{connection: object, method: string, savePointName: string | undefined, socket: import("ws").WebSocket}} args - Request identity.
+   * @param {() => Promise<T>} callback - Physical operation.
+   * @returns {Promise<T>} - Operation result.
+   */
+  async runConnectionRequest({connection, method, savePointName, socket}, callback) {
+    const state = this.connectionState(connection)
+    if (method === "rootTransactionStart") {
+      if (!savePointName) throw new Error("Shared transaction broker root transaction requires a savepoint name")
+      return await this.startRootLease({callback, savePointName, state, socket})
+    }
+    if (method === "rootTransactionRelease" || method === "rootTransactionRollback") {
+      return await this.finishRootLease({callback, savePointName, state, socket})
+    }
+    if (state.lease?.socket === socket) return await this.serializeLease(state.lease, callback)
+    return await this.serialize(state, callback)
+  }
+
+  /**
+   * Acquires the FIFO physical connection lease and holds the queue until end.
+   * @template T
+   * @param {{callback: () => Promise<T>, savePointName: string, state: ConnectionState, socket: import("ws").WebSocket}} args - Lease request.
+   * @returns {Promise<T>} - Root savepoint start result.
+   */
+  async startRootLease({callback, savePointName, state, socket}) {
+    if (state.rootSessions.has(socket)) throw new Error("Shared transaction broker root transaction is already active for this session")
+    state.rootSessions.add(socket)
+    const previous = state.queue
+    /**
+     * Resolves the start response.
+     * @type {(value: T) => void}
+     */
+    let resolveStarted = () => {}
+    /**
+     * Rejects the start response.
+     * @type {(error: Error) => void}
+     */
+    let rejectStarted = () => {}
+    const started = new Promise((resolve, reject) => { resolveStarted = resolve; rejectStarted = reject })
+    /**
+     * Releases the held connection queue.
+     * @type {(value?: void) => void}
+     */
+    let release = () => {}
+    const held = new Promise((resolve) => { release = resolve })
+
+    state.queue = previous.then(async () => {
+      try {
+        if (!this.accepting || socket.readyState !== socket.OPEN) throw new Error("Shared transaction broker root transaction session closed before lease acquisition")
+        const result = await callback()
+        state.lease = {operations: Promise.resolve(), release, savePointName, socket}
+        resolveStarted(result)
+        await held
+      } catch (error) {
+        state.rootSessions.delete(socket)
+        rejectStarted(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+    return await started
+  }
+
+  /**
+   * Finishes the calling session's root lease.
+   * @template T
+   * @param {{callback: () => Promise<T>, savePointName: string | undefined, state: ConnectionState, socket: import("ws").WebSocket}} args - Lease end request.
+   * @returns {Promise<T>} - Savepoint end result.
+   */
+  async finishRootLease({callback, savePointName, state, socket}) {
+    const lease = state.lease
+    if (!lease || lease.socket !== socket) throw new Error("Shared transaction broker session does not own the root transaction lease")
+    if (savePointName !== lease.savePointName) throw new Error("Shared transaction broker root transaction savepoint does not match its lease")
+    try {
+      return await this.serializeLease(lease, callback)
+    } finally {
+      state.lease = undefined
+      state.rootSessions.delete(socket)
+      lease.release()
+    }
+  }
+
+  /**
+   * Serializes operations belonging to the active lease holder.
+   * @template T
+   * @param {{operations: Promise<void>}} lease - Active lease.
+   * @param {() => Promise<T>} callback - Operation.
+   * @returns {Promise<T>} - Result.
+   */
+  async serializeLease(lease, callback) {
+    const previous = lease.operations
+    /**
+     * Releases the holder operation queue.
+     * @type {(value?: void) => void}
+     */
+    let release = () => {}
+    const current = new Promise((resolve) => { release = resolve })
+    lease.operations = previous.then(() => current)
+    await previous
+    try { return await callback() } finally { release() }
+  }
+
+  /**
+   * Rolls back leases abandoned by a disconnected session.
+   * @param {import("ws").WebSocket} socket - Disconnected session.
+   * @returns {Promise<void>} - Resolves after all owned leases release.
+   */
+  async releaseDisconnectedLeases(socket) {
+    for (const [connection, state] of this.connectionStates) {
+      const lease = state.lease
+      if (!lease || lease.socket !== socket) continue
+      try {
+        await this.serializeLease(lease, async () => {
+          await this.rollbackRootSavePoint(connection, lease.savePointName)
+        })
+      } finally {
+        state.lease = undefined
+        state.rootSessions.delete(socket)
+        lease.release()
+      }
+    }
+  }
+
+  /**
+   * Rolls back and removes a root savepoint so it cannot remain beneath the next lease.
+   * @param {object} connection - Parent physical connection.
+   * @param {string} savePointName - Root savepoint name.
+   * @returns {Promise<void>} - Resolves after rollback and release.
+   */
+  async rollbackRootSavePoint(connection, savePointName) {
+    const methods = /** @type {{releaseSavePoint: (name: string) => Promise<void>, rollbackSavePoint: (name: string) => Promise<void>}} */ (connection)
+    await methods.rollbackSavePoint(savePointName)
+    await methods.releaseSavePoint(savePointName)
+  }
+
+  /**
+   * Serializes ordinary non-holder work through the connection FIFO.
+   * @template T
+   * @param {ConnectionState} state - Connection state.
+   * @param {() => Promise<T>} callback - Work.
+   * @returns {Promise<T>} - Work result.
+   */
+  async serialize(state, callback) {
+    const previous = state.queue
     /**
      * Resolves the current queue entry.
      * @type {(value?: void) => void}
@@ -134,13 +302,12 @@ export default class SharedTransactionBroker extends EventEmitter {
     let release = () => {}
     const current = new Promise((resolve) => { release = resolve })
     const queued = previous.then(() => current)
-    this.connectionQueues.set(connection, queued)
+    state.queue = queued
     await previous
     try {
       return await callback()
     } finally {
       release()
-      if (this.connectionQueues.get(connection) === queued) this.connectionQueues.delete(connection)
     }
   }
 
@@ -152,8 +319,9 @@ export default class SharedTransactionBroker extends EventEmitter {
     if (!this.accepting) return
     this.accepting = false
     this.secret = randomBytes(32).toString("base64url")
+    for (const socket of this.sessions) await this.releaseDisconnectedLeases(socket)
     for (const socket of this.sessions) socket.close(1001, "Shared transaction broker closed")
-    await Promise.all(Array.from(this.connectionQueues.values()))
+    await Promise.all(Array.from(this.connectionStates.values()).map((state) => state.queue))
     await new Promise((resolve) => this.websocketServer.close(() => resolve(undefined)))
     await new Promise((resolve) => this.httpServer.close(() => resolve(undefined)))
   }

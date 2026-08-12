@@ -613,7 +613,8 @@ export default class TestRunner {
     process.env[SHARED_TRANSACTION_BROKER_ENV] = Buffer.from(JSON.stringify({
       address: broker.address(),
       capability: broker.capability(),
-      databaseIdentifiers
+      databaseIdentifiers,
+      expected: true
     })).toString("base64url")
 
     return {broker, previousEnvironment}

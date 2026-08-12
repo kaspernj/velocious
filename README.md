@@ -2074,6 +2074,8 @@ Request tests share transaction-active, non-tenant database connections with the
 
 Transactional tests also share active non-tenant connections with real forked, reusable pooled, and spawned background-job child runners through a per-attempt test-only loopback broker. Parent setup and child writes therefore occupy the same physical transaction and roll back together, including background-job persistence. Multiple configured databases route by identifier; tenant-only databases remain excluded. Tests using `{transaction: false, truncate: true}` retain ordinary independent physical connections for concurrency and locking coverage. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
 
+Warm pooled children receive the active broker capability per job, discard retained proxy state when the capability changes, and fail closed if a transactional dispatch lacks coordinates. Child transaction/savepoint work holds a FIFO lease on the parent physical connection until the matching root release or rollback.
+
 # Writing a request test
 
 First create a test file under something like the following path 'src/routes/accounts/create-test.js' with something like the following content:

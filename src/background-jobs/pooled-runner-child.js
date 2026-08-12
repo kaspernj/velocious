@@ -3,6 +3,7 @@
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
 import { closeRunnerConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
+import { runWithSharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
 const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
 
@@ -33,6 +34,27 @@ async function shutdownRunner(exitCode) {
  * @type {Set<string>}
  */
 const runningJobIds = new Set()
+/** @type {string | undefined} */
+let activeBrokerIdentity
+
+/**
+ * Clears retained proxy/direct connections whenever the per-job broker mode or
+ * capability changes. Concurrent siblings must share one identity.
+ * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} config - Dispatch-time configuration.
+ * @returns {Promise<void>} - Resolves after stale connections are closed.
+ */
+async function prepareBrokerIdentity(config) {
+  const identity = JSON.stringify(config)
+  if (activeBrokerIdentity === undefined) {
+    activeBrokerIdentity = identity
+    return
+  }
+  if (activeBrokerIdentity === identity) return
+  if (runningJobIds.size > 1) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
+
+  await closeRunnerConnections(currentConfigurationOrNull())
+  activeBrokerIdentity = identity
+}
 
 /**
  * Sets an aggregate process title from the current in-flight count. A child runs
@@ -51,11 +73,11 @@ function updateProcessTitle() {
 /**
  * Checks whether an IPC value is a runnable pooled job message.
  * @param {ReturnType<typeof JSON.parse>} message - IPC message.
- * @returns {message is {type: "job", payload: import("./types.js").BackgroundJobPayload & {id: string}}} - Whether this is a valid job message.
+ * @returns {message is {type: "job", payload: import("./types.js").BackgroundJobPayload & {id: string}, sharedTransactionBroker?: import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig}} - Whether this is a valid job message.
  */
 function isJobMessage(message) {
   if (!message || typeof message !== "object") return false
-  const record = /** @type {{type?: ReturnType<typeof JSON.parse>, payload?: ReturnType<typeof JSON.parse>}} */ (message)
+  const record = /** @type {{type?: ReturnType<typeof JSON.parse>, payload?: ReturnType<typeof JSON.parse>, sharedTransactionBroker?: ReturnType<typeof JSON.parse>}} */ (message)
 
   return record.type === "job" && !!record.payload && typeof record.payload === "object" && typeof record.payload.id === "string"
 }
@@ -95,11 +117,15 @@ function sendOutcome({jobId, acknowledged, status, error}) {
  * per-job try/catch) ends the child, which the worker sees as an exit and
  * reclaims for the whole in-flight set.
  * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload.
+ * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} sharedTransactionBroker - Per-job broker configuration.
  * @returns {Promise<void>} - Resolves after reporting.
  */
-async function runJob(payload) {
+async function runJob(payload, sharedTransactionBroker) {
   try {
-    const status = await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+    const status = await runWithSharedTransactionBrokerConfig(sharedTransactionBroker, async () => {
+      await prepareBrokerIdentity(sharedTransactionBroker)
+      return await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+    })
     await sendOutcome({jobId: payload.id, acknowledged: true, status})
   } catch (error) {
     if (error instanceof BackgroundJobPerformedFailure) {
@@ -125,7 +151,7 @@ function handleMessage(message) {
 
   runningJobIds.add(message.payload.id)
   updateProcessTitle()
-  void runJob(message.payload)
+  void runJob(message.payload, message.sharedTransactionBroker || {expected: false})
 }
 
 process.on("message", (message) => handleMessage(message))
