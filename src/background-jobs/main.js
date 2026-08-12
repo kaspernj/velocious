@@ -913,7 +913,13 @@ export default class BackgroundJobsMain {
       this._notifyEnqueued()
       await this._drain()
     } catch (error) {
-      this.logger.error(() => ["Failed to update job reschedule:", error])
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      const payload = {context: {jobId: message.jobId, stage: "background-job-reschedule"}, error: normalizedError}
+      const errorEvents = this.configuration.getErrorEvents()
+
+      this.logger.error(() => ["Failed to update job reschedule:", normalizedError])
+      errorEvents.emit("framework-error", payload)
+      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
       jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Failed to update job"})
     }
   }

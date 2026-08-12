@@ -707,7 +707,7 @@ export default class BackgroundJobsStore {
    */
   async markRescheduled({jobId, delayMs, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
-    const scheduledAtMs = this._rescheduledAtMs(delayMs)
+    this._validateRescheduleDelayMs(delayMs)
 
     return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const job = await this._getJobRowById(db, jobId)
@@ -716,6 +716,7 @@ export default class BackgroundJobsStore {
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
 
       await this._lockConcurrencyRow(db, job.concurrencyKey)
+      const scheduledAtMs = this._rescheduledAtMs(delayMs)
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
@@ -1114,9 +1115,7 @@ export default class BackgroundJobsStore {
    * @returns {number} - Future eligibility timestamp.
    */
   _rescheduledAtMs(delayMs) {
-    if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
-      throw VelociousError.safe("background job reschedule delayMs must be a non-negative safe integer")
-    }
+    this._validateRescheduleDelayMs(delayMs)
 
     const scheduledAtMs = Date.now() + delayMs
     if (!Number.isSafeInteger(scheduledAtMs)) {
@@ -1124,6 +1123,17 @@ export default class BackgroundJobsStore {
     }
 
     return scheduledAtMs
+  }
+
+  /**
+   * Validates a public reschedule delay before persistence work begins.
+   * @param {number} delayMs - Delay in milliseconds.
+   * @returns {void}
+   */
+  _validateRescheduleDelayMs(delayMs) {
+    if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
+      throw VelociousError.safe("background job reschedule delayMs must be a non-negative safe integer")
+    }
   }
 
   /**
