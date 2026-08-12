@@ -121,7 +121,7 @@
     "mysql": "^2.18.1",
     "node-fetch": "^3.3.1",
     "pg": "^8.16.3",
-    "rampway": "^0.4.0",
+    "rampway": "^0.5.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "release-patch": "^1.0.0",
