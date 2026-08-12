@@ -385,6 +385,8 @@ Each appended record contains:
 
 Use `pendingRecords()` to get records that still need reconciliation; storage adapters can service this through a status index rather than loading terminal history. Use `updateStatus(...)` after a replay, conflict, rejection, or successful sync. Use `compact(...)` after successful replay/sync to delete old terminal records while preserving pending/conflict records and records referenced by pending dependencies.
 
+`SyncClient` can use this same log as its authoritative queue for resources declaring `static sync.conflictTracking`. It captures each lifecycle event's pre-write base before deferring its queue append until transaction commit, preserves per-record predecessor order, persists structured conflicts/rejections, and retries with stable mutation ids. Only adjacent disjoint scalar updates with the same base can be combined on the wire; their individual log records remain durable. Acknowledged successors are rebased only from an authoritative server version and only when no pull/realtime observation intervened. Exact model-backed retries return a duplicate acknowledgement with the current routed record version without applying twice. Non-opted-in resources retain the original `Sync`-row queue behavior.
+
 ### Offline frontend-model writes
 
 Frontend models can queue offline mutations by configuring transport-level offline sync:

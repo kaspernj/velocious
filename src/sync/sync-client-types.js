@@ -18,6 +18,20 @@
  */
 
 /**
+ * Durable optimistic-version tracking configuration. Identity/grant fields are
+ * retained in the shared LocalMutationLog mutation shape used by offline sync.
+ * @typedef {object} SyncClientConflictTrackingConfig
+ * @property {string} actorDeviceId - Stable device identity.
+ * @property {string} actorUserId - Stable user identity.
+ * @property {() => string} clientMutationId - Durable idempotency-id generator.
+ * @property {import("./local-mutation-log.js").default} mutationLog - Existing durable mutation log.
+ * @property {() => Date} [now] - Mutation clock.
+ * @property {string} offlineGrantId - Grant identifier retained with intent.
+ * @property {string} policyHash - Policy hash retained with intent.
+ * @property {string} [versionAttribute] - Authoritative version attribute; defaults to updatedAt when present.
+ */
+
+/**
  * Declarative per-resource sync policy.
  * @typedef {object} SyncClientResourceConfig
  * @property {ReturnType<typeof JSON.parse>} modelClass - Local model class for this resource.
@@ -26,6 +40,7 @@
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"]} [findRecordForDelete] - Custom pull-apply delete resolver.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["afterApply"]} [afterApply] - Post-apply hook.
  * @property {string[]} [booleanAttributes] - Attributes coerced through sync boolean parsing when queueing.
+ * @property {SyncClientConflictTrackingConfig} [conflictTracking] - Opt-in durable base-version conflict tracking.
  * @property {string[]} [localOnlyAttributes] - Attributes stripped from queued payloads.
  * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>}) => string)} [syncType] - Maps a mutation operation to a sync type. The "upsert" flag queues creates and updates as "update" rows (the server upserts by resource id) and destroys as "delete". Defaults to the operation name with destroy mapped to "delete".
  * @property {(args: {operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>}) => Record<string, ReturnType<typeof JSON.parse>>} [trackedData] - Custom queued-payload builder for tracked mutations.
@@ -42,6 +57,7 @@
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["afterApply"]} [afterApply] - Post-apply hook.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["attributes"]} [attributes] - Pull-apply attribute mapper. Required for resources that receive pulled changes.
  * @property {string[]} [booleanAttributes] - Extra boolean attributes merged with the boolean columns derived from column types.
+ * @property {SyncClientConflictTrackingConfig} [conflictTracking] - Opt-in durable base-version conflict tracking.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecord"]} [findRecord] - Custom pull-apply record resolver.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"]} [findRecordForDelete] - Custom pull-apply delete resolver.
  * @property {string[]} [localOnlyAttributes] - Extra local-only attributes merged with the derived primary key, createdAt/updatedAt, and sync bookkeeping attributes.
