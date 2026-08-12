@@ -14,6 +14,8 @@ class FakeConnection {
     /** @type {(value?: void) => void} */
     this.resolveCall = () => {}
     this.callStarted = new Promise((resolve) => { this.resolveCall = resolve })
+    this.failRollback = false
+    this.failRelease = false
   }
 
   async query(value) {
@@ -35,8 +37,14 @@ class FakeConnection {
   }
 
   async startSavePoint(name) { this.calls.push(`start:${name}`) }
-  async releaseSavePoint(name) { this.calls.push(`release:${name}`) }
-  async rollbackSavePoint(name) { this.calls.push(`rollback:${name}`) }
+  async releaseSavePoint(name) {
+    this.calls.push(`release:${name}`)
+    if (this.failRelease) throw new Error("release cleanup failed")
+  }
+  async rollbackSavePoint(name) {
+    this.calls.push(`rollback:${name}`)
+    if (this.failRollback) throw new Error("rollback cleanup failed")
+  }
 }
 
 describe("Shared transaction broker protocol", {databaseCleaning: {transaction: false, truncate: false}}, () => {
@@ -192,5 +200,52 @@ describe("Shared transaction broker protocol", {databaseCleaning: {transaction: 
       await client.close()
       await broker.close()
     }
+  })
+
+  it("records disconnected lease cleanup failure without an unhandled rejection and settles FIFO waiters", async () => {
+    const connection = new FakeConnection()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const holder = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+    const waiter = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+    /** @type {Array<Error>} */
+    const unhandled = []
+    const onUnhandled = (reason) => unhandled.push(reason instanceof Error ? reason : new Error(String(reason)))
+    process.on("unhandledRejection", onUnhandled)
+
+    await holder.call("rootTransactionStart", ["broken"])
+    const waitingStart = waiter.call("rootTransactionStart", ["waiting"])
+    const waitingResult = waitingStart.then(() => "resolved", () => "rejected")
+    connection.failRollback = true
+    await holder.close()
+    expect(await waitingResult).toEqual("resolved")
+    await waiter.call("rootTransactionRelease", ["waiting"])
+    await expect(() => broker.close()).toThrow(/rollback cleanup failed/i)
+
+    process.removeListener("unhandledRejection", onUnhandled)
+    expect(unhandled).toEqual([])
+    expect(broker.httpServer.listening).toEqual(false)
+    expect(broker.sessions.size).toEqual(0)
+    await waiter.close()
+  })
+
+  it("continues explicit close after lease cleanup failures and rejects only after transport drain", async () => {
+    const firstConnection = new FakeConnection()
+    const secondConnection = new FakeConnection()
+    firstConnection.failRollback = true
+    secondConnection.failRelease = true
+    const broker = await SharedTransactionBroker.start({connections: {first: firstConnection, second: secondConnection}})
+    const first = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "first"})
+    const second = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "second"})
+    await first.call("rootTransactionStart", ["first"])
+    await second.call("rootTransactionStart", ["second"])
+
+    await expect(() => broker.close()).toThrow(/cleanup failed/i)
+
+    expect(firstConnection.calls).toEqual(["start:first", "rollback:first", "release:first"])
+    expect(secondConnection.calls).toEqual(["start:second", "rollback:second", "release:second"])
+    expect(broker.httpServer.listening).toEqual(false)
+    expect(broker.sessions.size).toEqual(0)
+    await first.close()
+    await second.close()
   })
 })

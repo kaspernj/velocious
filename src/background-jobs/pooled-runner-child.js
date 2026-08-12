@@ -3,6 +3,7 @@
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
 import { closeRunnerConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
+import PooledRunnerBrokerIdentity from "./pooled-runner-broker-identity.js"
 import { runWithSharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
 const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
@@ -34,27 +35,9 @@ async function shutdownRunner(exitCode) {
  * @type {Set<string>}
  */
 const runningJobIds = new Set()
-/** @type {string | undefined} */
-let activeBrokerIdentity
-
-/**
- * Clears retained proxy/direct connections whenever the per-job broker mode or
- * capability changes. Concurrent siblings must share one identity.
- * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} config - Dispatch-time configuration.
- * @returns {Promise<void>} - Resolves after stale connections are closed.
- */
-async function prepareBrokerIdentity(config) {
-  const identity = JSON.stringify(config)
-  if (activeBrokerIdentity === undefined) {
-    activeBrokerIdentity = identity
-    return
-  }
-  if (activeBrokerIdentity === identity) return
-  if (runningJobIds.size > 1) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
-
-  await closeRunnerConnections(currentConfigurationOrNull())
-  activeBrokerIdentity = identity
-}
+const brokerIdentity = new PooledRunnerBrokerIdentity({
+  closeConnections: async () => await closeRunnerConnections(currentConfigurationOrNull())
+})
 
 /**
  * Sets an aggregate process title from the current in-flight count. A child runs
@@ -123,8 +106,9 @@ function sendOutcome({jobId, acknowledged, status, error}) {
 async function runJob(payload, sharedTransactionBroker) {
   try {
     const status = await runWithSharedTransactionBrokerConfig(sharedTransactionBroker, async () => {
-      await prepareBrokerIdentity(sharedTransactionBroker)
-      return await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+      return await brokerIdentity.run(sharedTransactionBroker, async () => {
+        return await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+      })
     })
     await sendOutcome({jobId: payload.id, acknowledged: true, status})
   } catch (error) {

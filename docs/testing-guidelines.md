@@ -34,10 +34,16 @@ their configured identifiers.
 
 Reusable pooled runners receive broker mode and capability with every job dispatch,
 so a warm child can safely cross test-attempt boundaries. A capability change closes
-the child's retained proxy state before the next job; missing coordinates fail closed
-when that dispatch expects transactional sharing. Concurrent child transactions are
+the child's retained proxy state before the next job; concurrent jobs for that same
+new capability share the one serialized rotation, while genuinely different active
+capabilities are rejected. Missing coordinates fail closed when that dispatch expects
+transactional sharing. Concurrent child transactions are
 leased FIFO for their complete root-savepoint lifetime, rather than interleaving
 savepoints one WebSocket call at a time.
+
+If abandoned savepoint cleanup fails, the broker still releases FIFO waiters and
+drains every child socket and server. The teardown caller then receives the collected
+driver cleanup errors after transport shutdown completes.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so

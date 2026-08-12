@@ -13,7 +13,7 @@ const markerPrefix = `shared-transaction-pooled-attempts-${process.pid}-${Date.n
 
 describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], databaseCleaning: {transaction: true, truncate: false}}, () => {
   beforeAll(async () => {
-    backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
+    backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerConcurrency: 2, pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
     backgroundJobs.worker._createPooledChild()
   })
 
@@ -38,18 +38,23 @@ describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], data
     firstAttemptPid = result.pid
   })
 
-  it("reuses the process with the new attempt capability and no stale fallback", async () => {
+  it("runs concurrent jobs sharing the new attempt capability in the reused process", async () => {
     if (!backgroundJobs || firstAttemptPid === undefined) throw new Error("Expected first pooled attempt to complete")
     const parentMarker = `${markerPrefix}-parent-second`
-    const childMarker = `${markerPrefix}-child-second`
-    const outputPath = await outputPathFor("shared-transaction-next-attempt")
+    const childMarkers = [`${markerPrefix}-child-second-a`, `${markerPrefix}-child-second-b`]
+    const outputPaths = await Promise.all([
+      outputPathFor("shared-transaction-next-attempt-a"),
+      outputPathFor("shared-transaction-next-attempt-b")
+    ])
     await Project.create({creatingUserReference: parentMarker})
-    const jobId = await SharedTransactionTestJob.performLaterWithOptions({args: [parentMarker, childMarker, outputPath], options: {executionMode: "pooled"}})
+    const jobIds = await Promise.all(childMarkers.map(async (childMarker, index) => {
+      return await SharedTransactionTestJob.performLaterWithOptions({args: [parentMarker, childMarker, outputPaths[index]], options: {executionMode: "pooled"}})
+    }))
 
-    await waitForJobCompleted({jobId, store: backgroundJobs.store, timeoutSeconds: 10})
-    const result = await waitForOutputJson({outputPath, timeoutSeconds: 10})
-    expect(result.pid).toEqual(firstAttemptPid)
-    expect(result.parentCount).toEqual(1)
-    expect(result.childCount).toEqual(1)
+    await Promise.all(jobIds.map(async (jobId) => await waitForJobCompleted({jobId, store: backgroundJobs.store, timeoutSeconds: 10})))
+    const results = await Promise.all(outputPaths.map(async (outputPath) => await waitForOutputJson({outputPath, timeoutSeconds: 10})))
+    expect(results.map((result) => result.pid)).toEqual([firstAttemptPid, firstAttemptPid])
+    expect(results.map((result) => result.parentCount)).toEqual([1, 1])
+    expect(results.map((result) => result.childCount)).toEqual([1, 1])
   })
 })

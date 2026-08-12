@@ -51,13 +51,19 @@ export default class SharedTransactionBroker extends EventEmitter {
     this.connectionStates = new Map()
     /** @type {Set<import("ws").WebSocket>} */
     this.sessions = new Set()
+    /** @type {Map<import("ws").WebSocket, Promise<void>>} */
+    this.sessionCleanup = new Map()
+    /** @type {Array<Error>} */
+    this.cleanupErrors = []
+    /** @type {Promise<void> | undefined} */
+    this.closePromise = undefined
     this.httpServer = createServer()
     this.websocketServer = new WebSocketServer({server: this.httpServer, maxPayload: 16 * 1024 * 1024})
     this.websocketServer.on("connection", (socket) => {
       this.sessions.add(socket)
       socket.once("close", () => {
         this.sessions.delete(socket)
-        void this.releaseDisconnectedLeases(socket)
+        this.scheduleSessionCleanup(socket)
       })
       socket.on("message", (data) => void this.handleRequest(socket, `${data}`))
     })
@@ -259,6 +265,8 @@ export default class SharedTransactionBroker extends EventEmitter {
    * @returns {Promise<void>} - Resolves after all owned leases release.
    */
   async releaseDisconnectedLeases(socket) {
+    /** @type {Array<Error>} */
+    const errors = []
     for (const [connection, state] of this.connectionStates) {
       const lease = state.lease
       if (!lease || lease.socket !== socket) continue
@@ -266,12 +274,34 @@ export default class SharedTransactionBroker extends EventEmitter {
         await this.serializeLease(lease, async () => {
           await this.rollbackRootSavePoint(connection, lease.savePointName)
         })
+      } catch (error) {
+        errors.push(error instanceof Error ? error : new Error(String(error)))
       } finally {
         state.lease = undefined
         state.rootSessions.delete(socket)
         lease.release()
       }
     }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `Shared transaction broker lease cleanup failed: ${errors.map((error) => error.message).join("; ")}`)
+    }
+  }
+
+  /**
+   * Tracks detached socket cleanup and records its failure for close().
+   * @param {import("ws").WebSocket} socket - Closed session.
+   * @returns {Promise<void>} - Settled tracked cleanup.
+   */
+  scheduleSessionCleanup(socket) {
+    const existing = this.sessionCleanup.get(socket)
+    if (existing) return existing
+    const cleanup = this.releaseDisconnectedLeases(socket)
+      .catch((error) => {
+        this.cleanupErrors.push(error instanceof Error ? error : new Error(String(error)))
+      })
+      .finally(() => this.sessionCleanup.delete(socket))
+    this.sessionCleanup.set(socket, cleanup)
+    return cleanup
   }
 
   /**
@@ -282,8 +312,21 @@ export default class SharedTransactionBroker extends EventEmitter {
    */
   async rollbackRootSavePoint(connection, savePointName) {
     const methods = /** @type {{releaseSavePoint: (name: string) => Promise<void>, rollbackSavePoint: (name: string) => Promise<void>}} */ (connection)
-    await methods.rollbackSavePoint(savePointName)
-    await methods.releaseSavePoint(savePointName)
+    /** @type {Array<Error>} */
+    const errors = []
+    try {
+      await methods.rollbackSavePoint(savePointName)
+    } catch (error) {
+      errors.push(error instanceof Error ? error : new Error(String(error)))
+    }
+    try {
+      await methods.releaseSavePoint(savePointName)
+    } catch (error) {
+      errors.push(error instanceof Error ? error : new Error(String(error)))
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `Shared transaction broker could not clean root savepoint ${savePointName}: ${errors.map((error) => error.message).join("; ")}`)
+    }
   }
 
   /**
@@ -316,13 +359,27 @@ export default class SharedTransactionBroker extends EventEmitter {
    * @returns {Promise<void>} - Resolves after transport shutdown.
    */
   async close() {
-    if (!this.accepting) return
+    if (this.closePromise) return await this.closePromise
+    this.closePromise = this.closeTransport()
+    return await this.closePromise
+  }
+
+  /**
+   * Performs deterministic transport shutdown and reports cleanup failures last.
+   * @returns {Promise<void>} - Resolves after shutdown or rejects with cleanup errors.
+   */
+  async closeTransport() {
     this.accepting = false
     this.secret = randomBytes(32).toString("base64url")
-    for (const socket of this.sessions) await this.releaseDisconnectedLeases(socket)
-    for (const socket of this.sessions) socket.close(1001, "Shared transaction broker closed")
-    await Promise.all(Array.from(this.connectionStates.values()).map((state) => state.queue))
+    const closingSessions = Array.from(this.sessions)
+    await Promise.all(closingSessions.map(async (socket) => await this.scheduleSessionCleanup(socket)))
+    for (const socket of closingSessions) socket.close(1001, "Shared transaction broker closed")
+    await Promise.allSettled(Array.from(this.connectionStates.values()).map((state) => state.queue))
     await new Promise((resolve) => this.websocketServer.close(() => resolve(undefined)))
     await new Promise((resolve) => this.httpServer.close(() => resolve(undefined)))
+    await Promise.all(Array.from(this.sessionCleanup.values()))
+    if (this.cleanupErrors.length > 0) {
+      throw new AggregateError(this.cleanupErrors, `Shared transaction broker cleanup failed: ${this.cleanupErrors.map((error) => error.message).join("; ")}`)
+    }
   }
 }
