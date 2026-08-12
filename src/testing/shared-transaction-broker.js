@@ -5,6 +5,7 @@ import { createServer } from "node:http"
 import { EventEmitter } from "node:events"
 import { WebSocketServer } from "ws"
 import { decodeBrokerValue, encodeBrokerValue } from "./shared-transaction-codec.js"
+import {clearSharedTransactionCoordinator, setSharedTransactionCoordinator} from "./shared-transaction-connection-coordinator.js"
 
 /** @typedef {{queue: Promise<void>, rootSessions: Set<import("ws").WebSocket>, lease?: {operations: Promise<void>, release: () => void, savePointName: string, socket: import("ws").WebSocket}}} ConnectionState */
 
@@ -57,6 +58,18 @@ export default class SharedTransactionBroker extends EventEmitter {
     this.cleanupErrors = []
     /** @type {Promise<void> | undefined} */
     this.closePromise = undefined
+    /** @type {Map<object, (callback: () => Promise<ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>>} */
+    this.connectionCoordinators = new Map()
+    for (const connection of new Set(Object.values(connections))) {
+      /**
+       * Serializes parent operations with child broker traffic.
+       * @param {() => Promise<unknown>} callback - Parent operation.
+       * @returns {Promise<unknown>} - Operation result.
+       */
+      const coordinator = async (callback) => await this.serialize(this.connectionState(connection), callback)
+      this.connectionCoordinators.set(connection, coordinator)
+      setSharedTransactionCoordinator(connection, coordinator)
+    }
     this.httpServer = createServer()
     this.websocketServer = new WebSocketServer({server: this.httpServer, maxPayload: 16 * 1024 * 1024})
     this.websocketServer.on("connection", (socket) => {
@@ -378,6 +391,9 @@ export default class SharedTransactionBroker extends EventEmitter {
     await new Promise((resolve) => this.websocketServer.close(() => resolve(undefined)))
     await new Promise((resolve) => this.httpServer.close(() => resolve(undefined)))
     await Promise.all(Array.from(this.sessionCleanup.values()))
+    for (const [connection, coordinator] of this.connectionCoordinators) {
+      clearSharedTransactionCoordinator(connection, coordinator)
+    }
     if (this.cleanupErrors.length > 0) {
       throw new AggregateError(this.cleanupErrors, `Shared transaction broker cleanup failed: ${this.cleanupErrors.map((error) => error.message).join("; ")}`)
     }

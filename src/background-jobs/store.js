@@ -6,6 +6,7 @@ import TableData from "../database/table-data/index.js"
 import VelociousError from "../velocious-error.js"
 import BackgroundJobRecord from "./job-record.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
+import {coordinateSharedTransactionConnection} from "../testing/shared-transaction-connection-coordinator.js"
 
 /**
  * PreparedBackgroundJob type.
@@ -2385,7 +2386,8 @@ export default class BackgroundJobsStore {
 
     return await this.configuration.runWithTestSharedConnectionContexts(async () => {
       return await this.configuration.ensureConnections({databaseIdentifiers: [databaseIdentifier], name: "Background jobs store"}, async (dbs) => {
-        return await callback(dbs[databaseIdentifier])
+        const connection = dbs[databaseIdentifier]
+        return await coordinateSharedTransactionConnection(connection, async () => await callback(connection))
       })
     })
   }

@@ -48,7 +48,9 @@ driver cleanup errors after transport shutdown completes.
 The in-process background-jobs main also enters the attempt's shared connection
 context before store work. This keeps enqueue, handoff, and terminal job rows on the
 same parent-owned transaction on async-tracked database pools instead of checking out
-an independently committed connection.
+an independently committed connection. Parent store callbacks and child broker calls
+also share the broker's per-physical-connection queue, preventing overlapping driver
+requests while preserving root-savepoint leases.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
