@@ -2,7 +2,6 @@
 
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
-import JsonSocket from "../../src/background-jobs/json-socket.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 class FailingRescheduleStore extends BackgroundJobsStore {
@@ -34,7 +33,7 @@ describe("Background jobs - main reschedule errors", () => {
 
     try {
       await main._handleJobReschedule({
-        jsonSocket: /** @type {JsonSocket} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: (message) => sent.push(message)})),
+        jsonSocket: /** @type {import("../../src/background-jobs/json-socket.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: (message) => sent.push(message)})),
         message: {type: "job-reschedule", jobId: "job-1", delayMs: 1_000}
       })
     } finally {
