@@ -2345,6 +2345,26 @@ await MyJob.performLaterWithOptions({
 
 Until `scheduledAtMs` is reached, the job remains queued but is not eligible for dispatch. The event-driven dispatcher arms its timer for the earliest future job and wakes at that timestamp. Omitting `scheduledAtMs` keeps the immediate-enqueue behavior.
 
+A running job that cannot proceed yet can reschedule its same durable row without
+recording a failure—for example, when a non-blocking lock is busy:
+
+```js
+async perform(accountId) {
+  if (!(await Account.tryAcquireRefreshLock(accountId))) {
+    this.rescheduleIn(30_000)
+  }
+
+  await refreshAccount(accountId)
+}
+```
+
+`rescheduleIn(delayMs)` requires a finite, non-negative safe-integer millisecond
+delay and never returns: it stops the current `perform`, releases its worker and
+concurrency slots, and makes the same job eligible again after the delay. This is
+normal control flow, not failure retry: attempts and failure metadata remain
+unchanged, retries are not consumed, and failure/error events are not emitted.
+See [Rescheduling a running job](docs/background-jobs.md#rescheduling-a-running-job).
+
 Use a durable stable key when the same logical one-off schedule must be moved or cancelled without retaining its transient job id:
 
 ```js

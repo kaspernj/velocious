@@ -1,0 +1,1 @@
+Add `VelociousJob#rescheduleIn(delayMs)` for cleanly snoozing the same running background-job row when work cannot proceed yet. Rescheduling releases worker and durable concurrency capacity, preserves attempts and failure metadata, and does not emit failure/error events or consume retries.

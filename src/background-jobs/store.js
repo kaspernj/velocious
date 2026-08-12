@@ -695,6 +695,48 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Returns an active handoff to the queue at a caller-requested future time.
+   * This is normal job control flow: it preserves failure attempts and metadata.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {number} args.delayMs - Delay from persistence time in milliseconds.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @returns {Promise<boolean>} - Whether the fenced report was accepted.
+   */
+  async markRescheduled({jobId, delayMs, handoffId, workerId, handedOffAtMs}) {
+    await this.ensureReady()
+    this._validateRescheduleDelayMs(delayMs)
+
+    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+      const job = await this._getJobRowById(db, jobId)
+
+      if (!job) return false
+      if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
+
+      await this._lockConcurrencyRow(db, job.concurrencyKey)
+      const scheduledAtMs = this._rescheduledAtMs(delayMs)
+      const affectedRows = await this._updateAffectedRows(db, {
+        tableName: JOBS_TABLE,
+        data: {
+          status: "queued",
+          scheduled_at_ms: scheduledAtMs,
+          handed_off_at_ms: null,
+          handoff_id: null,
+          worker_id: null
+        },
+        conditions: this._activeHandoffConditions(job)
+      })
+
+      if (affectedRows !== 1) return false
+      await this._releaseConcurrency(db, job.concurrencyKey)
+      await this._recordStatusTransition(db, "handed_off", "queued")
+      return true
+    }))
+  }
+
+  /**
    * Runs mark returned to queue.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
@@ -1065,6 +1107,33 @@ export default class BackgroundJobsStore {
     if (Number.isSafeInteger(scheduledAtMs) && scheduledAtMs >= 0) return scheduledAtMs
 
     throw VelociousError.safe("background job scheduledAtMs must be a non-negative safe integer")
+  }
+
+  /**
+   * Resolves a reschedule delay against persistence time.
+   * @param {number} delayMs - Delay in milliseconds.
+   * @returns {number} - Future eligibility timestamp.
+   */
+  _rescheduledAtMs(delayMs) {
+    this._validateRescheduleDelayMs(delayMs)
+
+    const scheduledAtMs = Date.now() + delayMs
+    if (!Number.isSafeInteger(scheduledAtMs)) {
+      throw VelociousError.safe("background job reschedule scheduledAtMs must be a safe integer")
+    }
+
+    return scheduledAtMs
+  }
+
+  /**
+   * Validates a public reschedule delay before persistence work begins.
+   * @param {number} delayMs - Delay in milliseconds.
+   * @returns {void}
+   */
+  _validateRescheduleDelayMs(delayMs) {
+    if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
+      throw VelociousError.safe("background job reschedule delayMs must be a non-negative safe integer")
+    }
   }
 
   /**

@@ -1,6 +1,7 @@
 // @ts-check
 
 import BackgroundJobsClient from "./client.js"
+import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 
 /**
  * Base class for background jobs.
@@ -42,6 +43,20 @@ export default class VelociousJob {
    * @type {string | undefined}
    */
   static processTitle = undefined
+
+  /**
+   * Stops this performance and reschedules the same logical job row. This is
+   * normal control flow: it does not count as a failure or consume a retry.
+   * @param {number} delayMs - Non-negative safe-integer delay in milliseconds.
+   * @returns {never} - This method never returns.
+   */
+  rescheduleIn(delayMs) {
+    if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
+      throw new TypeError("background job reschedule delayMs must be a non-negative safe integer")
+    }
+
+    throw new BackgroundJobRescheduleSignal(delayMs)
+  }
 
   /**
    * Runs job name.

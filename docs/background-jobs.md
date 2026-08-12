@@ -27,6 +27,37 @@ For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-bac
 
 Logical one-off schedules that may be moved or cancelled can use `replaceScheduled` and `cancelScheduled` with a durable stable key. Queued replacement/cancellation is atomic across processes; a `handed_off` result is explicitly best-effort because running JavaScript is not interrupted. Consumers must pair the API with their own generation/revision check immediately before side effects. See [Replacing or cancelling a logical schedule](scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
+## Rescheduling a running job
+
+Use `this.rescheduleIn(delayMs)` when a running job cannot proceed yet but has not
+failed, such as when a non-blocking application lock is already held:
+
+```js
+export default class RefreshAccountJob extends VelociousJob {
+  async perform(accountId) {
+    if (!(await Account.tryAcquireRefreshLock(accountId))) {
+      this.rescheduleIn(30_000)
+    }
+
+    await refreshAccount(accountId)
+  }
+}
+```
+
+The delay must be a finite, non-negative safe integer in milliseconds. The method
+never returns: it ends the current performance, atomically returns the same
+durable job row to `queued`, schedules it relative to the time that transition is
+persisted, and releases both the executing worker slot and any durable concurrency
+reservation. The row keeps its id, arguments, queue, execution mode, stable
+schedule ownership, attempts, and failure metadata.
+
+Rescheduling is normal control flow and is deliberately separate from throwing an
+error. It does not consume `maxRetries`, increment `attempts`, set `lastError`, or
+emit `background-job-failed` / `all-error`. An invalid delay is an ordinary
+programming error and therefore follows normal job failure and retry behavior.
+Independent enqueues remain independent: rescheduling does not insert, merge, or
+delete rows, and `deduplicateWhileQueued` keeps its existing enqueue-time rules.
+
 ## Database connection scopes
 
 By default, a job receives the existing Velocious behavior: every active configured database is checked out for the duration of `perform`. Jobs that need a known subset should declare it on the job class:
