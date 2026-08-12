@@ -2,6 +2,7 @@
 
 import AsyncTrackedMultiConnection from "../../../src/database/pool/async-tracked-multi-connection.js"
 import DatabaseDriverBase from "../../../src/database/drivers/base.js"
+import NodeEnvironmentHandler from "../../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
 class SchemaCacheTestDriver extends DatabaseDriverBase {
@@ -35,6 +36,8 @@ class SchemaCacheTestDriver extends DatabaseDriverBase {
  * @returns {import("../../../src/configuration.js").default} - Configuration-shaped object.
  */
 function buildConfiguration(databaseConfig) {
+  const environmentHandler = new NodeEnvironmentHandler()
+
   return /** @type {import("../../../src/configuration.js").default} */ (/** @type {unknown} */ ({
     clearSchemaCachesForReuseKey() {
       // This stub configuration owns no pool registry, so cross-pool invalidation
@@ -45,6 +48,9 @@ function buildConfiguration(databaseConfig) {
     },
     getEnvironment() {
       return "test"
+    },
+    getEnvironmentHandler() {
+      return environmentHandler
     },
     getQueryLoggingEnabled() {
       return false

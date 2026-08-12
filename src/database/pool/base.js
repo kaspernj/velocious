@@ -194,6 +194,15 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Returns the connection registered for test-only in-process sharing.
+   * Base pools do not need a separate shared connection.
+   * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
+   */
+  testSharedConnection() {
+    return undefined
+  }
+
+  /**
    * Returns whether the current connection is pinned to an execution context.
    * @returns {boolean} - Whether the current connection can be reused by nested code.
    */

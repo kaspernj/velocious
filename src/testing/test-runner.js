@@ -1073,6 +1073,9 @@ export default class TestRunner {
                     }
 
                     sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker()
+                    if (sharedTransactionBrokerRegistration && testSharedConnectionRegistrations.length === 0) {
+                      testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                    }
 
                     // Record which test is running so an async crash (an unhandled
                     // rejection detached from any await) that fires during or shortly

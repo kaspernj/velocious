@@ -45,6 +45,11 @@ If abandoned savepoint cleanup fails, the broker still releases FIFO waiters and
 drains every child socket and server. The teardown caller then receives the collected
 driver cleanup errors after transport shutdown completes.
 
+The in-process background-jobs main also enters the attempt's shared connection
+context before store work. This keeps enqueue, handoff, and terminal job rows on the
+same parent-owned transaction on async-tracked database pools instead of checking out
+an independently committed connection.
+
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
 child/request work continues to use independent physical connections. Tenant-only
