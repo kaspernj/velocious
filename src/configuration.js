@@ -302,8 +302,8 @@ export default class VelociousConfiguration {
      */
     this._initializeModelsPromise = undefined
     /**
-     * In-progress `initialize()` promise, memoized so concurrent callers await
-     * the same bootstrap. Reset to undefined if initialization fails.
+     * Current `initialize()` promise, memoized so concurrent callers await the
+     * same bootstrap. Reset when initialization fails or connections close.
      * @type {Promise<void> | undefined}
      */
     this._initializePromise = undefined
@@ -2110,6 +2110,10 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize({type} = {type: "undefined"}) {
+    if (this._closeDatabaseConnectionsPromise) {
+      await this._closeDatabaseConnectionsPromise
+    }
+
     if (this._isInitialized) return
     // Memoize the in-progress initialization so concurrent callers await the same
     // bootstrap instead of racing. `_isInitialized` was previously set to `true`
@@ -2119,13 +2123,14 @@ export default class VelociousConfiguration {
     // was still awaiting model discovery and initializers. Mirrors connectBeacon.
     if (this._initializePromise) return await this._initializePromise
 
-    this._initializePromise = (async () => {
+    const initializationGeneration = this._modelInitializationGeneration
+    const initializePromise = (async () => {
       await this.initializeModels({type})
 
       // Model initialization can be invalidated by a concurrent connection close.
       // If models are not ready, stop without marking the configuration initialized
       // so the next caller retries a full bootstrap.
-      if (!this._modelsInitialized) return
+      if (this._modelInitializationGeneration !== initializationGeneration || !this._modelsInitialized) return
 
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
@@ -2147,22 +2152,28 @@ export default class VelociousConfiguration {
         }
       }
 
-      this._isInitialized = true
+      if (this._modelInitializationGeneration === initializationGeneration) {
+        this._isInitialized = true
+      }
     })()
 
+    this._initializePromise = initializePromise
+
     try {
-      await this._initializePromise
+      await initializePromise
     } catch (error) {
       // Let a later call retry a failed initialization instead of every future
       // caller awaiting the same cached rejection.
-      this._initializePromise = undefined
+      if (this._initializePromise === initializePromise) {
+        this._initializePromise = undefined
+      }
       throw error
     }
 
     // If the inner IIFE returned without marking the configuration initialized
     // (e.g. because models were invalidated mid-bootstrap), clear the promise so
     // a later call retries a full bootstrap.
-    if (!this._isInitialized) {
+    if (!this._isInitialized && this._initializePromise === initializePromise) {
       this._initializePromise = undefined
     }
   }
@@ -3325,6 +3336,7 @@ export default class VelociousConfiguration {
 
     /** @type {Set<typeof import("./database/pool/base.js").default>} */
     const constructors = new Set()
+    const initializePromise = this._initializePromise
 
     this._closeDatabaseConnectionsPromise = (async () => {
       try {
@@ -3354,6 +3366,10 @@ export default class VelociousConfiguration {
         this._modelInitializationGeneration += 1
         this._modelsInitialized = false
         this._isInitialized = false
+
+        if (this._initializePromise === initializePromise) {
+          this._initializePromise = undefined
+        }
       }
     })()
 
