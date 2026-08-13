@@ -73,6 +73,9 @@
 /**
  * @typedef {object} SyncReplayItem
  * @property {string | number} id - Sync id.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} [conflict] - Structured durable conflict payload.
+ * @property {string} [reason] - Rejection reason.
+ * @property {string | number | null} [serverVersion] - Authoritative version after successful replay.
  * @property {string} syncState - Replay state.
  */
 

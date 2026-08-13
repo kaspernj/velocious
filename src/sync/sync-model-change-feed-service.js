@@ -3,6 +3,7 @@
 import VelociousError from "../velocious-error.js"
 
 import {declaredSyncScopeAttributes} from "./sync-scope-attributes.js"
+import {decodeReplayPersistedData} from "./sync-replay-persisted-data.js"
 
 /**
  * Generic cursor-paginated change feed over an app-owned sync/change model.
@@ -243,9 +244,7 @@ export default class SyncModelChangeFeedService {
     const data = this.recordValue(record, "data")
 
     if (data === "" || data === null || data === undefined) return null
-    if (typeof data !== "string") return data
-
-    return JSON.parse(data)
+    return decodeReplayPersistedData(data).payload
   }
 
   /**
@@ -285,4 +284,3 @@ export default class SyncModelChangeFeedService {
     return date.toISOString()
   }
 }
-

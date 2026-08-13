@@ -149,6 +149,30 @@ export default class LocalMutationLog {
   }
 
   /**
+   * Replaces the mutation payload of a still-pending record. Used when an
+   * acknowledged predecessor supplies the authoritative base for its successor.
+   * @param {{id: string, mutation: import("./device-identity.js").SyncMutation}} args - Record and replacement mutation.
+   * @returns {Promise<LocalMutationLogRecord>} Updated record.
+   */
+  async updateMutation({id, mutation}) {
+    return await withStorageKeyLock(this.storageKey, async () => {
+      const rawRecord = await this.storage.record(this.storageKey, id)
+
+      if (!rawRecord) throw new Error(`No local mutation log record '${id}'`)
+
+      const record = normalizeRecord(rawRecord)
+
+      if (!PENDING_STATUSES.has(record.status)) throw new Error(`Cannot update mutation for ${record.status} local mutation '${id}'`)
+
+      record.mutation = normalizeMutation(mutation)
+      record.updatedAt = this.currentTimestamp()
+      await this.storage.updateRecord(this.storageKey, cloneRecord(record))
+
+      return cloneRecord(record)
+    })
+  }
+
+  /**
    * Prunes terminal records that are no longer needed for replay dependencies.
    * @param {object} [args] - Compaction options.
    * @param {number} [args.maxTerminalRecords] - Maximum terminal records to retain.

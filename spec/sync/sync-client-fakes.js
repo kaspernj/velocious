@@ -65,10 +65,13 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
   /** @type {Record<string, string>} */
   const columnNameToAttributeName = {}
   /** @type {Record<string, string>} */
+  const attributeNameToColumnName = {}
+  /** @type {Record<string, string>} */
   const typesByColumnName = {}
 
   for (const column of columns) {
     columnNameToAttributeName[column.name] = column.attributeName
+    attributeNameToColumnName[column.attributeName] = column.name
     typesByColumnName[column.name] = column.type
   }
 
@@ -102,6 +105,11 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
     /** @returns {Record<string, string>} Column name to attribute name map. */
     static getColumnNameToAttributeNameMap() {
       return columnNameToAttributeName
+    }
+
+    /** @returns {Record<string, string>} Attribute name to column name map. */
+    static getAttributeNameToColumnNameMap() {
+      return attributeNameToColumnName
     }
 
     /** @param {string} name - Column name. @returns {string | undefined} Column type. */
@@ -142,6 +150,16 @@ export function buildMetadataModelClass({columns, modelName, sync}) {
       (this.lifecycleCallbacks.afterDestroy ||= []).push(callback)
     }
 
+    /** @param {Function} callback - Lifecycle callback. @returns {void} */
+    static beforeUpdate(callback) {
+      (this.lifecycleCallbacks.beforeUpdate ||= []).push(callback)
+    }
+
+    /** @param {Function} callback - Lifecycle callback. @returns {void} */
+    static beforeDestroy(callback) {
+      (this.lifecycleCallbacks.beforeDestroy ||= []).push(callback)
+    }
+
     /** @param {string} callbackName - Callback type. @param {Function} callback - Registered callback. @returns {void} */
     static unregisterLifecycleCallback(callbackName, callback) {
       const callbacks = this.lifecycleCallbacks[callbackName]
@@ -174,6 +192,7 @@ export function buildRecord(modelClass, id, attributes, {databaseOperation} = {}
   record._databaseOperation = databaseOperation
   record.id = () => id
   record.attributes = () => attributes
+  record.changes = () => ({})
   /** @param {string} attributeName - Attribute name. @returns {ReturnType<typeof JSON.parse>} Attribute value. */
   record.readAttribute = (attributeName) => attributes[attributeName]
 

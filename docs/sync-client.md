@@ -30,6 +30,7 @@ class TicketScan extends ApplicationRecord {
 - `attributes` / `afterApply` — only for models that receive pulled changes and need to map or react to them.
 - `localOnlyAttributes` / `booleanAttributes` — only to *extend* the derived sets; the primary key, timestamps, bookkeeping columns, and boolean columns are always derived.
 - `trackedData` — only when a tracked payload must carry more than the record's attributes.
+- `conflictTracking` — opts a resource into durable optimistic-version replay. It takes the existing `LocalMutationLog`, stable actor/device/grant/policy metadata, a `clientMutationId` generator, and an optional `versionAttribute` (defaults to `updatedAt` only when that column exists). The configured version attribute is server-managed and is stripped from automatic mutation data. Resources without this option keep the legacy one-pending-row behavior and wire payload exactly.
 
 ## The sync.client configuration block
 
@@ -164,6 +165,29 @@ await syncClient().queue({resource: ticketScan, syncType: "scanAttempt"})
 Automatic tracking covers ordinary creates/updates, so most models never call `queue()`. Explicit `queue()` stays available for command-style mutations whose payload carries more than the record's attributes (e.g. a `scanAttempt` with device context).
 
 `queue()` persists a pending row on the derived `Sync` model (stripping local-only attributes, coercing booleans) and schedules an immediate background replay. Replays are single-flighted and online-gated; rows are marked successful only after the backend acknowledges them, so offline or rejected changes stay pending for the next attempt. Background failures go to the `sync.client.onError` hook (rethrown when none is configured). `waitForScheduledReplay()` awaits the last scheduled attempt (useful in tests and shutdown flows).
+
+### Durable base-version conflicts
+
+Shared/offline-editable resources can preserve every local intent instead of replacing one pending `Sync` row:
+
+```js
+static sync = {
+  conflictTracking: {
+    actorDeviceId: device.id,
+    actorUserId: currentUser.id,
+    clientMutationId: () => crypto.randomUUID(),
+    mutationLog,
+    offlineGrantId: grant.id,
+    policyHash: manifest.Task.policyHash,
+    versionAttribute: "updatedAt"
+  },
+  track: true
+}
+```
+
+Updates and deletes capture the configured version before the local write; creates use a null base. Each mutation is appended to `LocalMutationLog` with a per-record predecessor, so a create stays ahead of its edit and a conflicted/rejected predecessor blocks (but never deletes) later intent. Adjacent updates may share one transport mutation only when their payloads contain disjoint scalar fields and have the same base; every constituent log record remains inspectable.
+
+Replay sends stable client mutation ids and persists structured `conflict`/`failed` responses through the existing local-log result mapper. Per-record occurrence timestamps are strictly monotonic even when multiple intents are queued during one clock millisecond. Successful or duplicate acknowledgements may rebase the direct successor from the returned authoritative `serverVersion`; a pull/realtime observation while the predecessor is in flight prevents that rebase. With conflict-tracked model-backed replay, the sync row durably retains the original mutation identity, payload fingerprint, and acknowledgement version alongside its public change-feed data. An exact response-loss retry returns `syncState: "duplicate"` plus the version produced by the original apply—not a later record version—without applying twice; older distinct stale mutations retain the established successful no-op response. The server replay service must use the matching `conflictStrategy.versionAttribute` so successful responses carry an authoritative version and stale updates/deletes use the existing structured conflict contract.
 
 ## Realtime
 

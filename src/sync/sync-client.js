@@ -119,10 +119,14 @@ export default class SyncClient {
     this._scheduledReplay = null
     /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null} */
     this._pullResourceConfigs = null
-    /** @type {Array<{callback: (record: ReturnType<typeof JSON.parse>) => Promise<void>, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy", modelClass: ReturnType<typeof JSON.parse>}>} */
+    /** @type {Array<{callback: (record: ReturnType<typeof JSON.parse>) => Promise<void> | void, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy" | "beforeUpdate" | "beforeDestroy", modelClass: ReturnType<typeof JSON.parse>}>} */
     this._trackedCallbacks = []
     /** @type {WeakSet<object>} */
     this._remoteApplyRecords = new WeakSet()
+    /** @type {Map<string, number>} */
+    this._remoteGenerations = new Map()
+    /** @type {WeakMap<object, Array<string | number | null>>} */
+    this._capturedBaseVersions = new WeakMap()
     this._withoutTrackingDepth = 0
     /** @type {Logger | {error: (...messages: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} | null} */
     this._logger = null
@@ -144,6 +148,23 @@ export default class SyncClient {
 
     for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
       const operations = this.trackedOperations({resourceConfig, resourceType})
+
+      if (resourceConfig.conflictTracking) {
+        for (const operation of operations.filter((candidate) => candidate !== "create")) {
+          const callbackName = operation === "destroy" ? "beforeDestroy" : "beforeUpdate"
+          const callback = (/** @type {ReturnType<typeof JSON.parse>} */ record) => {
+            if (this.isTrackingSuppressed(record)) return
+
+            const capturedVersions = this._capturedBaseVersions.get(record) || []
+
+            capturedVersions.push(this.preMutationBaseVersionFor({operation, record, resourceConfig}))
+            this._capturedBaseVersions.set(record, capturedVersions)
+          }
+
+          resourceConfig.modelClass[callbackName](callback)
+          this._trackedCallbacks.push({callback, callbackName, modelClass: resourceConfig.modelClass})
+        }
+      }
 
       for (const operation of operations) {
         const callbackName = TRACKED_CALLBACK_NAMES[operation]
@@ -220,6 +241,9 @@ export default class SyncClient {
         resource: record
       })
       const syncType = this.defaultSyncType({operation, record, resourceConfig})
+      const baseVersion = resourceConfig.conflictTracking
+        ? this.capturedBaseVersionFor({operation, record, resourceConfig})
+        : null
       const databaseOperation = record.databaseOperation()
       const operationScope = databaseOperation
         ? databaseOperation.forModel(this.config.syncModel)
@@ -227,12 +251,19 @@ export default class SyncClient {
 
       await record.connection().afterCommit(async () => {
         try {
-          await SyncApiClient.queueLocalSync({
-            data,
-            resource: record,
-            syncModel: operationScope,
-            syncType
-          })
+          if (resourceConfig.conflictTracking) {
+            await SyncApiClient.queueConflictTrackedSync({
+              baseVersion,
+              conflictTracking: resourceConfig.conflictTracking,
+              data,
+              operation,
+              resource: record,
+              resourceType: record.constructor.getModelName(),
+              syncType
+            })
+          } else {
+            await SyncApiClient.queueLocalSync({data, resource: record, syncModel: operationScope, syncType})
+          }
         } catch (error) {
           await this.reportAfterCommitError(/** @type {Error} */ (error))
 
@@ -483,6 +514,17 @@ export default class SyncClient {
         throw new Error(`No sync resource with pull attributes configured for ${source}: ${String(resourceType)}`)
       }
 
+      const data = sync.data()
+      const versionAttribute = this.config.resources[resourceType].conflictTracking?.versionAttribute
+
+      if (versionAttribute) {
+        const dataAttributes = data && typeof data === "object" && !Array.isArray(data)
+          ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (data)
+          : {}
+
+        this.noteRemoteVersion({resourceId: String(sync.resourceId()), resourceType, version: dataAttributes[versionAttribute]})
+      }
+
       return await applier(sync)
     }
   }
@@ -658,18 +700,42 @@ export default class SyncClient {
   /**
    * Queues a local model change as a pending sync row and schedules an immediate
    * replay attempt (kept pending while offline or when the backend rejects it).
-   * @param {{resource: ReturnType<typeof JSON.parse>, data?: Record<string, ReturnType<typeof JSON.parse>>, syncType?: string}} args - Queue args.
-   * @returns {Promise<ReturnType<typeof JSON.parse>>} Pending local sync row.
+   * @param {{baseVersion?: string | number | null, resource: ReturnType<typeof JSON.parse>, data?: Record<string, ReturnType<typeof JSON.parse>>, operation?: "create" | "update" | "destroy", syncType?: string}} args - Queue args.
+   * @returns {Promise<ReturnType<typeof JSON.parse> | import("./local-mutation-log.js").LocalMutationLogRecord>} Pending local sync row or durable conflict-tracked intent.
    */
-  async queue({data, resource, syncType}) {
+  async queue({baseVersion, data, operation = "update", resource, syncType}) {
     const resourceConfig = this.resourceConfigFor(resource)
+    const resolvedSyncType = syncType ?? this.defaultSyncType({operation, record: resource, resourceConfig})
+
+    if (resourceConfig.conflictTracking) {
+      const queuedData = SyncApiClient.queuedSyncData({
+        booleanAttributes: resourceConfig.booleanAttributes || [],
+        data,
+        localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+        resource
+      })
+      const record = await SyncApiClient.queueConflictTrackedSync({
+        baseVersion: baseVersion === undefined ? this.baseVersionFor({operation, record: resource, resourceConfig}) : baseVersion,
+        conflictTracking: resourceConfig.conflictTracking,
+        data: queuedData,
+        operation,
+        resource,
+        resourceType: resource.constructor.getModelName(),
+        syncType: resolvedSyncType
+      })
+
+      this.scheduleReplay()
+
+      return record
+    }
+
     const syncRow = await SyncApiClient.queueLocalSync({
       booleanAttributes: resourceConfig.booleanAttributes || [],
       data,
       localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
       resource,
       syncModel: this.config.syncModel,
-      syncType: syncType ?? this.defaultSyncType({operation: "update", record: resource, resourceConfig})
+      syncType: resolvedSyncType
     })
 
     this.scheduleReplay()
@@ -686,6 +752,19 @@ export default class SyncClient {
     if (!(await this.isOnline())) return
 
     await SyncApiClient.singleFlight(`velocious-sync-client-replay-${this._clientNumber}`, async () => {
+      for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
+        if (!resourceConfig.conflictTracking) continue
+
+        await SyncApiClient.replayConflictTrackedSyncs({
+          authenticationToken: await this.config.authenticationToken(),
+          batchSize: this.config.batchSize,
+          conflictTracking: resourceConfig.conflictTracking,
+          postReplay: this.config.postReplay,
+          remoteGeneration: (identity) => this._remoteGenerations.get(identity) || 0,
+          resourceType
+        })
+      }
+
       await SyncApiClient.replayLocalSyncs({
         authenticationToken: await this.config.authenticationToken(),
         batchSize: this.config.batchSize,
@@ -693,6 +772,82 @@ export default class SyncClient {
         syncModel: this.config.syncModel
       })
     })
+  }
+
+  /**
+   * Records an authoritative remote observation so an in-flight acknowledgement
+   * cannot rebase a successor across that observation.
+   * @param {{resourceId: string | number, resourceType: string, version?: string | number | null}} args - Remote identity.
+   * @returns {void}
+   */
+  noteRemoteVersion({resourceId, resourceType, version}) {
+    void version
+    const identity = `${resourceType}:${String(resourceId)}`
+
+    this._remoteGenerations.set(identity, (this._remoteGenerations.get(identity) || 0) + 1)
+  }
+
+  /**
+   * Reads the authoritative base version observed before a local mutation.
+   * @param {{operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Version args.
+   * @returns {string | number | null} Base version.
+   */
+  baseVersionFor({operation, record, resourceConfig}) {
+    if (operation === "create") return null
+
+    const versionAttribute = resourceConfig.conflictTracking?.versionAttribute
+
+    if (!versionAttribute) return null
+
+    const value = record.readAttribute(versionAttribute)
+
+    if (value instanceof Date) return value.toISOString()
+    if (value === null || typeof value === "string" || typeof value === "number") return value
+
+    throw new Error(`Sync conflict version ${versionAttribute} must be a Date, string, number, or null`)
+  }
+
+  /**
+   * Reads the pre-assignment value exposed by record changes during beforeUpdate.
+   * Deletes have no version change pair and use the record's current version.
+   * @param {{operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Version args.
+   * @returns {string | number | null} Pre-mutation base version.
+   */
+  preMutationBaseVersionFor({operation, record, resourceConfig}) {
+    const versionAttribute = resourceConfig.conflictTracking?.versionAttribute
+    const versionColumn = versionAttribute
+      ? record.constructor.getAttributeNameToColumnNameMap()[versionAttribute]
+      : undefined
+    const versionChange = operation === "update" && versionColumn
+      ? record.changes()[versionColumn]
+      : undefined
+
+    if (!versionChange) return this.baseVersionFor({operation, record, resourceConfig})
+
+    const value = versionChange[0]
+
+    if (value instanceof Date) return value.toISOString()
+    if (value === null || typeof value === "string" || typeof value === "number") return value
+
+    throw new Error(`Sync conflict version ${versionAttribute} must be a Date, string, number, or null`)
+  }
+
+  /**
+   * Consumes the base captured for this lifecycle event before its after-commit
+   * closure is deferred, preserving repeated same-record writes in one transaction.
+   * @param {{operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-client-types.js").SyncClientResourceConfig}} args - Capture args.
+   * @returns {string | number | null} Captured base version.
+   */
+  capturedBaseVersionFor({operation, record, resourceConfig}) {
+    if (operation === "create") return null
+
+    const capturedVersions = this._capturedBaseVersions.get(record)
+    const baseVersion = capturedVersions?.shift()
+
+    if (capturedVersions?.length === 0) this._capturedBaseVersions.delete(record)
+    if (baseVersion !== undefined) return baseVersion
+
+    return this.baseVersionFor({operation, record, resourceConfig})
   }
 
   /**
@@ -822,7 +977,7 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
     throw new Error(`${resourceType} static sync must be true or a sync declaration object, got: ${String(declaration)}`)
   }
 
-  const {afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, publish, realtime, syncType, track, trackedData, ...restDeclaration} = normalizedDeclaration
+  const {afterApply, attributes, booleanAttributes, conflictTracking, findRecord, findRecordForDelete, localOnlyAttributes, publish, realtime, syncType, track, trackedData, ...restDeclaration} = normalizedDeclaration
   const unknownKeys = Object.keys(restDeclaration)
 
   // `publish` is the server-side half of the shared `static sync` declaration
@@ -831,7 +986,7 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
   void publish
 
   if (unknownKeys.length > 0) {
-    throw new Error(`${resourceType} static sync received unknown keys: ${unknownKeys.join(", ")} (supported: afterApply, attributes, booleanAttributes, findRecord, findRecordForDelete, localOnlyAttributes, publish, realtime, syncType, track, trackedData)`)
+    throw new Error(`${resourceType} static sync received unknown keys: ${unknownKeys.join(", ")} (supported: afterApply, attributes, booleanAttributes, conflictTracking, findRecord, findRecordForDelete, localOnlyAttributes, publish, realtime, syncType, track, trackedData)`)
   }
   if (syncType !== undefined && typeof syncType !== "function" && syncType !== "upsert") {
     throw new Error(`${resourceType} static sync syncType must be a function or the string "upsert", got: ${String(syncType)}`)
@@ -839,18 +994,47 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
 
   const derived = derivedSyncAttributes({modelClass, resourceType})
 
+  if (conflictTracking) validateConflictTracking({conflictTracking, derived, resourceType})
+
   return {
     afterApply,
     attributes,
     booleanAttributes: mergedAttributeNames(derived.booleanAttributes, booleanAttributes),
+    conflictTracking: conflictTracking ? {...conflictTracking, versionAttribute: conflictTracking.versionAttribute || "updatedAt"} : undefined,
     findRecord,
     findRecordForDelete,
-    localOnlyAttributes: mergedAttributeNames(derived.localOnlyAttributes, localOnlyAttributes),
+    localOnlyAttributes: mergedAttributeNames(
+      derived.localOnlyAttributes,
+      [...(localOnlyAttributes || []), ...(conflictTracking ? [conflictTracking.versionAttribute || "updatedAt"] : [])]
+    ),
     modelClass,
     realtime,
     syncType,
     track: normalizedTrack(track),
     trackedData
+  }
+}
+
+/**
+ * Validates one resource's durable conflict-tracking declaration.
+ * @param {{conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig, derived: {booleanAttributes: string[], localOnlyAttributes: string[]}, resourceType: string}} args - Validation args.
+ * @returns {void}
+ */
+function validateConflictTracking({conflictTracking, derived, resourceType}) {
+  const requiredStrings = {
+    actorDeviceId: conflictTracking.actorDeviceId,
+    actorUserId: conflictTracking.actorUserId,
+    offlineGrantId: conflictTracking.offlineGrantId,
+    policyHash: conflictTracking.policyHash
+  }
+
+  for (const [key, value] of Object.entries(requiredStrings)) {
+    if (typeof value !== "string" || value.length === 0) throw new Error(`${resourceType} conflictTracking.${key} must be a non-empty string`)
+  }
+  if (!conflictTracking.mutationLog || typeof conflictTracking.mutationLog.append !== "function") throw new Error(`${resourceType} conflictTracking.mutationLog must be a LocalMutationLog`)
+  if (typeof conflictTracking.clientMutationId !== "function") throw new Error(`${resourceType} conflictTracking.clientMutationId must be a function`)
+  if (!conflictTracking.versionAttribute && !derived.localOnlyAttributes.includes("updatedAt")) {
+    throw new Error(`${resourceType} conflictTracking requires versionAttribute because the model has no updatedAt column`)
   }
 }
 

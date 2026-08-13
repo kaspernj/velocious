@@ -3,6 +3,7 @@
 import {optionalBoolean, optionalInteger} from "typanic"
 
 import recordChanges from "../database/record-changes.js"
+import {applySyncReplayResultToLocalMutationLog} from "./conflict-strategy.js"
 
 /** @typedef {import("./sync-api-client-types.js").SyncChangeApplyResult} SyncChangeApplyResult */
 /** @typedef {import("./sync-api-client-types.js").SyncChangeEnvelope} SyncChangeEnvelope */
@@ -21,6 +22,208 @@ const syncTaskPromises = new Map()
  * persistence/auth hooks.
  */
 export default class SyncApiClient {
+  /**
+   * Appends one conflict-tracked intent to the existing durable mutation log.
+   * @param {object} args - Queue arguments.
+   * @param {string | number | null} args.baseVersion - Authoritative version observed before the local mutation.
+   * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Durable tracking configuration.
+   * @param {Record<string, unknown>} args.data - Backend-safe mutation attributes.
+   * @param {"create" | "update" | "destroy"} args.operation - Local operation.
+   * @param {ReturnType<typeof JSON.parse>} args.resource - Local resource.
+   * @param {string} args.resourceType - Resource type.
+   * @param {string} args.syncType - Wire operation.
+   * @returns {Promise<import("./local-mutation-log.js").LocalMutationLogRecord>} Appended intent.
+   */
+  static async queueConflictTrackedSync({baseVersion, conflictTracking, data, operation, resource, resourceType, syncType}) {
+    const resourceId = String(resource.id())
+    const records = await conflictTracking.mutationLog.records()
+    const predecessor = records
+      .filter((record) => record.mutation.model === resourceType && record.mutation.payload?.resourceId === resourceId)
+      .at(-1)
+    const clientMutationId = conflictTracking.clientMutationId()
+    const now = conflictTracking.now ? conflictTracking.now() : new Date()
+    const predecessorTime = predecessor ? new Date(predecessor.mutation.occurredAt).getTime() : Number.NEGATIVE_INFINITY
+    const occurredAt = new Date(Math.max(now.getTime(), predecessorTime + 1)).toISOString()
+
+    return await conflictTracking.mutationLog.append({
+      dependencies: predecessor ? [{clientMutationId: predecessor.mutation.clientMutationId, model: resourceType}] : [],
+      mutation: {
+        actorDeviceId: conflictTracking.actorDeviceId,
+        actorUserId: conflictTracking.actorUserId,
+        attributes: /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (data),
+        baseVersion,
+        clientMutationId,
+        model: resourceType,
+        occurredAt,
+        offlineGrantId: conflictTracking.offlineGrantId,
+        operation,
+        payload: {resourceId, syncType},
+        policyHash: conflictTracking.policyHash
+      }
+    })
+  }
+
+  /**
+   * Drains the existing mutation log in predecessor order. Independent records
+   * continue after durable conflicts/rejections; successors stay blocked.
+   * @param {object} args - Replay arguments.
+   * @param {string} args.authenticationToken - Authentication token.
+   * @param {number} [args.batchSize] - Batch size.
+   * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Tracking configuration.
+   * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Transport boundary.
+   * @param {(identity: string) => number} args.remoteGeneration - Current remote generation.
+   * @param {string} args.resourceType - Resource whose log records should drain.
+   * @returns {Promise<void>} Resolves when no ready intent remains.
+   */
+  static async replayConflictTrackedSyncs({authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType}) {
+    const maxBatchSize = this.normalizedBatchSize(batchSize)
+
+    while (true) {
+      const records = await conflictTracking.mutationLog.records()
+      const statuses = new Map(records.map((record) => [record.mutation.clientMutationId, record.status]))
+      const pending = records.filter((record) => record.status === "pending" && record.mutation.model === resourceType)
+      const ready = pending.filter((record) => record.dependencies.every((dependency) => statuses.get(dependency.clientMutationId) === "synced"))
+
+      if (ready.length === 0) return
+
+      const groups = this.conflictReplayGroups({pending, ready}).slice(0, maxBatchSize)
+      const generations = new Map(groups.map((group) => [group[0].mutation.clientMutationId, remoteGeneration(this.conflictRecordIdentity(group[0]))]))
+      const response = await postReplay({
+        authenticationToken,
+        syncs: groups.map((group) => this.conflictReplayPayload(group))
+      })
+
+      this.ensureSuccessfulResponse(response)
+
+      const responsesById = new Map((response.syncs || []).map((result) => [String(result.id), result]))
+
+      for (const group of groups) {
+        const result = responsesById.get(group[0].mutation.clientMutationId)
+
+        if (!result) throw new Error(`Sync response missing result for mutation ${group[0].mutation.clientMutationId}`)
+        if (!["successful", "duplicate", "conflict", "failed", "rejected"].includes(result.syncState)) {
+          throw new Error(`Invalid sync state returned for mutation ${group[0].mutation.clientMutationId}: ${result.syncState}`)
+        }
+
+        for (const record of group) {
+          await applySyncReplayResultToLocalMutationLog({mutationLog: conflictTracking.mutationLog, record, result: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (result)})
+        }
+
+        if (["successful", "duplicate"].includes(result.syncState) && result.serverVersion !== undefined) {
+          const identity = this.conflictRecordIdentity(group[0])
+
+          if (remoteGeneration(identity) === generations.get(group[0].mutation.clientMutationId)) {
+            await this.rebaseConflictSuccessor({conflictTracking, predecessor: group[group.length - 1], serverVersion: result.serverVersion})
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Builds safe transport groups from root-ready records and their successors.
+   * @param {{pending: Array<import("./local-mutation-log.js").LocalMutationLogRecord>, ready: Array<import("./local-mutation-log.js").LocalMutationLogRecord>}} args - Pending and root-ready records.
+   * @returns {Array<Array<import("./local-mutation-log.js").LocalMutationLogRecord>>} Safe transport groups.
+   */
+  static conflictReplayGroups({pending, ready}) {
+    const groups = []
+    const selectedIdentities = new Set()
+
+    for (const record of ready) {
+      const identity = this.conflictRecordIdentity(record)
+
+      if (selectedIdentities.has(identity)) continue
+
+      const group = [record]
+      let tail = record
+
+      while (true) {
+        const successor = pending.find((candidate) => candidate.dependencies.some((dependency) => dependency.clientMutationId === tail.mutation.clientMutationId))
+
+        if (!successor || !this.canCoalesceConflictRecords(tail, successor)) break
+        group.push(successor)
+        tail = successor
+      }
+
+      groups.push(group)
+      selectedIdentities.add(identity)
+    }
+
+    return groups
+  }
+
+  /**
+   * Checks whether two durable intents can share one transport mutation.
+   * @param {import("./local-mutation-log.js").LocalMutationLogRecord} left - Earlier intent.
+   * @param {import("./local-mutation-log.js").LocalMutationLogRecord} right - Later intent.
+   * @returns {boolean} Whether scalar updates can share one transport mutation.
+   */
+  static canCoalesceConflictRecords(left, right) {
+    if (left.mutation.operation !== "update" || right.mutation.operation !== "update") return false
+    if (this.conflictRecordIdentity(left) !== this.conflictRecordIdentity(right)) return false
+    if (left.mutation.baseVersion !== right.mutation.baseVersion) return false
+    if (!this.scalarSyncAttributes(left.mutation.attributes) || !this.scalarSyncAttributes(right.mutation.attributes)) return false
+
+    return !Object.keys(left.mutation.attributes || {}).some((key) => Object.hasOwn(right.mutation.attributes || {}, key))
+  }
+
+  /**
+   * Checks whether attributes contain scalar JSON values only.
+   * @param {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue> | undefined} attributes - Attributes.
+   * @returns {boolean} Whether every value is scalar.
+   */
+  static scalarSyncAttributes(attributes) {
+    return Boolean(attributes) && Object.values(attributes || {}).every((value) => value === null || ["string", "number", "boolean"].includes(typeof value))
+  }
+
+  /**
+   * Builds one replay envelope for a safe transport group.
+   * @param {Array<import("./local-mutation-log.js").LocalMutationLogRecord>} group - Transport group.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} Replay envelope.
+   */
+  static conflictReplayPayload(group) {
+    const first = group[0]
+    const payload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({
+      baseVersion: first.mutation.baseVersion,
+      clientUpdatedAt: first.mutation.occurredAt,
+      data: Object.assign({}, ...group.map((record) => record.mutation.attributes || {})),
+      id: first.mutation.clientMutationId,
+      resourceId: first.mutation.payload?.resourceId,
+      resourceType: first.mutation.model,
+      syncType: first.mutation.payload?.syncType
+    })
+
+    return payload
+  }
+
+  /**
+   * Builds a stable resource identity for ordering and remote generations.
+   * @param {import("./local-mutation-log.js").LocalMutationLogRecord} record - Record.
+   * @returns {string} Resource identity.
+   */
+  static conflictRecordIdentity(record) {
+    return `${record.mutation.model}:${String(record.mutation.payload?.resourceId)}`
+  }
+
+  /**
+   * Rebases the direct pending successor from an authoritative acknowledgement.
+   * @param {object} args - Rebase args.
+   * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Tracking config.
+   * @param {import("./local-mutation-log.js").LocalMutationLogRecord} args.predecessor - Acknowledged predecessor.
+   * @param {string | number | null} args.serverVersion - Authoritative server version.
+   * @returns {Promise<void>}
+   */
+  static async rebaseConflictSuccessor({conflictTracking, predecessor, serverVersion}) {
+    const successor = (await conflictTracking.mutationLog.pendingRecords())
+      .find((record) => record.dependencies.some((dependency) => dependency.clientMutationId === predecessor.mutation.clientMutationId))
+
+    if (!successor) return
+
+    await conflictTracking.mutationLog.updateMutation({
+      id: successor.id,
+      mutation: {...successor.mutation, baseVersion: serverVersion}
+    })
+  }
   /**
    * Serializes sync work with the same key so callers do not have to keep app-local locks.
    * @param {string} key - Lock key.

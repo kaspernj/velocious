@@ -63,6 +63,9 @@ export async function applySyncReplayResultToLocalMutationLog({mutationLog, reco
  * @returns {import("./local-mutation-log.js").LocalMutationStatus} - Local mutation-log status.
  */
 export function replayResultLocalStatus(result) {
+  if (result.syncState === "conflict") return "conflict"
+  if (result.syncState === "failed" || result.syncState === "rejected") return "rejected"
+  if (result.syncState === "successful" || result.syncState === "duplicate") return "synced"
   if (result.status === "conflict") return "conflict"
   if (result.status === "error" || result.status === "rejected") return "rejected"
   if (result.status === "success" && replayResultHasFailedApplication(result)) return "rejected"
