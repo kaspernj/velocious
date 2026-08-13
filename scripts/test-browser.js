@@ -81,7 +81,11 @@ async function buildBrowserTestApp() {
     bundle: true,
     define: {
       "process.env.EXPO_PUBLIC_SYSTEM_TEST": JSON.stringify(process.env.EXPO_PUBLIC_SYSTEM_TEST || ""),
-      "process.env.EXPO_PUBLIC_SYSTEM_TEST_HOST": JSON.stringify(process.env.EXPO_PUBLIC_SYSTEM_TEST_HOST || "")
+      "process.env.EXPO_PUBLIC_SYSTEM_TEST_HOST": JSON.stringify(process.env.EXPO_PUBLIC_SYSTEM_TEST_HOST || ""),
+      "process.env.VELOCIOUS_BROWSER_TESTS": JSON.stringify("true"),
+      "process.env.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS": "undefined",
+      "process.env.VELOCIOUS_DISABLE_MSSQL": JSON.stringify("1"),
+      "process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION": JSON.stringify("1")
     },
     format: "esm",
     outdir: distDir,
