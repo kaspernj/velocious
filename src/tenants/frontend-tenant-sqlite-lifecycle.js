@@ -292,10 +292,12 @@ export default class FrontendTenantSqliteLifecycle {
     const entry = await this.serialize(async () => {
       const operationEntry = this.entries.get(this.key(databaseIdentifier, databaseConfiguration))
 
-      if (!operationEntry) return undefined
-      if (requireReady && operationEntry.schemaGeneration && !operationEntry.ready) {
-        throw new Error(`Frontend tenant database ${JSON.stringify(databaseIdentifier)} is not ready for schema generation ${JSON.stringify(operationEntry.schemaGeneration)}`)
+      if (requireReady && databaseConfiguration.tenantOnly && databaseConfiguration.migrations && !operationEntry?.ready) {
+        const generation = operationEntry?.schemaGeneration ? ` for schema generation ${JSON.stringify(operationEntry.schemaGeneration)}` : ""
+
+        throw new Error(`Frontend tenant database ${JSON.stringify(databaseIdentifier)} is not ready${generation}`)
       }
+      if (!operationEntry) return undefined
       if (schemaGeneration && operationEntry.schemaGeneration && schemaGeneration !== operationEntry.schemaGeneration) {
         throw new Error(`Frontend tenant database ${JSON.stringify(databaseIdentifier)} is on schema generation ${JSON.stringify(operationEntry.schemaGeneration)}, not ${JSON.stringify(schemaGeneration)}`)
       }

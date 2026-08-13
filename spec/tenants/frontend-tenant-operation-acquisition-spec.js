@@ -9,6 +9,38 @@ import { createTenantTestConfiguration } from "../helpers/tenant-test-helpers.js
 import { describe, expect, it } from "../../src/testing/test.js"
 
 describe("frontend tenant operation acquisition", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("rejects a ready-required operation before the tenant database is opened", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-operation-fresh")
+    configuration.getDatabaseConfiguration().projectTenant.migrations = true
+    const handle = Tenant.handle({slug: "alpha"}, configuration)
+
+    try {
+      await expect(async () => await handle.databaseOperation({databaseIdentifier: "projectTenant"}, async () => "operation entered"))
+        .toThrow(/is not ready/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("rejects an open-only database until tenant initialization makes it ready", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-operation-open-only")
+    configuration.getDatabaseConfiguration().projectTenant.migrations = true
+    const handle = Tenant.handle({slug: "alpha"}, configuration)
+    const migrations = buildFrontendMigrationContext({})
+
+    try {
+      await handle.open({databaseIdentifier: "projectTenant"})
+      await expect(async () => await handle.databaseOperation({databaseIdentifier: "projectTenant"}, async () => "operation entered"))
+        .toThrow(/is not ready/)
+
+      await handle.initialize({databaseIdentifier: "projectTenant", migrations, schemaGeneration: "generation-1"})
+
+      expect(await handle.databaseOperation({databaseIdentifier: "projectTenant"}, async () => "operation entered")).toEqual("operation entered")
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("does not admit an old-generation operation behind a queued replacement", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("frontend-tenant-operation-generation-race")
     const replacementEntered = deferred()

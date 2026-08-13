@@ -62,22 +62,30 @@ export default function useDatabase({databaseIdentifier, migrationsRequireContex
   restArgsError(restArgs)
 
   const {isServer} = useEnvSense()
-  const selection = React.useMemo(() => ({databaseIdentifier, migrationsRequireContextCallback, schemaGeneration, tenantHandle}), [databaseIdentifier, migrationsRequireContextCallback, schemaGeneration, tenantHandle])
+  const migrationsRequireContextCallbackRef = React.useRef(migrationsRequireContextCallback)
+
+  migrationsRequireContextCallbackRef.current = migrationsRequireContextCallback
+
+  const selection = React.useMemo(() => {
+    if (isServer) return undefined
+
+    return {configuration: Configuration.current(), databaseIdentifier, schemaGeneration, tenantHandle}
+  }, [isServer, databaseIdentifier, schemaGeneration, tenantHandle])
   const [state, setState] = React.useState({error: /** @type {Error | null} */ (null), loaded: false, selection})
 
   React.useEffect(() => {
-    if (isServer) return undefined
+    if (!selection) return undefined
 
     let current = true
-    const configuration = Configuration.current()
+    const migrationsLoader = migrationsRequireContextCallbackRef.current
 
     setState({error: null, loaded: false, selection})
     void initializeFrontendDatabase({
-      configuration,
-      databaseIdentifier,
-      migrationsRequireContextCallback,
-      schemaGeneration,
-      tenantHandle
+      configuration: selection.configuration,
+      databaseIdentifier: selection.databaseIdentifier,
+      migrationsRequireContextCallback: migrationsLoader,
+      schemaGeneration: selection.schemaGeneration,
+      tenantHandle: selection.tenantHandle
     }).then(() => {
       if (current) setState({error: null, loaded: true, selection})
     }, (error) => {
@@ -85,7 +93,7 @@ export default function useDatabase({databaseIdentifier, migrationsRequireContex
     })
 
     return () => { current = false }
-  }, [isServer, selection])
+  }, [selection])
 
   if (state.selection !== selection) return {error: null, loaded: false}
 

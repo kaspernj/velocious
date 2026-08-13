@@ -17,7 +17,9 @@ describe("useDatabase selection state", () => {
     `)
 
     expect(result.initialLoaded).toEqual(true)
+    expect(result.loadedAfterInlineLoaderRerender).toEqual(true)
     expect(result.firstChangedLoaded).toEqual(false)
-    expect(result.firstRenderAfterError).toEqual({error: null, loaded: false})
+    expect(result.loaderCalls).toEqual(["first", "second", "third"])
+    expect(result.thirdAfterStaleCompletion).toEqual({error: null, loaded: true})
   })
 })
