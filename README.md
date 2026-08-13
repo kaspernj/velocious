@@ -956,7 +956,7 @@ Async class APIs initialize record metadata on first use when a model has not
 already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)
 for the eager and lazy initialization behavior, including atomic shared bootstrap
 and complete recovery after an eager initialization failure or database-connection
-closure.
+closure without overlapping stale and current bootstrap side effects.
 
 ## Lifecycle callbacks
 

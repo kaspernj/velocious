@@ -1,1 +1,1 @@
-Invalidate cached configuration initialization when database connections close so a later `initialize()` reruns model and application bootstrap work.
+Invalidate cached configuration initialization when database connections close so a later `initialize()` reruns model and application bootstrap work after any stale generation settles, without overlapping side effects.
