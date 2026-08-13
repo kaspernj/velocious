@@ -81,6 +81,38 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   _timezoneAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
 
   /**
+   * Shared-transaction coordinator ownership by physical connection.
+   * @type {import("node:async_hooks").AsyncLocalStorage<Map<object, symbol>> | undefined}
+   */
+  _sharedTransactionCoordinatorAsyncLocalStorage = NodeAsyncLocalStorage ? new NodeAsyncLocalStorage() : undefined
+
+  /**
+   * Gets the active shared-transaction coordinator owner for a connection.
+   * @param {object} connection - Parent physical connection.
+   * @returns {symbol | undefined} - Active coordinator owner.
+   */
+  getSharedTransactionCoordinatorOwner(connection) {
+    return this._sharedTransactionCoordinatorAsyncLocalStorage?.getStore()?.get(connection)
+  }
+
+  /**
+   * Runs work as the current shared-transaction coordinator owner.
+   * @template T
+   * @param {object} connection - Parent physical connection.
+   * @param {symbol} owner - Coordinator owner.
+   * @param {() => T} callback - Owned work.
+   * @returns {T} - Callback result.
+   */
+  runWithSharedTransactionCoordinatorOwner(connection, owner, callback) {
+    if (!this._sharedTransactionCoordinatorAsyncLocalStorage) return callback()
+
+    const owners = new Map(this._sharedTransactionCoordinatorAsyncLocalStorage.getStore())
+
+    owners.set(connection, owner)
+    return this._sharedTransactionCoordinatorAsyncLocalStorage.run(owners, callback)
+  }
+
+  /**
    * Find commands result.
    * @type {import("./base.js").CommandFileObjectType[] | undefined} */
   _findCommandsResult = undefined

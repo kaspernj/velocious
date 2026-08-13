@@ -506,6 +506,38 @@ export default class VelociousDatabaseDriversMssql extends Base{
     })
   }
 
+  /**
+   * Truncates all eligible tables in one SQL Server request, retaining the
+   * recognized foreign-key fallback used by the per-table implementation.
+   * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+   * @returns {Promise<void>} - Resolves when the batch completes.
+   */
+  async truncateTables(tables) {
+    const statements = []
+
+    for (const table of tables) {
+      const quotedTable = this.quoteTable(table.getName())
+
+      statements.push(
+        "BEGIN TRY",
+        `  TRUNCATE TABLE ${quotedTable};`,
+        "END TRY",
+        "BEGIN CATCH",
+        "  IF ERROR_NUMBER() = 4712",
+        "  BEGIN",
+        `    DELETE FROM ${quotedTable};`,
+        "  END",
+        "  ELSE",
+        "  BEGIN",
+        "    THROW;",
+        "  END",
+        "END CATCH;"
+      )
+    }
+
+    await this.query(statements.join("\n"))
+  }
+
   async lastInsertID(options = {}) {
     const result = await this.query("SELECT SCOPE_IDENTITY() AS last_insert_id", options)
     const lastInsertID = digg(result, 0, "last_insert_id")

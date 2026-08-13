@@ -5,7 +5,7 @@ import { createServer } from "node:http"
 import { EventEmitter } from "node:events"
 import { WebSocketServer } from "ws"
 import { decodeBrokerValue, encodeBrokerValue } from "./shared-transaction-codec.js"
-import {clearSharedTransactionCoordinator, setSharedTransactionCoordinator} from "./shared-transaction-connection-coordinator.js"
+import { clearSharedTransactionCoordinator, setSharedTransactionCoordinator } from "./shared-transaction-connection-coordinator.js"
 
 /** @typedef {{queue: Promise<void>, rootSessions: Set<import("ws").WebSocket>, lease?: {operations: Promise<void>, release: () => void, savePointName: string, socket: import("ws").WebSocket}}} ConnectionState */
 
@@ -38,6 +38,23 @@ function capabilityMatches(provided, expected) {
   return providedBytes.length === expectedBytes.length && timingSafeEqual(providedBytes, expectedBytes)
 }
 
+/**
+ * Adds broker ownership to decoded driver options.
+ * @param {ReturnType<typeof JSON.parse>} value - Decoded options.
+ * @param {symbol} operationOwner - Broker coordinator owner.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>> & {operationOwner: symbol}} - Owned options.
+ */
+function ownedOperationOptions(value, operationOwner) {
+  if (value === undefined) return {operationOwner}
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Shared transaction broker driver options must be an object")
+  }
+
+  const options = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (value)
+
+  return {...options, operationOwner}
+}
+
 export default class SharedTransactionBroker extends EventEmitter {
   /**
    * Creates a broker around parent-owned physical connections.
@@ -60,6 +77,8 @@ export default class SharedTransactionBroker extends EventEmitter {
     this.closePromise = undefined
     /** @type {Map<object, (callback: () => Promise<ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>>} */
     this.connectionCoordinators = new Map()
+    /** @type {Map<object, symbol>} */
+    this.connectionCoordinatorOwners = new Map()
     for (const connection of new Set(Object.values(connections))) {
       /**
        * Serializes parent operations with child broker traffic.
@@ -68,7 +87,7 @@ export default class SharedTransactionBroker extends EventEmitter {
        */
       const coordinator = async (callback) => await this.serialize(this.connectionState(connection), callback)
       this.connectionCoordinators.set(connection, coordinator)
-      setSharedTransactionCoordinator(connection, coordinator)
+      this.connectionCoordinatorOwners.set(connection, setSharedTransactionCoordinator(connection, coordinator))
     }
     this.httpServer = createServer()
     this.websocketServer = new WebSocketServer({server: this.httpServer, maxPayload: 16 * 1024 * 1024})
@@ -144,16 +163,35 @@ export default class SharedTransactionBroker extends EventEmitter {
             : request.method === "rootTransactionRollback"
               ? "rollbackSavePoint"
               : request.method
-        const connectionMethods = /** @type {Record<string, (...methodArgs: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>>} */ (connection)
+        const connectionMethods = /** @type {Record<string, (...methodArgs: Array<ReturnType<typeof JSON.parse> | {operationOwner: symbol}>) => ReturnType<typeof JSON.parse>>} */ (connection)
         const method = connectionMethods[physicalMethod]
         if (typeof method !== "function") throw new Error(`Connection does not support shared transaction method: ${request.method}`)
-        return await method.apply(connection, args)
+        return await method.apply(connection, this.ownedMethodArgs({args, connection, method: physicalMethod}))
       })
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({requestId, result: encodeBrokerValue(result)}))
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error(String(error))
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({requestId, error: encodeBrokerValue(normalized)}))
     }
+  }
+
+  /**
+   * Adds the broker owner to public driver methods that re-enter coordinated query work.
+   * @param {{args: Array<ReturnType<typeof JSON.parse>>, connection: object, method: string}} args - Physical invocation.
+   * @returns {Array<ReturnType<typeof JSON.parse> | {operationOwner: symbol}>} - Owned method arguments.
+   */
+  ownedMethodArgs({args, connection, method}) {
+    const operationOwner = this.connectionCoordinatorOwners.get(connection)
+
+    if (!operationOwner) throw new Error("Shared transaction broker connection owner is missing")
+    if (["_startTransactionAction", "_commitTransactionAction", "_rollbackTransactionAction"].includes(method)) {
+      return [ownedOperationOptions(args[0], operationOwner)]
+    }
+    if (["query", "affectedRows", "startSavePoint", "releaseSavePoint", "rollbackSavePoint"].includes(method)) {
+      return [args[0], ownedOperationOptions(args[1], operationOwner)]
+    }
+
+    return args
   }
 
   /**
@@ -324,16 +362,19 @@ export default class SharedTransactionBroker extends EventEmitter {
    * @returns {Promise<void>} - Resolves after rollback and release.
    */
   async rollbackRootSavePoint(connection, savePointName) {
-    const methods = /** @type {{releaseSavePoint: (name: string) => Promise<void>, rollbackSavePoint: (name: string) => Promise<void>}} */ (connection)
+    const methods = /** @type {{releaseSavePoint: (name: string, options?: {operationOwner?: symbol}) => Promise<void>, rollbackSavePoint: (name: string, options?: {operationOwner?: symbol}) => Promise<void>}} */ (connection)
+    const operationOwner = this.connectionCoordinatorOwners.get(connection)
+
+    if (!operationOwner) throw new Error("Shared transaction broker connection owner is missing")
     /** @type {Array<Error>} */
     const errors = []
     try {
-      await methods.rollbackSavePoint(savePointName)
+      await methods.rollbackSavePoint(savePointName, {operationOwner})
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)))
     }
     try {
-      await methods.releaseSavePoint(savePointName)
+      await methods.releaseSavePoint(savePointName, {operationOwner})
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)))
     }

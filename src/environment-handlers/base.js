@@ -28,6 +28,24 @@ export default class VelociousEnvironmentHandlerBase {
   async createTestSharedTransactionConnection(_args) { return undefined }
 
   /**
+   * Gets the active shared-transaction coordinator owner for a connection.
+   * Browser runtimes never install the Node test broker.
+   * @param {object} _connection - Parent physical connection.
+   * @returns {symbol | undefined} - Active coordinator owner.
+   */
+  getSharedTransactionCoordinatorOwner(_connection) { return undefined }
+
+  /**
+   * Runs work as the current shared-transaction coordinator owner.
+   * @template T
+   * @param {object} _connection - Parent physical connection.
+   * @param {symbol} _owner - Coordinator owner.
+   * @param {() => T} callback - Owned work.
+   * @returns {T} - Callback result.
+   */
+  runWithSharedTransactionCoordinatorOwner(_connection, _owner, callback) { return callback() }
+
+  /**
    * Mutable ambient tenant used by runtimes without async-context storage.
    * @type {ReturnType<typeof JSON.parse> | undefined}
    */

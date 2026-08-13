@@ -487,6 +487,23 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
+   * Uses one multi-statement request only when the existing connection option
+   * explicitly allows it; otherwise retains the base sequential behavior.
+   * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+   * @returns {Promise<void>} - Resolves when every table has been truncated.
+   */
+  async truncateTables(tables) {
+    if (!this.getArgs().multipleStatements) {
+      await super.truncateTables(tables)
+      return
+    }
+
+    const statements = tables.map((table) => `TRUNCATE TABLE ${this.quoteTable(table.getName())}`)
+
+    await this.query(statements.join(";\n"))
+  }
+
+  /**
    * Runs query to sql.
    * @param {import("../../query/index.js").default} query - Query instance.
    * @returns {string} - SQL string.

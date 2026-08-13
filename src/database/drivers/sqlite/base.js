@@ -162,6 +162,18 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   }
 
   /**
+   * Deletes every eligible table through the platform driver's native SQLite
+   * script path so the whole cleanup is submitted as one request.
+   * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+   * @returns {Promise<void>} - Resolves when the script completes.
+   */
+  async truncateTables(tables) {
+    const statements = tables.map((table) => `DELETE FROM ${this.quoteTable(table.getName())}`)
+
+    await this.query(statements.join(";\n"), {sqliteScript: true})
+  }
+
+  /**
    * Runs insert multiple.
    * @param {string} tableName - Table name.
    * @param {Array<string>} columns - Column names.

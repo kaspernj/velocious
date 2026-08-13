@@ -1,0 +1,1 @@
+Optimize `truncateAllTables()` by batching cleanup per driver while preserving schema-cache retries, foreign-key restoration, driver identity semantics, and SQL.js persistence. MySQL and MariaDB batching remains opt-in through `multipleStatements: true`.

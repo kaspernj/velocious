@@ -84,10 +84,16 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
+   * @param {import("../base.js").QueryOptions} [options] - Query options.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query actual.
    */
-  async _queryActual(sql) {
+  async _queryActual(sql, options = {}) {
     if (!this.connection) throw new Error("No connection")
+
+    if (options.sqliteScript) {
+      await this.connection.exec(sql)
+      return []
+    }
 
     return await query(this.connection, sql)
   }
