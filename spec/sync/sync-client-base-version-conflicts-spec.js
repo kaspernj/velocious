@@ -8,17 +8,22 @@ import SyncClient from "../../src/sync/sync-client.js"
 
 const COLUMNS = [
   {attributeName: "id", name: "id", type: "uuid"},
+  {attributeName: "lockVersion", name: "lock_version", type: "integer"},
   {attributeName: "title", name: "title", type: "varchar"},
   {attributeName: "updatedAt", name: "updated_at", type: "datetime"}
 ]
 
-/** @param {object} args - Harness args. @param {boolean} [args.optIn] - Enable conflict tracking. @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} [args.responses] - Replay responses. @returns {ReturnType<typeof JSON.parse>} Harness. */
-function buildHarness({optIn = true, responses = []} = {}) {
+/** @param {object} args - Harness args. @param {boolean} [args.optIn] - Enable conflict tracking. @param {Array<Record<string, ReturnType<typeof JSON.parse>>>} [args.responses] - Replay responses. @param {string} [args.versionAttribute] - Conflict version attribute. @returns {ReturnType<typeof JSON.parse>} Harness. */
+function buildHarness({optIn = true, responses = [], versionAttribute = "updatedAt"} = {}) {
   const mutationIds = ["mutation-1", "mutation-2", "mutation-3", "mutation-4"]
   const mutationLog = buildMutationLog(mutationIds)
   const syncModel = buildFakeSyncModel()
   const posts = []
-  const declaration = optIn ? {conflictTracking: conflictTracking(mutationLog, mutationIds), track: true} : {track: true}
+  const tracking = conflictTracking(mutationLog, mutationIds)
+
+  tracking.versionAttribute = versionAttribute
+
+  const declaration = optIn ? {conflictTracking: tracking, track: true} : {track: true}
   const ModelClass = buildMetadataModelClass({columns: COLUMNS, modelName: "UuidItem", sync: declaration})
   const transport = {
     post: async (_path, payload) => {
@@ -46,6 +51,35 @@ function record(ModelClass, title, version) {
 }
 
 describe("sync client base-version conflict tracking", () => {
+  it("makes same-record predecessor timestamps strictly monotonic when the clock does not advance", async () => {
+    const harness = buildHarness()
+    const item = record(harness.ModelClass, "first", "2026-08-12T09:00:00.000Z")
+    const tracking = harness.client.config.resources.UuidItem.conflictTracking
+
+    if (!tracking) throw new Error("Expected conflict tracking")
+    tracking.now = () => new Date("2026-08-12T09:30:00.000Z")
+
+    await harness.client.queue({baseVersion: "v1", data: {title: "first"}, operation: "update", resource: item})
+    await harness.client.queue({baseVersion: "v1", data: {title: "second"}, operation: "update", resource: item})
+
+    const records = await harness.mutationLog.records()
+
+    expect(records.map((queued) => queued.mutation.occurredAt)).toEqual([
+      "2026-08-12T09:30:00.000Z",
+      "2026-08-12T09:30:00.001Z"
+    ])
+  })
+
+  it("strips a custom server-managed version attribute from automatic mutation data", async () => {
+    const harness = buildHarness({versionAttribute: "lockVersion"})
+    const item = buildRecord(harness.ModelClass, "item-1", {id: "item-1", lockVersion: 7, title: "changed"})
+
+    await harness.client.queue({baseVersion: 7, operation: "update", resource: item})
+
+    expect((await harness.mutationLog.records())[0].mutation.attributes).toEqual({title: "changed"})
+    expect(harness.client.config.resources.UuidItem.localOnlyAttributes).toContain("lockVersion")
+  })
+
   it("captures the pre-update version before the tracked record changes", async () => {
     const harness = buildHarness()
     const attributes = {id: "item-1", title: "before", updatedAt: new Date("2026-08-12T09:00:00.000Z")}

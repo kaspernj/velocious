@@ -1003,7 +1003,10 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
     conflictTracking: conflictTracking ? {...conflictTracking, versionAttribute: conflictTracking.versionAttribute || "updatedAt"} : undefined,
     findRecord,
     findRecordForDelete,
-    localOnlyAttributes: mergedAttributeNames(derived.localOnlyAttributes, localOnlyAttributes),
+    localOnlyAttributes: mergedAttributeNames(
+      derived.localOnlyAttributes,
+      [...(localOnlyAttributes || []), ...(conflictTracking ? [conflictTracking.versionAttribute || "updatedAt"] : [])]
+    ),
     modelClass,
     realtime,
     syncType,

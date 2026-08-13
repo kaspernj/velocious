@@ -7,6 +7,7 @@ import {resolveSyncConflict} from "./conflict-strategy.js"
 import SyncReplayUpsertApplier from "./sync-replay-upsert-applier.js"
 import stableJsonStringify from "./stable-json.js"
 import sha256Hex from "../utils/sha256-hex.js"
+import {decodeReplayPersistedData, serializeReplayPersistedData} from "./sync-replay-persisted-data.js"
 import {ValidationError} from "../database/record/index.js"
 import VelociousError from "../velocious-error.js"
 
@@ -214,7 +215,11 @@ export default class SyncEnvelopeReplayService {
       /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const successfulResponse = {id: mutation.id, syncState: duplicate ? "duplicate" : "successful"}
 
-      if (this.conflictStrategy && mutation.baseVersion !== undefined && applyResult?.record) {
+      const persistedReplayMetadata = duplicate ? this.replayPersistedMetadata(existingSync) : null
+
+      if (persistedReplayMetadata) {
+        successfulResponse.serverVersion = persistedReplayMetadata.acknowledgementVersion
+      } else if (this.conflictStrategy && mutation.baseVersion !== undefined && applyResult?.record) {
         successfulResponse.serverVersion = normalizeConflictValue(applyResult.record.readAttribute(this.conflictStrategy.versionAttribute))
       }
 
@@ -422,6 +427,13 @@ export default class SyncEnvelopeReplayService {
   isDuplicateReplayMutation({existingSync, mutation}) {
     if (!existingSync) return false
 
+    const metadata = this.replayPersistedMetadata(existingSync)
+
+    if (metadata) {
+      return metadata.clientMutationId === String(mutation.clientMutationId || mutation.id)
+        && metadata.payloadFingerprint === sha256Hex(mutation.serializedData)
+    }
+
     const existingClientUpdatedAt = this.existingReplaySyncClientUpdatedAt(existingSync)
     const existingData = this.replaySyncRecordValue(existingSync, "data")
     const existingSyncType = this.replaySyncRecordValue(existingSync, "syncType")
@@ -443,6 +455,17 @@ export default class SyncEnvelopeReplayService {
     const value = record[attributeName]
 
     return typeof value === "function" ? value.call(syncRecord) : value
+  }
+
+  /**
+   * Reads durable replay acknowledgement metadata from a model-backed sync row.
+   * @param {ReturnType<typeof JSON.parse>} syncRecord - Existing sync row.
+   * @returns {{acknowledgementVersion: string | number | null, clientMutationId: string, payloadFingerprint: string} | null} Persisted metadata.
+   */
+  replayPersistedMetadata(syncRecord) {
+    if (!syncRecord) return null
+
+    return decodeReplayPersistedData(this.replaySyncRecordValue(syncRecord, "data")).metadata
   }
 
   /**
@@ -1067,6 +1090,18 @@ export default class SyncEnvelopeReplayService {
       if (serializedData !== undefined && serializedData !== null) {
         attributes.data = typeof serializedData === "string" ? serializedData : JSON.stringify(serializedData)
       }
+    }
+
+    if (this.conflictStrategy && shouldApply && mutation.baseVersion !== undefined && applyResult?.record) {
+      const publicPayload = decodeReplayPersistedData(attributes.data).payload
+      const acknowledgementVersion = normalizeConflictValue(applyResult.record.readAttribute(this.conflictStrategy.versionAttribute))
+
+      attributes.data = serializeReplayPersistedData({
+        acknowledgementVersion,
+        clientMutationId: String(mutation.clientMutationId || mutation.id),
+        payload: publicPayload,
+        payloadFingerprint: sha256Hex(mutation.serializedData)
+      })
     }
 
     if (existingSync) {

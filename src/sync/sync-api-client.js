@@ -41,7 +41,9 @@ export default class SyncApiClient {
       .filter((record) => record.mutation.model === resourceType && record.mutation.payload?.resourceId === resourceId)
       .at(-1)
     const clientMutationId = conflictTracking.clientMutationId()
-    const occurredAt = (conflictTracking.now ? conflictTracking.now() : new Date()).toISOString()
+    const now = conflictTracking.now ? conflictTracking.now() : new Date()
+    const predecessorTime = predecessor ? new Date(predecessor.mutation.occurredAt).getTime() : Number.NEGATIVE_INFINITY
+    const occurredAt = new Date(Math.max(now.getTime(), predecessorTime + 1)).toISOString()
 
     return await conflictTracking.mutationLog.append({
       dependencies: predecessor ? [{clientMutationId: predecessor.mutation.clientMutationId, model: resourceType}] : [],

@@ -12,7 +12,7 @@ import UuidItem from "../dummy/src/models/uuid-item.js"
 const ACTOR_ID = "1f6e9a4c-2b3d-4e5f-8a9b-0c1d2e3f4a5b"
 
 /** @returns {SyncEnvelopeReplayService} Resource-routed replay service. */
-function replayService({syncModel} = {}) {
+function replayService({persistSerializedData, syncModel} = {}) {
   class TestReplayService extends SyncEnvelopeReplayService {
     /** @returns {Promise<{actor: {id: () => string}, authenticated: true}>} Test actor. */
     async authenticateReplay() {
@@ -22,6 +22,7 @@ function replayService({syncModel} = {}) {
 
   return new TestReplayService({
     conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+    persistSerializedData,
     resourceTypeOverrides: {UuidItem: SyncUuidItemResource},
     syncModel
   })
@@ -134,6 +135,73 @@ describe("sync client base-version conflicts - dummy integration", {databaseClea
       expect(records.map((record) => record.status)).toEqual(["synced", "synced"])
       expect(records[1].mutation.baseVersion).toEqual(records[0].syncResult?.serverVersion)
       expect((await UuidItem.findByOrFail({id: item.id()})).title()).toEqual("second")
+    } finally {
+      UuidItem.sync = originalSync
+    }
+  })
+
+  it("keeps the original duplicate acknowledgement across snapshots and an intervening server write", async () => {
+    const ids = ["mutation-1", "mutation-2"]
+    const mutationLog = buildMutationLog(ids)
+    const originalSync = UuidItem.sync
+    const service = replayService({
+      persistSerializedData: ({applyResult}) => ({id: applyResult.record.id(), title: applyResult.record.title()}),
+      syncModel: SyncEntry
+    })
+    const responses = []
+    let requestCount = 0
+    let online = false
+    const tracking = conflictTracking(mutationLog, ids)
+
+    tracking.now = () => new Date("2026-08-12T09:00:00.000Z")
+    UuidItem.sync = {...originalSync, conflictTracking: tracking}
+
+    const item = await UuidItem.create({id: "5ac9b8a7-f6e5-434d-ac1b-9f8e7d6c5b4a", title: "base"})
+    const originalBase = item.updatedAt().toISOString()
+    const configuration = buildConfiguration({
+      modelClasses: [UuidItem],
+      sync: {client: {
+        authenticationToken: () => "token-1",
+        isOnline: () => online,
+        transport: {post: async (_path, payload) => {
+          requestCount += 1
+
+          if (requestCount === 2) {
+            const remote = await UuidItem.findByOrFail({id: item.id()})
+
+            remote.assign({title: "remote", updatedAt: "2026-08-12T09:30:00.000Z"})
+            await remote.save()
+          }
+
+          const response = await service.replay(payload)
+
+          responses.push(response)
+          if (requestCount === 1) throw new Error("response lost after persistence")
+
+          return {json: () => response}
+        }}
+      }}
+    })
+    const client = new SyncClient({configuration, syncModel: buildFakeSyncModel()})
+
+    try {
+      await client.queue({baseVersion: originalBase, data: {title: "first"}, operation: "update", resource: item})
+      await client.queue({baseVersion: originalBase, data: {title: "second"}, operation: "update", resource: item})
+      online = true
+
+      await expect(async () => await client.replayPending()).toThrow("response lost after persistence")
+      await client.replayPending()
+
+      const records = await mutationLog.records()
+
+      expect(responses[1].syncs[0]).toEqual({
+        id: "mutation-1",
+        serverVersion: responses[0].syncs[0].serverVersion,
+        syncState: "duplicate"
+      })
+      expect(records[1].mutation.baseVersion).toEqual(responses[0].syncs[0].serverVersion)
+      expect(records[1].status).toEqual("conflict")
+      expect((await UuidItem.findByOrFail({id: item.id()})).title()).toEqual("remote")
     } finally {
       UuidItem.sync = originalSync
     }
