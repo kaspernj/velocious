@@ -65,6 +65,7 @@
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
  * @property {boolean} [retry] - Whether retryable errors may retry the query; defaults to true.
  * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
+ * @property {boolean} [sqliteScript] - Internal SQLite flag selecting native multi-statement script execution.
  * @property {AbortSignal} [signal] - Aborts the in-flight query (destroying its connection) when it fires.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  * @property {symbol} [operationOwner] - Opaque owner for an operation-leased connection.
@@ -2215,41 +2216,51 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Truncates the given table snapshot. Drivers can override this to issue one batch.
+   * @protected
+   * @param {Array<import("./base-table.js").default>} tables - Eligible tables for this cleanup attempt.
+   * @returns {Promise<void>} - Resolves when every table has been cleaned.
+   */
+  async truncateTables(tables) {
+    const truncateErrors = []
+
+    for (const table of tables) {
+      try {
+        await table.truncate({cascade: true})
+      } catch (error) {
+        truncateErrors.push(error)
+      }
+    }
+
+    if (truncateErrors.length > 0) throw truncateErrors[0]
+  }
+
+  /**
    * Runs truncate all tables.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async truncateAllTables() {
     this._assertNotReadOnly()
+    let tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
+
+    if (tables.length == 0) return
+
     await this.withDisabledForeignKeys(async () => {
-      let tries = 0
+      for (let tries = 1; tries <= 6; tries++) {
+        try {
+          await this.truncateTables(tables)
+          return
+        } catch (error) {
+          console.error(error)
 
-      while(tries <= 5) {
-        tries++
+          if (tries == 6) throw error
 
-        const tables = await this.getTables()
-        const truncateErrors = []
-
-        for (const table of tables) {
-          if (table.getName() != "schema_migrations") {
-            try {
-              await table.truncate({cascade: true})
-            } catch (error) {
-              console.error(error)
-              truncateErrors.push(error)
-            }
-          }
-        }
-
-        if (truncateErrors.length == 0) {
-          break
-        } else if (tries <= 5) {
           // A truncate failed — the schema cache may still list a table that was
           // dropped out from under us (e.g. a db:rollback test that left the
           // shared DB rolled back). Clear it so the next pass re-reads the live
           // table list and no longer tries to truncate a table that is gone.
           this.clearSchemaCache()
-        } else {
-          throw truncateErrors[0]
+          tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
         }
       }
     })

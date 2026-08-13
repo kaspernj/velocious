@@ -82,13 +82,19 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
+   * @param {import("../base.js").QueryOptions} [options] - Query options.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Query result rows.
    */
-  async _queryActual(sql) {
-    return await this._queryMutex.sync(() => {
+  async _queryActual(sql, options = {}) {
+    return await this._queryMutex.sync(async () => {
       if (!this.connection) throw new Error("Not connected yet")
 
-      return query(this.connection, sql)
+      if (options.sqliteScript) {
+        await this.connection.execAsync(sql)
+        return []
+      }
+
+      return await query(this.connection, sql)
     })
   }
 

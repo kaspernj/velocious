@@ -80,10 +80,11 @@ async function buildSqliteWebDriver({SQL, databaseName, storage}) {
 
 /**
  * @param {SqliteWebDriver} driver - SQLite web driver.
+ * @param {string} [tableName] - Table to count.
  * @returns {Promise<number>} - Persisted test row count.
  */
-async function persistedItemsCount(driver) {
-  const rows = await driver.query("SELECT COUNT(*) AS count FROM persisted_items")
+async function persistedItemsCount(driver, tableName = "persisted_items") {
+  const rows = await driver.query(`SELECT COUNT(*) AS count FROM ${driver.quoteTable(tableName)}`)
   const count = rows[0]?.count
 
   if (typeof count !== "number") {
@@ -103,7 +104,9 @@ describe("database - sqlite web driver - persistence", {databaseCleaning: {trans
     try {
       setupDriver = await buildSqliteWebDriver({SQL, databaseName, storage})
       await setupDriver.query("CREATE TABLE persisted_items(id INTEGER PRIMARY KEY, name TEXT)")
+      await setupDriver.query("CREATE TABLE persisted_related_items(id INTEGER PRIMARY KEY, name TEXT)")
       await setupDriver.query("INSERT INTO persisted_items(name) VALUES ('before truncate')")
+      await setupDriver.query("INSERT INTO persisted_related_items(name) VALUES ('before truncate')")
       await setupDriver.close()
       setupDriver = undefined
 
@@ -113,9 +116,12 @@ describe("database - sqlite web driver - persistence", {databaseCleaning: {trans
 
       await truncateDriver.truncateAllTables()
 
+      expect(truncateDriver.hasPendingWrites()).toEqual(false)
+
       reloadDriver = await buildSqliteWebDriver({SQL, databaseName, storage})
 
       expect(await persistedItemsCount(reloadDriver)).toEqual(0)
+      expect(await persistedItemsCount(reloadDriver, "persisted_related_items")).toEqual(0)
     } finally {
       if (reloadDriver) await reloadDriver.close()
       if (truncateDriver) await truncateDriver.close()

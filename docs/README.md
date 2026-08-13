@@ -33,7 +33,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/routing-hooks-and-autoroutes.md`: Route hook support and frontend-model autoroute behavior.
 - `docs/authorization-and-current.md`: Ability usage, `Current`, and `accessible`/`accessibleBy` behavior.
 - `docs/relationships.md`: Relationship types, through (many-to-many) relationships, and preloading behavior.
-- `docs/testing-guidelines.md`: Browser/system test guidance and why end-to-end coverage is preferred.
+- `docs/testing-guidelines.md`: Browser/system test guidance, database cleanup batching, and why end-to-end coverage is preferred.
 
 ## Working Agreement
 When new behavior, constraints, edge cases, or integration caveats are discovered, add/update docs in this folder in the same change so knowledge stays current.

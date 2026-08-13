@@ -104,6 +104,18 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   }
 
   /**
+   * Executes a native SQL.js script and explicitly marks its batched mutation
+   * for persistence because it bypasses the ordinary query classifier.
+   * @param {string} sql - Multi-statement SQL script.
+   * @returns {Promise<[]>} - Empty result rows.
+   */
+  async exec(sql) {
+    this.connection.exec(sql)
+    this.saveDatabaseDebounce()
+    return []
+  }
+
+  /**
    * Executes a mutation with affected-row metadata.
    * @param {string} sql - Mutation SQL.
    * @returns {Promise<number>} - Affected row count.
