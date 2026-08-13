@@ -6,6 +6,7 @@ import path from "node:path"
 import {fileURLToPath, pathToFileURL} from "node:url"
 import {promisify} from "node:util"
 import {describe, expect, it} from "../../src/testing/test.js"
+import { runRetainedChildProcess } from "../helpers/retained-child-process.js"
 
 const execFileAsync = promisify(execFile)
 
@@ -103,16 +104,22 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
         private: true,
         type: "module"
       }))
-      await execFileAsync(process.execPath, [
-        npmExecutable,
-        "install",
-        "--allow-git=all",
-        "--allow-remote=all",
-        "--cache", npmCacheDirectory,
-        "--ignore-scripts=false",
-        "--no-audit",
-        "--no-fund"
-      ], {cwd: consumerDirectory})
+      await runRetainedChildProcess({
+        commandArgs: [
+          npmExecutable,
+          "install",
+          "--allow-git=all",
+          "--allow-remote=all",
+          "--cache", npmCacheDirectory,
+          "--ignore-scripts=false",
+          "--no-audit",
+          "--no-fund"
+        ],
+        cwd: consumerDirectory,
+        description: "install Velocious from the temporary Git checkout",
+        executable: process.execPath,
+        outputPath: path.join(temporaryDirectory, "npm-install.log")
+      })
 
       await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "index.js"))
       await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "index.d.ts"))
