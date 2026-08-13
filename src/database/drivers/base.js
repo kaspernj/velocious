@@ -142,7 +142,8 @@ import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
-import {optionalPositiveInteger} from "typanic"
+import { optionalPositiveInteger } from "typanic"
+import { coordinateSharedTransactionConnection } from "../../testing/shared-transaction-connection-coordinator.js"
 
 /** Maximum characters inspected when building the debug SQL preview. */
 const SQL_PREVIEW_SCAN_LIMIT = 4096
@@ -1595,13 +1596,16 @@ export default class VelociousDatabaseDriversBase {
   async affectedRows(sql, options = {}) {
     await this._waitForOperationLease(options.operationOwner)
     this._assertWritableQuery(sql)
-    await this.beforeQuery(sql, options)
 
-    try {
-      return await this._affectedRowsActual(sql)
-    } finally {
-      await this.afterQuery(sql, options)
-    }
+    return await coordinateSharedTransactionConnection(this, async () => {
+      await this.beforeQuery(sql, options)
+
+      try {
+        return await this._affectedRowsActual(sql)
+      } finally {
+        await this.afterQuery(sql, options)
+      }
+    }, options.operationOwner)
   }
 
   /**
@@ -1664,13 +1668,15 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
   async _queryActualWithHooks(sql, options) {
-    await this.beforeQuery(sql, options)
+    return await coordinateSharedTransactionConnection(this, async () => {
+      await this.beforeQuery(sql, options)
 
-    try {
-      return await this._queryActual(sql, options)
-    } finally {
-      await this.afterQuery(sql, options)
-    }
+      try {
+        return await this._queryActual(sql, options)
+      } finally {
+        await this.afterQuery(sql, options)
+      }
+    }, options.operationOwner)
   }
 
   /**
