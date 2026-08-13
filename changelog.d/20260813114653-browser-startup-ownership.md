@@ -1,0 +1,1 @@
+Make browser test startup use the exact prewarmed Chrome/ChromeDriver pair, retain actionable service diagnostics, and terminate driver, browser, SystemTest, and backend resources after startup failures.

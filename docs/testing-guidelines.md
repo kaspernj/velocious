@@ -147,3 +147,18 @@ signal or condition instead:
   expect(rows.length).toEqual(3))`.
 - **System/browser tests:** wait for the expected element to appear rather than
   sleeping before interacting with it.
+
+## Browser runner startup ownership
+
+`scripts/prewarm-chromedriver.js` validates Chrome and ChromeDriver by executing
+their version commands and persists the selected compatible pair for
+`npm run test:browser`. The browser runner launches that exact ChromeDriver as a
+managed process group and connects Selenium to its explicit service URL. If
+WebDriver session creation fails or times out, the runner terminates ChromeDriver
+and its Chrome descendants before stopping SystemTest and the backend.
+
+Startup errors include the startup phase, runtime versions and paths, service URL,
+Chrome process snapshots before and after cleanup, and retained ChromeDriver logs
+under `tmp/browser-test-chrome/`. Use those diagnostics to fix the concrete service
+or Chrome failure; do not stabilize startup by increasing timeouts or retrying the
+whole browser test command.

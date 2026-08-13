@@ -328,6 +328,7 @@ npm run test:browser
 ```
 
 Browser system tests must be named `*.browser-test.js` or `*.browser-spec.js` (override with `VELOCIOUS_BROWSER_TEST_PATTERN`).
+The runner validates and persists the exact Chrome/ChromeDriver pair selected by `scripts/prewarm-chromedriver.js`, then owns ChromeDriver and Chrome as a managed process group. Startup failures report the runtime paths and versions, service URL, retained logs under `tmp/browser-test-chrome/`, and Chrome process state before and after cleanup.
 
 Use beforeAll/afterAll for suite-level setup/teardown.
 
