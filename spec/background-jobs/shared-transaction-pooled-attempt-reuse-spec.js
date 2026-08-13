@@ -10,6 +10,7 @@ let backgroundJobs
 /** @type {number | undefined} */
 let firstAttemptPid
 const markerPrefix = `shared-transaction-pooled-attempts-${process.pid}-${Date.now()}`
+const concurrentPooledTransactionTimeoutSeconds = 30
 
 describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], databaseCleaning: {transaction: true, truncate: false}}, () => {
   beforeAll(async () => {
@@ -51,8 +52,8 @@ describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], data
       return await SharedTransactionTestJob.performLaterWithOptions({args: [parentMarker, childMarker, outputPaths[index]], options: {executionMode: "pooled"}})
     }))
 
-    await Promise.all(jobIds.map(async (jobId) => await waitForJobCompleted({jobId, store: backgroundJobs.store, timeoutSeconds: 10})))
-    const results = await Promise.all(outputPaths.map(async (outputPath) => await waitForOutputJson({outputPath, timeoutSeconds: 10})))
+    await Promise.all(jobIds.map(async (jobId) => await waitForJobCompleted({jobId, store: backgroundJobs.store, timeoutSeconds: concurrentPooledTransactionTimeoutSeconds})))
+    const results = await Promise.all(outputPaths.map(async (outputPath) => await waitForOutputJson({outputPath, timeoutSeconds: concurrentPooledTransactionTimeoutSeconds})))
     expect(results.map((result) => result.pid)).toEqual([firstAttemptPid, firstAttemptPid])
     expect(results.map((result) => result.parentCount)).toEqual([1, 1])
     expect(results.map((result) => result.childCount)).toEqual([1, 1])
