@@ -118,6 +118,23 @@ export default class VelociousDatabaseRecordBaseRelationship {
   }
 
   /**
+   * Resolves an attribute-form foreign key through the model class that owns the physical column.
+   * @param {object} args - Bound relationship model classes.
+   * @param {typeof import("../index.js").default} args.modelClass - Relationship source model class.
+   * @param {typeof import("../index.js").default} args.targetModelClass - Relationship target model class.
+   * @returns {string} - Physical foreign-key column name.
+   */
+  getForeignKeyForModelClasses({modelClass, targetModelClass}) {
+    this.getForeignKey()
+
+    if (!this.foreignKey) throw new Error(`Relationship ${this.modelClass.name}#${this.relationshipName} did not resolve a foreign key`)
+
+    const foreignKeyModelClass = this.getType() === "belongsTo" ? modelClass : targetModelClass
+
+    return foreignKeyModelClass.getAttributeNameToColumnNameMap()[this.foreignKey] || this.foreignKey
+  }
+
+  /**
    * Runs get inverse of.
    * @abstract
    * @returns {string | undefined} The name of the inverse relationship, e.g. "posts", "comments" etc.

@@ -24,6 +24,11 @@
 
 /** @typedef {import("../../configuration-types.js").TenantDatabaseProviderType} TenantDatabaseProviderType */
 
+/**
+ * Schema metadata cached for one record class and physical database generation.
+ * @typedef {boolean | null | string | undefined | Promise<void> | string[] | import("../drivers/base-column.js").default[] | import("../drivers/base-table.js").default | Record<string, string> | Record<string, string | undefined> | Record<string, import("../drivers/base-column.js").default>} RecordMetadataValue
+ */
+
 import AdvisoryLockRunner, {AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError} from "../advisory-lock-runner.js"
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
@@ -72,6 +77,39 @@ const declaredBooleanTruthyValues = new Set([1, true, "1"])
 
 /** Stored values that a declared `"boolean"` cast reads back as `false`. */
 const declaredBooleanFalsyValues = new Set([0, false, "0"])
+
+/** Static record metadata fields isolated per physical database/schema generation. */
+const recordMetadataPropertyNames = new Set([
+  "_attributeNameToColumnName",
+  "_columnNameToAttributeName",
+  "_columnNames",
+  "_columns",
+  "_columnsAsHash",
+  "_columnTypeByName",
+  "_databaseType",
+  "_initialized",
+  "_initializeRecordPromise",
+  "_table"
+])
+
+/** @type {WeakMap<typeof import("./index.js").default, Map<string, Map<string, RecordMetadataValue>>>} */
+const recordMetadataValuesByModel = new WeakMap()
+
+/**
+ * Returns the generation-keyed metadata store owned by one canonical model.
+ * @param {typeof import("./index.js").default} modelClass - Canonical model class.
+ * @returns {Map<string, Map<string, RecordMetadataValue>>} - Metadata store.
+ */
+function recordMetadataValuesFor(modelClass) {
+  let values = recordMetadataValuesByModel.get(modelClass)
+
+  if (!values) {
+    values = new Map()
+    recordMetadataValuesByModel.set(modelClass, values)
+  }
+
+  return values
+}
 
 class ValidationError extends Error {
   /**
@@ -236,6 +274,15 @@ class VelociousDatabaseRecord {
    * @type {Promise<void> | null | undefined} */
   static _initializeRecordPromise
 
+  /** @type {typeof VelociousDatabaseRecord | undefined} Canonical model class exposed only by an operation-bound metadata proxy. */
+  static _recordMetadataModelClass
+
+  /** @type {((modelClass: typeof VelociousDatabaseRecord) => typeof VelociousDatabaseRecord) | undefined} Binds related generated model classes to the same operation metadata generation. */
+  static _recordMetadataBinder
+
+  /** @type {import("../operation.js").default | undefined} Operation exposed only by a constructing metadata proxy. */
+  static _recordMetadataOperation
+
   /**
    * Narrows the runtime value to the documented type.
    * @type {boolean | undefined} */
@@ -360,8 +407,30 @@ class VelociousDatabaseRecord {
     return defineModelScope({
       callback,
       modelClass: this,
-      startQuery: () => this._newQuery()
+      startQuery: (modelClass = this) => {
+        // This backend scope factory can only be invoked through a DatabaseRecord class.
+        const BackendModelClass = /** @type {typeof VelociousDatabaseRecord} */ (modelClass)
+
+        return BackendModelClass._newQuery()
+      }
     })
+  }
+
+  /**
+   * Returns the application model class behind an operation-bound metadata view.
+   * @returns {typeof VelociousDatabaseRecord} - Canonical model class.
+   */
+  static canonicalRecordMetadataModelClass() {
+    return this._recordMetadataModelClass || this
+  }
+
+  /**
+   * Binds a relationship target to this model class's metadata generation.
+   * @param {typeof VelociousDatabaseRecord} modelClass - Relationship target.
+   * @returns {typeof VelociousDatabaseRecord} - Generation-bound target, or the unchanged target for legacy queries.
+   */
+  static bindRecordMetadataModelClass(modelClass) {
+    return this._recordMetadataBinder ? this._recordMetadataBinder(modelClass) : modelClass
   }
 
   static getColumnNameToAttributeNameMap() {
@@ -1470,6 +1539,68 @@ class VelociousDatabaseRecord {
     this._columnTypeByName = undefined
     this._attributeNameToColumnName = undefined
     this._columnNameToAttributeName = undefined
+
+    if (!this._recordMetadataModelClass) this.clearRecordMetadataValues()
+  }
+
+  /**
+   * Static fields that belong to one physical database/schema generation.
+   * @returns {Set<string>} - Metadata property names.
+   */
+  static recordMetadataPropertyNames() {
+    return recordMetadataPropertyNames
+  }
+
+  /**
+   * Reads one operation-bound metadata field.
+   * @param {string} metadataKey - Physical database and schema generation key.
+   * @param {string} property - Static metadata property.
+   * @returns {RecordMetadataValue} - Stored metadata value.
+   */
+  static recordMetadataValue(metadataKey, property) {
+    return recordMetadataValuesFor(this).get(metadataKey)?.get(property)
+  }
+
+  /**
+   * Writes one operation-bound metadata field.
+   * @param {string} metadataKey - Physical database and schema generation key.
+   * @param {string} property - Static metadata property.
+   * @param {RecordMetadataValue} value - Metadata value.
+   * @returns {void}
+   */
+  static setRecordMetadataValue(metadataKey, property, value) {
+    let values = recordMetadataValuesFor(this).get(metadataKey)
+
+    if (!values) {
+      values = new Map()
+      recordMetadataValuesFor(this).set(metadataKey, values)
+    }
+
+    values.set(property, value)
+  }
+
+  /** Clears every tenant/generation metadata snapshot for this model. */
+  static clearRecordMetadataValues() {
+    recordMetadataValuesByModel.delete(this)
+  }
+
+  /**
+   * Clears snapshots whose key belongs to one physical database identity.
+   * @param {string} databaseIdentity - Logical identifier plus pool reuse key.
+   * @returns {void}
+   */
+  static clearRecordMetadataValuesForDatabaseIdentity(databaseIdentity) {
+    const values = recordMetadataValuesByModel.get(this)
+
+    if (!values) return
+
+    const metadataPrefix = `${databaseIdentity.length}:${databaseIdentity}:`
+
+    for (const metadataKey of values.keys()) {
+      if (metadataKey.startsWith(metadataPrefix)) values.delete(metadataKey)
+    }
+
+    if (values.size === 0) recordMetadataValuesByModel.delete(this)
   }
 
   /**
@@ -1484,8 +1615,10 @@ class VelociousDatabaseRecord {
     if (!configuration) throw new Error(`No configuration given for ${this.name}`)
 
     this.resetRecordMetadata()
-    this._configuration = configuration
-    this._configuration.registerModelClass(this)
+    const modelClass = this._recordMetadataModelClass || this
+
+    modelClass._configuration = configuration
+    configuration.registerModelClass(modelClass)
   }
 
   /**
@@ -1637,7 +1770,10 @@ class VelociousDatabaseRecord {
 
       if (!locales) throw new Error("Locales hasn't been set in the configuration")
 
-      await this.getTranslationClass().initializeRecord({
+      const TranslationClass = this.getTranslationClass()
+      const BoundTranslationClass = this._recordMetadataBinder ? this._recordMetadataBinder(TranslationClass) : TranslationClass
+
+      await BoundTranslationClass.initializeRecord({
         configuration: this._getConfiguration(),
         connection
       })
@@ -1824,6 +1960,8 @@ class VelociousDatabaseRecord {
    */
   getModelClass() {
     const modelClass = /** @type {typeof VelociousDatabaseRecord} */ (this.constructor)
+
+    if (this._databaseOperation) return this._databaseOperation.modelClass(modelClass)
 
     return modelClass
   }
@@ -3092,8 +3230,10 @@ class VelociousDatabaseRecord {
    * @returns {ModelClassQuery<MC>} - The new query.
    */
   static _newQuery(args = {}) {
-    const {driver = () => this.connection(), operation, ...restArgs} = args
+    const {driver: givenDriver, operation: givenOperation, ...restArgs} = args
     restArgsError(restArgs)
+    const operation = givenOperation || this._recordMetadataOperation
+    const driver = givenDriver || (operation ? operation.connection() : () => this.connection())
     this._assertHasBeenInitialized()
     const handler = new Handler()
     const query = new ModelClassQuery({
@@ -3450,6 +3590,9 @@ class VelociousDatabaseRecord {
    * @param {WriteAttributes} changes - Changes.
    */
   constructor(changes = /** @type {WriteAttributes} */ ({})) {
+    const ModelClass = /** @type {typeof VelociousDatabaseRecord} */ (new.target)
+
+    this._databaseOperation = ModelClass._recordMetadataOperation
     this.getModelClass()._assertHasBeenInitialized()
     this._attributes = {}
     this._changes = {}

@@ -1,0 +1,1 @@
+Frontend tenant SQLite handles can now migrate and initialize model metadata independently per physical database and schema generation, including atomic operation admission, generation-bound association builders, full React configuration bootstrap, selection-keyed render readiness, deduplicated lifecycle work, and isolated retries.

@@ -8,41 +8,94 @@ import Migrator from "./migrator.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 /**
- * Runs load migrations.
- * @param {object} args - Options object.
- * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback - Migrations require context callback.
- * @returns {{loaded: boolean}} - Whether the database was loaded by this call.
+ * Initializes either the legacy ambient frontend database or one immutable
+ * tenant-bound physical database generation.
+ * @param {object} args - Initialization options.
+ * @param {import("../configuration.js").default} args.configuration - Current frontend configuration.
+ * @param {string} [args.databaseIdentifier] - Tenant-only logical database identifier.
+ * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback - Migrations loader.
+ * @param {string} [args.schemaGeneration] - Tenant schema generation.
+ * @param {import("../tenants/tenant-handle.js").default} [args.tenantHandle] - Immutable tenant handle.
+ * @returns {Promise<void>} - Resolves when the selected database is ready.
  */
-export default function loadMigrations({migrationsRequireContextCallback, ...restArgs}) {
-  const instance = React.useMemo(() => ({running: false}), [])
-  const {isServer} = useEnvSense()
-  const [loaded, setLoaded] = React.useState(false)
+export async function initializeFrontendDatabase({configuration, databaseIdentifier, migrationsRequireContextCallback, schemaGeneration, tenantHandle}) {
+  if (tenantHandle) {
+    tenantHandle.assertConfiguration(configuration)
+    if (!databaseIdentifier) throw new Error("Tenant frontend database initialization requires databaseIdentifier")
+    if (!schemaGeneration) throw new Error("Tenant frontend database initialization requires schemaGeneration")
 
-  const loadDatabase = React.useCallback(async () => {
-    instance.running = true
+    await tenantHandle.initialize({
+      databaseIdentifier,
+      migrations: await migrationsRequireContextCallback(),
+      schemaGeneration
+    })
+    await configuration.initialize()
+    return
+  }
+  if (databaseIdentifier || schemaGeneration) {
+    throw new Error("Tenant frontend database initialization requires tenantHandle")
+  }
 
-    try {
-      await Configuration.current().ensureConnections({name: "React database migration loader"}, async () => {
-        const migrator = new Migrator({configuration: Configuration.current()})
+  await configuration.ensureConnections({name: "React database migration loader"}, async () => {
+    const migrator = new Migrator({configuration})
 
-        await migrator.prepare()
-        await migrator.migrateFilesFromRequireContext(await migrationsRequireContextCallback())
-      })
+    await migrator.prepare()
+    await migrator.migrateFilesFromRequireContext(await migrationsRequireContextCallback())
+  })
 
-      await Configuration.current().initialize()
-      setLoaded(true)
-    } finally {
-      instance.running = false
-    }
-  }, [])
+  await configuration.initialize()
+}
 
-  React.useMemo(() => {
-    if (!loaded && !isServer && !instance.running) {
-      loadDatabase()
-    }
-  }, [loaded])
-
+/**
+ * React lifecycle hook for frontend database readiness. With `tenantHandle`,
+ * readiness follows that immutable physical tenant plus `schemaGeneration`;
+ * changing either cancels the stale render result without cancelling shared
+ * lifecycle work needed by another caller.
+ * @param {object} args - Hook options.
+ * @param {string} [args.databaseIdentifier] - Tenant-only logical database identifier.
+ * @param {() => Promise<import("./migrator/types.js").RequireMigrationContextType>} args.migrationsRequireContextCallback - Migrations loader.
+ * @param {string} [args.schemaGeneration] - Tenant schema generation.
+ * @param {import("../tenants/tenant-handle.js").default} [args.tenantHandle] - Immutable tenant handle.
+ * @returns {{error: Error | null, loaded: boolean}} - Selected database readiness.
+ */
+export default function useDatabase({databaseIdentifier, migrationsRequireContextCallback, schemaGeneration, tenantHandle, ...restArgs}) {
   restArgsError(restArgs)
 
-  return {loaded}
+  const {isServer} = useEnvSense()
+  const migrationsRequireContextCallbackRef = React.useRef(migrationsRequireContextCallback)
+
+  migrationsRequireContextCallbackRef.current = migrationsRequireContextCallback
+
+  const selection = React.useMemo(() => {
+    if (isServer) return undefined
+
+    return {configuration: Configuration.current(), databaseIdentifier, schemaGeneration, tenantHandle}
+  }, [isServer, databaseIdentifier, schemaGeneration, tenantHandle])
+  const [state, setState] = React.useState({error: /** @type {Error | null} */ (null), loaded: false, selection})
+
+  React.useEffect(() => {
+    if (!selection) return undefined
+
+    let current = true
+    const migrationsLoader = migrationsRequireContextCallbackRef.current
+
+    setState({error: null, loaded: false, selection})
+    void initializeFrontendDatabase({
+      configuration: selection.configuration,
+      databaseIdentifier: selection.databaseIdentifier,
+      migrationsRequireContextCallback: migrationsLoader,
+      schemaGeneration: selection.schemaGeneration,
+      tenantHandle: selection.tenantHandle
+    }).then(() => {
+      if (current) setState({error: null, loaded: true, selection})
+    }, (error) => {
+      if (current) setState({error: error instanceof Error ? error : new Error(String(error)), loaded: false, selection})
+    })
+
+    return () => { current = false }
+  }, [selection])
+
+  if (state.selection !== selection) return {error: null, loaded: false}
+
+  return {error: state.error, loaded: state.loaded}
 }

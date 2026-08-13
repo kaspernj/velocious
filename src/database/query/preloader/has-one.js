@@ -2,7 +2,7 @@
 
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
-import preloadQueryForModel from "./query-for-model.js"
+import preloadQueryForModel, { bindPreloadModelClass } from "./query-for-model.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderHasOne {
@@ -32,13 +32,16 @@ export default class VelociousDatabaseQueryPreloaderHasOne {
      * @type {Record<number | string, Array<import("../../record/index.js").default>>} */
     const modelsByPrimaryKeyValue = {}
 
-    const foreignKey = this.relationship.getForeignKey()
     const primaryKey = this.relationship.getPrimaryKey()
     const relationshipName = this.relationship.getRelationshipName()
 
-    const targetModelClass = this.relationship.getTargetModelClass()
+    const rawTargetModelClass = this.relationship.getTargetModelClass()
 
-    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+    if (!rawTargetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    const sourceModelClass = this.models[0].getModelClass()
+    const targetModelClass = bindPreloadModelClass(this.models, rawTargetModelClass)
+    const foreignKey = this.relationship.getForeignKeyForModelClasses({modelClass: sourceModelClass, targetModelClass})
 
     /**
      * Preload collections.

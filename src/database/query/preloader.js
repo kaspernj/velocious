@@ -88,7 +88,7 @@ export default class VelociousDatabaseQueryPreloader {
   static async preload(models, queryOrSpec, {force = false} = {}) {
     if (models.length == 0) return
 
-    const modelClass = /** @type {typeof import("../record/index.js").default} */ (models[0].constructor)
+    const modelClass = models[0].getModelClass()
     const isQuery = Boolean(queryOrSpec) && typeof queryOrSpec == "object" && "_preload" in queryOrSpec
     // Reuse the query builder's preload/select normalization for raw specs
     // instead of duplicating it here.
@@ -176,15 +176,17 @@ export default class VelociousDatabaseQueryPreloader {
 
             if (models.length == 0) continue
 
-            const targetModelClass = configuration.getModelClass(className)
+            const targetModelClass = this.modelClass.bindRecordMetadataModelClass(configuration.getModelClass(className))
             const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models, preload: normalizedPreload, selection: this.selection})
 
             await preloader.run()
           }
         } else {
-          const targetModelClass = relationship.getTargetModelClass()
+          const rawTargetModelClass = relationship.getTargetModelClass()
 
-          if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+          if (!rawTargetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+          const targetModelClass = this.modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
 
           const preloader = new VelociousDatabaseQueryPreloader({modelClass: targetModelClass, models: targetModels, preload: normalizedPreload, selection: this.selection})
 

@@ -42,6 +42,27 @@ Features that need framework-owned tables, such as record auditing, should
 still be declared through normal application migrations. See
 [record auditing](auditing.md#schema) for the shared `audits` table layout.
 
+## Frontend tenant databases
+
+For a tenant-only SQLite identifier, run frontend migrations through the
+immutable tenant handle rather than the ambient migrator:
+
+```js
+await tenantHandle.initialize({
+  databaseIdentifier: "projectTenant",
+  migrations: await loadFrontendMigrations(),
+  schemaGeneration: appSchemaGeneration
+})
+```
+
+Each captured physical database owns its own `schema_migrations` ledger. Matching
+concurrent calls share one migration/readiness pass for that physical identity
+and generation, while different tenants migrate independently. A failed tenant
+does not affect another tenant's readiness and can retry safely. Changing the
+generation rechecks the durable ledger and rebuilds model metadata without
+reapplying recorded versions. See the [frontend tenant SQLite lifecycle](frontend-tenant-sqlite-lifecycle.md)
+for the React hook and close/reopen contract.
+
 `removeIndex(tableName, nameOrColumns, args)` drops an index by explicit name, or by deriving the same database-specific default name that `addIndex(...)` uses when passed columns:
 
 ```js

@@ -153,13 +153,13 @@ function resolveTargetModelClass(rootModelClass, chain) {
 
   for (const segment of chain) {
     const relationship = modelClass.getRelationshipByName(segment)
-    const target = relationship.getTargetModelClass()
+    const rawTarget = relationship.getTargetModelClass()
 
-    if (!target) {
+    if (!rawTarget) {
       throw new Error(`queryData: could not resolve target model for ${modelClass.name}#${segment}`)
     }
 
-    modelClass = target
+    modelClass = modelClass.bindRecordMetadataModelClass(rawTarget)
   }
 
   return modelClass

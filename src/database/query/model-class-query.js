@@ -88,6 +88,22 @@ function normalizeScopePath(path) {
 }
 
 /**
+ * Narrows a shared model-scope descriptor to the backend model class required by ModelClassQuery.
+ * @param {import("../../utils/model-scope.js").ModelScopeDescriptor} scopeDescriptor - Shared scope descriptor.
+ * @returns {typeof import("../record/index.js").default} - Backend scope owner.
+ */
+function backendScopeModelClass(scopeDescriptor) {
+  const modelClass = scopeDescriptor.modelClass
+
+  if (!("canonicalRecordMetadataModelClass" in modelClass)) {
+    throw new Error("A frontend-model scope cannot be applied to a database record query")
+  }
+
+  // The runtime member check above narrows the shared frontend/backend descriptor boundary.
+  return /** @type {typeof import("../record/index.js").default} */ (modelClass)
+}
+
+/**
  * Deep-copies a preload select map (keyed by model name with attribute arrays)
  * so a cloned query's selections can be mutated without affecting the original.
  * @param {Record<string, string[]>} map - Preload select map to copy.
@@ -491,6 +507,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+   * Binds a relationship target to this query's physical database generation.
+   * @param {typeof import("../record/index.js").default} modelClass - Canonical relationship target.
+   * @returns {typeof import("../record/index.js").default} - Query-bound relationship target.
+   */
+  bindModelClass(modelClass) {
+    return this.getModelClass().bindRecordMetadataModelClass(modelClass)
+  }
+
+  /**
    * Runs get join base path.
    * @returns {string[]} - The join base path.
    */
@@ -563,7 +588,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
         throw new Error(`No target model class for ${modelClass.name}#${relationshipName}`)
       }
 
-      modelClass = targetModelClass
+      modelClass = this.bindModelClass(targetModelClass)
     }
 
     return modelClass
@@ -642,7 +667,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
       throw new Error("scope() expects a descriptor returned by defineScope(...).scope(...)")
     }
 
-    if (scopeDescriptor.modelClass !== this.getModelClass()) {
+    const scopeModelClass = backendScopeModelClass(scopeDescriptor)
+
+    if (scopeModelClass.canonicalRecordMetadataModelClass() !== this.getModelClass().canonicalRecordMetadataModelClass()) {
       throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to ${this.getModelClass().name} query`)
     }
 
@@ -671,7 +698,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const fullJoinPath = this.getJoinBasePath().concat(joinPath)
     const targetModelClass = this._resolveModelClassForJoinPath(fullJoinPath)
 
-    if (scopeDescriptor.modelClass !== targetModelClass) {
+    const scopeModelClass = backendScopeModelClass(scopeDescriptor)
+
+    if (scopeModelClass.canonicalRecordMetadataModelClass() !== targetModelClass.canonicalRecordMetadataModelClass()) {
       throw new Error(`Cannot apply ${scopeDescriptor.modelClass.name} scope to join path ${fullJoinPath.join(".")} (${targetModelClass.name})`)
     }
 
@@ -1418,11 +1447,12 @@ function splitWhereHash({hash, modelClass}) {
 
     if (isNested) {
       if (relationship) {
-        const targetModelClass = relationship.getTargetModelClass()
-        if (!targetModelClass) {
+        const rawTargetModelClass = relationship.getTargetModelClass()
+        if (!rawTargetModelClass) {
           fallbackHash[key] = value
           continue
         }
+        const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
         const nestedResult = splitWhereHash({hash: value, modelClass: targetModelClass})
         const nestedResolvedKeys = Object.keys(nestedResult.resolvedHash)
         const nestedFallbackKeys = Object.keys(nestedResult.fallbackHash)
@@ -1476,8 +1506,9 @@ function buildJoinObjectFromWhereHash({hash, modelClass}) {
     if (!relationship) continue
 
     if (isPlainObject(value)) {
-      const targetModelClass = relationship.getTargetModelClass()
-      if (!targetModelClass) continue
+      const rawTargetModelClass = relationship.getTargetModelClass()
+      if (!rawTargetModelClass) continue
+      const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
       const nestedJoinObject = buildJoinObjectFromWhereHash({hash: value, modelClass: targetModelClass})
 
       joinObject[key] = Object.keys(nestedJoinObject).length > 0 ? nestedJoinObject : true

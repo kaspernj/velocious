@@ -64,6 +64,29 @@ connection or metadata initialization failures still propagate.
 `Tenant` facade when callback code needs checked-out connections and ready tenant
 model metadata.
 
+## Frontend tenant metadata
+
+Immutable frontend tenant handles initialize metadata through
+`handle.initialize({databaseIdentifier, migrations, schemaGeneration})`. Record
+metadata is keyed by the captured physical database identity and schema
+generation, rather than only by model class. Two tenant databases can therefore
+initialize the same model concurrently even when their columns differ, without
+one tenant overwriting the other's column/table metadata.
+
+Operations created by the initialized handle automatically use that generation's
+model-class view. Loaded records and records built through has-many, has-one, or
+belongs-to associations retain the same operation ownership; the association
+target is bound before its constructor validates metadata. Closing,
+deleting, evicting, or shutting down a resident tenant database invalidates only
+that physical identity's snapshots; another tenant remains ready. A new schema
+generation builds a new snapshot after its migrations run. Failed initialization
+does not commit readiness and may be retried.
+
+Eager registered models must have their base and declared translation tables for
+frontend readiness to succeed. Set `Model.setEagerLoadRecordMetadata(false)` for
+an optional integration whose tables may be absent; it remains lazily initialized
+when actually queried.
+
 ## Frontend Model Requests
 
 Frontend-model command handling initializes only the requested resource model

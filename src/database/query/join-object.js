@@ -54,11 +54,14 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
     for (const joinKey in join) {
       const joinValue = join[joinKey]
       const relationship = modelClass.getRelationshipByName(joinKey)
-      const targetModelClass = relationship.getTargetModelClass()
+      const rawTargetModelClass = relationship.getTargetModelClass()
 
-      if (!targetModelClass) {
+      if (!rawTargetModelClass) {
         throw new Error(`Relationship ${modelClass.name}#${joinKey} has no target model class`)
       }
+
+      const targetModelClass = query.bindModelClass(rawTargetModelClass)
+      const foreignKey = relationship.getForeignKeyForModelClasses({modelClass, targetModelClass})
 
       const joinPath = path.concat([joinKey])
       const parentTableRef = query.getJoinTableReference(path)
@@ -80,9 +83,9 @@ export default class VelociousDatabaseQueryJoinObject extends JoinBase {
 
       if (relationship.getType() == "belongsTo") {
         sql += `${conn.quoteTable(targetTableRef)}.${conn.quoteColumn(relationship.getPrimaryKey())} = `
-        sql += `${conn.quoteTable(parentTableRef)}.${conn.quoteColumn(relationship.getForeignKey())}`
+        sql += `${conn.quoteTable(parentTableRef)}.${conn.quoteColumn(foreignKey)}`
       } else if (relationship.getType() == "hasMany" || relationship.getType() == "hasOne") {
-        sql += `${conn.quoteTable(targetTableRef)}.${conn.quoteColumn(relationship.getForeignKey())} = `
+        sql += `${conn.quoteTable(targetTableRef)}.${conn.quoteColumn(foreignKey)} = `
         sql += `${conn.quoteTable(parentTableRef)}.${conn.quoteColumn(relationship.getPrimaryKey())}`
       } else {
         throw new Error(`Unknown relationship type: ${relationship.getType()}`)

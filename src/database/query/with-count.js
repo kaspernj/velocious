@@ -155,13 +155,14 @@ function queryForEntry({entry, modelClass, sourceModel}) {
     throw new Error(`withCount currently supports only hasMany relationships; ${modelClass.name}#${entry.relationshipName} is ${relationship.type}`)
   }
 
-  const targetModelClass = relationship.getTargetModelClass()
+  const rawTargetModelClass = relationship.getTargetModelClass()
 
-  if (!targetModelClass) {
+  if (!rawTargetModelClass) {
     throw new Error(`withCount: could not resolve target model for ${modelClass.name}#${entry.relationshipName}`)
   }
 
-  const foreignKey = relationship.getForeignKey()
+  const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
+  const foreignKey = relationship.getForeignKeyForModelClasses({modelClass, targetModelClass})
   /**
    * Mandatory cohort conditions.
    * @type {Record<string, ReturnType<typeof JSON.parse>>} */

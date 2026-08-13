@@ -1104,6 +1104,18 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Invalidates record metadata owned by one closed/deleted physical tenant
+   * database while preserving every other tenant generation.
+   * @param {string} databaseIdentity - Logical identifier plus pool reuse key.
+   * @returns {void}
+   */
+  clearRecordMetadataForDatabaseIdentity(databaseIdentity) {
+    for (const modelClass of Object.values(this.modelClasses)) {
+      modelClass.clearRecordMetadataValuesForDatabaseIdentity(databaseIdentity)
+    }
+  }
+
+  /**
    * Runs get database pool type.
    * @param {string} identifier - Identifier.
    * @returns {typeof import("./database/pool/base.js").default} - The database pool type.
@@ -3114,11 +3126,11 @@ export default class VelociousConfiguration {
    * database configuration. No ambient tenant value is read during checkout or
    * execution.
    * @template T
-   * @param {{databaseConfiguration: import("./configuration-types.js").DatabaseConfigurationType, databaseIdentifier: string, name?: string, tenant?: object}} options - Captured operation options.
+   * @param {{databaseConfiguration: import("./configuration-types.js").DatabaseConfigurationType, databaseIdentifier: string, name?: string, schemaGeneration?: string, tenant?: object}} options - Captured operation options.
    * @param {(operation: DatabaseOperation) => Promise<T>} callback - Operation callback.
    * @returns {Promise<T>} - Callback result.
    */
-  async withDatabaseOperation({databaseConfiguration, databaseIdentifier, name = "Configuration.withDatabaseOperation", tenant, ...restArgs}, callback) {
+  async withDatabaseOperation({databaseConfiguration, databaseIdentifier, name = "Configuration.withDatabaseOperation", schemaGeneration, tenant, ...restArgs}, callback) {
     restArgsError(restArgs)
 
     if (!databaseIdentifier) throw new Error("Configuration.withDatabaseOperation requires a databaseIdentifier")
@@ -3137,6 +3149,7 @@ export default class VelociousConfiguration {
         databaseIdentifier,
         enforceCurrentTenantReuseKey: false,
         owner,
+        schemaGeneration,
         tenant
       })
 

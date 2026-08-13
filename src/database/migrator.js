@@ -145,39 +145,7 @@ export default class VelociousDatabaseMigrator {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async migrateFilesFromRequireContext(requireContext) {
-    /**
-     * Files.
-     * @type {import("./migrator/types.js").MigrationObjectType[]} */
-    let files = []
-
-    for (const file of requireContext.keys()) {
-      // "13,14" because somes "require-context"-npm-module deletes first character!?
-      const match = file.match(/(\d{13,14})-(.+)\.js$/)
-
-      if (!match) continue
-
-      // Fix require-context-npm-module deletes first character
-      let fileName = file
-      let dateNumber = match[1]
-
-      if (dateNumber.length == 13) {
-        dateNumber = `2${dateNumber}`
-        fileName = `2${fileName}`
-      }
-
-      // Parse regex
-      const date = parseInt(dateNumber)
-      const migrationName = match[2]
-      const migrationClassName = inflection.camelize(migrationName.replaceAll("-", "_"))
-
-      files.push({
-        file: fileName,
-        date,
-        migrationClassName
-      })
-    }
-
-    files = files.sort((migration1, migration2) => migration1.date - migration2.date)
+    const files = this.migrationsFromRequireContext(requireContext)
 
     await this.configuration.ensureConnections({databaseIdentifiers: this.databaseIdentifiers, name: "Database migrator: migrate require-context files"}, async () => {
       for (const migration of files) {
@@ -189,6 +157,104 @@ export default class VelociousDatabaseMigrator {
 
       await this._afterMigrations()
     })
+  }
+
+  /**
+   * Migrates exactly one already-captured physical database. This is the
+   * frontend/tenant counterpart to the ambient multi-database entrypoints:
+   * callers own the captured connection and no configuration fallback is read.
+   * @param {object} args - Captured migration arguments.
+   * @param {import("../configuration-types.js").DatabaseConfigurationType} args.databaseConfiguration - Captured physical database configuration.
+   * @param {string} args.databaseIdentifier - Logical database identifier.
+   * @param {import("./drivers/base.js").default} args.db - Captured physical connection.
+   * @param {import("./migrator/types.js").RequireMigrationContextType} args.requireContext - Frontend migration require context.
+   * @returns {Promise<number>} - Number of newly applied migrations.
+   */
+  async migrateRequireContextForDatabase({databaseConfiguration, databaseIdentifier, db, requireContext}) {
+    if (!databaseConfiguration.migrations) return 0
+
+    await MigrationsLedger.ensureTable(db)
+    const appliedVersions = new Set(await MigrationsLedger.appliedVersions(db))
+    const migrations = this.migrationsFromRequireContext(requireContext)
+    let appliedCount = 0
+
+    for (const migration of migrations) {
+      const version = `${migration.date}`
+
+      if (appliedVersions.has(version)) continue
+
+      const MigrationClass = requireContext(migration.file).default
+
+      if (!MigrationClass || typeof MigrationClass !== "function") {
+        throw new Error(`Migration ${migration.file} must export a default migration class. Type: ${typeof MigrationClass}`)
+      }
+      if (!(MigrationClass.getDatabaseIdentifiers() || ["default"]).includes(databaseIdentifier)) continue
+
+      const migrationInstance = new MigrationClass({configuration: this.configuration, databaseIdentifier, db})
+
+      await this.runMigrationUp({migration, migrationInstance})
+      await MigrationsLedger.recordVersion(db, version)
+      appliedVersions.add(version)
+      appliedCount++
+    }
+
+    return appliedCount
+  }
+
+  /**
+   * Parses and orders migrations from a browser/native require context.
+   * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Migration require context.
+   * @returns {import("./migrator/types.js").MigrationObjectType[]} - Ordered migrations.
+   */
+  migrationsFromRequireContext(requireContext) {
+    const migrations = []
+
+    for (const file of requireContext.keys()) {
+      const match = file.match(/(\d{13,14})-(.+)\.js$/)
+
+      if (!match) continue
+
+      let fileName = file
+      let dateNumber = match[1]
+
+      if (dateNumber.length == 13) {
+        dateNumber = `2${dateNumber}`
+        fileName = `2${fileName}`
+      }
+
+      migrations.push({
+        date: parseInt(dateNumber),
+        file: fileName,
+        migrationClassName: inflection.camelize(match[2].replaceAll("-", "_"))
+      })
+    }
+
+    return migrations.sort((migration1, migration2) => migration1.date - migration2.date)
+  }
+
+  /**
+   * Runs one migration's upward implementation.
+   * @param {object} args - Migration arguments.
+   * @param {import("./migrator/types.js").MigrationObjectType} args.migration - Migration descriptor.
+   * @param {import("./migration/index.js").default} args.migrationInstance - Migration instance.
+   * @returns {Promise<void>} - Resolves after the migration succeeds.
+   */
+  async runMigrationUp({migration, migrationInstance}) {
+    try {
+      await migrationInstance.change()
+    } catch (changeError) {
+      if (!(changeError instanceof NotImplementedError)) throw changeError
+
+      try {
+        await migrationInstance.up()
+      } catch (upError) {
+        if (upError instanceof NotImplementedError) {
+          throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`, {cause: upError})
+        }
+
+        throw upError
+      }
+    }
   }
 
   /**

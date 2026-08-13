@@ -1,11 +1,13 @@
 // @ts-check
 
+import Migrator from "../database/migrator.js"
+
 /**
  * TenantDescriptorValue type.
  * @typedef {null | boolean | number | string | TenantDescriptorValue[] | {[key: string]: TenantDescriptorValue}} TenantDescriptorValue
  */
 /** @typedef {{[key: string]: TenantDescriptorValue}} TenantDescriptor */
-/** @typedef {{databaseIdentifier: string, dirty: boolean, lastUsed: number, pinCount: number, state: "closed" | "closing" | "deleting" | "open" | "opening"}} TenantSqliteLifecycleSnapshot */
+/** @typedef {{databaseIdentifier: string, dirty: boolean, lastUsed: number, pinCount: number, ready: boolean, schemaGeneration: string | undefined, state: "closed" | "closing" | "deleting" | "open" | "opening"}} TenantSqliteLifecycleSnapshot */
 
 /**
  * Returns a readable path for a captured descriptor/configuration value.
@@ -205,6 +207,17 @@ export default class TenantHandle {
   }
 
   /**
+   * Rejects using this handle with a different Configuration instance.
+   * @param {import("../configuration.js").default} configuration - Expected owner.
+   * @returns {void}
+   */
+  assertConfiguration(configuration) {
+    if (configuration !== this._configuration) {
+      throw new Error("Tenant handle belongs to a different Velocious configuration")
+    }
+  }
+
+  /**
    * Returns the captured physical configuration for an active identifier.
    * @param {string} databaseIdentifier - Logical database identifier.
    * @returns {import("../configuration-types.js").DatabaseConfigurationType} - Captured resolved configuration.
@@ -227,6 +240,58 @@ export default class TenantHandle {
   async open(options) {
     const {databaseIdentifier} = options
     return await this._configuration.getFrontendTenantSqliteLifecycle().open(databaseIdentifier, this.databaseConfiguration(databaseIdentifier))
+  }
+
+  /**
+   * Opens, migrates, and initializes record metadata for one captured physical
+   * tenant SQLite database and application schema generation.
+   * @param {object} options - Initialization options.
+   * @param {string} options.databaseIdentifier - Tenant-only logical database identifier.
+   * @param {import("../database/migrator/types.js").RequireMigrationContextType} options.migrations - Frontend migration require context.
+   * @param {string} options.schemaGeneration - Stable application schema generation.
+   * @returns {Promise<Readonly<TenantSqliteLifecycleSnapshot>>} - Ready lifecycle snapshot.
+   */
+  async initialize({databaseIdentifier, migrations, schemaGeneration}) {
+    if (!migrations || typeof migrations !== "function" || typeof migrations.keys !== "function") {
+      throw new TypeError("TenantHandle.initialize requires a migrations require context")
+    }
+
+    const databaseConfiguration = this.databaseConfiguration(databaseIdentifier)
+    const lifecycle = this._configuration.getFrontendTenantSqliteLifecycle()
+
+    return await lifecycle.initialize(databaseIdentifier, databaseConfiguration, schemaGeneration, async () => {
+      await this._databaseOperation({
+        databaseIdentifier,
+        name: `Initialize frontend tenant database: ${databaseIdentifier}`,
+        requireReady: false,
+        schemaGeneration
+      }, async (operation) => {
+        const migrator = new Migrator({configuration: this._configuration, databaseIdentifiers: [databaseIdentifier]})
+
+        operation.connection().clearSchemaCache()
+        await migrator.migrateRequireContextForDatabase({
+          databaseConfiguration,
+          databaseIdentifier,
+          db: operation.connection(),
+          requireContext: migrations
+        })
+        await this._configuration.initializeModels({type: "frontend-tenant"})
+
+        for (const modelClass of Object.values(this._configuration.getModelClasses())) {
+          if (modelClass.getDatabaseIdentifier({tenant: this._tenant}) !== databaseIdentifier) continue
+          const table = await operation.connection().getTableByName(modelClass.tableName(), {throwError: false})
+
+          if (!table && !modelClass.getEagerLoadRecordMetadata()) continue
+          if (Object.keys(modelClass.getTranslationsMap()).length > 0) {
+            const translationsTable = await operation.connection().getTableByName(modelClass.getTranslationsTableName(), {throwError: false})
+
+            if (!translationsTable && !modelClass.getEagerLoadRecordMetadata()) continue
+          }
+
+          await operation.ensureModelInitialized(modelClass)
+        }
+      })
+    })
   }
 
   /**
@@ -290,13 +355,32 @@ export default class TenantHandle {
    * @returns {Promise<T>} - Callback result.
    */
   async databaseOperation({databaseIdentifier, name = "TenantHandle.databaseOperation"}, callback) {
+    return await this._databaseOperation({databaseIdentifier, name, requireReady: true}, callback)
+  }
+
+  /**
+   * Runs a captured operation with explicit readiness policy. Initialization is
+   * the only caller allowed to enter an unready schema generation.
+   * @template T
+   * @param {{databaseIdentifier: string, name: string, requireReady: boolean, schemaGeneration?: string}} options - Internal operation options.
+   * @param {(operation: import("../database/operation.js").default) => Promise<T>} callback - Operation callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _databaseOperation({databaseIdentifier, name, requireReady, schemaGeneration}, callback) {
     const databaseConfiguration = this.databaseConfiguration(databaseIdentifier)
-    return await this._configuration.getFrontendTenantSqliteLifecycle().databaseOperation(databaseIdentifier, databaseConfiguration, async () => await this._configuration.withDatabaseOperation({
-      databaseConfiguration,
+
+    return await this._configuration.getFrontendTenantSqliteLifecycle().databaseOperation(
       databaseIdentifier,
-      name,
-      tenant: this._tenant
-    }, callback))
+      databaseConfiguration,
+      {requireReady, schemaGeneration},
+      async (operationSchemaGeneration) => await this._configuration.withDatabaseOperation({
+        databaseConfiguration,
+        databaseIdentifier,
+        name,
+        schemaGeneration: operationSchemaGeneration,
+        tenant: this._tenant
+      }, callback)
+    )
   }
 
   /**

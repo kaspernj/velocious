@@ -572,9 +572,12 @@ function backendRelationshipEntries(modelClass) {
 
     if (typeof relationship.isPolymorphic === "function" && relationship.isPolymorphic()) continue
 
-    const targetModelClass = relationship.getTargetModelClass()
+    const rawTargetModelClass = relationship.getTargetModelClass()
 
-    if (!targetModelClass) continue
+    if (!rawTargetModelClass) continue
+
+    const targetModelClass = /** @type {typeof import("../database/record/index.js").default} */ (modelClass)
+      .bindRecordMetadataModelClass(rawTargetModelClass)
 
     entries[relationshipName] = {targetModelClass}
   }

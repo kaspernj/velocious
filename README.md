@@ -20,7 +20,7 @@
 * Self-sustaining sync feeds: upstream imports triggered by the changes pull itself, with framework-owned coalescing and throttling (see [docs/sync-upstream-imports.md](docs/sync-upstream-imports.md))
 * AwesomeTasks-shaped offline sync proof using routed resources, domain commands, signed offline grants, and peer-forwarded mutations (see the [developer guide](docs/shared-resource-sync-guide.md) and [proof](docs/awesome-tasks-offline-sync-proof.md))
 * SQLite web persistence that automatically prefers OPFS, then IndexedDB, and migrates legacy persisted bytes when possible (see [docs/sqlite-web-persistence.md](docs/sqlite-web-persistence.md))
-* Bounded frontend tenant SQLite handles with durable flush/close, backend-complete deletion, clean-only LRU eviction, and scoped pins (see [docs/frontend-tenant-sqlite-lifecycle.md](docs/frontend-tenant-sqlite-lifecycle.md))
+* Bounded frontend tenant SQLite handles with independently deduplicated per-database migrations/model readiness, React lifecycle integration, durable flush/close, backend-complete deletion, clean-only LRU eviction, and scoped pins (see [docs/frontend-tenant-sqlite-lifecycle.md](docs/frontend-tenant-sqlite-lifecycle.md))
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))

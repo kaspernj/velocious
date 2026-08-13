@@ -17,9 +17,10 @@ export default class VelociousDatabaseOperation {
    * @param {import("./drivers/base.js").default} args.connection - Pinned physical connection.
    * @param {string} args.databaseIdentifier - Singular database identifier.
    * @param {symbol} args.owner - Opaque pool lease owner.
+   * @param {string} [args.schemaGeneration] - Tenant schema generation owning record metadata.
    * @param {object | undefined} args.tenant - Tenant descriptor captured by the owning handle.
    */
-  constructor({configuration, databaseConfiguration, configurationReuseKey, connection, databaseIdentifier, enforceCurrentTenantReuseKey = true, owner, tenant}) {
+  constructor({configuration, databaseConfiguration, configurationReuseKey, connection, databaseIdentifier, enforceCurrentTenantReuseKey = true, owner, schemaGeneration, tenant}) {
     this._active = true
     this._configuration = configuration
     this._databaseConfiguration = databaseConfiguration || configuration.resolveDatabaseConfiguration(databaseIdentifier, tenant)
@@ -27,7 +28,10 @@ export default class VelociousDatabaseOperation {
     this._databaseIdentifier = databaseIdentifier
     this._enforceCurrentTenantReuseKey = enforceCurrentTenantReuseKey
     this._physicalConnection = connection
+    this._schemaGeneration = schemaGeneration
     this._tenant = tenant
+    /** @type {WeakMap<typeof import("./record/index.js").default, typeof import("./record/index.js").default>} */
+    this._boundModelClasses = new WeakMap()
     this._connection = new OperationConnection({
       connection,
       operation: this,
@@ -45,10 +49,55 @@ export default class VelociousDatabaseOperation {
     this.assertActive()
     this.assertModel(ModelClass)
 
-    return ModelClass._newQuery({
+    return this.modelClass(ModelClass)._newQuery({
       driver: this.connection(),
       operation: this
     })
+  }
+
+  /**
+   * Returns a model-class view whose schema metadata is bound to this physical
+   * database generation. Construction still produces the application's original
+   * model class, so lifecycle callbacks and model registries retain class identity.
+   * @template {typeof import("./record/index.js").default} MC
+   * @param {MC} ModelClass - Canonical model class.
+   * @returns {MC} - Operation-bound model class.
+   */
+  modelClass(ModelClass) {
+    if (!this._schemaGeneration) return ModelClass
+
+    const canonicalModelClass = /** @type {MC} */ (ModelClass._recordMetadataModelClass || ModelClass)
+
+    const existing = this._boundModelClasses.get(canonicalModelClass)
+
+    if (existing) return /** @type {MC} */ (existing)
+
+    const databaseIdentity = this.databaseIdentity()
+    const metadataKey = `${databaseIdentity.length}:${databaseIdentity}:${this._schemaGeneration}`
+    const metadataProperties = canonicalModelClass.recordMetadataPropertyNames()
+    const boundModelClass = new Proxy(canonicalModelClass, {
+      construct: (target, args, newTarget) => Reflect.construct(target, args, newTarget),
+      get: (target, property, receiver) => {
+        if (property === "_recordMetadataModelClass") return target
+        if (property === "_recordMetadataBinder") return (/** @type {typeof import("./record/index.js").default} */ targetModelClass) => this.modelClass(targetModelClass)
+        if (property === "_recordMetadataOperation") return this
+        if (typeof property === "string" && metadataProperties.has(property)) return target.recordMetadataValue(metadataKey, property)
+
+        return Reflect.get(target, property, receiver)
+      },
+      set: (target, property, value, receiver) => {
+        if (typeof property === "string" && metadataProperties.has(property)) {
+          target.setRecordMetadataValue(metadataKey, property, value)
+          return true
+        }
+
+        return Reflect.set(target, property, value, receiver)
+      }
+    })
+
+    this._boundModelClasses.set(canonicalModelClass, boundModelClass)
+
+    return /** @type {MC} */ (boundModelClass)
   }
 
   /**
@@ -162,9 +211,11 @@ export default class VelociousDatabaseOperation {
   async ensureModelInitialized(ModelClass) {
     this.assertActive()
 
-    if (ModelClass.isInitialized()) this.assertModel(ModelClass)
+    const boundModelClass = this.modelClass(ModelClass)
 
-    await ModelClass.ensureInitialized({
+    if (boundModelClass.isInitialized()) this.assertModel(ModelClass)
+
+    await boundModelClass.ensureInitialized({
       configuration: this._configuration,
       connection: this.connection()
     })
