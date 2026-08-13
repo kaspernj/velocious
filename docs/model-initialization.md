@@ -13,6 +13,17 @@ not finish. This matters for warm background-job children, which remain reusable
 after reporting a bootstrap failure and must not admit later jobs with partial
 record metadata.
 
+`configuration.closeDatabaseConnections()` invalidates the completed
+configuration and model bootstrap. A later `configuration.initialize()` call
+reruns model discovery and application initializers before `isInitialized()`
+becomes true again. Calls that arrive while connections are closing wait for the
+close to finish, and stale initialization work from the previous connection
+generation cannot mark the new generation initialized. If that stale work is
+still running after the close, the next generation waits for its model,
+discovery, and application-initializer phases to settle before retrying the
+complete bootstrap. This keeps side-effecting phases serialized while ensuring
+the new generation cannot resolve with uninitialized models.
+
 ## Lazy record APIs
 
 Async class methods such as `create`, `count`, `find`, `findBy`, `first`,

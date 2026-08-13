@@ -2,16 +2,11 @@
 
 import fs from "fs/promises"
 import path from "path"
-import {fileURLToPath} from "url"
 
 import Configuration, {CurrentConfigurationNotSetError} from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
-
-/** @returns {string} - Repository root. */
-function repoRoot() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
-}
+import repoRoot from "../helpers/repo-root.js"
 
 describe("Configuration - concurrent initialize", () => {
   it("bootstraps once when called concurrently and marks initialized only after it completes", async () => {

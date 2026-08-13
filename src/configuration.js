@@ -302,8 +302,9 @@ export default class VelociousConfiguration {
      */
     this._initializeModelsPromise = undefined
     /**
-     * In-progress `initialize()` promise, memoized so concurrent callers await
-     * the same bootstrap. Reset to undefined if initialization fails.
+     * Current `initialize()` promise, memoized so concurrent callers await the
+     * same bootstrap. Retained across a connection close until stale bootstrap
+     * work settles, then cleared by identity before the new generation retries.
      * @type {Promise<void> | undefined}
      */
     this._initializePromise = undefined
@@ -2054,10 +2055,25 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initializeModels(args = {type: "server"}) {
-    if (this._modelsInitialized) return
-    if (this._initializeModelsPromise) return await this._initializeModelsPromise
-
     const modelInitializationGeneration = this._modelInitializationGeneration
+
+    if (this._modelsInitialized) return
+    if (this._initializeModelsPromise) {
+      const initializeModelsPromise = this._initializeModelsPromise
+
+      await initializeModelsPromise
+
+      if (this._modelInitializationGeneration === modelInitializationGeneration && !this._modelsInitialized) {
+        if (this._initializeModelsPromise === initializeModelsPromise) {
+          this._initializeModelsPromise = undefined
+        }
+
+        return await this.initializeModels(args)
+      }
+
+      return
+    }
+
     const initializeModelsPromise = (async () => {
       const shouldSkipDummyModelInitialization = process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
         && process.env.VELOCIOUS_BROWSER_TESTS === "true"
@@ -2110,6 +2126,12 @@ export default class VelociousConfiguration {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async initialize({type} = {type: "undefined"}) {
+    if (this._closeDatabaseConnectionsPromise) {
+      await this._closeDatabaseConnectionsPromise
+    }
+
+    const initializationGeneration = this._modelInitializationGeneration
+
     if (this._isInitialized) return
     // Memoize the in-progress initialization so concurrent callers await the same
     // bootstrap instead of racing. `_isInitialized` was previously set to `true`
@@ -2117,15 +2139,29 @@ export default class VelociousConfiguration {
     // `pooledRunnerConcurrency > 1` starting several jobs on a cold child) could
     // skip initialization and load models / perform a job while the first call
     // was still awaiting model discovery and initializers. Mirrors connectBeacon.
-    if (this._initializePromise) return await this._initializePromise
+    if (this._initializePromise) {
+      const initializePromise = this._initializePromise
 
-    this._initializePromise = (async () => {
+      await initializePromise
+
+      if (this._modelInitializationGeneration === initializationGeneration && !this._isInitialized) {
+        if (this._initializePromise === initializePromise) {
+          this._initializePromise = undefined
+        }
+
+        return await this.initialize({type})
+      }
+
+      return
+    }
+
+    const initializePromise = (async () => {
       await this.initializeModels({type})
 
       // Model initialization can be invalidated by a concurrent connection close.
       // If models are not ready, stop without marking the configuration initialized
       // so the next caller retries a full bootstrap.
-      if (!this._modelsInitialized) return
+      if (this._modelInitializationGeneration !== initializationGeneration || !this._modelsInitialized) return
 
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
@@ -2147,22 +2183,28 @@ export default class VelociousConfiguration {
         }
       }
 
-      this._isInitialized = true
+      if (this._modelInitializationGeneration === initializationGeneration) {
+        this._isInitialized = true
+      }
     })()
 
+    this._initializePromise = initializePromise
+
     try {
-      await this._initializePromise
+      await initializePromise
     } catch (error) {
       // Let a later call retry a failed initialization instead of every future
       // caller awaiting the same cached rejection.
-      this._initializePromise = undefined
+      if (this._initializePromise === initializePromise) {
+        this._initializePromise = undefined
+      }
       throw error
     }
 
     // If the inner IIFE returned without marking the configuration initialized
     // (e.g. because models were invalidated mid-bootstrap), clear the promise so
     // a later call retries a full bootstrap.
-    if (!this._isInitialized) {
+    if (!this._isInitialized && this._initializePromise === initializePromise) {
       this._initializePromise = undefined
     }
   }
