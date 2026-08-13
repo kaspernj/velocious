@@ -76,7 +76,10 @@ export default class ServerChangeFeedStore {
     this._memoryChanges = []
     this._memorySequence = 0
     this._isReady = false
+    /** @type {Promise<void> | null} */
     this._readyPromise = null
+    /** @type {WeakMap<import("../database/drivers/base.js").default, {completion: Promise<void>, promise: Promise<void>}>} */
+    this._transactionReadyPromises = new WeakMap()
   }
 
   /**
@@ -90,15 +93,60 @@ export default class ServerChangeFeedStore {
     }
 
     if (await this._schemaReady()) return
-    if (this._readyPromise) return await this._readyPromise
 
-    this._readyPromise = (async () => {
-      this.configuration.setCurrent()
-      await this._withDb(async (db) => {
-        await this._ensureChangesTable(db)
+    this.configuration.setCurrent()
+    await this._withDb(async (db) => await this._ensureReadyWithDb(db))
+  }
+
+  /**
+   * Coordinates durable and transaction-local readiness on one connection.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} Resolves when this caller can use the table.
+   */
+  async _ensureReadyWithDb(db) {
+    if (this._isReady) return
+
+    const transactionCompletion = db.insideTransaction() ? db.transactionCompletion() : null
+    const transactionReady = this._transactionReadyPromises.get(db)
+
+    if (transactionCompletion && transactionReady?.completion === transactionCompletion) {
+      await transactionReady.promise
+      return
+    }
+
+    if (this._readyPromise) {
+      const readyPromise = this._readyPromise
+
+      await readyPromise
+      if (this._readyPromise === readyPromise) this._readyPromise = null
+      if (this._isReady) return
+
+      await this.ensureReady()
+      return
+    }
+
+    if (transactionCompletion) {
+      const tableReadyPromise = this._ensureChangesTable(db)
+      const transactionReadyPromise = tableReadyPromise.then(() => undefined)
+
+      const durableReadyPromise = tableReadyPromise.then(async (created) => {
+        if (!created) {
+          this._isReady = true
+          return
+        }
+
+        await transactionCompletion
       })
+
+      this._transactionReadyPromises.set(db, {completion: transactionCompletion, promise: transactionReadyPromise})
+      this._readyPromise = durableReadyPromise
+      await transactionReadyPromise
+      return
+    }
+
+    this._readyPromise = this._ensureChangesTable(db).then(() => {
       this._isReady = true
-    })()
+    })
 
     try {
       await this._readyPromise
@@ -257,10 +305,10 @@ export default class ServerChangeFeedStore {
   /**
    * Ensures changes table exists.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @returns {Promise<void>} - Resolves when complete.
+   * @returns {Promise<boolean>} - Whether the table had to be created.
    */
   async _ensureChangesTable(db) {
-    if (await db.tableExists(TABLE_NAME)) return
+    if (await db.tableExists(TABLE_NAME)) return false
 
     const table = new TableData(TABLE_NAME, {ifNotExists: true})
 
@@ -279,6 +327,8 @@ export default class ServerChangeFeedStore {
     table.datetime("created_at", {index: true, null: false})
 
     await db.createTable(table)
+
+    return true
   }
 
   /**

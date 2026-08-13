@@ -35,7 +35,10 @@ describe("Background jobs - shared test transaction broker", {tags: ["dummy"], d
 
         expect(result.parentCount).toEqual(1)
         expect(result.childCount).toEqual(1)
-        expect(await Project.where({creatingUserReference: childMarker}).count()).toEqual(1)
+        const parentVisibleChildCount = await store._withDb(async () => {
+          return await Project.where({creatingUserReference: childMarker}).count()
+        })
+        expect(parentVisibleChildCount).toEqual(1)
         if (executionMode === "pooled") pooledPids.push(result.pid)
       }
 

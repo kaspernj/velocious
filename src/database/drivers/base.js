@@ -195,6 +195,10 @@ export default class VelociousDatabaseDriversBase {
    * Narrows the runtime value to the documented type.
    * @type {TransactionCallbackFrame[]} */
   _transactionCallbackFrames
+  /** @type {Promise<void>} */
+  _transactionCompletionPromise
+  /** @type {(() => void) | undefined} */
+  _resolveTransactionCompletion
   /**
    * Narrows the runtime value to the documented type.
    * @type {Map<string, Promise<ReturnType<typeof JSON.parse>>>} */
@@ -231,6 +235,8 @@ export default class VelociousDatabaseDriversBase {
     this.logger = new Logger(this)
     this._transactionCallbackFrames = []
     this._transactionsCount = 0
+    this._transactionCompletionPromise = Promise.resolve()
+    this._resolveTransactionCompletion = undefined
     this._transactionsActionsMutex = new Mutex()
     this._schemaCache = new Map()
   }
@@ -1427,6 +1433,12 @@ export default class VelociousDatabaseDriversBase {
   insideTransaction() { return this._transactionsCount > 0 }
 
   /**
+   * Returns the completion promise identifying the current outer transaction.
+   * @returns {Promise<void>} Resolves after that transaction commits or rolls back.
+   */
+  transactionCompletion() { return this._transactionCompletionPromise }
+
+  /**
    * Runs start transaction.
    * @param {Pick<QueryOptions, "operationOwner">} [options] - Transaction ownership.
    * @returns {Promise<void>} - Resolves when complete.
@@ -1446,6 +1458,12 @@ export default class VelociousDatabaseDriversBase {
 
         await this._startTransactionAction(options)
         this._transactionsCount++
+
+        if (this._transactionsCount === 1) {
+          this._transactionCompletionPromise = new Promise((resolve) => {
+            this._resolveTransactionCompletion = resolve
+          })
+        }
       })
 
       if (!blockingOperationLease) return
@@ -1472,7 +1490,18 @@ export default class VelociousDatabaseDriversBase {
     await this._transactionsActionsMutex.sync(async () => {
       await this._commitTransactionAction(options)
       this._transactionsCount--
+      this._resolveCompletedTransaction()
     })
+  }
+
+  /** Resolves the current outer transaction completion when it has finished. */
+  _resolveCompletedTransaction() {
+    if (this._transactionsCount !== 0) return
+
+    const resolve = this._resolveTransactionCompletion
+
+    this._resolveTransactionCompletion = undefined
+    if (resolve) resolve()
   }
 
   /**
@@ -2091,6 +2120,7 @@ export default class VelociousDatabaseDriversBase {
         await this._rollbackTransactionAction(options)
       } finally {
         this._transactionsCount--
+        this._resolveCompletedTransaction()
 
         // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE
         // run lazily inside the transaction), so any cached schema metadata is
