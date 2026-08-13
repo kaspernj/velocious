@@ -12,6 +12,8 @@ import restArgsError from "../utils/rest-args-error.js"
 import {testConfig, testEvents, tests} from "./test.js"
 import {pathToFileURL} from "url"
 import {clearDeliveries} from "../mailer.js"
+import SharedTransactionBroker from "./shared-transaction-broker.js"
+import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver.js"
 
 /**
  * ConsoleMethodName type.
@@ -586,6 +588,54 @@ export default class TestRunner {
   }
 
   /**
+   * Starts a capability-scoped broker for the active non-tenant physical
+   * transaction connections. No broker/env is installed for truncation-only or
+   * other transaction-disabled attempts.
+   * @returns {Promise<{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined>} - Attempt registration.
+   */
+  async startSharedTransactionBroker() {
+    const configuration = this.getConfiguration()
+    const currentConnections = configuration.getCurrentConnections()
+    /** @type {Record<string, import("../database/drivers/base.js").default>} */
+    const connections = {}
+
+    for (const [identifier, connection] of Object.entries(currentConnections)) {
+      const pool = configuration.getDatabasePool(identifier)
+      if (pool.getConfiguration().tenantOnly || !connection.insideTransaction()) continue
+      connections[identifier] = connection
+    }
+
+    const databaseIdentifiers = Object.keys(connections)
+    if (databaseIdentifiers.length === 0) return undefined
+
+    const broker = await SharedTransactionBroker.start({connections})
+    const previousEnvironment = process.env[SHARED_TRANSACTION_BROKER_ENV]
+    process.env[SHARED_TRANSACTION_BROKER_ENV] = Buffer.from(JSON.stringify({
+      address: broker.address(),
+      capability: broker.capability(),
+      databaseIdentifiers,
+      expected: true
+    })).toString("base64url")
+
+    return {broker, previousEnvironment}
+  }
+
+  /**
+   * Revokes an attempt broker before database rollback hooks run and restores
+   * the caller's environment so later pooled/spawned children cannot inherit it.
+   * @param {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} registration - Attempt registration.
+   */
+  async stopSharedTransactionBroker(registration) {
+    if (!registration) return
+    if (registration.previousEnvironment === undefined) {
+      delete process.env[SHARED_TRANSACTION_BROKER_ENV]
+    } else {
+      process.env[SHARED_TRANSACTION_BROKER_ENV] = registration.previousEnvironment
+    }
+    await registration.broker.close()
+  }
+
+  /**
    * Runs request client.
    * @returns {Promise<RequestClient>} - Resolves with the request client.
    */
@@ -983,6 +1033,8 @@ export default class TestRunner {
           let testLifecycle
           /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
           let testSharedConnectionRegistrations = []
+          /** @type {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} */
+          let sharedTransactionBrokerRegistration
           /**
            * Shared mutable flag so the catch block can suppress the
            * `_successfulTests` increment inside the still-detached lifecycle:
@@ -1020,6 +1072,11 @@ export default class TestRunner {
                       await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
                     }
 
+                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker()
+                    if (sharedTransactionBrokerRegistration && testSharedConnectionRegistrations.length === 0) {
+                      testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                    }
+
                     // Record which test is running so an async crash (an unhandled
                     // rejection detached from any await) that fires during or shortly
                     // after this test can be attributed to it in run()'s handler.
@@ -1033,8 +1090,12 @@ export default class TestRunner {
                       this._successfulTests++
                     }
                   } finally {
-                    for (const afterEachData of newAfterEaches) {
-                      await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                    try {
+                      await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
+                    } finally {
+                      for (const afterEachData of newAfterEaches) {
+                        await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                      }
                     }
                   }
                 } finally {
@@ -1080,6 +1141,8 @@ export default class TestRunner {
               // ensureConnections before activateTestSharedConnections() replaces
               // it. Clear it here so the next test checks out a fresh connection.
               // Idempotent when the lifecycle did settle and already cleared.
+              await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
+              sharedTransactionBrokerRegistration = undefined
               this.clearTestSharedConnections(testSharedConnectionRegistrations)
             }
 

@@ -66,7 +66,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     await execFileAsync(process.execPath, [typescriptExecutable, "--ignoreConfig", "--noEmit", "--skipLibCheck", declarationPath])
   })
 
-  it("builds the declared package entry points when installed from Git", {timeoutSeconds: 180}, async () => {
+  it("builds the declared package entry points when installed from Git", {timeoutSeconds: 300}, async () => {
     const temporaryDirectoryParent = path.join(repositoryDirectory(), "tmp")
 
     await fs.mkdir(temporaryDirectoryParent, {recursive: true})
@@ -81,7 +81,9 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
 
     try {
       await execFileAsync("git", ["clone", "--local", "--no-hardlinks", repositoryDirectory(), sourceDirectory])
-      await fs.copyFile(path.join(repositoryDirectory(), "package.json"), path.join(sourceDirectory, "package.json"))
+      const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory(), "package.json"), "utf8"))
+      packageJson.devDependencies["eslint-plugin-jsdoc-inline-type-casts"] = `file:${path.join(repositoryDirectory(), "node_modules", "eslint-plugin-jsdoc-inline-type-casts")}`
+      await fs.writeFile(path.join(sourceDirectory, "package.json"), JSON.stringify(packageJson, null, 2))
       await execFileAsync("git", [
         "-c", "user.name=Velocious test",
         "-c", "user.email=velocious@example.invalid",
@@ -107,6 +109,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
         "--allow-git=all",
         "--allow-remote=all",
         "--cache", npmCacheDirectory,
+        "--ignore-scripts=false",
         "--no-audit",
         "--no-fund"
       ], {cwd: consumerDirectory})

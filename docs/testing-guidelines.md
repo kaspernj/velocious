@@ -23,6 +23,40 @@ lets concurrency and locking tests opt out of transaction cleanup and exercise
 production-style connection behavior. Shared connection state is scoped to the test
 lifecycle and cleared around tests.
 
+Transactional background-job tests use the same isolation for real child runtimes.
+While a test transaction is active, forked, pooled, and spawned runners route their
+physical database operations through a capability-scoped loopback broker owned by
+that test attempt. This makes parent uncommitted setup visible to the job, makes job
+writes visible to the parent, and lets the normal parent rollback remove both the
+job's application writes and its background-job persistence rows. Only active
+non-tenant database connections are shared, and multiple databases are matched by
+their configured identifiers.
+
+Reusable pooled runners receive broker mode and capability with every job dispatch,
+so a warm child can safely cross test-attempt boundaries. A capability change closes
+the child's retained proxy state before the next job; concurrent jobs for that same
+new capability share the one serialized rotation, while genuinely different active
+capabilities are rejected. Missing coordinates fail closed when that dispatch expects
+transactional sharing. Concurrent child transactions are
+leased FIFO for their complete root-savepoint lifetime, rather than interleaving
+savepoints one WebSocket call at a time.
+
+If abandoned savepoint cleanup fails, the broker still releases FIFO waiters and
+drains every child socket and server. The teardown caller then receives the collected
+driver cleanup errors after transport shutdown completes.
+
+The in-process background-jobs main also enters the attempt's shared connection
+context before store work. This keeps enqueue, handoff, and terminal job rows on the
+same parent-owned transaction on async-tracked database pools instead of checking out
+an independently committed connection. Parent store callbacks and child broker calls
+also share the broker's per-physical-connection queue, preventing overlapping driver
+requests while preserving root-savepoint leases.
+
+The broker is not enabled for tests that opt out of transaction cleanup. Keep
+`{transaction: false, truncate: true}` on true concurrency and locking coverage so
+child/request work continues to use independent physical connections. Tenant-only
+connections are also intentionally excluded from the initial broker mode.
+
 ## Coverage focus for frontend models
 - Command URL mapping behavior
 - `findBy` and `findByOrFail` real HTTP flows

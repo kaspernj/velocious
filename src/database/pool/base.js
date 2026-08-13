@@ -194,6 +194,15 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Returns the connection registered for test-only in-process sharing.
+   * Base pools do not need a separate shared connection.
+   * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
+   */
+  testSharedConnection() {
+    return undefined
+  }
+
+  /**
    * Returns whether the current connection is pinned to an execution context.
    * @returns {boolean} - Whether the current connection can be reused by nested code.
    */
@@ -349,7 +358,15 @@ class VelociousDatabasePoolBase {
 
     if (!DriverClass) throw new Error("No driver class set in database pool or in given config")
 
-    const connection = new DriverClass(config, this.configuration)
+    const sharedConnection = config.tenantOnly
+      ? undefined
+      : await this.configuration.getEnvironmentHandler().createTestSharedTransactionConnection({
+        DriverClass,
+        config,
+        configuration: this.configuration,
+        databaseIdentifier: this.identifier
+      })
+    const connection = sharedConnection || new DriverClass(config, this.configuration)
 
     try {
       await connection.connect()

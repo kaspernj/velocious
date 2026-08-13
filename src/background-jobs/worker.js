@@ -693,11 +693,24 @@ export default class BackgroundJobsWorker {
 
       state.inflight.set(payload.id, {payload, resolve, timeoutTimer})
       try {
-        child.send({type: "job", payload})
+        child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
       } catch (error) {
         void this._handlePooledChildFailure({child, error})
       }
     })
+  }
+
+  /**
+   * Captures the current test attempt's broker mode at dispatch time. A warm
+   * pooled child must never rely on its immutable fork-time environment.
+   * @returns {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} - Per-job broker configuration.
+   */
+  _pooledJobSharedTransactionBrokerConfig() {
+    const serialized = process.env.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
+    if (!serialized) return {expected: false}
+
+    const config = JSON.parse(Buffer.from(serialized, "base64url").toString("utf8"))
+    return {...config, expected: true}
   }
 
   /**
@@ -792,7 +805,7 @@ export default class BackgroundJobsWorker {
     const config = configuration.getBackgroundJobsConfig()
     const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
       cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
-      env: Object.assign({}, process.env, {VELOCIOUS_ENV: configuration.getEnvironment(), VELOCIOUS_BACKGROUND_JOBS_HOST: config.host, VELOCIOUS_BACKGROUND_JOBS_PORT: `${config.port}`})
+      env: Object.assign({}, process.env, {VELOCIOUS_BACKGROUND_JOB_CHILD: "1", VELOCIOUS_ENV: configuration.getEnvironment(), VELOCIOUS_BACKGROUND_JOBS_HOST: config.host, VELOCIOUS_BACKGROUND_JOBS_PORT: `${config.port}`})
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
@@ -989,6 +1002,7 @@ export default class BackgroundJobsWorker {
       execArgv: [],
       stdio: ["ignore", "ignore", "ignore", "ipc"],
       env: Object.assign({}, process.env, {
+        VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
         VELOCIOUS_ENV: configuration.getEnvironment(),
         VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
         VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`
@@ -1216,6 +1230,7 @@ export default class BackgroundJobsWorker {
       detached: true,
       stdio: "ignore",
       env: Object.assign({}, process.env, {
+        VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
         VELOCIOUS_ENV: configuration.getEnvironment(),
         VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
         VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`,

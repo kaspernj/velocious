@@ -6,6 +6,7 @@ import TableData from "../database/table-data/index.js"
 import VelociousError from "../velocious-error.js"
 import BackgroundJobRecord from "./job-record.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
+import {coordinateSharedTransactionConnection} from "../testing/shared-transaction-connection-coordinator.js"
 
 /**
  * PreparedBackgroundJob type.
@@ -2376,23 +2377,19 @@ export default class BackgroundJobsStore {
    * @returns {Promise<T>} - Callback result.
    */
   async _withDb(callback) {
-    const pool = this.configuration.getDatabasePool(this.getDatabaseIdentifier())
-    let callbackCalled = false
-    /**
-     * Defines result.
-     * @type {T | undefined} */
-    let result
+    const databaseIdentifier = this.getDatabaseIdentifier()
+    const pool = this.configuration.getDatabasePool(databaseIdentifier)
 
-    await pool.withConnection({name: "Background jobs store"}, async (db) => {
-      callbackCalled = true
-      result = await callback(db)
-    })
-
-    if (!callbackCalled) {
-      throw new Error("Background jobs store callback was not invoked")
+    if (!pool.testSharedConnection()) {
+      return await pool.withConnection({name: "Background jobs store"}, callback)
     }
 
-    return /** @type {T} */ (result)
+    return await this.configuration.runWithTestSharedConnectionContexts(async () => {
+      return await this.configuration.ensureConnections({databaseIdentifiers: [databaseIdentifier], name: "Background jobs store"}, async (dbs) => {
+        const connection = dbs[databaseIdentifier]
+        return await coordinateSharedTransactionConnection(connection, async () => await callback(connection))
+      })
+    })
   }
 
   /**
