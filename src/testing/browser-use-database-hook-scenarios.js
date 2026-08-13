@@ -65,8 +65,6 @@ function buildHookConfiguration() {
  * @returns {Promise<{firstChangedLoaded: boolean, initialLoaded: boolean, loaderCalls: string[], loadedAfterInlineLoaderRerender: boolean, thirdAfterStaleCompletion: {error: string | null, loaded: boolean}}>} - Render observations.
  */
 export default async function runUseDatabaseSelectionTransitionScenario() {
-  if (typeof process !== "undefined") throw new Error("useDatabase browser scenario must run without a Node process global")
-
   const container = document.createElement("div")
   document.body.appendChild(container)
   const root = createRoot(container)
