@@ -212,4 +212,103 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
 
     expect(receivingSubscription.received).toEqual([{hello: "after throw"}])
   })
+
+  it("does not settle the pending broadcast barrier until snapshotted local subscriber deliveries settle, while leaving later work unawaited", async () => {
+    const configuration = buildConfiguration()
+    /** @type {Array<{body: Record<string, any>, release: (error?: Error) => void}>} */
+    const gatedDeliveries = []
+    const makeGatedSubscription = () => {
+      const inner = makeSubscription()
+
+      return {
+        ...inner,
+        deliverBroadcast: (body) => new Promise((resolve, reject) => {
+          gatedDeliveries.push({
+            body,
+            release: (error) => {
+              if (error) {
+                reject(error)
+
+                return
+              }
+
+              inner.received.push(body)
+              resolve()
+            }
+          })
+        })
+      }
+    }
+    const slowInFlight = makeGatedSubscription()
+    const slowAfterSnapshot = makeGatedSubscription()
+    const fastSubscription = makeSubscription()
+
+    configuration._registerWebsocketChannelSubscription("pipeline", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (slowInFlight))
+    configuration._registerWebsocketChannelSubscription("pipeline", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (fastSubscription))
+
+    configuration.broadcastToChannel("pipeline", {}, {first: true})
+
+    let barrierSettled = false
+    const barrier = configuration.awaitPendingBroadcasts().then(() => {
+      barrierSettled = true
+    })
+
+    // Let the async delivery chain start and an (incorrect) barrier settle if it
+    // were not tracking in-flight local deliveries. No real time passes.
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+
+    expect(gatedDeliveries.length).toBe(1)
+    expect(gatedDeliveries[0].body).toEqual({first: true})
+    expect(fastSubscription.received).toEqual([{first: true}])
+    expect(barrierSettled).toBe(false)
+
+    // Work enqueued after the barrier snapshotted must not be awaited by that barrier.
+    configuration._registerWebsocketChannelSubscription("pipeline", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (slowAfterSnapshot))
+    configuration.broadcastToChannel("pipeline", {}, {after: true})
+
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+
+    // The second broadcast also reaches the slow in-flight subscriber again, so
+    // three deliveries gate: the snapshot's slow one and two enqueued after it.
+    expect(gatedDeliveries.length).toBe(3)
+    expect(slowAfterSnapshot.received.length).toBe(0)
+
+    gatedDeliveries[0].release()
+
+    await barrier
+    expect(barrierSettled).toBe(true)
+    expect(slowAfterSnapshot.received.length).toBe(0)
+
+    let secondBarrierSettled = false
+    const secondBarrier = configuration.awaitPendingBroadcasts().then(() => {
+      secondBarrierSettled = true
+    })
+
+    gatedDeliveries[1].release()
+    gatedDeliveries[2].release()
+
+    await secondBarrier
+    expect(secondBarrierSettled).toBe(true)
+    expect(slowInFlight.received).toEqual([{first: true}, {after: true}])
+    expect(slowAfterSnapshot.received).toEqual([{after: true}])
+  })
+
+  it("keeps a rejecting local subscriber delivery isolated and logged while still draining the barrier", async () => {
+    const configuration = buildConfiguration()
+    const failingSubscription = {
+      ...makeSubscription(),
+      deliverBroadcast: () => Promise.reject(new Error("delivery exploded"))
+    }
+    const okSubscription = makeSubscription()
+
+    configuration._registerWebsocketChannelSubscription("pipeline", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (failingSubscription))
+    configuration._registerWebsocketChannelSubscription("pipeline", /** @type {import("../../src/http-server/websocket-channel.js").default} */ (okSubscription))
+
+    configuration.broadcastToChannel("pipeline", {}, {message: "isolated"})
+
+    await configuration.awaitPendingBroadcasts()
+
+    expect(okSubscription.received).toEqual([{message: "isolated"}])
+    expect(failingSubscription.received).toEqual([])
+  })
 })

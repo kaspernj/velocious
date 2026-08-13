@@ -365,6 +365,15 @@ export default class VelociousConfiguration {
     this._websocketChannelSubscriptions = new Map()
 
     /**
+     * In-flight local (per-process) websocket channel broadcast deliveries,
+     * launched fire-and-forget from `_broadcastToChannelLocal` so one slow
+     * subscriber never blocks another. Tracked here so
+     * `awaitPendingBroadcasts` can snapshot and drain them before settling.
+     * Settled deliveries are removed by the tracking-level cleanup.
+     * @type {Set<Promise<void>>} */
+    this._localBroadcastDeliveries = new Set()
+
+    /**
      * Stores the websocket sessions value.
      * @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window.
      */
@@ -2810,8 +2819,13 @@ export default class VelociousConfiguration {
     const websocketEvents = this._websocketEvents
 
     if (websocketEvents && typeof websocketEvents.awaitPendingBroadcasts === "function") {
+      // Drain the host/worker publish queues (including event-log persistence)
+      // before draining local deliveries, because host dispatch launches the
+      // local deliveries synchronously and they must be part of the snapshot.
       await websocketEvents.awaitPendingBroadcasts()
     }
+
+    await this._awaitLocalBroadcastDeliveries()
   }
 
   /**
@@ -2845,7 +2859,7 @@ export default class VelociousConfiguration {
 
       if (!matches) continue
 
-      void this.withoutCurrentConnectionContexts(() => {
+      const delivery = this.withoutCurrentConnectionContexts(() => {
         return Promise
           .resolve()
           .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
@@ -2853,7 +2867,33 @@ export default class VelociousConfiguration {
             console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
           })
       })
+
+      // Keep the fire-and-forget delivery (never awaited at broadcast time) but
+      // track it so `awaitPendingBroadcasts` can drain it before settling. Remove
+      // on settle; the failure handler also satisfies the promise so a rejected
+      // delivery never becomes an unhandled rejection.
+      this._localBroadcastDeliveries.add(delivery)
+
+      delivery.then(
+        () => { this._localBroadcastDeliveries.delete(delivery) },
+        () => { this._localBroadcastDeliveries.delete(delivery) }
+      )
     }
+  }
+
+  /**
+   * Awaits a snapshot of the in-flight local (per-process) websocket channel
+   * broadcast deliveries. Called from `awaitPendingBroadcasts` after the host
+   * publish queues drain, so every delivery those queues launched is captured.
+   * New deliveries enqueued after the snapshot are not awaited. Individual
+   * delivery errors are isolated per subscriber — the delivery chain already
+   * logs them and resolves — so a snapshotted rejection never fails this barrier.
+   * @returns {Promise<void>}
+   */
+  async _awaitLocalBroadcastDeliveries() {
+    const snapshot = [...this._localBroadcastDeliveries]
+
+    await Promise.allSettled(snapshot)
   }
 
   /**
