@@ -25,7 +25,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
    */
   build(data) {
     // Spawn new model of the targeted class
-    const targetModelClass = this.getTargetModelClass()
+    const targetModelClass = this.getBoundTargetModelClass()
 
     if (!targetModelClass) throw new Error("Can't build a new record without a taget model class")
 
@@ -58,7 +58,10 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
     const parentModel = this.getModel()
 
     if (parentModel.isPersisted()) {
-      const foreignKeyName = this.getForeignKey()
+      const foreignKeyName = this.getRelationship().getForeignKeyForModelClasses({
+        modelClass: parentModel.getModelClass(),
+        targetModelClass
+      })
       const columnNameMap = targetModelClass.getColumnNameToAttributeNameMap()
       const foreignKeyAttributeName = columnNameMap[foreignKeyName]
       if (!foreignKeyAttributeName) throw new Error(`Unknown foreign key attribute name for ${foreignKeyName}`)

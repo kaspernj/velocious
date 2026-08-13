@@ -2,7 +2,7 @@
 
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
-import preloadQueryForModel from "./query-for-model.js"
+import preloadQueryForModel, { bindPreloadModelClass } from "./query-for-model.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 /**
@@ -18,19 +18,23 @@ export function hasManyThroughTargetForeignKey(relationship, throughModelClass, 
   // (e.g. a default plus an alternate), so picking the first match would otherwise be ambiguous.
   const explicitForeignKey = relationship.getExplicitForeignKey()
 
-  if (explicitForeignKey) return explicitForeignKey
+  if (explicitForeignKey) {
+    return targetModelClass.getAttributeNameToColumnNameMap()[explicitForeignKey] || explicitForeignKey
+  }
 
   for (const targetRelationship of targetModelClass.getRelationships()) {
     if (targetRelationship.getType() != "belongsTo") continue
 
     const relationshipTargetModelClass = targetRelationship.getTargetModelClass()
 
-    if (relationshipTargetModelClass === throughModelClass) {
-      return targetRelationship.getForeignKey()
+    if (!relationshipTargetModelClass) continue
+
+    if (relationshipTargetModelClass.canonicalRecordMetadataModelClass() === throughModelClass.canonicalRecordMetadataModelClass()) {
+      return targetRelationship.getForeignKeyForModelClasses({modelClass: targetModelClass, targetModelClass: throughModelClass})
     }
   }
 
-  return relationship.getForeignKey()
+  return relationship.getForeignKeyForModelClasses({modelClass: throughModelClass, targetModelClass})
 }
 
 export default class VelociousDatabaseQueryPreloaderHasMany {
@@ -107,15 +111,19 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     }
 
     const throughRelationshipName = /** @type {string} */ (this.relationship.through)
-    const parentModelClass = this.relationship.getModelClass()
+    const parentModelClass = this.models[0].getModelClass()
     const throughRelationship = parentModelClass.getRelationshipByName(throughRelationshipName)
-    const throughModelClass = throughRelationship.getTargetModelClass()
+    const rawThroughModelClass = throughRelationship.getTargetModelClass()
 
-    if (!throughModelClass) throw new Error(`Through relationship ${throughRelationshipName} has no target model class`)
+    if (!rawThroughModelClass) throw new Error(`Through relationship ${throughRelationshipName} has no target model class`)
 
-    const targetModelClass = this.relationship.getTargetModelClass()
+    const throughModelClass = bindPreloadModelClass(this.models, rawThroughModelClass)
 
-    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+    const rawTargetModelClass = this.relationship.getTargetModelClass()
+
+    if (!rawTargetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    const targetModelClass = bindPreloadModelClass(this.models, rawTargetModelClass)
 
     const targetForeignKey = hasManyThroughTargetForeignKey(this.relationship, throughModelClass, targetModelClass)
     const {modelsToLoad, satisfiedTargets} = this._partition(targetModelClass, [targetForeignKey])
@@ -127,7 +135,7 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
     await ensureModelClassInitialized(throughModelClass, configuration, modelsToLoad[0])
     await ensureModelClassInitialized(targetModelClass, configuration, modelsToLoad[0])
 
-    const throughForeignKey = throughRelationship.getForeignKey()
+    const throughForeignKey = throughRelationship.getForeignKeyForModelClasses({modelClass: parentModelClass, targetModelClass: throughModelClass})
 
     /**
      * Models primary key values.
@@ -260,16 +268,19 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
    * @returns {Promise<import("../../record/index.js").default[]>} - Loaded target models.
    */
   async _runDirect() {
-    const foreignKey = this.relationship.getForeignKey()
     const primaryKey = this.relationship.getPrimaryKey()
 
     if (!primaryKey) {
       throw new Error(`${this.relationship.getModelClass().name}#${this.relationship.getRelationshipName()} doesn't have a primary key`)
     }
 
-    const targetModelClass = this.relationship.getTargetModelClass()
+    const rawTargetModelClass = this.relationship.getTargetModelClass()
 
-    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+    if (!rawTargetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    const sourceModelClass = this.models[0].getModelClass()
+    const targetModelClass = bindPreloadModelClass(this.models, rawTargetModelClass)
+    const foreignKey = this.relationship.getForeignKeyForModelClasses({modelClass: sourceModelClass, targetModelClass})
 
     const {modelsToLoad, satisfiedTargets} = this._partition(targetModelClass, [foreignKey])
 

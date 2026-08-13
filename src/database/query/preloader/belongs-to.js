@@ -2,7 +2,7 @@
 
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
-import preloadQueryForModel from "./query-for-model.js"
+import preloadQueryForModel, { bindPreloadModelClass } from "./query-for-model.js"
 import restArgsError from "../../../utils/rest-args-error.js"
 
 export default class VelociousDatabaseQueryPreloaderBelongsTo {
@@ -22,7 +22,8 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
   }
 
   async run() {
-    const foreignKey = this.relationship.getForeignKey()
+    const sourceModelClass = this.models[0].getModelClass()
+    const foreignKey = this.relationship.getForeignKeyForModelClasses({modelClass: sourceModelClass, targetModelClass: sourceModelClass})
     const primaryKey = this.relationship.getPrimaryKey()
     const relationshipName = this.relationship.getRelationshipName()
 
@@ -30,9 +31,11 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
       return await this._runPolymorphic({foreignKey, primaryKey, relationshipName})
     }
 
-    const targetModelClass = this.relationship.getTargetModelClass()
+    const rawTargetModelClass = this.relationship.getTargetModelClass()
 
-    if (!targetModelClass) throw new Error("No target model class could be gotten from relationship")
+    if (!rawTargetModelClass) throw new Error("No target model class could be gotten from relationship")
+
+    const targetModelClass = bindPreloadModelClass(this.models, rawTargetModelClass)
 
     /**
      * Satisfied targets.
@@ -155,7 +158,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     for (const model of this.models) {
       const targetType = /** @type {string | undefined} */ (model.readColumn(typeColumn))
       const instanceRelationship = model.getRelationshipByName(relationshipName)
-      const targetModelClass = targetType ? configuration.getModelClass(targetType) : undefined
+      const targetModelClass = targetType ? bindPreloadModelClass(this.models, configuration.getModelClass(targetType)) : undefined
 
       if (targetModelClass && this.selection.isSatisfied({instanceRelationship, targetModelClass, mappingColumns: [primaryKey]})) {
         const loaded = /** @type {import("../../record/index.js").default | undefined} */ (instanceRelationship.getLoadedOrUndefined())
@@ -203,7 +206,7 @@ export default class VelociousDatabaseQueryPreloaderBelongsTo {
     const targetModels = []
 
     for (const targetType in foreignKeyValuesByType) {
-      const targetModelClass = configuration.getModelClass(targetType)
+      const targetModelClass = bindPreloadModelClass(this.models, configuration.getModelClass(targetType))
 
       await ensureModelClassInitialized(targetModelClass, configuration, this.models[0])
 

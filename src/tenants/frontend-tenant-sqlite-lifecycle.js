@@ -8,6 +8,9 @@
  * @property {boolean} dirty - Whether delayed writes remain.
  * @property {number} lastUsed - Monotonic recency sequence.
  * @property {number} pinCount - Active scoped pins.
+ * @property {Promise<void> | undefined} readinessPromise - In-progress schema readiness.
+ * @property {boolean} ready - Whether migrations and model metadata are ready.
+ * @property {string | undefined} schemaGeneration - Ready or in-progress schema generation.
  * @property {LifecycleState} state - Current lifecycle state.
  */
 
@@ -55,7 +58,17 @@ export default class FrontendTenantSqliteLifecycle {
     const key = this.key(databaseIdentifier, databaseConfiguration)
     let entry = this.entries.get(key)
     if (!entry) {
-      entry = {databaseConfiguration, databaseIdentifier, dirty: false, lastUsed: 0, pinCount: 0, state: "closed"}
+      entry = {
+        databaseConfiguration,
+        databaseIdentifier,
+        dirty: false,
+        lastUsed: 0,
+        pinCount: 0,
+        readinessPromise: undefined,
+        ready: false,
+        schemaGeneration: undefined,
+        state: "closed"
+      }
       this.entries.set(key, entry)
     }
     return entry
@@ -67,6 +80,8 @@ export default class FrontendTenantSqliteLifecycle {
       dirty: entry.dirty,
       lastUsed: entry.lastUsed,
       pinCount: entry.pinCount,
+      ready: entry.ready,
+      schemaGeneration: entry.schemaGeneration,
       state: entry.state
     })
   }
@@ -94,6 +109,78 @@ export default class FrontendTenantSqliteLifecycle {
     })
   }
 
+  /**
+   * Opens and prepares one captured physical tenant database generation. The
+   * readiness callback runs outside the lifecycle bookkeeping lock, so distinct
+   * tenant databases can migrate concurrently while matching callers share one
+   * promise.
+   * @param {string} databaseIdentifier - Logical database identifier.
+   * @param {import("../configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Captured physical configuration.
+   * @param {string} schemaGeneration - Application schema generation.
+   * @param {() => Promise<void>} callback - Migration and metadata initialization.
+   * @returns {Promise<Readonly<ReturnType<FrontendTenantSqliteLifecycle["snapshot"]>>>} - Ready lifecycle snapshot.
+   */
+  async initialize(databaseIdentifier, databaseConfiguration, schemaGeneration, callback) {
+    this.assertSqlite(databaseConfiguration)
+    if (!databaseConfiguration.tenantOnly) throw new Error("Frontend tenant database initialization requires a tenant-only SQLite database")
+    if (typeof schemaGeneration !== "string" || schemaGeneration.length === 0) {
+      throw new TypeError("Frontend tenant database initialization requires a non-empty schemaGeneration")
+    }
+
+    const readiness = await this.serialize(async () => {
+      const entry = this.entry(databaseIdentifier, databaseConfiguration)
+
+      if (entry.readinessPromise) {
+        if (entry.schemaGeneration !== schemaGeneration) {
+          throw new Error(`Frontend tenant database is already initializing schema generation ${JSON.stringify(entry.schemaGeneration)}; cannot initialize mismatched generation ${JSON.stringify(schemaGeneration)}`)
+        }
+
+        return {entry, promise: entry.readinessPromise}
+      }
+      if (entry.ready && entry.schemaGeneration === schemaGeneration) {
+        return {entry, promise: Promise.resolve()}
+      }
+      if (entry.schemaGeneration && entry.schemaGeneration !== schemaGeneration && (entry.pinCount > 0 || this.configuration.getDatabasePool(databaseIdentifier).capturedConnectionInUse(databaseConfiguration))) {
+        throw new Error(`Cannot replace frontend tenant schema generation ${JSON.stringify(entry.schemaGeneration)} while its physical database is in use`)
+      }
+      if (entry.state !== "open") await this.openUnlocked(entry)
+      if (entry.schemaGeneration && entry.schemaGeneration !== schemaGeneration) {
+        this.configuration.clearRecordMetadataForDatabaseIdentity(this.key(databaseIdentifier, databaseConfiguration))
+      }
+
+      entry.ready = false
+      entry.schemaGeneration = schemaGeneration
+      entry.pinCount++
+      const promise = Promise.resolve().then(callback)
+
+      entry.readinessPromise = promise
+
+      return {entry, promise}
+    })
+
+    try {
+      await readiness.promise
+      await this.serialize(async () => {
+        if (readiness.entry.readinessPromise === readiness.promise) {
+          readiness.entry.readinessPromise = undefined
+          readiness.entry.ready = true
+          readiness.entry.pinCount--
+        }
+      })
+    } catch (error) {
+      await this.serialize(async () => {
+        if (readiness.entry.readinessPromise === readiness.promise) {
+          readiness.entry.readinessPromise = undefined
+          readiness.entry.ready = false
+          readiness.entry.pinCount--
+        }
+      })
+      throw error
+    }
+
+    return this.snapshot(readiness.entry)
+  }
+
   async flush(/** @type {string} */ databaseIdentifier, /** @type {import("../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
     this.assertSqlite(databaseConfiguration)
     return await this.serialize(async () => {
@@ -117,7 +204,10 @@ export default class FrontendTenantSqliteLifecycle {
       try {
         if (flush) await this.configuration.getDatabasePool(databaseIdentifier).flushCapturedConnection(databaseConfiguration)
         await this.configuration.getDatabasePool(databaseIdentifier).closeCapturedConnection(databaseConfiguration)
+        this.configuration.clearRecordMetadataForDatabaseIdentity(this.key(databaseIdentifier, databaseConfiguration))
         entry.dirty = false
+        entry.ready = false
+        entry.schemaGeneration = undefined
         entry.state = "closed"
         this.entries.delete(this.key(databaseIdentifier, databaseConfiguration))
         return this.snapshot(entry)
@@ -136,11 +226,16 @@ export default class FrontendTenantSqliteLifecycle {
       entry.state = "deleting"
       try {
         await this.configuration.getDatabasePool(databaseIdentifier).deleteCapturedDatabase(databaseConfiguration)
+        this.configuration.clearRecordMetadataForDatabaseIdentity(this.key(databaseIdentifier, databaseConfiguration))
         entry.dirty = false
+        entry.ready = false
+        entry.schemaGeneration = undefined
         entry.state = "closed"
         this.entries.delete(this.key(databaseIdentifier, databaseConfiguration))
         return this.snapshot(entry)
       } catch (error) {
+        this.configuration.clearRecordMetadataForDatabaseIdentity(this.key(databaseIdentifier, databaseConfiguration))
+        entry.ready = false
         entry.state = "closed"
         throw error
       }
@@ -150,7 +245,7 @@ export default class FrontendTenantSqliteLifecycle {
   inspect(/** @type {string} */ databaseIdentifier, /** @type {import("../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration) {
     this.assertSqlite(databaseConfiguration)
     const entry = this.entries.get(this.key(databaseIdentifier, databaseConfiguration))
-    return entry ? this.snapshot(entry) : Object.freeze({databaseIdentifier, dirty: false, lastUsed: 0, pinCount: 0, state: "closed"})
+    return entry ? this.snapshot(entry) : Object.freeze({databaseIdentifier, dirty: false, lastUsed: 0, pinCount: 0, ready: false, schemaGeneration: undefined, state: "closed"})
   }
 
   inspectAll() {
@@ -158,7 +253,13 @@ export default class FrontendTenantSqliteLifecycle {
     return Object.freeze({handles: Object.freeze(handles), maxOpenHandles: this.maxOpenHandles, openCount: handles.filter(({state}) => state === "open").length})
   }
 
-  reset() { this.entries.clear() }
+  reset() {
+    for (const entry of this.entries.values()) {
+      this.configuration.clearRecordMetadataForDatabaseIdentity(this.key(entry.databaseIdentifier, entry.databaseConfiguration))
+    }
+
+    this.entries.clear()
+  }
 
   async withPin(/** @type {string} */ databaseIdentifier, /** @type {import("../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration, /** @type {() => Promise<ReturnType<typeof JSON.parse>>} */ callback) {
     this.assertSqlite(databaseConfiguration)
@@ -176,21 +277,50 @@ export default class FrontendTenantSqliteLifecycle {
     }
   }
 
-  async databaseOperation(/** @type {string} */ databaseIdentifier, /** @type {import("../configuration-types.js").DatabaseConfigurationType} */ databaseConfiguration, /** @type {() => Promise<ReturnType<typeof JSON.parse>>} */ callback) {
-    if (!this.entries.has(this.key(databaseIdentifier, databaseConfiguration))) return await callback()
+  /**
+   * Atomically validates readiness, captures the schema generation, and pins
+   * one lifecycle entry before starting database work.
+   * @param {string} databaseIdentifier - Logical database identifier.
+   * @param {import("../configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Captured physical configuration.
+   * @param {{requireReady: boolean, schemaGeneration?: string}} options - Operation readiness requirements.
+   * @param {(schemaGeneration: string | undefined) => Promise<ReturnType<typeof JSON.parse>>} callback - Pinned operation callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Operation result.
+   */
+  async databaseOperation(databaseIdentifier, databaseConfiguration, {requireReady, schemaGeneration}, callback) {
+    if (databaseConfiguration.type !== "sqlite") return await callback(schemaGeneration)
 
-    return await this.withPin(databaseIdentifier, databaseConfiguration, async () => {
-      try {
-        return await callback()
-      } finally {
-        const dirty = this.configuration.getDatabasePool(databaseIdentifier).capturedConnectionHasPendingWrites(databaseConfiguration)
-        await this.serialize(async () => {
-          const entry = this.entry(databaseIdentifier, databaseConfiguration)
-          entry.dirty ||= dirty
-          entry.lastUsed = ++this.sequence
-        })
+    const entry = await this.serialize(async () => {
+      const operationEntry = this.entries.get(this.key(databaseIdentifier, databaseConfiguration))
+
+      if (!operationEntry) return undefined
+      if (requireReady && operationEntry.schemaGeneration && !operationEntry.ready) {
+        throw new Error(`Frontend tenant database ${JSON.stringify(databaseIdentifier)} is not ready for schema generation ${JSON.stringify(operationEntry.schemaGeneration)}`)
       }
+      if (schemaGeneration && operationEntry.schemaGeneration && schemaGeneration !== operationEntry.schemaGeneration) {
+        throw new Error(`Frontend tenant database ${JSON.stringify(databaseIdentifier)} is on schema generation ${JSON.stringify(operationEntry.schemaGeneration)}, not ${JSON.stringify(schemaGeneration)}`)
+      }
+      if (operationEntry.state !== "open") await this.openUnlocked(operationEntry)
+
+      operationEntry.pinCount++
+      operationEntry.lastUsed = ++this.sequence
+
+      return operationEntry
     })
+    const operationSchemaGeneration = schemaGeneration || entry?.schemaGeneration
+
+    if (!entry) return await callback(operationSchemaGeneration)
+
+    try {
+      return await callback(operationSchemaGeneration)
+    } finally {
+      const dirty = this.configuration.getDatabasePool(databaseIdentifier).capturedConnectionHasPendingWrites(databaseConfiguration)
+
+      await this.serialize(async () => {
+        entry.dirty ||= dirty
+        entry.lastUsed = ++this.sequence
+        entry.pinCount--
+      })
+    }
   }
 
   async openUnlocked(/** @type {LifecycleEntry} */ entry) {
@@ -222,6 +352,9 @@ export default class FrontendTenantSqliteLifecycle {
     const victim = candidates[0]
     if (!victim) throw new Error(`Frontend tenant SQLite handle capacity ${this.maxOpenHandles} reached; every handle is dirty, pinned, or in use`)
     await this.configuration.getDatabasePool(victim.databaseIdentifier).closeCapturedConnection(victim.databaseConfiguration)
+    this.configuration.clearRecordMetadataForDatabaseIdentity(this.key(victim.databaseIdentifier, victim.databaseConfiguration))
+    victim.ready = false
+    victim.schemaGeneration = undefined
     victim.state = "closed"
     this.entries.delete(this.key(victim.databaseIdentifier, victim.databaseConfiguration))
   }

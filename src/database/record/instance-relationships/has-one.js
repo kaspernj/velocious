@@ -28,7 +28,7 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
-    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
+    const TargetModelClass = this.getBoundTargetModelClass()
 
     if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
 

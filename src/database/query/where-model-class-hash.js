@@ -403,9 +403,11 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
       if (relationship && tuples) {
         if (index > 0) sql += " AND "
 
-        const targetModelClass = relationship.getTargetModelClass()
+        const rawTargetModelClass = relationship.getTargetModelClass()
 
-        if (!targetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+        if (!rawTargetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+
+        const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
 
         const nestedPath = path.concat([whereKey])
         const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
@@ -431,9 +433,11 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
           throw new Error(`Unknown relationship "${whereKey}" for ${modelClass.name}`)
         }
 
-        const targetModelClass = relationship.getTargetModelClass()
+        const rawTargetModelClass = relationship.getTargetModelClass()
 
-        if (!targetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+        if (!rawTargetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+
+        const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
 
         const nestedHash = /** @type {WhereHash} */ (whereValue)
         const nestedPath = path.concat([whereKey])

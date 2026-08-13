@@ -18,9 +18,10 @@ import path from "path"
  * @param {boolean} [args.enforceTenantDatabaseScopes] - Whether tenant-switched model queries require a resolved tenant database.
  * @param {import("../../src/environment-handlers/base.js").default} [args.environmentHandler] - Environment handler override.
  * @param {{maxOpenHandles?: number}} [args.frontendTenantSqlite] - Frontend tenant SQLite lifecycle configuration.
+ * @param {import("../../src/configuration-types.js").InitializersCallbackType} [args.initializers] - Application initializer loader.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
  */
-export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true, environmentHandler = new EnvironmentHandlerNode(), frontendTenantSqlite} = {}) {
+export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true, environmentHandler = new EnvironmentHandlerNode(), frontendTenantSqlite, initializers} = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
 
   const configuration = new Configuration({
@@ -56,6 +57,7 @@ export async function createTenantTestConfiguration(prefix, {enforceTenantDataba
     environment: "test",
     environmentHandler,
     initializeModels: async () => {},
+    initializers,
     locale: "en",
     localeFallbacks: {en: ["en"]},
     locales: ["en"],

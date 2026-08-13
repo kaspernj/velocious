@@ -63,6 +63,19 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   }
 
   /**
+   * Resolves a relationship target through the source record's operation and
+   * metadata generation before construction.
+   * @returns {TMC | undefined} - Bound target model class.
+   */
+  getBoundTargetModelClass() {
+    const targetModelClass = this.getTargetModelClass()
+
+    if (!targetModelClass) return undefined
+
+    return /** @type {TMC} */ (this.getModel().getModelClass().bindRecordMetadataModelClass(targetModelClass))
+  }
+
+  /**
    * Runs get auto save.
    * @returns {boolean | undefined} Whether the relationship should be auto-saved before saving the parent model
    */
