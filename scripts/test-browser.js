@@ -5,7 +5,6 @@ import path from "node:path"
 import {pathToFileURL} from "node:url"
 import {build} from "esbuild"
 import initSqlJs from "sql.js"
-import SystemTest from "system-testing/build/system-test.js"
 import Application from "../src/application.js"
 import Configuration from "../src/configuration.js"
 import BrowserEnvironmentHandler from "../src/environment-handlers/browser.js"
@@ -22,6 +21,7 @@ import dummyDirectory from "../spec/dummy/dummy-directory.js"
 import {withSourcePeerPackage} from "../src/environment-handlers/node/source-peer-package.js"
 import {
   BrowserTestSession,
+  buildBrowserTestSystemTestFactory,
   loadOrPrewarmBrowserTestChromeRuntime,
   stopBrowserTestSession
 } from "./browser-test-session.js"
@@ -405,12 +405,8 @@ async function runBrowserTests() {
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
     browserTestSession = new BrowserTestSession({
       runtime: chromeRuntime,
-      systemTestFactory: ({browserPath}) => SystemTest.current({
+      systemTestFactory: buildBrowserTestSystemTestFactory({
         debug: process.env.SYSTEM_TEST_DEBUG === "true",
-        driver: {
-          type: "selenium",
-          options: {chromeBinaryPath: browserPath}
-        },
         httpHost: systemTestHttpHost,
         httpPort: systemTestHttpPort
       })

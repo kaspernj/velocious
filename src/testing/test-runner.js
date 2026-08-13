@@ -1456,14 +1456,15 @@ export default class TestRunner {
      * @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */
     const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */ (console)
     /**
-     * Original console methods.
+     * Original console methods captured as direct references so stopping restores
+     * the exact method that was installed at capture start.
      * @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */
     const originalConsoleMethods = {
-      debug: consoleObject.debug.bind(console),
-      error: consoleObject.error.bind(console),
-      info: consoleObject.info.bind(console),
-      log: consoleObject.log.bind(console),
-      warn: consoleObject.warn.bind(console)
+      debug: consoleObject.debug,
+      error: consoleObject.error,
+      info: consoleObject.info,
+      log: consoleObject.log,
+      warn: consoleObject.warn
     }
     let stopped = false
     let outputText = ""
@@ -1473,7 +1474,7 @@ export default class TestRunner {
         lines.push(`[${new Date().toISOString()}] [${methodName}] ${format(...args)}`)
 
         if (passthrough) {
-          originalConsoleMethods[methodName](...args)
+          originalConsoleMethods[methodName].apply(consoleObject, args)
         }
       }
     }

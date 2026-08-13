@@ -74,7 +74,7 @@ configuration.broadcastToChannel("GameChat", {gameId: "abc"}, {from: "alice", te
 - Broadcasts for one channel are persisted (when the channel is replay-logged) and dispatched in strict FIFO order; an event's persistence always completes before the next broadcast on that same channel is dispatched.
 - Each channel has its own ordered queue, so a slow or failing publish on one channel never blocks publishes on unrelated channels.
 - A failed publish is logged and rethrown to anyone awaiting `awaitPendingBroadcasts()`. Items already queued behind the failure on that same channel do not run; work on other channels is unaffected.
-- `configuration.awaitPendingBroadcasts()` is a global snapshot barrier: it waits until every publish accepted before the call — across all channels, including work still queued behind earlier same-channel items — has settled, then rethrows the first failure. Work enqueued after the call is not awaited.
+- `configuration.awaitPendingBroadcasts()` is a global snapshot barrier: it waits until every publish accepted before the call — across all channels, including work still queued behind earlier same-channel items — has settled, then rethrows the first failure. It also drains local subscriber deliveries that were already in flight when the call was made (per-process fan-out launched fire-and-forget so one slow subscriber never blocks another), snapshot-style like the publish queues. Individual delivery errors stay isolated (logged, not rethrown), and work enqueued after the call is not awaited.
 
 ## Auth model — locked in
 
