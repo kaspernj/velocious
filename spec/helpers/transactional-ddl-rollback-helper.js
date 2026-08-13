@@ -1,6 +1,6 @@
 // @ts-check
 
-import {expect} from "../../src/testing/test.js"
+import { expect } from "../../src/testing/test.js"
 import AsyncTrackedMultiConnection from "../../src/database/pool/async-tracked-multi-connection.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"

@@ -97,10 +97,20 @@ export default class SyncScopeStore {
     }
 
     if (transactionCompletion) {
-      const transactionReadyPromise = this._ensureScopesTable(db).then(() => undefined)
+      const tableReadyPromise = this._ensureScopesTable(db)
+      const transactionReadyPromise = tableReadyPromise.then(() => undefined)
+
+      const durableReadyPromise = tableReadyPromise.then(async (created) => {
+        if (!created) {
+          this._isReady = true
+          return
+        }
+
+        await transactionCompletion
+      })
 
       this._transactionReadyPromises.set(db, {completion: transactionCompletion, promise: transactionReadyPromise})
-      this._readyPromise = transactionCompletion
+      this._readyPromise = durableReadyPromise
       await transactionReadyPromise
       return
     }

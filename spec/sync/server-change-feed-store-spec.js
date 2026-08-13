@@ -1,10 +1,10 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
-import {deferred} from "awaitery"
+import { describe, expect, it } from "../../src/testing/test.js"
+import { deferred } from "awaitery"
 import Configuration from "../../src/configuration.js"
 import ServerChangeFeedStore from "../../src/sync/server-change-feed.js"
-import {createTransactionalDdlReadinessConfiguration, expectTransactionalDdlTableRolledBack, supportsTransactionalDdlRollback} from "../helpers/transactional-ddl-rollback-helper.js"
+import { createTransactionalDdlReadinessConfiguration, expectTransactionalDdlTableRolledBack, supportsTransactionalDdlRollback } from "../helpers/transactional-ddl-rollback-helper.js"
 import Task from "../dummy/src/models/task.js"
 
 describe("server change-feed store", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
@@ -123,6 +123,36 @@ describe("server change-feed store", {tags: ["dummy"], databaseCleaning: {transa
       ddlCanFinish.resolve(undefined)
       transactionCanFinish.resolve(undefined)
       await transactionResult
+      await cleanup()
+    }
+  })
+
+  it("publishes durable readiness immediately when a transaction finds the table", async () => {
+    const {cleanup, configuration} = await createTransactionalDdlReadinessConfiguration("change-feed-existing-readiness")
+    const setupStore = new ServerChangeFeedStore({configuration})
+
+    try {
+      await setupStore.ensureReady()
+
+      const store = new ServerChangeFeedStore({configuration})
+
+      await configuration.withConnections({name: "Change-feed existing-table owner"}, async (dbs) => {
+        await dbs.default.transaction(async () => {
+          await store.ensureReady()
+
+          expect(store._isReady).toEqual(true)
+
+          const concurrentStarted = deferred()
+          const concurrentCall = configuration.withoutCurrentConnectionContexts(async () => {
+            concurrentStarted.resolve(undefined)
+            await store.ensureReady()
+          })
+
+          await concurrentStarted.promise
+          await concurrentCall
+        })
+      })
+    } finally {
       await cleanup()
     }
   })

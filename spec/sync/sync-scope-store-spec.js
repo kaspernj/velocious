@@ -1,11 +1,11 @@
 // @ts-check
 
-import {describe, expect, it} from "../../src/testing/test.js"
-import {deferred} from "awaitery"
-import {serializedScopeFromQuery} from "../../src/sync/query-scope.js"
+import { describe, expect, it } from "../../src/testing/test.js"
+import { deferred } from "awaitery"
+import { serializedScopeFromQuery } from "../../src/sync/query-scope.js"
 import SyncScopeStore from "../../src/sync/sync-scope-store.js"
 import Configuration from "../../src/configuration.js"
-import {createTransactionalDdlReadinessConfiguration, expectTransactionalDdlTableRolledBack} from "../helpers/transactional-ddl-rollback-helper.js"
+import { createTransactionalDdlReadinessConfiguration, expectTransactionalDdlTableRolledBack } from "../helpers/transactional-ddl-rollback-helper.js"
 import Task from "../dummy/src/models/task.js"
 
 /** @returns {SyncScopeStore} Store bound to the current (dummy) configuration. */
@@ -167,6 +167,36 @@ describe("sync scope store", {tags: ["dummy"], databaseCleaning: {transaction: f
       ddlCanFinish.resolve(undefined)
       transactionCanFinish.resolve(undefined)
       await transactionResult
+      await cleanup()
+    }
+  })
+
+  it("publishes durable readiness immediately when a transaction finds the table", async () => {
+    const {cleanup, configuration} = await createTransactionalDdlReadinessConfiguration("sync-scope-existing-readiness")
+    const setupStore = new SyncScopeStore({configuration})
+
+    try {
+      await setupStore.ensureReady()
+
+      const store = new SyncScopeStore({configuration})
+
+      await configuration.withConnections({name: "Sync scope existing-table owner"}, async (dbs) => {
+        await dbs.default.transaction(async () => {
+          await store.ensureReady()
+
+          expect(store._isReady).toEqual(true)
+
+          const concurrentStarted = deferred()
+          const concurrentCall = configuration.withoutCurrentConnectionContexts(async () => {
+            concurrentStarted.resolve(undefined)
+            await store.ensureReady()
+          })
+
+          await concurrentStarted.promise
+          await concurrentCall
+        })
+      })
+    } finally {
       await cleanup()
     }
   })
