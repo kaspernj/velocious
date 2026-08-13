@@ -8,7 +8,7 @@ import Base from "./base.js"
 
 /**
  * VelociousDatabaseDriversSqliteWeb class.
- * @typedef {{query: (sql: string) => Promise<Record<string, ReturnType<typeof JSON.parse>>[]>, exec: (sql: string) => Promise<Record<string, ReturnType<typeof JSON.parse>>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} SqliteWebConnection
+ * @typedef {{query: (sql: string) => Promise<Record<string, ReturnType<typeof JSON.parse>>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} SqliteWebConnection
  */
 
 export default class VelociousDatabaseDriversSqliteWeb extends Base {
@@ -182,12 +182,12 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query actual.
    */
   async _queryActual(sql, options = {}) {
-    const result = options.sqliteScript
-      ? await this.getConnection().exec(sql)
-      : await this.getConnection().query(sql)
+    const connection = this.getConnection()
+    const result = connection instanceof ConnectionSqlJs
+      ? await connection.query(sql, {mutation: options.sqliteScript === true})
+      : await connection.query(sql)
 
     if (!Array.isArray(result)) {
-      const connection = this.getConnection()
       const connectionName = connection?.constructor?.name || "UnknownConnection"
 
       throw new Error(`Sqlite web connection ${connectionName} returned a non-array result: ${typeof result}`)

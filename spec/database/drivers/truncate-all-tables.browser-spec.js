@@ -10,6 +10,8 @@ import PgsqlDriver from "../../../src/database/drivers/pgsql/index.js"
 import {countSqlMessages, isTableListQuery, sqlMessages, withQueryLogOutput} from "../../helpers/query-log-helpers.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
+/** @typedef {import("../../../src/database/drivers/base.js").default} Driver */
+
 const BATCH_PARENT_TABLE = "truncate_batch_parents"
 const BATCH_CHILD_TABLE = "truncate_batch_children"
 const BATCH_IDENTITY_TABLE = "truncate_batch_identities"
@@ -17,8 +19,6 @@ const CACHE_FIRST_TABLE = "truncate_cache_first"
 const CACHE_SECOND_TABLE = "truncate_cache_second"
 const STALE_TABLE = "truncate_stale_table"
 const STALE_LIVE_TABLE = "truncate_stale_live_table"
-
-/** @typedef {import("../../../src/database/drivers/base.js").default} Driver */
 
 class TestTable extends BaseTable {
   /**

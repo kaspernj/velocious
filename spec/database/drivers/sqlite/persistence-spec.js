@@ -5,6 +5,7 @@ import ConnectionSqlJs from "../../../../src/database/drivers/sqlite/connection-
 import SqliteWebDriver from "../../../../src/database/drivers/sqlite/index.web.js"
 import initSqlJs from "sql.js"
 import path from "path"
+import queryWeb from "../../../../src/database/drivers/sqlite/query.web.js"
 import {describe, expect, it} from "../../../../src/testing/test.js"
 import {fileURLToPath} from "url"
 
@@ -95,6 +96,45 @@ async function persistedItemsCount(driver, tableName = "persisted_items") {
 }
 
 describe("database - sqlite web driver - persistence", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("batches cleanup through the browser runner connection query API", async () => {
+    const SQL = await loadSqlJs()
+    const database = new SQL.Database()
+    const scripts = []
+    const connection = {
+      affectedRows: async () => 0,
+      close: async () => database.close(),
+      query: async (sql) => {
+        scripts.push(sql)
+        return await queryWeb(database, sql)
+      }
+    }
+    const driver = new SqliteWebDriver({
+      getConnection: () => connection,
+      name: "browser-runner-truncate"
+    }, Configuration.current())
+
+    driver.args = driver.getArgs()
+
+    try {
+      await driver.query("CREATE TABLE browser_items(id INTEGER PRIMARY KEY, name TEXT)")
+      await driver.query("CREATE TABLE browser_related_items(id INTEGER PRIMARY KEY, name TEXT)")
+      await driver.query("INSERT INTO browser_items(name) VALUES ('first')")
+      await driver.query("INSERT INTO browser_related_items(name) VALUES ('second')")
+      driver.clearSchemaCache()
+      scripts.length = 0
+
+      await driver.truncateAllTables()
+
+      const cleanupScripts = scripts.filter((sql) => sql.includes("DELETE FROM"))
+
+      expect(cleanupScripts.length).toEqual(1)
+      expect(await persistedItemsCount(driver, "browser_items")).toEqual(0)
+      expect(await persistedItemsCount(driver, "browser_related_items")).toEqual(0)
+    } finally {
+      await driver.close()
+    }
+  })
+
   it("persists truncateAllTables before it resolves so immediate reloads see reset rows", async () => {
     const SQL = await loadSqlJs()
     const databaseName = `sqlite-web-truncate-flush-${Date.now()}`

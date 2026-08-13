@@ -89,30 +89,19 @@ export default class VelociousDatabaseDriversSqliteConnectionSqlJs {
   /**
    * Runs query.
    * @param {string} sql - SQL string.
+   * @param {{mutation?: boolean}} [options] - Internal query classification options.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query.
    */
-  async query(sql) {
+  async query(sql, {mutation = false} = {}) {
     const result = await queryWeb(this.connection, sql)
     const downcasedSQL = sql.toLowerCase().trim()
 
     // Auto-save database in local storage in case we can find manipulating instructions in the SQL
-    if (downcasedSQL.startsWith("delete ") || downcasedSQL.startsWith("insert into ") || downcasedSQL.startsWith("update ")) {
+    if (mutation || downcasedSQL.startsWith("delete ") || downcasedSQL.startsWith("insert into ") || downcasedSQL.startsWith("update ")) {
       this.saveDatabaseDebounce()
     }
 
     return result
-  }
-
-  /**
-   * Executes a native SQL.js script and explicitly marks its batched mutation
-   * for persistence because it bypasses the ordinary query classifier.
-   * @param {string} sql - Multi-statement SQL script.
-   * @returns {Promise<[]>} - Empty result rows.
-   */
-  async exec(sql) {
-    this.connection.exec(sql)
-    this.saveDatabaseDebounce()
-    return []
   }
 
   /**
