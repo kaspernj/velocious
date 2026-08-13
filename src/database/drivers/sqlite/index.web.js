@@ -178,13 +178,16 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
+   * @param {import("../base.js").QueryOptions} [options] - Query options.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query actual.
    */
-  async _queryActual(sql) {
-    const result = await this.getConnection().query(sql)
+  async _queryActual(sql, options = {}) {
+    const connection = this.getConnection()
+    const result = connection instanceof ConnectionSqlJs
+      ? await connection.query(sql, {mutation: options.sqliteScript === true})
+      : await connection.query(sql)
 
     if (!Array.isArray(result)) {
-      const connection = this.getConnection()
       const connectionName = connection?.constructor?.name || "UnknownConnection"
 
       throw new Error(`Sqlite web connection ${connectionName} returned a non-array result: ${typeof result}`)

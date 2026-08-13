@@ -9,6 +9,40 @@
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
 - If test framework startup fails, backend server must still stop to avoid leaked open handles.
 
+## Truncation cleanup
+
+When test isolation uses truncation, `truncateAllTables()` discovers the live table
+list through the connection's schema metadata cache and excludes
+`schema_migrations`. If there are no other tables, it returns without toggling
+foreign keys or flushing persistence. Failed cleanup clears the schema cache and
+retries against live metadata for up to six passes, then restores foreign keys before
+surfacing the first failure from the final pass.
+
+Cleanup is submitted as one request on PostgreSQL, SQL Server, and the SQLite
+family. PostgreSQL uses `TRUNCATE TABLE ... CASCADE` without `RESTART IDENTITY`.
+SQLite uses a native multi-statement script of `DELETE` statements, including the
+Expo/native and SQL.js paths; SQL.js marks the batch dirty and flushes its persisted
+bytes before cleanup resolves. SQL Server attempts `TRUNCATE` per table inside one
+guarded T-SQL batch and falls back to `DELETE` only for error 4712, the recognized
+foreign-key/reference restriction.
+
+MySQL and MariaDB use a single request only when the database connection already has
+`multipleStatements: true`. The option remains off by default; without it, cleanup
+uses the existing sequential `TRUNCATE TABLE` path. Enable it explicitly for test
+databases where the reduced cleanup round trips are worth accepting stacked SQL:
+
+```js
+database: {
+  test: {
+    default: {
+      driver: MysqlDriver,
+      type: "mysql",
+      multipleStatements: true
+    }
+  }
+}
+```
+
 ## Request test database connections
 Request tests share only transaction-active, non-tenant database connections with
 in-process request handlers. Handlers can therefore see uncommitted test setup while
@@ -113,3 +147,18 @@ signal or condition instead:
   expect(rows.length).toEqual(3))`.
 - **System/browser tests:** wait for the expected element to appear rather than
   sleeping before interacting with it.
+
+## Browser runner startup ownership
+
+`scripts/prewarm-chromedriver.js` validates Chrome and ChromeDriver by executing
+their version commands and persists the selected compatible pair for
+`npm run test:browser`. The browser runner launches that exact ChromeDriver as a
+managed process group and connects Selenium to its explicit service URL. If
+WebDriver session creation fails or times out, the runner terminates ChromeDriver
+and its Chrome descendants before stopping SystemTest and the backend.
+
+Startup errors include the startup phase, runtime versions and paths, service URL,
+Chrome process snapshots before and after cleanup, and retained ChromeDriver logs
+under `tmp/browser-test-chrome/`. Use those diagnostics to fix the concrete service
+or Chrome failure; do not stabilize startup by increasing timeouts or retrying the
+whole browser test command.

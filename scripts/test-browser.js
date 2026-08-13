@@ -20,6 +20,11 @@ import {normalizeExamplePatterns, parseFilters} from "../src/testing/test-filter
 import fileExists from "../src/utils/file-exists.js"
 import dummyDirectory from "../spec/dummy/dummy-directory.js"
 import {withSourcePeerPackage} from "../src/environment-handlers/node/source-peer-package.js"
+import {
+  BrowserTestSession,
+  loadOrPrewarmBrowserTestChromeRuntime,
+  stopBrowserTestSession
+} from "./browser-test-session.js"
 
 const rootDir = process.cwd()
 const distDir = path.join(rootDir, "dist")
@@ -367,6 +372,8 @@ async function runBrowserTests() {
   process.env.VELOCIOUS_BROWSER_BACKEND_PORT = String(browserBackendPort)
   process.env.SYSTEM_TEST_HTTP_PORT = String(systemTestHttpPort)
 
+  const chromeRuntime = await loadOrPrewarmBrowserTestChromeRuntime()
+
   await buildBrowserTestApp()
 
   const {testFiles, lineFilters, includeTags, excludeTags, examplePatterns} = await resolveTests(processArgs)
@@ -381,21 +388,30 @@ async function runBrowserTests() {
     lineFilters,
     examplePatterns
   })
-  /** @type {SystemTest | undefined} */
-  let systemTest
+  /** @type {BrowserTestSession | undefined} */
+  let browserTestSession
   /** @type {Application | undefined} */
   let backendApplication
+  /** @type {Error | undefined} */
+  let runError
 
   try {
     const backendConfiguration = await loadBrowserBackendConfiguration()
     globalThis.__velocious_browser_test_backend_configuration = backendConfiguration
     backendApplication = await startBrowserBackendServer(backendConfiguration, browserBackendPort)
-    systemTest = SystemTest.current({
-      debug: process.env.SYSTEM_TEST_DEBUG === "true",
-      httpHost: systemTestHttpHost,
-      httpPort: systemTestHttpPort
+    browserTestSession = new BrowserTestSession({
+      runtime: chromeRuntime,
+      systemTestFactory: ({browserPath}) => SystemTest.current({
+        debug: process.env.SYSTEM_TEST_DEBUG === "true",
+        driver: {
+          type: "selenium",
+          options: {chromeBinaryPath: browserPath}
+        },
+        httpHost: systemTestHttpHost,
+        httpPort: systemTestHttpPort
+      })
     })
-    await systemTest.start()
+    await browserTestSession.start()
 
     await testRunner.prepare()
 
@@ -413,10 +429,7 @@ async function runBrowserTests() {
     if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
       console.error("\nNo tests matched the provided filters")
       process.exitCode = 1
-      return
-    }
-
-    if (testRunner.isFailed()) {
+    } else if (testRunner.isFailed()) {
       await testRunner.persistFailedTestConsoleOutputsToAssets()
       const failedTests = testRunner.getFailedTestDetails()
 
@@ -443,15 +456,34 @@ async function runBrowserTests() {
     } else {
       console.log(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`)
     }
-  } finally {
-    if (systemTest) {
-      await systemTest.stop()
-    }
+  } catch (error) {
+    runError = error instanceof Error ? error : new Error(String(error))
+  }
 
-    if (backendApplication) {
-      await backendApplication.stop()
+  const cleanupErrors = []
+
+  if (browserTestSession) {
+    try {
+      await stopBrowserTestSession(browserTestSession)
+    } catch (error) {
+      cleanupErrors.push(error instanceof Error ? error : new Error(String(error)))
     }
   }
+
+  if (backendApplication) {
+    try {
+      await backendApplication.stop()
+    } catch (error) {
+      cleanupErrors.push(error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+
+  if (runError && cleanupErrors.length > 0) {
+    throw new AggregateError([runError, ...cleanupErrors], "Browser tests and resource cleanup failed", {cause: runError})
+  }
+  if (runError) throw runError
+  if (cleanupErrors.length === 1) throw cleanupErrors[0]
+  if (cleanupErrors.length > 1) throw new AggregateError(cleanupErrors, "Browser test resource cleanup failed")
 }
 
 async function main() {

@@ -328,6 +328,7 @@ npm run test:browser
 ```
 
 Browser system tests must be named `*.browser-test.js` or `*.browser-spec.js` (override with `VELOCIOUS_BROWSER_TEST_PATTERN`).
+The runner validates and persists the exact Chrome/ChromeDriver pair selected by `scripts/prewarm-chromedriver.js`, then owns ChromeDriver and Chrome as a managed process group. Startup failures report the runtime paths and versions, service URL, retained logs under `tmp/browser-test-chrome/`, and Chrome process state before and after cleanup.
 
 Use beforeAll/afterAll for suite-level setup/teardown.
 
@@ -954,7 +955,8 @@ Translated models also get a `currentTranslation` `hasOne` relationship scoped t
 Async class APIs initialize record metadata on first use when a model has not
 already been initialized eagerly. See [docs/model-initialization.md](docs/model-initialization.md)
 for the eager and lazy initialization behavior, including atomic shared bootstrap
-and complete recovery after an eager initialization failure.
+and complete recovery after an eager initialization failure or database-connection
+closure without overlapping stale and current bootstrap side effects.
 
 ## Lifecycle callbacks
 
@@ -2069,6 +2071,13 @@ If you are developing on Velocious, you can run the tests with:
 ```
 
 Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
+
+Truncation-based test cleanup batches eligible tables into one request on PostgreSQL,
+SQL Server, and SQLite while preserving each driver's existing identity behavior,
+foreign-key restoration, stale-schema retry, and SQL.js persistence guarantees.
+MySQL/MariaDB batching requires the database's existing `multipleStatements: true`
+option; the default configuration keeps sequential `TRUNCATE TABLE` requests. See
+[database cleanup guidance](docs/testing-guidelines.md#truncation-cleanup).
 
 Request tests share transaction-active, non-tenant database connections with their in-process HTTP handlers. Eligibility is evaluated when each request is dispatched, so a hook can start a transaction and issue a request in the same callback. This makes uncommitted setup visible to handlers while preserving rollback isolation. Without an active transaction, handlers use independent pooled connections, so concurrency and locking tests can opt out of transaction cleanup and exercise production-style connections. Shared connection state is scoped to the test lifecycle and cleared around each test. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
 

@@ -326,6 +326,17 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     })
   }
 
+  /**
+   * Truncates all eligible tables in one PostgreSQL request.
+   * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+   * @returns {Promise<void>} - Resolves when the batch completes.
+   */
+  async truncateTables(tables) {
+    const quotedTables = tables.map((table) => this.quoteTable(table.getName()))
+
+    await this.query(`TRUNCATE TABLE ${quotedTables.join(", ")} CASCADE`)
+  }
+
   async lastInsertID(options = {}) {
     const result = await this.query("SELECT LASTVAL() AS last_insert_id", options)
 

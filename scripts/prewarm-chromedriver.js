@@ -1,26 +1,7 @@
 #!/usr/bin/env node
 
-import fs from "node:fs"
-import { createRequire } from "node:module"
+import { prewarmBrowserTestChromeRuntime } from "./browser-test-session.js"
 
-const require = createRequire(import.meta.url)
-const { binaryPaths } = require("selenium-webdriver/common/seleniumManager.js")
-const { browserPath, driverPath } = binaryPaths([
-  "--browser",
-  "chrome",
-  "--language-binding",
-  "javascript",
-  "--output",
-  "json",
-  "--avoid-browser-download"
-])
+const runtime = await prewarmBrowserTestChromeRuntime()
 
-if (!browserPath || !fs.existsSync(browserPath)) {
-  throw new Error(`Selenium Manager did not find installed Chrome at ${browserPath || "<missing path>"}`)
-}
-
-if (!driverPath || !fs.existsSync(driverPath)) {
-  throw new Error(`Selenium Manager did not provision ChromeDriver at ${driverPath || "<missing path>"}`)
-}
-
-console.log(`Prewarmed ChromeDriver at ${driverPath} for Chrome at ${browserPath}`)
+console.log(`Prewarmed ChromeDriver ${runtime.driverVersion} at ${runtime.driverPath} for Chrome ${runtime.browserVersion} at ${runtime.browserPath}`)
