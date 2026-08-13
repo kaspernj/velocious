@@ -1,0 +1,1 @@
+- Keep `SyncScopeStore` and `ServerChangeFeedStore` readiness transaction-local when their backing table is first used inside an active transaction. Repeated work on the owning transaction reuses its local readiness, while other connections wait for transaction completion and then revalidate, so rollback cannot expose stale process readiness or an uncommitted table.

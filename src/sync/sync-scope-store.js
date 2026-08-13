@@ -50,6 +50,8 @@ export default class SyncScopeStore {
     this._isReady = false
     /** @type {Promise<void> | null} */
     this._readyPromise = null
+    /** @type {WeakMap<import("../database/drivers/base.js").default, {completion: Promise<void>, promise: Promise<void>}>} */
+    this._transactionReadyPromises = new WeakMap()
   }
 
   /**
@@ -64,10 +66,46 @@ export default class SyncScopeStore {
       return
     }
 
-    if (this._readyPromise) return await this._readyPromise
+    await this._withDb(async (db) => await this._ensureReadyWithDb(db))
+  }
 
-    this._readyPromise = this._withDb(async (db) => {
-      await this._ensureScopesTable(db)
+  /**
+   * Coordinates durable and transaction-local readiness on one connection.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} Resolves when this caller can use the table.
+   */
+  async _ensureReadyWithDb(db) {
+    if (this._isReady) return
+
+    const transactionCompletion = db.insideTransaction() ? db.transactionCompletion() : null
+    const transactionReady = this._transactionReadyPromises.get(db)
+
+    if (transactionCompletion && transactionReady?.completion === transactionCompletion) {
+      await transactionReady.promise
+      return
+    }
+
+    if (this._readyPromise) {
+      const readyPromise = this._readyPromise
+
+      await readyPromise
+      if (this._readyPromise === readyPromise) this._readyPromise = null
+      if (this._isReady) return
+
+      await this.ensureReady()
+      return
+    }
+
+    if (transactionCompletion) {
+      const transactionReadyPromise = this._ensureScopesTable(db).then(() => undefined)
+
+      this._transactionReadyPromises.set(db, {completion: transactionCompletion, promise: transactionReadyPromise})
+      this._readyPromise = transactionCompletion
+      await transactionReadyPromise
+      return
+    }
+
+    this._readyPromise = this._ensureScopesTable(db).then(() => {
       this._isReady = true
     })
 
@@ -274,10 +312,10 @@ export default class SyncScopeStore {
   /**
    * Ensures the scopes table exists.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @returns {Promise<void>}
+   * @returns {Promise<boolean>} Whether the table had to be created.
    */
   async _ensureScopesTable(db) {
-    if (await db.tableExists(TABLE_NAME)) return
+    if (await db.tableExists(TABLE_NAME)) return false
 
     const table = new TableData(TABLE_NAME, {ifNotExists: true})
 
@@ -291,6 +329,8 @@ export default class SyncScopeStore {
     table.datetime("updated_at", {null: false})
 
     await db.createTable(table)
+
+    return true
   }
 
   /**
