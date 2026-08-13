@@ -7,6 +7,7 @@ import { createRequire } from "node:module"
 import path from "node:path"
 import { promisify } from "node:util"
 import timeout from "awaitery/build/timeout.js"
+import SystemTest from "system-testing/build/system-test.js"
 
 /**
  * @typedef {object} BrowserTestChromeRuntime
@@ -27,6 +28,14 @@ import timeout from "awaitery/build/timeout.js"
  * @property {() => Promise<string>} start - Starts ChromeDriver and returns its URL.
  * @property {() => Promise<void>} stop - Stops ChromeDriver and its process group.
  * @property {() => Promise<string>} diagnostics - Reads retained ChromeDriver diagnostics.
+ */
+
+/**
+ * @typedef {object} BrowserTestSystemTestConfig
+ * @property {boolean} debug - Whether SystemTest should emit debug output.
+ * @property {{type: "selenium", options: {chromeArguments: string[], chromeBinaryPath: string}}} driver - Selenium driver config.
+ * @property {string} httpHost - HTTP host for the browser-test app.
+ * @property {number} httpPort - HTTP port for the browser-test app.
  */
 
 const require = createRequire(import.meta.url)
@@ -183,6 +192,57 @@ export async function loadOrPrewarmBrowserTestChromeRuntime() {
 
     throw error
   }
+}
+
+/**
+ * Formatted default Chrome launch arguments for every browser-test session. Mirrors the
+ * Selenium driver defaults used by system-testing so supplying the list does not drop the
+ * headless container requirements, and adds pipe-mode devtools transport, which ChromeDriver
+ * recommends over the injected `--remote-debugging-port` and which keeps the Chrome instance
+ * alive until a session is created on headless container CI.
+ * @returns {string[]} - Chrome launch arguments.
+ */
+function browserTestChromeArguments() {
+  return [
+    "--disable-backgrounding-occluded-windows",
+    "--disable-background-timer-throttling",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-renderer-backgrounding",
+    "--headless=new",
+    "--no-sandbox",
+    "--remote-debugging-pipe",
+    "--window-size=1920,1080"
+  ]
+}
+
+/**
+ * Builds the SystemTest factory used by BrowserTestSession so the Selenium builder path
+ * receives the pinned Chrome binary and the required headless container Chrome arguments.
+ * @param {object} [args] - Factory options.
+ * @param {string[]} [args.chromeArguments] - Chrome launch arguments.
+ * @param {boolean} [args.debug] - Whether SystemTest should emit debug output.
+ * @param {string} [args.httpHost] - HTTP host for the browser-test app.
+ * @param {number} [args.httpPort] - HTTP port for the browser-test app.
+ * @param {(config: BrowserTestSystemTestConfig) => BrowserTestSystemTest} [args.systemTestCurrent] - SystemTest factory.
+ * @returns {(args: {browserPath: string, remoteUrl: string}) => BrowserTestSystemTest} - SystemTest factory.
+ */
+export function buildBrowserTestSystemTestFactory({
+  chromeArguments = browserTestChromeArguments(),
+  debug = false,
+  httpHost = "127.0.0.1",
+  httpPort = 1984,
+  systemTestCurrent = SystemTest.current
+} = {}) {
+  return ({browserPath}) => systemTestCurrent({
+    debug,
+    driver: {
+      type: "selenium",
+      options: {chromeArguments, chromeBinaryPath: browserPath}
+    },
+    httpHost,
+    httpPort
+  })
 }
 
 /**
