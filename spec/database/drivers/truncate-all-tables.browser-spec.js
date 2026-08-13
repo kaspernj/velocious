@@ -75,6 +75,23 @@ class TruncateHarnessDriver extends BaseDriver {
   clearSchemaCache() { this.clearCalls++ }
 }
 
+class EmptyRefreshTruncateDriver extends TruncateHarnessDriver {
+  /** @type {number[]} */
+  truncateBatchSizes = []
+
+  /**
+   * @param {BaseTable[]} tables - Eligible table snapshot.
+   * @returns {Promise<void>} - Always rejects to simulate the stale first batch or invalid empty SQL.
+   */
+  async truncateTables(tables) {
+    this.truncateBatchSizes.push(tables.length)
+
+    if (tables.length == 0) throw new Error("empty truncate batch")
+
+    throw new Error("stale truncate batch")
+  }
+}
+
 class RecordingPgsqlDriver extends PgsqlDriver {
   /** @type {string[]} */
   queries = []
@@ -246,6 +263,23 @@ describe("database - drivers - truncate all tables", {tags: ["dummy"], databaseC
     expect(driver.disableCalls).toEqual(0)
     expect(driver.enableCalls).toEqual(0)
     expect(driver.flushCalls).toEqual(0)
+  })
+
+  it("finishes cleanup without an empty batch when refreshed stale metadata has no eligible tables", async () => {
+    const driver = new EmptyRefreshTruncateDriver({}, Configuration.current())
+    const staleTable = new TestTable({driver, name: "stale_table"})
+    const migrationsTable = new TestTable({driver, name: "schema_migrations"})
+
+    driver.tableSnapshots = [[staleTable], [migrationsTable]]
+
+    await driver.truncateAllTables()
+
+    expect(driver.truncateBatchSizes).toEqual([1])
+    expect(driver.getTablesCalls).toEqual(2)
+    expect(driver.clearCalls).toEqual(1)
+    expect(driver.disableCalls).toEqual(1)
+    expect(driver.enableCalls).toEqual(1)
+    expect(driver.flushCalls).toEqual(1)
   })
 
   it("uses one cold table discovery, reuses a warm cache, and sees tables created after DDL invalidation", async () => {

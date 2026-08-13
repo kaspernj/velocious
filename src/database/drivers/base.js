@@ -2261,6 +2261,8 @@ export default class VelociousDatabaseDriversBase {
           // table list and no longer tries to truncate a table that is gone.
           this.clearSchemaCache()
           tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
+
+          if (tables.length == 0) return
         }
       }
     })
