@@ -1,8 +1,9 @@
 // @ts-check
 
-import {pathToFileURL} from "node:url"
-import {readdir, stat} from "node:fs/promises"
+import { pathToFileURL } from "node:url"
+import { readdir, stat } from "node:fs/promises"
 import path from "node:path"
+import { reserveDefinitionReloadBudget } from "./definition-reload-policy.js"
 
 /**
  * Monotonic cache-busting counter shared by reloads. Kept module-local so a reload
@@ -68,6 +69,26 @@ async function resolveFiles(target) {
 export async function loadDefinitions(registry, target, {reload = false} = {}) {
   const files = await resolveFiles(target)
 
+  return await loadResolvedDefinitionFiles({files, registry, reload})
+}
+
+/**
+ * Loads definition files that have already been resolved into a deterministic
+ * sorted list. When `reload` is set, the whole batch is preflighted and reserved
+ * against the process-global import budget before any registry reset or import
+ * attempt, so a rejected reload never mutates the registry.
+ * @param {object} args - Options object.
+ * @param {string[]} args.files - Resolved, sorted definition file paths.
+ * @param {import("../factory-registry.js").default} args.registry - Registry to define into.
+ * @param {boolean} args.reload - Whether to cache-bust the imports.
+ * @param {boolean} [args.reset] - Whether to reset the registry first.
+ * @returns {Promise<string[]>} - The loaded file paths, in load order.
+ */
+async function loadResolvedDefinitionFiles({files, registry, reload, reset = false}) {
+  if (reload) reserveDefinitionReloadBudget(files.length)
+
+  if (reset) registry.reset()
+
   for (const file of files) {
     let href = pathToFileURL(file).href
 
@@ -91,13 +112,16 @@ export async function loadDefinitions(registry, target, {reload = false} = {}) {
 /**
  * Fully reloads definitions: resets the registry (dropping every factory, trait,
  * sequence, callback and default) and re-imports the target files with cache
- * busting so edited definitions take effect.
+ * busting so edited definitions take effect. The resolved batch is preflighted
+ * against the process-global import budget before the reset, and a
+ * `DefinitionRecycleRequiredError` is raised before any mutation when the batch
+ * would exceed the budget.
  * @param {import("../factory-registry.js").default} registry - Registry to reload.
  * @param {string | string[]} target - File path, directory, or list of paths.
  * @returns {Promise<string[]>} - The reloaded file paths, in load order.
  */
 export async function reloadDefinitions(registry, target) {
-  registry.reset()
+  const files = await resolveFiles(target)
 
-  return await loadDefinitions(registry, target, {reload: true})
+  return await loadResolvedDefinitionFiles({files, registry, reload: true, reset: true})
 }
