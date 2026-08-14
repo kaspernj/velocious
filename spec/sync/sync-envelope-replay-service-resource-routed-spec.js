@@ -2,9 +2,18 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import Ability from "../../src/authorization/ability.js"
+import {applySyncReplayResultToLocalMutationLog} from "../../src/sync/conflict-strategy.js"
+import backendProjects from "../dummy/src/config/backend-projects.js"
+import {buildMutationLog} from "../helpers/sync-client-conflict-tracking-helper.js"
+import Cli from "../../src/cli/index.js"
 import Comment from "../dummy/src/models/comment.js"
+import Configuration from "../../src/configuration.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import dummyDirectory from "../dummy/dummy-directory.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
+import fs from "fs/promises"
 import Project from "../dummy/src/models/project.js"
 import SyncEntry from "../dummy/src/models/sync-entry.js"
 import SyncEnvelopeReplayService, {syncReplayConflictLockName} from "../../src/sync/sync-envelope-replay-service.js"
@@ -525,6 +534,160 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect(conflict.serverModel.id).toEqual(comment.id())
     expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
     expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "taskId", "updatedAt"])
+  })
+
+  it("preserves Date-typed affected attributes through the conflict transport round trip", async () => {
+    class DateConflictCommentResource extends FrontendModelBaseResource {
+      static ModelClass = Comment
+
+      /** @type {string[]} */
+      static attributes = ["body", "createdAt"]
+
+      /** @type {string[]} */
+      static writableAttributes = ["body", "createdAt", "taskId"]
+    }
+
+    const project = await Project.create({name: "Date conflict projection project"})
+    const task = await Task.create({name: "Date projection task", projectId: project.id()})
+    const comment = await Comment.create({body: "Date original", createdAt: "2026-07-01T09:00:00.000Z", taskId: task.id()})
+    const baseVersion = comment.updatedAt().toISOString()
+
+    comment.assign({body: "Date authoritative body", updatedAt: "2026-07-04T10:00:00.000Z"})
+    await comment.save()
+
+    const service = buildService({
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      resourceTypeOverrides: {Comment: DateConflictCommentResource},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        data: {body: "Stale body", createdAt: "2026-07-02T09:00:00.000Z"},
+        id: "35d7e8f9-1111-4222-8333-444455556666",
+        resourceId: String(comment.id()),
+        resourceType: "Comment"
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+
+    // Cross the real controller -> http-client transport boundary so the date
+    // marker must survive the JSON hop for the accessor to receive a Date.
+    // (The generated-accessor half of this contract is asserted in
+    // spec/cli/commands/generate/frontend-models-spec.js with a class produced
+    // by the real generator consuming the round-tripped serverModel.)
+    const serialized = serializeFrontendModelTransportValue(result)
+    const roundTripped = deserializeFrontendModelTransportValue(JSON.parse(JSON.stringify(serialized)))
+    const conflict = roundTripped.syncs[0].conflict
+
+    expect(conflict.serverModel.createdAt).toBeInstanceOf(Date)
+    expect(conflict.serverModel.createdAt.toISOString()).toEqual("2026-07-01T09:00:00.000Z")
+    expect(conflict.serverModel.createdAt.toISOString()).toEqual(comment.createdAt().toISOString())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
+  })
+
+  it("preserves Date-typed conflict serverModel through durable mutation-log readback into a generated accessor", async () => {
+    const outputDir = `${dummyDirectory()}/src/frontend-models`
+    await fs.rm(outputDir, {force: true, recursive: true})
+
+    try {
+      // Produce the real CLI-generated frontend models (the same workflow apps
+      // ship) so the durable readback is consumed by an actual generated
+      // accessor rather than a hand-written shim.
+      const cli = new Cli({
+        configuration: new Configuration({
+          backendProjects,
+          database: {test: {}},
+          directory: dummyDirectory(),
+          environment: "test",
+          environmentHandler: new EnvironmentHandlerNode(),
+          initializeModels: async () => {},
+          locale: "en",
+          localeFallbacks: {en: ["en"]},
+          locales: ["en"]
+        }),
+        directory: dummyDirectory(),
+        environmentHandler: new EnvironmentHandlerNode(),
+        processArgs: ["g:frontend-models"],
+        testing: true
+      })
+
+      await cli.execute()
+
+      const {default: GeneratedTask} = await import(`${outputDir}/task.js`)
+
+      class DateConflictTaskResource extends FrontendModelBaseResource {
+        static ModelClass = Task
+
+        /** @type {string[]} */
+        static attributes = ["name", "createdAt"]
+
+        /** @type {string[]} */
+        static writableAttributes = ["name", "createdAt"]
+      }
+
+      const project = await Project.create({name: "Durable conflict projection project"})
+      const task = await Task.create({name: "Durable original", createdAt: "2026-07-01T09:00:00.000Z", projectId: project.id()})
+      const baseVersion = task.updatedAt().toISOString()
+
+      task.assign({name: "Durable authoritative", updatedAt: "2026-07-04T10:00:00.000Z"})
+      await task.save()
+
+      const service = buildService({
+        conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+        resourceTypeOverrides: {Task: DateConflictTaskResource},
+        syncModel: SyncEntry
+      })
+      const result = await service.replay({
+        syncs: [buildSync({
+          baseVersion,
+          data: {name: "Stale name", createdAt: "2026-07-02T09:00:00.000Z"},
+          id: "45d7e8f9-2222-4333-8444-555566667777",
+          resourceId: String(task.id()),
+          resourceType: "Task"
+        })]
+      })
+
+      expect(result.syncs[0].syncState).toEqual("conflict")
+
+      // Server -> client transport hop restores the Date marker.
+      const roundTripped = deserializeFrontendModelTransportValue(JSON.parse(JSON.stringify(serializeFrontendModelTransportValue(result))))
+
+      // Framework-managed SyncClient flow: persist the replay result durably.
+      const mutationLog = buildMutationLog(["mutation-1"])
+      const logRecord = await mutationLog.append({
+        mutation: {
+          actorDeviceId: "device-1",
+          actorUserId: "user-1",
+          attributes: {name: "Stale name", createdAt: "2026-07-02T09:00:00.000Z"},
+          baseVersion,
+          clientMutationId: "mutation-1",
+          model: "Task",
+          occurredAt: "2026-07-02T09:00:00.000Z",
+          offlineGrantId: "grant-1",
+          operation: "update",
+          policyHash: "policy-1"
+        }
+      })
+      await applySyncReplayResultToLocalMutationLog({mutationLog, record: logRecord, result: roundTripped.syncs[0]})
+
+      const persisted = (await mutationLog.records())[0]
+
+      expect(persisted.status).toEqual("conflict")
+      expect(persisted.syncResult?.conflict?.serverModel.createdAt).toBeInstanceOf(Date)
+
+      // Durable readback passed into the real CLI-generated model must surface
+      // the authoritative Date from its generated createdAt() accessor.
+      const generatedTask = GeneratedTask.instantiateFromResponse(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (persisted.syncResult?.conflict?.serverModel))
+
+      expect(generatedTask.createdAt()).toBeInstanceOf(Date)
+      expect(generatedTask.createdAt().toISOString()).toEqual("2026-07-01T09:00:00.000Z")
+      expect(generatedTask.createdAt().toISOString()).toEqual(task.createdAt().toISOString())
+      expect(generatedTask.name()).toEqual("Durable authoritative")
+    } finally {
+      await fs.rm(outputDir, {force: true, recursive: true})
+    }
   })
 
   it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {

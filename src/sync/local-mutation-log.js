@@ -37,11 +37,12 @@
  * @property {import("./device-identity.js").SignedSyncMutation} [signedMutation] - Original signed mutation envelope, retained for peer-forwarded mutations.
  * @property {number} sequence - Monotonic local sequence.
  * @property {LocalMutationStatus} status - Local replay/apply status.
- * @property {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} [syncResult] - Backend replay/result metadata.
+ * @property {Record<string, import("../frontend-models/base.js").FrontendModelTransportValue>} [syncResult] - Backend replay/result metadata. Stored as transport markers so Date (and other typed) values survive the durable JSON round trip and are restored on readback.
  * @property {string} updatedAt - ISO timestamp when the record was last changed.
  */
 // @ts-check
 
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
 import stableJsonStringify from "./stable-json.js"
 
 const DEFAULT_STORAGE_KEY = "velocious.sync.localMutationLog"
@@ -126,7 +127,7 @@ export default class LocalMutationLog {
    * @param {object} args - Arguments.
    * @param {string} args.id - Record id.
    * @param {LocalMutationStatus} args.status - New status.
-   * @param {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} [args.syncResult] - Result metadata.
+   * @param {Record<string, import("../frontend-models/base.js").FrontendModelTransportValue>} [args.syncResult] - Result metadata (may carry transport-restored typed values).
    * @returns {Promise<LocalMutationLogRecord>} - Updated record.
    */
   async updateStatus({id, status, syncResult}) {
@@ -140,11 +141,16 @@ export default class LocalMutationLog {
       const record = normalizeRecord(rawRecord)
 
       record.status = /** @type {LocalMutationStatus} */ (status)
-      if (syncResult !== undefined) record.syncResult = cloneJsonObject(syncResult, "syncResult")
+      if (syncResult !== undefined) {
+        // Encode transport-restored typed values (e.g. Date attributes in a
+        // conflict serverModel) as markers before the JSON clone so the
+        // durable persistence round trip cannot stringify them.
+        record.syncResult = cloneJsonObject(serializeFrontendModelTransportValue(syncResult), "syncResult")
+      }
       record.updatedAt = this.currentTimestamp()
       await this.storage.updateRecord(this.storageKey, cloneRecord(record))
 
-      return cloneRecord(record)
+      return restoreSyncResultTypes(cloneRecord(record))
     })
   }
 
@@ -168,7 +174,7 @@ export default class LocalMutationLog {
       record.updatedAt = this.currentTimestamp()
       await this.storage.updateRecord(this.storageKey, cloneRecord(record))
 
-      return cloneRecord(record)
+      return restoreSyncResultTypes(cloneRecord(record))
     })
   }
 
@@ -270,6 +276,25 @@ function normalizeRecordList(records) {
     .map(normalizeRecord)
     .sort((left, right) => left.sequence - right.sequence)
     .map((record) => cloneRecord(record))
+    .map(restoreSyncResultTypes)
+}
+
+/**
+ * Restores transport-restored typed values in a record's syncResult after the
+ * final JSON clone, so callers see Date (and other typed) values on durable
+ * readback instead of marker-encoded ISO strings.
+ * @param {LocalMutationLogRecord} record - Cloned record.
+ * @returns {LocalMutationLogRecord} - Record with restored syncResult types.
+ */
+function restoreSyncResultTypes(record) {
+  if (record.syncResult === undefined) return record
+
+  return {
+    ...record,
+    syncResult: /** @type {Record<string, import("../frontend-models/base.js").FrontendModelTransportValue>} */ (
+      deserializeFrontendModelTransportValue(record.syncResult)
+    )
+  }
 }
 
 /**
@@ -328,7 +353,13 @@ function normalizeRecord(value) {
   if (record.signedMutation !== undefined) {
     normalizedRecord.signedMutation = /** @type {import("./device-identity.js").SignedSyncMutation} */ (cloneJsonObject(record.signedMutation, "signedMutation"))
   }
-  if (record.syncResult !== undefined) normalizedRecord.syncResult = cloneJsonObject(record.syncResult, "syncResult")
+  if (record.syncResult !== undefined) {
+    // Persisted syncResult is marker-encoded so it survives the JSON clone;
+    // typed values are restored by restoreSyncResultTypes at the read boundary.
+    normalizedRecord.syncResult = /** @type {Record<string, import("../frontend-models/base.js").FrontendModelTransportValue>} */ (
+      cloneJsonObject(record.syncResult, "syncResult")
+    )
+  }
 
   return normalizedRecord
 }

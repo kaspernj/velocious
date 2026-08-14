@@ -13,6 +13,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "node:path"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../../../src/frontend-models/transport-serialization.js"
 import {typescriptCliDiagnostics} from "../../../helpers/typescript-cli-helpers.js"
 
 class Call extends DatabaseRecord {
@@ -1270,5 +1271,48 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(command.argTypeAcceptsEmptyObject("Record<string, unknown>")).toEqual(false)
     expect(command.argTypeAcceptsEmptyObject("Record<\"accountId\", string>")).toEqual(false)
     expect(command.argTypeAcceptsEmptyObject("Partial<Filters> & {accountId: string}")).toEqual(false)
+  })
+
+  it("materializes round-tripped conflict serverModel through a generated accessor as Date", async () => {
+    const outputDir = `${dummyDirectory()}/src/frontend-models`
+    await fs.rm(outputDir, {force: true, recursive: true})
+
+    try {
+      const cli = new Cli({
+        configuration: buildConfiguration({backendProjectsList: backendProjects}),
+        directory: dummyDirectory(),
+        environmentHandler: new EnvironmentHandlerNode(),
+        processArgs: ["g:frontend-models"],
+        testing: true
+      })
+
+      await cli.execute()
+
+      const {default: GeneratedTask} = await import(`${outputDir}/task.js`)
+
+      // Shape matches the sync envelope replay service `serverModel` conflict
+      // snapshot: readable affected attributes plus the normalized version
+      // string. The replay half of this contract (a raw Date emitted by the
+      // replay service surviving serialize/JSON/deserialize) lives in
+      // spec/sync/sync-envelope-replay-service-resource-routed-spec.js; here the
+      // real generated accessor must return that authoritative Date.
+      const serverModel = {
+        id: 1,
+        name: "Authoritative name",
+        createdAt: new Date("2026-07-01T09:00:00.000Z"),
+        updatedAt: "2026-07-04T10:00:00.000Z"
+      }
+
+      const serialized = serializeFrontendModelTransportValue(serverModel)
+      const roundTripped = deserializeFrontendModelTransportValue(JSON.parse(JSON.stringify(serialized)))
+
+      const generatedTask = GeneratedTask.instantiateFromResponse(roundTripped)
+
+      expect(generatedTask.createdAt()).toBeInstanceOf(Date)
+      expect(generatedTask.createdAt().toISOString()).toEqual("2026-07-01T09:00:00.000Z")
+      expect(generatedTask.name()).toEqual("Authoritative name")
+    } finally {
+      await fs.rm(outputDir, {force: true, recursive: true})
+    }
   })
 })
