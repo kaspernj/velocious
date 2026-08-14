@@ -12,7 +12,7 @@ let firstAttemptPid
 const markerPrefix = `shared-transaction-pooled-attempts-${process.pid}-${Date.now()}`
 const concurrentPooledTransactionTimeoutSeconds = 30
 
-describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: false}}, () => {
+describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], databaseCleaning: {transaction: true, truncate: false}}, () => {
   beforeAll(async () => {
     backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerConcurrency: 2, pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
     backgroundJobs.worker._createPooledChild()
