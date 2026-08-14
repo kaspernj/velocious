@@ -101,7 +101,7 @@ export default class CrashOnceResendBackend extends ResendSmtpMailerBackend {
 import Configuration from ${JSON.stringify(pathToFileURL(path.join(velociousDirectory, "src", "configuration.js")).href)}
 import NodeEnvironmentHandler from ${JSON.stringify(pathToFileURL(path.join(velociousDirectory, "src", "environment-handlers", "node.js")).href)}
 import SqliteDriver from ${JSON.stringify(pathToFileURL(path.join(velociousDirectory, "src", "database", "drivers", "sqlite", "index.js")).href)}
-import SingleMultiUsePool from ${JSON.stringify(pathToFileURL(path.join(velociousDirectory, "src", "database", "pool", "single-multi-use.js")).href)}
+import AsyncTrackedMultiConnectionPool from ${JSON.stringify(pathToFileURL(path.join(velociousDirectory, "src", "database", "pool", "async-tracked-multi-connection.js")).href)}
 import CrashOnceResendBackend from "./crash-once-resend-backend.js"
 
 export default new Configuration({
@@ -109,7 +109,8 @@ export default new Configuration({
     driver: SqliteDriver,
     migrations: false,
     name: "mail-crash-window",
-    poolType: SingleMultiUsePool,
+    pool: {checkoutTimeoutMillis: 100, max: 1},
+    poolType: AsyncTrackedMultiConnectionPool,
     type: "sqlite"
   }}},
   directory: ${JSON.stringify(directory)},
@@ -148,7 +149,7 @@ export default new Configuration({
 
       if (typeof jobId !== "string") throw new Error("Expected native mail job id")
 
-      await fakeServer.quitReceived
+      await timeout({timeout: 2000}, async () => await fakeServer.quitReceived)
       await waitForJob({jobId, predicate: (job) => job.status === "queued" && job.attempts === 1, store})
 
       await store._withDb(async (db) => {

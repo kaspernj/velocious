@@ -21,6 +21,7 @@ export default class MailerDeliveryOperationStore {
   constructor({configuration, clock = () => Date.now()}) {
     this.backgroundJobsStore = new BackgroundJobsStore({configuration})
     this.clock = clock
+    this.configuration = configuration
   }
 
   /**
@@ -36,9 +37,16 @@ export default class MailerDeliveryOperationStore {
 
     if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new Error("Mailer delivery operation clock must return a non-negative safe integer")
 
-    await this.backgroundJobsStore.ensureReady()
+    const databaseIdentifier = this.backgroundJobsStore.getDatabaseIdentifier()
 
-    return await this.backgroundJobsStore._withDb(async (db) => {
+    return await this.configuration.ensureConnections({
+      databaseIdentifiers: [databaseIdentifier],
+      name: "Mailer delivery operation attempt"
+    }, async (dbs) => {
+      const db = dbs[databaseIdentifier]
+
+      await this.backgroundJobsStore.ensureSchema(db)
+
       return await db.transaction(async () => {
         const operationKey = mailDeliveryOperationKey(operation.id)
 

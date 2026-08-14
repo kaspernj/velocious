@@ -3,6 +3,7 @@
 import ejs from "ejs"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
+import BackgroundJobsClient from "../background-jobs/client.js"
 import configurationResolver from "../configuration-resolver.js"
 import restArgsError from "../utils/rest-args-error.js"
 import MailerDelivery from "./delivery.js"
@@ -343,13 +344,12 @@ export async function enqueuePayload(payload, {configuration: suppliedConfigurat
   }
 
   const {default: mailDeliveryJob} = await import("../jobs/mail-delivery.js")
+  const client = new BackgroundJobsClient({configuration})
+  const jobOptions = mailDeliveryJob._withQueue(deliveryOperation ? {idempotencyKey: deliveryOperation.id} : undefined)
 
-  if (deliveryOperation) {
-    return await mailDeliveryJob.performLaterWithOptions({
-      args: [persistedPayload],
-      options: {idempotencyKey: deliveryOperation.id}
-    })
-  }
-
-  return await mailDeliveryJob.performLater(persistedPayload)
+  return await client.enqueue({
+    args: [persistedPayload],
+    jobName: mailDeliveryJob.jobName(),
+    options: jobOptions
+  })
 }
