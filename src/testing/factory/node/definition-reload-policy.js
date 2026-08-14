@@ -13,9 +13,9 @@ export const DEFAULT_DEFINITION_RELOAD_BUDGET = 4096
 
 /**
  * Rejected when code tries to configure the process-global reload budget more
- * than once or after cache-busted imports have already been reserved. Retained
- * ESM modules and their accounting live for the process lifetime, so changing
- * the budget can never begin a new in-process policy epoch.
+ * than once or after any valid cache-busted import reservation was attempted.
+ * Retained ESM modules and their accounting live for the process lifetime, so
+ * changing the budget can never begin a new in-process policy epoch.
  */
 export class DefinitionReloadConfigurationError extends Error {
   /**
@@ -29,7 +29,7 @@ export class DefinitionReloadConfigurationError extends Error {
   constructor({budget, configured, current, requestedBudget}) {
     const reason = configured
       ? "the process-global definition reload budget was already configured"
-      : "cache-busted definition imports were already reserved"
+      : "a definition reload reservation was already attempted"
 
     super(`Cannot configure definition reload budget to ${requestedBudget}: ${reason} (current=${current}, budget=${budget}). Configuration is allowed exactly once before the first reservation; only process exit resets retained-module accounting.`)
     this.name = "DefinitionReloadConfigurationError"
@@ -73,7 +73,7 @@ let reservedImports = 0
 /** @type {boolean} - Whether the process-global budget was explicitly configured. */
 let budgetConfigured = false
 
-/** @type {boolean} - Whether any complete reload batch has been reserved. */
+/** @type {boolean} - Whether any valid complete reload batch reservation was attempted. */
 let reservationStarted = false
 
 /**
@@ -96,9 +96,10 @@ export function peekDefinitionReloadBudget() {
 
 /**
  * Configures the one process-global import budget exactly once and only before
- * the first reservation. There is exactly one budget for the whole process, so
- * no combination of registries or targets can create independent budgets that
- * defeat the global limit. Retained-import accounting is never reset in-process.
+ * the first valid reservation attempt. There is exactly one budget for the whole
+ * process, so no combination of registries or targets can create independent
+ * budgets that defeat the global limit. Retained-import accounting is never
+ * reset in-process.
  * @param {number} budget - New budget.
  * @returns {void}
  */
@@ -121,20 +122,28 @@ export function setDefinitionReloadBudget(budget) {
 }
 
 /**
- * Preflights and reserves a whole reload batch synchronously. Throws
- * {@link DefinitionRecycleRequiredError} when the requested batch would push the
- * process over its budget. The check and reservation run in one synchronous
- * step, so concurrent reloads cannot race past the budget. The reservation is
- * deliberately conservative: it covers every import attempt in the batch, so a
- * mid-batch import failure still counts its attempts as retained modules.
+ * Preflights and reserves a whole reload batch synchronously. Malformed counts
+ * are rejected before configuration is sealed or accounting changes. Every valid
+ * request, including zero and a rejected over-budget request, seals configuration
+ * before capacity is evaluated. Throws {@link DefinitionRecycleRequiredError}
+ * when the requested batch would push the process over its budget. The check and
+ * reservation run in one synchronous step, so concurrent reloads cannot race past
+ * the budget. The reservation is deliberately conservative: it covers every
+ * import attempt in the batch, so a mid-batch import failure still counts its
+ * attempts as retained modules.
  * @param {number} requested - Cache-busted import attempts the reload will perform.
  * @returns {void}
  */
 export function reserveDefinitionReloadBudget(requested) {
+  if (!Number.isInteger(requested) || requested < 0) {
+    throw new TypeError(`Definition reload reservation must be a non-negative integer, got ${typeof requested} ${String(requested)}`)
+  }
+
+  reservationStarted = true
+
   if (reservedImports + requested > importBudget) {
     throw new DefinitionRecycleRequiredError({current: reservedImports, budget: importBudget, requested})
   }
 
-  reservationStarted = true
   reservedImports += requested
 }

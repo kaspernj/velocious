@@ -330,9 +330,13 @@ import {
 - `getDefinitionReloadBudget()` / `peekDefinitionReloadBudget()` report the budget and
   how much of it is already reserved across the whole process.
 - `setDefinitionReloadBudget(n)` is the single explicit process-global knob and may
-  succeed exactly once, before the first reload reservation. A second configuration, or
-  a first configuration after any reservation, throws
+  succeed exactly once, before the first valid reload reservation attempt. Every valid
+  reservation attempt seals configuration before capacity is checked, including an
+  empty batch or one rejected for exceeding the remaining budget. A second
+  configuration, or a first configuration after any valid reservation attempt, throws
   `DefinitionReloadConfigurationError` without changing the budget or reserved count.
+  A malformed reservation count is rejected as a `TypeError` before it can seal
+  configuration or change accounting; reservation counts must be non-negative integers.
   There is no in-process reset or new accounting epoch: only process exit discards the
   retained modules and their accounting. The default is
   `DEFAULT_DEFINITION_RELOAD_BUDGET` (4096), chosen from the

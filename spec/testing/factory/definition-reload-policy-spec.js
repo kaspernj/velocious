@@ -29,6 +29,38 @@ async function runScenario(scenario) {
 }
 
 describe("Factory reload process-global import budget (Node)", () => {
+  it("seals configuration before rejecting a first over-budget reservation", async () => {
+    const report = await runScenario("over-budget-first-reservation-seals")
+
+    expect(report.reservationError.name).toEqual("DefinitionRecycleRequiredError")
+    expect(report.reservationError).toEqual(expect.objectContaining({budget: 4096, current: 0, requested: 4097}))
+    expect(report.before).toEqual({budget: 4096, reserved: 0})
+    expect(report.configurationError.name).toEqual("DefinitionReloadConfigurationError")
+    expect(report.configurationError.message).toMatch(/reservation was already attempted/)
+    expect(report.after).toEqual(report.before)
+  })
+
+  it("rejects malformed reservation counts without sealing or corrupting accounting", async () => {
+    const report = await runScenario("malformed-reservation-counts")
+
+    expect(report.errors.map(({label}) => label)).toEqual([
+      "negative",
+      "fractional",
+      "nan",
+      "positive-infinity",
+      "negative-infinity",
+      "string",
+      "boolean",
+      "null",
+      "undefined",
+      "bigint",
+      "symbol"
+    ])
+    expect(report.errors.every(({message, name}) => name === "TypeError" && /non-negative integer/.test(message))).toEqual(true)
+    expect(report.beforeConfiguration).toEqual({budget: 4096, reserved: 0})
+    expect(report.afterValidReservation).toEqual({budget: 7, reserved: 2})
+  })
+
   it("allows one explicit configuration before the first reservation", async () => {
     const report = await runScenario("configure-once")
 

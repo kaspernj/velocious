@@ -3,6 +3,7 @@
 import {
   getDefinitionReloadBudget,
   peekDefinitionReloadBudget,
+  reserveDefinitionReloadBudget,
   setDefinitionReloadBudget
 } from "../../src/testing/factory/node/definition-reload-policy.js"
 import { loadDefinitions, reloadDefinitions } from "../../src/testing/factory/node/load-definitions.js"
@@ -69,6 +70,48 @@ async function runScenario() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "factory-policy-child-"))
 
   try {
+    if (scenario === "over-budget-first-reservation-seals") {
+      const defaultBudget = getDefinitionReloadBudget()
+      const reservationError = await captureError(async () => reserveDefinitionReloadBudget(defaultBudget + 1))
+      const before = {budget: getDefinitionReloadBudget(), reserved: peekDefinitionReloadBudget()}
+      const configurationError = await captureError(async () => setDefinitionReloadBudget(defaultBudget + 2))
+      const after = {budget: getDefinitionReloadBudget(), reserved: peekDefinitionReloadBudget()}
+
+      return {after, before, configurationError, reservationError}
+    }
+
+    if (scenario === "malformed-reservation-counts") {
+      const malformedRequests = [
+        {label: "negative", value: -1},
+        {label: "fractional", value: 1.5},
+        {label: "nan", value: Number.NaN},
+        {label: "positive-infinity", value: Number.POSITIVE_INFINITY},
+        {label: "negative-infinity", value: Number.NEGATIVE_INFINITY},
+        {label: "string", value: "1"},
+        {label: "boolean", value: true},
+        {label: "null", value: null},
+        {label: "undefined", value: undefined},
+        {label: "bigint", value: 1n},
+        {label: "symbol", value: Symbol("one")}
+      ]
+      const errors = []
+
+      for (const {label, value} of malformedRequests) {
+        const error = await captureError(async () => Reflect.apply(reserveDefinitionReloadBudget, undefined, [value]))
+        errors.push({label, message: error.message, name: error.name})
+      }
+
+      const beforeConfiguration = {budget: getDefinitionReloadBudget(), reserved: peekDefinitionReloadBudget()}
+      setDefinitionReloadBudget(7)
+      reserveDefinitionReloadBudget(2)
+
+      return {
+        afterValidReservation: {budget: getDefinitionReloadBudget(), reserved: peekDefinitionReloadBudget()},
+        beforeConfiguration,
+        errors
+      }
+    }
+
     if (scenario === "configure-once") {
       const defaultBudget = getDefinitionReloadBudget()
       const invalidZeroError = (await captureError(async () => setDefinitionReloadBudget(0))).message
