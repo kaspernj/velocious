@@ -2264,6 +2264,7 @@ You can configure the main host/port in your configuration:
 export default new Configuration({
   // ...
   backgroundJobs: {
+    mode: "background",
     host: "127.0.0.1",
     port: 7331,
     databaseIdentifier: "default",
@@ -2279,6 +2280,16 @@ export default new Configuration({
   }
 })
 ```
+
+`backgroundJobs.mode` is separate from a job's `executionMode`. The default
+`"background"` mode preserves the Node SQL queue, TCP main/worker transport, and
+per-job `"pooled"` execution default. `"inline"` is a platform-neutral,
+non-durable application mode: `performLater` performs immediately and rejects
+queue/scheduling/retry/execution options whose guarantees require durable state.
+Custom persistence can be supplied as a `BackgroundJobsAdapter` instance or
+synchronous factory. See [runtime modes and adapters](docs/background-jobs.md#runtime-modes-and-adapters)
+for the contract, lifecycle, Node TCP/wake behavior, the explicit
+`platform-job.js` browser/Expo entry, and SQL-only compatibility boundaries.
 
 Or via env vars:
 
@@ -2357,7 +2368,7 @@ Queue a job:
 await MyJob.performLater("a", "b")
 ```
 
-Jobs use `executionMode: "forked"` by default. This runs the job in a separate attached Node child process. To run inline:
+Durably queued jobs use `executionMode: "pooled"` by default. To run one inside the worker process instead:
 
 ```js
 await MyJob.performLaterWithOptions({

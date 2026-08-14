@@ -1,5 +1,6 @@
 // @ts-check
 
+import BackgroundJobsAdapterClient from "../background-jobs/adapter-client.js"
 import {validateTimeZone} from "../time-zone.js"
 
 /**
@@ -573,6 +574,25 @@ export default class VelociousEnvironmentHandlerBase {
    */
   async ensureFrameworkSchema(args) { // eslint-disable-line no-unused-vars
     return
+  }
+
+  /**
+   * Creates the environment's default persistence adapter.
+   * @abstract
+   * @param {{configuration: import("../configuration.js").default}} _args - Adapter options.
+   * @returns {import("../background-jobs/adapter.js").default} - Default adapter.
+   */
+  createBackgroundJobsAdapter(_args) {
+    throw new Error("This environment requires an explicit backgroundJobs.adapter")
+  }
+
+  /**
+   * Creates the platform-neutral producer path for an explicit adapter.
+   * @param {{configuration: import("../configuration.js").default}} args - Client options.
+   * @returns {import("../background-jobs/types.js").BackgroundJobsProducer} - Adapter-backed producer.
+   */
+  backgroundJobsClient(args) {
+    return new BackgroundJobsAdapterClient(args)
   }
 
   /**

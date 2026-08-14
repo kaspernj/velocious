@@ -99,11 +99,14 @@ export default class VelociousBackgroundJobsWebController extends Controller {
    */
   async health() {
     await this._respond(async () => {
+      const health = await this.getConfiguration().backgroundJobsHealth()
+
       await this.render({json: {
         capabilities: {backgroundJobCountDeltas: 1},
-        ok: true,
+        ok: health.ready,
+        ready: health.ready,
         service: "velocious-background-jobs"
-      }})
+      }, status: health.ready ? 200 : 503})
     })
   }
 

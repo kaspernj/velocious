@@ -11,11 +11,20 @@
  * @property {string[]} [databaseIdentifiers] - Database identifiers to include in the connection scope.
  * @property {string} [name] - Human-readable name for the checked-out database connections.
  */
+/**
+ * One adapter instance and its serialized ready/close lifecycle.
+ * @typedef {object} BackgroundJobsAdapterGeneration
+ * @property {import("./background-jobs/adapter.js").default} adapter - Adapter owned by this generation.
+ * @property {boolean} closing - Whether close has claimed this generation.
+ * @property {Promise<void> | undefined} readyPromise - Shared readiness attempt.
+ * @property {Promise<void> | undefined} closePromise - Shared close operation.
+ */
 
 import {digg} from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
+import BackgroundJobsAdapter from "./background-jobs/adapter.js"
 import DatabaseOperation from "./database/operation.js"
 import {initializeAuditedModelRelationships} from "./database/record/auditing.js"
 import EventEmitter from "./utils/event-emitter.js"
@@ -204,6 +213,9 @@ export default class VelociousConfiguration {
    * @type {Promise<void> | null} */
   _closeDatabaseConnectionsPromise = null
 
+  /** @type {BackgroundJobsAdapterGeneration | undefined} */
+  _backgroundJobsAdapterGeneration = undefined
+
   /**
    * Dedicated advisory-lock connections currently holding a lock. These are spawned
    * outside the pools' tracked sets (so a hold-timeout lock survives pool checkouts),
@@ -268,7 +280,7 @@ export default class VelociousConfiguration {
     this.debug = debug
     this._debugEndpoint = this._normalizeDebugEndpoint(debugEndpoint)
     this._apiManifest = this._normalizeApiManifest(apiManifest)
-    this._environment = environment || process.env.VELOCIOUS_ENV || process.env.NODE_ENV || "development"
+    this._environment = environment || globalThis.process?.env.VELOCIOUS_ENV || globalThis.process?.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
     this._exposeInternalErrorsToClients = exposeInternalErrorsToClients
@@ -1441,22 +1453,23 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get background jobs config.
-   * @returns {Required<import("./configuration-types.js").BackgroundJobsConfiguration> & {retention: import("./configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration}} - Background jobs configuration.
+   * @returns {Omit<Required<import("./configuration-types.js").BackgroundJobsConfiguration>, "adapter" | "retention"> & {retention: import("./configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration}} - Background jobs configuration.
    */
   getBackgroundJobsConfig() {
-    const envHost = process.env.VELOCIOUS_BACKGROUND_JOBS_HOST
-    const envPortRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_PORT
-    const envDatabaseIdentifier = process.env.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
-    const envMaxConcurrentForkedRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS
-    const envMaxConcurrentRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS
-    const envPooledRunnerCountRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_COUNT
-    const envPooledRunnerConcurrencyRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_CONCURRENCY
-    const envPooledRunnerMaxJobsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS
-    const envPooledRunnerMaxRssBytesRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_RSS_BYTES
-    const envPooledRunnerMaxLifetimeMsRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS
-    const envDispatchStrategy = process.env.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
-    const envPollIntervalRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS
-    const envJobTimeoutRaw = process.env.VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS
+    const processEnvironment = globalThis.process?.env
+    const envHost = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_HOST
+    const envPortRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_PORT
+    const envDatabaseIdentifier = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
+    const envMaxConcurrentForkedRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_FORKED_JOBS
+    const envMaxConcurrentRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_MAX_CONCURRENT_INLINE_JOBS
+    const envPooledRunnerCountRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_COUNT
+    const envPooledRunnerConcurrencyRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_CONCURRENCY
+    const envPooledRunnerMaxJobsRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS
+    const envPooledRunnerMaxRssBytesRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_RSS_BYTES
+    const envPooledRunnerMaxLifetimeMsRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS
+    const envDispatchStrategy = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
+    const envPollIntervalRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS
+    const envJobTimeoutRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS
     const envPort = envPortRaw ? Number(envPortRaw) : undefined
     const envMaxConcurrentForked = envMaxConcurrentForkedRaw ? Number(envMaxConcurrentForkedRaw) : undefined
     const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
@@ -1468,6 +1481,11 @@ export default class VelociousConfiguration {
     const envPollInterval = envPollIntervalRaw ? Number(envPollIntervalRaw) : undefined
     const envJobTimeout = envJobTimeoutRaw ? Number(envJobTimeoutRaw) : undefined
     const configured = this._backgroundJobs || {}
+    const mode = configured.mode === undefined ? "background" : configured.mode
+
+    if (mode !== "background" && mode !== "inline") {
+      throw new TypeError(`backgroundJobs.mode must be "background" or "inline", got: ${String(mode)}`)
+    }
     const host = configured.host || envHost || "127.0.0.1"
     const port = typeof configured.port === "number"
       ? configured.port
@@ -1522,7 +1540,146 @@ export default class VelociousConfiguration {
         : 60 * 60 * 1000
     }
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobTimeoutMs, retention}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobTimeoutMs, retention}
+  }
+
+  /**
+   * Resolves and memoizes one background-jobs adapter for this configuration lifecycle.
+   * @returns {BackgroundJobsAdapter} - Active adapter.
+   */
+  getBackgroundJobsAdapter() {
+    if (this._backgroundJobsAdapterGeneration) return this._backgroundJobsAdapterGeneration.adapter
+
+    const configuredAdapter = this._backgroundJobs?.adapter
+    const adapter = typeof configuredAdapter === "function"
+      ? configuredAdapter({configuration: this})
+      : (configuredAdapter || this.getEnvironmentHandler().createBackgroundJobsAdapter({configuration: this}))
+
+    if (!(adapter instanceof BackgroundJobsAdapter)) {
+      throw new TypeError("backgroundJobs.adapter must be a BackgroundJobsAdapter instance or a synchronous factory returning one")
+    }
+
+    this._backgroundJobsAdapterGeneration = {
+      adapter,
+      closing: false,
+      closePromise: undefined,
+      readyPromise: undefined
+    }
+    return adapter
+  }
+
+  /**
+   * Atomically acquires the exact ready adapter for the active lifecycle.
+   * A close that claims the generation while readiness is pending wins: this
+   * operation waits for that close, creates the next generation, readies it,
+   * and returns only that live instance.
+   * @returns {Promise<BackgroundJobsAdapter>} - Exact ready adapter generation.
+   */
+  async acquireReadyBackgroundJobsAdapter() {
+    while (true) {
+      const databaseClosePromise = this._closeDatabaseConnectionsPromise
+
+      if (databaseClosePromise) {
+        await databaseClosePromise
+        continue
+      }
+
+      this.getBackgroundJobsAdapter()
+      const generation = this._backgroundJobsAdapterGeneration
+
+      if (!generation) throw new Error("Background jobs adapter generation was not created")
+
+      if (generation.closing) {
+        if (generation.closePromise) await generation.closePromise
+        continue
+      }
+
+      const readyPromise = generation.readyPromise || Promise.resolve().then(async () => {
+        await generation.adapter.ensureReady()
+      })
+
+      generation.readyPromise = readyPromise
+
+      try {
+        await readyPromise
+      } catch (error) {
+        if (generation.readyPromise === readyPromise) generation.readyPromise = undefined
+        throw error
+      }
+
+      if (generation.closing) {
+        if (generation.closePromise) await generation.closePromise
+        continue
+      }
+
+      if (this._backgroundJobsAdapterGeneration !== generation) continue
+
+      return generation.adapter
+    }
+  }
+
+  /**
+   * Readies the active adapter once per lifecycle. A failed attempt remains retryable.
+   * @returns {Promise<void>} - Resolves when ready.
+   */
+  async ensureBackgroundJobsAdapterReady() {
+    await this.acquireReadyBackgroundJobsAdapter()
+  }
+
+  /**
+   * Returns health without resolving persistence in non-durable inline mode.
+   * @returns {Promise<import("./background-jobs/types.js").BackgroundJobsHealth>} - Current health.
+   */
+  async backgroundJobsHealth() {
+    if (this.getBackgroundJobsConfig().mode === "inline") return {ready: true}
+
+    const adapter = await this.acquireReadyBackgroundJobsAdapter()
+
+    return await adapter.health()
+  }
+
+  /**
+   * Closes the resolved adapter once and clears lifecycle caches.
+   * @returns {Promise<void>} - Resolves after close.
+   */
+  async closeBackgroundJobsAdapter() {
+    const generation = this._backgroundJobsAdapterGeneration
+
+    if (!generation) return
+    if (generation.closePromise) return await generation.closePromise
+
+    generation.closing = true
+    const closePromise = (async () => {
+      /** @type {Error[]} */
+      const closeErrors = []
+
+      if (generation.readyPromise) {
+        try {
+          await generation.readyPromise
+        } catch (error) {
+          closeErrors.push(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+
+      try {
+        await generation.adapter.close()
+      } catch (error) {
+        closeErrors.push(error instanceof Error ? error : new Error(String(error)))
+      }
+
+      if (closeErrors.length === 1) throw closeErrors[0]
+      if (closeErrors.length > 1) throw new AggregateError(closeErrors, "Failed to ready and close the background-jobs adapter")
+    })()
+
+    generation.closePromise = closePromise
+
+    try {
+      await closePromise
+    } finally {
+      if (this._backgroundJobsAdapterGeneration === generation) {
+        this._backgroundJobsAdapterGeneration = undefined
+      }
+    }
   }
 
   /**
@@ -1531,6 +1688,10 @@ export default class VelociousConfiguration {
    * @returns {void}
    */
   setBackgroundJobsConfig(backgroundJobs) {
+    if (this._backgroundJobsAdapterGeneration && backgroundJobs.adapter !== undefined) {
+      throw new Error("Cannot replace backgroundJobs.adapter during an active adapter lifecycle; close it first")
+    }
+
     this._backgroundJobs = Object.assign({}, this._backgroundJobs, backgroundJobs)
   }
 
@@ -2099,8 +2260,8 @@ export default class VelociousConfiguration {
     }
 
     const initializeModelsPromise = (async () => {
-      const shouldSkipDummyModelInitialization = process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
-        && process.env.VELOCIOUS_BROWSER_TESTS === "true"
+      const shouldSkipDummyModelInitialization = globalThis.process?.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1"
+        && globalThis.process?.env.VELOCIOUS_BROWSER_TESTS === "true"
         && this.getEnvironment() === "test"
 
       if (!shouldSkipDummyModelInitialization) {
@@ -3425,34 +3586,50 @@ export default class VelociousConfiguration {
     const constructors = new Set()
 
     this._closeDatabaseConnectionsPromise = (async () => {
+      /** @type {Error[]} */
+      const closeErrors = []
+
       try {
-        // Close dedicated advisory-lock connections first: they are spawned outside the
-        // pools' tracked sets, so `pool.closeAll()` would not reach them and a lock held
-        // by a runner torn down mid-pass would leak until the DB server's `wait_timeout`.
-        // Still close the pools even if this throws, so a stuck lock connection does not
-        // leave the rest of the connections open.
-        await this._closeAdvisoryLockConnections()
-      } finally {
-        for (const pool of Object.values(this.databasePools)) {
-          if (!pool) continue
-
-          await pool.closeAll()
-
-          const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
-          constructors.add(PoolClass)
-        }
-
-        for (const PoolClass of constructors) {
-          PoolClass.clearGlobalConnections(this)
-        }
-
-        this._frontendTenantSqliteLifecycle.reset()
-
-        // Allow full re-initialization after connections are closed.
-        this._modelInitializationGeneration += 1
-        this._modelsInitialized = false
-        this._isInitialized = false
+        await this.closeBackgroundJobsAdapter()
+      } catch (error) {
+        closeErrors.push(error instanceof Error ? error : new Error(String(error)))
       }
+
+      try {
+        try {
+          // Close dedicated advisory-lock connections first: they are spawned outside the
+          // pools' tracked sets, so `pool.closeAll()` would not reach them and a lock held
+          // by a runner torn down mid-pass would leak until the DB server's `wait_timeout`.
+          // Still close the pools if this throws, so a stuck lock connection does not
+          // leave the rest of the connections open.
+          await this._closeAdvisoryLockConnections()
+        } finally {
+          for (const pool of Object.values(this.databasePools)) {
+            if (!pool) continue
+
+            await pool.closeAll()
+
+            const PoolClass = /** @type {typeof import("./database/pool/base.js").default} */ (pool.constructor)
+            constructors.add(PoolClass)
+          }
+
+          for (const PoolClass of constructors) {
+            PoolClass.clearGlobalConnections(this)
+          }
+
+          this._frontendTenantSqliteLifecycle.reset()
+
+          // Allow full re-initialization after connections are closed.
+          this._modelInitializationGeneration += 1
+          this._modelsInitialized = false
+          this._isInitialized = false
+        }
+      } catch (error) {
+        closeErrors.push(error instanceof Error ? error : new Error(String(error)))
+      }
+
+      if (closeErrors.length === 1) throw closeErrors[0]
+      if (closeErrors.length > 1) throw new AggregateError(closeErrors, "Failed to close background-jobs and database resources")
     })()
 
     try {

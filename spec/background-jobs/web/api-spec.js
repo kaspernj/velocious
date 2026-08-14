@@ -6,6 +6,7 @@ import Dummy from "../../dummy/index.js"
 import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../src/environment-handlers/node.js"
+import BackgroundJobsTestAdapter from "../../helpers/background-jobs-test-adapter.js"
 import fetch from "node-fetch"
 import Request from "../../../src/http-server/client/request.js"
 import Response from "../../../src/http-server/client/response.js"
@@ -41,10 +42,12 @@ async function seedJobs() {
 /**
  * @param {object} args - Options.
  * @param {string} args.at - Mount prefix.
+ * @param {import("../../../src/configuration-types.js").BackgroundJobsConfiguration} [args.backgroundJobs] - Background-jobs configuration.
  * @returns {Configuration} - A throwaway configuration for resolver-level tests.
  */
-function buildResolverConfiguration({at}) {
+function buildResolverConfiguration({at, backgroundJobs}) {
   const configuration = new Configuration({
+    backgroundJobs,
     database: {test: {}},
     directory: dummyDirectory(),
     environment: "test",
@@ -244,8 +247,34 @@ describe("Background jobs - web API", {databaseCleaning: {truncate: true}}, () =
     })
   })
 
+  it("reports adapter unavailability through the health check", async () => {
+    const adapter = new BackgroundJobsTestAdapter()
+    adapter.healthResult = {ready: false}
+    const configuration = buildResolverConfiguration({
+      at: "/velocious/jobs-unready",
+      backgroundJobs: {adapter}
+    })
+
+    const response = await resolveGet({
+      configuration,
+      path: "/velocious/jobs-unready/api/health",
+      remoteAddress: "127.0.0.1"
+    })
+
+    expect(response.getStatusCode()).toEqual(503)
+    expect(JSON.parse(response.getBody())).toEqual({
+      capabilities: {backgroundJobCountDeltas: 1},
+      ok: false,
+      ready: false,
+      service: "velocious-background-jobs"
+    })
+  })
+
   it("falls back to loopback-only access when no auth is configured", async () => {
-    const configuration = buildResolverConfiguration({at: "/velocious/jobs-open"})
+    const configuration = buildResolverConfiguration({
+      at: "/velocious/jobs-open",
+      backgroundJobs: {adapter: new BackgroundJobsTestAdapter()}
+    })
 
     const loopbackResponse = await resolveGet({configuration, path: "/velocious/jobs-open/api/health", remoteAddress: "127.0.0.1"})
 

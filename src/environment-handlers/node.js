@@ -2,6 +2,8 @@
 
 import "../database/annotations-async-hooks.js"
 import Base from "./base.js"
+import BackgroundJobsClient from "../background-jobs/client.js"
+import SqlBackgroundJobsAdapter from "../background-jobs/sql-adapter.js"
 import CliCommandsDestroyMigration from "./node/cli/commands/destroy/migration.js"
 import CliCommandsInit from "./node/cli/commands/init.js"
 import CliCommandsGenerateBaseModels from "./node/cli/commands/generate/base-models.js"
@@ -65,6 +67,25 @@ function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
 }
 
 export default class VelociousEnvironmentHandlerNode extends Base{
+  /**
+   * Creates the built-in SQL persistence adapter.
+   * @param {{configuration: import("../configuration.js").default}} args - Adapter options.
+   * @returns {SqlBackgroundJobsAdapter} - SQL adapter.
+   */
+  createBackgroundJobsAdapter({configuration}) {
+    return new SqlBackgroundJobsAdapter({configuration})
+  }
+
+  /**
+   * Preserves the Node TCP producer and main-process wake-up path. The main
+   * owns the configured persistence adapter; Node producers never bypass it.
+   * @param {{configuration: import("../configuration.js").default}} args - Client options.
+   * @returns {import("../background-jobs/types.js").BackgroundJobsProducer} - Producer client.
+   */
+  backgroundJobsClient({configuration}) {
+    return new BackgroundJobsClient({configuration})
+  }
+
   /**
    * Gives concurrent shared-transaction child jobs independent proxy sessions.
    * A configured single-connection pool shares mutable transaction state between
@@ -1100,26 +1121,12 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<void>} - Resolves when complete.
    */
   async ensureFrameworkSchema({dbs}) {
-    const {default: BackgroundJobsStore} = await import("../background-jobs/store.js")
-    const store = new BackgroundJobsStore({configuration: this.getConfiguration()})
-    const databaseIdentifier = store.getDatabaseIdentifier() ?? "default"
-    const frameworkDb = dbs[databaseIdentifier]
+    // Migration passes its already checked-out DB into the adapter hook. Do not
+    // run runtime readiness here: SQL readiness would open a nested checkout and
+    // can deadlock a single-connection migration pool.
+    const adapter = this.getConfiguration().getBackgroundJobsAdapter()
 
-    // Only ensure the framework schema when the background-jobs database is actually
-    // part of this migrate operation. When it isn't among the migrated set — e.g.
-    // `db:tenants:migrate <tenant>`, which migrates only tenant databases — the
-    // framework store lives elsewhere (typically the default DB) and was already
-    // ensured by the plain `db:migrate` that precedes it. Reaching into it here would
-    // open a fresh connection to that shared database once per tenant worker for
-    // schema work that is already applied. So skip when the framework DB isn't in
-    // this set; the runtime store still creates it lazily if a plain migrate never
-    // ran. Queue-cap reconciliation never runs on this path at all — it belongs to
-    // main-process startup (`BackgroundJobsStore#reconcileQueueConcurrency`).
-    if (!frameworkDb) return
-
-    // Reuse the connection db:migrate already holds for this database; opening a
-    // nested checkout would deadlock a database whose pool is capped at one connection.
-    await store.ensureSchema(frameworkDb)
+    await adapter.ensureFrameworkSchema({dbs})
   }
 
   /**

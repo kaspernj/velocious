@@ -3,7 +3,7 @@
 import fs from "fs/promises"
 import path from "path"
 import toImportSpecifier from "../utils/to-import-specifier.js"
-import VelociousJob from "./job.js"
+import VelociousJob from "./platform-job.js"
 
 export default class BackgroundJobRegistry {
   /**

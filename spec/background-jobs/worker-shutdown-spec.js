@@ -632,6 +632,7 @@ describe("Background jobs main - shutdown", () => {
     const main = new BackgroundJobsMain({
       closeDatabaseConnectionsOnStop: false,
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeBackgroundJobsAdapter: async () => { events.push("close-adapter") },
         closeDatabaseConnections: async () => { events.push("close-db") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
         getBackgroundJobsConfig: () => ({
@@ -652,7 +653,7 @@ describe("Background jobs main - shutdown", () => {
 
     await main.stop()
 
-    expect(events).toEqual(["disconnect-beacon", "close-server"])
+    expect(events).toEqual(["disconnect-beacon", "close-server", "close-adapter"])
   })
 
   it("runs the stopped hook after shutdown", async () => {
@@ -661,6 +662,7 @@ describe("Background jobs main - shutdown", () => {
     const main = new BackgroundJobsMain({
       closeDatabaseConnectionsOnStop: false,
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeBackgroundJobsAdapter: async () => { events.push("close-adapter") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
@@ -675,15 +677,17 @@ describe("Background jobs main - shutdown", () => {
 
     await main.stop()
 
-    expect(events).toEqual(["disconnect-beacon", "stopped"])
+    expect(events).toEqual(["disconnect-beacon", "close-adapter", "stopped"])
   })
 
   it("shares one main stop lifecycle across concurrent and repeated callers", async () => {
     const disconnect = deferred()
+    let adapterCloseCount = 0
     let stoppedCount = 0
     const main = new BackgroundJobsMain({
       closeDatabaseConnectionsOnStop: false,
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeBackgroundJobsAdapter: async () => { adapterCloseCount += 1 },
         disconnectBeacon: async () => await disconnect.promise,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
@@ -707,15 +711,18 @@ describe("Background jobs main - shutdown", () => {
 
     expect(main.stop()).toBe(firstStop)
     await main.stop()
+    expect(adapterCloseCount).toBe(1)
     expect(stoppedCount).toBe(1)
   })
 
   it("runs the stopped hook after an earlier main shutdown rejection", async () => {
     const shutdownError = new Error("main scheduler stop failed")
+    let adapterCloseCount = 0
     let stoppedCount = 0
     const main = new BackgroundJobsMain({
       closeDatabaseConnectionsOnStop: false,
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeBackgroundJobsAdapter: async () => { adapterCloseCount += 1 },
         disconnectBeacon: async () => {},
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
@@ -734,15 +741,18 @@ describe("Background jobs main - shutdown", () => {
     expect(await captureRejection(main.stop())).toBe(shutdownError)
     expect(stoppedCount).toBe(1)
     expect(await captureRejection(main.stop())).toBe(shutdownError)
+    expect(adapterCloseCount).toBe(1)
     expect(stoppedCount).toBe(1)
   })
 
   it("aggregates main shutdown and stopped-hook failures in lifecycle order", async () => {
     const shutdownError = new Error("main scheduler stop failed")
     const hookError = new Error("main hook failed")
+    let adapterCloseCount = 0
     const main = new BackgroundJobsMain({
       closeDatabaseConnectionsOnStop: false,
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeBackgroundJobsAdapter: async () => { adapterCloseCount += 1 },
         disconnectBeacon: async () => {},
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
@@ -763,5 +773,6 @@ describe("Background jobs main - shutdown", () => {
     expect(error).toBeInstanceOf(AggregateError)
     expect(/** @type {AggregateError} */ (error).errors).toEqual([shutdownError, hookError])
     expect(error.cause).toBe(shutdownError)
+    expect(adapterCloseCount).toBe(1)
   })
 })

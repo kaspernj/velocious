@@ -6,6 +6,100 @@ For the mounted inspection API, authoritative tab-count snapshots, and
 WebSocket/Beacon delta contract, see the
 [background-jobs dashboard](background-jobs-dashboard.md).
 
+## Runtime modes and adapters
+
+`backgroundJobs.mode` selects the application-level delivery path and is distinct
+from a durable job's `executionMode`:
+
+- `"background"` (default) enqueues through a background-jobs producer. In Node,
+  the unchanged default is TCP transport to `background-jobs-main`, the built-in
+  SQL adapter, and `executionMode: "pooled"` when a job does not select an
+  execution mode. Existing retries, leases, fencing, scheduling, idempotency,
+  deduplication, concurrency, pruning, and migrations retain their SQL behavior.
+- `"inline"` performs the job immediately in the caller, awaits `perform`, and
+  returns an ephemeral `inline-...` performance id. It does not resolve an
+  adapter, open a main/worker transport, or create durable queue state. Errors
+  propagate to the caller. All `jobOptions` are rejected because their retry,
+  scheduling, queue, concurrency, idempotency, deduplication, and worker-execution
+  semantics require durable state. `replaceScheduled`, `cancelScheduled`, and
+  `rescheduleIn` are rejected for the same reason.
+
+The established `background-jobs/job.js` entry remains the Node entry. It keeps
+lazy `src/config/configuration.js` discovery in fresh producer processes and
+always sends durable mutations over TCP to `background-jobs-main`, including
+when the main uses a custom adapter. This preserves the main's dispatch wake-up
+and event-driven idle-worker behavior.
+
+Browser, Expo, and other non-Node runtimes use the explicit
+`velocious/build/src/background-jobs/platform-job.js` entry. That entry and its
+runtime graph contain no Node configuration resolver, SQL, TCP, filesystem,
+process, main, or worker imports. Its configuration must already be current
+(call `configuration.setCurrent()`). Inline mode needs no adapter. Background
+mode requires an environment handler and explicit adapter that are valid on the
+target platform; this task does not provide a Cloudflare adapter.
+
+### BackgroundJobsAdapter contract
+
+Custom background persistence extends the documented base class:
+
+```js
+import BackgroundJobsAdapter from "velocious/build/src/background-jobs/adapter.js"
+
+class ApplicationJobsAdapter extends BackgroundJobsAdapter {
+  // Implement the lifecycle and queue operations described below.
+}
+
+export default new Configuration({
+  // One caller-provided instance, reused if a later lifecycle resolves it again:
+  backgroundJobs: {adapter: new ApplicationJobsAdapter()}
+
+  // Or a fresh instance per lifecycle:
+  // backgroundJobs: {adapter: ({configuration}) => new ApplicationJobsAdapter({configuration})}
+})
+```
+
+Adapter factories are synchronous. A configuration memoizes one resolved adapter,
+shares one successful `ensureReady()` phase, and atomically acquires that exact
+ready instance for an operation. Close is serialized against acquisition: if
+close claims an adapter while readiness is pending, the acquisition waits for
+close and readies the next lifecycle instead of mutating a closed generation.
+`closeDatabaseConnections()` calls `close()`, and concurrent close calls share
+that close. After close, a factory is invoked again on the next use; a configured
+instance is resolved again, so an instance intended for repeated lifecycles must
+support readiness after close. A stopped main clears its adapter reference and
+acquires the current ready generation again on every `start()`.
+
+The current main/worker architecture requires these adapter operations:
+
+- lifecycle/readiness: `ensureReady`, `health`, and `close`;
+- enqueue and stable schedules: `enqueue`, `replaceScheduled`, and
+  `cancelScheduled`;
+- dequeue and timing: `nextAvailableJob`, `nextScheduledJob`, and
+  `reconcileQueueConcurrency`;
+- start/handoff state: `markHandedOff`, `markReturnedToQueue`, and
+  `handedOffJobsForWorker`;
+- success/failure state: `markCompleted`, `markRescheduled`, `markFailed`, and
+  `markOrphanedJobs`;
+- built-in maintenance: `getJob` and `pruneTerminalJobs`.
+
+Methods that accept worker reports must preserve the existing lease-fencing and
+at-least-once semantics. `health()` returns `{ready: boolean}`; the mounted health
+endpoint reports `503` when an adapter explicitly reports `ready: false`.
+
+The built-in adapter is available at
+`velocious/build/src/background-jobs/sql-adapter.js`. It subclasses the existing
+`BackgroundJobsStore`, so existing direct store imports and every current SQL
+migration/queue semantic remain compatible. The SQL adapter also owns the
+framework-schema migration hook; a custom adapter may override
+`ensureFrameworkSchema({dbs})` when it owns framework persistence, while the base
+implementation is a no-op.
+
+This seam is intentionally bounded. Dashboard list/stats storage and specialized
+mailer delivery-operation SQL remain direct `BackgroundJobsStore` consumers;
+only dashboard health is adapter-aware. Supplying a generic adapter does not make
+those SQL-specific features portable. No Cloudflare Workers implementation or
+package root/export-map alias is included here.
+
 ## Execution modes and pooled runners
 
 New enqueues default to `executionMode: "pooled"`. Each worker owns a local pool of warm Node child processes; a child runs up to `pooledRunnerConcurrency` jobs at a time on its own event loop and is reused for sequential jobs. Completion still flows through the runner's durable status reporter, so the main process and database acknowledgement remain authoritative. Pooled capacity is advertised explicitly and is separate from inline and forked/spawned capacity. The `execution_mode` column is the single source of truth for a job's runtime — pooled rows persist as `execution_mode = "pooled"` directly.

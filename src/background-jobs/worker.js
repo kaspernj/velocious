@@ -10,6 +10,7 @@ import {randomUUID} from "crypto"
 import {fileURLToPath} from "node:url"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
+import performBackgroundJob from "./perform-job.js"
 
 /**
  * Per-forked-child timeout bookkeeping.
@@ -958,14 +959,11 @@ export default class BackgroundJobsWorker {
     const registry = new BackgroundJobRegistry({configuration})
     await registry.load()
     const JobClass = registry.getJobByName(payload.jobName)
-    const jobInstance = new JobClass()
-    /**
-     * Perform.
-     * @type {(...args: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} */
-    const perform = jobInstance.perform
-
-    await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job worker inline: ${payload.jobName}`}, async () => {
-      await perform.apply(jobInstance, payload.args || [])
+    await performBackgroundJob({
+      configuration,
+      JobClass,
+      jobArgs: payload.args || [],
+      name: `Background job worker inline: ${payload.jobName}`
     })
   }
 

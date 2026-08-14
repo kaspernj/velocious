@@ -1,6 +1,5 @@
 // @ts-check
 
-import BackgroundJobsStore from "../background-jobs/store.js"
 import Configuration from "../configuration.js"
 import VelociousJob from "../background-jobs/job.js"
 
@@ -59,9 +58,9 @@ export default class PruneTerminalBackgroundJobsJob extends VelociousJob {
   async perform() {
     const configuration = Configuration.current()
     const config = configuration.getBackgroundJobsConfig()
-    const store = new BackgroundJobsStore({configuration, databaseIdentifier: config.databaseIdentifier})
+    const adapter = await configuration.acquireReadyBackgroundJobsAdapter()
 
-    await store.pruneTerminalJobs({
+    await adapter.pruneTerminalJobs({
       completedTtlMs: config.retention.completedTtlMs,
       failedTtlMs: config.retention.failedTtlMs,
       batchSize: config.retention.batchSize
