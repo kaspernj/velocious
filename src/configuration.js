@@ -1889,7 +1889,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs set mailer backend.
-   * @param {import("./configuration-types.js").MailerBackend} mailerBackend - Mailer backend.
+   * @param {import("./configuration-types.js").MailerBackend | undefined} mailerBackend - Mailer backend, or undefined to remove it.
    * @returns {void} - No return value.
    */
   setMailerBackend(mailerBackend) {

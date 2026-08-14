@@ -110,6 +110,23 @@ The cap-fallthrough guarantee is a property of the **queue-derived** cap. A job 
 
 `deduplicateWhileQueued: true` coalesces an enqueue by job identity: job name, serialized arguments, and queue. It returns the earliest identical queued job only when that job is scheduled no later than the new enqueue. This preserves one queued copy for repeated immediate or recurring triggers, but a failed job whose retry is backed off into the future cannot block fresh immediate work.
 
+## Durable idempotent enqueue
+
+Pass a producer-owned stable `idempotencyKey` when replaying one logical enqueue must return the original job rather than create another one:
+
+```js
+const jobId = await PublishEventJob.performLaterWithOptions({
+  args: [eventId, eventRevision],
+  options: {idempotencyKey: `publish-event:${eventId}:${eventRevision}`}
+})
+```
+
+The durable ownership scope is the tuple of resolved job class name, resolved queue, and caller key. The first enqueue atomically creates the ownership row and job row. Concurrent first enqueues converge through the database's unique ownership key. An exact replay returns the original job id while the job is queued, running, completed, failed, cancelled, or orphaned, and continues returning that id after terminal-job retention prunes the job row.
+
+The owned request includes the serialized arguments and behavior-affecting enqueue options: resolved queue, execution mode, retry cap, resolved concurrency configuration, and immediate-versus-scheduled timing. Reusing the same scope with a different canonical request fails with a safe `background-job-idempotency-conflict` error. Generated job ids and the wall-clock timestamp of an immediate enqueue are not request identity. `deduplicateWhileQueued` is also not identity: it remains the separate, transient queued-row optimization described above.
+
+Idempotency ownership rows are intentionally not pruned in this release, and ordinary terminal-job retention never deletes them. Operators should treat keys as permanent until Velocious gains a separate, explicit reconciliation and deletion policy; deleting ownership without proving that its external operation can no longer be replayed can recreate duplicate work.
+
 ## Retention (pruning old job rows)
 
 Terminal job rows are not deleted automatically unless retention is configured — a busy application otherwise accumulates `completed` (and `failed`/`orphaned`) rows indefinitely, bloating the table and its indexes and eventually slowing dispatch. Configure retention under `backgroundJobs.retention`:
@@ -131,7 +148,7 @@ When at least one TTL is enabled, `background-jobs-main` registers a built-in `v
 - each run appears in the job tables as a normal queued job and can retry or fail like any other job;
 - runs are bounded — a `maxConcurrency: 1` reservation prevents overlap, and enqueue-time deduplication keeps the recurring schedule from piling up redundant queued rows when a prune runs slower than its interval or no worker is free.
 
-Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`) so a large backlog is removed incrementally rather than in one long transaction. Retention only ever deletes terminal rows; `queued` and in-flight jobs are never pruned.
+Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`) so a large backlog is removed incrementally rather than in one long transaction. Retention only ever deletes terminal rows; `queued` and in-flight jobs are never pruned. Durable idempotency ownership and mail-operation rows are independent of job retention and are not deleted by this sweep.
 
 ## Worker Disconnect Recovery
 

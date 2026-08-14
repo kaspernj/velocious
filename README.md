@@ -389,6 +389,19 @@ await new TasksMailer().newNotification(task, user).deliverNow()
 await new TasksMailer().newNotification(task, user).deliverLater()
 ```
 
+For a provider that advertises duplicate suppression, a producer can require one stable mail operation across outbox replay and native-job retries:
+
+```js
+await new TasksMailer().newNotification(task, user).deliverLater({
+  deliveryOperation: {
+    id: `project-command:${command.id()}`,
+    idempotency: "required"
+  }
+})
+```
+
+Required delivery fails before enqueue on unsupported backends, rejects the same id with changed rendered content, and fails closed after the provider retention window. Generic SMTP remains at-least-once. Velocious includes a dedicated `ResendSmtpMailerBackend` for Resend's 24-hour `Resend-Idempotency-Key` contract; see [Mailers](docs/mailers.md#provider-backed-idempotent-background-delivery) for setup, expiry, reconciliation, and non-exactly-once guarantees.
+
 Build the rendered payload without sending when the app needs to store an audit copy or hand delivery to its own transport:
 
 ```js
@@ -2393,6 +2406,8 @@ await MyJob.cancelScheduled(`event:${eventId}:reminder:24h`)
 A queued owner is atomically cancelled during replacement/cancellation. A `previousStatus` or cancellation `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
 Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
+
+Use `options: {idempotencyKey}` when producer replay must converge on the original durable job across every state and even after terminal-job pruning. Ownership is scoped to the resolved job class name, resolved queue, and key; reusing that scope with changed canonical arguments or behavior-affecting options fails. This is distinct from queued-only deduplication, and ownership rows are intentionally retained until a future explicit reconciliation/deletion policy. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
 
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.
 

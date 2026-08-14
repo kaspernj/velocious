@@ -367,6 +367,9 @@
 /**
  * @typedef {object} MailerBackend
  * @property {(args: {payload: import("./mailer.js").MailerDeliveryPayload, configuration: import("./configuration.js").default}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} deliver - Deliver a mailer payload.
+ * @property {() => import("./mailer.js").MailerDeliveryIdempotencyCapability} [deliveryIdempotencyCapability] - Explicit provider-backed duplicate-suppression capability. Generic SMTP omits this and remains at-least-once.
+ * @property {(args: {payload: import("./mailer.js").MailerDeliveryPayload}) => import("./mailer.js").MailerDeliveryPayload} [prepareDeliveryOperationPayload] - Resolves provider defaults into the immutable payload before required-operation hashing and enqueue.
+ * @property {(args: {deliveryOperation: import("./mailer.js").MailerDeliveryOperationRequest | import("./mailer.js").MailerDeliveryOperation, payload: import("./mailer.js").MailerDeliveryPayload}) => void} [validateDeliveryOperation] - Provider-specific operation and payload validation performed before enqueue and every network attempt.
  */
 
 
