@@ -10,6 +10,18 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
 describe("Background jobs - stable schedule dispatch", {databaseCleaning: {truncate: true}}, () => {
+  it("waits for the active drain before completing a coalesced drain request", async () => {
+    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    const completions = []
+
+    const activeDrain = main._drain().then(() => completions.push("active"))
+    const coalescedDrain = main._drain().then(() => completions.push("coalesced"))
+
+    await Promise.all([activeDrain, coalescedDrain])
+
+    expect(completions).toEqual(["active", "coalesced"])
+  })
+
   it("re-arms dispatch when replacement moves a schedule earlier", async () => {
     const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("stable-schedule-rearm")
