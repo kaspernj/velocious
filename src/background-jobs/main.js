@@ -169,21 +169,25 @@ export default class BackgroundJobsMain {
   async start() {
     this._stopped = false
     this.stopPromise = undefined
-    this.adapter = undefined
     this.configuration.setCurrent()
-    await this.configuration.initialize({type: "background-jobs-main"})
-    await this.configuration.connectBeacon({peerType: "background-jobs-main"})
-    this.adapter = await this.configuration.acquireReadyBackgroundJobsAdapter()
-    // Queue-cap changes are reconciled against the persisted backlog here, at
-    // main-process startup — the explicit lifecycle for applying queue
-    // configuration changes. The store serializes the adoption/release UPDATEs
-    // across processes with a database advisory lock, so concurrently started
-    // mains cannot interleave them.
-    await this.store.reconcileQueueConcurrency()
-    const server = net.createServer((socket) => this._handleConnection(socket))
-    this.server = server
 
     try {
+      await this.configuration.initialize({type: "background-jobs-main"})
+      await this.configuration.connectBeacon({peerType: "background-jobs-main"})
+
+      if (!this.adapter) {
+        this.adapter = await this.configuration.acquireReadyBackgroundJobsAdapter()
+      }
+
+      // Queue-cap changes are reconciled against the persisted backlog here, at
+      // main-process startup — the explicit lifecycle for applying queue
+      // configuration changes. The store serializes the adoption/release UPDATEs
+      // across processes with a database advisory lock, so concurrently started
+      // mains cannot interleave them.
+      await this.store.reconcileQueueConcurrency()
+      const server = net.createServer((socket) => this._handleConnection(socket))
+      this.server = server
+
       await new Promise((resolve, reject) => {
         server.once("error", reject)
         server.listen(this.port, this.host, () => resolve(undefined))
@@ -238,7 +242,16 @@ export default class BackgroundJobsMain {
       // but this drain covers it).
       await this._drain()
     } catch (error) {
-      await this.stop()
+      try {
+        await this.stop()
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Background jobs main startup and cleanup failed",
+          {cause: cleanupError}
+        )
+      }
+
       throw error
     }
   }
@@ -267,11 +280,14 @@ export default class BackgroundJobsMain {
           this._closeWorkers()
           this._clearTimers()
           this._disconnectBeaconHandlers()
-          await this.scheduler?.stop()
           try {
-            await this._drainWorkerHandoffAdoptions()
+            await this.scheduler?.stop()
           } finally {
-            await this._stopBeaconAndServer()
+            try {
+              await this._drainWorkerHandoffAdoptions()
+            } finally {
+              await this._stopBeaconAndServer()
+            }
           }
         }
       })
@@ -339,7 +355,11 @@ export default class BackgroundJobsMain {
     try {
       await this._closeServer()
     } finally {
-      if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
+      if (this.closeDatabaseConnectionsOnStop) {
+        await this.configuration.closeDatabaseConnections()
+      } else {
+        await this.configuration.closeBackgroundJobsAdapter()
+      }
     }
   }
 
