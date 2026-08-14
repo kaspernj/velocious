@@ -39,7 +39,7 @@ const cancellation = await EventReminderJob.cancelScheduled(scheduleKey)
 - `"handed_off"` means ownership was removed, but execution may already be running and was not stopped.
 - `"not_found"` means the key has no current owner. Repeating a successful cancellation therefore returns `"not_found"`.
 
-Replacement and cancellation wake the event-driven dispatcher and rebuild its future-job timer, including when a replacement moves earlier or cancellation removes the earliest job. The current owner survives process restarts in framework-managed database state.
+Replacement and cancellation wake the event-driven dispatcher and rebuild its future-job timer, including when a replacement moves earlier or cancellation removes the earliest job. Their acknowledgements wait for the corresponding drain lifecycle; a request that overlaps a drain already in progress coalesces into that lifecycle and waits for its re-drain and timer re-arm instead of acknowledging early. Existing drain failures retain the configured retry behavior. The current owner survives process restarts in framework-managed database state.
 
 Job history keeps `scheduleKey` after replacement, cancellation, completion, failure, or orphaning, while terminal jobs release current ownership. The dashboard API exposes this historical field.
 
