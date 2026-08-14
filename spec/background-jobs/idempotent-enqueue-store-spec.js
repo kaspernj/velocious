@@ -146,4 +146,21 @@ describe("Background jobs - idempotent enqueue store", {databaseCleaning: {trans
     expect(ordinarySecond).not.toEqual(ordinaryFirst)
     expect(deduplicatedSecond).toEqual(deduplicatedFirst)
   })
+
+  it("clears durable idempotency ownership with the test reset", async () => {
+    if (!store) throw new Error("Expected store")
+    const request = {
+      args: ["reset"],
+      jobName: "IdempotentResetJob",
+      options: {idempotencyKey: "reset:1"}
+    }
+    const firstJobId = await store.enqueue(request)
+
+    await store.clearAll()
+
+    const secondJobId = await store.enqueue(request)
+
+    expect(secondJobId).not.toEqual(firstJobId)
+    expect(await store.countJobs({jobName: "IdempotentResetJob"})).toEqual(1)
+  })
 })

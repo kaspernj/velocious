@@ -46,8 +46,10 @@ describe("Cli - Commands - db:migrate", () => {
     const internalTables = new Set([
       "background_job_count_revisions",
       "background_job_concurrency",
+      "background_job_idempotency_keys",
       "background_job_schedule_keys",
       "background_jobs",
+      "mailer_delivery_operations",
       "velocious_attachments",
       "velocious_internal_migrations",
       "velocious_server_sequences",

@@ -13,6 +13,7 @@ import {
  */
 export default class MailerDeliveryOperationStore {
   /**
+   * Creates a durable mail-operation state guard.
    * @param {object} args - Store input.
    * @param {import("../configuration.js").default} args.configuration - Active configuration.
    * @param {() => number} [args.clock] - Explicit clock dependency.

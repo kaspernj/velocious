@@ -80,7 +80,7 @@ export default new Configuration({
 })
 ```
 
-`ResendSmtpMailerBackend` advertises provider kind `resend-smtp` with a 24-hour retention window and injects the stable operation id as `Resend-Idempotency-Key`. Keys must contain 1–256 characters. Caller-supplied versions of that reserved header are rejected case-insensitively. Resend documents that identical requests with the same key are suppressed for 24 hours and changed-payload reuse is rejected; see [Resend idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys) and [Resend SMTP](https://resend.com/docs/send-with-smtp).
+`ResendSmtpMailerBackend` advertises provider kind `resend-smtp` with a 24-hour retention window and injects the stable operation id as `Resend-Idempotency-Key`. Keys must contain 1–256 characters and cannot contain SMTP header control characters. Caller-supplied versions of that reserved header are rejected case-insensitively. Resend documents that identical requests with the same key are suppressed for 24 hours and changed-payload reuse is rejected; see [Resend idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys) and [Resend SMTP](https://resend.com/docs/send-with-smtp).
 
 The retention clock starts when Velocious durably marks the first provider attempt immediately before network I/O; time spent waiting in the queue does not consume the window. At or after `firstAttemptStartedAt + 24 hours`, Velocious raises the safe `mail-delivery-idempotency-expired` error without opening a network connection. It never rotates the key or silently downgrades required delivery. Operators must reconcile the ambiguous operation with provider records before deciding what to do next. A changed or removed backend similarly fails closed.
 

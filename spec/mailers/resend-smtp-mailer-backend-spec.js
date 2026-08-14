@@ -98,4 +98,43 @@ describe("ResendSmtpMailerBackend", {databaseCleaning: {transaction: true}}, () 
       await fakeServer.close()
     }
   })
+
+  it("rejects SMTP header-value control characters before connecting", async () => {
+    const fakeServer = await startFakeSmtpServer({requireAuth: false})
+
+    try {
+      const backend = new ResendSmtpMailerBackend({
+        connectionOptions: {host: "127.0.0.1", ignoreTLS: true, port: fakeServer.port, secure: false}
+      })
+      const controlCharacters = [
+        ...Array.from({length: 32}, (_, codePoint) => String.fromCodePoint(codePoint)),
+        ...Array.from({length: 33}, (_, offset) => String.fromCodePoint(0x7f + offset))
+      ]
+
+      for (const controlCharacter of controlCharacters) {
+        await expect(async () => await backend.deliver({payload: operationPayload(`prefix${controlCharacter}suffix`)}))
+          .toThrow(/control characters/i)
+      }
+
+      let error = /** @type {import("../../src/velocious-error.js").default | null} */ (null)
+
+      try {
+        backend.validateDeliveryOperation({
+          deliveryOperation: operationPayload("unsafe\r\nInjected: true").deliveryOperation,
+          payload: operationPayload()
+        })
+      } catch (newError) {
+        error = /** @type {import("../../src/velocious-error.js").default} */ (newError)
+      }
+
+      if (!error) throw new Error("Expected a safe Resend idempotency-key validation error")
+      expect(error.code).toEqual("mail-delivery-idempotency-key-invalid")
+      expect(error.safeToExpose).toEqual(true)
+
+      expect(fakeServer.commands).toEqual([])
+      expect(fakeServer.messages).toEqual([])
+    } finally {
+      await fakeServer.close()
+    }
+  })
 })

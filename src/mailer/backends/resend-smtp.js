@@ -9,6 +9,21 @@ const RETENTION_MS = 24 * 60 * 60 * 1000
 const IDEMPOTENCY_HEADER = "Resend-Idempotency-Key"
 
 /**
+ * Checks whether a value contains an SMTP header control character.
+ * @param {string} value - Header value.
+ * @returns {boolean} - Whether a control character is present.
+ */
+function containsHeaderValueControlCharacter(value) {
+  for (const character of value) {
+    const codePoint = character.charCodeAt(0)
+
+    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) return true
+  }
+
+  return false
+}
+
+/**
  * Keeps the provider-owned operation header out of caller payloads.
  * @param {import("../index.js").MailerDeliveryPayload} payload - Mail payload.
  * @returns {void}
@@ -52,15 +67,20 @@ export default class ResendSmtpMailerBackend extends SmtpMailerBackend {
   }
 
   /**
-   * Validates Resend's documented 1-256 character operation key contract.
+   * Validates Resend's documented length and SMTP header-value safety contract.
    * @param {object} args - Validation input.
    * @param {import("../index.js").MailerDeliveryOperationRequest | import("../index.js").MailerDeliveryOperation} args.deliveryOperation - Operation.
    * @param {import("../index.js").MailerDeliveryPayload} args.payload - Rendered or persisted mail payload.
    * @returns {void}
    */
   validateDeliveryOperation({deliveryOperation, payload}) {
-    if (typeof deliveryOperation.id !== "string" || deliveryOperation.id.length < 1 || deliveryOperation.id.length > 256) {
-      throw VelociousError.safe("Resend idempotency keys must contain between 1 and 256 characters.", {
+    if (
+      typeof deliveryOperation.id !== "string" ||
+      deliveryOperation.id.length < 1 ||
+      deliveryOperation.id.length > 256 ||
+      containsHeaderValueControlCharacter(deliveryOperation.id)
+    ) {
+      throw VelociousError.safe("Resend idempotency keys must contain between 1 and 256 characters without control characters.", {
         code: "mail-delivery-idempotency-key-invalid"
       })
     }

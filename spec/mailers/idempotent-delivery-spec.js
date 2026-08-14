@@ -10,6 +10,7 @@ import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import VelociousMailer, {deliverPayload} from "../../src/mailer.js"
+import ResendSmtpMailerBackend from "../../src/mailer/backends/resend-smtp.js"
 
 class OperationMailer extends VelociousMailer {
   /**
@@ -103,7 +104,9 @@ describe("Mailers - idempotent delivery", {databaseCleaning: {transaction: true}
     expect(typeof firstJobId).toEqual("string")
 
     const job = await store.getJob(/** @type {string} */ (firstJobId))
-    const payload = /** @type {import("../../src/mailer.js").MailerDeliveryPayload} */ (job?.args[0])
+
+    if (!job) throw new Error("Expected persisted mail delivery job")
+    const payload = /** @type {import("../../src/mailer.js").MailerDeliveryPayload} */ (job.args[0])
     const rows = await store._withDb(async (db) => await db.newQuery().from("mailer_delivery_operations").results())
 
     expect(payload.deliveryOperation).toMatchObject({
@@ -156,7 +159,8 @@ describe("Mailers - idempotent delivery", {databaseCleaning: {transaction: true}
     const jobId = await new OperationMailer({configuration}).notice({from: ""}).deliverLater({deliveryOperation})
     const job = await store.getJob(/** @type {string} */ (jobId))
 
-    expect(/** @type {import("../../src/mailer.js").MailerDeliveryPayload} */ (job?.args[0]).from).toEqual("first-default@example.com")
+    if (!job) throw new Error("Expected persisted mail delivery job")
+    expect(/** @type {import("../../src/mailer.js").MailerDeliveryPayload} */ (job.args[0]).from).toEqual("first-default@example.com")
 
     defaultFrom = "changed-default@example.com"
     await expect(async () => await new OperationMailer({configuration}).notice({from: ""}).deliverLater({deliveryOperation}))
@@ -174,6 +178,20 @@ describe("Mailers - idempotent delivery", {databaseCleaning: {transaction: true}
     })).toThrow(/does not support|required.*idempotency/i)
 
     expect(networkAttempts).toEqual(0)
+    expect(await store.countJobs({jobName: "MailDeliveryJob"})).toEqual(0)
+  })
+
+  it("rejects an unsafe provider operation id before durable enqueue", async () => {
+    if (!configuration || !store) throw new Error("Expected mail test setup")
+
+    configuration.setMailerBackend(new ResendSmtpMailerBackend({
+      connectionOptions: {host: "127.0.0.1", port: 1, secure: false}
+    }))
+
+    await expect(async () => await new OperationMailer({configuration}).notice().deliverLater({
+      deliveryOperation: {id: "project-command:unsafe\r\nInjected: true", idempotency: "required"}
+    })).toThrow(/control characters/i)
+
     expect(await store.countJobs({jobName: "MailDeliveryJob"})).toEqual(0)
   })
 

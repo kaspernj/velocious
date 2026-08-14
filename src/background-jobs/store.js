@@ -1262,8 +1262,8 @@ export default class BackgroundJobsStore {
 
     await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const snapshot = await this._countSnapshotOnLockedConnection(db)
-      if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) await db.delete({tableName: MAIL_DELIVERY_OPERATIONS_TABLE, conditions: {}})
-      if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) await db.delete({tableName: IDEMPOTENCY_KEYS_TABLE, conditions: {}})
+      if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(MAIL_DELIVERY_OPERATIONS_TABLE)}`)
+      if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(IDEMPOTENCY_KEYS_TABLE)}`)
       if (await db.tableExists(SCHEDULE_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(SCHEDULE_KEYS_TABLE)}`)
       await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)}`)
       if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
