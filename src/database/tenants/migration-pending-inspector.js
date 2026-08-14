@@ -48,8 +48,14 @@ export default class TenantMigrationPendingInspector {
    * @returns {Promise<boolean>} - Whether the tenant has an applicable pending migration.
    */
   async tenantHasPendingMigrations(tenant) {
-    try {
-      return await this.configuration.runWithTenant(tenant, async () => {
+    return await this.configuration.runWithTenant(tenant, async () => {
+      const tenantLabel = TenantIterator.tenantLabel(tenant)
+
+      if (!this.configuration.isDatabaseIdentifierActive(this.identifier)) {
+        throw new Error(`Tenant database identifier ${this.identifier} is inactive for tenant: ${tenantLabel}`)
+      }
+
+      try {
         return await this.configuration.ensureConnections({
           databaseIdentifiers: [this.identifier],
           name: `Tenant migration pending preflight: ${this.identifier}`
@@ -63,11 +69,9 @@ export default class TenantMigrationPendingInspector {
 
           return this.migrationVersions.some((version) => !appliedVersions.has(version))
         })
-      })
-    } catch (error) {
-      const tenantLabel = TenantIterator.tenantLabel(tenant)
-
-      throw new Error(`Could not read ${MigrationsLedger.tableName()} for tenant ${tenantLabel}`, {cause: error})
-    }
+      } catch (error) {
+        throw new Error(`Could not read ${MigrationsLedger.tableName()} for tenant ${tenantLabel}`, {cause: error})
+      }
+    })
   }
 }

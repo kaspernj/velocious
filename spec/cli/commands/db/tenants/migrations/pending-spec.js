@@ -18,10 +18,11 @@ describe("Cli - Commands - db:tenants:migrations:pending", () => {
    * @param {string[]} args.alphaVersions - Applied alpha migration versions.
    * @param {string[]} args.betaVersions - Applied beta migration versions.
    * @param {boolean} [args.createAlphaLedger] - Whether alpha has a readable ledger.
+   * @param {string[]} [args.templateVersions] - Applied base/template migration versions.
    * @param {Array<{slug: string}>} [args.tenants] - Listed tenants.
    * @returns {Promise<{afterMigrateCalls: () => number, cli: Cli, configuration: Configuration, directory: string}>} - Scenario.
    */
-  async function buildScenario({alphaVersions, betaVersions, createAlphaLedger = true, tenants = [{slug: "alpha"}, {slug: "beta"}]}) {
+  async function buildScenario({alphaVersions, betaVersions, createAlphaLedger = true, templateVersions, tenants = [{slug: "alpha"}, {slug: "beta"}]}) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-cli-tenant-migrations-pending-"))
     const migrationsDirectory = path.join(directory, "src", "database", "migrations")
     const migrationModuleUrl = new URL("../../../../../../src/database/migration/index.js", import.meta.url).href
@@ -83,11 +84,18 @@ export default TenantChange
       tenantDatabaseResolver: ({identifier, tenant}) => {
         const tenantObject = /** @type {{slug?: string}} */ (tenant)
 
-        if (identifier != "projectTenant" || !tenantObject.slug) return
+        if (identifier != "projectTenant" || !["alpha", "beta"].includes(tenantObject.slug || "")) return
 
         return {name: `velocious-cli-tenant-migrations-pending-project-${tenantObject.slug}`}
       }
     })
+
+    if (templateVersions) {
+      await configuration.ensureConnections({databaseIdentifiers: ["projectTenant"]}, async (dbs) => {
+        await MigrationsLedger.ensureTable(dbs.projectTenant)
+        await MigrationsLedger.markApplied(dbs.projectTenant, templateVersions)
+      })
+    }
 
     for (const [slug, versions, createLedger] of [
       ["alpha", alphaVersions, createAlphaLedger],
@@ -183,6 +191,22 @@ export default TenantChange
           expect(await MigrationsLedger.tableExists(dbs.projectTenant)).toEqual(false)
         })
       })
+    } finally {
+      await scenario.configuration.closeDatabaseConnections()
+      await fs.rm(scenario.directory, {force: true, recursive: true})
+    }
+  })
+
+  it("rejects an unresolved tenant without reading the current base template ledger", async () => {
+    const scenario = await buildScenario({
+      alphaVersions: [],
+      betaVersions: [],
+      templateVersions: ["20260814090000", "20260814090100"],
+      tenants: [{slug: "stale"}]
+    })
+
+    try {
+      await expect(async () => await scenario.cli.execute()).toThrow(/projectTenant is inactive for tenant: stale/)
     } finally {
       await scenario.configuration.closeDatabaseConnections()
       await fs.rm(scenario.directory, {force: true, recursive: true})
