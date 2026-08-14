@@ -1136,7 +1136,10 @@ export default class VelociousConfiguration {
       throw new Error("No poolType given in database configuration")
     }
 
-    return poolTypeClass
+    return this.getEnvironmentHandler().resolveTestSharedTransactionPoolType({
+      configuredPoolType: poolTypeClass,
+      databaseIdentifier: identifier
+    })
   }
 
   getDatabaseType(identifier = "default") {
@@ -1898,7 +1901,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs set mailer backend.
-   * @param {import("./configuration-types.js").MailerBackend} mailerBackend - Mailer backend.
+   * @param {import("./configuration-types.js").MailerBackend | undefined} mailerBackend - Mailer backend, or undefined to remove it.
    * @returns {void} - No return value.
    */
   setMailerBackend(mailerBackend) {

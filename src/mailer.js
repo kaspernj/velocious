@@ -1,6 +1,10 @@
 // @ts-check
 
-/** @typedef {{to: ReturnType<typeof JSON.parse>, subject: string, from?: ReturnType<typeof JSON.parse>, cc?: ReturnType<typeof JSON.parse>, bcc?: ReturnType<typeof JSON.parse>, replyTo?: ReturnType<typeof JSON.parse>, headers?: Record<string, string>, html: string, mailer: string, action: string}} MailerDeliveryPayload */
+/** @typedef {import("./mailer/index.js").MailerDeliveryOperationRequest} MailerDeliveryOperationRequest */
+/** @typedef {import("./mailer/index.js").MailerDeliveryOperation} MailerDeliveryOperation */
+/** @typedef {import("./mailer/index.js").MailerDeliveryIdempotencyCapability} MailerDeliveryIdempotencyCapability */
+/** @typedef {import("./mailer/index.js").MailerDeliveryLaterOptions} MailerDeliveryLaterOptions */
+/** @typedef {import("./mailer/index.js").MailerDeliveryPayload} MailerDeliveryPayload */
 
 export {
   VelociousMailerBase,
@@ -12,4 +16,5 @@ export {
   setDeliveryHandler
 } from "./mailer/index.js"
 export {default as SmtpMailerBackend} from "./mailer/backends/smtp.js"
+export {default as ResendSmtpMailerBackend} from "./mailer/backends/resend-smtp.js"
 export {default} from "./mailer/index.js"

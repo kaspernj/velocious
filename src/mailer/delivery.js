@@ -1,5 +1,7 @@
 // @ts-check
 
+import restArgsError from "../utils/rest-args-error.js"
+
 /**
  * Represents a prepared mail delivery.
  */
@@ -52,19 +54,22 @@ export default class MailerDelivery {
 
   /**
    * Runs deliver later.
+   * @param {import("./index.js").MailerDeliveryLaterOptions} [options] - Delivery execution options.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
-  async deliverLater() {
+  async deliverLater({deliveryOperation, ...restArgs} = {}) {
+    restArgsError(restArgs)
     const payload = await this.buildPayload()
 
-    return await this.mailer._enqueuePayload(payload)
+    return await this.mailer._enqueuePayload(payload, {deliveryOperation})
   }
 
   /**
    * Runs deliver laver.
+   * @param {import("./index.js").MailerDeliveryLaterOptions} [options] - Delivery execution options.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
-  async deliverLaver() {
-    return await this.deliverLater()
+  async deliverLaver(options) {
+    return await this.deliverLater(options)
   }
 }
