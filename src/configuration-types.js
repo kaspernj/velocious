@@ -156,8 +156,13 @@
  *   `background_jobs` table (see `pollIntervalMs`).
  */
 
+/** @typedef {"background" | "inline"} BackgroundJobsMode */
+/** @typedef {(args: {configuration: import("./configuration.js").default}) => import("./background-jobs/adapter.js").default} BackgroundJobsAdapterFactory */
+
 /**
  * @typedef {object} BackgroundJobsConfiguration
+ * @property {import("./background-jobs/adapter.js").default | BackgroundJobsAdapterFactory} [adapter] - Adapter instance or synchronous factory. A factory creates one adapter per configuration lifecycle; the framework closes adapters it resolves.
+ * @property {BackgroundJobsMode} [mode] - `"background"` uses the configured adapter/transport and durable queue semantics; `"inline"` performs immediately without durable queue state. Defaults to `"background"`.
  * @property {string} [host] - Hostname for the background jobs main process.
  * @property {number} [port] - Port for the background jobs main process.
  * @property {string} [databaseIdentifier] - Database identifier used to store background jobs.

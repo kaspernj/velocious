@@ -3,7 +3,6 @@
 import net from "net"
 import JsonSocket from "./json-socket.js"
 import BackgroundJobsScheduler from "./scheduler.js"
-import BackgroundJobsStore from "./store.js"
 import Logger from "../logger.js"
 import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
 import VelociousError from "../velocious-error.js"
@@ -78,7 +77,8 @@ export default class BackgroundJobsMain {
     // long is treated as wedged/dead: its leases are released and it is dropped.
     this.workerStaleTimeoutMs = typeof workerStaleTimeoutMs === "number" && workerStaleTimeoutMs >= 1 ? workerStaleTimeoutMs : WORKER_STALE_TIMEOUT_MS
     this.workerLivenessSweepMs = typeof workerLivenessSweepMs === "number" && workerLivenessSweepMs >= 1 ? workerLivenessSweepMs : WORKER_LIVENESS_SWEEP_MS
-    this.store = new BackgroundJobsStore({configuration, databaseIdentifier: config.databaseIdentifier})
+    /** @type {import("./adapter.js").default | undefined} */
+    this.adapter = undefined
     this.logger = new Logger(this)
     /**
      * Narrows the runtime value to the documented type.
@@ -145,16 +145,35 @@ export default class BackgroundJobsMain {
   }
 
   /**
+   * Compatibility alias for integrations that inspect the active main store.
+   * @returns {import("./adapter.js").default} - Adapter acquired by start.
+   */
+  get store() {
+    if (!this.adapter) throw new Error("Background jobs main has not acquired its adapter")
+
+    return this.adapter
+  }
+
+  /**
+   * Preserves the historical subclass seam while keeping one adapter reference.
+   * @param {import("./adapter.js").default} adapter - Adapter to assign.
+   */
+  set store(adapter) {
+    this.adapter = adapter
+  }
+
+  /**
    * Runs start.
    * @returns {Promise<void>} - Resolves when listening.
    */
   async start() {
     this._stopped = false
     this.stopPromise = undefined
+    this.adapter = undefined
     this.configuration.setCurrent()
     await this.configuration.initialize({type: "background-jobs-main"})
     await this.configuration.connectBeacon({peerType: "background-jobs-main"})
-    await this.store.ensureReady()
+    this.adapter = await this.configuration.acquireReadyBackgroundJobsAdapter()
     // Queue-cap changes are reconciled against the persisted backlog here, at
     // main-process startup — the explicit lifecycle for applying queue
     // configuration changes. The store serializes the adoption/release UPDATEs
@@ -241,20 +260,24 @@ export default class BackgroundJobsMain {
   async _stop() {
     this._stopped = true
 
-    await shutdownLifecycle({
-      onStopped: this.onStopped,
-      shutdown: async () => {
-        this._closeWorkers()
-        this._clearTimers()
-        this._disconnectBeaconHandlers()
-        await this.scheduler?.stop()
-        try {
-          await this._drainWorkerHandoffAdoptions()
-        } finally {
-          await this._stopBeaconAndServer()
+    try {
+      await shutdownLifecycle({
+        onStopped: this.onStopped,
+        shutdown: async () => {
+          this._closeWorkers()
+          this._clearTimers()
+          this._disconnectBeaconHandlers()
+          await this.scheduler?.stop()
+          try {
+            await this._drainWorkerHandoffAdoptions()
+          } finally {
+            await this._stopBeaconAndServer()
+          }
         }
-      }
-    })
+      })
+    } finally {
+      this.adapter = undefined
+    }
   }
 
   /**

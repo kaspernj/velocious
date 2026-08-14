@@ -4,6 +4,16 @@
  * @typedef {"inline" | "forked" | "pooled" | "spawned"} BackgroundJobExecutionMode
  */
 /**
+ * @typedef {object} BackgroundJobsHealth
+ * @property {boolean} ready - Whether the adapter can accept and process work.
+ */
+/**
+ * @typedef {object} BackgroundJobsProducer
+ * @property {(args: {jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}) => Promise<string>} enqueue - Enqueues a job.
+ * @property {(args: {scheduleKey: string, jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}) => Promise<BackgroundJobReplacementResult>} replaceScheduled - Replaces a stable schedule.
+ * @property {(args: {scheduleKey: string}) => Promise<BackgroundJobCancellationResult>} cancelScheduled - Cancels a stable schedule.
+ */
+/**
  * @typedef {object} BackgroundJobHandoff
  * @property {string} handoffId - Unique handoff lease id.
  * @property {number} handedOffAtMs - Time handed to a worker in ms.

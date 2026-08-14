@@ -1,6 +1,7 @@
 // @ts-check
 
 import {createHash, randomUUID} from "crypto"
+import BackgroundJobsAdapter from "./adapter.js"
 import Logger from "../logger.js"
 import TableData from "../database/table-data/index.js"
 import VelociousError from "../velocious-error.js"
@@ -100,7 +101,7 @@ const schemaApplyChains = new Map()
 /** @type {Map<string, Promise<void>>} */
 const transactionMutationChains = new Map()
 
-export default class BackgroundJobsStore {
+export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   /**
    * Runs constructor.
    * @param {object} args - Options.
@@ -108,6 +109,7 @@ export default class BackgroundJobsStore {
    * @param {string} [args.databaseIdentifier] - Database identifier.
    */
   constructor({configuration, databaseIdentifier}) {
+    super()
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
     this.logger = new Logger(this)
