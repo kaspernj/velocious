@@ -92,12 +92,12 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
       await TestJob.replaceScheduled({
         scheduleKey: "event:53:reminder:24h",
         args: ["cancelled", cancelledOutputPath],
-        options: {executionMode: "inline", scheduledAtMs: Date.now() + 1000}
+        options: {executionMode: "inline", scheduledAtMs: Date.now() + 60000}
       })
       await TestJob.replaceScheduled({
         scheduleKey: "event:54:reminder:24h",
         args: ["kept", keptOutputPath],
-        options: {executionMode: "inline", scheduledAtMs: Date.now() + 1200}
+        options: {executionMode: "inline", scheduledAtMs: Date.now() + 120000}
       })
       await main._drain()
       await timeout({timeout: 500}, async () => {
@@ -109,6 +109,11 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
       expect(await TestJob.cancelScheduled("event:53:reminder:24h")).toMatchObject({outcome: "cancelled"})
       await timeout({timeout: 500}, async () => {
         while (main._scheduledTimer === timerBeforeCancellation) await wait(0.01)
+      })
+      await TestJob.replaceScheduled({
+        scheduleKey: "event:54:reminder:24h",
+        args: ["kept", keptOutputPath],
+        options: {executionMode: "inline", scheduledAtMs: Date.now()}
       })
       expect(await waitForOutputJson({outputPath: keptOutputPath, timeoutSeconds: 2})).toEqual({message: "kept"})
       await expect(async () => await fs.access(cancelledOutputPath)).toThrow(/ENOENT/)
