@@ -19,8 +19,8 @@ describe("Pooled runner broker identity", {databaseCleaning: {transaction: false
     const active = new Promise((resolve) => { signalActive = resolve })
 
     class PausedAfterPrepareIdentity extends PooledRunnerBrokerIdentity {
-      async prepare(config) {
-        await super.prepare(config)
+      async prepare(config, options) {
+        await super.prepare(config, options)
         if (config.capability === "attempt-b") {
           signalPrepared()
           await preparedBlocked
@@ -65,6 +65,35 @@ describe("Pooled runner broker identity", {databaseCleaning: {transaction: false
     await Promise.all([first, second])
 
     expect(identities.current()).toEqual(JSON.stringify({capability: "attempt-b", expected: true}))
+  })
+
+  it("admits same-capability callbacks concurrently while preparation is pending", async () => {
+    /** @type {() => void} */
+    let releaseClose = () => {}
+    const closeBlocked = new Promise((resolve) => { releaseClose = resolve })
+    /** @type {() => void} */
+    let releaseCallbacks = () => {}
+    const callbacksBlocked = new Promise((resolve) => { releaseCallbacks = resolve })
+    let callbacksStarted = 0
+    /** @type {() => void} */
+    let signalBothCallbacks = () => {}
+    const bothCallbacksStarted = new Promise((resolve) => { signalBothCallbacks = resolve })
+    const identities = new PooledRunnerBrokerIdentity({closeConnections: async () => await closeBlocked})
+    await identities.prepare({capability: "attempt-a", expected: true})
+    const callback = async () => {
+      callbacksStarted++
+      if (callbacksStarted === 2) signalBothCallbacks()
+      await callbacksBlocked
+    }
+
+    const first = identities.run({capability: "attempt-b", expected: true}, callback)
+    const second = identities.run({capability: "attempt-b", expected: true}, callback)
+    releaseClose()
+    await bothCallbacksStarted
+
+    expect(callbacksStarted).toEqual(2)
+    releaseCallbacks()
+    await Promise.all([first, second])
   })
 
   it("rejects a truly different identity while a rotation is pending", async () => {

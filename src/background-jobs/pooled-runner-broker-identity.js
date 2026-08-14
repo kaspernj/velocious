@@ -12,7 +12,6 @@ export default class PooledRunnerBrokerIdentity {
     /** @type {{identity: string, promise: Promise<void>} | undefined} */
     this.pending = undefined
     this.activeUsers = 0
-    this.admissionQueue = Promise.resolve()
   }
 
   /**
@@ -24,16 +23,18 @@ export default class PooledRunnerBrokerIdentity {
   /**
    * Prepares one identity, sharing an in-flight same-identity rotation.
    * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} config - Dispatch configuration.
+   * @param {boolean} [admissionReserved] - Whether the caller already reserved its active-user slot.
    * @returns {Promise<void>} - Resolves after stale connections close.
    */
-  async prepare(config) {
+  async prepare(config, admissionReserved = false) {
     const identity = JSON.stringify(config)
     if (this.pending) {
       if (this.pending.identity !== identity) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
       return await this.pending.promise
     }
     if (this.activeIdentity === identity) return
-    if (this.activeUsers > 0) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
+    const otherActiveUsers = this.activeUsers - (admissionReserved ? 1 : 0)
+    if (otherActiveUsers > 0) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
     if (this.activeIdentity === undefined) {
       this.activeIdentity = identity
       return
@@ -72,22 +73,12 @@ export default class PooledRunnerBrokerIdentity {
    * @returns {Promise<void>} - Resolves after admission is reserved.
    */
   async admit(config) {
-    const previousAdmission = this.admissionQueue
-    /**
-     * Releases the serialized admission turn.
-     * @type {() => void}
-     */
-    let releaseAdmission = () => {}
-    const admission = new Promise((resolve) => { releaseAdmission = () => resolve(undefined) })
-
-    this.admissionQueue = previousAdmission.then(async () => await admission)
-    await previousAdmission
-
+    this.activeUsers++
     try {
-      await this.prepare(config)
-      this.activeUsers++
-    } finally {
-      releaseAdmission()
+      await this.prepare(config, true)
+    } catch (error) {
+      this.activeUsers--
+      throw error
     }
   }
 
