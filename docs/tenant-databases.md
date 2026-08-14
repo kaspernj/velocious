@@ -91,6 +91,8 @@ npx velocious db:tenants:migrate projectTenant
 npx velocious db:tenants:drop projectTenant
 ```
 
+Before a deploy changes tenant migration behavior, use the read-only [tenant migration deploy preflight](tenant-migration-deploy-preflight.md) to determine whether any existing tenant is behind without running migrations or lifecycle hooks.
+
 Schema introspection and generated model bases can target one provider-resolved tenant database with `--tenant <identifier>`. This is a singular, fail-closed selection rather than a lifecycle scan; see [tenant-selected database generation](tenant-selected-database-generation.md).
 
 `db:tenants:drop` drops every listed tenant's database through the provider's `dropDatabase` hook. Like the other lifecycle commands it honors `--parallel`.

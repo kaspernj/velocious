@@ -23,16 +23,18 @@ export default class PooledRunnerBrokerIdentity {
   /**
    * Prepares one identity, sharing an in-flight same-identity rotation.
    * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} config - Dispatch configuration.
+   * @param {boolean} [admissionReserved] - Whether the caller already reserved its active-user slot.
    * @returns {Promise<void>} - Resolves after stale connections close.
    */
-  async prepare(config) {
+  async prepare(config, admissionReserved = false) {
     const identity = JSON.stringify(config)
     if (this.pending) {
       if (this.pending.identity !== identity) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
       return await this.pending.promise
     }
     if (this.activeIdentity === identity) return
-    if (this.activeUsers > 0) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
+    const otherActiveUsers = this.activeUsers - (admissionReserved ? 1 : 0)
+    if (otherActiveUsers > 0) throw new Error("Pooled runner cannot mix shared transaction broker capabilities concurrently")
     if (this.activeIdentity === undefined) {
       this.activeIdentity = identity
       return
@@ -55,12 +57,28 @@ export default class PooledRunnerBrokerIdentity {
    * @returns {Promise<T>} - Job result.
    */
   async run(config, callback) {
-    await this.prepare(config)
-    this.activeUsers++
+    await this.admit(config)
     try {
       return await callback()
     } finally {
       this.activeUsers--
+    }
+  }
+
+  /**
+   * Atomically prepares an attempt identity and reserves its active user. Without
+   * this admission turn, another capability can rotate connections after `prepare`
+   * resolves but before `run` increments `activeUsers`.
+   * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} config - Dispatch configuration.
+   * @returns {Promise<void>} - Resolves after admission is reserved.
+   */
+  async admit(config) {
+    this.activeUsers++
+    try {
+      await this.prepare(config, true)
+    } catch (error) {
+      this.activeUsers--
+      throw error
     }
   }
 
