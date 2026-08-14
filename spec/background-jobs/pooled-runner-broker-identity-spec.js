@@ -4,6 +4,48 @@ import PooledRunnerBrokerIdentity from "../../src/background-jobs/pooled-runner-
 import {describe, expect, it} from "../../src/testing/test.js"
 
 describe("Pooled runner broker identity", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("reserves an active user before admitting a different attempt capability", async () => {
+    /** @type {() => void} */
+    let releasePrepared = () => {}
+    const preparedBlocked = new Promise((resolve) => { releasePrepared = resolve })
+    /** @type {() => void} */
+    let signalPrepared = () => {}
+    const prepared = new Promise((resolve) => { signalPrepared = resolve })
+    /** @type {() => void} */
+    let releaseActive = () => {}
+    const activeBlocked = new Promise((resolve) => { releaseActive = resolve })
+    /** @type {() => void} */
+    let signalActive = () => {}
+    const active = new Promise((resolve) => { signalActive = resolve })
+
+    class PausedAfterPrepareIdentity extends PooledRunnerBrokerIdentity {
+      async prepare(config) {
+        await super.prepare(config)
+        if (config.capability === "attempt-b") {
+          signalPrepared()
+          await preparedBlocked
+        }
+      }
+    }
+
+    const identities = new PausedAfterPrepareIdentity({closeConnections: async () => {}})
+    await identities.prepare({capability: "attempt-a", expected: true})
+    const attemptB = identities.run({capability: "attempt-b", expected: true}, async () => {
+      signalActive()
+      await activeBlocked
+    })
+    await prepared
+    const attemptC = identities.run({capability: "attempt-c", expected: true}, async () => {})
+
+    await Promise.resolve()
+    expect(identities.current()).toEqual(JSON.stringify({capability: "attempt-b", expected: true}))
+    releasePrepared()
+    await active
+    await expect(async () => await attemptC).toThrow(/mix.*capabilit/i)
+    releaseActive()
+    await attemptB
+  })
+
   it("shares one pending rotation between concurrent jobs requesting the same identity", async () => {
     /** @type {() => void} */
     let releaseClose = () => {}

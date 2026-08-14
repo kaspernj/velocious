@@ -12,6 +12,7 @@ export default class PooledRunnerBrokerIdentity {
     /** @type {{identity: string, promise: Promise<void>} | undefined} */
     this.pending = undefined
     this.activeUsers = 0
+    this.admissionQueue = Promise.resolve()
   }
 
   /**
@@ -55,12 +56,38 @@ export default class PooledRunnerBrokerIdentity {
    * @returns {Promise<T>} - Job result.
    */
   async run(config, callback) {
-    await this.prepare(config)
-    this.activeUsers++
+    await this.admit(config)
     try {
       return await callback()
     } finally {
       this.activeUsers--
+    }
+  }
+
+  /**
+   * Atomically prepares an attempt identity and reserves its active user. Without
+   * this admission turn, another capability can rotate connections after `prepare`
+   * resolves but before `run` increments `activeUsers`.
+   * @param {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} config - Dispatch configuration.
+   * @returns {Promise<void>} - Resolves after admission is reserved.
+   */
+  async admit(config) {
+    const previousAdmission = this.admissionQueue
+    /**
+     * Releases the serialized admission turn.
+     * @type {() => void}
+     */
+    let releaseAdmission = () => {}
+    const admission = new Promise((resolve) => { releaseAdmission = () => resolve(undefined) })
+
+    this.admissionQueue = previousAdmission.then(async () => await admission)
+    await previousAdmission
+
+    try {
+      await this.prepare(config)
+      this.activeUsers++
+    } finally {
+      releaseAdmission()
     }
   }
 
