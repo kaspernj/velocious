@@ -841,8 +841,9 @@ export default class SyncEnvelopeReplayService {
    * Projects affected mutation fields through the resource's readable
    * attribute contract. Writable-but-hidden fields are omitted, while custom
    * `<attribute>Attribute(model)` serializers and model accessors remain the
-   * source of frontend-visible values. The full model attribute hash is never
-   * exposed.
+   * source of frontend-visible values (Date values are kept raw so the normal
+   * frontend-model transport serializer can emit its date marker). The full
+   * model attribute hash is never exposed.
    * @param {object} args - Projection args.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Permitted affected mutation attributes.
    * @param {import("../database/record/index.js").default} args.existingRecord - Authorized server record.
@@ -885,7 +886,7 @@ export default class SyncEnvelopeReplayService {
       const resourceAttribute = resource.resourceMethod(`${attributeName}Attribute`)
 
       if (resourceAttribute) {
-        serializedAttributes[affectedField] = normalizeConflictValue(await resourceAttribute.method.call(resourceAttribute.resource, existingRecord))
+        serializedAttributes[affectedField] = await resourceAttribute.method.call(resourceAttribute.resource, existingRecord)
         continue
       }
 
@@ -893,9 +894,9 @@ export default class SyncEnvelopeReplayService {
       const attributeMethod = recordMethods[attributeName]
 
       if (typeof attributeMethod === "function") {
-        serializedAttributes[affectedField] = normalizeConflictValue(await attributeMethod.call(existingRecord))
+        serializedAttributes[affectedField] = await attributeMethod.call(existingRecord)
       } else {
-        serializedAttributes[affectedField] = normalizeConflictValue(existingRecord.readAttribute(attributeName))
+        serializedAttributes[affectedField] = existingRecord.readAttribute(attributeName)
       }
     }
 
@@ -1166,8 +1167,11 @@ export function syncReplayConflictLockName({resourceId, resourceType}) {
 }
 
 /**
- * Normalizes an authoritative conflict value for JSON transport and deterministic comparison.
- * @param {ReturnType<typeof JSON.parse>} value - Raw value from a database record.
+ * Normalizes a version value for deterministic comparison and transport.
+ * Only version values participate in stable-JSON comparison against client
+ * `baseVersion` strings; resource serializer/accessor results must stay raw so
+ * the frontend-model transport serializer can retain Date markers.
+ * @param {ReturnType<typeof JSON.parse>} value - Raw version value from a database record.
  * @returns {ReturnType<typeof JSON.parse>} - Normalized value (Date values become ISO strings).
  */
 function normalizeConflictValue(value) {

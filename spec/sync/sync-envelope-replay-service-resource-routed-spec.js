@@ -3,6 +3,7 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import Ability from "../../src/authorization/ability.js"
 import Comment from "../dummy/src/models/comment.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../src/frontend-models/transport-serialization.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import Project from "../dummy/src/models/project.js"
@@ -525,6 +526,57 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect(conflict.serverModel.id).toEqual(comment.id())
     expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
     expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "taskId", "updatedAt"])
+  })
+
+  it("preserves Date-typed affected attributes through the conflict transport round trip", async () => {
+    class DateConflictCommentResource extends FrontendModelBaseResource {
+      static ModelClass = Comment
+
+      /** @type {string[]} */
+      static attributes = ["body", "createdAt"]
+
+      /** @type {string[]} */
+      static writableAttributes = ["body", "createdAt", "taskId"]
+    }
+
+    const project = await Project.create({name: "Date conflict projection project"})
+    const task = await Task.create({name: "Date projection task", projectId: project.id()})
+    const comment = await Comment.create({body: "Date original", createdAt: "2026-07-01T09:00:00.000Z", taskId: task.id()})
+    const baseVersion = comment.updatedAt().toISOString()
+
+    comment.assign({body: "Date authoritative body", updatedAt: "2026-07-04T10:00:00.000Z"})
+    await comment.save()
+
+    const service = buildService({
+      conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
+      resourceTypeOverrides: {Comment: DateConflictCommentResource},
+      syncModel: SyncEntry
+    })
+    const result = await service.replay({
+      syncs: [buildSync({
+        baseVersion,
+        data: {body: "Stale body", createdAt: "2026-07-02T09:00:00.000Z"},
+        id: "35d7e8f9-1111-4222-8333-444455556666",
+        resourceId: String(comment.id()),
+        resourceType: "Comment"
+      })]
+    })
+
+    expect(result.syncs[0].syncState).toEqual("conflict")
+
+    // Cross the real controller -> http-client transport boundary so the date
+    // marker must survive the JSON hop for the accessor to receive a Date.
+    // (The generated-accessor half of this contract is asserted in
+    // spec/cli/commands/generate/frontend-models-spec.js with a class produced
+    // by the real generator consuming the round-tripped serverModel.)
+    const serialized = serializeFrontendModelTransportValue(result)
+    const roundTripped = deserializeFrontendModelTransportValue(JSON.parse(JSON.stringify(serialized)))
+    const conflict = roundTripped.syncs[0].conflict
+
+    expect(conflict.serverModel.createdAt).toBeInstanceOf(Date)
+    expect(conflict.serverModel.createdAt.toISOString()).toEqual("2026-07-01T09:00:00.000Z")
+    expect(conflict.serverModel.createdAt.toISOString()).toEqual(comment.createdAt().toISOString())
+    expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
   })
 
   it("produces deterministic, distinct, MySQL-safe lock names for resource identities", () => {
