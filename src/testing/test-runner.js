@@ -1058,12 +1058,12 @@ export default class TestRunner {
               // back). Releasing the lease after each lifecycle also runs the pool's
               // session cleanup before another test can reuse the connection.
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
-                // Register dynamic candidates before application hooks so transaction
-                // state changes made during a hook are visible to a request dispatched
-                // by that same callback.
-                if (testArgs.type == "request") {
-                  testSharedConnectionRegistrations = this.activateTestSharedConnections()
-                }
+                // Register dynamic candidates before hooks so transaction state changes
+                // made during a hook are immediately visible to any in-process work.
+                // Long-lived services such as a background-jobs main can dispatch DB
+                // work between a transaction-starting hook and broker activation just
+                // as an HTTP request can dispatch work from inside the hook itself.
+                testSharedConnectionRegistrations = this.activateTestSharedConnections()
 
                 try {
                   try {

@@ -43,7 +43,7 @@ database: {
 }
 ```
 
-## Request test database connections
+## In-process test database connections
 Request tests share only transaction-active, non-tenant database connections with
 in-process request handlers. Handlers can therefore see uncommitted test setup while
 transaction rollback still isolates and cleans up the test.
@@ -80,11 +80,15 @@ drains every child socket and server. The teardown caller then receives the coll
 driver cleanup errors after transport shutdown completes.
 
 The in-process background-jobs main also enters the attempt's shared connection
-context before store work. This keeps enqueue, handoff, and terminal job rows on the
-same parent-owned transaction on async-tracked database pools instead of checking out
-an independently committed connection. Parent store callbacks and child broker calls
-also share the broker's per-physical-connection queue, preventing overlapping driver
-requests while preserving root-savepoint leases.
+context before store work. Dynamic shared-connection providers are installed before
+`beforeEach` hooks for every test type, so the provider becomes eligible at the exact
+point a hook starts its transaction; a long-lived main cannot acquire an independent
+session in a gap between transaction startup and broker activation. This keeps
+enqueue, handoff, and terminal job rows on the same parent-owned transaction on
+async-tracked database pools instead of checking out an independently committed
+connection. Parent store callbacks and child broker calls also share the broker's
+per-physical-connection queue, preventing overlapping driver requests while
+preserving root-savepoint leases.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
