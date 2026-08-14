@@ -92,7 +92,7 @@ describe("Controller frontend model custom commands", () => {
     expect(response.receivedName).toEqual("John")
   })
 
-  it("masks unexpected custom frontend-model command failures in secure mode", async () => {
+  it("masks unexpected custom frontend-model command failures when exposure is disabled", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: dummyDirectory(),
@@ -102,7 +102,7 @@ describe("Controller frontend model custom commands", () => {
       locale: "en",
       localeFallbacks: {en: ["en"]},
       locales: ["en"],
-      secureFrontendModelErrors: true
+      exposeInternalErrorsToClients: false
     })
 
     configuration.routes((routes) => {
@@ -148,10 +148,9 @@ describe("Controller frontend model custom commands", () => {
     expect(responsePayload.status).toEqual("success")
     expect(responsePayload.responses[0].response.status).toEqual("error")
     expect(responsePayload.responses[0].response.errorMessage).toEqual("Request failed.")
-    expect(responsePayload.responses[0].response.debugErrorClass).toEqual("Error")
-    expect(responsePayload.responses[0].response.debugErrorMessage).toEqual("Custom frontend model command exploded.")
-    expect(Array.isArray(responsePayload.responses[0].response.debugBacktrace)).toEqual(true)
-    expect(responsePayload.responses[0].response.debugBacktrace[0]).toMatch(/Custom frontend model command exploded\./)
+    expect(responsePayload.responses[0].response.debugErrorClass).toEqual(undefined)
+    expect(responsePayload.responses[0].response.debugErrorMessage).toEqual(undefined)
+    expect(responsePayload.responses[0].response.debugBacktrace).toEqual(undefined)
   })
 
   it("returns the message + velocious metadata and suppresses the endpoint-failed log line when error.velocious is set", async () => {
@@ -222,11 +221,13 @@ describe("Controller frontend model custom commands", () => {
       process.stdout.write = originalWrite
     }
 
-    // The message still reaches the client (exposed because
-    // `error.velocious` was set; otherwise the framework returns a
-    // generic safe message).
+    // The message reaches the client as an expected application error because
+    // `error.velocious` was set, without irrelevant internal debug fields.
     expect(responsePayload.responses[0].response.status).toEqual("error")
     expect(responsePayload.responses[0].response.errorMessage).toEqual("Invalid email or password")
+    expect(responsePayload.responses[0].response.debugErrorClass).toEqual(undefined)
+    expect(responsePayload.responses[0].response.debugErrorMessage).toEqual(undefined)
+    expect(responsePayload.responses[0].response.debugBacktrace).toEqual(undefined)
 
     // The velocious metadata bag is forwarded to the client so app
     // code can branch on `error.velocious?.type`.

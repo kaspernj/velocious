@@ -13,11 +13,10 @@ Projects sharing resource policy between backend and local/offline runtimes shou
 ## Error payloads
 
 ### Unexpected errors
-- Unexpected frontend-model endpoint failures return their original message by default with `errorType: "internal_error"` and a server-generated `correlationId`. Set `secureFrontendModelErrors: true` to expose only explicitly safe messages and otherwise return `errorMessage: "Request failed."`.
-- `development` and `test` responses also include `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` for faster browser/system-test diagnosis.
-- Other non-production environments, such as `staging`, can opt into the same debug fields with `exposeInternalErrorsToClients: true` on the app `Configuration`.
-- `production` always keeps the generic response, even if `exposeInternalErrorsToClients` is set.
-- `configuration.addClientErrorPayloadReporter(...)` can append client-safe metadata to the error payload. For frontend-model endpoint failures, the reporter `context` includes `frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. Reporters also receive `requestDetails` with `httpMethod`, `path`, and a sanitized parsed `body` snapshot when available.
+- Unexpected frontend-model endpoint failures return their original message and full stack trace by default in every environment, including production. The response uses `errorType: "internal_error"`, a server-generated `correlationId`, and the established `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields.
+- Set `exposeInternalErrorsToClients: false` on the app `Configuration` to return `errorMessage: "Request failed."` and omit `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace`. This opt-out applies consistently to built-in commands, custom commands, and sync replay failures.
+- `secureFrontendModelErrors: true` remains supported as a deprecated compatibility alias for the opt-out when `exposeInternalErrorsToClients` is omitted. An explicit `exposeInternalErrorsToClients` value is authoritative.
+- `configuration.addClientErrorPayloadReporter(...)` can append client-safe metadata to the error payload. For frontend-model endpoint failures, the reporter `context` includes `frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. Reporters also receive `requestDetails` with `httpMethod`, `path`, and a sanitized parsed `body` snapshot when available. The explicit exposure opt-out strips the established debug fields even if a reporter supplies them.
 - Unexpected frontend-model failures are emitted on `configuration.getErrorEvents()` as `framework-error` and `all-error`. These event payloads include the same `correlationId` returned to the client, the raw `request` for compatibility, and the same sanitized `requestDetails` snapshot. Expected user-flow errors, including validation errors, `safeToExpose` errors, and `error.velocious` metadata, are not emitted as framework errors. A raw `error.errorType` property is not a safety marker and does not suppress reporting.
 - `requestDetails.body` redacts common secret keys, truncates large strings and arrays, summarizes uploaded files and buffers without bytes, and compacts oversized frontend-model batches while preserving `requestId`, `model`, `commandType` / `customPath`, and payload shape.
 - Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `preload`, `group`, `sort`, `pluck`, or Ransack attributes, are frontend-model query errors. They return the specific query error message and `velocious.code: "frontend-model-query-error"` instead of being emitted as framework errors.
@@ -42,7 +41,7 @@ Projects sharing resource policy between backend and local/offline runtimes shou
 - `errorType` is `"validation_error"` to distinguish validation failures from unexpected internal errors.
 - `validationErrors` is keyed by attribute name; each entry is an array of objects with `type` (validator name), `message` (short description), and `fullMessage` (human-readable error including the attribute label).
 - Unlike unexpected errors, validation errors are safe to expose in all environments (including production) because they only carry user-fixable input errors.
-- Internal details (stack traces, SQL errors) are never leaked through validation error responses.
+- Validation error responses do not gain debug fields; only genuinely unexpected errors use the configured internal-error exposure behavior.
 
 ### Safe application errors
 - Backend code can throw `VelociousError.safe(message, {errorType, details, code})` when the message and optional structured details are explicitly safe for clients.

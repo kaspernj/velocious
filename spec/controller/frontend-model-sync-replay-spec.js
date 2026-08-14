@@ -392,7 +392,10 @@ describe("frontend-model sync replay", () => {
 
     expect(payload.results[0].status).toEqual("success")
     expect(payload.results[0].response.status).toEqual("error")
-    expect(payload.results[0].response.errorMessage).toEqual("Request failed.")
+    expect(payload.results[0].response.errorMessage).toEqual("Replay command exploded")
+    expect(payload.results[0].response.debugErrorMessage).toEqual("Replay command exploded")
+    expect(Array.isArray(payload.results[0].response.debugBacktrace)).toEqual(true)
+    expect(payload.results[0].response.debugBacktrace[0]).toMatch(/Replay command exploded/)
     expect(frameworkErrors.length).toEqual(1)
     expect(frameworkErrors[0].error.message).toEqual("Replay command exploded")
     expect(frameworkErrors[0].context.action).toEqual("frontendSyncReplay")
@@ -438,7 +441,10 @@ describe("frontend-model sync replay", () => {
     expect(payload.results[0].response).toEqual({status: "success", replayed: true})
     expect(payload.results[0].serverSequence).toEqual(null)
     expect(payload.results[0].serverChangeFeedStatus).toEqual("error")
-    expect(payload.results[0].serverChangeFeedError.errorMessage).toEqual("Request failed.")
+    expect(payload.results[0].serverChangeFeedError.errorMessage).toEqual("Change feed exploded")
+    expect(payload.results[0].serverChangeFeedError.debugErrorMessage).toEqual("Change feed exploded")
+    expect(Array.isArray(payload.results[0].serverChangeFeedError.debugBacktrace)).toEqual(true)
+    expect(payload.results[0].serverChangeFeedError.debugBacktrace[0]).toMatch(/Change feed exploded/)
     expect(controller.replayedCommands).toEqual([{action: "update", params: {attributes: {scanned: true}, id: "ticket-1", model: "Ticket"}}])
   })
 

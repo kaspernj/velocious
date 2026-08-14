@@ -697,9 +697,9 @@
  * @property {boolean} [enforceTenantDatabaseScopes] - Require tenant-switched model queries to resolve a tenant database identifier. Defaults to true.
  * @property {string} [environment] - Current environment name.
  * @property {import("./environment-handlers/base.js").default} environmentHandler - Environment handler instance.
- * @property {boolean} [exposeInternalErrorsToClients] - Return unexpected internal error details in client API payloads outside production. Defaults to false.
+ * @property {boolean} [exposeInternalErrorsToClients] - Return unexpected internal error messages and stack traces in frontend-model client payloads in every environment. Defaults to true.
  * @property {{maxOpenHandles?: number}} [frontendTenantSqlite] - Bounded frontend tenant SQLite lifecycle configuration.
- * @property {boolean} [secureFrontendModelErrors] - Return only explicitly safe frontend-model error messages to clients. Defaults to false.
+ * @property {boolean} [secureFrontendModelErrors] - Deprecated compatibility alias for `exposeInternalErrorsToClients: false` when the authoritative option is omitted.
  * @property {HttpServerConfiguration} [httpServer] - Default HTTP server configuration for applications started from this configuration.
  * @property {LoggingConfiguration} [logging] - Logging configuration.
  * @property {BackgroundJobsConfiguration} [backgroundJobs] - Background jobs configuration.
