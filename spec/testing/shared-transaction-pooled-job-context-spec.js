@@ -1,5 +1,9 @@
 // @ts-check
 
+import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
+import Configuration from "../../src/configuration.js"
+import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
+import SingleMultiUsePool from "../../src/database/pool/single-multi-use.js"
 import {
   runWithSharedTransactionBrokerConfig,
   sharedTransactionBrokerConfig
@@ -40,5 +44,19 @@ describe("Shared transaction pooled job context", {databaseCleaning: {transactio
       if (previous === undefined) delete process.env.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
       else process.env.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER = previous
     }
+  })
+
+  it("uses async-context connection ownership for concurrent pooled broker jobs", async () => {
+    const configuration = new Configuration({
+      database: {test: {default: {poolType: SingleMultiUsePool}}},
+      environment: "test",
+      environmentHandler: new NodeEnvironmentHandler()
+    })
+    const broker = {address: "ws://127.0.0.1:1001", capability: "shared", databaseIdentifiers: ["default"], expected: true}
+
+    expect(configuration.getDatabasePoolType()).toEqual(SingleMultiUsePool)
+    await runWithSharedTransactionBrokerConfig(broker, async () => {
+      expect(configuration.getDatabasePoolType()).toEqual(AsyncTrackedMultiConnectionPool)
+    })
   })
 })

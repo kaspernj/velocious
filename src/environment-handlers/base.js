@@ -20,6 +20,14 @@ import {validateTimeZone} from "../time-zone.js"
 
 export default class VelociousEnvironmentHandlerBase {
   /**
+   * Resolves the configured database pool type for the current runtime context.
+   * Browser and ordinary server contexts retain the application configuration.
+   * @param {{configuredPoolType: typeof import("../database/pool/base.js").default, databaseIdentifier: string}} args - Configured pool and logical database identifier.
+   * @returns {typeof import("../database/pool/base.js").default} - Pool type for this context.
+   */
+  resolveTestSharedTransactionPoolType({configuredPoolType}) { return configuredPoolType }
+
+  /**
    * Node test runtimes may replace a physical child connection with a broker
    * proxy. Other environments never participate in this test-only protocol.
    * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string}} _args - Connection details.

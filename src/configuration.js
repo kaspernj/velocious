@@ -1127,7 +1127,10 @@ export default class VelociousConfiguration {
       throw new Error("No poolType given in database configuration")
     }
 
-    return poolTypeClass
+    return this.getEnvironmentHandler().resolveTestSharedTransactionPoolType({
+      configuredPoolType: poolTypeClass,
+      databaseIdentifier: identifier
+    })
   }
 
   getDatabaseType(identifier = "default") {
