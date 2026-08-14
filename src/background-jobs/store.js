@@ -7,6 +7,12 @@ import VelociousError from "../velocious-error.js"
 import BackgroundJobRecord from "./job-record.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 import {coordinateSharedTransactionConnection} from "../testing/shared-transaction-connection-coordinator.js"
+import stableJsonStringify from "../utils/stable-json.js"
+import {
+  MAIL_DELIVERY_OPERATIONS_TABLE,
+  mailDeliveryOperationForJob,
+  mailDeliveryOperationKey
+} from "../mailer/delivery-operation.js"
 
 /**
  * PreparedBackgroundJob type.
@@ -37,6 +43,7 @@ const DROP_FORKED_COLUMN_MIGRATION_VERSION = "20260719000000"
 const LEGACY_POOLED_HANDOFF_ID_PREFIX = "velocious-pooled:"
 const LEGACY_POOLED_QUEUED_HANDOFF_ID = `${LEGACY_POOLED_HANDOFF_ID_PREFIX}queued`
 const JOBS_TABLE = "background_jobs"
+const IDEMPOTENCY_KEYS_TABLE = "background_job_idempotency_keys"
 const SCHEDULE_KEYS_TABLE = "background_job_schedule_keys"
 const CONCURRENCY_TABLE = "background_job_concurrency"
 const COUNTS_REVISION_TABLE = "background_job_count_revisions"
@@ -91,7 +98,7 @@ const SORTABLE_COLUMNS = {
  */
 const schemaApplyChains = new Map()
 /** @type {Map<string, Promise<void>>} */
-const countMutationChains = new Map()
+const transactionMutationChains = new Map()
 
 export default class BackgroundJobsStore {
   /**
@@ -210,6 +217,11 @@ export default class BackgroundJobsStore {
     await this.ensureReady()
 
     const preparedJob = this._prepareJob({jobName, args, options})
+
+    if (options?.idempotencyKey !== undefined) {
+      return await this._enqueueIdempotently({args: args || [], options, preparedJob})
+    }
+
     /** @type {string} */
     let resultJobId = preparedJob.jobId
 
@@ -241,6 +253,282 @@ export default class BackgroundJobsStore {
     }))
 
     return resultJobId
+  }
+
+  /**
+   * Atomically owns one durable idempotency scope and creates its job exactly once.
+   * @param {object} args - Enqueue input.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job arguments.
+   * @param {import("./types.js").BackgroundJobOptions} args.options - Job options.
+   * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @returns {Promise<string>} - Stable original job id.
+   */
+  async _enqueueIdempotently({args, options, preparedJob}) {
+    const idempotencyKey = this._normalizeIdempotencyKey(options.idempotencyKey)
+    const scopeDigest = this._idempotencyScopeDigest({idempotencyKey, jobName: preparedJob.jobName, queue: preparedJob.queue})
+    const requestDigest = this._idempotencyRequestDigest({args, options, preparedJob})
+    const ownership = {
+      created_at_ms: preparedJob.createdAtMs,
+      idempotency_key: idempotencyKey,
+      job_id: preparedJob.jobId,
+      job_name: preparedJob.jobName,
+      queue: preparedJob.queue,
+      request_digest: requestDigest,
+      scope_digest: scopeDigest
+    }
+    const mailOperationInput = mailDeliveryOperationForJob(preparedJob.jobName, args)
+
+    if (mailOperationInput && mailOperationInput.operation.id !== idempotencyKey) {
+      throw VelociousError.safe("Mail delivery operation id must equal its background job idempotency key.", {
+        code: "mail-delivery-idempotency-key-mismatch"
+      })
+    }
+
+    // Reuse ordinary enqueue transaction admission because this path changes
+    // the same durable count revision. The scope primary key remains the
+    // cross-process convergence owner.
+    return await this._withDb(async (db) => await this._idempotentEnqueueTransaction(db, async () => {
+      const existing = await this._idempotencyOwnership(db, scopeDigest)
+
+      if (existing) {
+        this._validateIdempotencyOwnership({existing, ownership})
+        await this._validateMailDeliveryOperation(db, {jobId: String(existing.job_id), mailOperationInput})
+        return String(existing.job_id)
+      }
+
+      const claimed = await this._claimIdempotencyOwnership(db, ownership)
+
+      if (!claimed.created) {
+        this._validateIdempotencyOwnership({existing: claimed.row, ownership})
+        await this._validateMailDeliveryOperation(db, {jobId: String(claimed.row.job_id), mailOperationInput})
+        return String(claimed.row.job_id)
+      }
+
+      await this._lockCountRevision(db)
+      await this._insertPreparedJob(db, {preparedJob, scheduleKey: null})
+      await this._persistMailDeliveryOperation(db, {jobId: preparedJob.jobId, mailOperationInput, createdAtMs: preparedJob.createdAtMs})
+      await this._recordCountDelta(db, {all: 1, queued: 1})
+
+      return preparedJob.jobId
+    }))
+  }
+
+  /**
+   * Serializes one physical connection locally without taking ownership away
+   * from the database uniqueness constraint shared by all processes.
+   * @template T
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {() => Promise<T>} callback - Transaction work.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _idempotentEnqueueTransaction(db, callback) {
+    return await this._serializedTransactionMutation(db, callback)
+  }
+
+  /**
+   * Inserts an ownership row, resolving only a database uniqueness race.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} ownership - Ownership row.
+   * @returns {Promise<{created: boolean, row: Record<string, ReturnType<typeof JSON.parse>>}>} - Claim result.
+   */
+  async _claimIdempotencyOwnership(db, ownership) {
+    try {
+      // The savepoint keeps PostgreSQL's outer transaction usable after a
+      // concurrent unique-key loss. The unique primary key, not a process
+      // mutex, is the cross-process convergence authority.
+      await db.transaction(async () => {
+        await db.insert({tableName: IDEMPOTENCY_KEYS_TABLE, data: ownership})
+      })
+
+      return {created: true, row: ownership}
+    } catch (error) {
+      const raced = await this._idempotencyOwnership(db, String(ownership.scope_digest))
+
+      if (!raced) throw error
+      return {created: false, row: raced}
+    }
+  }
+
+  /**
+   * Loads one durable enqueue owner.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scopeDigest - Fixed-size scope digest.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} - Row or null.
+   */
+  async _idempotencyOwnership(db, scopeDigest) {
+    const rows = await db.newQuery().from(IDEMPOTENCY_KEYS_TABLE).where({scope_digest: scopeDigest}).limit(1).results()
+
+    return rows[0] ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0]) : null
+  }
+
+  /**
+   * Fails closed when a durable key is reused for a different canonical request.
+   * @param {object} args - Validation input.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.existing - Stored owner.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.ownership - Requested owner.
+   * @returns {void}
+   */
+  _validateIdempotencyOwnership({existing, ownership}) {
+    const exactScope = String(existing.job_name) === ownership.job_name
+      && String(existing.queue) === ownership.queue
+      && String(existing.idempotency_key) === ownership.idempotency_key
+
+    if (!exactScope || String(existing.request_digest) !== ownership.request_digest) {
+      throw VelociousError.safe("The background job idempotency key was already used for a different request.", {
+        code: "background-job-idempotency-conflict"
+      })
+    }
+  }
+
+  /**
+   * Persists the built-in mail operation in the same first-enqueue transaction.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @param {object} args - Operation input.
+   * @param {number} args.createdAtMs - Creation timestamp.
+   * @param {string} args.jobId - Native job id.
+   * @param {{operation: import("../mailer/index.js").MailerDeliveryOperation, payload: import("../mailer/index.js").MailerDeliveryPayload} | null} args.mailOperationInput - Mail operation.
+   * @returns {Promise<void>} - Resolves after persistence.
+   */
+  async _persistMailDeliveryOperation(db, {createdAtMs, jobId, mailOperationInput}) {
+    if (!mailOperationInput) return
+    const {operation} = mailOperationInput
+    const operationKey = mailDeliveryOperationKey(operation.id)
+    const row = {
+      background_job_id: jobId,
+      created_at_ms: createdAtMs,
+      first_attempt_started_at_ms: null,
+      operation_id: operation.id,
+      operation_key: operationKey,
+      payload_digest: operation.payloadDigest,
+      provider_kind: operation.providerKind,
+      provider_retention_ms: operation.providerRetentionMs
+    }
+
+    try {
+      await db.transaction(async () => {
+        await db.insert({tableName: MAIL_DELIVERY_OPERATIONS_TABLE, data: row})
+      })
+    } catch (error) {
+      const existing = await this._mailDeliveryOperation(db, operationKey)
+
+      if (!existing) throw error
+      this._validateMailDeliveryOperationRow({existing, requested: row})
+    }
+  }
+
+  /**
+   * Validates the durable mail row during an exact generic enqueue replay.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Validation input.
+   * @param {string} args.jobId - Owned job id.
+   * @param {{operation: import("../mailer/index.js").MailerDeliveryOperation, payload: import("../mailer/index.js").MailerDeliveryPayload} | null} args.mailOperationInput - Mail operation.
+   * @returns {Promise<void>} - Resolves when exact.
+   */
+  async _validateMailDeliveryOperation(db, {jobId, mailOperationInput}) {
+    if (!mailOperationInput) return
+    const {operation} = mailOperationInput
+    const existing = await this._mailDeliveryOperation(db, mailDeliveryOperationKey(operation.id))
+
+    if (!existing) {
+      throw new Error("Background job idempotency ownership is missing its durable mail delivery operation")
+    }
+
+    this._validateMailDeliveryOperationRow({
+      existing,
+      requested: {
+        background_job_id: jobId,
+        operation_id: operation.id,
+        payload_digest: operation.payloadDigest,
+        provider_kind: operation.providerKind,
+        provider_retention_ms: operation.providerRetentionMs
+      }
+    })
+  }
+
+  /**
+   * Loads a durable mail operation.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} operationKey - Fixed-size operation key.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} - Row or null.
+   */
+  async _mailDeliveryOperation(db, operationKey) {
+    const rows = await db.newQuery().from(MAIL_DELIVERY_OPERATIONS_TABLE).where({operation_key: operationKey}).limit(1).results()
+
+    return rows[0] ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0]) : null
+  }
+
+  /**
+   * Compares provider-relevant durable mail operation fields.
+   * @param {object} args - Validation input.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.existing - Stored row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.requested - Requested row.
+   * @returns {void}
+   */
+  _validateMailDeliveryOperationRow({existing, requested}) {
+    const matches = String(existing.operation_id) === requested.operation_id
+      && String(existing.payload_digest) === requested.payload_digest
+      && String(existing.background_job_id) === requested.background_job_id
+      && String(existing.provider_kind) === requested.provider_kind
+      && this._normalizeNumber(existing.provider_retention_ms) === requested.provider_retention_ms
+
+    if (!matches) {
+      throw VelociousError.safe("The mail delivery operation was already used for a different payload or provider.", {
+        code: "mail-delivery-idempotency-conflict"
+      })
+    }
+  }
+
+  /**
+   * Canonical request digest excluding generated ids and immediate enqueue time.
+   * @param {object} args - Digest input.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job arguments.
+   * @param {import("./types.js").BackgroundJobOptions} args.options - Job options.
+   * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @returns {string} - SHA-256 digest.
+   */
+  _idempotencyRequestDigest({args, options, preparedJob}) {
+    const serialized = stableJsonStringify({
+      args,
+      concurrency: preparedJob.concurrency,
+      executionMode: preparedJob.executionMode,
+      format: "velocious-background-job-idempotency-v1",
+      jobName: preparedJob.jobName,
+      maxRetries: preparedJob.maxRetries,
+      queue: preparedJob.queue,
+      scheduledAtMs: options.scheduledAtMs === undefined ? null : preparedJob.scheduledAtMs,
+      scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled"
+    })
+
+    return createHash("sha256").update(serialized).digest("hex")
+  }
+
+  /**
+   * Fixed-size globally indexed representation of the documented scope tuple.
+   * @param {object} args - Scope input.
+   * @param {string} args.idempotencyKey - Caller key.
+   * @param {string} args.jobName - Job class name.
+   * @param {string} args.queue - Queue name.
+   * @returns {string} - SHA-256 scope digest.
+   */
+  _idempotencyScopeDigest({idempotencyKey, jobName, queue}) {
+    return createHash("sha256")
+      .update(stableJsonStringify({format: "velocious-background-job-idempotency-scope-v1", idempotencyKey, jobName, queue}))
+      .digest("hex")
+  }
+
+  /**
+   * Validates one caller key.
+   * @param {string | undefined} idempotencyKey - Caller key.
+   * @returns {string} - Valid key.
+   */
+  _normalizeIdempotencyKey(idempotencyKey) {
+    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+      throw VelociousError.safe("Background job idempotencyKey must be a non-empty string.", {
+        code: "background-job-idempotency-key-invalid"
+      })
+    }
+
+    return idempotencyKey
   }
 
   /**
@@ -974,6 +1262,8 @@ export default class BackgroundJobsStore {
 
     await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
       const snapshot = await this._countSnapshotOnLockedConnection(db)
+      if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(MAIL_DELIVERY_OPERATIONS_TABLE)}`)
+      if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(IDEMPOTENCY_KEYS_TABLE)}`)
       if (await db.tableExists(SCHEDULE_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(SCHEDULE_KEYS_TABLE)}`)
       await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)}`)
       if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
@@ -1225,6 +1515,8 @@ export default class BackgroundJobsStore {
     // row alone, otherwise later callers fail with "no such table".
     if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
       await this._ensureJobsTableColumns(db)
+      await this._ensureIdempotencyKeysTable(db)
+      await this._ensureMailDeliveryOperationsTable(db)
       await this._ensureScheduleKeysTable(db)
       await this._ensureConcurrencyTable(db)
       await this._ensureCountRevisionTable(db)
@@ -1235,6 +1527,8 @@ export default class BackgroundJobsStore {
 
     await this._applyMigrations(db)
     await this._ensureJobsTableColumns(db)
+    await this._ensureIdempotencyKeysTable(db)
+    await this._ensureMailDeliveryOperationsTable(db)
     await this._ensureScheduleKeysTable(db)
     await this._ensureConcurrencyTable(db)
     await this._ensureCountRevisionTable(db)
@@ -1957,6 +2251,73 @@ export default class BackgroundJobsStore {
   }
 
   /**
+   * Ensures durable generic enqueue ownership exists independently of job rows.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ready.
+   */
+  async _ensureIdempotencyKeysTable(db) {
+    if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) return
+
+    const lockName = `${MIGRATION_SCOPE}:idempotency_keys_table`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background job idempotency-key table schema lock")
+
+    try {
+      db.clearSchemaCache()
+      if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) return
+
+      const table = new TableData(IDEMPOTENCY_KEYS_TABLE, {ifNotExists: true})
+
+      table.string("scope_digest", {primaryKey: true})
+      table.string("job_name", {null: false})
+      table.string("queue", {null: false})
+      table.text("idempotency_key", {null: false})
+      table.string("job_id", {index: true, null: false})
+      table.string("request_digest", {null: false})
+      table.bigint("created_at_ms", {null: false})
+      await db.createTable(table)
+      db.clearSchemaCache()
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
+  }
+
+  /**
+   * Ensures durable provider-backed mail operation state exists independently of jobs.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ready.
+   */
+  async _ensureMailDeliveryOperationsTable(db) {
+    if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) return
+
+    const lockName = `${MIGRATION_SCOPE}:mail_delivery_operations_table`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire mail delivery operation table schema lock")
+
+    try {
+      db.clearSchemaCache()
+      if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) return
+
+      const table = new TableData(MAIL_DELIVERY_OPERATIONS_TABLE, {ifNotExists: true})
+
+      table.string("operation_key", {primaryKey: true})
+      table.text("operation_id", {null: false})
+      table.string("payload_digest", {null: false})
+      table.string("background_job_id", {index: true, null: false})
+      table.bigint("first_attempt_started_at_ms", {null: true})
+      table.string("provider_kind", {null: false})
+      table.bigint("provider_retention_ms", {null: false})
+      table.bigint("created_at_ms", {null: false})
+      await db.createTable(table)
+      db.clearSchemaCache()
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
+  }
+
+  /**
    * Ensures the singleton durable count-revision row exists.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} Resolves when ready.
@@ -2422,8 +2783,25 @@ export default class BackgroundJobsStore {
    * @returns {Promise<T>} Callback result.
    */
   async _serializedCountMutation(db, callback) {
+    return await this._serializedTransactionMutation(db, async () => {
+      await this._lockCountRevision(db)
+
+      return await callback()
+    })
+  }
+
+  /**
+   * Serializes transactions that may share one physical connection in this
+   * process. Cross-process ordering remains the responsibility of durable row
+   * locks and unique constraints acquired inside the callback.
+   * @template T
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {() => Promise<T>} callback - Transaction callback.
+   * @returns {Promise<T>} Callback result.
+   */
+  async _serializedTransactionMutation(db, callback) {
     const identifier = this.getDatabaseIdentifier() || "default"
-    const previous = countMutationChains.get(identifier) || Promise.resolve()
+    const previous = transactionMutationChains.get(identifier) || Promise.resolve()
     let resolveRun = () => {}
     /** @type {Promise<void>} */
     const run = new Promise((resolve) => {
@@ -2431,18 +2809,14 @@ export default class BackgroundJobsStore {
     })
     const chain = previous.then(() => run)
 
-    countMutationChains.set(identifier, chain)
+    transactionMutationChains.set(identifier, chain)
     await previous
 
     try {
-      return await this._transactionResult(db, async () => {
-        await this._lockCountRevision(db)
-
-        return await callback()
-      })
+      return await this._transactionResult(db, callback)
     } finally {
       resolveRun()
-      if (countMutationChains.get(identifier) === chain) countMutationChains.delete(identifier)
+      if (transactionMutationChains.get(identifier) === chain) transactionMutationChains.delete(identifier)
     }
   }
 

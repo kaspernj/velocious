@@ -3,9 +3,16 @@
 import ejs from "ejs"
 import {incorporate} from "incorporator"
 import * as inflection from "inflection"
+import BackgroundJobsClient from "../background-jobs/client.js"
 import configurationResolver from "../configuration-resolver.js"
 import restArgsError from "../utils/rest-args-error.js"
 import MailerDelivery from "./delivery.js"
+import MailerDeliveryOperationStore from "./delivery-operation-store.js"
+import {
+  deliveryOperationFromPayload,
+  prepareRequiredDeliveryPayload,
+  requireDeliveryIdempotencyCapability
+} from "./delivery-operation.js"
 
 /**
  * Deliveries store.
@@ -64,16 +71,6 @@ function inferActionName(mailerClass, stack) {
   }
 
   return actionName
-}
-
-/**
- * Runs is testing environment.
- * @returns {Promise<boolean>} - Whether the current environment is test.
- */
-async function isTestingEnvironment() {
-  const configuration = await configurationResolver()
-
-  return configuration.getEnvironment() === "test"
 }
 
 /**
@@ -241,10 +238,13 @@ export class VelociousMailerBase {
   /**
    * Runs enqueue payload.
    * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
+   * @param {import("./index.js").MailerDeliveryLaterOptions} [options] - Delivery execution options.
    * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
    */
-  async _enqueuePayload(payload) {
-    return await enqueuePayload(payload)
+  async _enqueuePayload(payload, options) {
+    const configuration = await this._getConfiguration()
+
+    return await enqueuePayload(payload, {...options, configuration})
   }
 }
 
@@ -287,13 +287,21 @@ export function getDeliveryHandler() {
  * @returns {Promise<import("./index.js").MailerDeliveryPayload | ReturnType<typeof JSON.parse>>} - Handler result.
  */
 export async function deliverPayload(payload) {
-  if (await isTestingEnvironment()) {
+  const configuration = await configurationResolver()
+  const backend = configuration.getMailerBackend()
+  const deliveryOperation = deliveryOperationFromPayload(payload)
+
+  if (deliveryOperation) {
+    const capability = requireDeliveryIdempotencyCapability({backend, deliveryOperation, payload})
+    const operationStore = new MailerDeliveryOperationStore({configuration})
+
+    await operationStore.beginAttempt({capability, payload})
+  }
+
+  if (configuration.getEnvironment() === "test") {
     deliveriesStore.push(payload)
     return payload
   }
-
-  const configuration = await configurationResolver()
-  const backend = configuration.getMailerBackend()
 
   if (backend?.deliver) {
     return await backend.deliver({payload, configuration})
@@ -311,15 +319,37 @@ export async function deliverPayload(payload) {
 /**
  * Runs the enqueuePayload helper.
  * @param {import("./index.js").MailerDeliveryPayload} payload - Mail delivery payload.
+ * @param {object} [options] - Enqueue options.
+ * @param {import("../configuration.js").default} [options.configuration] - Owning configuration.
+ * @param {import("./index.js").MailerDeliveryOperationRequest} [options.deliveryOperation] - Required provider-backed operation.
  * @returns {Promise<string | import("./index.js").MailerDeliveryPayload | null>} - Job id or payload in test mode.
  */
-export async function enqueuePayload(payload) {
-  if (await isTestingEnvironment()) {
-    deliveriesStore.push(payload)
-    return payload
+export async function enqueuePayload(payload, {configuration: suppliedConfiguration, deliveryOperation} = {}) {
+  const configuration = suppliedConfiguration || await configurationResolver()
+  let persistedPayload = payload
+
+  if (deliveryOperation) {
+    const backend = configuration.getMailerBackend()
+    const operationPayload = typeof backend?.prepareDeliveryOperationPayload === "function"
+      ? backend.prepareDeliveryOperationPayload({payload})
+      : payload
+    const capability = requireDeliveryIdempotencyCapability({backend, deliveryOperation, payload: operationPayload})
+
+    persistedPayload = prepareRequiredDeliveryPayload({capability, deliveryOperation, payload: operationPayload})
+  }
+
+  if (configuration.getEnvironment() === "test") {
+    deliveriesStore.push(persistedPayload)
+    return persistedPayload
   }
 
   const {default: mailDeliveryJob} = await import("../jobs/mail-delivery.js")
+  const client = new BackgroundJobsClient({configuration})
+  const jobOptions = mailDeliveryJob._withQueue(deliveryOperation ? {idempotencyKey: deliveryOperation.id} : undefined)
 
-  return await mailDeliveryJob.performLater(payload)
+  return await client.enqueue({
+    args: [persistedPayload],
+    jobName: mailDeliveryJob.jobName(),
+    options: jobOptions
+  })
 }

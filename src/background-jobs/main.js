@@ -127,6 +127,8 @@ export default class BackgroundJobsMain {
     this.scheduler = undefined
     this._draining = false
     this._redrainQueued = false
+    /** @type {Promise<void> | undefined} */
+    this._drainPromise = undefined
     this._stopped = false
     /** @type {Promise<void> | undefined} */
     this.stopPromise = undefined
@@ -645,9 +647,11 @@ export default class BackgroundJobsMain {
   /**
    * Removes a lost worker socket and releases only leases dispatched through it.
    * @param {JsonSocket} worker - Disconnected worker socket.
+   * @param {object} [args] - Coordination options.
+   * @param {boolean} [args.queueRedrain] - Queue another pass instead of awaiting the active drain.
    * @returns {Promise<void>} - Resolves after its active leases are released.
    */
-  async _handleWorkerSocketClosed(worker) {
+  async _handleWorkerSocketClosed(worker, {queueRedrain = false} = {}) {
     this.workers.delete(worker)
     this.readyWorkers.delete(worker)
 
@@ -657,7 +661,7 @@ export default class BackgroundJobsMain {
     }
 
     try {
-      await this._releaseWorkerHandoffs(worker)
+      await this._releaseWorkerHandoffs(worker, {queueRedrain})
     } catch (error) {
       this._reportHandoffReleaseError(error)
       this._scheduleErrorRetry()
@@ -667,9 +671,11 @@ export default class BackgroundJobsMain {
   /**
    * Releases all leases still owned by one exact worker socket.
    * @param {JsonSocket} worker - Worker socket.
+   * @param {object} [args] - Coordination options.
+   * @param {boolean} [args.queueRedrain] - Queue another pass instead of awaiting the active drain.
    * @returns {Promise<void>} - Resolves after fenced releases and dispatch wake-up.
    */
-  async _releaseWorkerHandoffs(worker) {
+  async _releaseWorkerHandoffs(worker, {queueRedrain = false} = {}) {
     const handoffs = this.workerHandoffs.get(worker)
 
     if (!handoffs || handoffs.size === 0) {
@@ -683,7 +689,11 @@ export default class BackgroundJobsMain {
 
     this.workerHandoffs.delete(worker)
     this._notifyEnqueued()
-    await this._drain()
+    if (queueRedrain) {
+      this._redrainQueued = true
+    } else {
+      await this._drain()
+    }
   }
 
   /**
@@ -1100,23 +1110,38 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>}
    */
   async _drain() {
-    if (!this._startDrain()) return
+    if (this._stopped) return
 
-    const errored = await this._drainUntilIdle()
+    if (this._drainPromise) {
+      this._redrainQueued = true
+      await this._drainPromise
+      return
+    }
 
-    await this._finishDrain({errored})
+    const drainPromise = this._drainToCompletion()
+
+    this._drainPromise = drainPromise
+    await drainPromise
   }
 
   /**
-   * Runs start drain.
-   * @returns {boolean} - Whether the drain should continue.
+   * Runs one serialized drain lifecycle, including timer re-arming.
+   * @returns {Promise<void>} - Resolves after every coalesced request is handled.
    */
-  _startDrain() {
-    if (this._stopped) return false
-    if (this._queueDrainIfAlreadyRunning()) return false
-
+  async _drainToCompletion() {
     this._draining = true
-    return true
+
+    try {
+      let errored
+
+      do {
+        errored = await this._drainUntilIdle()
+        await this._finishDrain({errored})
+      } while (!errored && this._redrainQueued && !this._stopped)
+    } finally {
+      this._draining = false
+      this._drainPromise = undefined
+    }
   }
 
   /**
@@ -1163,26 +1188,11 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * Runs queue drain if already running.
-   * @returns {boolean} - Whether another drain is already in progress.
-   */
-  _queueDrainIfAlreadyRunning() {
-    if (!this._draining) return false
-
-    this._redrainQueued = true
-    return true
-  }
-
-  /**
    * Runs drain until idle.
    * @returns {Promise<boolean>} - Whether the drain hit an error.
    */
   async _drainUntilIdle() {
-    try {
-      return await this._runDrainLoop()
-    } finally {
-      this._draining = false
-    }
+    return await this._runDrainLoop()
   }
 
   /**
@@ -1279,7 +1289,7 @@ export default class BackgroundJobsMain {
       if (!handoffs || !this.workers.has(worker)) {
         await this.store.markReturnedToQueue({handoffId: handoff.handoffId, jobId: job.id})
         this._notifyEnqueued()
-        await this._drain()
+        this._redrainQueued = true
         continue
       }
 
@@ -1307,7 +1317,7 @@ export default class BackgroundJobsMain {
         } catch (closeError) {
           this.logger.warn(() => ["Failed to close worker after job send failure:", closeError])
         }
-        await this._handleWorkerSocketClosed(worker)
+        await this._handleWorkerSocketClosed(worker, {queueRedrain: true})
       }
     }
   }

@@ -28,7 +28,7 @@ Node-only definition loading (filesystem discovery + dynamic import) is kept out
 browser-safe core in a separate module:
 
 ```js
-import {loadDefinitions, reloadDefinitions} from "velocious/src/testing/factory/node/load-definitions.js"
+import { loadDefinitions, reloadDefinitions } from "velocious/src/testing/factory/node/load-definitions.js"
 ```
 
 Never import `node/load-definitions.js` from browser/Metro bundles; static-import your
@@ -298,6 +298,69 @@ Factory.rewindSequences()   // reset only sequence counters, keeping definitions
 await loadDefinitions(registry, "/abs/path/to/factories")   // directory, file, or list
 await reloadDefinitions(registry, "/abs/path/to/factories") // reset + cache-busting re-import
 ```
+
+### Reload retention budget and process recycling
+
+`reloadDefinitions` re-imports every target file with a fresh cache-busted URL on each
+reload, so edited definitions take effect and the previously imported module instances
+are never reused. Node retains every distinct ESM module instance for the process
+lifetime, so repeatedly reloading in a long-running watcher would otherwise grow process
+memory without bound.
+
+To bound that growth, every cache-busted reload reserves its whole resolved batch against
+a **process-global import budget** before any registry reset or import. The check and
+reservation happen synchronously, so concurrent reloads cannot race past the budget, and
+the budget is shared across all registries and targets in the process. When a reload
+would exceed the budget it throws `DefinitionRecycleRequiredError` *before* the registry
+is reset or any file is imported, and the currently loaded registry stays fully usable;
+the error carries `current`/`budget`/`requested` counts and instructs the caller to
+recycle or restart the owning Node process, which is the only boundary that reclaims the
+retained modules.
+
+```js
+import {
+  DefinitionReloadConfigurationError,
+  DefinitionRecycleRequiredError,
+  getDefinitionReloadBudget,
+  peekDefinitionReloadBudget,
+  setDefinitionReloadBudget
+} from "velocious/src/testing/factory/node/definition-reload-policy.js"
+```
+
+- `getDefinitionReloadBudget()` / `peekDefinitionReloadBudget()` report the budget and
+  how much of it is already reserved across the whole process.
+- `setDefinitionReloadBudget(n)` is the single explicit process-global knob and may
+  succeed exactly once, before the first valid reload reservation attempt. Every valid
+  reservation attempt seals configuration before capacity is checked, including an
+  empty batch or one rejected for exceeding the remaining budget. A second
+  configuration, or a first configuration after any valid reservation attempt, throws
+  `DefinitionReloadConfigurationError` without changing the budget or reserved count.
+  A malformed reservation count is rejected as a `TypeError` before it can seal
+  configuration or change accounting; reservation counts must be non-negative integers.
+  There is no in-process reset or new accounting epoch: only process exit discards the
+  retained modules and their accounting. The default is
+  `DEFAULT_DEFINITION_RELOAD_BUDGET` (4096), chosen from the
+  `npm run benchmark:factory-esm-reload-retention` evidence (~6 KB retained heap per
+  cache-busted import), bounding retained definitions to a few tens of MB per process.
+- A failed mid-batch import keeps its full batch reservation, because earlier files in
+  the batch may already have been retained.
+
+Catching `DefinitionRecycleRequiredError` in a watcher lets you stop cleanly and tell the
+caller to start a fresh process (or, as the benchmark's supervised mode shows, a
+supervisor can recycle whole child processes at the budget boundary, one per epoch, so
+every generation stays within the budget). Within one process every reload stays fully
+cache-busted — there is no shortcut that reuses a module based on unchanged top-level
+content, so a top-level file that imports an edited dependency still re-evaluates on
+reload; the edited dependency itself becomes visible on the next process recycle, since
+plain specifier imports follow Node's module cache.
+
+The benchmark always runs and validates exactly eight rows: single-process and
+supervisor-recycled modes, unchanged and edited scenarios, and 100 and 1,000 reloads.
+It exits nonzero for incomplete/duplicate/malformed rows, child failures or signals,
+budget invariant failures, invisible top-level edits, or dependency edits that remain
+stale after recycling. RSS is reported as observational evidence rather than enforced as
+an absolute threshold, because allocators and operating systems make absolute RSS
+unsuitable as a deterministic CI contract.
 
 Registry mutation (`define`, `modify`, `reset`, sequence `set`/`rewind`) is setup-time only
 and is rejected with a `RegistryBusyError` while evaluations are active.

@@ -25,7 +25,7 @@
 * Expo / Metro compatibility guidance and a real Expo export check (see [docs/expo-metro-compatibility.md](docs/expo-metro-compatibility.md))
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
-* Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, and linting (see [docs/factories.md](docs/factories.md))
+* Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, linting, and a process-global reload-retention budget that bounds cache-busted re-import memory (see [docs/factories.md](docs/factories.md))
 * Per-row association counts via `.withCount(...)`, including cohort-safe intersected filters, safe batching of structurally identical aggregates, and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)`, with compatible projections sharing a roundtrip while preserving declared alias-overwrite order and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
@@ -389,6 +389,19 @@ Deliver immediately or enqueue via background jobs:
 await new TasksMailer().newNotification(task, user).deliverNow()
 await new TasksMailer().newNotification(task, user).deliverLater()
 ```
+
+For a provider that advertises duplicate suppression, a producer can require one stable mail operation across outbox replay and native-job retries:
+
+```js
+await new TasksMailer().newNotification(task, user).deliverLater({
+  deliveryOperation: {
+    id: `project-command:${command.id()}`,
+    idempotency: "required"
+  }
+})
+```
+
+Required delivery fails before enqueue on unsupported backends, rejects the same id with changed rendered content, and fails closed after the provider retention window. Direct required `deliverPayload()` calls also fail before provider I/O when the background-jobs database connection is already inside a caller-owned transaction, because an outer rollback could erase the first-attempt marker. Generic SMTP remains at-least-once. Velocious includes a dedicated `ResendSmtpMailerBackend` for Resend's 24-hour `Resend-Idempotency-Key` contract; see [Mailers](docs/mailers.md#provider-backed-idempotent-background-delivery) for setup, expiry, reconciliation, and non-exactly-once guarantees.
 
 Build the rendered payload without sending when the app needs to store an audit copy or hand delivery to its own transport:
 
@@ -2396,9 +2409,11 @@ const result = await MyJob.replaceScheduled({
 await MyJob.cancelScheduled(`event:${eventId}:reminder:24h`)
 ```
 
-A queued owner is atomically cancelled during replacement/cancellation. A `previousStatus` or cancellation `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
+A queued owner is atomically cancelled during replacement/cancellation. Its acknowledgement waits for the corresponding dispatch drain lifecycle; if another drain is already active, the request coalesces and waits for its re-drain and future-job timer re-arm instead of acknowledging early. A `previousStatus` or cancellation `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
 Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
+
+Use `options: {idempotencyKey}` when producer replay must converge on the original durable job across every state and even after terminal-job pruning. Ownership is scoped to the resolved job class name, resolved queue, and key; reusing that scope with changed canonical arguments or behavior-affecting options fails. This is distinct from queued-only deduplication, and ownership rows are intentionally retained until a future explicit reconciliation/deletion policy. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
 
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.
 

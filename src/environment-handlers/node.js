@@ -32,6 +32,7 @@ import path from "path"
 import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
 import {timingSafeEqual} from "node:crypto"
 import requireContext from "require-context"
+import AsyncTrackedMultiConnectionPool from "../database/pool/async-tracked-multi-connection.js"
 import InitializerFromRequireContext from "../database/initializer-from-require-context.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
@@ -64,6 +65,19 @@ function pathWithinAllowedPrefixes(filePath, allowedPathPrefixes) {
 }
 
 export default class VelociousEnvironmentHandlerNode extends Base{
+  /**
+   * Gives concurrent shared-transaction child jobs independent proxy sessions.
+   * A configured single-connection pool shares mutable transaction state between
+   * async jobs, while the broker requires one root-transaction lease per socket.
+   * @param {{configuredPoolType: typeof import("../database/pool/base.js").default, databaseIdentifier: string}} args - Configured pool and logical database identifier.
+   * @returns {typeof import("../database/pool/base.js").default} - Pool type for this context.
+   */
+  resolveTestSharedTransactionPoolType({configuredPoolType, databaseIdentifier}) {
+    if (!sharedTransactionBrokerConfig(databaseIdentifier)) return configuredPoolType
+
+    return AsyncTrackedMultiConnectionPool
+  }
+
   /**
    * Creates a test-only child proxy when TestRunner supplied an active broker.
    * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string}} args - Connection details.
