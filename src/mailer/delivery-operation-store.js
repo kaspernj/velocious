@@ -45,6 +45,12 @@ export default class MailerDeliveryOperationStore {
     }, async (dbs) => {
       const db = dbs[databaseIdentifier]
 
+      if (db.insideTransaction()) {
+        throw VelociousError.safe("Required mail delivery cannot start inside an existing database transaction.", {
+          code: "mail-delivery-idempotency-transaction-active"
+        })
+      }
+
       await this.backgroundJobsStore.ensureSchema(db)
 
       return await db.transaction(async () => {

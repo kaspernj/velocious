@@ -356,13 +356,13 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.
    */
   retryableDatabaseError(error) {
+    const databaseLocked = Boolean(error.message?.includes("database is locked"))
     const shouldRetry = (
       error.message?.startsWith("attempt to write a readonly database") ||
-      error.message?.startsWith("database is locked") ||
-      error.message?.includes("→ Caused by: Error code : database is locked")
+      databaseLocked
     )
 
-    return {retry: shouldRetry, reconnect: false}
+    return {deadlock: databaseLocked, retry: shouldRetry, reconnect: false}
   }
 
   /**

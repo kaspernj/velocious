@@ -400,7 +400,7 @@ await new TasksMailer().newNotification(task, user).deliverLater({
 })
 ```
 
-Required delivery fails before enqueue on unsupported backends, rejects the same id with changed rendered content, and fails closed after the provider retention window. Generic SMTP remains at-least-once. Velocious includes a dedicated `ResendSmtpMailerBackend` for Resend's 24-hour `Resend-Idempotency-Key` contract; see [Mailers](docs/mailers.md#provider-backed-idempotent-background-delivery) for setup, expiry, reconciliation, and non-exactly-once guarantees.
+Required delivery fails before enqueue on unsupported backends, rejects the same id with changed rendered content, and fails closed after the provider retention window. Direct required `deliverPayload()` calls also fail before provider I/O when the background-jobs database connection is already inside a caller-owned transaction, because an outer rollback could erase the first-attempt marker. Generic SMTP remains at-least-once. Velocious includes a dedicated `ResendSmtpMailerBackend` for Resend's 24-hour `Resend-Idempotency-Key` contract; see [Mailers](docs/mailers.md#provider-backed-idempotent-background-delivery) for setup, expiry, reconciliation, and non-exactly-once guarantees.
 
 Build the rendered payload without sending when the app needs to store an audit copy or hand delivery to its own transport:
 

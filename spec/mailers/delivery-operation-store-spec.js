@@ -10,6 +10,17 @@ import {startFakeSmtpServer} from "../helpers/fake-smtp-server.js"
 
 const capability = {providerKind: "test-provider", retentionMs: 60_000}
 
+/**
+ * Reads an exact integer from a raw cross-driver database row.
+ * @param {ReturnType<typeof JSON.parse>} value - Raw integer value.
+ * @returns {bigint} - Exact integer.
+ */
+function exactDatabaseInteger(value) {
+  if (typeof value !== "number" && typeof value !== "string") throw new Error("Expected a database integer")
+
+  return BigInt(value)
+}
+
 /** @returns {import("../../src/mailer.js").MailerDeliveryPayload} - Base payload. */
 function payload() {
   return {
@@ -57,7 +68,9 @@ describe("Mailer delivery operation store", {databaseCleaning: {transaction: fal
 
     const rows = await backgroundStore._withDb(async (db) => await db.newQuery().from("mailer_delivery_operations").results())
 
-    expect(rows).toMatchObject([{background_job_id: jobId, first_attempt_started_at_ms: 500_000}])
+    if (!rows[0]) throw new Error("Expected a mail delivery operation row")
+    expect(rows).toMatchObject([{background_job_id: jobId}])
+    expect(exactDatabaseInteger(rows[0].first_attempt_started_at_ms)).toEqual(500_000n)
 
     nowMs = 559_999
     await operationStore.beginAttempt({capability, payload: persistedPayload})
@@ -92,7 +105,8 @@ describe("Mailer delivery operation store", {databaseCleaning: {transaction: fal
 
     const rows = await backgroundStore._withDb(async (db) => await db.newQuery().from("mailer_delivery_operations").results())
 
-    expect(rows).toMatchObject([{first_attempt_started_at_ms: 10_000}])
+    if (!rows[0]) throw new Error("Expected a mail delivery operation row")
+    expect(exactDatabaseInteger(rows[0].first_attempt_started_at_ms)).toEqual(10_000n)
   })
 
   it("rejects changed persisted payload content before an attempt", async () => {

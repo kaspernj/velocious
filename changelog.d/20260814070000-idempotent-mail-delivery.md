@@ -1,2 +1,3 @@
 - Add durable background-job idempotent enqueue ownership that returns the original job id across retries, terminal states, and job pruning while rejecting changed request reuse.
 - Add provider-backed required mail operations with immutable payload digests, durable first-attempt retention state, fail-closed expiry/backend validation, and a dedicated 24-hour `ResendSmtpMailerBackend` capability. Generic SMTP and mail without an operation remain at-least-once.
+- Fail direct required payload delivery before provider I/O when an outer database transaction could roll back its durable first-attempt marker.
