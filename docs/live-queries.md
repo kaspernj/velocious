@@ -26,9 +26,18 @@ You can subscribe directly when you need the raw signal:
 const unsubscribe = recordChanges.subscribe(Ticket, ({operation, record}) => { /* … */ })
 ```
 
+Every event also carries `databaseIdentity`, the opaque physical identity of the connection that committed it. For a model declaring `switchesTenantDatabase(...)`, direct subscriptions must provide the identity captured by an immutable handle; an unscoped tenant subscription rejects instead of receiving every tenant:
+
+```js
+const project = Tenant.handle({slug: projectSlug})
+const unsubscribe = recordChanges.subscribe(Ticket, callback, {
+  databaseIdentity: project.databaseIdentity("projectTenant")
+})
+```
+
 ## Batching
 
-A sync apply touches many rows. `recordChanges.batch(fn)` opens a coalescing window: every change committed while `fn` runs is buffered and **deduplicated by model class**, then flushed as a single event per changed model class when the outermost batch ends (nested batches share one flush). The sync client wraps its apply loops in this, so:
+A sync apply touches many rows. `recordChanges.batch(fn)` opens a coalescing window: every change committed while `fn` runs is buffered and **deduplicated by model class and physical database identity**, then flushed as a single event per changed model/tenant pair when the outermost batch ends (nested batches share one flush). The sync client wraps its apply loops in this, so:
 
 - a full `SyncClient.pull()` (all scopes/pages) triggers **one** re-run per live query, not one per applied row;
 - a realtime push message (`SyncRealtimeBridge.applyMessage`) triggers **one** re-run for its batch.
@@ -51,6 +60,25 @@ const {results, loading, error} = useLiveQuery(query, {active, debounce, models}
 - **`models`** — model classes to observe. Defaults to `[query.getModelClass()]`; pass this to also react to changes on joined models a query reads.
 
 The hook subscribes on mount and unsubscribes on unmount. The reactive engine lives in a React-free controller, `LiveQuery` (`src/database/live-query.js`), which `useLiveQuery` wraps with `useSyncExternalStore`; use `LiveQuery` directly outside React when you need the same live results without a component.
+
+## Tenant-bound live queries
+
+Browser/native tenant models must not build or rerun queries from ambient tenant state. Build the source from the immutable handle after that physical database is initialized:
+
+```js
+const project = Tenant.handle({slug: projectSlug})
+const ticketQuery = useMemo(() => project.liveQuery({
+  databaseIdentifier: "projectTenant",
+  modelClass: Ticket,
+  query: (query) => query.where({state: "open"}).order("created_at")
+}), [project])
+
+const {results: tickets, loading, error} = useLiveQuery(ticketQuery)
+```
+
+Each initial load and refresh opens a fresh bounded operation against the handle's captured physical configuration. The source publishes that same identity to `LiveQuery`, so tenant B events never schedule tenant A's source. Observed `models` must resolve to the same captured logical database; cross-database models, another-operation query results, inactive/unready handles, and stale physical records reject. Returned records retain their physical identity and their completed operation owner, so attribute reads remain available but follow-up database work cannot fall back to whichever tenant is ambient later.
+
+The handle source has no synchronous `toSql()` identity. Keep it stable (for React, construct it with `useMemo`) just like any other custom live-query source.
 
 ## Replacing manual refresh plumbing
 

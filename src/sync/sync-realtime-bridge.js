@@ -313,7 +313,7 @@ export default class SyncRealtimeBridge {
       throw new Error(`subscribeRealtime can't derive attribute names for the sync scope declared on ${scopeRow.resourceType} - declare static sync on that model so its resource is registered`)
     }
 
-    const columnNameToAttributeName = resourceConfig.modelClass.getColumnNameToAttributeNameMap()
+    const columnNameToAttributeName = resourceConfig.metadataModelClass.getColumnNameToAttributeNameMap()
     /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const conditions = {}
 

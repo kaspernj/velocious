@@ -26,8 +26,8 @@
  * @property {(args: {attributes: Record<string, unknown>, data: Record<string, unknown>, record: ReturnType<typeof JSON.parse>, sync: SyncChangeEnvelope}) => Promise<boolean | void> | boolean | void} [afterApply] - Optional post-save hook.
  * @property {(args: {data: Record<string, unknown>, record: ReturnType<typeof JSON.parse>, sync: SyncChangeEnvelope}) => Promise<Record<string, unknown>> | Record<string, unknown>} attributes - Allowed attributes builder.
  * @property {boolean} enabled - Whether this resource is sync-enabled.
- * @property {(args: {data: Record<string, unknown>, resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [findRecord] - Optional upsert finder.
- * @property {(args: {resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [findRecordForDelete] - Optional destroy finder.
+ * @property {(args: {data: Record<string, unknown>, modelClass?: ReturnType<typeof JSON.parse>, operation?: import("../database/operation.js").default | null, resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [findRecord] - Optional upsert finder. SyncClient tenant resources additionally receive an operation-bound model class and operation; direct API consumers retain the legacy arguments.
+ * @property {(args: {modelClass?: ReturnType<typeof JSON.parse>, operation?: import("../database/operation.js").default | null, resourceId: unknown, sync: SyncChangeEnvelope}) => Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} [findRecordForDelete] - Optional destroy finder. SyncClient tenant resources additionally receive an operation-bound model class and operation; direct API consumers retain the legacy arguments.
  * @property {ReturnType<typeof JSON.parse>} modelClass - Velocious model class.
  */
 

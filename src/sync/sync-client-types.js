@@ -34,6 +34,7 @@
 /**
  * Declarative per-resource sync policy.
  * @typedef {object} SyncClientResourceConfig
+ * @property {ReturnType<typeof JSON.parse>} metadataModelClass - Model metadata owner for scope translation and derived attributes.
  * @property {ReturnType<typeof JSON.parse>} modelClass - Local model class for this resource.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["attributes"]} [attributes] - Pull-apply attribute mapper. Required for resources that receive pulled changes.
  * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecord"]} [findRecord] - Custom pull-apply record resolver.
@@ -91,6 +92,8 @@
  * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
  * @property {import("./sync-scope-store.js").default} [scopeStore] - Scope store override (tests).
  * @property {ReturnType<typeof JSON.parse>} [syncModel] - Pending-sync model override. Defaults to the registered "Sync" model.
+ * @property {string} [databaseIdentifier] - Tenant database identifier; required with tenantHandle.
+ * @property {import("../tenants/tenant-handle.js").default} [tenantHandle] - Immutable tenant handle binding every local sync state transition.
  */
 
 /**
@@ -108,6 +111,8 @@
  * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.
  * @property {ReturnType<typeof JSON.parse>} syncModel - Local pending-sync model class.
+ * @property {string} [databaseIdentifier] - Tenant-scoped database identifier.
+ * @property {import("../tenants/tenant-handle.js").default} [tenantHandle] - Tenant-scoped immutable handle.
  * @property {SyncClientSharedConnection} [websocketClient] - Shared app-lifetime websocket client instance (the low-level shared-connection form).
  * @property {string | (() => string | null | undefined)} [websocketUrl] - Shared app-lifetime websocket URL the framework builds a client from.
  */

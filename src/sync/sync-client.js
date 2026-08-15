@@ -56,7 +56,7 @@ export default class SyncClient {
    * @param {import("./sync-client-types.js").SyncClientOptions} [options] - Optional overrides.
    */
   constructor(options = {}) {
-    const {configuration = Configuration.current(), legacyCursor, scopeStore, syncModel, ...restOptions} = options
+    const {configuration = Configuration.current(), databaseIdentifier, legacyCursor, scopeStore, syncModel, tenantHandle, ...restOptions} = options
 
     restArgsError(restOptions)
 
@@ -66,26 +66,50 @@ export default class SyncClient {
       throw new Error("SyncClient requires a sync.client configuration block: new Configuration({sync: {client: {authenticationToken, transport}}})")
     }
 
+    if (Boolean(tenantHandle) !== Boolean(databaseIdentifier)) {
+      throw new Error("SyncClient tenantHandle and databaseIdentifier must be provided together")
+    }
+    if (tenantHandle) {
+      tenantHandle.assertConfiguration(configuration)
+      tenantHandle.databaseConfiguration(/** @type {string} */ (databaseIdentifier))
+    }
+
     const modelClasses = configuration.getModelClasses()
+    const resolvedSyncModel = syncModel || modelClasses.Sync
+    const databaseIdentity = tenantHandle ? tenantHandle.databaseIdentity(/** @type {string} */ (databaseIdentifier)) : null
     /** @type {Record<string, import("./sync-client-types.js").SyncClientResourceConfig>} */
     const resources = {}
 
     for (const modelClass of Object.values(modelClasses)) {
       if (!modelClass.sync) continue
+      if (tenantHandle && modelClass.getDatabaseIdentifier({tenant: tenantHandle.tenant()}) !== databaseIdentifier) continue
 
       const resourceType = modelClass.getModelName()
 
-      resources[resourceType] = resourceConfigFromSyncDeclaration({declaration: modelClass.sync, modelClass, resourceType})
+      const metadataModelClass = tenantHandle
+        ? tenantHandle.metadataModelClass({databaseIdentifier: /** @type {string} */ (databaseIdentifier), modelClass})
+        : modelClass
+      const resourceConfig = resourceConfigFromSyncDeclaration({declaration: modelClass.sync, metadataModelClass, modelClass, resourceType})
+
+      if (databaseIdentity && resourceConfig.conflictTracking) {
+        resourceConfig.conflictTracking = {
+          ...resourceConfig.conflictTracking,
+          mutationLog: resourceConfig.conflictTracking.mutationLog.partition(databaseIdentity)
+        }
+      }
+
+      resources[resourceType] = resourceConfig
     }
 
     if (Object.keys(resources).length === 0) {
       throw new Error("SyncClient found no registered models declaring static sync - declare `static sync = true` (or a sync declaration object) on the models that should sync")
     }
 
-    const resolvedSyncModel = syncModel || modelClasses.Sync
-
     if (!resolvedSyncModel) {
       throw new Error("SyncClient requires a registered \"Sync\" model for pending local sync rows (or pass options.syncModel)")
+    }
+    if (tenantHandle && resolvedSyncModel.getDatabaseIdentifier({tenant: tenantHandle.tenant()}) !== databaseIdentifier) {
+      throw new Error(`SyncClient sync model does not use tenant database ${JSON.stringify(databaseIdentifier)}`)
     }
 
     /** @type {import("./sync-client-types.js").SyncClientConfig} */
@@ -93,6 +117,7 @@ export default class SyncClient {
       authenticationToken: clientConfiguration.authenticationToken,
       batchSize: clientConfiguration.batchSize,
       configuration,
+      databaseIdentifier,
       isOnline: clientConfiguration.isOnline,
       legacyCursor,
       onError: clientConfiguration.onError,
@@ -101,10 +126,15 @@ export default class SyncClient {
       realtime: clientConfiguration.realtime,
       resources,
       syncModel: resolvedSyncModel,
+      tenantHandle,
       websocketClient: clientConfiguration.websocketClient,
       websocketUrl: clientConfiguration.websocketUrl
     }
     this._clientNumber = ++clientCounter
+    this._databaseIdentity = databaseIdentity
+    this._tenantSchemaGeneration = tenantHandle
+      ? tenantHandle.inspect({databaseIdentifier: /** @type {string} */ (databaseIdentifier)}).schemaGeneration
+      : null
     /** @type {SyncRealtimeBridge | null} */
     this._realtimeBridge = null
     /** @type {import("./sync-client-types.js").SyncClientSharedConnection | null | undefined} Shared app-lifetime websocket connection (undefined until first resolved, null when none is configured). */
@@ -142,6 +172,7 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async start() {
+    this.assertTenantReady()
     if (this._started) return
 
     this._started = true
@@ -153,6 +184,7 @@ export default class SyncClient {
         for (const operation of operations.filter((candidate) => candidate !== "create")) {
           const callbackName = operation === "destroy" ? "beforeDestroy" : "beforeUpdate"
           const callback = (/** @type {ReturnType<typeof JSON.parse>} */ record) => {
+            if (!this.ownsRecord(record)) return
             if (this.isTrackingSuppressed(record)) return
 
             const capturedVersions = this._capturedBaseVersions.get(record) || []
@@ -232,6 +264,7 @@ export default class SyncClient {
    */
   trackedMutationCallback({operation, resourceConfig}) {
     return async (record) => {
+      if (!this.ownsRecord(record)) return
       if (this.isTrackingSuppressed(record)) return
 
       const data = SyncApiClient.queuedSyncData({
@@ -397,6 +430,7 @@ export default class SyncClient {
    * @returns {Promise<{scope: import("./sync-client-types.js").SerializedSyncScope, pulled: import("./sync-api-client-types.js").SyncChangesResult | null}>} Declared scope and pull result (null while offline).
    */
   async sync(query, {onProgress, upstreamRefresh} = {}) {
+    this.assertQueryOwnership(query)
     const scope = serializedScopeFromQuery(query)
     const scopeStore = this.scopeStore()
     const scopeRow = await scopeStore.findOrCreateScope(scope)
@@ -417,6 +451,7 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async unsync(query) {
+    this.assertQueryOwnership(query)
     await this.scopeStore().deactivate(serializedScopeFromQuery(query))
   }
 
@@ -428,6 +463,7 @@ export default class SyncClient {
    * @returns {Promise<import("./sync-api-client-types.js").SyncChangesResult | null>} Combined pull result, or null while offline.
    */
   async pull({onProgress, upstreamRefresh} = {}) {
+    this.assertTenantReady()
     if (!(await this.isOnline())) return null
 
     /** @type {import("./sync-api-client-types.js").SyncChangesResult | null} */
@@ -504,28 +540,35 @@ export default class SyncClient {
    * @returns {(sync: import("./sync-api-client-types.js").SyncChangeEnvelope) => Promise<import("./sync-api-client-types.js").SyncChangeApplyResult>} Loud remote-change applier.
    */
   remoteApplySync({source = "pulled change"} = {}) {
-    const pullResourceConfigs = this.pullResourceConfigs()
-    const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => this.markRemoteApply(record))
-
     return async (sync) => {
       const resourceType = sync.resourceType()
+      const configuredResource = resourceType ? this.config.resources[resourceType] : undefined
 
-      if (!resourceType || !pullResourceConfigs[resourceType]) {
+      if (!resourceType || !configuredResource?.attributes) {
         throw new Error(`No sync resource with pull attributes configured for ${source}: ${String(resourceType)}`)
       }
 
-      const data = sync.data()
-      const versionAttribute = this.config.resources[resourceType].conflictTracking?.versionAttribute
+      return await this.withTenantOperation(async (operation) => {
+        const data = sync.data()
+        const versionAttribute = this.config.resources[resourceType].conflictTracking?.versionAttribute
 
-      if (versionAttribute) {
-        const dataAttributes = data && typeof data === "object" && !Array.isArray(data)
-          ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (data)
-          : {}
+        if (versionAttribute) {
+          const dataAttributes = data && typeof data === "object" && !Array.isArray(data)
+            ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (data)
+            : {}
 
-        this.noteRemoteVersion({resourceId: String(sync.resourceId()), resourceType, version: dataAttributes[versionAttribute]})
-      }
+          this.noteRemoteVersion({resourceId: String(sync.resourceId()), resourceType, version: dataAttributes[versionAttribute]})
+        }
 
-      return await applier(sync)
+        const pullResourceConfigs = this.pullResourceConfigs(operation)
+        const applier = SyncApiClient.resourceApplier(pullResourceConfigs, (record) => {
+          if (operation) this.bindRemoteRecord({operation, record})
+
+          return this.markRemoteApply(record)
+        })
+
+        return await applier(sync)
+      })
     }
   }
 
@@ -563,6 +606,7 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async subscribeRealtime(context) {
+    this.assertTenantReady()
     await this.realtimeBridge().subscribe(context)
   }
 
@@ -704,6 +748,8 @@ export default class SyncClient {
    * @returns {Promise<ReturnType<typeof JSON.parse> | import("./local-mutation-log.js").LocalMutationLogRecord>} Pending local sync row or durable conflict-tracked intent.
    */
   async queue({baseVersion, data, operation = "update", resource, syncType}) {
+    this.assertTenantReady()
+    this.assertRecordOwnership(resource)
     const resourceConfig = this.resourceConfigFor(resource)
     const resolvedSyncType = syncType ?? this.defaultSyncType({operation, record: resource, resourceConfig})
 
@@ -729,14 +775,14 @@ export default class SyncClient {
       return record
     }
 
-    const syncRow = await SyncApiClient.queueLocalSync({
+    const syncRow = await this.withTenantOperation(async (databaseOperation) => await SyncApiClient.queueLocalSync({
       booleanAttributes: resourceConfig.booleanAttributes || [],
       data,
       localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
       resource,
-      syncModel: this.config.syncModel,
+      syncModel: databaseOperation ? databaseOperation.modelClass(this.config.syncModel) : this.config.syncModel,
       syncType: resolvedSyncType
-    })
+    }))
 
     this.scheduleReplay()
 
@@ -749,9 +795,10 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async replayPending() {
+    this.assertTenantReady()
     if (!(await this.isOnline())) return
 
-    await SyncApiClient.singleFlight(`velocious-sync-client-replay-${this._clientNumber}`, async () => {
+    await SyncApiClient.singleFlight(`velocious-sync-client-replay-${this._clientNumber}`, async () => await this.withTenantOperation(async (operation) => {
       for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
         if (!resourceConfig.conflictTracking) continue
 
@@ -769,9 +816,9 @@ export default class SyncClient {
         authenticationToken: await this.config.authenticationToken(),
         batchSize: this.config.batchSize,
         postReplay: this.config.postReplay,
-        syncModel: this.config.syncModel
+        syncModel: operation ? operation.modelClass(this.config.syncModel) : this.config.syncModel
       })
-    })
+    }))
   }
 
   /**
@@ -902,7 +949,17 @@ export default class SyncClient {
    * @returns {import("./sync-scope-store.js").default} Scope store.
    */
   scopeStore() {
-    this._scopeStore ||= new SyncScopeStore({configuration: this.config.configuration})
+    this.assertTenantReady()
+
+    if (this._scopeStore && this._databaseIdentity && this._scopeStore.storeIdentity !== this._databaseIdentity) {
+      throw new Error("SyncClient scope store belongs to another or unresolved physical tenant database")
+    }
+
+    this._scopeStore ||= new SyncScopeStore({
+      configuration: this.config.configuration,
+      databaseIdentifier: this.config.databaseIdentifier,
+      tenantHandle: this.config.tenantHandle
+    })
 
     return this._scopeStore
   }
@@ -944,33 +1001,135 @@ export default class SyncClient {
 
   /**
    * Derives the pull-apply resource configs from the declared resources.
+   * @param {import("../database/operation.js").default | null} [operation] - Tenant operation binding the resource model classes.
    * @returns {Record<string, import("./sync-api-client-types.js").SyncResourceConfig>} Pull-apply resource configs.
    */
-  pullResourceConfigs() {
-    this._pullResourceConfigs ||= /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig>} */ (Object.fromEntries(
+  pullResourceConfigs(operation) {
+    if (!operation && this._pullResourceConfigs) return this._pullResourceConfigs
+
+    const resourceConfigs = /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig>} */ (Object.fromEntries(
       Object.entries(this.config.resources)
         .filter(([, resource]) => Boolean(resource.attributes))
-        .map(([resourceType, resource]) => [resourceType, {
-          afterApply: resource.afterApply,
-          attributes: /** @type {import("./sync-api-client-types.js").SyncResourceConfig["attributes"]} */ (resource.attributes),
-          enabled: true,
-          findRecord: resource.findRecord,
-          findRecordForDelete: resource.findRecordForDelete,
-          modelClass: resource.modelClass
-        }])
+        .map(([resourceType, resource]) => {
+          const modelClass = operation ? operation.modelClass(resource.modelClass) : resource.modelClass
+          const findRecord = resource.findRecord
+          const findRecordForDelete = resource.findRecordForDelete
+
+          return [resourceType, {
+            afterApply: resource.afterApply,
+            attributes: /** @type {import("./sync-api-client-types.js").SyncResourceConfig["attributes"]} */ (resource.attributes),
+            enabled: true,
+            findRecord: operation && findRecord
+              ? (args) => findRecord({...args, modelClass, operation: operation || null})
+              : findRecord,
+            findRecordForDelete: operation && findRecordForDelete
+              ? (args) => findRecordForDelete({...args, modelClass, operation: operation || null})
+              : findRecordForDelete,
+            modelClass
+          }]
+        })
     ))
 
-    return this._pullResourceConfigs
+    if (!operation) this._pullResourceConfigs = resourceConfigs
+
+    return resourceConfigs
+  }
+
+  /**
+   * Runs local state work on this client's captured tenant, or directly for the legacy default-database client.
+   * @template T
+   * @param {(operation: import("../database/operation.js").default | null) => Promise<T>} callback - Bound work.
+   * @returns {Promise<T>} Callback result.
+   */
+  async withTenantOperation(callback) {
+    if (!this.config.tenantHandle || !this.config.databaseIdentifier) return await callback(null)
+    this.assertTenantReady()
+
+    return await this.config.tenantHandle.databaseOperation({
+      databaseIdentifier: this.config.databaseIdentifier,
+      name: "Tenant SyncClient"
+    }, async (operation) => {
+      await operation.ensureModelInitialized(this.config.syncModel)
+
+      return await callback(operation)
+    })
+  }
+
+  /**
+   * Reports whether a record belongs to this client's physical database.
+   * @param {ReturnType<typeof JSON.parse>} record - Candidate record.
+   * @returns {boolean} Whether this client owns it.
+   */
+  ownsRecord(record) {
+    if (!this._databaseIdentity) return true
+
+    const databaseOperation = record.databaseOperation()
+
+    return record.databaseIdentity() === this._databaseIdentity &&
+      databaseOperation?.schemaGeneration() === this._tenantSchemaGeneration
+  }
+
+  /**
+   * Rejects a record not owned by this client's physical database.
+   * @param {ReturnType<typeof JSON.parse>} record - Candidate record.
+   * @returns {void}
+   */
+  assertRecordOwnership(record) {
+    if (!this.ownsRecord(record)) throw new Error("SyncClient resource belongs to another or unresolved physical tenant database")
+  }
+
+  /**
+   * Validates a declared query against this client's captured tenant database.
+   * @param {import("../database/query/model-class-query.js").default<ReturnType<typeof JSON.parse>>} query - Scope query.
+   * @returns {void}
+   */
+  assertQueryOwnership(query) {
+    if (!this.config.tenantHandle || !this.config.databaseIdentifier) return
+
+    const modelClass = query.getModelClass()
+    const databaseIdentifier = modelClass.getDatabaseIdentifier({tenant: this.config.tenantHandle.tenant()})
+    const queryDatabaseIdentity = query._operation?.databaseIdentity()
+
+    if (databaseIdentifier !== this.config.databaseIdentifier ||
+      !this.config.resources[modelClass.getModelName()] ||
+      queryDatabaseIdentity !== this._databaseIdentity) {
+      throw new Error("SyncClient scope belongs to another or unresolved physical tenant database")
+    }
+  }
+
+  /**
+   * Rejects work after the handle's ready physical schema generation changed or closed.
+   * @returns {void}
+   */
+  assertTenantReady() {
+    if (!this.config.tenantHandle || !this.config.databaseIdentifier) return
+
+    const lifecycle = this.config.tenantHandle.inspect({databaseIdentifier: this.config.databaseIdentifier})
+
+    if (!lifecycle.ready || !lifecycle.schemaGeneration || lifecycle.schemaGeneration !== this._tenantSchemaGeneration) {
+      throw new Error("SyncClient tenant database generation is stale or not ready")
+    }
+  }
+
+  /**
+   * Binds a custom remote resolver result to the active tenant operation after proving its captured identity.
+   * @param {{operation: import("../database/operation.js").default, record: ReturnType<typeof JSON.parse>}} args - Binding args.
+   * @returns {void}
+   */
+  bindRemoteRecord({operation, record}) {
+    if (record.databaseOperation?.() === operation) return
+    this.assertRecordOwnership(record)
+    operation.bindRecord(record)
   }
 }
 
 /**
  * Builds one resource config from a model's `static sync` declaration plus its
  * derived column metadata.
- * @param {{declaration: import("./sync-client-types.js").ModelSyncDeclaration, modelClass: ReturnType<typeof JSON.parse>, resourceType: string}} args - Declaration args.
+ * @param {{declaration: import("./sync-client-types.js").ModelSyncDeclaration, metadataModelClass: ReturnType<typeof JSON.parse>, modelClass: ReturnType<typeof JSON.parse>, resourceType: string}} args - Declaration args.
  * @returns {import("./sync-client-types.js").SyncClientResourceConfig} Derived resource config.
  */
-function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceType}) {
+function resourceConfigFromSyncDeclaration({declaration, metadataModelClass, modelClass, resourceType}) {
   const normalizedDeclaration = declaration === true ? {} : declaration
 
   if (!normalizedDeclaration || typeof normalizedDeclaration !== "object" || Array.isArray(normalizedDeclaration)) {
@@ -992,7 +1151,7 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
     throw new Error(`${resourceType} static sync syncType must be a function or the string "upsert", got: ${String(syncType)}`)
   }
 
-  const derived = derivedSyncAttributes({modelClass, resourceType})
+  const derived = derivedSyncAttributes({modelClass: metadataModelClass, resourceType})
 
   if (conflictTracking) validateConflictTracking({conflictTracking, derived, resourceType})
 
@@ -1007,6 +1166,7 @@ function resourceConfigFromSyncDeclaration({declaration, modelClass, resourceTyp
       derived.localOnlyAttributes,
       [...(localOnlyAttributes || []), ...(conflictTracking ? [conflictTracking.versionAttribute || "updatedAt"] : [])]
     ),
+    metadataModelClass,
     modelClass,
     realtime,
     syncType,

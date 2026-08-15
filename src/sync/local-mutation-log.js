@@ -75,6 +75,23 @@ export default class LocalMutationLog {
   }
 
   /**
+   * Returns a log view with sequence, records, and locks partitioned by an
+   * immutable physical tenant identity while reusing the same row store.
+   * @param {string} partitionKey - Stable opaque partition identity.
+   * @returns {LocalMutationLog} Partitioned log.
+   */
+  partition(partitionKey) {
+    if (!partitionKey) throw new Error("LocalMutationLog partition key must be a non-empty string")
+
+    return new LocalMutationLog({
+      idGenerator: this.idGenerator,
+      now: this.now,
+      storage: this.storage,
+      storageKey: `${this.storageKey}:${partitionKey.length}:${partitionKey}`
+    })
+  }
+
+  /**
    * Appends a pending mutation record.
    * @param {object} args - Arguments.
    * @param {LocalMutationDependency[]} [args.dependencies] - Mutation dependencies.

@@ -67,8 +67,14 @@ When the limit is reached, Velocious closes the least-recently-used handle that 
 Use `withPin` for a Ticket-App-style project-scoped `SyncClient` or other owner that must not be displaced while it has pending domain work:
 
 ```js
+const projectSyncClient = SyncClient.fromConfiguration(configuration, {
+  databaseIdentifier: "projectTenant",
+  tenantHandle: project
+})
+
 await project.withPin({databaseIdentifier: "projectTenant"}, async () => {
-  await projectSyncClient.sync()
+  await projectSyncClient.replayPending()
+  await projectSyncClient.pull()
   await project.flush({databaseIdentifier: "projectTenant"})
 })
 ```
@@ -85,7 +91,8 @@ call can retry. Mark optional models with
 `Model.setEagerLoadRecordMetadata(false)`; absent eager tables are readiness
 errors.
 
-This API does not create migrations, construct tenant-specific sync clients,
-detect application-level unsynced state, coordinate LRU state between processes,
-or expose raw pools/drivers. Applications remain responsible for placing a
-scoped pin around unsynced work.
+This API does not create migrations, detect application-level unsynced state,
+coordinate LRU state between processes, or expose raw pools/drivers. It provides
+the immutable handle consumed by tenant live queries and project-scoped
+`SyncClient`; applications remain responsible for constructing one client per
+active project and placing a scoped pin around unsynced work.

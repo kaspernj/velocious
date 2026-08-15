@@ -127,6 +127,7 @@ export default class VelociousDatabaseOperation {
     this.assertActive()
     this.assertModel(record.getModelClass())
     record.bindDatabaseOperation(this)
+    record.captureDatabaseIdentity(this.databaseIdentity())
 
     return record
   }
@@ -201,6 +202,14 @@ export default class VelociousDatabaseOperation {
    */
   databaseIdentity() {
     return `${this._databaseIdentifier}:${this._configurationReuseKey}`
+  }
+
+  /**
+   * Returns the tenant schema generation captured when this operation started.
+   * @returns {string | undefined} - Captured schema generation.
+   */
+  schemaGeneration() {
+    return this._schemaGeneration
   }
 
   /**

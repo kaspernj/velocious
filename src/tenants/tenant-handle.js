@@ -159,6 +159,86 @@ function captureDatabaseConfiguration(databaseConfiguration) {
 }
 
 /**
+ * Live-query source whose query is rebuilt inside one captured tenant operation
+ * for every run.
+ * @template {typeof import("../database/record/index.js").default} MC
+ */
+class TenantLiveQuerySource {
+  /**
+   * Creates a live-query source bound to an immutable tenant handle.
+   * @param {object} args - Source arguments.
+   * @param {string} args.databaseIdentifier - Captured logical database.
+   * @param {TenantHandle} args.handle - Owning immutable tenant handle.
+   * @param {MC} args.modelClass - Root model class.
+   * @param {(query: import("../database/query/model-class-query.js").default<MC>) => import("../database/query/model-class-query.js").default<MC> | void} [args.query] - Query builder.
+   */
+  constructor({databaseIdentifier, handle, modelClass, query}) {
+    modelClass._getConfiguration()
+    handle.assertConfiguration(modelClass._getConfiguration())
+
+    const modelDatabaseIdentifier = modelClass.getDatabaseIdentifier({tenant: handle.tenant()})
+
+    if (modelDatabaseIdentifier !== databaseIdentifier) {
+      throw new Error(`${modelClass.getModelName()} uses database ${JSON.stringify(modelDatabaseIdentifier)}, not tenant live-query database ${JSON.stringify(databaseIdentifier)}`)
+    }
+
+    handle.databaseConfiguration(databaseIdentifier)
+    this._databaseIdentifier = databaseIdentifier
+    this._handle = handle
+    this._modelClass = modelClass
+    this._query = query
+    Object.freeze(this)
+  }
+
+  /**
+   * Returns the root model class.
+   * @returns {MC} Root model class.
+   */
+  getModelClass() {
+    return this._modelClass
+  }
+
+  /**
+   * Returns the captured physical identity for one observed model.
+   * @param {typeof import("../database/record/index.js").default} modelClass - Observed model class.
+   * @returns {string} Physical database identity.
+   */
+  databaseIdentityForModel(modelClass) {
+    const databaseIdentifier = modelClass.getDatabaseIdentifier({tenant: this._handle.tenant()})
+
+    if (databaseIdentifier !== this._databaseIdentifier) {
+      throw new Error(`${modelClass.getModelName()} uses database ${JSON.stringify(databaseIdentifier)}, not tenant live-query database ${JSON.stringify(this._databaseIdentifier)}`)
+    }
+
+    return this._handle.databaseIdentity(databaseIdentifier)
+  }
+
+  /**
+   * Loads the current tenant rows through a fresh captured operation.
+   * @returns {Promise<Array<InstanceType<MC>>>} Current tenant rows.
+   */
+  async toArray() {
+    return await this._handle.databaseOperation({
+      databaseIdentifier: this._databaseIdentifier,
+      name: `Tenant live query: ${this._modelClass.getModelName()}`
+    }, async (operation) => {
+      await operation.ensureModelInitialized(this._modelClass)
+      const baseQuery = operation.forModel(this._modelClass)
+      const builtQuery = this._query ? this._query(baseQuery) || baseQuery : baseQuery
+
+      if (builtQuery.getModelClass().getModelName() !== this._modelClass.getModelName()) {
+        throw new Error("Tenant live-query builder returned a query for another model")
+      }
+      if (builtQuery._operation !== operation) {
+        throw new Error("Tenant live-query builder returned a query from another database operation")
+      }
+
+      return await builtQuery.toArray()
+    })
+  }
+}
+
+/**
  * Immutable tenant/database handle. Physical database configurations are
  * resolved and captured at construction, so later ambient tenant changes
  * cannot redirect work performed through this handle.
@@ -193,6 +273,8 @@ export default class TenantHandle {
     this._configuration = configuration
     this._databaseConfigurations = Object.freeze(databaseConfigurations)
     this._tenant = capturedTenant
+    /** @type {WeakMap<typeof import("../database/record/index.js").default, {metadataKey: string, modelClass: typeof import("../database/record/index.js").default}>} */
+    this._metadataModelClasses = new WeakMap()
 
     Object.freeze(this)
   }
@@ -230,6 +312,89 @@ export default class TenantHandle {
     }
 
     return databaseConfiguration
+  }
+
+  /**
+   * Returns the opaque captured physical database identity used by events,
+   * live queries, and tenant-scoped sync state.
+   * @param {string} databaseIdentifier - Logical database identifier.
+   * @returns {string} Stable physical database identity.
+   */
+  databaseIdentity(databaseIdentifier) {
+    const databaseConfiguration = this.databaseConfiguration(databaseIdentifier)
+    const reuseKey = this._configuration
+      .getDatabasePool(databaseIdentifier)
+      .getConfigurationReuseKey(databaseConfiguration)
+
+    return `${databaseIdentifier}:${reuseKey}`
+  }
+
+  /**
+   * Builds a live-query source permanently bound to this captured tenant.
+   * @template {typeof import("../database/record/index.js").default} MC
+   * @param {object} args - Live-query source arguments.
+   * @param {string} args.databaseIdentifier - Logical tenant database.
+   * @param {MC} args.modelClass - Root model class.
+   * @param {(query: import("../database/query/model-class-query.js").default<MC>) => import("../database/query/model-class-query.js").default<MC> | void} [args.query] - Query builder run inside each captured operation.
+   * @returns {TenantLiveQuerySource<MC>} Tenant-bound source.
+   */
+  liveQuery({databaseIdentifier, modelClass, query}) {
+    return new TenantLiveQuerySource({databaseIdentifier, handle: this, modelClass, query})
+  }
+
+  /**
+   * Returns a read-only model-class metadata view for this handle's ready
+   * physical schema generation. Runtime queries must still use an operation.
+   * @template {typeof import("../database/record/index.js").default} MC
+   * @param {object} args - Metadata arguments.
+   * @param {string} args.databaseIdentifier - Logical tenant database.
+   * @param {MC} args.modelClass - Canonical model class.
+   * @returns {MC} Generation-bound metadata view.
+   */
+  metadataModelClass({databaseIdentifier, modelClass}) {
+    modelClass._getConfiguration()
+    this.assertConfiguration(modelClass._getConfiguration())
+
+    const modelDatabaseIdentifier = modelClass.getDatabaseIdentifier({tenant: this._tenant})
+
+    if (modelDatabaseIdentifier !== databaseIdentifier) {
+      throw new Error(`${modelClass.getModelName()} uses database ${JSON.stringify(modelDatabaseIdentifier)}, not tenant metadata database ${JSON.stringify(databaseIdentifier)}`)
+    }
+
+    const lifecycle = this.inspect({databaseIdentifier})
+
+    if (!lifecycle.ready || !lifecycle.schemaGeneration) {
+      throw new Error(`Tenant database ${JSON.stringify(databaseIdentifier)} is not initialized for model metadata`)
+    }
+
+    const canonicalModelClass = /** @type {MC} */ (modelClass._recordMetadataModelClass || modelClass)
+    const databaseIdentity = this.databaseIdentity(databaseIdentifier)
+    const metadataKey = `${databaseIdentity.length}:${databaseIdentity}:${lifecycle.schemaGeneration}`
+    const existing = this._metadataModelClasses.get(canonicalModelClass)
+
+    if (existing?.metadataKey === metadataKey) return /** @type {MC} */ (existing.modelClass)
+
+    const metadataProperties = canonicalModelClass.recordMetadataPropertyNames()
+    const metadataModelClass = new Proxy(canonicalModelClass, {
+      get: (target, property, receiver) => {
+        if (property === "_recordMetadataModelClass") return target
+        if (typeof property === "string" && metadataProperties.has(property)) return target.recordMetadataValue(metadataKey, property)
+
+        return Reflect.get(target, property, receiver)
+      },
+      set: (target, property, value, receiver) => {
+        if (typeof property === "string" && metadataProperties.has(property)) {
+          target.setRecordMetadataValue(metadataKey, property, value)
+          return true
+        }
+
+        return Reflect.set(target, property, value, receiver)
+      }
+    })
+
+    this._metadataModelClasses.set(canonicalModelClass, {metadataKey, modelClass: metadataModelClass})
+
+    return /** @type {MC} */ (metadataModelClass)
   }
 
   /**
