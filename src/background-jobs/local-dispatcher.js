@@ -3,6 +3,15 @@
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 import performBackgroundJob from "./perform-job.js"
 
+/** @typedef {{type: "completed"} | {type: "failed", error: ReturnType<typeof JSON.parse>} | {type: "rescheduled", delayMs: number}} LocalBackgroundJobAcknowledgement */
+
+/**
+ * @typedef {object} PendingLocalBackgroundJobAcknowledgement
+ * @property {LocalBackgroundJobAcknowledgement} acknowledgement - Durable transition still owned by this dispatcher.
+ * @property {import("./types.js").BackgroundJobHandoff} handoff - Fenced handoff being acknowledged.
+ * @property {import("./types.js").BackgroundJobRow} job - Claimed job snapshot.
+ */
+
 const MAX_TIMER_MS = 2_147_483_647
 const ERROR_RECOVERY_DELAY_MS = 1_000
 
@@ -31,6 +40,8 @@ export default class LocalBackgroundJobsDispatcher {
     this._wakeQueued = false
     /** @type {Set<Promise<void>>} */
     this._inFlight = new Set()
+    /** @type {Map<string, PendingLocalBackgroundJobAcknowledgement>} */
+    this._pendingAcknowledgements = new Map()
     /** @type {Set<() => void>} */
     this._idleWaiters = new Set()
     /** @type {ReturnType<typeof setTimeout> | number | undefined} */
@@ -119,7 +130,9 @@ export default class LocalBackgroundJobsDispatcher {
    * @returns {Promise<void>} - Resolves after one stable drain pass.
    */
   async _drain() {
-    while (this._accepting && this._inFlight.size < this._maxConcurrentJobs()) {
+    await this._retryPendingAcknowledgements()
+
+    while (this._accepting && this._ownedPerformanceCount() < this._maxConcurrentJobs()) {
       const job = await this.store.nextAvailableJob()
 
       if (!job) break
@@ -147,7 +160,7 @@ export default class LocalBackgroundJobsDispatcher {
 
     this._inFlight.add(performance)
     void performance
-      .catch((error) => this._reportFrameworkError({error, stage: "local-background-jobs-acknowledgement"}))
+      .catch((error) => this._reportFrameworkError({error, stage: "local-background-jobs-performance"}))
       .finally(() => {
         this._inFlight.delete(performance)
         if (this._accepting) this.wake()
@@ -161,6 +174,9 @@ export default class LocalBackgroundJobsDispatcher {
    * @returns {Promise<void>} - Resolves after acknowledgement.
    */
   async _perform({handoff, job}) {
+    /** @type {LocalBackgroundJobAcknowledgement} */
+    let acknowledgement = {type: "completed"}
+
     try {
       const JobClass = this.registry.resolve(job.jobName)
 
@@ -172,17 +188,56 @@ export default class LocalBackgroundJobsDispatcher {
       })
     } catch (error) {
       if (error instanceof BackgroundJobRescheduleSignal) {
-        await this.store.markRescheduled({delayMs: error.delayMs, handoffId: handoff.handoffId, jobId: job.id})
-        return
+        acknowledgement = {delayMs: error.delayMs, type: "rescheduled"}
+      } else {
+        acknowledgement = {error, type: "failed"}
       }
+    }
 
-      const updatedJob = await this.store.markFailed({error, handoffId: handoff.handoffId, jobId: job.id})
+    try {
+      await this._acknowledge({acknowledgement, handoff, job})
+    } catch (error) {
+      this._pendingAcknowledgements.set(job.id, {acknowledgement, handoff, job})
+      this._reportAcknowledgementError({acknowledgement, error, handoff, job})
+    }
+  }
 
-      if (updatedJob) this._emitBackgroundJobFailed({error, job: updatedJob})
+  /**
+   * Applies one fenced durable acknowledgement.
+   * @param {PendingLocalBackgroundJobAcknowledgement} args - Owned acknowledgement.
+   * @returns {Promise<void>} - Resolves after the durable transition is settled.
+   */
+  async _acknowledge({acknowledgement, handoff, job}) {
+    if (acknowledgement.type === "rescheduled") {
+      await this.store.markRescheduled({delayMs: acknowledgement.delayMs, handoffId: handoff.handoffId, jobId: job.id})
+      return
+    }
+
+    if (acknowledgement.type === "failed") {
+      const updatedJob = await this.store.markFailed({error: acknowledgement.error, handoffId: handoff.handoffId, jobId: job.id})
+
+      if (updatedJob) this._emitBackgroundJobFailed({error: acknowledgement.error, job: updatedJob})
       return
     }
 
     await this.store.markCompleted({handoffId: handoff.handoffId, jobId: job.id})
+  }
+
+  /**
+   * Replays each retained acknowledgement once at an event-driven wake boundary.
+   * @param {{throwOnError?: boolean}} [args] - Recovery behavior.
+   * @returns {Promise<void>} - Resolves after one bounded recovery pass.
+   */
+  async _retryPendingAcknowledgements({throwOnError = false} = {}) {
+    for (const [jobId, pendingAcknowledgement] of [...this._pendingAcknowledgements]) {
+      try {
+        await this._acknowledge(pendingAcknowledgement)
+        this._pendingAcknowledgements.delete(jobId)
+      } catch (error) {
+        this._reportAcknowledgementError({...pendingAcknowledgement, error})
+        if (throwOnError) throw error
+      }
+    }
   }
 
   /**
@@ -250,6 +305,7 @@ export default class LocalBackgroundJobsDispatcher {
 
     if (this._drainPromise) await this._drainPromise
     if (this._inFlight.size > 0) await Promise.all([...this._inFlight])
+    await this._retryPendingAcknowledgements({throwOnError: true})
 
     this._wakeQueued = false
     this._started = false
@@ -269,10 +325,18 @@ export default class LocalBackgroundJobsDispatcher {
   _maxConcurrentJobs() { return this.configuration.getBackgroundJobsConfig().maxConcurrentInlineJobs }
 
   /**
+   * Counts performances whose durable acknowledgement is still owned locally.
+   * @returns {number} - Active or pending-acknowledgement performances.
+   */
+  _ownedPerformanceCount() { return this._inFlight.size + this._pendingAcknowledgements.size }
+
+  /**
    * Reports whether no admission or acknowledgement work remains.
    * @returns {boolean} - Whether the dispatcher is idle.
    */
-  _isIdle() { return !this._wakeQueued && !this._drainPromise && this._inFlight.size === 0 }
+  _isIdle() {
+    return !this._wakeQueued && !this._drainPromise && this._inFlight.size === 0 && this._pendingAcknowledgements.size === 0
+  }
 
   /**
    * Resolves event-based idle waiters at a stable idle boundary.
@@ -316,13 +380,35 @@ export default class LocalBackgroundJobsDispatcher {
   }
 
   /**
-   * Reports an unexpected dispatcher failure through framework channels.
-   * @param {{error: ReturnType<typeof JSON.parse>, stage: string}} args - Unexpected failure.
+   * Reports one failed durable acknowledgement attempt with its fence context.
+   * @param {PendingLocalBackgroundJobAcknowledgement & {error: ReturnType<typeof JSON.parse>}} args - Failed acknowledgement.
    * @returns {void} - No return value.
    */
-  _reportFrameworkError({error, stage}) {
+  _reportAcknowledgementError({acknowledgement, error, handoff, job}) {
+    this._reportFrameworkError({
+      context: {
+        acknowledgementType: acknowledgement.type,
+        handoffId: handoff.handoffId,
+        jobId: job.id,
+        jobName: job.jobName,
+        workerId: "local"
+      },
+      error,
+      stage: "local-background-jobs-acknowledgement"
+    })
+  }
+
+  /**
+   * Reports an unexpected dispatcher failure through framework channels.
+   * @param {object} args - Unexpected failure.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.context] - Additional failure context.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Unexpected error.
+   * @param {string} args.stage - Dispatcher stage.
+   * @returns {void} - No return value.
+   */
+  _reportFrameworkError({context = {}, error, stage}) {
     const normalizedError = error instanceof Error ? error : new Error(String(error))
-    const payload = {context: {stage}, error: normalizedError}
+    const payload = {context: {...context, stage}, error: normalizedError}
     const errorEvents = this.configuration.getErrorEvents()
 
     errorEvents.emit("framework-error", payload)

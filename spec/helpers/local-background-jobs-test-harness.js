@@ -20,8 +20,6 @@ export class ManualBackgroundJobsClock {
   }
 
   /** @returns {number} - Current epoch milliseconds. */
-  // Injected through the structural clock contract; Fallow cannot trace that call.
-  // fallow-ignore-next-line unused-class-member
   now() { return this.currentMs }
 
   /**
