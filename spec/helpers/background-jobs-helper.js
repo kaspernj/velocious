@@ -55,6 +55,62 @@ export async function startBackgroundJobs({workerOptions = {}} = {}) {
 }
 
 /**
+ * Runs a callback with an owned main/worker pair and stops both services before returning or throwing.
+ * @template T
+ * @param {(backgroundJobs: {main: BackgroundJobsMain, store: BackgroundJobsStore, worker: BackgroundJobsWorker}) => Promise<T>} callback - Owned background-jobs callback.
+ * @param {object} [args] - Start options.
+ * @param {(args: {workerOptions?: ConstructorParameters<typeof BackgroundJobsWorker>[0]}) => Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, worker: BackgroundJobsWorker}>} [args.start] - Service factory override for lifecycle tests.
+ * @param {ConstructorParameters<typeof BackgroundJobsWorker>[0]} [args.workerOptions] - Worker constructor options.
+ * @returns {Promise<T>} - Callback result after both services stop.
+ */
+export async function withBackgroundJobs(callback, args) {
+  const start = args?.start || startBackgroundJobs
+  const backgroundJobs = await start({workerOptions: args?.workerOptions})
+  let callbackFailed = false
+  let callbackError
+  /** @type {T} */
+  let result
+
+  try {
+    result = await callback(backgroundJobs)
+  } catch (error) {
+    callbackFailed = true
+    callbackError = error
+  }
+
+  const cleanupErrors = []
+
+  try {
+    await backgroundJobs.worker.stop()
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+
+  try {
+    await backgroundJobs.main.stop()
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+
+  if (callbackFailed && cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [callbackError, ...cleanupErrors],
+      "Background jobs callback and cleanup failed",
+      {cause: callbackError}
+    )
+  }
+
+  if (cleanupErrors.length > 1) {
+    throw new AggregateError(cleanupErrors, "Background jobs cleanup failed", {cause: cleanupErrors[0]})
+  }
+
+  if (cleanupErrors.length === 1) throw cleanupErrors[0]
+  if (callbackFailed) throw callbackError
+
+  return result
+}
+
+/**
  * @param {object} [args] - Options.
  * @param {import("../../src/configuration-types.js").BackgroundJobsConfiguration} [args.backgroundJobsConfig] - Background jobs config override.
  * @param {boolean} [args.waitForWorkerStop] - Wait for the paired worker before closing shared test connections.
