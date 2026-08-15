@@ -1063,7 +1063,10 @@ export default class SyncClient {
   ownsRecord(record) {
     if (!this._databaseIdentity) return true
 
-    return record?.databaseIdentity?.() === this._databaseIdentity
+    const databaseOperation = record.databaseOperation()
+
+    return record.databaseIdentity() === this._databaseIdentity &&
+      databaseOperation?.schemaGeneration() === this._tenantSchemaGeneration
   }
 
   /**

@@ -205,6 +205,14 @@ export default class VelociousDatabaseOperation {
   }
 
   /**
+   * Returns the tenant schema generation captured when this operation started.
+   * @returns {string | undefined} - Captured schema generation.
+   */
+  schemaGeneration() {
+    return this._schemaGeneration
+  }
+
+  /**
    * Initializes a model through this operation's captured connection.
    * @param {typeof import("./record/index.js").default} ModelClass - Model class.
    * @returns {Promise<void>} - Resolves when initialized.
