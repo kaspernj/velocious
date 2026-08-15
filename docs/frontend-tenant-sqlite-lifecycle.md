@@ -62,6 +62,8 @@ diagnostics. All methods use the immutable physical configuration captured by
 `Tenant.handle`; unresolved or inactive identities fail before storage changes.
 The React helper also rejects a handle created by another `Configuration`.
 
+The built-in [local background-jobs queue](local-background-jobs.md) is anchored to `backgroundJobs.databaseIdentifier` on the owning configuration. It does not follow an ambient frontend-tenant handle or migrate between tenant databases. Applications that need tenant-specific work should persist the tenant identity in job arguments and resolve the intended handle explicitly during `perform`.
+
 When the limit is reached, Velocious closes the least-recently-used handle that is clean, idle, and unpinned. Dirty, pinned, and active-operation handles are never victims. If every candidate is protected, opening another handle rejects deterministically. SQL.js mutations remain dirty until `flush` completes; `close` therefore requires `{flush: true}` for a dirty handle. Node and Expo writes are already durable at the driver boundary.
 
 Use `withPin` for a Ticket-App-style project-scoped `SyncClient` or other owner that must not be displaced while it has pending domain work:

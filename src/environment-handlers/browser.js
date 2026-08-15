@@ -2,6 +2,7 @@ import Base from "./base.js"
 import * as inflection from "inflection"
 import restArgsError from "../utils/rest-args-error.js"
 import Logger from "../logger.js"
+import LocalBackgroundJobsAdapter from "../background-jobs/local-adapter.js"
 
 /**
  * Defines this typedef.
@@ -40,6 +41,15 @@ function isMigrationObject(migration) {
 }
 
 export default class VelociousEnvironmentsHandlerBrowser extends Base {
+  /**
+   * Creates the Browser/Expo local SQLite adapter and in-process dispatcher.
+   * @param {{configuration: import("../configuration.js").default}} args - Adapter options.
+   * @returns {LocalBackgroundJobsAdapter} - Local background-jobs adapter.
+   */
+  createBackgroundJobsAdapter({configuration}) {
+    return new LocalBackgroundJobsAdapter({configuration})
+  }
+
   /**
    * Find commands require context result.
    * @type {CommandsRequireContextType | undefined} */

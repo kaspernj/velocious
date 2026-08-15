@@ -33,7 +33,7 @@
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
-* Background jobs with failure events for production reporting and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md) and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
+* Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, failure events, and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
@@ -2288,6 +2288,38 @@ Custom persistence can be supplied as a `BackgroundJobsAdapter` instance or
 synchronous factory. See [runtime modes and adapters](docs/background-jobs.md#runtime-modes-and-adapters)
 for the contract, lifecycle, Node TCP/wake behavior, the explicit
 `platform-job.js` browser/Expo entry, and SQL-only compatibility boundaries.
+
+Browser and Expo configurations have a built-in local SQLite adapter in
+`"background"` mode. Register portable classes statically; no main process,
+worker, socket, or child process is started:
+
+```js
+import VelociousJob from "velocious/build/src/background-jobs/platform-job.js"
+
+class UploadPendingChangesJob extends VelociousJob {
+  async perform(projectId) {
+    await uploadPendingChanges(projectId)
+  }
+}
+
+export default new Configuration({
+  backgroundJobs: {
+    databaseIdentifier: "default",
+    jobClasses: [UploadPendingChangesJob],
+    maxConcurrentInlineJobs: 4,
+    queues: {uploads: {maxConcurrent: 2, priority: 10}}
+  }
+})
+```
+
+Local enqueue participates in an existing application transaction and wakes the
+dispatcher only after commit. It supports queue caps/priorities, explicit
+concurrency, queued deduplication, one-off scheduling, retries/backoff,
+`rescheduleIn`, fenced acknowledgements, graceful close/reopen, interrupted-job
+recovery, and the existing SQL.js persistence backends. It supports one active
+configuration-owned adapter per app/database; OS background execution and
+multi-tab leadership are outside this backend. See
+[local background jobs](docs/local-background-jobs.md).
 
 Or via env vars:
 

@@ -30,13 +30,17 @@ always sends durable mutations over TCP to `background-jobs-main`, including
 when the main uses a custom adapter. This preserves the main's dispatch wake-up
 and event-driven idle-worker behavior.
 
-Browser, Expo, and other non-Node runtimes use the explicit
+Browser and Expo runtimes use the explicit
 `velocious/build/src/background-jobs/platform-job.js` entry. That entry and its
-runtime graph contain no Node configuration resolver, SQL, TCP, filesystem,
-process, main, or worker imports. Its configuration must already be current
-(call `configuration.setCurrent()`). Inline mode needs no adapter. Background
-mode requires an environment handler and explicit adapter that are valid on the
-target platform; this task does not provide a Cloudflare adapter.
+runtime graph contains no Node configuration resolver, server background-job SQL
+store, TCP, filesystem registry, process, main, or worker imports. Its configuration must already be current
+(call `configuration.setCurrent()`). Inline mode needs no adapter. In background
+mode the Browser environment handler owns a built-in local SQLite adapter and
+in-process dispatcher; applications statically register portable classes with
+`backgroundJobs.jobClasses`. See [Local background jobs](local-background-jobs.md)
+for schema, transaction, retry, persistence, lifecycle, and one-adapter-per-database
+guarantees. Cloudflare and other environments still require an explicit compatible
+adapter.
 
 ### BackgroundJobsAdapter contract
 

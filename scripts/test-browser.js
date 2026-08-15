@@ -129,11 +129,15 @@ async function getSqlJsDatabase() {
 
 /**
  * @param {import("sql.js").Database} database - SQL.js database instance.
- * @returns {{query: (sql: string) => Promise<Record<string, unknown>[]>, close: () => Promise<void>}} - Connection wrapper.
+ * @returns {{query: (sql: string) => Promise<Record<string, unknown>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} - Connection wrapper.
  */
 function createSqlJsConnection(database) {
   return {
     query: async (sql) => await queryWeb(database, sql),
+    affectedRows: async (sql) => {
+      await queryWeb(database, sql)
+      return database.getRowsModified()
+    },
     close: async () => {
       database.close()
     }

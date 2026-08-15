@@ -158,14 +158,16 @@
 
 /** @typedef {"background" | "inline"} BackgroundJobsMode */
 /** @typedef {(args: {configuration: import("./configuration.js").default}) => import("./background-jobs/adapter.js").default} BackgroundJobsAdapterFactory */
+/** @typedef {typeof import("./background-jobs/platform-job.js").default} BackgroundJobClass */
 
 /**
  * @typedef {object} BackgroundJobsConfiguration
  * @property {import("./background-jobs/adapter.js").default | BackgroundJobsAdapterFactory} [adapter] - Adapter instance or synchronous factory. A factory creates one adapter per configuration lifecycle; the framework closes adapters it resolves.
+ * @property {BackgroundJobClass[]} [jobClasses] - Static portable job classes available to Browser/Expo local dispatch. Defaults to `[]`; Node keeps its filesystem registry.
  * @property {BackgroundJobsMode} [mode] - `"background"` uses the configured adapter/transport and durable queue semantics; `"inline"` performs immediately without durable queue state. Defaults to `"background"`.
  * @property {string} [host] - Hostname for the background jobs main process.
  * @property {number} [port] - Port for the background jobs main process.
- * @property {string} [databaseIdentifier] - Database identifier used to store background jobs.
+ * @property {string} [databaseIdentifier] - Database identifier used to store background jobs. Browser/Expo local dispatch uses this existing SQLite database and defaults to `"default"`.
  * @property {number} [maxConcurrentInlineJobs] - How many `forked: false` jobs a single
  *   `background-jobs-worker` process is allowed to run in parallel. Concurrency
  *   is at the JS event-loop level: every concurrent job shares the worker's

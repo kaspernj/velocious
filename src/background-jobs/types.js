@@ -4,6 +4,30 @@
  * @typedef {"inline" | "forked" | "pooled" | "spawned"} BackgroundJobExecutionMode
  */
 /**
+ * @typedef {object} LocalBackgroundJobsClock
+ * @property {() => number} now - Current epoch milliseconds.
+ * @property {(callback: () => void, delayMs: number) => ReturnType<typeof setTimeout> | number} setTimeout - Arms a timer.
+ * @property {(timerId: ReturnType<typeof setTimeout> | number) => void} clearTimeout - Clears a timer.
+ */
+/**
+ * @typedef {object} ResolvedBackgroundJobConcurrency
+ * @property {string} concurrencyKey - Durable cap identity.
+ * @property {number} maxConcurrency - Positive cap.
+ * @property {boolean} queueDerived - Whether queue configuration owns the cap.
+ */
+/**
+ * @typedef {object} PreparedLocalBackgroundJob
+ * @property {string} argsJson - Serialized arguments.
+ * @property {ResolvedBackgroundJobConcurrency | null} concurrency - Resolved concurrency.
+ * @property {number} createdAtMs - Creation timestamp.
+ * @property {"inline"} executionMode - Local in-process execution mode.
+ * @property {string} jobId - Durable id.
+ * @property {string} jobName - Registered name.
+ * @property {number} maxRetries - Retry cap.
+ * @property {string} queue - Queue name.
+ * @property {number} scheduledAtMs - Eligibility timestamp.
+ */
+/**
  * @typedef {object} BackgroundJobsHealth
  * @property {boolean} ready - Whether the adapter can accept and process work.
  */
@@ -20,7 +44,7 @@
  */
 /**
  * @typedef {object} BackgroundJobOptions
- * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Defaults to `"pooled"` (a warm, reused local runner process). `"forked"` runs the job in a fresh `child_process.fork()` child, `"spawned"` in a detached CLI runner, and `"inline"` inside the worker process. Omit to use the default `"pooled"` mode.
+ * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Node defaults to `"pooled"` (a warm, reused local runner process). Browser/Expo local dispatch defaults to and only accepts `"inline"`. `"forked"` runs a Node job in a fresh `child_process.fork()` child, and `"spawned"` in a detached CLI runner.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
  * @property {string} [queue] - Queue name. Defaults to `"default"`. When the queue has a configured cap in `backgroundJobs.queues`, that cap is enforced cluster-wide.
  * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap. Overrides any queue-derived cap.
