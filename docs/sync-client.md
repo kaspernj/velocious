@@ -1,6 +1,6 @@
 # Declarative sync client
 
-Project-scoped clients backed by separate SQLite replicas should hold a scoped lifecycle pin while a client owns pending work; see [frontend tenant SQLite lifecycle](frontend-tenant-sqlite-lifecycle.md).
+Project-scoped clients backed by separate SQLite replicas bind to an immutable tenant handle and logical database identifier. They should also hold a scoped lifecycle pin while a client owns pending work; see [frontend tenant SQLite lifecycle](frontend-tenant-sqlite-lifecycle.md).
 
 `SyncClient` (`src/sync/sync-client.js`) is the declarative client-side sync driver. Models declare sync, one configuration block carries the genuinely app-owned hooks, and Velocious derives everything else: the resource map, the sync endpoints, scope persistence, per-scope cursors, pull paging and apply, local queueing, and online-gated replay. There is no hand-written resource map, transport POSTer, or endpoint wiring in app code.
 
@@ -57,7 +57,40 @@ import {syncClient} from "velocious/build/src/sync/sync-client.js"
 await syncClient().start()
 ```
 
-`syncClient(configuration = Configuration.current())` memoizes one client per configuration and registers it as the current sync client on first construction. `new SyncClient(options)` / `SyncClient.fromConfiguration(configuration, options)` build unmemoized clients from the same derivation; `options` only carries `configuration`, `legacyCursor`, `scopeStore`, and `syncModel` overrides.
+`syncClient(configuration = Configuration.current())` memoizes one default-database client per configuration and registers it as the current sync client on first construction. `new SyncClient(options)` / `SyncClient.fromConfiguration(configuration, options)` build unmemoized clients from the same derivation. Alongside `legacyCursor`, `scopeStore`, and `syncModel` overrides, pass `tenantHandle` and `databaseIdentifier` together for a project client.
+
+## Project-scoped tenant clients
+
+Initialize the physical tenant database, then construct one client for that captured project:
+
+```js
+const project = Tenant.handle({slug: projectSlug})
+
+await project.initialize({
+  databaseIdentifier: "projectTenant",
+  migrations: await loadFrontendMigrations(),
+  schemaGeneration: appSchemaGeneration
+})
+
+const projectSync = SyncClient.fromConfiguration(configuration, {
+  databaseIdentifier: "projectTenant",
+  tenantHandle: project
+})
+
+await projectSync.start()
+
+let ticketScope
+await project.databaseOperation({databaseIdentifier: "projectTenant"}, async (operation) => {
+  ticketScope = operation.forModel(Ticket).where({projectId})
+})
+await projectSync.sync(ticketScope)
+```
+
+The client derives only sync-declared models resolving to `projectTenant` for the captured descriptor, and reads column metadata from that handle's ready physical schema generation. Its pending `Sync` rows, scope table, per-scope cursors, acknowledgement/receipt state, pull applies, and realtime reconnect catch-up all execute through fresh operations on the captured handle. Automatic lifecycle tracking compares each record's captured physical identity, so two started project clients can share model classes without either queueing the other's commits. Direct `queue()` rejects records from another or unresolved physical tenant.
+
+Conflict-tracked resources receive a physical-identity partition of their declared `LocalMutationLog`; local sequence allocation, pending/conflict/rejected/synced records, predecessor chains, and replay therefore cannot cross projects even when the underlying row-store adapter is shared. Scope rows carry their owning store identity and reject cursor reads/writes through another project store. Per-client replay/pull flights, remote-generation observations, channel subscriptions, and reconnect pulls remain independent even when projects ride the same app-lifetime websocket connection.
+
+Both tenant options are required together. The handle must belong to the same configuration, its database must be initialized and active, the `Sync` model must resolve to that database, and a scope query must come from an operation on that exact physical handle and name a resource derived for that client. An ambient, unresolved, or other-project query is rejected before its scope can be stored or pulled. Custom `findRecord` and `findRecordForDelete` hooks additionally receive `{modelClass, operation}` for operation-bound tenant lookup. Closing or replacing the handle's ready generation makes later operations fail; it does not redirect the client to a default database or discard durable queued work. The existing no-handle client retains its default-database behavior and legacy custom-finder arguments.
 
 ## What gets derived
 

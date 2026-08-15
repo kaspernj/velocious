@@ -14,6 +14,7 @@ import EventEmitter from "../utils/event-emitter.js"
  * RecordChangeEvent type.
  * @typedef {object} RecordChangeEvent
  * @property {RecordModelClass} modelClass - Model class whose row changed.
+ * @property {string} databaseIdentity - Opaque physical database identity where the commit occurred.
  * @property {RecordChangeOperation} operation - The committed operation.
  * @property {InstanceType<RecordModelClass>} record - The committed record instance.
  */
@@ -49,15 +50,25 @@ class RecordChanges {
    * Subscribes a listener to committed changes of a model class.
    * @param {RecordModelClass} modelClass - Model class to observe.
    * @param {RecordChangeListener} listener - Listener called with each change event.
+   * @param {{databaseIdentity?: string}} [options] - Captured physical identity filter.
    * @returns {() => void} Unsubscribe callback.
    */
-  subscribe(modelClass, listener) {
-    const eventName = modelClass.getModelName()
+  subscribe(modelClass, listener, {databaseIdentity} = {}) {
+    if (modelClass.hasTenantDatabaseIdentifierResolver() && !databaseIdentity) {
+      throw new Error(`Tenant-scoped record-change subscriptions for ${modelClass.getModelName()} require a captured databaseIdentity`)
+    }
 
-    this._emitter.on(eventName, listener)
+    const eventName = modelClass.getModelName()
+    const subscribedListener = databaseIdentity
+      ? (/** @type {RecordChangeEvent} */ event) => {
+        if (event.databaseIdentity === databaseIdentity) listener(event)
+      }
+      : listener
+
+    this._emitter.on(eventName, subscribedListener)
 
     return () => {
-      this._emitter.off(eventName, listener)
+      this._emitter.off(eventName, subscribedListener)
     }
   }
 
@@ -81,7 +92,10 @@ class RecordChanges {
    */
   emit(event) {
     if (this._batchDepth > 0) {
-      this._bufferedEvents.set(event.modelClass.getModelName(), event)
+      const modelName = event.modelClass.getModelName()
+      const eventKey = `${modelName.length}:${modelName}:${event.databaseIdentity}`
+
+      this._bufferedEvents.set(eventKey, event)
 
       return
     }

@@ -127,6 +127,7 @@ export default class VelociousDatabaseOperation {
     this.assertActive()
     this.assertModel(record.getModelClass())
     record.bindDatabaseOperation(this)
+    record.captureDatabaseIdentity(this.databaseIdentity())
 
     return record
   }
