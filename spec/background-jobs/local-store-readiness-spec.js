@@ -19,6 +19,22 @@ async function dropLocalSchema(configuration) {
   })
 }
 
+/** Store that rejects its first schema application inside the real readiness lifecycle. */
+class RejectFirstSchemaApplicationStore extends LocalBackgroundJobsStore {
+  applySchemaAttempts = 0
+
+  /**
+   * @param {import("../../src/database/drivers/base.js").default} db - Local SQLite connection.
+   * @returns {Promise<boolean>} - Whether schema state changed.
+   */
+  async _applySchema(db) {
+    this.applySchemaAttempts++
+    if (this.applySchemaAttempts === 1) throw new Error("Planned local schema readiness failure")
+
+    return await super._applySchema(db)
+  }
+}
+
 describe("Local background jobs store - readiness", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("creates the namespaced versioned schema once and reopens it safely", async () => {
     const configuration = Configuration.current()
@@ -84,5 +100,25 @@ describe("Local background jobs store - readiness", {tags: ["dummy"], databaseCl
     } finally {
       await cleanup()
     }
+  })
+
+  it("retries schema readiness after an ambient transaction attempt rejects", async () => {
+    const configuration = Configuration.current()
+
+    await dropLocalSchema(configuration)
+
+    const store = new RejectFirstSchemaApplicationStore({configuration})
+
+    await configuration.ensureConnections({name: "Local background jobs failed readiness owner"}, async (dbs) => {
+      await dbs.default.transaction(async () => {
+        await expect(async () => await store.ensureReady()).toThrow("Planned local schema readiness failure")
+        await store.ensureReady()
+      })
+    })
+
+    expect(store.applySchemaAttempts).toEqual(2)
+    await configuration.ensureConnections({name: "Local background jobs retried schema verification"}, async (dbs) => {
+      expect(await dbs.default.tableExists(JOBS_TABLE)).toEqual(true)
+    })
   })
 })

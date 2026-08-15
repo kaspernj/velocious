@@ -38,4 +38,22 @@ describe("Local background jobs store - queue semantics", {tags: ["dummy"], data
     expect(concurrentIds[0]).toEqual(concurrentIds[1])
     await expect(async () => await store.enqueue({jobName: "UploadJob", args: [], options: {idempotencyKey: "server-only"}})).toThrow(/not supported by the local background-jobs adapter/)
   })
+
+  it("reconciles changed and removed queue-derived caps for queued work", async () => {
+    const configuration = Configuration.current()
+
+    configuration.setBackgroundJobsConfig({queues: {uploads: {maxConcurrent: 2}}})
+
+    const store = new LocalBackgroundJobsStore({configuration})
+    const jobId = await store.enqueue({jobName: "UploadJob", args: ["reconcile"], options: {queue: "uploads"}})
+
+    expect((await store.getJob(jobId))?.maxConcurrency).toEqual(2)
+    configuration.setBackgroundJobsConfig({queues: {uploads: {maxConcurrent: 1}}})
+    await store.reconcileQueueConcurrency()
+    expect((await store.getJob(jobId))?.maxConcurrency).toEqual(1)
+    configuration.setBackgroundJobsConfig({queues: {}})
+    await store.reconcileQueueConcurrency()
+    expect((await store.getJob(jobId))?.concurrencyKey).toEqual(null)
+    expect((await store.getJob(jobId))?.maxConcurrency).toEqual(null)
+  })
 })

@@ -236,6 +236,7 @@ export default class LocalBackgroundJobsDispatcher {
       } catch (error) {
         this._reportAcknowledgementError({...pendingAcknowledgement, error})
         if (throwOnError) throw error
+        this._armRecoveryTimer()
       }
     }
   }

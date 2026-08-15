@@ -13,40 +13,45 @@ import {
   resetLocalBackgroundJobClasses
 } from "../helpers/local-background-jobs-test-harness.js"
 
-/** Local store that deterministically rejects one selected acknowledgement before its transaction begins. */
-class RejectOnceAcknowledgementStore extends LocalBackgroundJobsStore {
+/** Local store that deterministically rejects selected acknowledgements before their transactions begin. */
+class RejectAcknowledgementStore extends LocalBackgroundJobsStore {
   /**
    * @param {object} args - Store options.
-   * @param {"markCompleted" | "markFailed" | "markRescheduled"} args.acknowledgementMethod - Method to reject once.
+   * @param {"markCompleted" | "markFailed" | "markRescheduled"} args.acknowledgementMethod - Method to reject.
+   * @param {number} args.acknowledgementRejections - Number of attempts to reject.
    * @param {ManualBackgroundJobsClock} args.clock - Dispatcher clock.
    * @param {Configuration} args.configuration - Owning configuration.
    * @param {() => void} args.onCommittedEnqueue - Commit-aware dispatcher wake.
    */
-  constructor({ acknowledgementMethod, clock, configuration, onCommittedEnqueue }) {
+  constructor({ acknowledgementMethod, acknowledgementRejections, clock, configuration, onCommittedEnqueue }) {
     super({ clock, configuration, onCommittedEnqueue })
     this.acknowledgementMethod = acknowledgementMethod
-    this.acknowledgementRejected = false
-    this.rejectionObserved = deferred()
+    this.acknowledgementAttempts = 0
+    this.acknowledgementRejections = acknowledgementRejections
+    this.rejectionsObserved = deferred()
   }
 
   /**
-   * Rejects the selected acknowledgement exactly once.
+   * Rejects the configured number of selected acknowledgement attempts.
    * @param {"markCompleted" | "markFailed" | "markRescheduled"} acknowledgementMethod - Attempted method.
    * @returns {void} - No return value.
    */
-  _rejectOnce(acknowledgementMethod) {
-    if (this.acknowledgementRejected || acknowledgementMethod !== this.acknowledgementMethod) return
+  _rejectConfiguredAttempts(acknowledgementMethod) {
+    if (acknowledgementMethod !== this.acknowledgementMethod) return
 
-    this.acknowledgementRejected = true
+    this.acknowledgementAttempts++
+    if (this.acknowledgementRejections === 0) return
+
+    this.acknowledgementRejections--
     const error = new Error(`Planned ${acknowledgementMethod} database failure`)
 
-    this.rejectionObserved.resolve(error)
+    if (this.acknowledgementRejections === 0) this.rejectionsObserved.resolve(error)
     throw error
   }
 
   /** @param {{jobId: string, handoffId?: string}} args - Completion report. @returns {Promise<boolean>} - Whether accepted. */
   async markCompleted(args) {
-    this._rejectOnce("markCompleted")
+    this._rejectConfiguredAttempts("markCompleted")
     return await super.markCompleted(args)
   }
 
@@ -55,7 +60,7 @@ class RejectOnceAcknowledgementStore extends LocalBackgroundJobsStore {
    * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow | null>} - Accepted transition.
    */
   async markFailed(args) {
-    this._rejectOnce("markFailed")
+    this._rejectConfiguredAttempts("markFailed")
     return await super.markFailed(args)
   }
 
@@ -64,7 +69,7 @@ class RejectOnceAcknowledgementStore extends LocalBackgroundJobsStore {
    * @returns {Promise<boolean>} - Whether accepted.
    */
   async markRescheduled(args) {
-    this._rejectOnce("markRescheduled")
+    this._rejectConfiguredAttempts("markRescheduled")
     return await super.markRescheduled(args)
   }
 }
@@ -72,11 +77,12 @@ class RejectOnceAcknowledgementStore extends LocalBackgroundJobsStore {
 /**
  * Creates a real local dispatcher/store pair with one rejected acknowledgement.
  * @param {object} args - Harness options.
- * @param {"markCompleted" | "markFailed" | "markRescheduled"} args.acknowledgementMethod - Method to reject once.
+ * @param {"markCompleted" | "markFailed" | "markRescheduled"} args.acknowledgementMethod - Method to reject.
+ * @param {number} [args.acknowledgementRejections] - Number of attempts to reject.
  * @param {Array<typeof import("../../src/background-jobs/platform-job.js").default>} args.jobClasses - Registered job classes.
- * @returns {Promise<{clock: ManualBackgroundJobsClock, configuration: Configuration, dispatcher: LocalBackgroundJobsDispatcher, store: RejectOnceAcknowledgementStore}>} - Ready harness.
+ * @returns {Promise<{clock: ManualBackgroundJobsClock, configuration: Configuration, dispatcher: LocalBackgroundJobsDispatcher, store: RejectAcknowledgementStore}>} - Ready harness.
  */
-async function acknowledgementRecoveryHarness({ acknowledgementMethod, jobClasses }) {
+async function acknowledgementRecoveryHarness({ acknowledgementMethod, acknowledgementRejections = 1, jobClasses }) {
   const configuration = Configuration.current()
   const clock = new ManualBackgroundJobsClock()
   /** @type {LocalBackgroundJobsDispatcher} */
@@ -93,8 +99,9 @@ async function acknowledgementRecoveryHarness({ acknowledgementMethod, jobClasse
   })
   configuration.setCurrent()
 
-  const store = new RejectOnceAcknowledgementStore({
+  const store = new RejectAcknowledgementStore({
     acknowledgementMethod,
+    acknowledgementRejections,
     clock,
     configuration,
     onCommittedEnqueue: () => dispatcher.wake()
@@ -129,7 +136,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
     try {
       const firstJobId = await store.enqueue({ jobName: RecordingLocalJob.jobName(), args: ["first"], options: cappedOptions })
 
-      await store.rejectionObserved.promise
+      await store.rejectionsObserved.promise
       const secondJobId = await store.enqueue({ jobName: RecordingLocalJob.jobName(), args: ["second"], options: cappedOptions })
 
       await dispatcher.waitForIdle()
@@ -165,7 +172,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
         options: { ...cappedOptions, maxRetries: 0 }
       })
 
-      await store.rejectionObserved.promise
+      await store.rejectionsObserved.promise
       const followingJobId = await store.enqueue({
         jobName: RetryingLocalJob.jobName(),
         args: ["following", 0],
@@ -192,7 +199,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
     try {
       const rescheduledJobId = await store.enqueue({ jobName: ReschedulingLocalJob.jobName(), args: [], options: cappedOptions })
 
-      await store.rejectionObserved.promise
+      await store.rejectionsObserved.promise
       const followingJobId = await store.enqueue({ jobName: RecordingLocalJob.jobName(), args: ["following"], options: cappedOptions })
 
       await dispatcher.waitForIdle()
@@ -204,6 +211,48 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
       expect((await store.getJob(rescheduledJobId))?.status).toEqual("completed")
       expect(ReschedulingLocalJob.attempts).toEqual(2)
     } finally {
+      await dispatcher.stop()
+    }
+  })
+
+  it("schedules bounded recovery when the immediate acknowledgement retry also fails", async () => {
+    resetLocalBackgroundJobClasses()
+    const { clock, configuration, dispatcher, store } = await acknowledgementRecoveryHarness({
+      acknowledgementMethod: "markCompleted",
+      acknowledgementRejections: 2,
+      jobClasses: [RecordingLocalJob]
+    })
+    /** @type {Array<{context: Record<string, ReturnType<typeof JSON.parse>>, error: Error}>} */
+    const frameworkErrors = []
+    /** @type {Array<{context: Record<string, ReturnType<typeof JSON.parse>>, error: Error, errorType: string}>} */
+    const allErrors = []
+    const repeatedErrorObserved = deferred()
+    const onFrameworkError = (payload) => {
+      frameworkErrors.push(payload)
+      if (frameworkErrors.length === 2) repeatedErrorObserved.resolve(undefined)
+    }
+    const onAllError = (payload) => allErrors.push(payload)
+
+    configuration.getErrorEvents().on("framework-error", onFrameworkError)
+    configuration.getErrorEvents().on("all-error", onAllError)
+
+    try {
+      const jobId = await store.enqueue({ jobName: RecordingLocalJob.jobName(), args: ["recovered-by-timer"], options: cappedOptions })
+
+      await repeatedErrorObserved.promise
+      expect(store.acknowledgementAttempts).toEqual(2)
+      expect([...clock.timers.values()].map((timer) => timer.scheduledAtMs)).toEqual([clock.now() + 1_000])
+      expect((await store.getJob(jobId))?.status).toEqual("handed_off")
+      await clock.advance(1_000)
+      await dispatcher.waitForIdle()
+      expect(store.acknowledgementAttempts).toEqual(3)
+      expect((await store.getJob(jobId))?.status).toEqual("completed")
+      expect(RecordingLocalJob.performances).toEqual([["recovered-by-timer"]])
+      expect(frameworkErrors.length).toEqual(2)
+      expect(allErrors.map((payload) => payload.errorType)).toEqual(["framework-error", "framework-error"])
+    } finally {
+      configuration.getErrorEvents().off("framework-error", onFrameworkError)
+      configuration.getErrorEvents().off("all-error", onAllError)
       await dispatcher.stop()
     }
   })

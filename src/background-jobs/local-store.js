@@ -143,6 +143,7 @@ export default class LocalBackgroundJobsStore {
     if (transactionCompletion) {
       const schemaReadyPromise = this._applySchema(db)
       const transactionReadyPromise = schemaReadyPromise.then(() => undefined)
+      const transactionReady = {completion: transactionCompletion, promise: transactionReadyPromise}
       const durableReadyPromise = schemaReadyPromise.then(async (changed) => {
         if (!changed) {
           this._isReady = true
@@ -150,11 +151,22 @@ export default class LocalBackgroundJobsStore {
         }
 
         await transactionCompletion
+      }, () => {
+        // The transaction-local caller below owns and rethrows this same schema error.
+        // This branch only settles the shared durability barrier so it cannot become
+        // an independent unhandled rejection while failed ownership is cleared.
       })
 
-      this._transactionReadyPromises.set(db, {completion: transactionCompletion, promise: transactionReadyPromise})
+      this._transactionReadyPromises.set(db, transactionReady)
       this._readyPromise = durableReadyPromise
-      await transactionReadyPromise
+
+      try {
+        await transactionReadyPromise
+      } catch (error) {
+        if (this._transactionReadyPromises.get(db) === transactionReady) this._transactionReadyPromises.delete(db)
+        if (this._readyPromise === durableReadyPromise) this._readyPromise = null
+        throw error
+      }
       return
     }
 
@@ -473,42 +485,54 @@ export default class LocalBackgroundJobsStore {
       const rows = await db.newQuery().from(LOCAL_BACKGROUND_JOBS_TABLE).where({status: "queued"}).results()
 
       for (const rawRow of rows) {
-        const row = this._normalizeRow(rawRow)
-        const queueCap = queues[row.queue]?.maxConcurrent
-        const desiredCap = Number.isInteger(queueCap) && Number(queueCap) > 0 ? Number(queueCap) : null
-        const currentIsQueueDerived = Boolean(row.concurrencyKey?.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX))
-
-        if (row.concurrencyKey && !currentIsQueueDerived) continue
-
-        if (desiredCap === null) {
-          if (currentIsQueueDerived) {
-            await db.update({
-              conditions: {id: row.id, status: "queued"},
-              data: {concurrency_key: null, max_concurrency: null},
-              tableName: LOCAL_BACKGROUND_JOBS_TABLE
-            })
-          }
-          continue
-        }
-
-        const concurrency = {
-          concurrencyKey: `${QUEUE_CONCURRENCY_KEY_PREFIX}${row.queue}`,
-          maxConcurrency: desiredCap,
-          queueDerived: true
-        }
-
-        await this._ensureConcurrency(db, concurrency)
-        if (row.concurrencyKey !== concurrency.concurrencyKey || row.maxConcurrency !== desiredCap) {
-          await db.update({
-            conditions: {id: row.id, status: "queued"},
-            data: {concurrency_key: concurrency.concurrencyKey, max_concurrency: desiredCap},
-            tableName: LOCAL_BACKGROUND_JOBS_TABLE
-          })
-        }
+        await this._reconcileQueuedJobConcurrency(db, this._normalizeRow(rawRow), queues)
       }
 
       await this._rebuildConcurrencyCounts(db)
     }))
+  }
+
+  /**
+   * Applies current queue-derived concurrency policy to one queued row.
+   * Explicit concurrency keys remain owned by the enqueue contract.
+   * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
+   * @param {import("./types.js").BackgroundJobRow} job - Queued job snapshot.
+   * @param {Record<string, {maxConcurrent?: number, priority?: number}>} queues - Current queue policy snapshot.
+   * @returns {Promise<import("./types.js").BackgroundJobRow>} - Reconciled snapshot.
+   */
+  async _reconcileQueuedJobConcurrency(db, job, queues) {
+    const currentIsQueueDerived = Boolean(job.concurrencyKey?.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX))
+
+    if (job.concurrencyKey && !currentIsQueueDerived) return job
+
+    const concurrency = normalizeBackgroundJobConcurrency({
+      options: {},
+      queue: job.queue,
+      queues
+    })
+
+    if (!concurrency) {
+      if (currentIsQueueDerived) {
+        await db.update({
+          conditions: {id: job.id, status: "queued"},
+          data: {concurrency_key: null, max_concurrency: null},
+          tableName: LOCAL_BACKGROUND_JOBS_TABLE
+        })
+      }
+
+      return {...job, concurrencyKey: null, maxConcurrency: null}
+    }
+
+    await this._ensureConcurrency(db, concurrency)
+    if (job.concurrencyKey !== concurrency.concurrencyKey || job.maxConcurrency !== concurrency.maxConcurrency) {
+      await db.update({
+        conditions: {id: job.id, status: "queued"},
+        data: {concurrency_key: concurrency.concurrencyKey, max_concurrency: concurrency.maxConcurrency},
+        tableName: LOCAL_BACKGROUND_JOBS_TABLE
+      })
+    }
+
+    return {...job, concurrencyKey: concurrency.concurrencyKey, maxConcurrency: concurrency.maxConcurrency}
   }
 
   /**
@@ -714,6 +738,7 @@ export default class LocalBackgroundJobsStore {
     await this.ensureReady()
 
     return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      const queues = this.configuration.getBackgroundJobsConfig().queues
       const rows = await db.newQuery().from(LOCAL_BACKGROUND_JOBS_TABLE).where({status: "handed_off"}).results()
       /** @type {import("./types.js").BackgroundJobRow[]} */
       const recovered = []
@@ -722,9 +747,16 @@ export default class LocalBackgroundJobsStore {
         const job = this._normalizeRow(rawRow)
         const updated = await this._applyFailure(db, job, new Error("Local background job recovered after an interrupted dispatcher"))
 
-        if (updated) recovered.push(updated)
+        if (!updated) continue
+
+        const reconciled = updated.status === "queued"
+          ? await this._reconcileQueuedJobConcurrency(db, updated, queues)
+          : updated
+
+        recovered.push(reconciled)
       }
 
+      await this._rebuildConcurrencyCounts(db)
       return recovered
     }))
   }
