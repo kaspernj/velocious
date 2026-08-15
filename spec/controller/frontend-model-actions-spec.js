@@ -95,7 +95,9 @@ function buildFrontendModelControllerConfiguration(environment, options = {}) {
     directory: dummyDirectory(),
     environment,
     environmentHandler: new EnvironmentHandlerNode(),
-    exposeInternalErrorsToClients: options.exposeInternalErrorsToClients === true,
+    ...(options.exposeInternalErrorsToClients === undefined
+      ? {}
+      : {exposeInternalErrorsToClients: options.exposeInternalErrorsToClients}),
     initializeModels: async () => {},
     locale: "en",
     localeFallbacks: {en: ["en"]},
@@ -172,13 +174,13 @@ async function runFrontendApiWithResponse({configuration, params, requestPayload
 
 /**
  * @param {Record<string, any>} payload - Error payload.
- * @param {RegExp} messagePattern - Expected debug message.
+ * @param {RegExp} messagePattern - Expected exposed message.
  * @returns {void}
  */
-function expectDebugFrontendModelError(payload, messagePattern) {
+function expectExposedFrontendModelError(payload, messagePattern) {
   expect(payload.status).toEqual("error")
   expect(payload.errorType).toEqual("internal_error")
-  expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+  expect(payload.errorMessage).toMatch(messagePattern)
   expect(payload.correlationId).toMatch(/^[0-9a-f-]{36}$/)
   expect(payload.debugErrorClass).toEqual("Error")
   expect(payload.debugErrorMessage).toMatch(messagePattern)
@@ -463,7 +465,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
-  it("returns generic client-safe errors from shared frontend-model API for unexpected failures", async () => {
+  it("exposes internal errors from shared frontend-model API by default", async () => {
     await Dummy.run(async () => {
       const payload = await postFrontendModel("/frontend-models", {
         requests: [
@@ -478,7 +480,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
       expect(payload.status).toEqual("success")
       expect(payload.responses.length).toEqual(1)
-      expectDebugFrontendModelError(payload.responses[0].response, /No frontend model resource configuration/)
+      expectExposedFrontendModelError(payload.responses[0].response, /No frontend model resource configuration/)
     })
   })
 
@@ -600,38 +602,38 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     return payload.responses[0].response
   }
 
-  it("keeps unexpected shared frontend-model failures generic in production", async () => {
+  it("exposes unexpected shared frontend-model failures in production by default", async () => {
     const configuration = buildFrontendModelControllerConfiguration("production")
     const payload = await runFrontendApi({
       configuration,
       params: unknownSharedFrontendModelRequestParams()
     })
 
-    expectGenericFrontendModelError(expectSingleSharedFrontendModelResponse(payload))
+    expectExposedFrontendModelError(expectSingleSharedFrontendModelResponse(payload), /No frontend model resource configuration/)
   })
 
-  it("keeps unexpected shared frontend-model failures generic in staging by default", async () => {
+  it("exposes unexpected shared frontend-model failures in staging by default", async () => {
     const configuration = buildFrontendModelControllerConfiguration("staging")
     const payload = await runFrontendApi({
       configuration,
       params: unknownSharedFrontendModelRequestParams()
     })
 
-    expectGenericFrontendModelError(expectSingleSharedFrontendModelResponse(payload))
+    expectExposedFrontendModelError(expectSingleSharedFrontendModelResponse(payload), /No frontend model resource configuration/)
   })
 
-  it("returns debug details for unexpected shared frontend-model failures when staging opts in", async () => {
+  it("exposes unexpected shared frontend-model failures when staging explicitly enables exposure", async () => {
     const configuration = buildFrontendModelControllerConfiguration("staging", {exposeInternalErrorsToClients: true})
     const payload = await runFrontendApi({
       configuration,
       params: unknownSharedFrontendModelRequestParams()
     })
 
-    expectDebugFrontendModelError(expectSingleSharedFrontendModelResponse(payload), /No frontend model resource configuration/)
+    expectExposedFrontendModelError(expectSingleSharedFrontendModelResponse(payload), /No frontend model resource configuration/)
   })
 
   it("adds registered client error reporter payloads to shared frontend-model failures", async () => {
-    const configuration = buildFrontendModelControllerConfiguration("production")
+    const configuration = buildFrontendModelControllerConfiguration("production", {exposeInternalErrorsToClients: false})
     /** @type {import("../../src/configuration-types.js").ClientErrorPayloadContext[]} */
     const reporterContexts = []
     /** @type {Array<import("../../src/configuration-types.js").ErrorRequestDetails | null>} */
@@ -652,6 +654,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       return {
         bugReportUrl: "https://tensorbuzz.test/bugs/1",
         correlationId: "reporter-correlation-id",
+        debugBacktrace: ["Reporter stack"],
+        debugErrorClass: "ReporterError",
+        debugErrorMessage: "Reporter leaked internal details",
         errorType: "reporter_error"
       }
     })
@@ -683,7 +688,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
   })
 
   it("compacts oversized shared frontend-model request details for client error reporters", async () => {
-    const configuration = buildFrontendModelControllerConfiguration("production")
+    const configuration = buildFrontendModelControllerConfiguration("production", {exposeInternalErrorsToClients: false})
     /** @type {Array<import("../../src/configuration-types.js").ErrorRequestDetails | null>} */
     const reporterRequestDetails = []
     const requestPayload = unknownSharedFrontendModelRequestParams()
@@ -759,7 +764,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     const responseJson = responseText.length > 0 ? JSON.parse(responseText) : {}
     const payload = /** @type {Record<string, import("../../src/frontend-models/query.js").FrontendModelTransportValue>} */ (deserializeFrontendModelTransportValue(responseJson))
 
-    expectGenericFrontendModelError(payload)
+    expectExposedFrontendModelError(payload, /Could not parse nested params key/)
     expect(frameworkErrors.length).toEqual(1)
     expect(frameworkErrors[0].context.frontendModelEndpoint).toEqual(true)
     expect(frameworkErrors[0].error.message).toMatch(/Could not parse nested params key/)
@@ -790,8 +795,12 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(payload.errorMessage).toEqual("Ticket scan failed")
     expect(payload.details).toEqual({maximumLength: 100})
     expect(payload.velocious).toEqual({code: "ticket-scan-path-too-long"})
+    expect(payload.debugErrorClass).toEqual(undefined)
+    expect(payload.debugErrorMessage).toEqual(undefined)
+    expect(payload.debugBacktrace).toEqual(undefined)
     expect(authorizationPayload.errorType).toEqual("authorization_error")
     expect(authorizationPayload.errorMessage).toEqual("Not signed in.")
+    expect(authorizationPayload.debugErrorMessage).toEqual(undefined)
   })
 
   it("returns record-not-found errors with a stable safe type", async () => {
@@ -812,8 +821,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(payload.errorMessage).toEqual("Record not found.")
   })
 
-  it("keeps unexpected shared frontend-model failures generic in production when debug details are enabled", async () => {
-    const configuration = buildFrontendModelControllerConfiguration("production", {exposeInternalErrorsToClients: true})
+  it("keeps unexpected shared frontend-model failures generic in production when exposure is disabled", async () => {
+    const configuration = buildFrontendModelControllerConfiguration("production", {exposeInternalErrorsToClients: false})
     const payload = await runFrontendApi({
       configuration,
       params: unknownSharedFrontendModelRequestParams()
@@ -1661,7 +1670,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const reloadedForeignInteraction = await Interaction.find(foreignInteraction.id())
 
       expect(updatePayload.status).toEqual("error")
-      expect(updatePayload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(updatePayload.errorMessage).toMatch(/Cannot update nested interactions/)
       expect(reloadedForeignInteraction.kind()).toEqual("Foreign task interaction")
     })
   })
@@ -1804,7 +1813,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       })
 
       expect(payload.status).toEqual("error")
-      expect(payload.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
+      expect(payload.errorMessage).toEqual("Attachment path input is disabled")
     })
   })
 
@@ -2038,10 +2047,13 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       expect(payload.validationErrors.name[0].type).toEqual("presence")
       expect(payload.validationErrors.name[0].message).toEqual("can't be blank")
       expect(payload.validationErrors.name[0].fullMessage).toEqual("Name can't be blank")
+      expect(payload.debugErrorClass).toEqual(undefined)
+      expect(payload.debugErrorMessage).toEqual(undefined)
+      expect(payload.debugBacktrace).toEqual(undefined)
     })
   })
 
-  it("masks non-validation internal errors as generic in production frontend-model responses", async () => {
+  it("exposes non-validation internal errors in production frontend-model responses by default", async () => {
     await Dummy.run(async () => {
       const configuration = buildFrontendModelControllerConfiguration("production")
       const params = {
@@ -2057,12 +2069,8 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
       const payload = await runFrontendApi({configuration, params})
       const response = /** @type {Record<string, any>} */ (payload.responses?.[0]?.response || payload)
 
-      expect(response.status).toEqual("error")
-      expect(response.errorMessage).toEqual(FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE)
-      expect(response.errorType).toEqual("internal_error")
-      expect(response.correlationId).toMatch(/^[0-9a-f-]{36}$/)
+      expectExposedFrontendModelError(response, /No ability in context for Task/)
       expect(response.validationErrors).toBeUndefined()
-      expect(response.debugErrorClass).toBeUndefined()
     })
   })
 

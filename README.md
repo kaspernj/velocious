@@ -775,22 +775,20 @@ Use `await FrontendModelBase.waitForIdle()` when a test harness or app lifecycle
 
 Frontend-model HTTP requests always use `credentials: "include"` so shared custom commands can set session cookies without app-level transport overrides.
 
-Unexpected frontend-model endpoint failures return their original message by default with `errorType: "internal_error"` and a server-generated `correlationId` shared with the matching framework-error report. Set `secureFrontendModelErrors: true` to return only explicitly safe messages and otherwise `errorMessage: "Request failed."`. Expected application failures can use `VelociousError.safe(message, {errorType, details, code})`; generated frontend-model callers preserve the server's safe error fields. See [docs/frontend-models.md](docs/frontend-models.md#error-payloads).
+Unexpected frontend-model endpoint failures return their original message and full stack trace by default in every environment, including production. Responses use `errorType: "internal_error"`, a server-generated `correlationId` shared with the matching framework-error report, and the established `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields. Expected application failures can use `VelociousError.safe(message, {errorType, details, code})`; generated frontend-model callers preserve the server's safe error fields without adding irrelevant debug fields. See [docs/frontend-models.md](docs/frontend-models.md#error-payloads).
 Invalid client query descriptors, such as unknown `select`, `where`, `search`, `joins`, `preload`, `group`, `sort`, `pluck`, or Ransack attributes, return the specific frontend-model query error message with `velocious.code: "frontend-model-query-error"` and are not emitted as framework errors.
 Invalid frontend-model write attributes and attachment names, including attributes rejected by `permittedParams()`, return the specific safe error message with `velocious.code: "frontend-model-attribute-error"` and are not emitted as framework errors.
-In `development` and `test`, Velocious also includes `debugErrorClass`, `debugErrorMessage`, and `debugBacktrace` fields so browser/system-test failures are easier to diagnose without exposing those details in production.
-Other non-production environments, such as `staging`, keep the same client-safe default unless you explicitly opt in with `exposeInternalErrorsToClients: true`:
+To mask unexpected internal details, explicitly opt out for the application configuration:
 
 ```js
 const configuration = new Configuration({
-  environment: "staging",
-  exposeInternalErrorsToClients: true
+  exposeInternalErrorsToClients: false
 })
 ```
 
-This opt-in is ignored in `production`; production frontend-model responses never include internal exception details.
+With this opt-out, built-in commands, custom commands, and sync replay failures return `errorMessage: "Request failed."` and omit the debug message and stack fields in every environment. `secureFrontendModelErrors: true` remains a deprecated compatibility alias when `exposeInternalErrorsToClients` is omitted; an explicit `exposeInternalErrorsToClients` value always wins.
 
-Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, a safe `requestDetails` snapshot, and a small `context` object, and should only return fields that are safe for clients to see. Frontend-model endpoint failures include `context.frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. This is useful for attaching an error-reporting URL while keeping the normal production error message generic:
+Backends can append client-safe metadata to frontend-model error responses with `configuration.addClientErrorPayloadReporter(...)`. Reporters receive the caught `error`, the current `request`, a safe `requestDetails` snapshot, and a small `context` object, and should only return fields that are safe for clients to see. Frontend-model endpoint failures include `context.frontendModelEndpoint`, `action`, `commandType`, `model`, `requestId`, and `expectedError`. When exposure is disabled, Velocious strips the established debug fields even if a reporter supplies them. This is useful for attaching an error-reporting URL while keeping an opted-out error message generic:
 
 ```js
 configuration.addClientErrorPayloadReporter(async ({error, requestDetails, context}) => {
@@ -1919,7 +1917,7 @@ configuration.getErrorEvents().on("all-error", ({error, errorType}) => {
 })
 ```
 
-Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return an `internal_error` response with the original message by default (or `Request failed.` when `secureFrontendModelErrors` is enabled) and a correlation ID, then emits them as `framework-error`/`all-error` with the same correlation ID and `context.frontendModelEndpoint === true`. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` errors keep their expected-error status. A raw `errorType` property alone is not considered safe and does not suppress reporting.
+Genuinely unexpected frontend-model command failures reach this bus too. The frontend-model controller catches them to return an `internal_error` response with the original message and stack trace by default (or `Request failed.` without debug fields when `exposeInternalErrorsToClients: false`) and a correlation ID, then emits them as `framework-error`/`all-error` with the same correlation ID and `context.frontendModelEndpoint === true`. Expected user-flow errors are excluded: validation failures are forwarded with their real message (for example `Name can't be blank`), invalid client query descriptors are returned as frontend-model query errors, and `error.velocious`-annotated / `safeToExpose` errors keep their expected-error status without irrelevant debug fields. A raw `errorType` property alone is not considered safe and does not suppress reporting.
 
 Unexpected inbound decoded WebSocket dispatch failures emit one `framework-error` and one matching `all-error`. Established expected client-flow errors remain excluded from both events.
 

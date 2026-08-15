@@ -236,7 +236,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients = false, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors = false, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -283,8 +283,9 @@ export default class VelociousConfiguration {
     this._environment = environment || globalThis.process?.env.VELOCIOUS_ENV || globalThis.process?.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
-    this._exposeInternalErrorsToClients = exposeInternalErrorsToClients
-    this._secureFrontendModelErrors = secureFrontendModelErrors
+    this._exposeInternalErrorsToClients = exposeInternalErrorsToClients === undefined
+      ? secureFrontendModelErrors !== true
+      : exposeInternalErrorsToClients
     this._directory = directory
     this._initializeModels = initializeModels
     /** @type {VelociousPackage[]} */
@@ -461,9 +462,10 @@ export default class VelociousConfiguration {
 
   /**
    * Returns whether frontend-model errors expose only explicitly safe messages.
-   * @returns {boolean} Whether frontend-model errors expose only explicitly safe messages.
+   * @deprecated Use `getExposeInternalErrorsToClients()`.
+   * @returns {boolean} Whether frontend-model internal error exposure is disabled.
    */
-  getSecureFrontendModelErrors() { return this._secureFrontendModelErrors === true }
+  getSecureFrontendModelErrors() { return !this.getExposeInternalErrorsToClients() }
 
   /**
    * Runs get debug endpoint.

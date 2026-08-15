@@ -175,7 +175,6 @@ const frontendModelJoinedPathsSymbol = Symbol("frontendModelJoinedPaths")
 const frontendModelGroupedColumnsSymbol = Symbol("frontendModelGroupedColumns")
 const frontendModelWhereNoMatchSymbol = Symbol("frontendModelWhereNoMatch")
 const frontendModelClientSafeErrorMessage = "Request failed."
-const frontendModelDebugErrorEnvironments = new Set(["development", "test"])
 
 /**
  * Builds a client-safe sync replay validation error.
@@ -277,10 +276,10 @@ function frontendModelVelociousMetadataForError(error) {
 /**
  * Runs frontend model client message for error.
  * @param {unknown} error - Caught error.
- * @param {boolean} forwardUnexpectedErrorMessage - Whether unexpected error messages may be exposed.
+ * @param {boolean} exposeInternalErrorsToClients - Whether unexpected error messages may be exposed.
  * @returns {string} - Message safe to return to API clients.
  */
-function frontendModelClientMessageForError(error, forwardUnexpectedErrorMessage) {
+function frontendModelClientMessageForError(error, exposeInternalErrorsToClients) {
   if (error instanceof RecordNotFoundError) {
     return "Record not found."
   }
@@ -301,7 +300,7 @@ function frontendModelClientMessageForError(error, forwardUnexpectedErrorMessage
     return error.message
   }
 
-  if (forwardUnexpectedErrorMessage && error instanceof Error) return error.message
+  if (exposeInternalErrorsToClients && error instanceof Error) return error.message
 
   return frontendModelClientSafeErrorMessage
 }
@@ -310,14 +309,11 @@ function frontendModelClientMessageForError(error, forwardUnexpectedErrorMessage
  * Runs frontend model debug payload for error.
  * @param {object} args - Arguments.
  * @param {import("./configuration.js").default} args.configuration - Current configuration.
- * @param {string} args.environment - Current environment.
  * @param {unknown} args.error - Caught error.
- * @returns {import("./configuration-types.js").ClientErrorPayloadReporterPayload} - Optional debug payload for non-production environments.
+ * @returns {import("./configuration-types.js").ClientErrorPayloadReporterPayload} - Optional internal error details when client exposure is enabled.
  */
-function frontendModelDebugPayloadForError({configuration, environment, error}) {
-  const debugAllowed = frontendModelDebugErrorEnvironments.has(environment) || environment !== "production" && configuration.getExposeInternalErrorsToClients()
-
-  if (!debugAllowed) {
+function frontendModelDebugPayloadForError({configuration, error}) {
+  if (!configuration.getExposeInternalErrorsToClients()) {
     return {}
   }
 
@@ -3259,10 +3255,9 @@ export default class FrontendModelController extends Controller {
    * Runs frontend model client error payload for error.
    * @param {unknown} error - Caught error.
    * @param {FrontendModelEndpointErrorContext | undefined} [endpointErrorContext] - Frontend-model endpoint error context.
-   * @param {{forwardUnexpectedErrorMessage?: boolean}} [options] - Client error rendering options.
    * @returns {Promise<import("./configuration-types.js").ClientErrorPayloadReporterPayload>} - Client payload for the current environment.
    */
-  async frontendModelClientErrorPayloadForError(error, endpointErrorContext, {forwardUnexpectedErrorMessage = false} = {}) {
+  async frontendModelClientErrorPayloadForError(error, endpointErrorContext) {
     const velociousMetadata = frontendModelVelociousMetadataForError(error)
     const normalizedError = error instanceof Error ? error : new Error(String(error))
     /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
@@ -3312,15 +3307,20 @@ export default class FrontendModelController extends Controller {
       request: this.getRequest()
     })
 
+    if (!this.getConfiguration().getExposeInternalErrorsToClients()) {
+      delete reporterPayload.debugBacktrace
+      delete reporterPayload.debugErrorClass
+      delete reporterPayload.debugErrorMessage
+    }
+
     return {
       ...reporterPayload,
       ...this.frontendModelErrorPayload(frontendModelClientMessageForError(
         error,
-        forwardUnexpectedErrorMessage && !this.getConfiguration().getSecureFrontendModelErrors()
+        this.getConfiguration().getExposeInternalErrorsToClients()
       )),
       ...frontendModelDebugPayloadForError({
         configuration: this.getConfiguration(),
-        environment: this.getConfiguration().getEnvironment(),
         error
       }),
       ...(velociousMetadata ? {velocious: velociousMetadata} : {}),
@@ -4397,9 +4397,7 @@ export default class FrontendModelController extends Controller {
 
         responses.push({
           requestId,
-          response: await this.frontendModelClientErrorPayloadForError(error, errorContext, {
-            forwardUnexpectedErrorMessage: !isBuiltInCommand
-          })
+          response: await this.frontendModelClientErrorPayloadForError(error, errorContext)
         })
       }
     }
@@ -4623,9 +4621,7 @@ export default class FrontendModelController extends Controller {
       await this.frontendModelLogEndpointError({error, errorContext})
 
       await this.render({
-        json: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext, {
-          forwardUnexpectedErrorMessage: true
-        }), this.transportSerializationOptions()))
+        json: /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(await this.frontendModelClientErrorPayloadForError(error, errorContext), this.transportSerializationOptions()))
       })
     }
   }

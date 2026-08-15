@@ -1,0 +1,1 @@
+Frontend-model clients now receive unexpected error messages and stack traces by default in every environment, including production. Set `exposeInternalErrorsToClients: false` to return `"Request failed."` and omit debug fields consistently for built-in commands, custom commands, and sync replay failures.
