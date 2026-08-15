@@ -452,6 +452,7 @@ export default class TestRunner {
    * @returns {boolean} - Whether the test should be skipped.
    */
   shouldSkipTest(testArgs, testData, testDescription, descriptions, lineMatchedInScope) {
+    if (this.hasTag(testArgs, "browser-only") && !this.isBrowserTestMode()) return true
     if (this.hasMatchingTag(testArgs.tags, this.getExcludeTagSet())) return true
 
     if (this._includeTagSet.size > 0 && !testArgs.focus) {

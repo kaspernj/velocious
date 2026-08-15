@@ -9,6 +9,12 @@
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
 - If test framework startup fails, backend server must still stop to avoid leaked open handles.
 
+The `*.browser-spec.js` suffix includes a file in the browser runner without
+removing it from the Node database matrix. When a suite is meaningful only in a
+real browser, add `tags: ["browser-only"]` to its metadata. The Node runner still
+discovers the definition but filters its tests before lifecycle hooks or callbacks
+run; the browser runner executes them normally.
+
 ## Truncation cleanup
 
 When test isolation uses truncation, `truncateAllTables()` discovers the live table

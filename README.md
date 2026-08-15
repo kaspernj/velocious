@@ -177,6 +177,17 @@ npx velocious test --include-tag fast,api
 npx velocious test --exclude-tag slow
 ```
 
+`*.browser-spec.js` files remain eligible for both the Node database matrix and
+the browser runner. Add the reserved `browser-only` tag only when a suite requires
+the real browser environment; the Node runner discovers the file but does not
+execute its tagged tests.
+
+```js
+describe("Browser integration", {tags: ["browser-only"]}, () => {
+  it("uses browser runtime behavior", async () => {})
+})
+```
+
 Target a test by line number or description.
 
 ```bash

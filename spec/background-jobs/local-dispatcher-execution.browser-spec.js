@@ -4,7 +4,7 @@ import LocalBackgroundJobsAdapter from "../../src/background-jobs/local-adapter.
 import Configuration from "../../src/configuration.js"
 import {RecordingLocalJob, resetLocalBackgroundJobClasses} from "../helpers/local-background-jobs-test-harness.js"
 
-describe("Local background jobs dispatcher - execution", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("Local background jobs dispatcher - execution", {tags: ["dummy", "browser-only"], databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("uses the Browser/Expo default adapter and completes queued jobs in process", async () => {
     const configuration = Configuration.current()
 
