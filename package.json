@@ -116,7 +116,7 @@
     "cpy-cli": "^7.0.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.0.1",
-    "eslint-plugin-jsdoc": "^63.0.0",
+    "eslint-plugin-jsdoc": "^64.0.2",
     "eslint-plugin-jsdoc-inline-type-casts": "https://github.com/kaspernj/eslint-plugin-jsdoc-inline-type-casts/archive/refs/heads/master.tar.gz",
     "eslint-plugin-jsdoc-tag-lines": "^1.0.1",
     "fallow": "3.14.0",
