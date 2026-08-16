@@ -1,6 +1,6 @@
 // @ts-check
 
-import LocalBackgroundJobsStore from "../../src/background-jobs/local-store.js"
+import LocalBackgroundJobsStore, {LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE} from "../../src/background-jobs/local-store.js"
 import Configuration from "../../src/configuration.js"
 
 describe("Local background jobs store - queue semantics", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
@@ -36,6 +36,15 @@ describe("Local background jobs store - queue semantics", {tags: ["dummy"], data
     ])
 
     expect(concurrentIds[0]).toEqual(concurrentIds[1])
+    await configuration.ensureConnections({name: "Local background jobs concurrency ownership verification"}, async (dbs) => {
+      const rows = await dbs.default
+        .newQuery()
+        .from(LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE)
+        .where({concurrency_key: "queue:uploads"})
+        .results()
+
+      expect(rows).toHaveLength(1)
+    })
     await expect(async () => await store.enqueue({jobName: "UploadJob", args: [], options: {idempotencyKey: "server-only"}})).toThrow(/not supported by the local background-jobs adapter/)
   })
 

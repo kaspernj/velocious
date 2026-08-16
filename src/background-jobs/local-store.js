@@ -381,6 +381,8 @@ export default class LocalBackgroundJobsStore {
     return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
       let jobId = preparedJob.jobId
 
+      if (preparedJob.concurrency) await this._ensureConcurrency(db, preparedJob.concurrency)
+
       if (options.deduplicateWhileQueued) {
         const existing = await db
           .newQuery()
@@ -451,8 +453,6 @@ export default class LocalBackgroundJobsStore {
    * @returns {Promise<void>} - Resolves after insertion.
    */
   async _insertPreparedJob(db, preparedJob) {
-    if (preparedJob.concurrency) await this._ensureConcurrency(db, preparedJob.concurrency)
-
     await db.insert({
       tableName: LOCAL_BACKGROUND_JOBS_TABLE,
       data: {
@@ -892,20 +892,19 @@ export default class LocalBackgroundJobsStore {
    * @returns {Promise<void>} - Resolves when ensured.
    */
   async _ensureConcurrency(db, concurrency) {
+    await db.upsert({
+      conflictColumns: ["concurrency_key"],
+      data: {active_count: 0, concurrency_key: concurrency.concurrencyKey, max_concurrency: concurrency.maxConcurrency},
+      tableName: LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE,
+      updateColumns: ["concurrency_key"]
+    })
+
     const rows = await db
       .newQuery()
       .from(LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE)
       .where({concurrency_key: concurrency.concurrencyKey})
       .limit(1)
       .results()
-
-    if (!rows[0]) {
-      await db.insert({
-        tableName: LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE,
-        data: {active_count: 0, concurrency_key: concurrency.concurrencyKey, max_concurrency: concurrency.maxConcurrency}
-      })
-      return
-    }
 
     const existingRow = /** @type {{max_concurrency: number | string}} */ (rows[0])
     const existingCap = Number(existingRow.max_concurrency)

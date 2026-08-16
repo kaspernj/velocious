@@ -52,11 +52,16 @@ describe("Local background jobs store - readiness", {tags: ["dummy"], databaseCl
 
       const jobsTable = await dbs.default.getTableByNameOrFail(JOBS_TABLE)
       const indexes = await jobsTable.getIndexes()
-      const indexNames = indexes.map((index) => index.getName()).sort()
+      const primaryIndexes = indexes.filter((index) => index.isPrimaryKey())
+      const secondaryIndexNames = indexes
+        .filter((index) => !index.isPrimaryKey())
+        .map((index) => index.getName())
+        .sort()
       const argsDigestColumn = await jobsTable.getColumnByNameOrFail("args_digest")
       const deduplicationIndex = indexes.find((index) => index.getName() === LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2])
 
-      expect(indexNames).toEqual([...LOCAL_BACKGROUND_JOBS_INDEX_NAMES].sort())
+      expect(primaryIndexes.map((index) => index.getColumnNames())).toEqual(dbs.default.getType() === "sqlite" ? [] : [["id"]])
+      expect(secondaryIndexNames).toEqual([...LOCAL_BACKGROUND_JOBS_INDEX_NAMES].sort())
       expect(argsDigestColumn.getMaxLength()).toEqual(64)
       expect(deduplicationIndex?.getColumnNames()).toEqual(["args_digest"])
     })

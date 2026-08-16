@@ -150,7 +150,9 @@ describe("Cli - Commands - db:rollback", () => {
       "users",
       "uuid_acts_as_list_items",
       "uuid_interactions",
-      "uuid_items"
+      "uuid_items",
+      "velocious_local_background_job_concurrency",
+      "velocious_local_background_jobs"
     ]
     const expectedRolledBackMigrations = [
       "20230728075328",

@@ -102,6 +102,13 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * ordinary test failure (the promise already settled).
  * @typedef {Error & {velociousTestTimeout?: true}} TestTimeoutError
  */
+/**
+ * SharedTransactionBrokerRegistration type.
+ * @typedef {object} SharedTransactionBrokerRegistration
+ * @property {SharedTransactionBroker} broker - Attempt broker and connection coordinator.
+ * @property {boolean} environmentPublished - Whether child-process coordinates were published.
+ * @property {string | undefined} previousEnvironment - Environment value to restore after publication.
+ */
 
 /**
  * Runs run with timeout.
@@ -589,12 +596,11 @@ export default class TestRunner {
   }
 
   /**
-   * Starts a capability-scoped broker for the active non-tenant physical
-   * transaction connections. No broker/env is installed for truncation-only or
-   * other transaction-disabled attempts.
-   * @returns {Promise<{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined>} - Attempt registration.
+   * Selects the current non-tenant connections eligible for shared transaction work.
+   * @param {{transactionsOnly: boolean}} args - Selection options.
+   * @returns {Record<string, import("../database/drivers/base.js").default>} - Eligible connections by identifier.
    */
-  async startSharedTransactionBroker() {
+  sharedTransactionConnections({transactionsOnly}) {
     const configuration = this.getConfiguration()
     const currentConnections = configuration.getCurrentConnections()
     /** @type {Record<string, import("../database/drivers/base.js").default>} */
@@ -602,14 +608,58 @@ export default class TestRunner {
 
     for (const [identifier, connection] of Object.entries(currentConnections)) {
       const pool = configuration.getDatabasePool(identifier)
-      if (pool.getConfiguration().tenantOnly || !connection.insideTransaction()) continue
+
+      if (pool.getConfiguration().tenantOnly) continue
+      if (transactionsOnly && !connection.insideTransaction()) continue
       connections[identifier] = connection
     }
 
-    const databaseIdentifiers = Object.keys(connections)
-    if (databaseIdentifiers.length === 0) return undefined
+    return connections
+  }
 
-    const broker = await SharedTransactionBroker.start({connections})
+  /**
+   * Installs physical-connection coordination before a transaction-opening hook
+   * can expose the shared connection to a long-lived in-process service.
+   * Child-process coordinates remain unpublished until the transaction exists.
+   * @returns {Promise<SharedTransactionBrokerRegistration | undefined>} - Prepared coordinator.
+   */
+  async prepareSharedTransactionBroker() {
+    const connections = this.sharedTransactionConnections({transactionsOnly: false})
+
+    if (Object.keys(connections).length === 0) return undefined
+
+    return {
+      broker: await SharedTransactionBroker.start({connections}),
+      environmentPublished: false,
+      previousEnvironment: undefined
+    }
+  }
+
+  /**
+   * Starts a capability-scoped broker for the active non-tenant physical
+   * transaction connections. No broker/env is installed for truncation-only or
+   * other transaction-disabled attempts.
+   * @param {SharedTransactionBrokerRegistration} [preparedRegistration] - Coordinator prepared before hooks.
+   * @returns {Promise<SharedTransactionBrokerRegistration | undefined>} - Attempt registration.
+   */
+  async startSharedTransactionBroker(preparedRegistration) {
+    const connections = this.sharedTransactionConnections({transactionsOnly: true})
+
+    const databaseIdentifiers = Object.keys(connections)
+    if (databaseIdentifiers.length === 0) {
+      await this.stopSharedTransactionBroker(preparedRegistration)
+      return undefined
+    }
+
+    const broker = preparedRegistration?.broker || await SharedTransactionBroker.start({connections})
+
+    for (const identifier of databaseIdentifiers) {
+      if (broker.connections[identifier] !== connections[identifier]) {
+        await this.stopSharedTransactionBroker(preparedRegistration)
+        throw new Error(`Prepared shared transaction broker connection changed for database: ${identifier}`)
+      }
+    }
+
     const previousEnvironment = process.env[SHARED_TRANSACTION_BROKER_ENV]
     process.env[SHARED_TRANSACTION_BROKER_ENV] = Buffer.from(JSON.stringify({
       address: broker.address(),
@@ -618,20 +668,23 @@ export default class TestRunner {
       expected: true
     })).toString("base64url")
 
-    return {broker, previousEnvironment}
+    return {broker, environmentPublished: true, previousEnvironment}
   }
 
   /**
    * Revokes an attempt broker before database rollback hooks run and restores
    * the caller's environment so later pooled/spawned children cannot inherit it.
-   * @param {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} registration - Attempt registration.
+   * @param {SharedTransactionBrokerRegistration | undefined} registration - Attempt registration.
    */
   async stopSharedTransactionBroker(registration) {
     if (!registration) return
-    if (registration.previousEnvironment === undefined) {
-      delete process.env[SHARED_TRANSACTION_BROKER_ENV]
-    } else {
-      process.env[SHARED_TRANSACTION_BROKER_ENV] = registration.previousEnvironment
+
+    if (registration.environmentPublished) {
+      if (registration.previousEnvironment === undefined) {
+        delete process.env[SHARED_TRANSACTION_BROKER_ENV]
+      } else {
+        process.env[SHARED_TRANSACTION_BROKER_ENV] = registration.previousEnvironment
+      }
     }
     await registration.broker.close()
   }
@@ -1034,8 +1087,10 @@ export default class TestRunner {
           let testLifecycle
           /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
           let testSharedConnectionRegistrations = []
-          /** @type {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} */
+          /** @type {SharedTransactionBrokerRegistration | undefined} */
           let sharedTransactionBrokerRegistration
+          /** @type {SharedTransactionBrokerRegistration | undefined} */
+          let sharedTransactionBrokerPreparation
           /**
            * Shared mutable flag so the catch block can suppress the
            * `_successfulTests` increment inside the still-detached lifecycle:
@@ -1061,19 +1116,23 @@ export default class TestRunner {
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
                 // Register dynamic candidates before hooks so transaction state changes
                 // made during a hook are immediately visible to any in-process work.
-                // Long-lived services such as a background-jobs main can dispatch DB
-                // work between a transaction-starting hook and broker activation just
-                // as an HTTP request can dispatch work from inside the hook itself.
+                // Prepare transaction sharing before hooks so long-lived services cannot
+                // use the shared connection while its coordinator is still missing.
                 testSharedConnectionRegistrations = this.activateTestSharedConnections()
 
                 try {
+                  if (testArgs.databaseCleaning?.transaction === true) {
+                    sharedTransactionBrokerPreparation = await this.prepareSharedTransactionBroker()
+                  }
+
                   try {
                     clearDeliveries()
                     for (const beforeEachData of newBeforeEaches) {
                       await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
                     }
 
-                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker()
+                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation)
+                    sharedTransactionBrokerPreparation = undefined
                     if (sharedTransactionBrokerRegistration && testSharedConnectionRegistrations.length === 0) {
                       testSharedConnectionRegistrations = this.activateTestSharedConnections()
                     }
@@ -1092,7 +1151,9 @@ export default class TestRunner {
                     }
                   } finally {
                     try {
-                      await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
+                      await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
+                      sharedTransactionBrokerRegistration = undefined
+                      sharedTransactionBrokerPreparation = undefined
                     } finally {
                       for (const afterEachData of newAfterEaches) {
                         await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
@@ -1142,8 +1203,9 @@ export default class TestRunner {
               // ensureConnections before activateTestSharedConnections() replaces
               // it. Clear it here so the next test checks out a fresh connection.
               // Idempotent when the lifecycle did settle and already cleared.
-              await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
+              await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
               sharedTransactionBrokerRegistration = undefined
+              sharedTransactionBrokerPreparation = undefined
               this.clearTestSharedConnections(testSharedConnectionRegistrations)
             }
 
