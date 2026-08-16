@@ -43,7 +43,11 @@ async function writeTestFixture(directory, fileName, source) {
  * @returns {Promise<{code: number, stderr: string, stdout: string}>} - Child result.
  */
 async function runTestCommand(args) {
-  const environment = {...process.env, MSSQL_SA_PASSWORD: "test-password", VELOCIOUS_DISABLE_MSSQL: "1"}
+  const environment = {
+    ...process.env,
+    MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "test-password",
+    VELOCIOUS_DISABLE_MSSQL: "1"
+  }
 
   delete environment.VELOCIOUS_TEST_DIR
 
@@ -72,7 +76,11 @@ async function runTestCommand(args) {
  * @returns {Promise<{code: number, stderr: string, stdout: string}>} - Interrupted child result.
  */
 async function runInterruptedTestCommand(args, readyOutput) {
-  const environment = {...process.env, MSSQL_SA_PASSWORD: "test-password", VELOCIOUS_DISABLE_MSSQL: "1"}
+  const environment = {
+    ...process.env,
+    MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "test-password",
+    VELOCIOUS_DISABLE_MSSQL: "1"
+  }
 
   delete environment.VELOCIOUS_TEST_DIR
 

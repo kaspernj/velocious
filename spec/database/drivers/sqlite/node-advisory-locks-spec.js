@@ -6,6 +6,7 @@ import os from "node:os"
 import path from "node:path"
 
 import Configuration from "../../../../src/configuration.js"
+import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import VelociousDatabaseDriversSqliteNode from "../../../../src/database/drivers/sqlite/index.js"
 import Task from "../../../dummy/src/models/task.js"
 
@@ -77,7 +78,7 @@ describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, (
       database: {test: {}},
       directory,
       environment: "test",
-      environmentHandler: Configuration.current().getEnvironmentHandler(),
+      environmentHandler: new EnvironmentHandlerNode(),
       locale: "en",
       localeFallbacks: {en: ["en"]},
       locales: ["en"]
