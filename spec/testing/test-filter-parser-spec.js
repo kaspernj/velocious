@@ -1,7 +1,7 @@
 // @ts-check
 
-import {parseFilters} from "../../src/testing/test-filter-parser.js"
-import {describe, expect, it} from "../../src/testing/test.js"
+import { parseFilters } from "../../src/testing/test-filter-parser.js"
+import { describe, expect, it } from "../../src/testing/test.js"
 
 describe("parseFilters", {databaseCleaning: {transaction: true}}, () => {
   describe("group splitting flags", () => {
@@ -52,6 +52,39 @@ describe("parseFilters", {databaseCleaning: {transaction: true}}, () => {
       expect(result.groupNumber).toBe(1)
       expect(result.includeTags).toEqual(["fast"])
       expect(result.excludeTags).toEqual(["slow"])
+    })
+  })
+
+  describe("profiling flags", () => {
+    it("parses profile outputs with separate and equals values", () => {
+      const result = parseFilters([
+        "test",
+        "--profile",
+        "--profile-json",
+        "tmp/profile.json",
+        "--timing-manifest-output=tmp/timings.json",
+        "spec/testing/"
+      ])
+
+      expect(result.profile).toBe(true)
+      expect(result.profileJsonPath).toBe("tmp/profile.json")
+      expect(result.timingManifestOutputPath).toBe("tmp/timings.json")
+      expect(result.filteredProcessArgs).toEqual(["test", "spec/testing/"])
+    })
+
+    it("leaves profiling flags after -- untouched", () => {
+      const result = parseFilters(["test", "--", "--profile", "--profile-json=tmp/profile.json"])
+
+      expect(result.profile).toBe(false)
+      expect(result.profileJsonPath).toBe(undefined)
+      expect(result.filteredProcessArgs).toEqual(["test", "--", "--profile", "--profile-json=tmp/profile.json"])
+    })
+
+    it("rejects missing manifest and profiling output values", async () => {
+      await expect(() => parseFilters(["test", "--timing-manifest"])).toThrow(/--timing-manifest requires a path/)
+      await expect(() => parseFilters(["test", "--profile-json"])).toThrow(/--profile-json requires a path/)
+      await expect(() => parseFilters(["test", "--profile-json="])).toThrow(/--profile-json requires a path/)
+      await expect(() => parseFilters(["test", "--timing-manifest-output", "--profile"])).toThrow(/--timing-manifest-output requires a path/)
     })
   })
 })

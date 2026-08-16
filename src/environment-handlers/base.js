@@ -55,6 +55,22 @@ export default class VelociousEnvironmentHandlerBase {
   runWithSharedTransactionCoordinatorOwner(_connection, _owner, callback) { return callback() }
 
   /**
+   * Runs work with test-profile attribution. Runtimes without async-context
+   * storage execute the callback without installing ambient attribution.
+   * @template T
+   * @param {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} _context - Captured profile context, or an explicit absence of attribution.
+   * @param {() => T} callback - Profiled work.
+   * @returns {T} - Callback result.
+   */
+  runWithTestProfileContext(_context, callback) { return callback() }
+
+  /**
+   * Gets the current test-profile attribution context.
+   * @returns {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} - Active context.
+   */
+  getCurrentTestProfileContext() { return undefined }
+
+  /**
    * Mutable ambient tenant used by runtimes without async-context storage.
    * @type {ReturnType<typeof JSON.parse> | undefined}
    */

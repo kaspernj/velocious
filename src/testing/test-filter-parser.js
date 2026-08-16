@@ -7,7 +7,10 @@
  * @property {string[]} filteredProcessArgs - Remaining process args with filter flags removed.
  * @property {number | undefined} groups - Total number of groups for test splitting.
  * @property {number | undefined} groupNumber - Which group to run (1-indexed).
+ * @property {boolean} profile - Whether test profiling is enabled.
+ * @property {string | undefined} profileJsonPath - Rich profile output path.
  * @property {string | undefined} timingManifestPath - JSON timing manifest path.
+ * @property {string | undefined} timingManifestOutputPath - Timing manifest output path.
  */
 // @ts-check
 
@@ -17,6 +20,8 @@ const EXAMPLE_FLAGS = new Set(["--example", "--name", "-e"])
 const GROUPS_FLAGS = new Set(["--groups"])
 const GROUP_NUMBER_FLAGS = new Set(["--group-number"])
 const TIMING_MANIFEST_FLAGS = new Set(["--timing-manifest"])
+const PROFILE_JSON_FLAGS = new Set(["--profile-json"])
+const TIMING_MANIFEST_OUTPUT_FLAGS = new Set(["--timing-manifest-output"])
 
 /**
  * Runs split tags.
@@ -81,8 +86,13 @@ export function parseFilters(processArgs) {
    * Defines groupNumber.
    * @type {number | undefined} */
   let groupNumber
+  let profile = false
+  /** @type {string | undefined} */
+  let profileJsonPath
   /** @type {string | undefined} */
   let timingManifestPath
+  /** @type {string | undefined} */
+  let timingManifestOutputPath
 
   let inRestArgs = false
 
@@ -189,15 +199,54 @@ export function parseFilters(processArgs) {
       if (TIMING_MANIFEST_FLAGS.has(arg)) {
         const nextValue = processArgs[i + 1]
 
-        if (nextValue && !nextValue.startsWith("-")) {
-          timingManifestPath = nextValue
-          i++
-        }
+        if (!nextValue || nextValue.startsWith("-")) throw new Error("--timing-manifest requires a path")
+        timingManifestPath = nextValue
+        i++
         continue
       }
 
       if (arg.startsWith("--timing-manifest=")) {
         timingManifestPath = arg.slice("--timing-manifest=".length)
+        if (!timingManifestPath) throw new Error("--timing-manifest requires a path")
+        continue
+      }
+
+      if (arg === "--profile") {
+        profile = true
+        continue
+      }
+
+      if (PROFILE_JSON_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (!nextValue || nextValue.startsWith("-")) throw new Error("--profile-json requires a path")
+        profileJsonPath = nextValue
+        profile = true
+        i++
+        continue
+      }
+
+      if (arg.startsWith("--profile-json=")) {
+        profileJsonPath = arg.slice("--profile-json=".length)
+        if (!profileJsonPath) throw new Error("--profile-json requires a path")
+        profile = true
+        continue
+      }
+
+      if (TIMING_MANIFEST_OUTPUT_FLAGS.has(arg)) {
+        const nextValue = processArgs[i + 1]
+
+        if (!nextValue || nextValue.startsWith("-")) throw new Error("--timing-manifest-output requires a path")
+        timingManifestOutputPath = nextValue
+        profile = true
+        i++
+        continue
+      }
+
+      if (arg.startsWith("--timing-manifest-output=")) {
+        timingManifestOutputPath = arg.slice("--timing-manifest-output=".length)
+        if (!timingManifestOutputPath) throw new Error("--timing-manifest-output requires a path")
+        profile = true
         continue
       }
     }
@@ -212,6 +261,9 @@ export function parseFilters(processArgs) {
     filteredProcessArgs,
     groups,
     groupNumber,
-    timingManifestPath
+    profile,
+    profileJsonPath,
+    timingManifestPath,
+    timingManifestOutputPath
   }
 }

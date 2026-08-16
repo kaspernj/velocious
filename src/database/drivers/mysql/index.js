@@ -518,7 +518,15 @@ export default class VelociousDatabaseDriversMysql extends Base{
     if (!this.pool) await this.connect()
     if (!this.pool) throw new Error("MySQL pool failed to initialize")
 
-    yield* streamQuery(this.pool, sql)
+    const profileAttempt = this._startProfiledQueryAttempt(sql)
+    let failed = true
+
+    try {
+      yield* streamQuery(this.pool, sql)
+      failed = false
+    } finally {
+      this._finishProfiledQueryAttempt(profileAttempt, failed)
+    }
   }
 
   /**
@@ -558,13 +566,20 @@ export default class VelociousDatabaseDriversMysql extends Base{
     if (!this.pool) throw new Error("MySQL pool failed to initialize")
 
     const pool = this.pool
+    const profileAttempt = this._startProfiledQueryAttempt(structureSql)
+    let failed = true
 
-    await new Promise((resolve, reject) => {
-      pool.query(structureSql, (error) => {
-        if (error) reject(error)
-        else resolve(undefined)
+    try {
+      await new Promise((resolve, reject) => {
+        pool.query(structureSql, (error) => {
+          if (error) reject(error)
+          else resolve(undefined)
+        })
       })
-    })
+      failed = false
+    } finally {
+      this._finishProfiledQueryAttempt(profileAttempt, failed)
+    }
 
     return true
   }

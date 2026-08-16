@@ -43,7 +43,7 @@ import { createSharedTransactionProxyDriver, sharedTransactionBrokerConfig } fro
 
 /**
  * Defines this typedef.
- * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ReturnType<typeof JSON.parse>, timeZone?: string}} TimezoneStore */
+ * @typedef {{ability?: import("../authorization/ability.js").default, offsetMinutes: number, requestTiming?: import("../http-server/client/request-timing.js").default, tenant?: ReturnType<typeof JSON.parse>, testProfileContext?: import("../testing/test-profiler.js").TestProfileAsyncContext, timeZone?: string}} TimezoneStore */
 
 /**
  * Runs path within allowed prefixes.
@@ -145,6 +145,36 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
     owners.set(connection, owner)
     return this._sharedTransactionCoordinatorAsyncLocalStorage.run(owners, callback)
+  }
+
+  /**
+   * Runs work with async-safe test profile attribution.
+   * @template T
+   * @param {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} context - Captured profile context, or an explicit absence of attribution.
+   * @param {() => T} callback - Profiled work.
+   * @returns {T} - Callback result.
+   */
+  runWithTestProfileContext(context, callback) {
+    if (!this._timezoneAsyncLocalStorage) return callback()
+
+    const existingStore = this._timezoneAsyncLocalStorage.getStore()
+
+    return this._timezoneAsyncLocalStorage.run({
+      ability: existingStore?.ability,
+      offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
+      requestTiming: existingStore?.requestTiming,
+      tenant: existingStore?.tenant,
+      testProfileContext: context,
+      timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
+    }, callback)
+  }
+
+  /**
+   * Gets the current async-safe test profile attribution context.
+   * @returns {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} - Current context.
+   */
+  getCurrentTestProfileContext() {
+    return this._timezoneAsyncLocalStorage?.getStore()?.testProfileContext
   }
 
   /**
@@ -378,6 +408,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       offsetMinutes,
       requestTiming: existingStore?.requestTiming,
       tenant: existingStore?.tenant,
+      testProfileContext: existingStore?.testProfileContext,
       timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
@@ -400,6 +431,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming: existingStore?.requestTiming,
       tenant: existingStore?.tenant,
+      testProfileContext: existingStore?.testProfileContext,
       timeZone: validateTimeZone(timeZone, "timeZone")
     }, callback)
   }
@@ -424,6 +456,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         offsetMinutes,
         requestTiming: existingStore?.requestTiming,
         tenant: existingStore?.tenant,
+        testProfileContext: existingStore?.testProfileContext,
         timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
       })
     }
@@ -453,6 +486,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
         requestTiming: existingStore?.requestTiming,
         tenant: existingStore?.tenant,
+        testProfileContext: existingStore?.testProfileContext,
         timeZone: normalizedTimeZone
       })
     }
@@ -510,6 +544,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming: existingStore?.requestTiming,
       tenant: existingStore?.tenant,
+      testProfileContext: existingStore?.testProfileContext,
       timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
@@ -535,6 +570,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
         requestTiming: undefined,
         tenant: undefined,
+        testProfileContext: undefined,
         timeZone: this.getTimeZone(this.getConfiguration())
       })
     }
@@ -570,6 +606,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming,
       tenant: existingStore?.tenant,
+      testProfileContext: existingStore?.testProfileContext,
       timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
@@ -604,6 +641,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
       offsetMinutes: existingStore?.offsetMinutes ?? this.getTimezoneOffsetMinutes(this.getConfiguration()),
       requestTiming: existingStore?.requestTiming,
       tenant,
+      testProfileContext: existingStore?.testProfileContext,
       timeZone: existingStore?.timeZone ?? this.getTimeZone(this.getConfiguration())
     }, callback)
   }
@@ -629,6 +667,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
         offsetMinutes: this.getTimezoneOffsetMinutes(this.getConfiguration()),
         requestTiming: undefined,
         tenant,
+        testProfileContext: undefined,
         timeZone: this.getTimeZone(this.getConfiguration())
       })
     }
