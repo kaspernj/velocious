@@ -19,9 +19,10 @@ import path from "path"
  * @param {import("../../src/environment-handlers/base.js").default} [args.environmentHandler] - Environment handler override.
  * @param {{maxOpenHandles?: number}} [args.frontendTenantSqlite] - Frontend tenant SQLite lifecycle configuration.
  * @param {import("../../src/configuration-types.js").InitializersCallbackType} [args.initializers] - Application initializer loader.
+ * @param {import("../../src/configuration-types.js").VelociousSyncConfiguration} [args.sync] - Sync configuration override.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
  */
-export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true, environmentHandler = new EnvironmentHandlerNode(), frontendTenantSqlite, initializers} = {}) {
+export async function createTenantTestConfiguration(prefix, {enforceTenantDatabaseScopes = true, environmentHandler = new EnvironmentHandlerNode(), frontendTenantSqlite, initializers, sync} = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
 
   const configuration = new Configuration({
@@ -61,6 +62,7 @@ export async function createTenantTestConfiguration(prefix, {enforceTenantDataba
     locale: "en",
     localeFallbacks: {en: ["en"]},
     locales: ["en"],
+    sync,
     tenantDatabaseResolver: ({identifier, tenant}) => {
       const tenantSlug = tenantSlugFromUnknownTenant(tenant)
 

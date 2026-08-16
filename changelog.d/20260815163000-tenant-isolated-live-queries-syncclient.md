@@ -1,0 +1,1 @@
+Tenant-switched record events and live queries now carry immutable physical database identity, and `SyncClient` accepts a tenant handle plus database identifier to isolate project queues, mutation logs, scopes, cursors, receipts, conflicts, pull applies, and realtime reconnect catch-up.

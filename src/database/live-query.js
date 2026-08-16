@@ -16,6 +16,7 @@ import restArgsError from "../utils/rest-args-error.js"
  * @template T
  * @typedef {object} LiveQuerySource
  * @property {() => RecordModelClass} getModelClass - Root model class the query reads.
+ * @property {(modelClass: RecordModelClass) => string} [databaseIdentityForModel] - Captured physical identity for an observed model.
  * @property {() => Promise<T[]>} toArray - Runs the query and resolves the current rows.
  */
 
@@ -117,7 +118,9 @@ class LiveQuery {
     this._started = true
 
     for (const modelClass of this._modelClasses) {
-      this._unsubscribes.push(recordChanges.subscribe(modelClass, this._onRecordChange))
+      const databaseIdentity = this._query.databaseIdentityForModel?.(modelClass)
+
+      this._unsubscribes.push(recordChanges.subscribe(modelClass, this._onRecordChange, {databaseIdentity}))
     }
 
     this._run()

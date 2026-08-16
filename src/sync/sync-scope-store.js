@@ -14,6 +14,7 @@ import stableJsonStringify from "./stable-json.js"
  * @property {string | null} resourceType - Scope resource/model name, or null for the all-types (user) scope.
  * @property {string} scopeDigest - Fixed-size deterministic digest of the canonical scope key.
  * @property {string} state - Scope state ("active" or "removed").
+ * @property {string} storeIdentity - Physical store identity owning this row.
  */
 const TABLE_NAME = "velocious_sync_scopes"
 const SCOPE_DIGEST_PREFIX = "velocious-sync-scope:"
@@ -41,10 +42,17 @@ export default class SyncScopeStore {
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration owning the database.
    * @param {string} [args.databaseIdentifier] - Database identifier.
+   * @param {import("../tenants/tenant-handle.js").default} [args.tenantHandle] - Immutable tenant handle owning the physical store.
    */
-  constructor({configuration, databaseIdentifier = "default"}) {
+  constructor({configuration, databaseIdentifier = "default", tenantHandle}) {
+    if (tenantHandle) tenantHandle.assertConfiguration(configuration)
+
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
+    this.tenantHandle = tenantHandle
+    this.storeIdentity = tenantHandle
+      ? tenantHandle.databaseIdentity(databaseIdentifier)
+      : `configuration:${databaseIdentifier}`
     /** @type {Map<string, SyncScopeRow>} */
     this._memoryScopes = new Map()
     this._isReady = false
@@ -151,7 +159,8 @@ export default class SyncScopeStore {
         id: new UUID(4).format(),
         resourceType: scope.resourceType ?? null,
         scopeDigest: digest,
-        state: "active"
+        state: "active",
+        storeIdentity: this.storeIdentity
       }
 
       this._memoryScopes.set(digest, newScope)
@@ -224,6 +233,7 @@ export default class SyncScopeStore {
    * @returns {Promise<string | null>} Cursor JSON payload.
    */
   async loadCursor(scopeRow) {
+    this._assertScopeRow(scopeRow)
     await this.ensureReady()
 
     if (this._usesMemoryStorage()) {
@@ -244,6 +254,7 @@ export default class SyncScopeStore {
    * @returns {Promise<void>}
    */
   async saveCursor(scopeRow, cursor) {
+    this._assertScopeRow(scopeRow)
     if (!cursor) return
 
     await this.ensureReady()
@@ -310,6 +321,12 @@ export default class SyncScopeStore {
    * @returns {Promise<Result>} Callback result.
    */
   async _withDb(callback) {
+    if (this.tenantHandle) {
+      return await this.tenantHandle.databaseOperation({databaseIdentifier: this.databaseIdentifier, name: "Tenant sync scope store"}, async (operation) => {
+        return await callback(operation.connection())
+      })
+    }
+
     return await this.configuration.ensureConnections({databaseIdentifiers: [this.databaseIdentifier], name: "Sync scope store"}, async (dbs) => {
       const db = dbs[this.databaseIdentifier]
 
@@ -372,7 +389,19 @@ export default class SyncScopeStore {
       id: String(row.id),
       resourceType: String(row.resource_type) === "" ? null : String(row.resource_type),
       scopeDigest: String(row.scope_digest),
-      state: String(row.state)
+      state: String(row.state),
+      storeIdentity: this.storeIdentity
+    }
+  }
+
+  /**
+   * Rejects passing a scope row captured from another physical store.
+   * @param {SyncScopeRow} scopeRow - Scope row to validate.
+   * @returns {void}
+   */
+  _assertScopeRow(scopeRow) {
+    if (scopeRow.storeIdentity !== this.storeIdentity) {
+      throw new Error("Sync scope row belongs to another physical tenant database")
     }
   }
 }

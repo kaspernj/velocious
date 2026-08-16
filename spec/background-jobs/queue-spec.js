@@ -3,7 +3,7 @@
 import fs from "fs/promises"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
-import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/background-jobs-helper.js"
+import {outputPathFor, startBackgroundJobs, waitForOutputJson, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
 import DelayedJob from "../dummy/src/jobs/delayed-job.js"
@@ -84,41 +84,39 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
   })
 
   it("limits forked runner concurrency without blocking inline job capacity", async () => {
-    const {main, worker} = await startBackgroundJobs({workerOptions: {
+    await withBackgroundJobs(async () => {
+      const firstForkedPath = await outputPathFor("forked-limit-first")
+      const secondForkedPath = await outputPathFor("forked-limit-second")
+      const inlinePath = await outputPathFor("forked-limit-inline")
+
+      await SlowTestJob.performLater("first", firstForkedPath, 1)
+      await SlowTestJob.performLater("second", secondForkedPath, 0.01)
+      const inlineResult = await appendInlineAndWait(inlinePath)
+
+      let secondForkedExists = true
+
+      try {
+        await fs.readFile(secondForkedPath, "utf8")
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
+
+        secondForkedExists = false
+      }
+
+      expect(secondForkedExists).toBeFalse()
+
+      const [firstForkedResult, secondForkedResult] = await Promise.all([
+        waitForOutputJson({outputPath: firstForkedPath, timeoutSeconds: 5}),
+        waitForOutputJson({outputPath: secondForkedPath, timeoutSeconds: 5})
+      ])
+
+      expect(inlineResult).toEqual(["inline"])
+      expect(firstForkedResult).toEqual({message: "first"})
+      expect(secondForkedResult).toEqual({message: "second"})
+    }, {workerOptions: {
       maxConcurrentForkedJobs: 1,
       maxConcurrentInlineJobs: 4
     }})
-    const firstForkedPath = await outputPathFor("forked-limit-first")
-    const secondForkedPath = await outputPathFor("forked-limit-second")
-    const inlinePath = await outputPathFor("forked-limit-inline")
-
-    await SlowTestJob.performLater("first", firstForkedPath, 1)
-    await SlowTestJob.performLater("second", secondForkedPath, 0.01)
-    const inlineResult = await appendInlineAndWait(inlinePath)
-
-    let secondForkedExists = true
-
-    try {
-      await fs.readFile(secondForkedPath, "utf8")
-    } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
-
-      secondForkedExists = false
-    }
-
-    expect(secondForkedExists).toBeFalse()
-
-    const [firstForkedResult, secondForkedResult] = await Promise.all([
-      waitForOutputJson({outputPath: firstForkedPath, timeoutSeconds: 5}),
-      waitForOutputJson({outputPath: secondForkedPath, timeoutSeconds: 5})
-    ])
-
-    expect(inlineResult).toEqual(["inline"])
-    expect(firstForkedResult).toEqual({message: "first"})
-    expect(secondForkedResult).toEqual({message: "second"})
-
-    await worker.stop()
-    await main.stop()
   })
 
   it("runs multiple inline jobs in parallel up to maxConcurrentInlineJobs", async () => {

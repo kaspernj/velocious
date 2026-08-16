@@ -3619,6 +3619,29 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Captures and validates the physical database identity that owns this record.
+   * @param {string} databaseIdentity - Opaque operation/connection identity.
+   * @returns {this} This record.
+   */
+  captureDatabaseIdentity(databaseIdentity) {
+    if (this._databaseIdentity && this._databaseIdentity !== databaseIdentity) {
+      throw new Error("Record belongs to a different physical tenant database")
+    }
+
+    this._databaseIdentity = databaseIdentity
+
+    return this
+  }
+
+  /**
+   * Returns the captured physical database identity.
+   * @returns {string | undefined} Captured physical database identity.
+   */
+  databaseIdentity() {
+    return this._databaseIdentity
+  }
+
+  /**
    * Releases this record from a completed eager-helper operation while
    * preserving the legacy ambient follow-up behavior of `usingTenant` finders.
    * @param {import("../operation.js").default} operation - Releasing operation.
@@ -3742,7 +3765,27 @@ class VelociousDatabaseRecord {
     if (this._databaseOperation) return this._databaseOperation.connection()
     if (this.__connection) return this.__connection
 
-    return this.getModelClass().connection()
+    const connection = this.getModelClass().connection()
+
+    if (this._databaseIdentity) this.captureDatabaseIdentity(this._databaseIdentityForConnection(connection))
+
+    return connection
+  }
+
+  /**
+   * Resolves the identity of an already selected concrete connection.
+   * @param {import("../drivers/base.js").default} connection - Concrete connection.
+   * @returns {string} Physical database identity.
+   */
+  _databaseIdentityForConnection(connection) {
+    const modelClass = this.getModelClass()
+    const databaseIdentifier = modelClass.getDatabaseIdentifier()
+    const reuseKey = modelClass
+      ._getConfiguration()
+      .getDatabasePool(databaseIdentifier)
+      .getConnectionConfigurationReuseKey(connection)
+
+    return `${databaseIdentifier}:${reuseKey}`
   }
 
   /**
@@ -3993,9 +4036,14 @@ class VelociousDatabaseRecord {
     if (!recordChanges.hasListeners(modelClass)) return
 
     const record = this
+    const databaseIdentity = this._databaseOperation
+      ? this._databaseOperation.databaseIdentity()
+      : this._databaseIdentityForConnection(this._connection())
+
+    this.captureDatabaseIdentity(databaseIdentity)
 
     await this._connection().afterCommit(() => {
-      recordChanges.emit({modelClass, operation, record})
+      recordChanges.emit({databaseIdentity, modelClass, operation, record})
     })
   }
 
