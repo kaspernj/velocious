@@ -57,6 +57,8 @@ case "$provider_runtime_source/" in "$dev_home_source/"*) exit 1;; esac
 case "$dev_home_source/" in "$provider_runtime_source/"*) exit 1;; esac
 case "$agent_context_source/" in "$dev_home_source/"*) exit 1;; esac
 case "$dev_home_source/" in "$agent_context_source/"*) exit 1;; esac
+case "$agent_context_source/" in "$provider_runtime_source/"*) exit 1;; esac
+case "$provider_runtime_source/" in "$agent_context_source/"*) exit 1;; esac
 case "$agent_context_source" in /opt/data|/opt/hermes-dind-shared|/opt/hermes-dind-shared/agent-context) exit 1;; esac
 
 stat -c '%u:%g %A %n' "$dev_home_source" "$provider_runtime_source" "$agent_context_source" "$github_config_source"
@@ -81,7 +83,7 @@ At every container start, `scripts/bootstrap-provider-runtime.sh` establishes th
 - `~/.config/opencode`, `~/.local/share/opencode`, `~/.local/state/opencode`, and `~/.cache/opencode` are real lane-local writable directories. Only `~/.local/share/opencode/auth.json` points into the shared provider runtime.
 - `AGENTS.md` and `CLAUDE.md` in the Codex home, Kimi home, and lane-local OpenCode config point to `/opt/hermes-agent-context/AGENTS.md`; their `skills` links point to `/opt/hermes-agent-context/skills`.
 
-Already-correct links are unchanged. A wrong symlink, file, or directory at a managed lane-home target or provider discovery-link target is moved intact under `~/.provider-runtime-migration-backups/<timestamp>-<unique-suffix>/` before replacement. Canonical provider-runtime aliases and their resolved directories are validation-only: a mismatch fails clearly and remains untouched. The bootstrap never deletes, chowns, or broadens permissions. It fails with the affected path when a required parent is not writable or cannot safely remain lane-local.
+Already-correct links are unchanged. Shared Codex/Kimi discovery-link validation and migration are serialized by locking the provider-runtime directory itself; the lock creates no runtime file and is released before lane-local setup. A wrong symlink, file, or directory at a managed lane-home target or provider discovery-link target is moved intact under `~/.provider-runtime-migration-backups/<timestamp>-<unique-suffix>/` before replacement. Canonical provider-runtime aliases and their resolved directories are validation-only: a mismatch fails clearly and remains untouched. The bootstrap never deletes, chowns, or broadens permissions. It fails with the affected path when a required parent is not writable or cannot safely remain lane-local.
 
 ## Concurrent isolated instances
 
@@ -94,7 +96,7 @@ COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
 
 ## Runtime and credential boundaries
 
-The provider runtime is mounted read/write at the same stable absolute path `/opt/hermes-dind-shared/auth/provider-runtime`. The exact agent-context bundle is mounted read-only at `/opt/hermes-agent-context`. Both use long-form bind syntax with `bind.create_host_path: false`, so Compose cannot create missing host paths. GitHub CLI config remains read-only at `/home/dev/.config/gh`, with `GH_CONFIG_DIR` pointing there. The normal dev service must not mount npm credentials, SSH keys, `/opt/data`, mutable `current`, broad shared roots, or any additional credential path.
+The provider runtime is mounted read/write at the same stable absolute path `/opt/hermes-dind-shared/auth/provider-runtime`. The exact agent-context bundle is mounted read-only at `/opt/hermes-agent-context`. Their resolved source paths must not contain one another, or the context would remain writable through the runtime bind. Both use long-form bind syntax with `bind.create_host_path: false`, so Compose cannot create missing host paths. GitHub CLI config remains read-only at `/home/dev/.config/gh`, with `GH_CONFIG_DIR` pointing there. The normal dev service must not mount npm credentials, SSH keys, `/opt/data`, mutable `current`, broad shared roots, or any additional credential path.
 
 Threadwire is not installed in the image or project; it remains parent orchestration resolved through unversioned `npx` outside the container. `THREADWIRE_CODEX_BIN`, `THREADWIRE_KIMI_BIN`, and `THREADWIRE_OPENCODE_BIN` explicitly select the provider CLIs installed at `/usr/local/bin`, avoiding host-only fallback adapters. `KIMI_CODE_HOME=/home/dev/.kimi-code` selects the durable Kimi home.
 

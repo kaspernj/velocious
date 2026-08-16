@@ -502,6 +502,27 @@ function verifyDockerRunSh(content) {
 }
 
 /**
+ * Verifies the documented source-path preflight.
+ *
+ * @param {string} content - The Docker development guide content.
+ * @returns {string[]} - The problems found.
+ */
+function verifyDockerDevelopmentDocs(content) {
+  const problems = []
+
+  for (const containmentCheck of [
+    'case "$agent_context_source/" in "$provider_runtime_source/"*) exit 1;; esac',
+    'case "$provider_runtime_source/" in "$agent_context_source/"*) exit 1;; esac'
+  ]) {
+    if (!content.includes(containmentCheck)) {
+      problems.push(`Docker preflight must reject bidirectional provider-runtime/agent-context containment: ${containmentCheck}`)
+    }
+  }
+
+  return problems
+}
+
+/**
  * Verifies that the provider bootstrap preserves the canonical runtime aliases.
  *
  * @param {string} content - The bootstrap script content.
@@ -543,6 +564,15 @@ function verifyProviderBootstrap(content) {
     }
   }
 
+  for (const lockOperation of [
+    'flock --exclusive "$provider_lock_fd"',
+    'flock --unlock "$provider_lock_fd"'
+  ]) {
+    if (!content.includes(lockOperation)) {
+      problems.push(`scripts/bootstrap-provider-runtime.sh must serialize shared provider-link mutations: ${lockOperation}`)
+    }
+  }
+
   return problems
 }
 
@@ -550,7 +580,7 @@ function verifyProviderBootstrap(content) {
  * Builds negative probes derived from the real files. Each probe mutates the
  * real content with a regression and must be caught by the matching verifier.
  *
- * @param {{dockerfile: string, compose: string, providerBootstrap: string}} contents - The real file contents.
+ * @param {{dockerDocs: string, dockerfile: string, compose: string, providerBootstrap: string}} contents - The real file contents.
  * @returns {{name: string, problems: string[], expected: string}[]} - The probes.
  */
 function negativeProbes(contents) {
@@ -643,6 +673,22 @@ function negativeProbes(contents) {
         'require_real_runtime_directory "$provider_runtime/.local-share"'
       )),
       expected: "real runtime parent"
+    },
+    {
+      name: "provider runtime serialization regression",
+      problems: verifyProviderBootstrap(contents.providerBootstrap.replace(
+        'flock --exclusive "$provider_lock_fd"',
+        'flock --shared "$provider_lock_fd"'
+      )),
+      expected: "serialize shared provider-link mutations"
+    },
+    {
+      name: "provider runtime and agent context containment regression",
+      problems: verifyDockerDevelopmentDocs(contents.dockerDocs.replace(
+        'case "$agent_context_source/" in "$provider_runtime_source/"*) exit 1;; esac',
+        ""
+      )),
+      expected: "bidirectional provider-runtime/agent-context containment"
     }
   ]
 }
@@ -682,8 +728,16 @@ function main() {
   }
 
   const dockerRunPath = path.join(repoRoot, "scripts", "docker-run.sh")
+  const dockerDocsPath = path.join(repoRoot, "docs", "docker-development-environment.md")
   const providerBootstrapPath = path.join(repoRoot, "scripts", "bootstrap-provider-runtime.sh")
+  const dockerDocs = fs.existsSync(dockerDocsPath) ? fs.readFileSync(dockerDocsPath, "utf8") : null
   const providerBootstrap = fs.existsSync(providerBootstrapPath) ? fs.readFileSync(providerBootstrapPath, "utf8") : null
+
+  if (dockerDocs === null) {
+    problems.push("Missing required file: docs/docker-development-environment.md")
+  } else {
+    problems.push(...verifyDockerDevelopmentDocs(dockerDocs))
+  }
 
   if (providerBootstrap === null) {
     problems.push("Missing required file: scripts/bootstrap-provider-runtime.sh")
@@ -703,8 +757,8 @@ function main() {
     }
   }
 
-  if (dockerfile !== null && compose !== null && providerBootstrap !== null) {
-    for (const probe of negativeProbes({dockerfile, compose, providerBootstrap})) {
+  if (dockerDocs !== null && dockerfile !== null && compose !== null && providerBootstrap !== null) {
+    for (const probe of negativeProbes({dockerDocs, dockerfile, compose, providerBootstrap})) {
       if (!probe.problems.some((problem) => problem.toLowerCase().includes(probe.expected.toLowerCase()))) {
         problems.push(`Negative probe was not caught by the verifier: ${probe.name}`)
       }

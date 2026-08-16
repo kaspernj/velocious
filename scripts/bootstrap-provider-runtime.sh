@@ -185,12 +185,40 @@ require_exact_runtime_alias() {
   fi
 }
 
-require_real_runtime_directory "$provider_runtime/.local"
-require_real_runtime_directory "$provider_runtime/.local/share"
-require_exact_runtime_alias "$provider_runtime/.codex" "codex" "$provider_runtime/codex"
-require_exact_runtime_alias "$provider_runtime/.kimi-code" "kimi-code" "$provider_runtime/kimi-code"
-require_exact_runtime_alias "$provider_runtime/.opencode" "opencode" "$provider_runtime/opencode"
-require_exact_runtime_alias "$provider_runtime/.local/share/opencode" "../../opencode" "$provider_runtime/opencode"
+validate_runtime_aliases() {
+  require_real_runtime_directory "$provider_runtime/.local"
+  require_real_runtime_directory "$provider_runtime/.local/share"
+  require_exact_runtime_alias "$provider_runtime/.codex" "codex" "$provider_runtime/codex"
+  require_exact_runtime_alias "$provider_runtime/.kimi-code" "kimi-code" "$provider_runtime/kimi-code"
+  require_exact_runtime_alias "$provider_runtime/.opencode" "opencode" "$provider_runtime/opencode"
+  require_exact_runtime_alias "$provider_runtime/.local/share/opencode" "../../opencode" "$provider_runtime/opencode"
+}
+
+validate_runtime_aliases
+
+if ! exec {provider_lock_fd}<"$provider_runtime"; then
+  fail "Could not open the provider runtime for shared-link locking: $provider_runtime"
+fi
+
+if ! flock --exclusive "$provider_lock_fd"; then
+  fail "Could not lock shared provider links: $provider_runtime"
+fi
+
+validate_runtime_aliases
+
+for provider_home in \
+  "$provider_runtime/codex" \
+  "$provider_runtime/kimi-code"; do
+  ensure_exact_link "$provider_home/AGENTS.md" "$agent_context/AGENTS.md"
+  ensure_exact_link "$provider_home/CLAUDE.md" "$agent_context/AGENTS.md"
+  ensure_exact_link "$provider_home/skills" "$agent_context/skills"
+done
+
+if ! flock --unlock "$provider_lock_fd"; then
+  fail "Could not unlock shared provider links: $provider_runtime"
+fi
+
+exec {provider_lock_fd}<&-
 
 for lane_parent in \
   "$dev_home/.config" \
@@ -214,13 +242,8 @@ ensure_exact_link "$dev_home/.kimi-code" "$provider_runtime/.kimi-code"
 ensure_exact_link "$dev_home/.opencode" "$provider_runtime/.opencode"
 ensure_exact_link "$dev_home/.local/share/opencode/auth.json" "$provider_runtime/.local/share/opencode/auth.json"
 
-for provider_home in \
-  "$provider_runtime/codex" \
-  "$provider_runtime/kimi-code" \
-  "$dev_home/.config/opencode"; do
-  ensure_exact_link "$provider_home/AGENTS.md" "$agent_context/AGENTS.md"
-  ensure_exact_link "$provider_home/CLAUDE.md" "$agent_context/AGENTS.md"
-  ensure_exact_link "$provider_home/skills" "$agent_context/skills"
-done
+ensure_exact_link "$dev_home/.config/opencode/AGENTS.md" "$agent_context/AGENTS.md"
+ensure_exact_link "$dev_home/.config/opencode/CLAUDE.md" "$agent_context/AGENTS.md"
+ensure_exact_link "$dev_home/.config/opencode/skills" "$agent_context/skills"
 
 exec "$@"
