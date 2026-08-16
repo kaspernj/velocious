@@ -241,24 +241,24 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
   async checkout(options = {}) {
-    const databaseConfig = this.getConfiguration()
-    const reuseKey = this.getConfigurationReuseKey()
+    let databaseConfig = this.getConfiguration()
+    let reuseKey = this.getConfigurationReuseKey(databaseConfig)
     let connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
     if (connection) return await this.activateConnection(connection, options)
 
     await this.reapIdleConnections()
+    databaseConfig = this.getConfiguration()
+    reuseKey = this.getConfigurationReuseKey(databaseConfig)
     connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
     if (connection) return await this.activateConnection(connection, options)
 
-    if (this.canSpawnConnection()) {
-      // Spawn via spawnConnection() so the tenant-aware configuration is resolved FRESH at
-      // spawn time for the current caller. Reusing the databaseConfig captured at the top of
-      // checkout() could bind the connection to a stale tenant/database, which breaks
-      // per-request isolation (e.g. test truncation appearing not to take effect). The queued
-      // path below keeps the waiting caller's captured config via waitForCheckout().
-      connection = await this.spawnConnectionForCheckout(this.getConfiguration(), this.getConfigurationReuseKey())
+    if (this.canSpawnConnection(databaseConfig)) {
+      // The post-reap configuration is fresh for the current caller, and its reuse key is
+      // derived from this exact captured object so the connection cannot open one tenant while
+      // being stamped for another. The queued path retains the same captured pair.
+      connection = await this.spawnConnectionForCheckout(databaseConfig, reuseKey)
 
       return await this.activateConnection(connection, options)
     }
@@ -443,13 +443,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     try {
       const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
-      const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
 
-      connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
-      connection.setSchemaCacheInvalidator(() => {
-        this.clearSchemaCache()
-        this.configuration.clearSchemaCachesForReuseKey(reuseKey)
-      })
+      this.stampConnectionForConfigurationReuseKey(connection, reuseKey)
 
       return connection
     } finally {

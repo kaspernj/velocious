@@ -1921,10 +1921,21 @@ Genuinely unexpected frontend-model command failures reach this bus too. The fro
 
 Unexpected inbound decoded WebSocket dispatch failures emit one `framework-error` and one matching `all-error`. Established expected client-flow errors remain excluded from both events.
 
-MySQL/MariaDB transaction deadlock retries emit a structured `database-deadlock-retry` event (also
-mirrored to `all-error`) with retry metadata, a redacted SQL fingerprint when available, and a
-best-effort bounded/redacted InnoDB deadlock excerpt. Diagnostic capture never joins the retry
-control flow. See [deadlock retry diagnostics](docs/logging.md#deadlock-retry-diagnostics).
+MySQL/MariaDB transaction contention that will run another outer attempt emits a structured
+`database-deadlock-retry` event through `configuration.getErrorEvents()` and mirrors it to `all-error` with
+`errorType: "database-deadlock-retry"`. Required context fields are `stage`, `driverType`,
+`contentionKind`, `attempt`, `maxAttempts`, `willRetry` (always `true` for this retry-only event), and
+`transactionAttemptDurationMs`. Exhausted/non-retried contention emits no retry event.
+Pool-owned connections optionally add logical `databaseIdentifier` and opaque
+`databaseIdentifierFingerprint`/`databaseIdentityFingerprint` fields; the logical identifier itself
+is always redacted. Named checkouts always redact `operationName` and add only its bounded opaque
+`operationNameFingerprint` for correlation. Query failures add
+`sqlOperation`/`sqlFingerprint`. True deadlocks may add `statusCapture` and the bounded structural
+`innodbDeadlockSummary`, including explicit bounded MariaDB counterparty conflict edges whose owner
+is intentionally not inferred; lock-wait timeouts report `statusCapture: "not-applicable"` and never attach a
+historical graph. Capture, parsing, and listeners remain detached from rollback and retry control
+flow. See the exact identity, redaction, structural bounds, failure-channel, and optional-field
+contract in [deadlock retry diagnostics](docs/logging.md#deadlock-retry-diagnostics).
 
 ## Use the Websocket client API (HTTP-like)
 
