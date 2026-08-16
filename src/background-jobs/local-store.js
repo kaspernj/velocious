@@ -4,6 +4,7 @@ import UUID from "pure-uuid"
 
 import TableData from "../database/table-data/index.js"
 import TableIndex from "../database/table-data/table-index.js"
+import sha256Hex from "../utils/sha256-hex.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 import {
   DEFAULT_BACKGROUND_JOB_QUEUE,
@@ -33,6 +34,7 @@ const EXPECTED_JOB_COLUMNS = [
   "id",
   "job_name",
   "args_json",
+  "args_digest",
   "execution_mode",
   "queue",
   "max_retries",
@@ -252,6 +254,7 @@ export default class LocalBackgroundJobsStore {
     table.string("id", {null: false, primaryKey: true})
     table.string("job_name", {null: false})
     table.text("args_json", {null: false})
+    table.string("args_digest", {maxLength: 64, null: false})
     table.string("execution_mode", {null: false})
     table.string("queue", {null: false})
     table.integer("max_retries", {null: false})
@@ -269,7 +272,7 @@ export default class LocalBackgroundJobsStore {
     table.integer("max_concurrency", {null: true})
     table.addIndex(new TableIndex(["status", "scheduled_at_ms", "created_at_ms", "id"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[0]}))
     table.addIndex(new TableIndex(["queue", "status", "created_at_ms"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[1]}))
-    table.addIndex(new TableIndex(["status", "job_name", "queue", "execution_mode", "args_json"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2]}))
+    table.addIndex(new TableIndex(["args_digest"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2]}))
     table.addIndex(new TableIndex(["status", "concurrency_key", "scheduled_at_ms"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[3]}))
     return table
   }
@@ -384,6 +387,7 @@ export default class LocalBackgroundJobsStore {
           .from(LOCAL_BACKGROUND_JOBS_TABLE)
           .select("id")
           .where({
+            args_digest: preparedJob.argsDigest,
             args_json: preparedJob.argsJson,
             job_name: preparedJob.jobName,
             queue: preparedJob.queue,
@@ -427,6 +431,7 @@ export default class LocalBackgroundJobsStore {
     if (executionMode !== "inline") throw new Error("Local background job execution mode invariant was violated")
 
     return {
+      argsDigest: sha256Hex(argsJson),
       argsJson,
       concurrency: normalizeBackgroundJobConcurrency({options, queue, queues}),
       createdAtMs,
@@ -451,6 +456,7 @@ export default class LocalBackgroundJobsStore {
     await db.insert({
       tableName: LOCAL_BACKGROUND_JOBS_TABLE,
       data: {
+        args_digest: preparedJob.argsDigest,
         args_json: preparedJob.argsJson,
         attempts: 0,
         completed_at_ms: null,

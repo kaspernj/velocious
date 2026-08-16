@@ -17,6 +17,7 @@
  */
 /**
  * @typedef {object} PreparedLocalBackgroundJob
+ * @property {string} argsDigest - Fixed-width digest of the serialized arguments.
  * @property {string} argsJson - Serialized arguments.
  * @property {ResolvedBackgroundJobConcurrency | null} concurrency - Resolved concurrency.
  * @property {number} createdAtMs - Creation timestamp.

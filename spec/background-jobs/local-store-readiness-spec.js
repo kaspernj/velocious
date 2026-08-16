@@ -4,6 +4,7 @@ import LocalBackgroundJobsStore, {LOCAL_BACKGROUND_JOBS_INDEX_NAMES} from "../..
 import Configuration from "../../src/configuration.js"
 import {createTransactionalDdlReadinessConfiguration, expectTransactionalDdlTableRolledBack} from "../helpers/transactional-ddl-rollback-helper.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+import sha256Hex from "../../src/utils/sha256-hex.js"
 
 const JOBS_TABLE = "velocious_local_background_jobs"
 const CONCURRENCY_TABLE = "velocious_local_background_job_concurrency"
@@ -50,12 +51,42 @@ describe("Local background jobs store - readiness", {tags: ["dummy"], databaseCl
       expect(await dbs.default.tableExists(CONCURRENCY_TABLE)).toEqual(true)
 
       const jobsTable = await dbs.default.getTableByNameOrFail(JOBS_TABLE)
-      const indexNames = (await jobsTable.getIndexes()).map((index) => index.getName()).sort()
+      const indexes = await jobsTable.getIndexes()
+      const indexNames = indexes.map((index) => index.getName()).sort()
+      const argsDigestColumn = await jobsTable.getColumnByNameOrFail("args_digest")
+      const deduplicationIndex = indexes.find((index) => index.getName() === LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2])
 
       expect(indexNames).toEqual([...LOCAL_BACKGROUND_JOBS_INDEX_NAMES].sort())
+      expect(argsDigestColumn.getMaxLength()).toEqual(64)
+      expect(deduplicationIndex?.getColumnNames()).toEqual(["args_digest"])
     })
 
     await new LocalBackgroundJobsStore({configuration}).ensureReady()
+  })
+
+  it("uses the bounded digest only to narrow exact queued-argument deduplication", async () => {
+    const configuration = Configuration.current()
+
+    await dropLocalSchema(configuration)
+
+    const store = new LocalBackgroundJobsStore({configuration})
+    const options = {deduplicateWhileQueued: true}
+    const firstId = await store.enqueue({jobName: "CollisionJob", args: ["first"], options})
+    const secondArgs = ["second"]
+    const collidingDigest = sha256Hex(JSON.stringify(secondArgs))
+
+    await configuration.ensureConnections({name: "Local background jobs digest collision setup"}, async (dbs) => {
+      await dbs.default.update({
+        conditions: {id: firstId},
+        data: {args_digest: collidingDigest},
+        tableName: JOBS_TABLE
+      })
+    })
+
+    const secondId = await store.enqueue({jobName: "CollisionJob", args: secondArgs, options})
+
+    expect(secondId).not.toEqual(firstId)
+    expect((await store.getJob(secondId))?.args).toEqual(secondArgs)
   })
 
   it("repairs a missing current-version index without replacing stored jobs", async () => {
