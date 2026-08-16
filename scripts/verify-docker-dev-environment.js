@@ -3,10 +3,11 @@
  * Static contract verifier for the canonical Docker development environment.
  *
  * Dependency-free: checks the tracked Dockerfile, compose.yml, .env.example,
- * .dockerignore, .gitignore, and scripts/docker-run.sh against the canonical
- * development-environment contract, then runs negative probes derived from
- * the real files to prove the checks actually catch regressions (for example
- * a standalone project `npm install` or a `COPY` of project source).
+ * .dockerignore, .gitignore, and development bootstrap scripts against the
+ * canonical development-environment contract, then runs negative probes
+ * derived from the real files to prove the checks actually catch regressions
+ * (for example a standalone project `npm install` or a `COPY` of project
+ * source).
  */
 
 import fs from "node:fs"
@@ -280,7 +281,8 @@ function composeServiceNames(content) {
 }
 
 /**
- * Extracts the volume entries of the first service-level volumes block.
+ * Extracts normalized volume entries from the first service-level volumes
+ * block.
  *
  * @param {string} content - The compose.yml content.
  * @returns {string[]} - The volume entries.
@@ -289,6 +291,8 @@ function composeServiceVolumes(content) {
   const lines = content.split("\n")
   const volumes = []
   let volumesIndent = null
+  /** @type {string[] | null} */
+  let currentVolume = null
 
   for (const line of lines) {
     if (volumesIndent === null) {
@@ -301,15 +305,26 @@ function composeServiceVolumes(content) {
 
     const entryMatch = line.match(/^(\s+)-\s+(.+?)\s*$/u)
 
-    if (entryMatch && entryMatch[1].length > volumesIndent) {
-      volumes.push(entryMatch[2])
+    if (entryMatch && entryMatch[1].length == volumesIndent + 2) {
+      if (currentVolume) volumes.push(currentVolume.join("\n"))
+
+      currentVolume = [`- ${entryMatch[2]}`]
       continue
     }
 
     if (line.trim() == "" || line.trimStart().startsWith("#")) continue
 
+    const indentation = line.match(/^\s*/u)?.[0].length || 0
+
+    if (currentVolume && indentation > volumesIndent + 2) {
+      currentVolume.push(line.trim())
+      continue
+    }
+
     break
   }
+
+  if (currentVolume) volumes.push(currentVolume.join("\n"))
 
   return volumes
 }
@@ -337,10 +352,6 @@ function verifyCompose(content) {
     problems.push(`compose.yml must not contain credential values (matched: ${content.match(COMPOSE_CREDENTIAL_VALUE_PATTERN)?.[0].trim()})`)
   }
 
-  if (/threadwire/iu.test(content)) {
-    problems.push("compose.yml must not couple the development service to Threadwire")
-  }
-
   if (!/^\s+init:\s*true\s*$/mu.test(content)) {
     problems.push("The dev service must set init: true")
   }
@@ -353,24 +364,44 @@ function verifyCompose(content) {
     problems.push("The dev service must set working_dir /home/dev/velocious")
   }
 
-  for (const envLine of ["GH_CONFIG_DIR: /home/dev/.config/gh", "HOME: /home/dev", "NODE_ENV: development"]) {
+  for (const envLine of [
+    "GH_CONFIG_DIR: /home/dev/.config/gh",
+    "HOME: /home/dev",
+    "KIMI_CODE_HOME: /home/dev/.kimi-code",
+    "NODE_ENV: development",
+    "THREADWIRE_CODEX_BIN: /usr/local/bin/codex",
+    "THREADWIRE_KIMI_BIN: /usr/local/bin/kimi",
+    "THREADWIRE_OPENCODE_BIN: /usr/local/bin/opencode"
+  ]) {
     if (!content.includes(envLine)) {
       problems.push(`The dev service is missing environment entry: ${envLine}`)
     }
   }
 
   const expectedVolumes = [
-    "${DEV_HOME_PATH:-/home/dev}:/home/dev",
-    "${GH_CONFIG_SOURCE_PATH:?Set GH_CONFIG_SOURCE_PATH in .env}:/home/dev/.config/gh:ro"
+    "- type: bind\nsource: ${DEV_HOME_PATH:-/home/dev}\ntarget: /home/dev\nbind:\ncreate_host_path: false",
+    "- type: bind\nsource: ${AI_PROVIDER_RUNTIME_SOURCE_PATH:?Set AI_PROVIDER_RUNTIME_SOURCE_PATH in .env}\ntarget: /opt/hermes-dind-shared/auth/provider-runtime\nbind:\ncreate_host_path: false",
+    "- type: bind\nsource: ${AGENT_CONTEXT_SOURCE_PATH:?Set AGENT_CONTEXT_SOURCE_PATH in .env}\ntarget: /opt/hermes-agent-context\nread_only: true\nbind:\ncreate_host_path: false",
+    "- type: bind\nsource: ${GH_CONFIG_SOURCE_PATH:?Set GH_CONFIG_SOURCE_PATH in .env}\ntarget: /home/dev/.config/gh\nread_only: true\nbind:\ncreate_host_path: false"
   ]
   const actualVolumes = composeServiceVolumes(content)
 
   if (actualVolumes.length != expectedVolumes.length || !expectedVolumes.every((volume) => actualVolumes.includes(volume))) {
-    problems.push(`The dev service must mount exactly the development-home and read-only GH config binds (found: ${actualVolumes.join(", ") || "none"})`)
+    problems.push(`The dev service must mount exactly the development home, provider runtime, immutable agent context, and read-only GH config binds (found: ${actualVolumes.join(" | ") || "none"})`)
+  }
+
+  const expectedEntrypoint = "    entrypoint: [\"/home/dev/velocious/scripts/bootstrap-provider-runtime.sh\", \"/home/dev\", \"/opt/hermes-dind-shared/auth/provider-runtime\", \"/opt/hermes-agent-context\"]"
+
+  if (!content.includes(expectedEntrypoint)) {
+    problems.push("The dev service must use the provider runtime bootstrap as its entrypoint so Compose command overrides remain bootstrapped")
   }
 
   if (!/^\s+command:\s*(\[\s*"sleep",\s*"infinity"\s*\]|sleep\s+infinity)\s*$/mu.test(content)) {
-    problems.push("The dev service must run sleep infinity")
+    problems.push("The dev service must run sleep infinity by default")
+  }
+
+  if (/\.npmrc|NPM_CONFIG_USERCONFIG/iu.test(content)) {
+    problems.push("The normal dev service must not mount or configure npm credentials")
   }
 
   if (/container_name:/u.test(content)) {
@@ -399,6 +430,14 @@ function verifyEnvExample(content) {
 
   if (!content.includes("GH_CONFIG_SOURCE_PATH")) {
     problems.push(".env.example must document GH_CONFIG_SOURCE_PATH")
+  }
+
+  if (!content.includes("AI_PROVIDER_RUNTIME_SOURCE_PATH")) {
+    problems.push(".env.example must document AI_PROVIDER_RUNTIME_SOURCE_PATH")
+  }
+
+  if (!content.includes("AGENT_CONTEXT_SOURCE_PATH")) {
+    problems.push(".env.example must document AGENT_CONTEXT_SOURCE_PATH")
   }
 
   if (!content.includes("DEV_HOME_PATH")) {
@@ -459,8 +498,49 @@ function verifyDockerRunSh(content) {
     problems.push("scripts/docker-run.sh must execute commands through docker compose run")
   }
 
-  if (/threadwire/iu.test(content)) {
-    problems.push("scripts/docker-run.sh must not reference Threadwire: it stays parent orchestration")
+  return problems
+}
+
+/**
+ * Verifies that the provider bootstrap preserves the canonical runtime aliases.
+ *
+ * @param {string} content - The bootstrap script content.
+ * @returns {string[]} - The problems found.
+ */
+function verifyProviderBootstrap(content) {
+  const problems = []
+  const firstAliasValidation = content.indexOf('require_exact_runtime_alias "$provider_runtime/.codex"')
+
+  for (const requiredParent of [
+    'require_real_runtime_directory "$provider_runtime/.local"',
+    'require_real_runtime_directory "$provider_runtime/.local/share"'
+  ]) {
+    const parentValidation = content.indexOf(requiredParent)
+
+    if (parentValidation == -1 || firstAliasValidation == -1 || parentValidation > firstAliasValidation) {
+      problems.push(`scripts/bootstrap-provider-runtime.sh must validate the real runtime parent before aliases: ${requiredParent}`)
+    }
+  }
+
+  for (const requiredAlias of [
+    'require_exact_runtime_alias "$provider_runtime/.codex" "codex" "$provider_runtime/codex"',
+    'require_exact_runtime_alias "$provider_runtime/.kimi-code" "kimi-code" "$provider_runtime/kimi-code"',
+    'require_exact_runtime_alias "$provider_runtime/.opencode" "opencode" "$provider_runtime/opencode"',
+    'require_exact_runtime_alias "$provider_runtime/.local/share/opencode" "../../opencode" "$provider_runtime/opencode"'
+  ]) {
+    if (!content.includes(requiredAlias)) {
+      problems.push(`scripts/bootstrap-provider-runtime.sh must validate canonical provider runtime alias: ${requiredAlias}`)
+    }
+  }
+
+  for (const resolutionCheck of [
+    'resolved_alias_path=$(realpath -e -- "$alias_path")',
+    'resolved_directory_path=$(realpath -e -- "$resolved_directory")',
+    'if [[ $resolved_alias_path != "$resolved_directory_path" ]]; then'
+  ]) {
+    if (!content.includes(resolutionCheck)) {
+      problems.push(`scripts/bootstrap-provider-runtime.sh must verify canonical provider runtime aliases resolve to their target: ${resolutionCheck}`)
+    }
   }
 
   return problems
@@ -470,7 +550,7 @@ function verifyDockerRunSh(content) {
  * Builds negative probes derived from the real files. Each probe mutates the
  * real content with a regression and must be caught by the matching verifier.
  *
- * @param {{dockerfile: string, compose: string}} contents - The real file contents.
+ * @param {{dockerfile: string, compose: string, providerBootstrap: string}} contents - The real file contents.
  * @returns {{name: string, problems: string[], expected: string}[]} - The probes.
  */
 function negativeProbes(contents) {
@@ -502,7 +582,7 @@ function negativeProbes(contents) {
     },
     {
       name: "compose credential mount regression",
-      problems: verifyCompose(contents.compose.replace("    command:", "      - $" + "{HOME}/.kimi:/home/dev/.kimi\n    command:")),
+      problems: verifyCompose(contents.compose.replace("    entrypoint:", "      - type: bind\n        source: $" + "{HOME}/.kimi\n        target: /home/dev/.kimi\n    entrypoint:")),
       expected: "mount exactly"
     },
     {
@@ -511,14 +591,58 @@ function negativeProbes(contents) {
       expected: "credential values"
     },
     {
-      name: "compose Threadwire coupling regression",
-      problems: verifyCompose(contents.compose.replace("      HOME: /home/dev", "      HOME: /home/dev\n      THREADWIRE_TOKEN: secret")),
-      expected: "Threadwire"
+      name: "compose stale provider runtime target regression",
+      problems: verifyCompose(contents.compose.replace("target: /opt/hermes-dind-shared/auth/provider-runtime", "target: /run/ai-provider-runtime")),
+      expected: "mount exactly"
+    },
+    {
+      name: "compose mutable agent context source regression",
+      problems: verifyCompose(contents.compose.replace("${AGENT_CONTEXT_SOURCE_PATH:?Set AGENT_CONTEXT_SOURCE_PATH in .env}", "/opt/hermes-dind-shared/agent-context/current")),
+      expected: "mount exactly"
+    },
+    {
+      name: "compose stale agent context target regression",
+      problems: verifyCompose(contents.compose.replaceAll("/opt/hermes-agent-context", "/opt/agent-context")),
+      expected: "mount exactly"
+    },
+    {
+      name: "compose npm credential mount regression",
+      problems: verifyCompose(contents.compose.replace("    entrypoint:", "      - type: bind\n        source: $" + "{HOME}/.npmrc\n        target: /home/dev/.npmrc\n        read_only: true\n    entrypoint:")),
+      expected: "npm credentials"
+    },
+    {
+      name: "compose bootstrap entrypoint regression",
+      problems: verifyCompose(contents.compose.replace("    entrypoint:", "    x-entrypoint:")),
+      expected: "command overrides"
     },
     {
       name: "compose second service regression",
       problems: verifyCompose(`${contents.compose}\n  worker:\n    image: ubuntu\n`),
       expected: "dev"
+    },
+    {
+      name: "provider runtime alias regression",
+      problems: verifyProviderBootstrap(contents.providerBootstrap.replace(
+        'require_exact_runtime_alias "$provider_runtime/.local/share/opencode" "../../opencode" "$provider_runtime/opencode"',
+        'require_exact_runtime_alias "$provider_runtime/.local/share/opencode" "opencode" "$provider_runtime/opencode"'
+      )),
+      expected: "canonical provider runtime alias"
+    },
+    {
+      name: "provider runtime alias resolution regression",
+      problems: verifyProviderBootstrap(contents.providerBootstrap.replace(
+        'resolved_alias_path=$(realpath -e -- "$alias_path")',
+        'resolved_alias_path=$(realpath -e -- "$resolved_directory")'
+      )),
+      expected: "resolve to their target"
+    },
+    {
+      name: "provider runtime real parent regression",
+      problems: verifyProviderBootstrap(contents.providerBootstrap.replace(
+        'require_real_runtime_directory "$provider_runtime/.local/share"',
+        'require_real_runtime_directory "$provider_runtime/.local-share"'
+      )),
+      expected: "real runtime parent"
     }
   ]
 }
@@ -558,17 +682,29 @@ function main() {
   }
 
   const dockerRunPath = path.join(repoRoot, "scripts", "docker-run.sh")
+  const providerBootstrapPath = path.join(repoRoot, "scripts", "bootstrap-provider-runtime.sh")
+  const providerBootstrap = fs.existsSync(providerBootstrapPath) ? fs.readFileSync(providerBootstrapPath, "utf8") : null
 
-  if (fs.existsSync(dockerRunPath) && process.platform != "win32") {
-    const mode = fs.statSync(dockerRunPath).mode
+  if (providerBootstrap === null) {
+    problems.push("Missing required file: scripts/bootstrap-provider-runtime.sh")
+  } else {
+    problems.push(...verifyProviderBootstrap(providerBootstrap))
+  }
 
-    if ((mode & 0o111) == 0) {
-      problems.push("scripts/docker-run.sh must be executable")
+  if (process.platform != "win32") {
+    for (const executablePath of [dockerRunPath, providerBootstrapPath]) {
+      if (!fs.existsSync(executablePath)) continue
+
+      const mode = fs.statSync(executablePath).mode
+
+      if ((mode & 0o111) == 0) {
+        problems.push(`${path.relative(repoRoot, executablePath)} must be executable`)
+      }
     }
   }
 
-  if (dockerfile !== null && compose !== null) {
-    for (const probe of negativeProbes({dockerfile, compose})) {
+  if (dockerfile !== null && compose !== null && providerBootstrap !== null) {
+    for (const probe of negativeProbes({dockerfile, compose, providerBootstrap})) {
       if (!probe.problems.some((problem) => problem.toLowerCase().includes(probe.expected.toLowerCase()))) {
         problems.push(`Negative probe was not caught by the verifier: ${probe.name}`)
       }

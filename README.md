@@ -106,7 +106,7 @@ The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` se
 
 Prerequisites: Docker with the Compose v2 plugin, and this repository checked out at `$DEV_HOME_PATH/velocious` (default `DEV_HOME_PATH`: `/home/dev`).
 
-First-use setup: copy `.env.example` to the git-ignored `.env` and set `GH_CONFIG_SOURCE_PATH` to an existing host GitHub CLI config directory:
+First-use setup: copy `.env.example` to the git-ignored `.env`, set `GH_CONFIG_SOURCE_PATH` to an existing host GitHub CLI config directory, set `AI_PROVIDER_RUNTIME_SOURCE_PATH` to the dedicated writable provider runtime, and replace `AGENT_CONTEXT_SOURCE_PATH` with one exact immutable bundle directory:
 
 ```bash
 cp .env.example .env
@@ -122,7 +122,7 @@ docker compose exec dev bash
 scripts/docker-run.sh npm ci   # one-off command in a disposable container
 ```
 
-The dev service preserves the complete `$DEV_HOME_PATH` bind at `/home/dev`, so dependencies, caches, settings, and `node_modules` persist naturally across runs. Install dependencies with the normal package commands inside the service (for example `docker compose exec dev npm ci`), never at image build time.
+The dev service preserves the complete `$DEV_HOME_PATH` bind at `/home/dev`, so dependencies, lane-local caches, settings, and `node_modules` persist naturally across runs. Codex, Kimi, and OpenCode authentication survives lane recreation through the dedicated provider-runtime bind, while `/opt/hermes-agent-context` supplies one read-only reviewed guide/skills bundle. Install dependencies with the normal package commands inside the service (for example `docker compose exec dev npm ci`), never at image build time.
 
 Concurrent isolated instances use the standard Compose project-name contract plus a distinct development home per instance:
 
@@ -131,7 +131,7 @@ COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
   docker compose up --build --detach dev
 ```
 
-GitHub CLI authentication is the sole authorized credential boundary: the host config directory named by `GH_CONFIG_SOURCE_PATH` is mounted read-only at `/home/dev/.config/gh`, with container-side `GH_CONFIG_DIR` pointing there. Do not add SSH keys or other credential mounts. Kimi (and other provider) credentials are intentionally kept out of the tracked Compose files — they are an external operational override layered on by the calling environment. Threadwire is not installed in the image or the project; it remains parent orchestration resolved through unversioned `npx` outside the container.
+The authorized credential boundaries are the writable provider runtime and the read-only GitHub CLI config. The normal dev service mounts no npm credentials, SSH keys, `/opt/data`, mutable agent-context discovery links, or broad shared roots. At startup, the provider bootstrap requires real `.local` and `.local/share` runtime directories, validates and preserves the provider runtime's canonical relative aliases, then creates exact lane-home provider and `/opt/hermes-agent-context` discovery links, preserving conflicts only at those managed targets under `~/.provider-runtime-migration-backups/<timestamp>-<unique-suffix>/`. Threadwire remains parent orchestration, with its provider executable overrides pointed directly at `/usr/local/bin/codex`, `/usr/local/bin/kimi`, and `/usr/local/bin/opencode`. See the setup guide for source-path preflight and the exact lane-local OpenCode state contract.
 
 After changing the Docker artifacts, run the checked-in static contract verifier:
 
