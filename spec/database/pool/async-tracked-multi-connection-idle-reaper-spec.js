@@ -101,12 +101,22 @@ describe("database - pool - async tracked multi connection idle reaper", () => {
       await pool.reapIdleConnections()
 
       expect(checkedInConnection.connection).toEqual(undefined)
-      expect(pool.getDebugSnapshot().telemetry).toEqual({
-        checkoutWaitCount: 0,
-        checkoutWaitMaxMs: 0,
-        checkoutWaitTotalMs: 0,
-        idleReapDisposalCount: 1
-      })
+      const telemetry = pool.getDebugSnapshot().telemetry
+
+      expect(telemetry?.connectionCreationCount).toEqual(1)
+      expect(telemetry?.connectionCreationFailureCount).toEqual(0)
+      expect(telemetry?.connectionCreationMaxMs).toBeGreaterThanOrEqual(0)
+      expect(telemetry?.connectionCreationTotalMs).toBeGreaterThanOrEqual(0)
+      expect(telemetry?.checkoutTimeoutCount).toEqual(0)
+      expect(telemetry?.checkoutWaitCount).toEqual(0)
+      expect(telemetry?.checkoutWaitMaxMs).toEqual(0)
+      expect(telemetry?.checkoutWaitTotalMs).toEqual(0)
+      expect(telemetry?.idleReapCount).toEqual(1)
+      expect(telemetry?.idleReapDisposalCount).toEqual(1)
+      expect(telemetry?.idleReapFailureCount).toEqual(0)
+      expect(telemetry?.idleReapMaxMs).toBeGreaterThanOrEqual(0)
+      expect(telemetry?.idleReapTotalMs).toBeGreaterThanOrEqual(0)
+      expect(telemetry?.peakLiveConnections).toEqual(1)
     } finally {
       await cleanup()
     }

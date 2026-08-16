@@ -123,6 +123,11 @@ run. Each line shows the duration, full description and `file:line`.
 `TestRunner#getSlowestTests(limit = 10)` exposes the same data programmatically
 (slowest first; `limit` of `0` returns every recorded test).
 
+For a phase breakdown, retry/hook attribution, database and pool aggregates, or
+reusable file weights, enable the opt-in [test profiler](test-profiling.md).
+`--profile` prints only the compact summary, while `--profile-json <path>` and
+`--timing-manifest-output <path>` also write atomic outputs and imply profiling.
+
 ## Duration-aware parallel sharding
 Pass `--timing-manifest=<path>` together with `--groups` and `--group-number` to
 weight discovered test files by recorded wall-clock duration. The JSON object maps
@@ -140,6 +145,9 @@ normalized when reading keys. A valid duration takes precedence over the static
 directory/browser heuristic for that file. Missing paths, unknown paths, non-number,
 non-positive, or non-finite durations fall back per file. Missing, unreadable, or
 malformed JSON manifests also leave the existing deterministic heuristic intact.
+Generate a compatible sorted manifest from a representative run with
+`--timing-manifest-output <path>`; see [test profiling](test-profiling.md#timing-manifest-ownership)
+for file ownership and retry/hook accounting.
 
 ## Avoiding fixed sleeps
 Never `await wait(<fixed ms>)` to let something async settle — it is both slow and

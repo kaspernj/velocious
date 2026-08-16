@@ -1,7 +1,8 @@
 // @ts-check
 
-import {AsyncLocalStorage} from "async_hooks"
-import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
+import { AsyncLocalStorage } from "async_hooks"
+import BasePool, { POOL_CONFIGURATION_KEY } from "./base.js"
+import { currentTestProfileContext } from "../../testing/test-profile-context.js"
 
 /**
  * PendingCheckout type.
@@ -15,6 +16,7 @@ import BasePool, {POOL_CONFIGURATION_KEY} from "./base.js"
  * @property {number | null} timeoutAt - Timestamp when the checkout will time out, or null when disabled.
  * @property {number | null} timeoutMillis - Milliseconds to wait before rejecting, or null when disabled.
  * @property {ReturnType<typeof setTimeout> | undefined} timeoutTimer - Timer that rejects the pending checkout.
+ * @property {import("../../testing/test-profiler.js").TestProfileAsyncContext | undefined} [testProfileContext] - Async-safe profile attribution captured at enqueue.
  */
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
 const IDLE_CONNECTION_CHECKED_IN_AT = Symbol("velociousIdleConnectionCheckedInAt")
@@ -115,10 +117,20 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
   /** Cumulative low-cardinality pool telemetry. */
   telemetry = {
+    connectionCreationCount: 0,
+    connectionCreationFailureCount: 0,
+    connectionCreationMaxMs: 0,
+    connectionCreationTotalMs: 0,
+    checkoutTimeoutCount: 0,
     checkoutWaitCount: 0,
     checkoutWaitMaxMs: 0,
     checkoutWaitTotalMs: 0,
-    idleReapDisposalCount: 0
+    idleReapCount: 0,
+    idleReapDisposalCount: 0,
+    idleReapFailureCount: 0,
+    idleReapMaxMs: 0,
+    idleReapTotalMs: 0,
+    peakLiveConnections: 0
   }
 
   idSeq = 0
@@ -137,6 +149,58 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
      */
     const withoutCurrentConnectionContext = (callback) => this.asyncLocalStorage.run(SUPPRESSED_CONNECTION_CONTEXT, callback)
     this._withoutCurrentConnectionContext = withoutCurrentConnectionContext
+  }
+
+  /**
+   * Returns the pool telemetry clock.
+   * @returns {number} - Current time in milliseconds.
+   */
+  nowMs() { return Date.now() }
+
+  /**
+   * Records a pool metric in the active async-safe test profile context.
+   * @param {import("../../testing/test-profiler.js").TestProfileAsyncContext | undefined} context - Captured profile context.
+   * @param {"connectionCreation" | "checkoutWait" | "checkoutTimeout" | "idleReap" | "idleReapDisposal" | "peakLiveConnections"} metric - Metric name.
+   * @param {{durationMs?: number, failed?: boolean, value?: number}} [values] - Aggregate values.
+   * @returns {void}
+   */
+  recordTestProfilePoolMetric(context, metric, values = {}) {
+    if (!context) return
+
+    context.profiler.recordPoolMetric(context, this.identifier, metric, values)
+  }
+
+  /**
+   * Spawns and times a physical connection without retaining its configuration.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Resolved database configuration.
+   * @returns {Promise<import("../drivers/base.js").default>} - Connected driver.
+   */
+  async spawnConnectionWithConfiguration(config) {
+    const startedAt = this.nowMs()
+    const profileContext = currentTestProfileContext(this.configuration)
+    let failed = true
+
+    try {
+      const connection = await super.spawnConnectionWithConfiguration(config)
+
+      failed = false
+      const liveConnectionCount = this.liveConnectionCount() - this.connectionsBeingSpawned + 1
+
+      if (liveConnectionCount > this.telemetry.peakLiveConnections) {
+        this.telemetry.peakLiveConnections = liveConnectionCount
+        this.recordTestProfilePoolMetric(profileContext, "peakLiveConnections", {value: liveConnectionCount})
+      }
+
+      return connection
+    } finally {
+      const durationMs = Math.max(0, this.nowMs() - startedAt)
+
+      this.telemetry.connectionCreationCount++
+      if (failed) this.telemetry.connectionCreationFailureCount++
+      this.telemetry.connectionCreationTotalMs += durationMs
+      this.telemetry.connectionCreationMaxMs = Math.max(this.telemetry.connectionCreationMaxMs, durationMs)
+      this.recordTestProfilePoolMetric(profileContext, "connectionCreation", {durationMs, failed})
+    }
   }
 
   /**
@@ -241,24 +305,28 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
   async checkout(options = {}) {
-    const databaseConfig = this.getConfiguration()
-    const reuseKey = this.getConfigurationReuseKey()
+    let databaseConfig = this.getConfiguration()
+    let reuseKey = this.getConfigurationReuseKey(databaseConfig)
     let connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
     if (connection) return await this.activateConnection(connection, options)
 
     await this.reapIdleConnections()
+    databaseConfig = this.getConfiguration()
+    reuseKey = this.getConfigurationReuseKey(databaseConfig)
     connection = this.takeIdleConnectionForReuseKey(reuseKey)
 
     if (connection) return await this.activateConnection(connection, options)
 
-    if (this.canSpawnConnection()) {
-      // Spawn via spawnConnection() so the tenant-aware configuration is resolved FRESH at
-      // spawn time for the current caller. Reusing the databaseConfig captured at the top of
-      // checkout() could bind the connection to a stale tenant/database, which breaks
-      // per-request isolation (e.g. test truncation appearing not to take effect). The queued
-      // path below keeps the waiting caller's captured config via waitForCheckout().
-      connection = await this.spawnConnectionForCheckout(this.getConfiguration(), this.getConfigurationReuseKey())
+    if (this.canSpawnConnection(databaseConfig)) {
+      // The post-reap configuration is fresh for the current caller, and its reuse key is
+      // derived from this exact captured object so the connection cannot open one tenant while
+      // being stamped for another. The queued path retains the same captured pair.
+      connection = await this.spawnConnectionForCheckout(
+        databaseConfig,
+        reuseKey,
+        currentTestProfileContext(this.configuration)
+      )
 
       return await this.activateConnection(connection, options)
     }
@@ -291,7 +359,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (connection) return await this.activateConnection(connection, options)
 
     if (this.canSpawnConnection(databaseConfig)) {
-      connection = await this.spawnConnectionForCheckout(databaseConfig, reuseKey)
+      connection = await this.spawnConnectionForCheckout(
+        databaseConfig,
+        reuseKey,
+        currentTestProfileContext(this.configuration)
+      )
 
       return await this.activateConnection(connection, options)
     }
@@ -436,20 +508,19 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * Runs spawn connection for checkout.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfig - Resolved database config for the checkout.
    * @param {string} reuseKey - Database configuration reuse key for the checkout.
+   * @param {import("../../testing/test-profiler.js").TestProfileAsyncContext | undefined} profileContext - Profile context captured when checkout began.
    * @returns {Promise<import("../drivers/base.js").default>} - Spawned connection.
    */
-  async spawnConnectionForCheckout(databaseConfig, reuseKey) {
+  async spawnConnectionForCheckout(databaseConfig, reuseKey, profileContext) {
     this.connectionsBeingSpawned++
 
     try {
-      const connection = await this.spawnConnectionWithConfiguration(databaseConfig)
-      const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
-
-      connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
-      connection.setSchemaCacheInvalidator(() => {
-        this.clearSchemaCache()
-        this.configuration.clearSchemaCachesForReuseKey(reuseKey)
+      const environmentHandler = this.configuration.getEnvironmentHandler()
+      const connection = await environmentHandler.runWithTestProfileContext(profileContext, async () => {
+        return await this.spawnConnectionWithConfiguration(databaseConfig)
       })
+
+      this.stampConnectionForConfigurationReuseKey(connection, reuseKey)
 
       return connection
     } finally {
@@ -478,7 +549,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
         reuseKey,
         timeoutAt: timeoutMillis === null ? null : enqueuedAt + timeoutMillis,
         timeoutMillis,
-        timeoutTimer: undefined
+        timeoutTimer: undefined,
+        testProfileContext: currentTestProfileContext(this.configuration)
       }
 
       checkout.timeoutTimer = this.startPendingCheckoutTimeout(checkout)
@@ -578,11 +650,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {void}
    */
   recordCheckoutWait(checkout) {
-    const waitedForMs = Math.max(0, Date.now() - checkout.enqueuedAt)
+    const waitedForMs = Math.max(0, this.nowMs() - checkout.enqueuedAt)
 
     this.telemetry.checkoutWaitCount++
     this.telemetry.checkoutWaitTotalMs += waitedForMs
     this.telemetry.checkoutWaitMaxMs = Math.max(this.telemetry.checkoutWaitMaxMs, waitedForMs)
+    this.recordTestProfilePoolMetric(checkout.testProfileContext, "checkoutWait", {durationMs: waitedForMs})
   }
 
   /**
@@ -611,6 +684,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     if (index === -1) return
 
     this.removePendingCheckoutAt(index)
+    this.telemetry.checkoutTimeoutCount++
+    this.recordTestProfilePoolMetric(checkout.testProfileContext, "checkoutTimeout")
     checkout.reject(this.pendingCheckoutTimeoutError(checkout))
   }
 
@@ -744,16 +819,24 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<void>} - Resolves when the checkout has been handled.
    */
   async spawnAndResolvePendingCheckout(checkout) {
-    let connection
+    const environmentHandler = this.configuration.getEnvironmentHandler()
 
-    try {
-      connection = await this.spawnConnectionForCheckout(checkout.databaseConfig, checkout.reuseKey)
-    } catch (error) {
-      checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
-      return
-    }
+    return await environmentHandler.runWithTestProfileContext(checkout.testProfileContext, async () => {
+      let connection
 
-    await this.resolvePendingCheckout(checkout, connection)
+      try {
+        connection = await this.spawnConnectionForCheckout(
+          checkout.databaseConfig,
+          checkout.reuseKey,
+          checkout.testProfileContext
+        )
+      } catch (error) {
+        checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
+        return
+      }
+
+      await this.resolvePendingCheckout(checkout, connection)
+    })
   }
 
   /**
@@ -763,11 +846,15 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<void>} - Resolves when the checkout has been handled.
    */
   async resolvePendingCheckout(checkout, connection) {
-    try {
-      checkout.resolve(await this.activateConnection(connection, checkout.options))
-    } catch (error) {
-      checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
-    }
+    const environmentHandler = this.configuration.getEnvironmentHandler()
+
+    return await environmentHandler.runWithTestProfileContext(checkout.testProfileContext, async () => {
+      try {
+        checkout.resolve(await this.activateConnection(connection, checkout.options))
+      } catch (error) {
+        checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
+      }
+    })
   }
 
   /**
@@ -1313,24 +1400,40 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const idleTimeoutMillis = this.idleTimeoutMillis()
 
     if (idleTimeoutMillis === null) return
+    const startedAt = this.nowMs()
+    const profileContext = currentTestProfileContext(this.configuration)
+    let failed = true
 
-    const {expiredConnections, keptConnections} = this.classifyIdleConnectionsForReaping({idleTimeoutMillis, now: Date.now()})
+    try {
+      const {expiredConnections, keptConnections} = this.classifyIdleConnectionsForReaping({idleTimeoutMillis, now: this.nowMs()})
 
-    this.connections = keptConnections
-    await this.closeExpiredIdleConnections(expiredConnections)
-    await this.awaitInflightConnectionCloses()
-    if (this.connections.length > 0) this.scheduleIdleConnectionReaper()
+      this.connections = keptConnections
+      await this.closeExpiredIdleConnections(expiredConnections, profileContext)
+      await this.awaitInflightConnectionCloses()
+      if (this.connections.length > 0) this.scheduleIdleConnectionReaper()
+      failed = false
+    } finally {
+      const durationMs = Math.max(0, this.nowMs() - startedAt)
+
+      this.telemetry.idleReapCount++
+      if (failed) this.telemetry.idleReapFailureCount++
+      this.telemetry.idleReapTotalMs += durationMs
+      this.telemetry.idleReapMaxMs = Math.max(this.telemetry.idleReapMaxMs, durationMs)
+      this.recordTestProfilePoolMetric(profileContext, "idleReap", {durationMs, failed})
+    }
   }
 
   /**
    * Runs close expired idle connections.
    * @param {import("../drivers/base.js").default[]} expiredConnections - Connections to close.
+   * @param {import("../../testing/test-profiler.js").TestProfileAsyncContext | undefined} [profileContext] - Reaper profile context.
    * @returns {Promise<void>} - Resolves when closed.
    */
-  async closeExpiredIdleConnections(expiredConnections) {
+  async closeExpiredIdleConnections(expiredConnections, profileContext) {
     for (const connection of expiredConnections) {
       await this.closeConnection(connection)
       this.telemetry.idleReapDisposalCount++
+      this.recordTestProfilePoolMetric(profileContext, "idleReapDisposal")
     }
   }
 
