@@ -2,12 +2,15 @@
 
 import BaseCommand from "../../../../cli/base-command.js"
 import fs from "fs/promises"
+import path from "node:path"
 import picocolors from "picocolors"
 import TestFilesFinder from "../../../../testing/test-files-finder.js"
+import TestProfiler from "../../../../testing/test-profiler.js"
+import { formatTestProfileSummary, writeTestProfileOutputs } from "../../../../testing/test-profile-output.js"
 import TestRunner from "../../../../testing/test-runner.js"
 import TestSuiteSplitter from "../../../../testing/test-suite-splitter.js"
-import {normalizeExamplePatterns, parseFilters} from "../../../../testing/test-filter-parser.js"
-import {prepareSourcePeerPackage} from "../../source-peer-package.js"
+import { normalizeExamplePatterns, parseFilters } from "../../../../testing/test-filter-parser.js"
+import { prepareSourcePeerPackage } from "../../source-peer-package.js"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
   async execute() {
@@ -27,116 +30,249 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       directories.push(`${this.directory()}/spec`)
     }
 
-    const {includeTags, excludeTags, examplePatterns, filteredProcessArgs, groups, groupNumber, timingManifestPath} = parseFilters(this.processArgs || [])
-    const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
-    let testFiles = await testFilesFinder.findTestFiles()
-
-    if (groups !== undefined || groupNumber !== undefined) {
-      if (groups === undefined || groupNumber === undefined) {
-        throw new Error("Both --groups and --group-number must be provided together")
-      }
-
-      const timingManifest = await loadTimingManifest(timingManifestPath)
-      const splitter = new TestSuiteSplitter({groups, groupNumber, testFiles, baseDirectory: directory, timingManifest})
-
-      testFiles = splitter.getGroupFiles()
-      console.log(picocolors.cyan(`Running group ${groupNumber} of ${groups} (${testFiles.length} files)`))
-    }
-
-    const testRunner = new TestRunner({
-      configuration: this.getConfiguration(),
-      excludeTags,
+    const {
       includeTags,
-      testFiles,
-      lineFilters: testFilesFinder.getLineFiltersByFile(),
-      examplePatterns: normalizeExamplePatterns(examplePatterns)
+      excludeTags,
+      examplePatterns,
+      filteredProcessArgs,
+      groups,
+      groupNumber,
+      profile,
+      profileJsonPath,
+      timingManifestPath,
+      timingManifestOutputPath
+    } = parseFilters(this.processArgs || [])
+    const profileOptions = resolveTestProfileOptions({
+      cwd: process.cwd(),
+      profile,
+      profileJsonPath,
+      timingManifestPath,
+      timingManifestOutputPath
     })
-    let signalHandled = false
+    const selection = {
+      excludeTagCount: excludeTags.length,
+      hasExampleFilters: examplePatterns.length > 0,
+      includeTagCount: includeTags.length,
+      shard: groups !== undefined && groupNumber !== undefined ? {groups, groupNumber} : undefined
+    }
+    const profiler = profileOptions.profile
+      ? new TestProfiler({configuration: this.getConfiguration(), projectDirectory: directory, selection})
+      : undefined
+    const testFilesFinder = new TestFilesFinder({directory, directories, processArgs: filteredProcessArgs})
+    /** @type {TestRunner | undefined} */
+    let testRunner
+    let profileFinalized = false
 
-    const handleSignal = async (/** @type {string} */ signal) => {
-      if (signalHandled) return
-      signalHandled = true
-      console.error(`\nReceived ${signal}, running afterAll hooks before exit...`)
+    /**
+     * Finalizes requested outputs once for every command outcome.
+     * @param {string} status - Run status.
+     * @returns {Promise<void>} - Resolves after requested outputs are written.
+     */
+    const finalizeProfile = async (status) => {
+      if (!profiler || profileFinalized) return
 
-      try {
-        await testRunner.runAfterAllsForActiveScopes()
-      } catch (error) {
-        console.error("Failed while running afterAll hooks:", error)
-      } finally {
-        process.exit(130)
+      profileFinalized = true
+      const failed = testRunner?.getFailedTests() ?? 0
+      const passed = testRunner?.getSuccessfulTests() ?? 0
+      const profileDocument = profiler.finish({
+        counts: {
+          discovered: testRunner?.getTestsCount() ?? 0,
+          executed: testRunner?.getExecutedTestsCount() ?? 0,
+          failed,
+          passed
+        },
+        focused: Boolean(testRunner?.anyTestsFocussed),
+        status
+      })
+
+      await writeTestProfileOutputs({
+        profile: profileDocument,
+        profileJsonPath: profileOptions.profileJsonPath,
+        timingManifestOutputPath: profileOptions.timingManifestOutputPath
+      })
+      console.log(`\n${formatTestProfileSummary(profileDocument, profileOptions)}`)
+    }
+
+    try {
+      const discoverTestFiles = async () => {
+        let discoveredTestFiles = await testFilesFinder.findTestFiles()
+
+        if (groups !== undefined || groupNumber !== undefined) {
+          if (groups === undefined || groupNumber === undefined) {
+            throw new Error("Both --groups and --group-number must be provided together")
+          }
+
+          const timingManifest = await loadTimingManifest(profileOptions.timingManifestPath)
+          const splitter = new TestSuiteSplitter({
+            groups,
+            groupNumber,
+            testFiles: discoveredTestFiles,
+            baseDirectory: directory,
+            timingManifest
+          })
+
+          discoveredTestFiles = splitter.getGroupFiles()
+          console.log(picocolors.cyan(`Running group ${groupNumber} of ${groups} (${discoveredTestFiles.length} files)`))
+        }
+
+        return discoveredTestFiles
       }
-    }
+      const testFiles = profiler
+        ? await profiler.measurePhase("discovery", discoverTestFiles)
+        : await discoverTestFiles()
 
-    process.once("SIGINT", () => { void handleSignal("SIGINT") })
-    process.once("SIGTERM", () => { void handleSignal("SIGTERM") })
+      profiler?.setSelection({fileCount: testFiles.length})
+      testRunner = new TestRunner({
+        configuration: this.getConfiguration(),
+        excludeTags,
+        includeTags,
+        testFiles,
+        lineFilters: testFilesFinder.getLineFiltersByFile(),
+        examplePatterns: normalizeExamplePatterns(examplePatterns),
+        profiler
+      })
+      const activeTestRunner = testRunner
+      let signalHandled = false
 
-    await testRunner.prepare()
+      const handleSignal = async (/** @type {string} */ signal) => {
+        if (signalHandled) return
+        signalHandled = true
+        profiler?.interrupt()
+        console.error(`\nReceived ${signal}, running afterAll hooks before exit...`)
 
-    if (testRunner.getTestsCount() === 0) {
-      throw new Error(`${testRunner.getTestsCount()} tests was found in ${testFiles.length} file(s)`)
-    }
-
-    await testRunner.run()
-
-    const executedTests = testRunner.getExecutedTestsCount()
-
-    const lineFilters = testRunner.getLineFilters()
-    const hasLineFilters = Object.keys(lineFilters).length > 0
-    const hasExampleFilters = examplePatterns.length > 0
-    const hasTagFilters = includeTags.length > 0 || excludeTags.length > 0
-
-    if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
-      console.error(picocolors.red("\nNo tests matched the provided filters"))
-      process.exit(1)
-    }
-
-    // Report the slowest tests so suite hotspots are visible every run. Defaults to
-    // the top 10; tune with VELOCIOUS_SLOW_TEST_COUNT (0 disables). Skipped for
-    // single-test runs where it would just be noise.
-    const slowTestCount = resolveSlowTestCount(process.env.VELOCIOUS_SLOW_TEST_COUNT)
-
-    if (slowTestCount > 0 && executedTests > 1) {
-      const slowestTests = testRunner.getSlowestTests(slowTestCount)
-
-      if (slowestTests.length > 0) {
-        console.log(picocolors.cyan(`\nSlowest ${slowestTests.length} tests:`))
-
-        for (const slowTest of slowestTests) {
-          const location = slowTest.filePath && slowTest.line ? ` (${slowTest.filePath}:${slowTest.line})` : ""
-
-          console.log(picocolors.cyan(`  ${String(slowTest.durationMs).padStart(6)}ms  ${slowTest.fullDescription}${location}`))
+        try {
+          await activeTestRunner.runAfterAllsForActiveScopes()
+        } catch (error) {
+          console.error("Failed while running afterAll hooks:", error)
+        } finally {
+          try {
+            await finalizeProfile("interrupted")
+          } catch (error) {
+            console.error("Failed while writing interrupted test profile:", error)
+          }
+          process.exit(130)
         }
       }
-    }
 
-    if (testRunner.isFailed()) {
-      await testRunner.persistFailedTestConsoleOutputsToAssets()
-      const failedTests = testRunner.getFailedTestDetails()
+      process.once("SIGINT", () => { void handleSignal("SIGINT") })
+      process.once("SIGTERM", () => { void handleSignal("SIGTERM") })
 
-      if (failedTests.length > 0) {
-      console.error(picocolors.red("\nFailed tests:"))
+      await testRunner.prepare()
 
-        for (const failed of failedTests) {
-          const location = failed.filePath && failed.line
-            ? ` (${failed.filePath}:${failed.line})`
-            : ""
-          console.error(picocolors.red(`- ${failed.fullDescription}${location}`))
+      if (testRunner.getTestsCount() === 0) {
+        await finalizeProfile("no-tests")
+        throw new Error(`${testRunner.getTestsCount()} tests was found in ${testFiles.length} file(s)`)
+      }
 
-          if (failed.consoleLogPath) {
-            console.error(picocolors.red(`  Console log: ${failed.consoleLogPath}`))
+      await testRunner.run()
+
+      const executedTests = testRunner.getExecutedTestsCount()
+      const lineFilters = testRunner.getLineFilters()
+      const hasLineFilters = Object.keys(lineFilters).length > 0
+      const hasExampleFilters = examplePatterns.length > 0
+      const hasTagFilters = includeTags.length > 0 || excludeTags.length > 0
+
+      if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
+        console.error(picocolors.red("\nNo tests matched the provided filters"))
+        await finalizeProfile("no-tests")
+        process.exit(1)
+      }
+
+      // Report the slowest tests so suite hotspots are visible every run. Defaults to
+      // the top 10; tune with VELOCIOUS_SLOW_TEST_COUNT (0 disables). Skipped for
+      // single-test runs where it would just be noise.
+      const slowTestCount = resolveSlowTestCount(process.env.VELOCIOUS_SLOW_TEST_COUNT)
+
+      if (slowTestCount > 0 && executedTests > 1) {
+        const slowestTests = testRunner.getSlowestTests(slowTestCount)
+
+        if (slowestTests.length > 0) {
+          console.log(picocolors.cyan(`\nSlowest ${slowestTests.length} tests:`))
+
+          for (const slowTest of slowestTests) {
+            const location = slowTest.filePath && slowTest.line ? ` (${slowTest.filePath}:${slowTest.line})` : ""
+
+            console.log(picocolors.cyan(`  ${String(slowTest.durationMs).padStart(6)}ms  ${slowTest.fullDescription}${location}`))
           }
         }
       }
 
-      console.error(picocolors.red(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
-      process.exit(1)
-    } else if (testRunner.areAnyTestsFocussed()) {
-      console.error(picocolors.red(`\nFocussed run with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
-      process.exit(1)
-    } else {
-      console.log(picocolors.green(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`))
-      process.exit(0)
+      if (testRunner.isFailed()) {
+        await testRunner.persistFailedTestConsoleOutputsToAssets()
+        const failedTests = testRunner.getFailedTestDetails()
+
+        if (failedTests.length > 0) {
+          console.error(picocolors.red("\nFailed tests:"))
+
+          for (const failed of failedTests) {
+            const location = failed.filePath && failed.line
+              ? ` (${failed.filePath}:${failed.line})`
+              : ""
+            console.error(picocolors.red(`- ${failed.fullDescription}${location}`))
+
+            if (failed.consoleLogPath) {
+              console.error(picocolors.red(`  Console log: ${failed.consoleLogPath}`))
+            }
+          }
+        }
+
+        console.error(picocolors.red(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
+        await finalizeProfile("failed")
+        process.exit(1)
+      } else if (testRunner.areAnyTestsFocussed()) {
+        console.error(picocolors.red(`\nFocussed run with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
+        await finalizeProfile("focused")
+        process.exit(1)
+      } else {
+        console.log(picocolors.green(`\nTest run succeeded with ${testRunner.getSuccessfulTests()} successful tests`))
+        await finalizeProfile("passed")
+        process.exit(0)
+      }
+    } catch (error) {
+      try {
+        await finalizeProfile("error")
+      } catch (profileError) {
+        throw new AggregateError([error, profileError], "Test command and profile finalization both failed", {cause: profileError})
+      }
+
+      throw error
     }
+  }
+}
+
+/**
+ * Resolves and validates profiling paths before test discovery starts.
+ * @param {object} args - Raw profiling options.
+ * @param {string} args.cwd - Command working directory.
+ * @param {boolean} args.profile - Whether console profiling was requested.
+ * @param {string} [args.profileJsonPath] - Rich profile output path.
+ * @param {string} [args.timingManifestPath] - Timing manifest input path.
+ * @param {string} [args.timingManifestOutputPath] - Timing manifest output path.
+ * @returns {{profile: boolean, profileJsonPath: string | undefined, timingManifestPath: string | undefined, timingManifestOutputPath: string | undefined}} - Resolved profiling options.
+ */
+export function resolveTestProfileOptions({cwd, profile, profileJsonPath, timingManifestPath, timingManifestOutputPath}) {
+  const resolvedProfileJsonPath = profileJsonPath ? path.resolve(cwd, profileJsonPath) : undefined
+  const resolvedTimingManifestPath = timingManifestPath ? path.resolve(cwd, timingManifestPath) : undefined
+  const resolvedTimingManifestOutputPath = timingManifestOutputPath
+    ? path.resolve(cwd, timingManifestOutputPath)
+    : undefined
+
+  if (resolvedProfileJsonPath && resolvedTimingManifestOutputPath && resolvedProfileJsonPath === resolvedTimingManifestOutputPath) {
+    throw new Error("Test profiling output paths must be different")
+  }
+
+  if (resolvedTimingManifestPath && (
+    resolvedProfileJsonPath === resolvedTimingManifestPath ||
+    resolvedTimingManifestOutputPath === resolvedTimingManifestPath
+  )) {
+    throw new Error("Test profiling outputs must not overwrite --timing-manifest input")
+  }
+
+  return {
+    profile: profile || Boolean(resolvedProfileJsonPath || resolvedTimingManifestOutputPath),
+    profileJsonPath: resolvedProfileJsonPath,
+    timingManifestPath: resolvedTimingManifestPath,
+    timingManifestOutputPath: resolvedTimingManifestOutputPath
   }
 }
 

@@ -35,6 +35,7 @@ import {frontendModelApiManifest, frontendModelResourceClassFromDefinition, fron
 import {currentOfflineGrantSigningKey, normalizeOfflineGrantSigningKey} from "./sync/offline-grant.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
+import { validateTestActivityName } from "./testing/test-profile-activity.js"
 import {validateTimeZone} from "./time-zone.js"
 import {withTrackedStack} from "./utils/with-tracked-stack.js"
 import VelociousPackage from "./packages/velocious-package.js"
@@ -3148,6 +3149,24 @@ export default class VelociousConfiguration {
    */
   async runWithRequestTiming(requestTiming, callback) {
     return await this.getEnvironmentHandler().runWithRequestTiming(requestTiming, callback)
+  }
+
+  /**
+   * Profiles an application-defined test activity when an opt-in test profile
+   * context is active. The callback always runs, including outside profiling.
+   * @template T
+   * @param {string} name - Low-cardinality activity identifier.
+   * @param {() => (T | Promise<T>)} callback - Activity callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async profileTestActivity(name, callback) {
+    const validatedName = validateTestActivityName(name)
+
+    const context = this.getEnvironmentHandler().getCurrentTestProfileContext()
+
+    if (!context) return await callback()
+
+    return await context.profiler.profileActivity(context, validatedName, callback)
   }
 
   /**

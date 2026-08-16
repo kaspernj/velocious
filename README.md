@@ -26,6 +26,7 @@
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, linting, and a process-global reload-retention budget that bounds cache-busted re-import memory (see [docs/factories.md](docs/factories.md))
+* Opt-in Benchmark-style test profiling with privacy-safe rich JSON and directly reusable duration-aware shard manifests (see [docs/test-profiling.md](docs/test-profiling.md))
 * Per-row association counts via `.withCount(...)`, including cohort-safe intersected filters, safe batching of structurally identical aggregates, and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)`, with compatible projections sharing a roundtrip while preserving declared alias-overwrite order and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
@@ -226,6 +227,22 @@ Slowest 10 tests:
 ```
 
 The report is skipped for single-test runs. See [docs/testing-guidelines.md](docs/testing-guidelines.md).
+
+Add `--profile` for a compact Benchmark-style phase and pool summary. Use
+`--profile-json <path>` for versioned, privacy-safe detail or
+`--timing-manifest-output <path>` to generate a sorted per-file duration map for
+the existing `--timing-manifest` shard input; either output flag implies
+profiling.
+
+```bash
+npx velocious test --profile-json tmp/test-profile.json \
+  --timing-manifest-output tmp/test-timings.json
+npx velocious test --groups=4 --group-number=1 \
+  --timing-manifest tmp/test-timings.json
+```
+
+See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
+activity spans, schema, and privacy guarantees.
 
 Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`.
 
@@ -1769,7 +1786,12 @@ database: {
 
 `pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
 
-Debug snapshots also expose cumulative checkout-wait and idle-reaper disposal telemetry. The [MySQL idle-reaping benchmark and methodology](docs/mysql-pool-idle-reaping-research.md) compare the 5-second default with 60 seconds and disabled reaping under a fixed cap; absent representative measured evidence, retain the 5-second default.
+Debug snapshots also expose cumulative connection-creation, checkout-wait and
+timeout, idle-reap, and peak-live-connection telemetry. Opt-in test profiles can
+attribute safe aggregate deltas to their current spans. The [MySQL idle-reaping
+benchmark and methodology](docs/mysql-pool-idle-reaping-research.md) compare the
+5-second default with 60 seconds and disabled reaping under a fixed cap; absent
+representative measured evidence, retain the 5-second default.
 
 # Websockets
 

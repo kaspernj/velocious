@@ -120,7 +120,6 @@ ${"ignored status line\n".repeat(500)}`
 export class NonPromiseDiagnosticMysqlDriver extends DiagnosticMysqlDriver {
   /** @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Deliberately malformed diagnostic result. */
   // Base-driver hook invoked through the detached diagnostics contract.
-  // fallow-ignore-next-line unused-class-member
   _deadlockDiagnosticContext() {
     // @ts-expect-error Simulates a runtime subclass that violates the documented Promise contract.
     return {statusCapture: "malformed-non-promise"}

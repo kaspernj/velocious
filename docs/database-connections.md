@@ -36,7 +36,15 @@ Framework persistence stores that already own one database identifier, such as t
 
 When every allowed connection is checked out, additional checkouts wait for a compatible connection to be checked in or for capacity to be freed. Waiting checkouts time out after `10000` ms by default. Configure `database.<environment>.<identifier>.pool.checkoutTimeoutMillis` to change that wait, or set it to `null` to wait indefinitely.
 
-Pool debug snapshots include cumulative low-cardinality telemetry for completed checkout queue waits (`checkoutWaitCount`, `checkoutWaitTotalMs`, and `checkoutWaitMaxMs`) and idle-reaper disposals (`idleReapDisposalCount`). These counters contain no checkout or tenant labels. See [MySQL outer-pool idle reaping research](mysql-pool-idle-reaping-research.md) for the reproducible 5-second/60-second/disabled comparison and safe interpretation for tenant-heavy processes.
+Pool debug snapshots include cumulative low-cardinality telemetry for connection
+creation count/failures/total/max, completed checkout queue waits, checkout
+timeouts, idle-reap count/failures/total/max/disposals, and peak live
+connections. These counters contain no checkout or tenant labels. When opt-in
+[test profiling](test-profiling.md) is active, safe aggregate deltas are also
+attributed to the current profile span. See [MySQL outer-pool idle reaping
+research](mysql-pool-idle-reaping-research.md) for the reproducible
+5-second/60-second/disabled comparison and safe interpretation for tenant-heavy
+processes.
 
 MySQL/MariaDB callers can cancel queued and in-flight statements with an `AbortSignal`, including ORM model queries and cross-tenant aggregates. See [Database Query Cancellation](database-query-cancellation.md) for the API and driver-specific behavior.
 

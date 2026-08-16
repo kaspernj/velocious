@@ -92,6 +92,14 @@
  */
 
 /**
+ * TestProfileQueryAttempt type.
+ * @typedef {object} TestProfileQueryAttempt
+ * @property {import("../../testing/test-profiler.js").TestProfileAsyncContext} context - Captured async attribution.
+ * @property {{sqlFingerprint: string, sqlOperation: string}} diagnostic - Redacted statement diagnostic.
+ * @property {number} startedAtMs - Physical attempt start time.
+ */
+
+/**
  * ActiveQueryDebugSnapshot type.
  * @typedef {object} ActiveQueryDebugSnapshot
  * @property {string[]} annotations - Database annotations active when the query started.
@@ -164,6 +172,7 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
 import { optionalPositiveInteger } from "typanic"
 import { coordinateSharedTransactionConnection } from "../../testing/shared-transaction-connection-coordinator.js"
+import { currentTestProfileContext } from "../../testing/test-profile-context.js"
 import sha256Hex from "../../utils/sha256-hex.js"
 
 /** Maximum characters inspected when building the debug SQL preview. */
@@ -1740,7 +1749,9 @@ export default class VelociousDatabaseDriversBase {
           return
         }
 
-        await this._startTransactionAction(options)
+        await this._runProfiledTransactionAction("start", async () => {
+          await this._startTransactionAction(options)
+        })
         this._transactionsCount++
 
         if (this._transactionsCount === 1) {
@@ -1772,7 +1783,9 @@ export default class VelociousDatabaseDriversBase {
    */
   async commitTransaction(options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
-      await this._commitTransactionAction(options)
+      await this._runProfiledTransactionAction("commit", async () => {
+        await this._commitTransactionAction(options)
+      })
       this._transactionsCount--
       this._resolveCompletedTransaction()
     })
@@ -1795,6 +1808,68 @@ export default class VelociousDatabaseDriversBase {
    */
   async _commitTransactionAction(options = {}) {
     await this.query("COMMIT", options)
+  }
+
+  /**
+   * Times a physical transaction action only when test profiling is active.
+   * @template T
+   * @param {"start" | "commit" | "rollback"} action - Transaction action.
+   * @param {() => Promise<T>} callback - Physical action callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _runProfiledTransactionAction(action, callback) {
+    const profileContext = currentTestProfileContext(this.configuration)
+
+    if (!profileContext) return await callback()
+
+    const startedAtMs = nowMs()
+    let failed = true
+
+    try {
+      const result = await callback()
+
+      failed = false
+      return result
+    } finally {
+      profileContext.profiler.recordDatabaseTransaction(profileContext, {
+        action,
+        durationMs: nowMs() - startedAtMs,
+        failed
+      })
+    }
+  }
+
+  /**
+   * Starts an optional physical-query profile attempt without retaining SQL.
+   * @param {string} sql - Original SQL used only to derive its redacted diagnostic.
+   * @returns {TestProfileQueryAttempt | undefined} - Active profile handle.
+   */
+  _startProfiledQueryAttempt(sql) {
+    const context = currentTestProfileContext(this.configuration)
+
+    if (!context) return undefined
+
+    return {
+      context,
+      diagnostic: sqlDiagnostic(sql),
+      startedAtMs: nowMs()
+    }
+  }
+
+  /**
+   * Completes an optional physical-query profile attempt.
+   * @param {TestProfileQueryAttempt | undefined} attempt - Profile handle.
+   * @param {boolean} failed - Whether the physical driver call failed.
+   * @returns {void}
+   */
+  _finishProfiledQueryAttempt(attempt, failed) {
+    if (!attempt) return
+
+    attempt.context.profiler.recordDatabaseQuery(attempt.context, {
+      durationMs: nowMs() - attempt.startedAtMs,
+      failed,
+      ...attempt.diagnostic
+    })
   }
 
   /**
@@ -1916,7 +1991,17 @@ export default class VelociousDatabaseDriversBase {
       await this.beforeQuery(sql, options)
 
       try {
-        return await this._affectedRowsActual(sql)
+        const profileAttempt = this._startProfiledQueryAttempt(sql)
+        let failed = true
+
+        try {
+          const affectedRows = await this._affectedRowsActual(sql)
+
+          failed = false
+          return affectedRows
+        } finally {
+          this._finishProfiledQueryAttempt(profileAttempt, failed)
+        }
       } finally {
         await this.afterQuery(sql, options)
       }
@@ -1945,7 +2030,7 @@ export default class VelociousDatabaseDriversBase {
     let result
 
     try {
-      const runQueryActualWithHooks = async () => await this._queryActualWithHooks(querySql, options)
+      const runQueryActualWithHooks = async () => await this._queryActualWithHooks(querySql, options, originalSql)
 
       if (requestTiming && tries === 1) {
         result = await requestTiming.measureDbQuery(runQueryActualWithHooks)
@@ -1980,14 +2065,25 @@ export default class VelociousDatabaseDriversBase {
    * Runs query actual with before/after hooks.
    * @param {string} sql - SQL string.
    * @param {QueryOptions} options - Query options.
+   * @param {string} originalSql - SQL before process-list comments.
    * @returns {Promise<QueryResultType>} - Resolves with the query.
    */
-  async _queryActualWithHooks(sql, options) {
+  async _queryActualWithHooks(sql, options, originalSql) {
     return await coordinateSharedTransactionConnection(this, async () => {
       await this.beforeQuery(sql, options)
 
       try {
-        return await this._queryActual(sql, options)
+        const profileAttempt = this._startProfiledQueryAttempt(originalSql)
+        let failed = true
+
+        try {
+          const result = await this._queryActual(sql, options)
+
+          failed = false
+          return result
+        } finally {
+          this._finishProfiledQueryAttempt(profileAttempt, failed)
+        }
       } finally {
         await this.afterQuery(sql, options)
       }
@@ -2403,7 +2499,9 @@ export default class VelociousDatabaseDriversBase {
   async rollbackTransaction(options = {}) {
     await this._transactionsActionsMutex.sync(async () => {
       try {
-        await this._rollbackTransactionAction(options)
+        await this._runProfiledTransactionAction("rollback", async () => {
+          await this._rollbackTransactionAction(options)
+        })
       } finally {
         this._transactionsCount--
         this._resolveCompletedTransaction()

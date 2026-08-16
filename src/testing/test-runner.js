@@ -46,6 +46,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @property {TestArgs} args - Arguments passed to the test.
  * @property {string} [filePath] - Source file path.
  * @property {number} [line] - Source line number.
+ * @property {string} [ownerFilePath] - Deterministic importing test file.
  * @property {(arg: TestArgs) => (void|Promise<void>)} function - Test callback to execute.
  */
 /**
@@ -63,6 +64,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @typedef {object} ActiveAfterAllScopeEntry
  * @property {TestsArgument} tests - Scope test tree.
  * @property {boolean} afterAllsRun - Whether cleanup hooks have run.
+ * @property {string} [profileScopeId] - Opaque profile scope identifier.
  */
 /**
  * Defines this typedef.
@@ -72,6 +74,9 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * AfterBeforeEachCallbackObjectType type.
  * @typedef {object} AfterBeforeEachCallbackObjectType
  * @property {AfterBeforeEachCallbackType} callback - Hook callback to execute.
+ * @property {number} [declarationIndex] - Hook index within its declaration scope.
+ * @property {string} [declarationScopeId] - Opaque profile scope identifier.
+ * @property {string} [ownerFilePath] - Deterministic importing test file.
  */
 /**
  * Defines this typedef.
@@ -81,6 +86,9 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * BeforeAfterAllCallbackObjectType type.
  * @typedef {object} BeforeAfterAllCallbackObjectType
  * @property {BeforeAfterAllCallbackType} callback - Hook callback to execute.
+ * @property {number} [declarationIndex] - Hook index within its declaration scope.
+ * @property {string} [declarationScopeId] - Opaque profile scope identifier.
+ * @property {string} [ownerFilePath] - Deterministic importing test file.
  */
 /**
  * TestsArgument type.
@@ -93,6 +101,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @property {AfterBeforeEachCallbackObjectType[]} beforeEaches - Before-each hooks for this scope.
  * @property {string} [filePath] - Source file path.
  * @property {number} [line] - Source line number.
+ * @property {string} [ownerFilePath] - Deterministic importing test file.
  * @property {Record<string, TestData>} tests - A unique identifier for the node.
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
  */
@@ -206,8 +215,9 @@ export default class TestRunner {
    * @param {Array<string>} args.testFiles - Test files.
    * @param {Record<string, number[]>} [args.lineFilters] - Line filters by file.
    * @param {RegExp[]} [args.examplePatterns] - Example patterns.
+   * @param {import("./test-profiler.js").default} [args.profiler] - Opt-in profiler.
    */
-  constructor({configuration, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, ...restArgs}) {
+  constructor({configuration, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration is required")
@@ -220,6 +230,7 @@ export default class TestRunner {
     this._testFiles = testFiles
     this._lineFilters = lineFilters || {}
     this._examplePatterns = examplePatterns || []
+    this._profiler = profiler
 
     this._failedTests = 0
     this._successfulTests = 0
@@ -255,6 +266,41 @@ export default class TestRunner {
    * @returns {RegExp[]} - Example patterns.
    */
   getExamplePatterns() { return this._examplePatterns }
+
+  /**
+   * Runs a profiler span only when profiling was explicitly enabled.
+   * @template T
+   * @param {object} metadata - Span metadata.
+   * @param {string} metadata.phase - Phase name.
+   * @param {number} [metadata.declarationIndex] - Hook declaration index.
+   * @param {string} [metadata.declarationScopeId] - Hook declaration scope.
+   * @param {string} [metadata.filePath] - Source ownership.
+   * @param {() => (T | Promise<T>)} callback - Timed callback.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async runProfileSpan(metadata, callback) {
+    if (!this._profiler) return await callback()
+
+    return await this._profiler.runSpan(metadata, callback)
+  }
+
+  /**
+   * Adds declaration metadata to hooks only for an active profile.
+   * @template {AfterBeforeEachCallbackObjectType | BeforeAfterAllCallbackObjectType} T
+   * @param {T[]} hooks - Hooks declared in one scope.
+   * @param {string | undefined} declarationScopeId - Profile scope identifier.
+   * @param {string | undefined} ownerFilePath - Scope owner file.
+   * @returns {T[]} - Profile-aware hook entries.
+   */
+  profileHookEntries(hooks, declarationScopeId, ownerFilePath) {
+    if (!this._profiler) return hooks
+
+    return hooks.map((hook, declarationIndex) => Object.assign({}, hook, {
+      declarationIndex: hook.declarationIndex ?? declarationIndex,
+      declarationScopeId: hook.declarationScopeId ?? declarationScopeId,
+      ownerFilePath: hook.ownerFilePath ?? ownerFilePath
+    }))
+  }
 
   /**
    * Runs normalize tags.
@@ -652,7 +698,64 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async importTestFiles() {
-    await this.getConfiguration().getEnvironmentHandler().importTestFiles(this.getTestFiles())
+    const environmentHandler = this.getConfiguration().getEnvironmentHandler()
+
+    if (!this._profiler) {
+      await environmentHandler.importTestFiles(this.getTestFiles())
+      return
+    }
+
+    for (const testFile of this.getTestFiles()) {
+      const existingRegistrations = this.testRegistrationObjects(tests)
+
+      await this._profiler.measurePhase("imports", async () => {
+        await environmentHandler.importTestFiles([testFile])
+      }, {filePath: testFile})
+      this.assignTestRegistrationOwnership(tests, existingRegistrations, testFile)
+    }
+  }
+
+  /**
+   * Collects registered scope, hook, and test objects by identity.
+   * @param {TestsArgument} scope - Test scope.
+   * @param {Set<object>} [registrations] - Accumulated identities.
+   * @returns {Set<object>} - Registration identities.
+   */
+  testRegistrationObjects(scope, registrations = new Set()) {
+    registrations.add(scope)
+
+    for (const hook of [...scope.beforeAlls, ...scope.beforeEaches, ...scope.afterEaches, ...scope.afterAlls]) {
+      registrations.add(hook)
+    }
+
+    for (const testData of Object.values(scope.tests)) registrations.add(testData)
+    for (const childScope of Object.values(scope.subs)) this.testRegistrationObjects(childScope, registrations)
+
+    return registrations
+  }
+
+  /**
+   * Assigns deterministic ownership to registrations added by one entry file,
+   * including declarations originating in a helper imported by that entry file.
+   * @param {TestsArgument} scope - Test scope.
+   * @param {Set<object>} previousRegistrations - Identities present before import.
+   * @param {string} ownerFilePath - Importing entry file.
+   * @returns {void}
+   */
+  assignTestRegistrationOwnership(scope, previousRegistrations, ownerFilePath) {
+    if (!previousRegistrations.has(scope)) scope.ownerFilePath ??= ownerFilePath
+
+    for (const hook of [...scope.beforeAlls, ...scope.beforeEaches, ...scope.afterEaches, ...scope.afterAlls]) {
+      if (!previousRegistrations.has(hook)) hook.ownerFilePath ??= ownerFilePath
+    }
+
+    for (const testData of Object.values(scope.tests)) {
+      if (!previousRegistrations.has(testData)) testData.ownerFilePath ??= ownerFilePath
+    }
+
+    for (const childScope of Object.values(scope.subs)) {
+      this.assignTestRegistrationOwnership(childScope, previousRegistrations, ownerFilePath)
+    }
   }
 
   /**
@@ -748,11 +851,7 @@ export default class TestRunner {
    * @returns {number} - The executed tests count.
    */
   getExecutedTestsCount() {
-    if (this._successfulTests === undefined || this._failedTests === undefined) {
-      throw new Error("Tests hasn't been run yet")
-    }
-
-    return this._successfulTests + this._failedTests
+    return this._testDurations.length
   }
 
   /**
@@ -784,7 +883,9 @@ export default class TestRunner {
     const testingConfigPath = this.getConfiguration().getTesting()
 
     if (testingConfigPath) {
-      await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
+      await this.runProfileSpan({phase: "testing config/global setup"}, async () => {
+        await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
+      })
     }
   }
 
@@ -957,24 +1058,43 @@ export default class TestRunner {
    * @param {string[]} args.descriptions - Descriptions.
    * @param {number} args.indentLevel - Indent level.
    * @param {boolean} [args.lineMatchedInScope] - Whether line matched in scope.
+   * @param {string} [args.parentProfileScopeId] - Parent profile scope.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope = false}) {
+  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope = false, parentProfileScopeId}) {
     const leftPadding = " ".repeat(indentLevel * 2)
-    const newAfterEaches = [...afterEaches, ...tests.afterEaches]
-    const newBeforeEaches = [...beforeEaches, ...tests.beforeEaches]
+    const scopeOwnerFilePath = tests.ownerFilePath ?? tests.filePath
+    const profileScopeId = this._profiler?.scopeId(tests, {
+      descriptions,
+      filePath: scopeOwnerFilePath,
+      line: tests.line,
+      parentId: parentProfileScopeId
+    })
+    const ownAfterEaches = this.profileHookEntries(tests.afterEaches, profileScopeId, scopeOwnerFilePath)
+    const ownBeforeEaches = this.profileHookEntries(tests.beforeEaches, profileScopeId, scopeOwnerFilePath)
+    const newAfterEaches = [...afterEaches, ...ownAfterEaches]
+    const newBeforeEaches = [...beforeEaches, ...ownBeforeEaches]
     const scopeLineMatch = lineMatchedInScope || this.matchesLineFilter(tests)
     const shouldRunAnyTests = this.hasRunnableTests(tests, descriptions, scopeLineMatch)
 
     if (!shouldRunAnyTests) return
 
     /** @type {ActiveAfterAllScopeEntry} */
-    const scopeEntry = {tests, afterAllsRun: false}
+    const scopeEntry = {tests, afterAllsRun: false, profileScopeId}
     this._activeAfterAllScopes.push(scopeEntry)
 
     try {
-      for (const beforeAllData of tests.beforeAlls || []) {
-        await beforeAllData.callback({configuration: this.getConfiguration()})
+      const beforeAlls = this.profileHookEntries(tests.beforeAlls || [], profileScopeId, scopeOwnerFilePath)
+
+      for (const beforeAllData of beforeAlls) {
+        await this.runProfileSpan({
+          phase: "beforeAll",
+          declarationIndex: beforeAllData.declarationIndex,
+          declarationScopeId: beforeAllData.declarationScopeId,
+          filePath: beforeAllData.ownerFilePath
+        }, async () => {
+          await beforeAllData.callback({configuration: this.getConfiguration()})
+        })
       }
 
       for (const testDescription in tests.tests) {
@@ -1035,23 +1155,23 @@ export default class TestRunner {
           let testSharedConnectionRegistrations = []
           /** @type {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} */
           let sharedTransactionBrokerRegistration
-          /**
-           * Shared mutable flag so the catch block can suppress the
-           * `_successfulTests` increment inside the still-detached lifecycle:
-           * when the lifecycle eventually resolves after a timeout rejection,
-           * the success increment must not count a test that was already
-           * recorded as failed.
-           * @type {{timedOut: boolean}} */
-          const timeoutState = {timedOut: false}
           const stopConsoleCapture = this.startConsoleCapture({
             passthrough: testConfig.consoleOutput === "live"
           })
+          const profiler = this._profiler
+          const profileAttempt = profiler?.startAttempt({
+            descriptions,
+            attemptNumber,
+            testData,
+            testDescription
+          })
+          let attemptTimedOut = false
 
           try {
             // Run the whole per-test lifecycle (dummy/server startup, connection
             // acquisition, beforeEach hooks, the test body and afterEach hooks) as
             // one promise so the timeout below can cover all of it.
-            testLifecycle = this.runWithDummyIfNeeded(testArgs, async () => {
+            const lifecycleCallback = async () => await this.runWithDummyIfNeeded(testArgs, async () => {
               // Pin one connection per test so beforeEach, the test body and afterEach
               // all run on the SAME connection. This is required for transaction-based
               // database cleaning (beforeEach starts a transaction, afterEach rolls it
@@ -1069,7 +1189,14 @@ export default class TestRunner {
                   try {
                     clearDeliveries()
                     for (const beforeEachData of newBeforeEaches) {
-                      await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                      await this.runProfileSpan({
+                        phase: "beforeEach",
+                        declarationIndex: beforeEachData.declarationIndex,
+                        declarationScopeId: beforeEachData.declarationScopeId,
+                        filePath: beforeEachData.ownerFilePath
+                      }, async () => {
+                        await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                      })
                     }
 
                     sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker()
@@ -1085,16 +1212,22 @@ export default class TestRunner {
                       filePath: testData.filePath ?? "<unknown>",
                       line: testData.line ?? 0
                     }
-                    await testData.function(testArgs)
-                    if (!timeoutState.timedOut) {
-                      this._successfulTests++
-                    }
+                    await this.runProfileSpan({phase: "test body", filePath: testData.ownerFilePath ?? testData.filePath}, async () => {
+                      await testData.function(testArgs)
+                    })
                   } finally {
                     try {
                       await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
                     } finally {
                       for (const afterEachData of newAfterEaches) {
-                        await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                        await this.runProfileSpan({
+                          phase: "afterEach",
+                          declarationIndex: afterEachData.declarationIndex,
+                          declarationScopeId: afterEachData.declarationScopeId,
+                          filePath: afterEachData.ownerFilePath
+                        }, async () => {
+                          await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                        })
                       }
                     }
                   }
@@ -1103,6 +1236,9 @@ export default class TestRunner {
                 }
               })
             })
+            testLifecycle = profileAttempt && profiler
+              ? profiler.runAttempt(profileAttempt, lifecycleCallback)
+              : lifecycleCallback()
 
             // Time out the ENTIRE lifecycle, not just the test body. A hang in any
             // phase — a connection checkout that never resolves, a beforeEach/afterEach
@@ -1114,6 +1250,11 @@ export default class TestRunner {
             } else {
               await testLifecycle
             }
+
+            // A test is successful only after its complete lifecycle settles.
+            // Cleanup failures and timed-out detached work must not overlap the
+            // final successful and failed counters used for executed-test totals.
+            this._successfulTests++
           } catch (error) {
             caughtError = error
             lastError = error
@@ -1129,9 +1270,10 @@ export default class TestRunner {
             // still can't stall the whole run: if it will not settle within the
             // grace, we proceed exactly as before (no worse than today).
             const timedOut = Boolean(/** @type {TestTimeoutError} */ (error)?.velociousTestTimeout)
+            attemptTimedOut = timedOut
 
             if (timedOut && testLifecycle) {
-              timeoutState.timedOut = true
+              if (profileAttempt && profiler) profiler.finishAttempt(profileAttempt, "timed-out")
               await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
 
               // If the abandoned lifecycle never settled within the grace, its
@@ -1159,6 +1301,12 @@ export default class TestRunner {
             }
           } finally {
             const consoleOutput = stopConsoleCapture()
+
+            if (profileAttempt && profiler) {
+              profiler.finishAttempt(profileAttempt, caughtError === undefined
+                ? "passed"
+                : (attemptTimedOut ? "timed-out" : "failed"))
+            }
 
             if (consoleOutput) {
               attemptConsoleOutputs.push({attemptNumber, output: consoleOutput})
@@ -1284,7 +1432,8 @@ export default class TestRunner {
             tests: subTest,
             descriptions: newDecriptions,
             indentLevel: indentLevel + 1,
-            lineMatchedInScope: childScopeLineMatch
+            lineMatchedInScope: childScopeLineMatch,
+            parentProfileScopeId: profileScopeId
           })
         }
       }
@@ -1308,8 +1457,22 @@ export default class TestRunner {
 
     scopeEntry.afterAllsRun = true
 
-    for (const afterAllData of scopeEntry.tests.afterAlls || []) {
-      await afterAllData.callback({configuration: this.getConfiguration()})
+    const scopeOwnerFilePath = scopeEntry.tests.ownerFilePath ?? scopeEntry.tests.filePath
+    const afterAlls = this.profileHookEntries(
+      scopeEntry.tests.afterAlls || [],
+      scopeEntry.profileScopeId,
+      scopeOwnerFilePath
+    )
+
+    for (const afterAllData of afterAlls) {
+      await this.runProfileSpan({
+        phase: "afterAll",
+        declarationIndex: afterAllData.declarationIndex,
+        declarationScopeId: afterAllData.declarationScopeId,
+        filePath: afterAllData.ownerFilePath
+      }, async () => {
+        await afterAllData.callback({configuration: this.getConfiguration()})
+      })
     }
   }
 
