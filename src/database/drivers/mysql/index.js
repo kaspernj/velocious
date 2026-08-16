@@ -21,6 +21,7 @@ import Table from "./table.js"
 import StructureSql from "./structure-sql.js"
 import Upsert from "./sql/upsert.js"
 import Update from "./sql/update.js"
+import parseInnodbDeadlockSummary from "./deadlock-diagnostic-parser.js"
 
 /**
  * Sentinel timeout (in seconds) used as the "block forever" value when a
@@ -365,14 +366,12 @@ export default class VelociousDatabaseDriversMysql extends Base{
       // A deadlock or lock-wait-timeout aborts the whole transaction; it must be retried at the
       // transaction level (re-running the callback), not the query level, so flag it as such and
       // keep `retry` false so an in-transaction query does not retry against the dead transaction.
-      if (
-        errorCode == "ER_LOCK_DEADLOCK" ||
-        errorCode == "ER_LOCK_WAIT_TIMEOUT" ||
-        message.includes("ER_LOCK_DEADLOCK") ||
-        message.includes("Deadlock found") ||
-        message.includes("Lock wait timeout exceeded")
-      ) {
-        return {retry: false, reconnect: false, deadlock: true, waitMs: 50}
+      if (errorCode == "ER_LOCK_DEADLOCK" || message.includes("ER_LOCK_DEADLOCK") || message.includes("Deadlock found")) {
+        return {retry: false, reconnect: false, deadlock: true, contentionKind: "deadlock", waitMs: 50}
+      }
+
+      if (errorCode == "ER_LOCK_WAIT_TIMEOUT" || message.includes("Lock wait timeout exceeded")) {
+        return {retry: false, reconnect: false, deadlock: true, contentionKind: "lock-wait-timeout", waitMs: 50}
       }
 
       shouldReconnect ||= (
@@ -397,18 +396,23 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * Adds a redacted, bounded excerpt from MySQL's latest InnoDB deadlock report. Capture uses a
    * separate short-lived connection so it cannot queue ahead of rollback or the next retry on this
    * driver's single-connection pool.
+   * @param {import("../base.js").DeadlockRetryDiagnosticSnapshot} snapshot - Immutable retry snapshot.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Safe diagnostic context.
    */
-  async _deadlockDiagnosticContext() {
-    try {
-      const status = await this._captureInnodbDeadlockStatus()
+  async _deadlockDiagnosticContext(snapshot) {
+    if (snapshot.contentionKind == "lock-wait-timeout") return {statusCapture: "not-applicable"}
 
-      return {
-        innodbDeadlockSummary: this._innodbDeadlockSummary(status),
-        statusCapture: "captured"
-      }
+    let status
+
+    try {
+      status = await this._captureInnodbDeadlockStatus()
     } catch {
       return {statusCapture: "failed"}
+    }
+
+    return {
+      innodbDeadlockSummary: this._innodbDeadlockSummary(status),
+      statusCapture: "captured"
     }
   }
 
@@ -465,23 +469,10 @@ export default class VelociousDatabaseDriversMysql extends Base{
    * Extracts only fixed-format deadlock counters. The server report contains raw SQL, identifiers,
    * and physical record data, so no source text is ever included in an application diagnostic.
    * @param {string} status - SHOW ENGINE INNODB STATUS text.
-   * @returns {{transactions: number, victimTransaction: number | null}} - Structural deadlock summary.
+   * @returns {{lockRecordsTruncated: boolean, sectionTruncated: boolean, transactionNodes: Array<{conflictingLocks: Array<{indexFingerprint: string, lockMode: string, state: string, tableFingerprint: string}>, locks: Array<{indexFingerprint: string, lockMode: string, state: string, tableFingerprint: string}>, ordinal: number}>, transactionNodesTruncated: boolean, transactions: number, victimTransaction: number | null}} - Structural deadlock summary.
    */
   _innodbDeadlockSummary(status) {
-    const deadlockStart = status.indexOf("LATEST DETECTED DEADLOCK")
-    const candidate = deadlockStart >= 0 ? status.slice(deadlockStart) : status
-    let transactions = 0
-    /** @type {number | null} */
-    let victimTransaction = null
-
-    for (const line of candidate.split(/\r?\n/)) {
-      const trimmed = line.trim()
-      if (/^\*\*\* \(\d+\) TRANSACTION:$/.test(trimmed)) transactions++
-      const victimMatch = /^\*\*\* WE ROLL BACK TRANSACTION \((\d+)\)$/.exec(trimmed)
-      if (victimMatch) victimTransaction = Number(victimMatch[1])
-    }
-
-    return {transactions, victimTransaction}
+    return parseInnodbDeadlockSummary(status)
   }
 
   /**

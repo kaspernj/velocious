@@ -3,6 +3,7 @@
 import Configuration from "../../configuration.js"
 import Logger from "../../logger.js"
 import baseMethodsForward from "./base-methods-forward.js"
+import sha256Hex from "../../utils/sha256-hex.js"
 
 /**
  * Opaque ownership handle for an in-process test shared connection registration.
@@ -337,15 +338,31 @@ class VelociousDatabasePoolBase {
   async spawnConnectionForConfiguration(databaseConfiguration) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
     const connection = await this.spawnConnectionWithConfiguration(databaseConfiguration)
+
+    this.stampConnectionForConfigurationReuseKey(connection, reuseKey)
+
+    return connection
+  }
+
+  /**
+   * Stamps a connected driver with its pool reuse identity and diagnostic-safe opaque identity.
+   * @param {import("../drivers/base.js").default} connection - Connected driver.
+   * @param {string} reuseKey - Exact physical configuration reuse key captured for this spawn.
+   * @returns {void}
+   */
+  stampConnectionForConfigurationReuseKey(connection, reuseKey) {
     const connectionWithPoolKey = /** @type {import("../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (connection)
+    const databaseIdentityFingerprint = `sha256:${sha256Hex(`database-configuration-reuse:v1\0${reuseKey}`)}`
 
     connectionWithPoolKey[POOL_CONFIGURATION_KEY] = reuseKey
+    connection.setPoolDiagnosticIdentity({
+      databaseIdentifier: this.identifier,
+      databaseIdentityFingerprint
+    })
     connection.setSchemaCacheInvalidator(() => {
       this.clearSchemaCache()
       this.configuration.clearSchemaCachesForReuseKey(reuseKey)
     })
-
-    return connection
   }
 
   /**

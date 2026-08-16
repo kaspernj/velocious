@@ -1,0 +1,1 @@
+Harden MySQL/MariaDB contention diagnostics with immutable attempt timing, always-redacted logical pool and operation labels, opaque correlation identities, truthful lock-wait classification, and bounded structural lock-cycle fingerprints with explicit MariaDB counterparty edges while keeping capture detached from transaction retry behavior.

@@ -1,6 +1,7 @@
 // @ts-check
 
 import AsyncTrackedMultiConnection from "../../../src/database/pool/async-tracked-multi-connection.js"
+import sha256Hex from "../../../src/utils/sha256-hex.js"
 import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 
@@ -24,21 +25,19 @@ describe("database - pool - async tracked multi connection spawn config freshnes
       pool.connections = []
 
       const baseConfiguration = pool.getConfiguration()
-      const spawnTimeConfiguration = {...baseConfiguration, velociousSpawnFreshnessMarker: "spawn-time"}
-      let configurationHasChanged = false
+      let configurationResolutionCount = 0
 
-      // Resolve to the base config until the reap-await boundary, then to the spawn-time
-      // config. The connection must be spawned with the spawn-time configuration.
-      pool.getConfiguration = () => (configurationHasChanged ? spawnTimeConfiguration : baseConfiguration)
+      // Return a distinct physical configuration object on every resolution. Checkout may
+      // refresh once after reaping, but the spawn configuration and reuse identity must both
+      // come from that same exact captured object.
+      pool.getConfiguration = () => {
+        configurationResolutionCount++
 
-      // Flip the resolved configuration during the awaited reap that checkout() performs
-      // before it spawns. The old code captured the configuration before this ran.
-      const originalReapIdleConnections = pool.reapIdleConnections.bind(pool)
-
-      pool.reapIdleConnections = async () => {
-        configurationHasChanged = true
-
-        return await originalReapIdleConnections()
+        return {
+          ...baseConfiguration,
+          name: `${baseConfiguration.name}-resolution-${configurationResolutionCount}`,
+          velociousSpawnFreshnessMarker: configurationResolutionCount
+        }
       }
 
       /** @type {Array<unknown>} */
@@ -51,10 +50,21 @@ describe("database - pool - async tracked multi connection spawn config freshnes
         return await originalSpawnWithConfiguration(config)
       }
 
-      await pool.withConnection(async () => {})
+      let spawnedDatabaseIdentifier
+      let spawnedDatabaseIdentityFingerprint
+      let spawnedReuseKey
+
+      await pool.withConnection(async (connection) => {
+        spawnedDatabaseIdentifier = connection._databaseIdentifier
+        spawnedDatabaseIdentityFingerprint = connection._databaseIdentityFingerprint
+        spawnedReuseKey = pool.getConnectionConfigurationReuseKey(connection)
+      })
 
       expect(spawnedWithConfigurations.length).toEqual(1)
-      expect(spawnedWithConfigurations[0]).toEqual(spawnTimeConfiguration)
+      expect(spawnedWithConfigurations[0].velociousSpawnFreshnessMarker > 1).toBeTrue()
+      expect(spawnedReuseKey).toEqual(pool.getConfigurationReuseKey(spawnedWithConfigurations[0]))
+      expect(spawnedDatabaseIdentifier).toEqual("default")
+      expect(spawnedDatabaseIdentityFingerprint).toEqual(`sha256:${sha256Hex(`database-configuration-reuse:v1\0${spawnedReuseKey}`)}`)
     } finally {
       await cleanup()
     }

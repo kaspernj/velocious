@@ -54,6 +54,7 @@
  * @property {boolean} retry - Whether the error should be retried.
  * @property {boolean} reconnect - Whether to reconnect before retrying.
  * @property {boolean} [deadlock] - Whether the error is a transaction deadlock/lock-wait-timeout that should retry the whole transaction.
+ * @property {"deadlock" | "lock-wait-timeout"} [contentionKind] - Classified transaction contention kind.
  * @property {number} [maxTries] - Override the max retry attempts.
  * @property {number} [waitMs] - Wait time before retrying in milliseconds.
  */
@@ -69,6 +70,25 @@
  * @property {AbortSignal} [signal] - Aborts the in-flight query (destroying its connection) when it fires.
  * @property {string} [sourceStack] - Stack captured at the caller boundary.
  * @property {symbol} [operationOwner] - Opaque owner for an operation-leased connection.
+ */
+
+/**
+ * DeadlockRetryDiagnosticSnapshot type.
+ * @typedef {object} DeadlockRetryDiagnosticSnapshot
+ * @property {number} attempt - One-based transaction attempt.
+ * @property {"deadlock" | "lock-wait-timeout"} contentionKind - Classified contention kind.
+ * @property {string} [databaseIdentifier] - Redacted logical database pool identifier marker.
+ * @property {string} [databaseIdentifierFingerprint] - Opaque logical database pool identity.
+ * @property {string} [databaseIdentityFingerprint] - Opaque physical database identity.
+ * @property {string} driverType - Driver type.
+ * @property {number} maxAttempts - Configured transaction attempt budget.
+ * @property {string} [operationName] - Redacted operation-name marker.
+ * @property {string} [operationNameFingerprint] - Opaque operation-name identity.
+ * @property {string} [sqlFingerprint] - Normalized SQL-shape fingerprint.
+ * @property {string} [sqlOperation] - SQL verb.
+ * @property {string} stage - Error-event stage.
+ * @property {number} transactionAttemptDurationMs - Duration of the failed outer attempt.
+ * @property {boolean} willRetry - Whether another outer transaction attempt will run.
  */
 
 /**
@@ -144,19 +164,23 @@ import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
 import { optionalPositiveInteger } from "typanic"
 import { coordinateSharedTransactionConnection } from "../../testing/shared-transaction-connection-coordinator.js"
+import sha256Hex from "../../utils/sha256-hex.js"
 
 /** Maximum characters inspected when building the debug SQL preview. */
 const SQL_PREVIEW_SCAN_LIMIT = 4096
 /** Maximum characters inspected when deciding whether a statement invalidates schema metadata. */
 const SCHEMA_INVALIDATION_SCAN_LIMIT = 8192
+/** Maximum checkout-name characters inspected by retry diagnostics. */
+const OPERATION_NAME_SCAN_LIMIT = 1024
+const REDACTED_DIAGNOSTIC_LABEL = "[REDACTED]"
 
 /**
  * Builds a non-reversible, stable SQL fingerprint without retaining SQL text. Literal spelling is
  * normalized first so the same statement shape produces the same fingerprint across values.
  * @param {string} sql - SQL to fingerprint.
- * @returns {string} - Bounded fingerprint.
+ * @returns {{sqlFingerprint: string, sqlOperation: string}} - Bounded query diagnostic.
  */
-function sqlFingerprint(sql) {
+function sqlDiagnostic(sql) {
   let fingerprintInput = ""
 
   for (let index = 0; index < sql.length;) {
@@ -206,7 +230,12 @@ function sqlFingerprint(sql) {
     hash = BigInt.asUintN(64, hash * 0x100000001b3n)
   }
 
-  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`
+  const operationMatch = /^([a-z]+)/.exec(normalized)
+
+  return {
+    sqlFingerprint: `fnv1a64:${hash.toString(16).padStart(16, "0")}`,
+    sqlOperation: operationMatch ? operationMatch[1].toUpperCase() : "UNKNOWN"
+  }
 }
 
 /**
@@ -270,6 +299,10 @@ export default class VelociousDatabaseDriversBase {
    * Narrows the runtime value to the documented type.
    * @type {string | undefined} */
   _connectionCheckoutName
+  /** @type {string | undefined} */
+  _databaseIdentifier
+  /** @type {string | undefined} */
+  _databaseIdentityFingerprint
   /**
    * Active query.
    * @type {ActiveQueryState | null} */
@@ -463,6 +496,16 @@ export default class VelociousDatabaseDriversBase {
   async clearConnectionCheckoutName() {
     this._connectionCheckoutName = undefined
     this._connectionCheckedOutAtUnixMs = undefined
+  }
+
+  /**
+   * Sets the pool-owned identity used by safe database diagnostics.
+   * @param {{databaseIdentifier: string, databaseIdentityFingerprint: string}} identity - Pool-stamped identity redacted at diagnostic snapshot time.
+   * @returns {void}
+   */
+  setPoolDiagnosticIdentity({databaseIdentifier, databaseIdentityFingerprint}) {
+    this._databaseIdentifier = databaseIdentifier
+    this._databaseIdentityFingerprint = databaseIdentityFingerprint
   }
 
   /**
@@ -1304,6 +1347,7 @@ export default class VelociousDatabaseDriversBase {
 
     while (true) {
       attempt++
+      const attemptStartedAtMs = this._nowMs()
 
       try {
         return await this._runTransactionAttempt(callback, options)
@@ -1312,9 +1356,17 @@ export default class VelociousDatabaseDriversBase {
         if (!(error instanceof Error)) throw error
 
         const retryInfo = this.retryableDatabaseError(error)
+        const willRetry = Boolean(retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0)
 
-        if (retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0) {
-          this._reportDeadlockRetryDiagnostic({attempt, error, maxAttempts})
+        if (willRetry) {
+          this._reportDeadlockRetryDiagnostic({
+            attempt,
+            contentionKind: retryInfo.contentionKind || "deadlock",
+            error,
+            maxAttempts,
+            transactionAttemptDurationMs: Math.max(0, this._nowMs() - attemptStartedAtMs),
+            willRetry
+          })
 
           // An explicitly-configured base wins so the tuning knob is effective even on drivers
           // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
@@ -1330,7 +1382,9 @@ export default class VelociousDatabaseDriversBase {
           const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
           const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
 
-          this.logger.warn(`Retrying transaction after deadlock (attempt ${attempt}/${maxAttempts})`)
+          const loggedContentionKind = retryInfo.contentionKind || "transaction contention"
+
+          this.logger.warn(`Retrying transaction after ${loggedContentionKind} (attempt ${attempt}/${maxAttempts})`)
           await this._waitMs(jitteredWaitMs)
           continue
         }
@@ -1351,28 +1405,66 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Returns the clock used for transaction-attempt diagnostics.
+   * @returns {number} - Monotonic milliseconds where available.
+   */
+  _nowMs() {
+    return nowMs()
+  }
+
+  /**
    * Starts best-effort deadlock diagnostics without joining the retry control flow. Subclasses may
    * add bounded driver-specific context; capture and event-listener failures cannot affect retry.
-   * @param {{attempt: number, error: Error, maxAttempts: number}} args - Retry metadata.
+   * @param {{attempt: number, contentionKind: "deadlock" | "lock-wait-timeout", error: Error, maxAttempts: number, transactionAttemptDurationMs: number, willRetry: boolean}} args - Retry metadata.
    * @returns {void}
    */
-  _reportDeadlockRetryDiagnostic({attempt, error, maxAttempts}) {
-    const queryDiagnostic = this._failedQueryDiagnostics.get(error)
+  _reportDeadlockRetryDiagnostic({attempt, contentionKind, error, maxAttempts, transactionAttemptDurationMs, willRetry}) {
+    let snapshot
 
-    void this._deadlockDiagnosticContext()
+    try {
+      const queryDiagnostic = this._failedQueryDiagnostics.get(error)
+
+      snapshot = Object.freeze({
+        attempt,
+        contentionKind,
+        driverType: this.getType(),
+        maxAttempts,
+        stage: "database-deadlock-retry",
+        transactionAttemptDurationMs,
+        willRetry,
+        ...this._poolDiagnosticIdentityContext(),
+        ...this._operationDiagnosticContext(),
+        ...queryDiagnostic
+      })
+    } catch (diagnosticError) {
+      this._reportDeadlockDiagnosticPipelineFailure(diagnosticError)
+      return
+    }
+
+    let driverContextResult
+
+    try {
+      driverContextResult = this._deadlockDiagnosticContext(snapshot)
+    } catch (diagnosticError) {
+      this._reportDeadlockDiagnosticPipelineFailure(diagnosticError)
+      return
+    }
+
+    const hasPromiseContract = driverContextResult instanceof Promise
+
+    void Promise.resolve(driverContextResult)
       .then((driverContext) => {
+        if (!hasPromiseContract) throw new Error("Database deadlock diagnostic context must return a Promise")
+
         const context = {
-          attempt,
-          driverType: this.getType(),
-          maxAttempts,
-          stage: "database-deadlock-retry",
-          willRetry: true,
-          ...queryDiagnostic,
+          ...snapshot,
           ...driverContext
         }
         const payload = {
           context,
-          error: new Error("Database transaction deadlock will be retried")
+          error: new Error(willRetry
+            ? `Database transaction ${contentionKind} will be retried`
+            : `Database transaction ${contentionKind} exhausted its retry budget`)
         }
         const errorEvents = this.configuration.getErrorEvents()
 
@@ -1388,30 +1480,93 @@ export default class VelociousDatabaseDriversBase {
           this.logger.warn("Database deadlock retry all-error listener failed", {error: eventError})
         }
       })
-      .catch((diagnosticError) => {
-        const normalizedError = diagnosticError instanceof Error
-          ? diagnosticError
-          : new Error("Database deadlock retry diagnostic failed", {cause: diagnosticError})
-        const payload = {
-          context: {stage: "database-deadlock-retry-diagnostic"},
-          error: normalizedError
-        }
+      .catch((diagnosticError) => this._reportDeadlockDiagnosticPipelineFailure(diagnosticError))
+  }
 
-        try {
-          const errorEvents = this.configuration.getErrorEvents()
-          errorEvents.emit("framework-error", payload)
-          errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
-        } catch (reportingError) {
-          this.logger.warn("Database deadlock retry diagnostic pipeline failed", {error: normalizedError, reportingError})
-        }
-      })
+  /**
+   * Returns pool identity only when this driver was stamped by a pool.
+   * @returns {{databaseIdentifier?: string, databaseIdentifierFingerprint?: string, databaseIdentityFingerprint?: string}} - Safe pool identity.
+   */
+  _poolDiagnosticIdentityContext() {
+    if (this._databaseIdentifier === undefined || !this._databaseIdentityFingerprint) return {}
+
+    const identifierFingerprintInput = typeof this._databaseIdentifier === "string"
+      ? this._databaseIdentifier
+      : `invalid:${typeof this._databaseIdentifier}`
+    const databaseIdentifierFingerprint = `sha256:${sha256Hex(`database-logical-identifier:v1\0${identifierFingerprintInput}`)}`
+
+    return {
+      databaseIdentifier: REDACTED_DIAGNOSTIC_LABEL,
+      databaseIdentifierFingerprint,
+      databaseIdentityFingerprint: this._databaseIdentityFingerprint
+    }
+  }
+
+  /**
+   * Builds the bounded operation portion of an immutable retry snapshot.
+   * @returns {{operationName?: string, operationNameFingerprint?: string}} - Safe operation fields.
+   */
+  _operationDiagnosticContext() {
+    const rawOperationName = this._connectionCheckoutName
+
+    if (rawOperationName === undefined) return {}
+    if (typeof rawOperationName !== "string") {
+      return {
+        operationName: REDACTED_DIAGNOSTIC_LABEL,
+        operationNameFingerprint: `sha256:${sha256Hex(`database-operation:v1\0invalid:${typeof rawOperationName}`)}`
+      }
+    }
+
+    const scannedOperationName = rawOperationName.slice(0, OPERATION_NAME_SCAN_LIMIT)
+    const operationNameFingerprint = `sha256:${sha256Hex(`database-operation:v1\0${scannedOperationName}\0length:${rawOperationName.length}`)}`
+
+    return {
+      operationName: REDACTED_DIAGNOSTIC_LABEL,
+      operationNameFingerprint
+    }
+  }
+
+  /**
+   * Reports an unexpected detached diagnostics failure without changing transaction control flow.
+   * @param {ReturnType<typeof JSON.parse>} diagnosticError - Diagnostics failure.
+   * @returns {void}
+   */
+  _reportDeadlockDiagnosticPipelineFailure(diagnosticError) {
+    const normalizedError = diagnosticError instanceof Error
+      ? diagnosticError
+      : new Error("Database deadlock retry diagnostic failed", {cause: diagnosticError})
+    const payload = {
+      context: {stage: "database-deadlock-retry-diagnostic"},
+      error: normalizedError
+    }
+    let errorEvents
+
+    try {
+      errorEvents = this.configuration.getErrorEvents()
+    } catch (reportingError) {
+      this.logger.warn("Database deadlock retry diagnostic pipeline reporting failed", {error: normalizedError, reportingError})
+      return
+    }
+
+    try {
+      errorEvents.emit("framework-error", payload)
+    } catch (reportingError) {
+      this.logger.warn("Database deadlock retry framework-error listener failed", {error: normalizedError, reportingError})
+    }
+
+    try {
+      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    } catch (reportingError) {
+      this.logger.warn("Database deadlock retry all-error listener failed", {error: normalizedError, reportingError})
+    }
   }
 
   /**
    * Builds driver-specific deadlock context. The base driver has no server diagnostic source.
+   * @param {DeadlockRetryDiagnosticSnapshot} _snapshot - Immutable retry snapshot.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Safe context fields.
    */
-  async _deadlockDiagnosticContext() {
+  async _deadlockDiagnosticContext(_snapshot) {
     return {}
   }
 
@@ -1716,10 +1871,7 @@ export default class VelociousDatabaseDriversBase {
       } catch (error) {
         if (!(error instanceof Error)) throw error
 
-        this._failedQueryDiagnostics.set(error, {
-          sqlFingerprint: sqlFingerprint(sql),
-          sqlOperation: sql.trim().split(/\s+/, 1)[0]?.toUpperCase() || "UNKNOWN"
-        })
+        this._failedQueryDiagnostics.set(error, sqlDiagnostic(sql))
 
         // A deliberately-aborted query must never be silently re-run — its
         // connection was destroyed on purpose, so treat it as terminal.
