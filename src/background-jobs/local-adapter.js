@@ -107,10 +107,24 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
 
   /**
    * Claims one queued local job.
-   * @param {{jobId: string}} args - Claim request.
+   * @param {{jobId: string, workerId?: string}} args - Claim request.
    * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Handoff.
    */
   async markHandedOff(args) { return await this.store.markHandedOff(args) }
+
+  /**
+   * Finds active local handoffs owned by one worker.
+   * @param {{workerId: string}} args - Worker identity.
+   * @returns {Promise<Array<{jobId: string, handoffId: string}>>} - Active worker handoffs.
+   */
+  async handedOffJobsForWorker(args) { return await this.store.handedOffJobsForWorker(args) }
+
+  /**
+   * Returns an exact active local handoff to the queue.
+   * @param {{jobId: string, handoffId: string}} args - Handoff release.
+   * @returns {Promise<void>} - Resolves after the fenced release.
+   */
+  async markReturnedToQueue(args) { await this.store.markReturnedToQueue(args) }
 
   /**
    * Acknowledges successful local job completion.

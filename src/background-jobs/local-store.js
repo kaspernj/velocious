@@ -632,10 +632,10 @@ export default class LocalBackgroundJobsStore {
 
   /**
    * Atomically reserves concurrency and claims one queued job.
-   * @param {{jobId: string}} args - Claim request.
+   * @param {{jobId: string, workerId?: string}} args - Claim request.
    * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Fenced claim.
    */
-  async markHandedOff({jobId}) {
+  async markHandedOff({jobId, workerId}) {
     await this.ensureReady()
 
     return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
@@ -648,7 +648,7 @@ export default class LocalBackgroundJobsStore {
       const handoffId = new UUID(4).format()
       const affectedRows = await this._updateAffectedRows(db, {
         conditions: {id: jobId, status: "queued"},
-        data: {handed_off_at_ms: handedOffAtMs, handoff_id: handoffId, status: "handed_off", worker_id: "local"},
+        data: {handed_off_at_ms: handedOffAtMs, handoff_id: handoffId, status: "handed_off", worker_id: workerId || "local"},
         tableName: LOCAL_BACKGROUND_JOBS_TABLE
       })
 
@@ -658,6 +658,61 @@ export default class LocalBackgroundJobsStore {
       }
 
       return {handedOffAtMs, handoffId}
+    }))
+  }
+
+  /**
+   * Finds active local handoffs owned by one worker.
+   * @param {{workerId: string}} args - Worker identity.
+   * @returns {Promise<Array<{jobId: string, handoffId: string}>>} - Active worker handoffs.
+   */
+  async handedOffJobsForWorker({workerId}) {
+    await this.ensureReady()
+
+    const rows = await this._withDb(async (db) => await db
+      .newQuery()
+      .from(LOCAL_BACKGROUND_JOBS_TABLE)
+      .where({status: "handed_off", worker_id: workerId})
+      .results())
+    /** @type {Array<{jobId: string, handoffId: string}>} */
+    const handoffs = []
+
+    for (const rawRow of rows) {
+      const job = this._normalizeRow(rawRow)
+
+      if (job.handoffId) handoffs.push({jobId: job.id, handoffId: job.handoffId})
+    }
+
+    return handoffs
+  }
+
+  /**
+   * Returns an exact active handoff to the queue.
+   * @param {{jobId: string, handoffId: string}} args - Handoff release.
+   * @returns {Promise<void>} - Resolves after the fenced release.
+   */
+  async markReturnedToQueue({jobId, handoffId}) {
+    await this.ensureReady()
+
+    await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      const job = await this._getJob(db, jobId)
+
+      if (!this._acceptsHandoff(job, handoffId)) return
+      await this._lockConcurrencyRow(db, job.concurrencyKey)
+
+      const affectedRows = await this._updateAffectedRows(db, {
+        conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"},
+        data: {
+          handed_off_at_ms: null,
+          handoff_id: null,
+          scheduled_at_ms: this.clock.now(),
+          status: "queued",
+          worker_id: null
+        },
+        tableName: LOCAL_BACKGROUND_JOBS_TABLE
+      })
+
+      if (affectedRows === 1) await this._releaseConcurrency(db, job.concurrencyKey)
     }))
   }
 
@@ -774,8 +829,8 @@ export default class LocalBackgroundJobsStore {
   async clearAll() {
     await this.ensureReady()
     await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
-      await db.delete({conditions: {}, tableName: LOCAL_BACKGROUND_JOBS_TABLE})
-      await db.delete({conditions: {}, tableName: LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE})
+      await db.query(`DELETE FROM ${db.quoteTable(LOCAL_BACKGROUND_JOBS_TABLE)}`)
+      await db.query(`DELETE FROM ${db.quoteTable(LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE)}`)
     }))
   }
 

@@ -25,11 +25,12 @@ export async function clearBackgroundJobs() {
 
 /**
  * @param {object} [args] - Options.
+ * @param {import("../../src/configuration-types.js").BackgroundJobsConfiguration} [args.backgroundJobsConfig] - Main adapter configuration.
  * @param {ConstructorParameters<typeof BackgroundJobsWorker>[0]} [args.workerOptions] - Worker constructor options.
  * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, worker: BackgroundJobsWorker}>} - Started background job processes.
  */
-export async function startBackgroundJobs({workerOptions = {}} = {}) {
-  const {main, store, stopped} = await startBackgroundJobsMain({waitForWorkerStop: true})
+export async function startBackgroundJobs({backgroundJobsConfig, workerOptions = {}} = {}) {
+  const {main, store, stopped} = await startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop: true})
 
   dummyConfiguration.setBackgroundJobsConfig({
     host: "127.0.0.1",
@@ -117,7 +118,8 @@ export async function withBackgroundJobs(callback, args) {
  * @returns {Promise<{main: BackgroundJobsMain, store: BackgroundJobsStore, stopped: (service: string) => Promise<void>}>} - Started main process and cleared store.
  */
 export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop = false} = {}) {
-  if (backgroundJobsConfig) dummyConfiguration.setBackgroundJobsConfig(backgroundJobsConfig)
+  await dummyConfiguration.closeBackgroundJobsAdapter()
+  dummyConfiguration.setBackgroundJobsConfig({adapter: undefined, ...backgroundJobsConfig})
 
   const store = await clearBackgroundJobs()
 
