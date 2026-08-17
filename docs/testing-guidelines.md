@@ -139,10 +139,11 @@ normalized when reading keys; redundant separators and `.` segments are
 collapsed. Empty, absolute, drive-qualified, escaping `..`, colliding normalized
 paths, and invalid durations are rejected. An explicitly supplied manifest must
 be readable, valid JSON, and a plain object; corruption fails the command instead
-of silently disabling timing. Positive durations take precedence over the static
-directory/browser heuristic. Zero durations and missing/new paths use the
-heuristic, while stale keys are ignored. An empty object is valid. Velocious prints
-one compact measured/heuristic/stale coverage line when consuming timing history.
+of silently disabling timing, including when no sharding flags are present.
+Positive durations take precedence over the static directory/browser heuristic.
+Zero durations and missing/new paths use the heuristic, while stale keys are
+ignored. An empty object is valid. Velocious prints one compact
+measured/heuristic/stale coverage line when consuming timing history.
 
 Generate a compatible sorted manifest from one representative unsharded run with
 `--timing-manifest-output <path>`. For parallel profiling, write one rich

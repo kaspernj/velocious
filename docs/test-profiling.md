@@ -71,7 +71,9 @@ path-base semantics, and `testFileSetHash`: a deterministic SHA-256 identity of
 the sorted canonical pre-shard file universe. The path base is
 `configuration-directory` normally and `test-directory` when
 `VELOCIOUS_TEST_DIR` is set. These additive fields let aggregation prove that
-separately produced profiles describe one complete selection.
+separately produced profiles describe one complete selection. Tag-filter counts
+reflect the effective selection after combining CLI filters with exclusions from
+`configureTests`, so either source makes a profile ineligible for strict merge.
 
 Nested hooks have distinct invocation spans with declaration scope/index and
 execution order. Every retry remains present with its complete cost. Async work
@@ -133,7 +135,8 @@ and `.` segments. Case is preserved. Empty, absolute, drive-qualified, escaping
 `..`, and normalized-collision paths are invalid. With no
 `VELOCIOUS_TEST_DIR`, the base is the configured application directory; with the
 variable set, its test directory is the base. Producer, merger, and consumer
-must use the same semantics.
+must use the same semantics. Canonical output and file-set hashing use
+locale-independent JavaScript code-unit ordering.
 
 ## Merging parallel profiles
 

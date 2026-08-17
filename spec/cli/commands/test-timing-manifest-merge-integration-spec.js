@@ -143,4 +143,67 @@ describe("test timing manifest merge CLI integration", () => {
       await fs.rm(directory, {force: true, recursive: true})
     }
   })
+
+  it("records configured tag exclusions so strict aggregation rejects the filtered profile", async () => {
+    const temporaryRoot = path.join(dummyDirectory, "tmp")
+
+    await fs.mkdir(temporaryRoot, {recursive: true})
+    const directory = await fs.mkdtemp(path.join(temporaryRoot, "velocious-timing-config-tags-"))
+    const testPath = path.join(directory, "configured-exclusion.fixture.js")
+    const profilePath = path.join(directory, "profile.json")
+    const manifestPath = path.join(directory, "timings.json")
+
+    try {
+      await fs.writeFile(testPath, `
+        import { configureTests, describe, it } from "velocious/build/src/testing/test.js"
+        configureTests({excludeTags: ["timing-excluded"]})
+        describe("configured exclusion timing profile", () => {
+          it("is excluded", {tags: ["timing-excluded"]}, async () => {})
+          it("still runs an unfiltered test", async () => {})
+        })
+      `, "utf8")
+      const profileResult = await runCli([
+        "test", "--groups=1", "--group-number=1", `--profile-json=${profilePath}`, testPath
+      ])
+      const profile = JSON.parse(await fs.readFile(profilePath, "utf8"))
+      const mergeResult = await runCli([
+        "test:timing-manifest:merge", `--output=${manifestPath}`, profilePath
+      ])
+
+      expect(profileResult.code).toBe(0)
+      expect(profile.selection.excludeTagCount).toBe(1)
+      expect(mergeResult.code).toBe(1)
+      expect(mergeResult.stderr).toMatch(/filtered test profile/i)
+      await expect(() => fs.access(manifestPath)).toThrow()
+    } finally {
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
+  it("validates an explicit timing manifest even without sharding", async () => {
+    const temporaryRoot = path.join(dummyDirectory, "tmp")
+
+    await fs.mkdir(temporaryRoot, {recursive: true})
+    const directory = await fs.mkdtemp(path.join(temporaryRoot, "velocious-timing-unsharded-input-"))
+    const testPath = path.join(directory, "pass.fixture.js")
+    const malformedPath = path.join(directory, "malformed.json")
+    const missingPath = path.join(directory, "missing.json")
+
+    try {
+      await fs.writeFile(testPath, `
+        import { describe, it } from "velocious/build/src/testing/test.js"
+        describe("unsharded timing input", () => { it("passes", async () => {}) })
+      `, "utf8")
+      await fs.writeFile(malformedPath, "not json", "utf8")
+      const missingResult = await runCli(["test", `--timing-manifest=${missingPath}`, testPath])
+      const malformedResult = await runCli(["test", `--timing-manifest=${malformedPath}`, testPath])
+
+      expect(missingResult.code).toBe(1)
+      expect(missingResult.stderr).toMatch(/read timing manifest/i)
+      expect(malformedResult.code).toBe(1)
+      expect(malformedResult.stderr).toMatch(/parse timing manifest/i)
+    } finally {
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
 })

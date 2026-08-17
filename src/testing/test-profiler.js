@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import path from "node:path"
 import { registerTestProfileContextReader } from "./test-profile-context.js"
 import { validateTestActivityName } from "./test-profile-activity.js"
+import { compareTimingManifestPaths } from "./timing-manifest.js"
 
 /** @typedef {"passed" | "failed" | "interrupted" | "timed-out"} TestProfileAttemptStatus */
 /** @typedef {{user: number, system: number}} ProcessCpuUsage */
@@ -625,7 +626,7 @@ export default class TestProfiler {
         attemptsMs: roundProfileDuration(file.attemptsMs),
         totalMs: roundProfileDuration(file.totalMs)
       }))
-      .sort((fileA, fileB) => fileA.path.localeCompare(fileB.path))
+      .sort((fileA, fileB) => compareTimingManifestPaths(fileA.path, fileB.path))
     const timingManifest = Object.fromEntries(files.map((file) => [file.path, file.totalMs]))
     const attempts = this._tests.reduce((sum, test) => sum + test.attempts.length, 0)
 

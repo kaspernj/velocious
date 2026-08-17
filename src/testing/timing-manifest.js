@@ -64,6 +64,18 @@ export function canonicalTimingManifestPath(filePath) {
 }
 
 /**
+ * Compares timing-manifest paths by JavaScript code units without locale rules.
+ * @param {string} filePathA - First path.
+ * @param {string} filePathB - Second path.
+ * @returns {number} - Negative, zero, or positive ordering result.
+ */
+export function compareTimingManifestPaths(filePathA, filePathB) {
+  if (filePathA === filePathB) return 0
+
+  return filePathA < filePathB ? -1 : 1
+}
+
+/**
  * Validates and sorts a plain timing manifest.
  * @param {ReturnType<typeof JSON.parse>} timingManifest - Parsed timing manifest.
  * @param {{source?: string}} [options] - Validation context.
@@ -94,7 +106,7 @@ export function validateTimingManifest(timingManifest, {source = "timing manifes
 
   return Object.fromEntries(
     [...entries.entries()]
-      .sort(([filePathA], [filePathB]) => filePathA.localeCompare(filePathB))
+      .sort(([filePathA], [filePathB]) => compareTimingManifestPaths(filePathA, filePathB))
       .map(([filePath, entry]) => [filePath, entry.duration])
   )
 }

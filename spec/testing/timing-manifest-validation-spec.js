@@ -1,6 +1,7 @@
 // @ts-check
 
 import { describe, expect, it } from "../../src/testing/test.js"
+import sha256Hex from "../../src/utils/sha256-hex.js"
 import {
   canonicalTimingManifestPath,
   timingManifestFileSetHash,
@@ -44,5 +45,16 @@ describe("timing manifest validation", () => {
 
     expect(firstHash).toBe(secondHash)
     expect(firstHash).toMatch(/^sha256:[a-f0-9]{64}$/)
+  })
+
+  it("orders non-ASCII paths by locale-independent code units for output and identity", () => {
+    const filePaths = ["spec/é-spec.js", "spec/z-spec.js"]
+    const expectedIdentity = `velocious.test-file-set.v1\0spec/z-spec.js\0spec/é-spec.js`
+
+    expect(Object.keys(validateTimingManifest({
+      "spec/é-spec.js": 2,
+      "spec/z-spec.js": 1
+    }))).toEqual(["spec/z-spec.js", "spec/é-spec.js"])
+    expect(timingManifestFileSetHash(filePaths)).toBe(`sha256:${sha256Hex(expectedIdentity)}`)
   })
 })

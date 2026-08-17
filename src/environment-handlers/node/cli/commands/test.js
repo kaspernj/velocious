@@ -100,6 +100,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
 
     try {
       const discoverTestFiles = async () => {
+        const timingManifest = await loadTimingManifest(profileOptions.timingManifestPath)
         let discoveredTestFiles = await testFilesFinder.findTestFiles()
         const lineFilters = testFilesFinder.getLineFiltersByFile()
 
@@ -121,7 +122,6 @@ export default class VelociousCliCommandsTest extends BaseCommand {
             throw new Error("Both --groups and --group-number must be provided together")
           }
 
-          const timingManifest = await loadTimingManifest(profileOptions.timingManifestPath)
           const splitter = new TestSuiteSplitter({
             groups,
             groupNumber,
@@ -186,6 +186,9 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       process.once("SIGTERM", () => { void handleSignal("SIGTERM") })
 
       await testRunner.prepare()
+      const effectiveExcludeTagCount = testRunner.getExcludeTagSet().size
+
+      profiler?.setSelection({excludeTagCount: effectiveExcludeTagCount})
 
       if (testRunner.getTestsCount() === 0) {
         await finalizeProfile("no-tests")
@@ -198,7 +201,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       const lineFilters = testRunner.getLineFilters()
       const hasLineFilters = Object.keys(lineFilters).length > 0
       const hasExampleFilters = examplePatterns.length > 0
-      const hasTagFilters = includeTags.length > 0 || excludeTags.length > 0
+      const hasTagFilters = includeTags.length > 0 || effectiveExcludeTagCount > 0
 
       if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
         console.error(picocolors.red("\nNo tests matched the provided filters"))

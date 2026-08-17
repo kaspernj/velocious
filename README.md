@@ -335,7 +335,8 @@ Files absent from the manifest and zero-duration entries use the existing
 deterministic heuristic; stale entries are ignored. When `--timing-manifest` is
 explicitly supplied, its file must be readable and contain a plain JSON object
 with canonical relative paths and finite non-negative durations. Invalid input
-fails the command. A compact measured/heuristic/stale summary reports coverage.
+fails the command even without sharding flags. A compact
+measured/heuristic/stale summary reports coverage.
 The heuristic weights files by spec directory (`system/` = 20,
 `frontend-models/` = 10, `controller/` = 3, default = 1) with a 2x multiplier
 for `.browser-spec.js` files. The heaviest files are assigned first to the group

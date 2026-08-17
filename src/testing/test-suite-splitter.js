@@ -2,7 +2,7 @@
 
 import path from "path"
 import restArgsError from "../utils/rest-args-error.js"
-import { canonicalTimingManifestPath } from "./timing-manifest.js"
+import { canonicalTimingManifestPath, compareTimingManifestPaths } from "./timing-manifest.js"
 
 /**
  * SplitterFileEntry type.
@@ -225,7 +225,7 @@ export default class TestSuiteSplitter {
         return b.weight - a.weight
       }
 
-      return a.filePath.localeCompare(b.filePath)
+      return compareTimingManifestPaths(a.filePath, b.filePath)
     })
   }
 
