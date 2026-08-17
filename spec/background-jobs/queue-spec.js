@@ -1,14 +1,62 @@
 // @ts-check
 
 import fs from "fs/promises"
+import {deferred} from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
+import BackgroundJobsMain from "../../src/background-jobs/main.js"
+import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
 import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
+
+class QueuedOrphanStore extends BackgroundJobsStore {
+  /** @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow[]>} - Reclaimed orphan rows. */
+  async markOrphanedJobs() {
+    return [{
+      args: ["stale build"],
+      attempts: 1,
+      completedAtMs: null,
+      concurrencyKey: null,
+      createdAtMs: 1,
+      executionMode: "inline",
+      failedAtMs: null,
+      handedOffAtMs: null,
+      handoffId: null,
+      id: "orphaned-job",
+      jobName: FailingJob.jobName(),
+      lastError: "Worker heartbeat expired",
+      maxConcurrency: null,
+      maxRetries: 2,
+      orphanedAtMs: 2,
+      queue: "default",
+      scheduledAtMs: 2,
+      scheduleKey: null,
+      status: "queued",
+      timeoutMs: null,
+      workerId: null
+    }]
+  }
+}
+
+class MainWithBlockedDrain extends BackgroundJobsMain {
+  /** @param {ConstructorParameters<typeof BackgroundJobsMain>[0]} args - Main options. */
+  constructor(args) {
+    super(args)
+    this.store = new QueuedOrphanStore({configuration: args.configuration})
+    this.drainStarted = deferred()
+    this.drainCanFinish = deferred()
+  }
+
+  /** @returns {Promise<void>} - Resolves when the test releases the drain. */
+  async _drain() {
+    this.drainStarted.resolve(undefined)
+    await this.drainCanFinish.promise
+  }
+}
 
 /**
  * @param {string} outputPath - Output path.
@@ -27,6 +75,24 @@ async function appendInlineAndWait(outputPath) {
 }
 
 describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => {
+  it("emits orphan notifications before a blocked redrain finishes", async () => {
+    const main = new MainWithBlockedDrain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    const errorEvents = dummyConfiguration.getErrorEvents()
+    const orphanEvents = []
+    const onOrphan = (/** @type {ReturnType<typeof JSON.parse>} */ payload) => orphanEvents.push(payload)
+    errorEvents.on("background-job-orphaned", onOrphan)
+    const sweep = main._sweepOrphans()
+
+    try {
+      await main.drainStarted.promise
+      expect(orphanEvents).toMatchObject([{context: {jobId: "orphaned-job", willRetry: true}}])
+    } finally {
+      main.drainCanFinish.resolve(undefined)
+      await sweep
+      errorEvents.off("background-job-orphaned", onOrphan)
+    }
+  })
+
   it("processes inline jobs in order", async () => {
     const {main, worker} = await startBackgroundJobs({workerOptions: {maxConcurrentInlineJobs: 1}})
     const outputPath = await outputPathFor("queue")
