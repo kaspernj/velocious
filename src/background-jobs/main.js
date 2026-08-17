@@ -44,7 +44,7 @@ const WORKER_EXECUTION_MODE_CAPABILITIES = [
   // pre-pooled worker — which never sends the field — out of the pooled-capable
   // set, so the main never dispatches a pooled job to a worker that cannot run
   // one. This is the conservative half of the extended readiness protocol.
-  {executionMode: "pooled", accepts: (worker) => worker.acceptsPooledJobs === true},
+  {executionMode: "pooled", accepts: (worker) => worker.acceptsPooledJobs === true && (!worker.usesPooledCapacityCredits || worker.availablePooledSlots > 0)},
   {executionMode: "spawned", accepts: (worker) => worker.acceptsSpawnedJobs !== false}
 ]
 const WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE = new Map(
@@ -670,6 +670,11 @@ export default class BackgroundJobsMain {
     jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
     jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
     jsonSocket.acceptsPooledJobs = message.acceptsPooled === true
+    const availablePooledSlots = message.availablePooledSlots
+    jsonSocket.usesPooledCapacityCredits = Number.isInteger(availablePooledSlots)
+    jsonSocket.availablePooledSlots = Number.isInteger(availablePooledSlots) && availablePooledSlots !== undefined && availablePooledSlots > 0
+      ? availablePooledSlots
+      : 0
     jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
     if (jsonSocket.supportsHandoffIdReporting) {
       this.readyWorkers.add(jsonSocket)
@@ -1325,9 +1330,15 @@ export default class BackgroundJobsMain {
 
       this.readyWorkers.delete(worker)
 
+      if (job.executionMode === "pooled" && worker.usesPooledCapacityCredits && worker.availablePooledSlots > 0) {
+        worker.availablePooledSlots -= 1
+        if (worker.availablePooledSlots > 0) this.readyWorkers.add(worker)
+      }
+
       const handoff = await this.store.markHandedOff({jobId: job.id, workerId: worker.workerId})
 
       if (!handoff) {
+        if (job.executionMode === "pooled" && worker.usesPooledCapacityCredits) worker.availablePooledSlots += 1
         if (this.workers.has(worker)) this.readyWorkers.add(worker)
         continue
       }
