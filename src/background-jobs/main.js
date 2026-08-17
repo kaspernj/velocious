@@ -222,7 +222,11 @@ export default class BackgroundJobsMain {
             options: jobClass._withQueue(options)
           })
           this._notifyEnqueued()
-          await this._drain()
+          // Persistence is the scheduler enqueue boundary. Dispatch remains
+          // coalesced, but a slow active drain must not make the recurring
+          // scheduler treat this job key as still being enqueued and suppress
+          // later timer occurrences.
+          void this._drain()
         }
       })
       await this.scheduler.start()
@@ -284,6 +288,7 @@ export default class BackgroundJobsMain {
           this._disconnectBeaconHandlers()
           try {
             await this.scheduler?.stop()
+            if (this._drainPromise) await this._drainPromise
           } finally {
             try {
               await this._drainWorkerHandoffAdoptions()

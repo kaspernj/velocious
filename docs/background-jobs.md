@@ -204,6 +204,12 @@ The cap-fallthrough guarantee is a property of the **queue-derived** cap. A job 
 
 `deduplicateWhileQueued: true` coalesces an enqueue by job identity: job name, serialized arguments, and queue. It returns the earliest identical queued job only when that job is scheduled no later than the new enqueue. This preserves one queued copy for repeated immediate or recurring triggers, but a failed job whose retry is backed off into the future cannot block fresh immediate work.
 
+Recurring schedule ticks finish their enqueue lifecycle once the job is durably
+stored and workers have been notified. Dispatch is requested separately through
+the main process's coalesced drain. A slow dispatcher drain therefore cannot
+suppress future timer ticks; queued deduplication and durable concurrency limits
+continue to enforce the configured logical-job overlap policy.
+
 ## Durable idempotent enqueue
 
 Pass a producer-owned stable `idempotencyKey` when replaying one logical enqueue must return the original job rather than create another one:

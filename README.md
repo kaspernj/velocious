@@ -2510,6 +2510,13 @@ Supported schedule syntax:
 - `every: ["1h", {firstIn: "30s"}]`
 - `every: ["1 day", {firstIn: "5 minutes"}]`
 
+Each recurring tick completes after its enqueue is durably stored and workers
+are notified. Dispatch runs through the coalesced background-job drain without
+holding the schedule's in-flight enqueue marker, so a slow dispatcher cannot
+suppress later ticks. Use `deduplicateWhileQueued` together with a durable
+`concurrencyKey` / `maxConcurrency` limit when a recurring logical job must have
+at most one queued or running execution.
+
 Or a 5-field POSIX crontab expression via `cron`:
 
 ```js
