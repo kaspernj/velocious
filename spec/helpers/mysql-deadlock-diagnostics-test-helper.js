@@ -33,6 +33,7 @@ export class DiagnosticMysqlDriver extends MysqlDriver {
   clockMs = 100
   contentionCode = "ER_LOCK_DEADLOCK"
   diagnosticPipelineFailure = false
+  diagnosticReturnsNonPromise = false
   failedAttempts = 1
   /** @type {Error | undefined} */
   lastQueryError
@@ -70,10 +71,14 @@ ${"ignored status line\n".repeat(500)}`
    * @param {import("../../src/database/drivers/base.js").DeadlockRetryDiagnosticSnapshot} snapshot - Immutable retry snapshot.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Safe diagnostic context.
    */
-  async _deadlockDiagnosticContext(snapshot) {
+  _deadlockDiagnosticContext(snapshot) {
     if (this.diagnosticPipelineFailure) throw new Error("simulated diagnostic pipeline failure")
+    if (this.diagnosticReturnsNonPromise) {
+      // @ts-expect-error Simulates a runtime driver that violates the documented Promise contract.
+      return {statusCapture: "malformed-non-promise"}
+    }
 
-    return await super._deadlockDiagnosticContext(snapshot)
+    return super._deadlockDiagnosticContext(snapshot)
   }
 
   /** @returns {Promise<import("../../src/database/drivers/base.js").QueryResultType>} - Query result. */
@@ -114,14 +119,5 @@ ${"ignored status line\n".repeat(500)}`
     if (this.parserFailure) throw new Error("simulated deadlock parser failure")
 
     return super._innodbDeadlockSummary(status)
-  }
-}
-
-export class NonPromiseDiagnosticMysqlDriver extends DiagnosticMysqlDriver {
-  /** @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Deliberately malformed diagnostic result. */
-  // Base-driver hook invoked through the detached diagnostics contract.
-  _deadlockDiagnosticContext() {
-    // @ts-expect-error Simulates a runtime subclass that violates the documented Promise contract.
-    return {statusCapture: "malformed-non-promise"}
   }
 }
