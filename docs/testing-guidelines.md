@@ -9,6 +9,12 @@
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
 - If test framework startup fails, backend server must still stop to avoid leaked open handles.
 
+The `*.browser-spec.js` suffix includes a file in the browser runner without
+removing it from the Node database matrix. When a suite is meaningful only in a
+real browser, add `tags: ["browser-only"]` to its metadata. The Node runner still
+discovers the definition but filters its tests before lifecycle hooks or callbacks
+run; the browser runner executes them normally.
+
 ## Truncation cleanup
 
 When test isolation uses truncation, `truncateAllTables()` discovers the live table
@@ -125,7 +131,7 @@ reusable file weights, enable the opt-in [test profiler](test-profiling.md).
 ## Duration-aware parallel sharding
 Pass `--timing-manifest=<path>` together with `--groups` and `--group-number` to
 weight discovered test files by recorded wall-clock duration. The JSON object maps
-normalized project-relative test paths to positive finite numbers:
+normalized relative test paths to finite non-negative numbers:
 
 ```json
 {
@@ -135,13 +141,22 @@ normalized project-relative test paths to positive finite numbers:
 ```
 
 Forward slashes are the portable manifest format; leading `./` and backslashes are
-normalized when reading keys. A valid duration takes precedence over the static
-directory/browser heuristic for that file. Missing paths, unknown paths, non-number,
-non-positive, or non-finite durations fall back per file. Missing, unreadable, or
-malformed JSON manifests also leave the existing deterministic heuristic intact.
-Generate a compatible sorted manifest from a representative run with
-`--timing-manifest-output <path>`; see [test profiling](test-profiling.md#timing-manifest-ownership)
-for file ownership and retry/hook accounting.
+normalized when reading keys; redundant separators and `.` segments are
+collapsed. Empty, absolute, drive-qualified, escaping `..`, colliding normalized
+paths, and invalid durations are rejected. An explicitly supplied manifest must
+be readable, valid JSON, and a plain object; corruption fails the command instead
+of silently disabling timing, including when no sharding flags are present.
+Positive durations take precedence over the static directory/browser heuristic.
+Zero durations and missing/new paths use the heuristic, while stale keys are
+ignored. An empty object is valid. Velocious prints one compact
+measured/heuristic/stale coverage line when consuming timing history.
+
+Generate a compatible sorted manifest from one representative unsharded run with
+`--timing-manifest-output <path>`. For parallel profiling, write one rich
+`--profile-json` document per shard and merge the complete set with
+`velocious test:timing-manifest:merge`; see
+[test profiling](test-profiling.md#merging-parallel-profiles) for the strict
+completeness contract and path semantics.
 
 ## Avoiding fixed sleeps
 Never `await wait(<fixed ms>)` to let something async settle — it is both slow and

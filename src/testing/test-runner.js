@@ -111,6 +111,13 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * ordinary test failure (the promise already settled).
  * @typedef {Error & {velociousTestTimeout?: true}} TestTimeoutError
  */
+/**
+ * SharedTransactionBrokerRegistration type.
+ * @typedef {object} SharedTransactionBrokerRegistration
+ * @property {SharedTransactionBroker} broker - Attempt broker and connection coordinator.
+ * @property {boolean} environmentPublished - Whether child-process coordinates were published.
+ * @property {string | undefined} previousEnvironment - Environment value to restore after publication.
+ */
 
 /**
  * Runs run with timeout.
@@ -498,6 +505,7 @@ export default class TestRunner {
    * @returns {boolean} - Whether the test should be skipped.
    */
   shouldSkipTest(testArgs, testData, testDescription, descriptions, lineMatchedInScope) {
+    if (this.hasTag(testArgs, "browser-only") && !this.isBrowserTestMode()) return true
     if (this.hasMatchingTag(testArgs.tags, this.getExcludeTagSet())) return true
 
     if (this._includeTagSet.size > 0 && !testArgs.focus) {
@@ -634,12 +642,11 @@ export default class TestRunner {
   }
 
   /**
-   * Starts a capability-scoped broker for the active non-tenant physical
-   * transaction connections. No broker/env is installed for truncation-only or
-   * other transaction-disabled attempts.
-   * @returns {Promise<{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined>} - Attempt registration.
+   * Selects the current non-tenant connections eligible for shared transaction work.
+   * @param {{transactionsOnly: boolean}} args - Selection options.
+   * @returns {Record<string, import("../database/drivers/base.js").default>} - Eligible connections by identifier.
    */
-  async startSharedTransactionBroker() {
+  sharedTransactionConnections({transactionsOnly}) {
     const configuration = this.getConfiguration()
     const currentConnections = configuration.getCurrentConnections()
     /** @type {Record<string, import("../database/drivers/base.js").default>} */
@@ -647,14 +654,78 @@ export default class TestRunner {
 
     for (const [identifier, connection] of Object.entries(currentConnections)) {
       const pool = configuration.getDatabasePool(identifier)
-      if (pool.getConfiguration().tenantOnly || !connection.insideTransaction()) continue
+
+      if (pool.getConfiguration().tenantOnly) continue
+      if (transactionsOnly && !connection.insideTransaction()) continue
       connections[identifier] = connection
     }
 
-    const databaseIdentifiers = Object.keys(connections)
-    if (databaseIdentifiers.length === 0) return undefined
+    return connections
+  }
 
-    const broker = await SharedTransactionBroker.start({connections})
+  /**
+   * Installs physical-connection coordination before a transaction-opening hook
+   * can expose the shared connection to a long-lived in-process service.
+   * Child-process coordinates remain unpublished until the transaction exists.
+   * @returns {Promise<SharedTransactionBrokerRegistration | undefined>} - Prepared coordinator.
+   */
+  async prepareSharedTransactionBroker() {
+    const connections = this.sharedTransactionConnections({transactionsOnly: false})
+
+    if (Object.keys(connections).length === 0) return undefined
+
+    return {
+      broker: await SharedTransactionBroker.start({connections}),
+      environmentPublished: false,
+      previousEnvironment: undefined
+    }
+  }
+
+  /**
+   * Checks whether a prepared broker coordinates exactly the selected physical connections.
+   * @param {SharedTransactionBrokerRegistration | undefined} registration - Prepared coordinator.
+   * @param {Record<string, import("../database/drivers/base.js").default>} connections - Selected connections.
+   * @returns {boolean} - Whether the identifier set and physical connections match exactly.
+   */
+  sharedTransactionBrokerMatchesConnections(registration, connections) {
+    const identifiers = Object.keys(connections)
+
+    if (!registration || identifiers.length === 0) return false
+    if (Object.keys(registration.broker.connections).length !== identifiers.length) return false
+
+    for (const [identifier, connection] of Object.entries(connections)) {
+      if (registration.broker.connections[identifier] !== connection) return false
+    }
+
+    return true
+  }
+
+  /**
+   * Starts a capability-scoped broker for the active non-tenant physical
+   * transaction connections. No broker/env is installed for truncation-only or
+   * other transaction-disabled attempts.
+   * @param {SharedTransactionBrokerRegistration} [preparedRegistration] - Coordinator prepared before hooks.
+   * @param {Record<string, import("../database/drivers/base.js").default>} [selectedConnections] - Post-hook active connections.
+   * @returns {Promise<SharedTransactionBrokerRegistration | undefined>} - Attempt registration.
+   */
+  async startSharedTransactionBroker(preparedRegistration, selectedConnections) {
+    const connections = selectedConnections || this.sharedTransactionConnections({transactionsOnly: true})
+
+    const databaseIdentifiers = Object.keys(connections)
+    if (databaseIdentifiers.length === 0) {
+      await this.stopSharedTransactionBroker(preparedRegistration)
+      return undefined
+    }
+
+    let broker
+
+    if (preparedRegistration && this.sharedTransactionBrokerMatchesConnections(preparedRegistration, connections)) {
+      broker = preparedRegistration.broker
+    } else {
+      await this.stopSharedTransactionBroker(preparedRegistration)
+      broker = await SharedTransactionBroker.start({connections})
+    }
+
     const previousEnvironment = process.env[SHARED_TRANSACTION_BROKER_ENV]
     process.env[SHARED_TRANSACTION_BROKER_ENV] = Buffer.from(JSON.stringify({
       address: broker.address(),
@@ -663,20 +734,23 @@ export default class TestRunner {
       expected: true
     })).toString("base64url")
 
-    return {broker, previousEnvironment}
+    return {broker, environmentPublished: true, previousEnvironment}
   }
 
   /**
    * Revokes an attempt broker before database rollback hooks run and restores
    * the caller's environment so later pooled/spawned children cannot inherit it.
-   * @param {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} registration - Attempt registration.
+   * @param {SharedTransactionBrokerRegistration | undefined} registration - Attempt registration.
    */
   async stopSharedTransactionBroker(registration) {
     if (!registration) return
-    if (registration.previousEnvironment === undefined) {
-      delete process.env[SHARED_TRANSACTION_BROKER_ENV]
-    } else {
-      process.env[SHARED_TRANSACTION_BROKER_ENV] = registration.previousEnvironment
+
+    if (registration.environmentPublished) {
+      if (registration.previousEnvironment === undefined) {
+        delete process.env[SHARED_TRANSACTION_BROKER_ENV]
+      } else {
+        process.env[SHARED_TRANSACTION_BROKER_ENV] = registration.previousEnvironment
+      }
     }
     await registration.broker.close()
   }
@@ -1153,8 +1227,11 @@ export default class TestRunner {
           let testLifecycle
           /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
           let testSharedConnectionRegistrations = []
-          /** @type {{broker: SharedTransactionBroker, previousEnvironment: string | undefined} | undefined} */
+          let testSharedConnectionsActive = false
+          /** @type {SharedTransactionBrokerRegistration | undefined} */
           let sharedTransactionBrokerRegistration
+          /** @type {SharedTransactionBrokerRegistration | undefined} */
+          let sharedTransactionBrokerPreparation
           const stopConsoleCapture = this.startConsoleCapture({
             passthrough: testConfig.consoleOutput === "live"
           })
@@ -1180,12 +1257,16 @@ export default class TestRunner {
               await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
                 // Register dynamic candidates before hooks so transaction state changes
                 // made during a hook are immediately visible to any in-process work.
-                // Long-lived services such as a background-jobs main can dispatch DB
-                // work between a transaction-starting hook and broker activation just
-                // as an HTTP request can dispatch work from inside the hook itself.
+                // Prepare transaction sharing before hooks so long-lived services cannot
+                // use the shared connection while its coordinator is still missing.
                 testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                testSharedConnectionsActive = true
 
                 try {
+                  if (testArgs.databaseCleaning?.transaction === true) {
+                    sharedTransactionBrokerPreparation = await this.prepareSharedTransactionBroker()
+                  }
+
                   try {
                     clearDeliveries()
                     for (const beforeEachData of newBeforeEaches) {
@@ -1199,9 +1280,18 @@ export default class TestRunner {
                       })
                     }
 
-                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker()
-                    if (sharedTransactionBrokerRegistration && testSharedConnectionRegistrations.length === 0) {
+                    const activeSharedTransactionConnections = this.sharedTransactionConnections({transactionsOnly: true})
+                    if (sharedTransactionBrokerPreparation && !this.sharedTransactionBrokerMatchesConnections(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)) {
+                      this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                      testSharedConnectionRegistrations = []
+                      testSharedConnectionsActive = false
+                    }
+
+                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)
+                    sharedTransactionBrokerPreparation = undefined
+                    if (sharedTransactionBrokerRegistration && !testSharedConnectionsActive) {
                       testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                      testSharedConnectionsActive = true
                     }
 
                     // Record which test is running so an async crash (an unhandled
@@ -1217,22 +1307,35 @@ export default class TestRunner {
                     })
                   } finally {
                     try {
-                      await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
+                      if (testSharedConnectionsActive) {
+                        this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                        testSharedConnectionRegistrations = []
+                        testSharedConnectionsActive = false
+                      }
                     } finally {
-                      for (const afterEachData of newAfterEaches) {
-                        await this.runProfileSpan({
-                          phase: "afterEach",
-                          declarationIndex: afterEachData.declarationIndex,
-                          declarationScopeId: afterEachData.declarationScopeId,
-                          filePath: afterEachData.ownerFilePath
-                        }, async () => {
-                          await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                        })
+                      try {
+                        await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
+                        sharedTransactionBrokerRegistration = undefined
+                        sharedTransactionBrokerPreparation = undefined
+                      } finally {
+                        for (const afterEachData of newAfterEaches) {
+                          await this.runProfileSpan({
+                            phase: "afterEach",
+                            declarationIndex: afterEachData.declarationIndex,
+                            declarationScopeId: afterEachData.declarationScopeId,
+                            filePath: afterEachData.ownerFilePath
+                          }, async () => {
+                            await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                          })
+                        }
                       }
                     }
                   }
                 } finally {
-                  this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                  if (testSharedConnectionsActive) {
+                    this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                    testSharedConnectionsActive = false
+                  }
                 }
               })
             })
@@ -1283,9 +1386,14 @@ export default class TestRunner {
               // ensureConnections before activateTestSharedConnections() replaces
               // it. Clear it here so the next test checks out a fresh connection.
               // Idempotent when the lifecycle did settle and already cleared.
-              await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration)
+              if (testSharedConnectionsActive) {
+                this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                testSharedConnectionRegistrations = []
+                testSharedConnectionsActive = false
+              }
+              await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
               sharedTransactionBrokerRegistration = undefined
-              this.clearTestSharedConnections(testSharedConnectionRegistrations)
+              sharedTransactionBrokerPreparation = undefined
             }
 
             willRetry = retriesUsed < retryCount

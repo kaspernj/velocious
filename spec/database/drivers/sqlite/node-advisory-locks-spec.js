@@ -6,8 +6,35 @@ import os from "node:os"
 import path from "node:path"
 
 import Configuration from "../../../../src/configuration.js"
+import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 import VelociousDatabaseDriversSqliteNode from "../../../../src/database/drivers/sqlite/index.js"
 import Task from "../../../dummy/src/models/task.js"
+
+class PausedMetadataSqliteDriver extends VelociousDatabaseDriversSqliteNode {
+  /** @type {() => void} */
+  _continueMetadataWrite = () => {}
+  /** @type {() => void} */
+  _metadataWriteStarted = () => {}
+  /** @type {Promise<void>} */
+  continueMetadataWrite = new Promise((resolve) => { this._continueMetadataWrite = resolve })
+  /** @type {Promise<void>} */
+  metadataWriteStarted = new Promise((resolve) => { this._metadataWriteStarted = resolve })
+
+  /** Allows the paused metadata publication to continue. */
+  resumeMetadataWrite() { this._continueMetadataWrite() }
+
+  /**
+   * Pauses after the acquisition has created its candidate directory but before
+   * publishing owner metadata.
+   * @param {string} lockDirPath - Candidate lock directory.
+   * @returns {Promise<void>} - Resolves after metadata is written.
+   */
+  async _writeAdvisoryLockMetadata(lockDirPath) {
+    this._metadataWriteStarted()
+    await this.continueMetadataWrite
+    await super._writeAdvisoryLockMetadata(lockDirPath)
+  }
+}
 
 /**
  * Computes the same lock directory path the driver uses, so the test
@@ -45,6 +72,41 @@ function isNodeSqliteDriver(driver) {
 }
 
 describe("Record - advisory locks - Node SQLite file lock", {tags: ["dummy"]}, () => {
+  it("publishes owner metadata atomically when two processes initialize one lock", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-advisory-lock-publication-"))
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory,
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const driverArgs = {migrations: false, name: "atomic-advisory-lock-publication", type: "sqlite"}
+    const firstDriver = new PausedMetadataSqliteDriver(driverArgs, configuration)
+    const secondDriver = new VelociousDatabaseDriversSqliteNode(driverArgs, configuration)
+    const lockName = "atomic-owner-metadata"
+    const firstAcquisition = firstDriver._tryAcquireAdvisoryLockFile(lockName)
+
+    try {
+      await firstDriver.metadataWriteStarted
+      const secondAcquired = await secondDriver._tryAcquireAdvisoryLockFile(lockName)
+
+      firstDriver.resumeMetadataWrite()
+
+      const firstAcquired = await firstAcquisition
+
+      expect([firstAcquired, secondAcquired].filter(Boolean)).toHaveLength(1)
+      await (firstAcquired ? firstDriver : secondDriver)._releaseAdvisoryLockFile(lockName)
+      expect(await fs.readdir(firstDriver._resolveAdvisoryLockDirectory())).toEqual([])
+    } finally {
+      firstDriver.resumeMetadataWrite()
+      await Promise.allSettled([firstAcquisition])
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
   it("is only exercised against the Node SQLite driver", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       if (!isNodeSqliteDriver(dbs.default)) return // Other database build matrix entries skip this spec.

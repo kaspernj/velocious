@@ -19,6 +19,7 @@ The all-platform export is intentional: native bundles resolve `velocious/build/
 - Import Expo-shared Velocious modules from published `build/` paths.
 - Import SQLite with the extensionless path `velocious/build/src/database/drivers/sqlite/index` in Expo apps so Metro can pick `index.web.js` for web and `index.native.js` for native.
 - Add `expo-sqlite` to Expo apps that use the extensionless SQLite driver path, because native bundles resolve to Velocious's Expo SQLite driver.
+- Import portable background jobs from `velocious/build/src/background-jobs/platform-job.js` and list them as static class references in `backgroundJobs.jobClasses`. The Browser/Expo environment uses the [local SQLite dispatcher](local-background-jobs.md); it does not bundle Node TCP, worker, filesystem-registry, or child-process code.
 - Keep `import.meta` and Node-only modules out of code that Metro imports. Use Node-only helpers for backend/server paths.
 - Preserve Velocious class/function names in Metro minification when apps still rely on class names for runtime model/resource lookup.
 

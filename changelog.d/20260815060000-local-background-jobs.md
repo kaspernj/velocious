@@ -1,0 +1,1 @@
+Add a namespaced local SQLite background-job store and configuration-owned in-process dispatcher for Browser and Expo runtimes, with transactional commit-aware enqueue, queue/deduplication/concurrency controls, scheduling, retries, fenced acknowledgements, recovery, and SQL.js reopen persistence.

@@ -26,7 +26,7 @@
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, linting, and a process-global reload-retention budget that bounds cache-busted re-import memory (see [docs/factories.md](docs/factories.md))
-* Opt-in Benchmark-style test profiling with privacy-safe rich JSON and directly reusable duration-aware shard manifests (see [docs/test-profiling.md](docs/test-profiling.md))
+* Opt-in Benchmark-style test profiling with privacy-safe rich JSON, directly reusable duration-aware shard manifests, and strict generic shard-profile aggregation (see [docs/test-profiling.md](docs/test-profiling.md))
 * Per-row association counts via `.withCount(...)`, including cohort-safe intersected filters, safe batching of structurally identical aggregates, and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)`, with compatible projections sharing a roundtrip while preserving declared alias-overwrite order and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
@@ -34,7 +34,7 @@
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
-* Background jobs with failure events for production reporting and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md) and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
+* Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, failure events, and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
@@ -178,6 +178,17 @@ npx velocious test --include-tag fast,api
 npx velocious test --exclude-tag slow
 ```
 
+`*.browser-spec.js` files remain eligible for both the Node database matrix and
+the browser runner. Add the reserved `browser-only` tag only when a suite requires
+the real browser environment; the Node runner discovers the file but does not
+execute its tagged tests.
+
+```js
+describe("Browser integration", {tags: ["browser-only"]}, () => {
+  it("uses browser runtime behavior", async () => {})
+})
+```
+
 Target a test by line number or description.
 
 ```bash
@@ -239,6 +250,10 @@ npx velocious test --profile-json tmp/test-profile.json \
   --timing-manifest-output tmp/test-timings.json
 npx velocious test --groups=4 --group-number=1 \
   --timing-manifest tmp/test-timings.json
+
+# After every shard wrote rich JSON, merge the complete set for the next run
+npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
+  tmp/profile-1.json tmp/profile-2.json tmp/profile-3.json tmp/profile-4.json
 ```
 
 See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
@@ -327,12 +342,17 @@ separators:
 }
 ```
 
-Files absent from the manifest, unknown files, invalid duration values, and
-unreadable or malformed JSON all fall back to the existing deterministic
-heuristic. The heuristic weights files by spec directory (`system/` = 20, `frontend-models/` = 10,
-`controller/` = 3, default = 1) with a 2x multiplier for `.browser-spec.js`
-files. The heaviest files are assigned first to the group with the least
-accumulated weight, producing balanced wall-clock times across groups.
+Files absent from the manifest and zero-duration entries use the existing
+deterministic heuristic; stale entries are ignored. When `--timing-manifest` is
+explicitly supplied, its file must be readable and contain a plain JSON object
+with canonical relative paths and finite non-negative durations. Invalid input
+fails the command even without sharding flags. A compact
+measured/heuristic/stale summary reports coverage.
+The heuristic weights files by spec directory (`system/` = 20,
+`frontend-models/` = 10, `controller/` = 3, default = 1) with a 2x multiplier
+for `.browser-spec.js` files. The heaviest files are assigned first to the group
+with the least accumulated weight, producing balanced wall-clock times across
+groups.
 
 The algorithm is deterministic: the same file list always produces the same
 group assignments.
@@ -2322,6 +2342,38 @@ synchronous factory. See [runtime modes and adapters](docs/background-jobs.md#ru
 for the contract, lifecycle, Node TCP/wake behavior, the explicit
 `platform-job.js` browser/Expo entry, and SQL-only compatibility boundaries.
 
+Browser and Expo configurations have a built-in local SQLite adapter in
+`"background"` mode. Register portable classes statically; no main process,
+worker, socket, or child process is started:
+
+```js
+import VelociousJob from "velocious/build/src/background-jobs/platform-job.js"
+
+class UploadPendingChangesJob extends VelociousJob {
+  async perform(projectId) {
+    await uploadPendingChanges(projectId)
+  }
+}
+
+export default new Configuration({
+  backgroundJobs: {
+    databaseIdentifier: "default",
+    jobClasses: [UploadPendingChangesJob],
+    maxConcurrentInlineJobs: 4,
+    queues: {uploads: {maxConcurrent: 2, priority: 10}}
+  }
+})
+```
+
+Local enqueue participates in an existing application transaction and wakes the
+dispatcher only after commit. It supports queue caps/priorities, explicit
+concurrency, queued deduplication, one-off scheduling, retries/backoff,
+`rescheduleIn`, fenced acknowledgements, graceful close/reopen, interrupted-job
+recovery, and the existing SQL.js persistence backends. It supports one active
+configuration-owned adapter per app/database; OS background execution and
+multi-tab leadership are outside this backend. See
+[local background jobs](docs/local-background-jobs.md).
+
 Or via env vars:
 
 ```
@@ -2500,6 +2552,13 @@ Supported schedule syntax:
 - `every: "5m"`
 - `every: ["1h", {firstIn: "30s"}]`
 - `every: ["1 day", {firstIn: "5 minutes"}]`
+
+Each recurring tick completes after its enqueue is durably stored and workers
+are notified. Dispatch runs through the coalesced background-job drain without
+holding the schedule's in-flight enqueue marker, so a slow dispatcher cannot
+suppress later ticks. Use `deduplicateWhileQueued` together with a durable
+`concurrencyKey` / `maxConcurrency` limit when a recurring logical job must have
+at most one queued or running execution.
 
 Or a 5-field POSIX crontab expression via `cron`:
 

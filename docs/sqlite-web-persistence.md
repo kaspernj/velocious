@@ -4,6 +4,8 @@ For applications keeping many physical tenant databases, use the framework-owned
 
 Velocious's web SQLite driver uses `sql.js` for the in-browser SQLite runtime. The driver automatically chooses a durable browser persistence backend; application code does not need to configure a persistence strategy.
 
+The built-in [local background-jobs adapter](local-background-jobs.md) stores its namespaced queue in the selected configured SQLite database. Because persistence saves the complete SQL.js image, queued jobs and framework migration rows survive close/reopen whenever the selected backend is durable. An in-memory database intentionally does not provide reload durability.
+
 Selection order:
 
 1. Use **OPFS** (`navigator.storage.getDirectory`) when a small write/read/delete smoke test succeeds.

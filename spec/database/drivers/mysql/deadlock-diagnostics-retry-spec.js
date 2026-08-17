@@ -5,7 +5,6 @@ import { describe, expect, it } from "../../../../src/testing/test.js"
 import {
   configuration,
   DiagnosticMysqlDriver,
-  NonPromiseDiagnosticMysqlDriver,
   SECRET_SQL
 } from "../../../helpers/mysql-deadlock-diagnostics-test-helper.js"
 
@@ -116,12 +115,13 @@ describe("Database - drivers - mysql deadlock diagnostic retry behavior", () => 
 
   it("isolates a non-Promise driver diagnostic result without changing the retry result", async () => {
     const appConfiguration = configuration()
-    const driver = new NonPromiseDiagnosticMysqlDriver({deadlockBaseWaitMs: 1, deadlockMaxRetries: 2}, appConfiguration)
+    const driver = new DiagnosticMysqlDriver({deadlockBaseWaitMs: 1, deadlockMaxRetries: 2}, appConfiguration)
     const frameworkErrors = []
     const allErrors = []
     const frameworkErrorReported = new Promise((resolve) => appConfiguration.getErrorEvents().once("framework-error", resolve))
     const allErrorReported = new Promise((resolve) => appConfiguration.getErrorEvents().once("all-error", resolve))
 
+    driver.diagnosticReturnsNonPromise = true
     driver.setDesiredSessionTimeZone(null)
     appConfiguration.getErrorEvents().on("framework-error", (payload) => frameworkErrors.push(payload))
     appConfiguration.getErrorEvents().on("all-error", (payload) => allErrors.push(payload))

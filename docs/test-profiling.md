@@ -26,6 +26,11 @@ npx velocious test \
   --groups=4 \
   --group-number=1 \
   --timing-manifest=tmp/test-timings.json
+
+# Merge complete rich shard profiles before the next run
+npx velocious test:timing-manifest:merge \
+  --output tmp/test-timings.json \
+  tmp/profile-1.json tmp/profile-2.json tmp/profile-3.json tmp/profile-4.json
 ```
 
 `--timing-manifest-output` also implies `--profile`. Velocious validates missing
@@ -59,6 +64,16 @@ attempt, hook/test/custom spans, database and transaction aggregates, pool
 lifecycle aggregates, an unattributed late-event count, and the embedded timing
 manifest. Durations are finite, non-negative milliseconds rounded to three
 decimal places.
+
+Selection metadata records `discoveredFileCount` before sharding, `fileCount`
+after sharding, whether line filters were present, the shard number/count, the
+path-base semantics, and `testFileSetHash`: a deterministic SHA-256 identity of
+the sorted canonical pre-shard file universe. The path base is
+`configuration-directory` normally and `test-directory` when
+`VELOCIOUS_TEST_DIR` is set. These additive fields let aggregation prove that
+separately produced profiles describe one complete selection. Tag-filter counts
+reflect the effective selection after combining CLI filters with exclusions from
+`configureTests`, so either source makes a profile ineligible for strict merge.
 
 Nested hooks have distinct invocation spans with declaration scope/index and
 execution order. Every retry remains present with its complete cost. Async work
@@ -104,7 +119,7 @@ span and otherwise behaves as a pass-through.
 ## Timing-manifest ownership
 
 The plain timing manifest is a sorted, two-space JSON object with a trailing
-newline. Each key is a project-relative entry test file and each value is its
+newline. Each key is an entry test file relative to the profiling path base and each value is its
 measured total milliseconds. Its weight includes that entry's import, file-owned
 `beforeAll`/`afterAll`, and every attempt of its tests. Complete attempt time
 includes inherited `beforeEach`/`afterEach` work and retry cost. Shard-global
@@ -114,3 +129,41 @@ When an entry imports a helper that registers tests or hooks, those registration
 belong deterministically to the importing entry file. This keeps helper source
 paths out of the manifest and makes the generated file directly consumable by
 [`--timing-manifest`](testing-guidelines.md#duration-aware-parallel-sharding).
+
+Canonical paths use `/`, omit leading `./`, and collapse redundant separators
+and `.` segments. Case is preserved. Empty, absolute, drive-qualified, escaping
+`..`, and normalized-collision paths are invalid. With no
+`VELOCIOUS_TEST_DIR`, the base is the configured application directory; with the
+variable set, its test directory is the base. Producer, merger, and consumer
+must use the same semantics. Canonical output and file-set hashing use
+locale-independent JavaScript code-unit ordering.
+
+## Merging parallel profiles
+
+Each shard must write a distinct rich profile. After all shards pass, merge them
+into the plain manifest used by the next run:
+
+```bash
+npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
+  tmp/profile-1.json tmp/profile-2.json tmp/profile-3.json tmp/profile-4.json
+```
+
+Inputs are rich `velocious.test-profile` JSON only; plain timing maps are not
+accepted as merge inputs. The command requires compatible schema versions,
+`passed` status, no focused or filtered selection, the same positive group
+count, exactly one profile for every group `1..groups`, and identical path base,
+pre-shard discovered count, and file-set hash. It rejects invalid paths,
+normalized collisions, duplicate files, mismatched per-shard counts, and a
+merged key set that is not the complete pre-shard universe. Failed, focused,
+interrupted, no-test, and error profiles therefore cannot update timing history.
+Profiles may come from different times when these suite and selection invariants
+still match; there is intentionally no run ID.
+
+All inputs are read and validated before output starts. Success atomically
+replaces `--output` with the existing plain `{path: duration}` format (sorted,
+two-space JSON, trailing newline), so existing splitter consumers remain
+compatible. Failure leaves an existing output untouched.
+
+The filesystem-free validation and aggregation primitives are also available as
+the public deep import `velocious/build/src/testing/timing-manifest.js`. They are
+not added to the package root export.

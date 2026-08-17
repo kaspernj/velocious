@@ -6,6 +6,7 @@ import path from "node:path"
 import { promisify } from "node:util"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "../../../src/testing/test.js"
+import { timingManifestFileSetHash } from "../../../src/testing/timing-manifest.js"
 
 const execFileAsync = promisify(execFile)
 const repositoryDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
@@ -43,7 +44,11 @@ async function writeTestFixture(directory, fileName, source) {
  * @returns {Promise<{code: number, stderr: string, stdout: string}>} - Child result.
  */
 async function runTestCommand(args) {
-  const environment = {...process.env, MSSQL_SA_PASSWORD: "test-password", VELOCIOUS_DISABLE_MSSQL: "1"}
+  const environment = {
+    ...process.env,
+    MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "test-password",
+    VELOCIOUS_DISABLE_MSSQL: "1"
+  }
 
   delete environment.VELOCIOUS_TEST_DIR
 
@@ -72,7 +77,11 @@ async function runTestCommand(args) {
  * @returns {Promise<{code: number, stderr: string, stdout: string}>} - Interrupted child result.
  */
 async function runInterruptedTestCommand(args, readyOutput) {
-  const environment = {...process.env, MSSQL_SA_PASSWORD: "test-password", VELOCIOUS_DISABLE_MSSQL: "1"}
+  const environment = {
+    ...process.env,
+    MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "test-password",
+    VELOCIOUS_DISABLE_MSSQL: "1"
+  }
 
   delete environment.VELOCIOUS_TEST_DIR
 
@@ -131,6 +140,10 @@ describe("test profile CLI integration", () => {
       expect(profile.status).toBe("passed")
       expect(profile.counts).toEqual({attempts: 1, discovered: 1, executed: 1, failed: 0, passed: 1})
       expect(profile.selection.fileCount).toBe(1)
+      expect(profile.selection.discoveredFileCount).toBe(1)
+      expect(profile.selection.hasLineFilters).toBe(false)
+      expect(profile.selection.pathBase).toBe("configuration-directory")
+      expect(profile.selection.testFileSetHash).toBe(timingManifestFileSetHash([testPath]))
       expect(profile.phases.discovery.count).toBe(1)
       expect(profile.phases.imports.count).toBe(1)
       expect(Object.keys(manifest)).toEqual([testPath])

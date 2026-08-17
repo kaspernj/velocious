@@ -1,0 +1,1 @@
+Fixed recurring background-job schedules suppressing later timer occurrences while an unrelated dispatcher drain remains active. Scheduled enqueue completion now follows durable persistence and worker notification, while dispatch continues through the existing coalesced drain lifecycle.
