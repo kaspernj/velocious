@@ -53,4 +53,26 @@ describe("Background jobs - scheduled enqueue drain boundary", {databaseCleaning
       await main.stop()
     }
   })
+
+  it("still waits for the requested drain during shutdown", async () => {
+    dummyConfiguration.setScheduledBackgroundJobsConfig(undefined)
+    const {main} = await startBackgroundJobsMain()
+    let releaseDrain
+    const heldDrain = new Promise((resolve) => { releaseDrain = resolve })
+
+    main._drainPromise = heldDrain
+
+    const stopPromise = main.stop()
+    let stopped = false
+
+    void stopPromise.then(() => { stopped = true })
+    await Promise.resolve()
+    expect(stopped).toBeFalse()
+
+    if (!releaseDrain) throw new Error("Expected the drain release callback to be assigned")
+
+    releaseDrain()
+    await stopPromise
+    expect(stopped).toBeTrue()
+  })
 })

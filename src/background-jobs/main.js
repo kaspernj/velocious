@@ -288,6 +288,7 @@ export default class BackgroundJobsMain {
           this._disconnectBeaconHandlers()
           try {
             await this.scheduler?.stop()
+            if (this._drainPromise) await this._drainPromise
           } finally {
             try {
               await this._drainWorkerHandoffAdoptions()
