@@ -10,6 +10,11 @@ import { formatTestProfileSummary, writeTestProfileOutputs } from "../../../../t
 import TestRunner from "../../../../testing/test-runner.js"
 import TestSuiteSplitter from "../../../../testing/test-suite-splitter.js"
 import { normalizeExamplePatterns, parseFilters } from "../../../../testing/test-filter-parser.js"
+import {
+  canonicalTimingManifestPath,
+  timingManifestFileSetHash,
+  validateTimingManifest
+} from "../../../../testing/timing-manifest.js"
 import { prepareSourcePeerPackage } from "../../source-peer-package.js"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
@@ -95,14 +100,28 @@ export default class VelociousCliCommandsTest extends BaseCommand {
 
     try {
       const discoverTestFiles = async () => {
+        const timingManifest = await loadTimingManifest(profileOptions.timingManifestPath)
         let discoveredTestFiles = await testFilesFinder.findTestFiles()
+        const lineFilters = testFilesFinder.getLineFiltersByFile()
+
+        if (profiler) {
+          const discoveredFilePaths = discoveredTestFiles.map((filePath) => {
+            return canonicalTimingManifestPath(path.relative(directory, filePath))
+          })
+
+          profiler.setSelection({
+            discoveredFileCount: discoveredTestFiles.length,
+            hasLineFilters: Object.keys(lineFilters).length > 0,
+            pathBase: process.env.VELOCIOUS_TEST_DIR ? "test-directory" : "configuration-directory",
+            testFileSetHash: timingManifestFileSetHash(discoveredFilePaths)
+          })
+        }
 
         if (groups !== undefined || groupNumber !== undefined) {
           if (groups === undefined || groupNumber === undefined) {
             throw new Error("Both --groups and --group-number must be provided together")
           }
 
-          const timingManifest = await loadTimingManifest(profileOptions.timingManifestPath)
           const splitter = new TestSuiteSplitter({
             groups,
             groupNumber,
@@ -110,6 +129,15 @@ export default class VelociousCliCommandsTest extends BaseCommand {
             baseDirectory: directory,
             timingManifest
           })
+
+          if (profileOptions.timingManifestPath) {
+            const coverage = splitter.getTimingManifestCoverage()
+
+            console.log(picocolors.cyan(
+              `Timing manifest coverage: measured=${coverage.measuredFiles} ` +
+              `heuristic=${coverage.heuristicFiles} stale=${coverage.staleEntries}`
+            ))
+          }
 
           discoveredTestFiles = splitter.getGroupFiles()
           console.log(picocolors.cyan(`Running group ${groupNumber} of ${groups} (${discoveredTestFiles.length} files)`))
@@ -158,6 +186,9 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       process.once("SIGTERM", () => { void handleSignal("SIGTERM") })
 
       await testRunner.prepare()
+      const effectiveExcludeTagCount = testRunner.getExcludeTagSet().size
+
+      profiler?.setSelection({excludeTagCount: effectiveExcludeTagCount})
 
       if (testRunner.getTestsCount() === 0) {
         await finalizeProfile("no-tests")
@@ -170,7 +201,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       const lineFilters = testRunner.getLineFilters()
       const hasLineFilters = Object.keys(lineFilters).length > 0
       const hasExampleFilters = examplePatterns.length > 0
-      const hasTagFilters = includeTags.length > 0 || excludeTags.length > 0
+      const hasTagFilters = includeTags.length > 0 || effectiveExcludeTagCount > 0
 
       if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
         console.error(picocolors.red("\nNo tests matched the provided filters"))
@@ -277,20 +308,30 @@ export function resolveTestProfileOptions({cwd, profile, profileJsonPath, timing
 }
 
 /**
- * Loads an optional JSON timing manifest. Unreadable or malformed input intentionally falls back to heuristics.
+ * Loads and validates an explicitly supplied plain JSON timing manifest.
  * @param {string | undefined} timingManifestPath - Timing manifest path.
- * @returns {Promise<ReturnType<typeof JSON.parse> | undefined>} - Parsed manifest when readable and valid JSON.
+ * @returns {Promise<Record<string, number> | undefined>} - Canonical manifest, or undefined when not requested.
  */
 export async function loadTimingManifest(timingManifestPath) {
   if (!timingManifestPath) return undefined
 
-  try {
-    return JSON.parse(await fs.readFile(timingManifestPath, "utf8"))
-  } catch (error) {
-    if (error instanceof Error) return undefined
+  let content
 
-    throw error
+  try {
+    content = await fs.readFile(timingManifestPath, "utf8")
+  } catch (error) {
+    throw new Error(`Failed to read timing manifest: ${timingManifestPath}`, {cause: error})
   }
+
+  let parsed
+
+  try {
+    parsed = JSON.parse(content)
+  } catch (error) {
+    throw new Error(`Failed to parse timing manifest: ${timingManifestPath}`, {cause: error})
+  }
+
+  return validateTimingManifest(parsed, {source: `Timing manifest ${timingManifestPath}`})
 }
 
 /**
