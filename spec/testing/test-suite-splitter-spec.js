@@ -221,6 +221,21 @@ describe("TestSuiteSplitter", {databaseCleaning: {transaction: true}}, () => {
     expect(byPath["/project/spec/utils/string-spec.js"]).toBe(1)
   })
 
+  it("shards an external absolute test file with deterministic heuristic weight", () => {
+    const externalTestFile = "/external/spec/system/login.browser-spec.js"
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles: [externalTestFile],
+      baseDirectory: "/project"
+    })
+
+    expect(splitter.computeWeightedFiles()).toEqual([
+      {filePath: externalTestFile, weight: 2}
+    ])
+    expect(splitter.getGroupFiles()).toEqual([externalTestFile])
+  })
+
   it("uses normalized relative timing manifest durations as primary weights", () => {
     const splitter = new TestSuiteSplitter({
       groups: 1,

@@ -102,7 +102,7 @@ export default class TestSuiteSplitter {
       return duration
     }
 
-    const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
+    const relativePath = this.heuristicRelativePath(filePath)
     let weight = DEFAULT_WEIGHT
 
     // Extract the type directory from the relative path.
@@ -161,6 +161,31 @@ export default class TestSuiteSplitter {
   }
 
   /**
+   * Returns the permissive relative path used only for heuristic classification.
+   * @param {string} filePath - Absolute test file path.
+   * @returns {string} - Portable relative path which may escape the profiling base.
+   */
+  heuristicRelativePath(filePath) {
+    return path.relative(this._baseDirectory, filePath)
+      .replaceAll("\\", "/")
+      .replace(/^\.\//, "")
+  }
+
+  /**
+   * Returns a canonical manifest key when the file is representable under the profiling base.
+   * @param {string} filePath - Absolute test file path.
+   * @returns {string | undefined} - Canonical relative path, or undefined for an external file.
+   */
+  manifestRelativePath(filePath) {
+    const relativePath = path.relative(this._baseDirectory, filePath)
+
+    if (!relativePath || path.isAbsolute(relativePath)) return
+    if (relativePath === ".." || relativePath.startsWith(`..${path.sep}`)) return
+
+    return this.normalizeRelativePath(relativePath)
+  }
+
+  /**
    * Returns the first manifest entry matching a discovered test file.
    * @param {string} filePath - Absolute test file path.
    * @returns {number | undefined} - Recorded duration, including zero.
@@ -179,7 +204,10 @@ export default class TestSuiteSplitter {
    * @returns {string[]} - Canonical keys in matching priority order.
    */
   timingManifestPaths(filePath) {
-    const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
+    const relativePath = this.manifestRelativePath(filePath)
+
+    if (!relativePath) return []
+
     const projectRelativePath = this.normalizeRelativePath(path.join(path.basename(this._baseDirectory), relativePath))
 
     return relativePath === projectRelativePath ? [relativePath] : [relativePath, projectRelativePath]
