@@ -631,6 +631,7 @@ export default class BackgroundJobsWorker {
       acceptsForked: acceptsProcessJob,
       acceptsInline,
       acceptsPooled,
+      availablePooledSlots: this._availablePooledSlots(),
       acceptsSpawned: acceptsProcessJob
     }
   }
@@ -648,7 +649,6 @@ export default class BackgroundJobsWorker {
       if (!this.shouldStop) this._sendReadyIfRunning()
     })
     this.inflightPooledJobs.add(inflight)
-    this._sendReadyIfRunning()
   }
 
   /**
