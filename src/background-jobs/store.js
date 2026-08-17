@@ -27,6 +27,7 @@ import {
  * @property {number} maxRetries - Retry cap.
  * @property {string} queue - Queue name.
  * @property {number} scheduledAtMs - Eligibility timestamp.
+ * @property {number | null} timeoutMs - Per-job timeout override, or null when omitted.
  */
 
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
@@ -498,7 +499,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       maxRetries: preparedJob.maxRetries,
       queue: preparedJob.queue,
       scheduledAtMs: options.scheduledAtMs === undefined ? null : preparedJob.scheduledAtMs,
-      scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled"
+      scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled",
+      timeoutMs: preparedJob.timeoutMs
     })
 
     return createHash("sha256").update(serialized).digest("hex")
@@ -1332,8 +1334,23 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       jobName,
       maxRetries: this._normalizeMaxRetries(options?.maxRetries),
       queue,
-      scheduledAtMs: this._normalizeScheduledAtMs(options?.scheduledAtMs, createdAtMs)
+      scheduledAtMs: this._normalizeScheduledAtMs(options?.scheduledAtMs, createdAtMs),
+      timeoutMs: this._normalizeJobTimeoutMs(options)
     }
+  }
+
+  /**
+   * Normalizes a per-job timeout while preserving omitted (worker fallback)
+   * separately from explicitly disabled.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {number | null} - Positive timeout, zero for disabled, or null when omitted.
+   */
+  _normalizeJobTimeoutMs(options) {
+    if (options?.timeoutMs === undefined) return null
+
+    if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) return 0
+
+    return options.timeoutMs
   }
 
   /**
@@ -1371,6 +1388,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         schedule_key: scheduleKey,
         concurrency_key: concurrency?.concurrencyKey || null,
         max_concurrency: concurrency?.maxConcurrency || null,
+        timeout_ms: preparedJob.timeoutMs,
         handoff_id: null
       }
     })
@@ -1612,6 +1630,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     table.text("last_error", {null: true})
     table.string("concurrency_key", {null: true, index: true})
     table.integer("max_concurrency", {null: true})
+    table.bigint("timeout_ms", {null: true})
 
     await db.createTable(table)
   }
@@ -1704,6 +1723,35 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     await this._ensureQueueColumn(db)
     await this._ensureScheduleKeyColumn(db)
+    await this._ensureJobTimeoutColumn(db)
+  }
+
+  /**
+   * Idempotently adds the per-job wall-clock timeout to existing job tables.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureJobTimeoutColumn(db) {
+    const lockName = `${MIGRATION_SCOPE}:timeout_ms_column`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs timeout schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const table = await db.getTableByNameOrFail(JOBS_TABLE)
+
+      if (!(await table.getColumnByName("timeout_ms"))) {
+        const tableData = new TableData(JOBS_TABLE)
+        tableData.bigint("timeout_ms", {null: true})
+
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+
+        db.clearSchemaCache()
+      }
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
   }
 
   /**
@@ -2105,7 +2153,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       workerId: row.worker_id ? String(row.worker_id) : null,
       lastError: row.last_error ? String(row.last_error) : null,
       concurrencyKey: row.concurrency_key ? String(row.concurrency_key) : null,
-      maxConcurrency: this._normalizeNumber(row.max_concurrency)
+      maxConcurrency: this._normalizeNumber(row.max_concurrency),
+      timeoutMs: this._normalizeNumber(row.timeout_ms)
     }
   }
 

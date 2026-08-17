@@ -28,6 +28,7 @@
  * @property {boolean} [deduplicateWhileQueued] - When true, skip the enqueue if an identical still-queued job (same job name, args and queue) is scheduled no later than this enqueue, returning the earliest matching job's id. A future retry does not suppress earlier work. Deduplication is independent of `concurrencyKey`, so the job keeps its normal (e.g. queue-derived) concurrency cap. Keeps an interval-scheduled recurring job (e.g. retention pruning) from piling up redundant queued rows when it runs slower than its interval or no worker is free.
  * @property {string} [idempotencyKey] - Durable enqueue identity scoped to the resolved job class name and queue. Exact replay returns the original job id across every state and after job pruning; reuse with different canonical arguments or behavior-affecting options fails. Ownership is independent of `deduplicateWhileQueued` and is retained until an explicit future retention policy removes it.
  * @property {number} [scheduledAtMs] - Epoch timestamp in milliseconds when the job becomes eligible for dispatch. Defaults to enqueue time.
+ * @property {number} [timeoutMs] - Per-job wall-clock timeout for forked and pooled execution. A positive value overrides the worker-level `jobTimeoutMs`; a non-positive or non-finite value disables the timeout for this job.
  */
 /**
  * @typedef {object} BackgroundJobPayload
@@ -61,6 +62,7 @@
  * @property {string | null} lastError - Last failure message.
  * @property {string | null} concurrencyKey - Durable concurrency key.
  * @property {number | null} maxConcurrency - Durable per-key cap.
+ * @property {number | null} timeoutMs - Per-job wall-clock timeout override, or null when omitted.
  */
 /**
  * @typedef {"queued" | "handed_off" | null} BackgroundJobReplacementPreviousStatus

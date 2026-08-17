@@ -690,7 +690,7 @@ export default class BackgroundJobsWorker {
     state.lastDispatchSeq = ++this._pooledDispatchSeq
 
     return new Promise((resolve) => {
-      const timeoutTimer = this._armPooledJobTimeout({child, jobId: payload.id})
+      const timeoutTimer = this._armPooledJobTimeout({child, payload})
 
       state.inflight.set(payload.id, {payload, resolve, timeoutTimer})
       try {
@@ -753,15 +753,15 @@ export default class BackgroundJobsWorker {
    * the timer, or null when no timeout is configured.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
-   * @param {string} args.jobId - Job id whose overrun is guarded.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Job payload whose overrun is guarded.
    * @returns {ReturnType<typeof setTimeout> | null} - The armed timer, or null.
    */
-  _armPooledJobTimeout({child, jobId}) {
-    const timeoutMs = this._resolveJobTimeoutMs()
+  _armPooledJobTimeout({child, payload}) {
+    const timeoutMs = this._resolveJobTimeoutMs(payload.options)
 
     if (!(typeof timeoutMs === "number" && timeoutMs > 0)) return null
 
-    return setTimeout(() => this._onPooledJobTimeout({child, jobId}), timeoutMs)
+    return setTimeout(() => this._onPooledJobTimeout({child, jobId: payload.id}), timeoutMs)
   }
 
   /**
@@ -1016,7 +1016,7 @@ export default class BackgroundJobsWorker {
    * @returns {Promise<void>} - Resolves when the child exits.
    */
   _waitForForkedChild({child, payload}) {
-    const timeoutState = this._armForkedJobTimeout({child})
+    const timeoutState = this._armForkedJobTimeout({child, payload})
 
     return new Promise((resolve) => {
       child.once("exit", (code, signal) => {
@@ -1040,10 +1040,11 @@ export default class BackgroundJobsWorker {
    * and behavior is unchanged.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Job payload.
    * @returns {ForkedJobTimeoutState} - Timeout state.
    */
-  _armForkedJobTimeout({child}) {
-    const timeoutMs = this._resolveJobTimeoutMs()
+  _armForkedJobTimeout({child, payload}) {
+    const timeoutMs = this._resolveJobTimeoutMs(payload.options)
     /** @type {ForkedJobTimeoutState} */
     const state = {timedOut: false, timeoutMs, timer: null, sigkillTimer: null}
 
@@ -1056,14 +1057,18 @@ export default class BackgroundJobsWorker {
 
   /**
    * Resolves the effective wall-clock job timeout in ms (shared by forked and pooled jobs), or null when disabled. The
-   * constructor override wins; otherwise the value comes from the background-jobs
-   * configuration. A non-positive value disables the backstop.
+   * per-job override wins, followed by the constructor override, then the value
+   * from the background-jobs configuration. A non-positive value disables the
+   * backstop at whichever level supplied it.
+   * @param {import("./types.js").BackgroundJobOptions} [jobOptions] - Per-job options.
    * @returns {number | null} - Timeout in ms, or null when disabled.
    */
-  _resolveJobTimeoutMs() {
-    const raw = typeof this.jobTimeoutMsOverride === "number"
-      ? this.jobTimeoutMsOverride
-      : (this.configuration ? this.configuration.getBackgroundJobsConfig().jobTimeoutMs : null)
+  _resolveJobTimeoutMs(jobOptions) {
+    const raw = typeof jobOptions?.timeoutMs === "number"
+      ? jobOptions.timeoutMs
+      : (typeof this.jobTimeoutMsOverride === "number"
+          ? this.jobTimeoutMsOverride
+          : (this.configuration ? this.configuration.getBackgroundJobsConfig().jobTimeoutMs : null))
 
     // A non-finite (e.g. Infinity) or non-positive value disables the backstop;
     // a finite value beyond Node's timer range is clamped to the max rather than
