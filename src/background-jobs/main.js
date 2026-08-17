@@ -1500,11 +1500,11 @@ export default class BackgroundJobsMain {
         // an application event handler that throws below cannot strand them
         // queued until the next external enqueue/reconnect.
         this._notifyEnqueued()
-        await this._drain()
         // Emit an event per orphaned job so applications can react to a dead
         // worker's specific job (e.g. targeted recovery) instead of only polling
-        // for its aftermath. Isolate each so one throwing handler can't suppress
-        // the events for the rest.
+        // for its aftermath. Emit before awaiting the drain so a blocked
+        // dispatcher cannot delay application recovery. Isolate each so one
+        // throwing handler can't suppress the events for the rest.
         for (const job of orphanedJobs) {
           try {
             this._emitBackgroundJobOrphaned({job})
@@ -1512,6 +1512,7 @@ export default class BackgroundJobsMain {
             this.logger.error(() => ["A background-job-orphaned event handler threw:", error])
           }
         }
+        await this._drain()
       }
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])

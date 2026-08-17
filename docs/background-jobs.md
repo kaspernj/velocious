@@ -341,7 +341,7 @@ The mirrored `all-error` payload includes the same `error` and `context` plus `e
 
 ### Orphaned jobs
 
-`background-jobs-main` also emits a `background-job-orphaned` error event (mirrored to `all-error` as `errorType: "background-job-orphaned"`) for each job its time-based orphan sweep reclaims — a job whose worker died mid-run and stopped reporting, so it was stuck `handed_off` past the orphan timeout. Unlike `background-job-failed`, which fires on a worker's failure report, this fires from the main process's sweep, so an application can react to the specific job a dead worker left behind — enqueue a targeted recovery for the work it was doing — instead of only polling for the aftermath.
+`background-jobs-main` also emits a `background-job-orphaned` error event (mirrored to `all-error` as `errorType: "background-job-orphaned"`) for each job its time-based orphan sweep reclaims — a job whose worker died mid-run and stopped reporting, so it was stuck `handed_off` past the orphan timeout. Unlike `background-job-failed`, which fires on a worker's failure report, this fires from the main process's sweep, so an application can react to the specific job a dead worker left behind — enqueue a targeted recovery for the work it was doing — instead of only polling for the aftermath. The sweep emits these events before waiting for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery handlers.
 
 ```js
 configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) => {
