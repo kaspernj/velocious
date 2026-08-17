@@ -26,7 +26,7 @@
 * Gap-less positional lists with automatic reordering via `actsAsList`, including models with numeric, string, or UUID primary keys (see [docs/acts-as-list.md](docs/acts-as-list.md))
 * Rails-style nested-attribute writes on frontend-model `save()` (see [docs/nested-attributes.md](docs/nested-attributes.md))
 * Async-aware test-data factories with inherited traits, graph-first native association autosave, metadata-aware override precedence, callbacks, sequences, linting, and a process-global reload-retention budget that bounds cache-busted re-import memory (see [docs/factories.md](docs/factories.md))
-* Opt-in Benchmark-style test profiling with privacy-safe rich JSON and directly reusable duration-aware shard manifests (see [docs/test-profiling.md](docs/test-profiling.md))
+* Opt-in Benchmark-style test profiling with privacy-safe rich JSON, directly reusable duration-aware shard manifests, and strict generic shard-profile aggregation (see [docs/test-profiling.md](docs/test-profiling.md))
 * Per-row association counts via `.withCount(...)`, including cohort-safe intersected filters, safe batching of structurally identical aggregates, and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/with-count.md](docs/with-count.md))
 * Consumer-defined per-row SQL aggregates/computations via `.queryData(...)`, with compatible projections sharing a roundtrip while preserving declared alias-overwrite order and automatic IN-list chunking for large parent sets, on frontend and backend queries (see [docs/query-data.md](docs/query-data.md))
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
@@ -239,6 +239,10 @@ npx velocious test --profile-json tmp/test-profile.json \
   --timing-manifest-output tmp/test-timings.json
 npx velocious test --groups=4 --group-number=1 \
   --timing-manifest tmp/test-timings.json
+
+# After every shard wrote rich JSON, merge the complete set for the next run
+npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
+  tmp/profile-1.json tmp/profile-2.json tmp/profile-3.json tmp/profile-4.json
 ```
 
 See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
@@ -327,12 +331,17 @@ separators:
 }
 ```
 
-Files absent from the manifest, unknown files, invalid duration values, and
-unreadable or malformed JSON all fall back to the existing deterministic
-heuristic. The heuristic weights files by spec directory (`system/` = 20, `frontend-models/` = 10,
-`controller/` = 3, default = 1) with a 2x multiplier for `.browser-spec.js`
-files. The heaviest files are assigned first to the group with the least
-accumulated weight, producing balanced wall-clock times across groups.
+Files absent from the manifest and zero-duration entries use the existing
+deterministic heuristic; stale entries are ignored. When `--timing-manifest` is
+explicitly supplied, its file must be readable and contain a plain JSON object
+with canonical relative paths and finite non-negative durations. Invalid input
+fails the command even without sharding flags. A compact
+measured/heuristic/stale summary reports coverage.
+The heuristic weights files by spec directory (`system/` = 20,
+`frontend-models/` = 10, `controller/` = 3, default = 1) with a 2x multiplier
+for `.browser-spec.js` files. The heaviest files are assigned first to the group
+with the least accumulated weight, producing balanced wall-clock times across
+groups.
 
 The algorithm is deterministic: the same file list always produces the same
 group assignments.

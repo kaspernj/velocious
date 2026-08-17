@@ -6,6 +6,7 @@ import path from "node:path"
 import { promisify } from "node:util"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "../../../src/testing/test.js"
+import { timingManifestFileSetHash } from "../../../src/testing/timing-manifest.js"
 
 const execFileAsync = promisify(execFile)
 const repositoryDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
@@ -131,6 +132,10 @@ describe("test profile CLI integration", () => {
       expect(profile.status).toBe("passed")
       expect(profile.counts).toEqual({attempts: 1, discovered: 1, executed: 1, failed: 0, passed: 1})
       expect(profile.selection.fileCount).toBe(1)
+      expect(profile.selection.discoveredFileCount).toBe(1)
+      expect(profile.selection.hasLineFilters).toBe(false)
+      expect(profile.selection.pathBase).toBe("configuration-directory")
+      expect(profile.selection.testFileSetHash).toBe(timingManifestFileSetHash([testPath]))
       expect(profile.phases.discovery.count).toBe(1)
       expect(profile.phases.imports.count).toBe(1)
       expect(Object.keys(manifest)).toEqual([testPath])

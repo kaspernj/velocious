@@ -14,6 +14,7 @@ import CliCommandsLintRelationships from "./node/cli/commands/lint/relationships
 import CliCommandsRoutes from "./node/cli/commands/routes.js"
 import CliCommandsServer from "./node/cli/commands/server.js"
 import CliCommandsTest from "./node/cli/commands/test.js"
+import CliCommandsTestTimingManifestMerge from "./node/cli/commands/test/timing-manifest/merge.js"
 import CliCommandsBackgroundJobsMain from "./node/cli/commands/background-jobs-main.js"
 import CliCommandsBackgroundJobsWorker from "./node/cli/commands/background-jobs-worker.js"
 import CliCommandsBackgroundJobsRunner from "./node/cli/commands/background-jobs-runner.js"
@@ -828,6 +829,15 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsTest(command) {
     return await this.forwardCommand(command, CliCommandsTest)
+  }
+
+  /**
+   * Runs cli commands test timing manifest merge.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsTestTimingManifestMerge(command) {
+    return await this.forwardCommand(command, CliCommandsTestTimingManifestMerge)
   }
 
   /**

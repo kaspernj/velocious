@@ -1,24 +1,39 @@
 // @ts-check
 
+import fs from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
-import {fileURLToPath} from "node:url"
-import {describe, expect, it} from "../../../src/testing/test.js"
-import {loadTimingManifest} from "../../../src/environment-handlers/node/cli/commands/test.js"
+import { describe, expect, it } from "../../../src/testing/test.js"
+import { loadTimingManifest } from "../../../src/environment-handlers/node/cli/commands/test.js"
 
-const repositoryDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
+describe("test timing manifest loading", () => {
+  it("loads and validates a canonical plain timing map", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-timing-loader-"))
+    const manifestPath = path.join(directory, "timings.json")
 
-describe("test timing manifest loading", {databaseCleaning: {transaction: true}}, () => {
-  it("loads valid JSON", async () => {
-    const manifest = await loadTimingManifest(path.join(repositoryDirectory, "package.json"))
-
-    expect(manifest.name).toBe("velocious")
+    try {
+      await fs.writeFile(manifestPath, JSON.stringify({"./spec//task-spec.js": 0}), "utf8")
+      expect(await loadTimingManifest(manifestPath)).toEqual({"spec/task-spec.js": 0})
+      expect(await loadTimingManifest(undefined)).toBe(undefined)
+    } finally {
+      await fs.rm(directory, {force: true, recursive: true})
+    }
   })
 
-  it("returns undefined for malformed JSON", async () => {
-    expect(await loadTimingManifest(path.join(repositoryDirectory, "AGENTS.md"))).toBe(undefined)
-  })
+  it("fails for explicitly supplied missing malformed and invalid manifests", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-timing-loader-errors-"))
+    const malformedPath = path.join(directory, "malformed.json")
+    const invalidPath = path.join(directory, "invalid.json")
 
-  it("returns undefined for an unreadable path", async () => {
-    expect(await loadTimingManifest(path.join(repositoryDirectory, "missing-test-timing-manifest.json"))).toBe(undefined)
+    try {
+      await fs.writeFile(malformedPath, "not json", "utf8")
+      await fs.writeFile(invalidPath, JSON.stringify({"spec/task-spec.js": "12"}), "utf8")
+
+      await expect(() => loadTimingManifest(path.join(directory, "missing.json"))).toThrow(/read timing manifest/)
+      await expect(() => loadTimingManifest(malformedPath)).toThrow(/parse timing manifest/)
+      await expect(() => loadTimingManifest(invalidPath)).toThrow(/duration/)
+    } finally {
+      await fs.rm(directory, {force: true, recursive: true})
+    }
   })
 })
