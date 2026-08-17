@@ -40,6 +40,7 @@ import {
  * @property {number} maxRetries - Retry cap.
  * @property {string} queue - Queue name.
  * @property {number} scheduledAtMs - Eligibility timestamp.
+ * @property {number | null} timeoutMs - Per-job timeout override, or null when omitted.
  */
 
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
@@ -65,6 +66,8 @@ const COUNTS_REVISION_KEY = "counts"
 export const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts"
 export const BACKGROUND_JOB_COUNT_BUCKETS = ["all", "queued", "handed_off", "completed", "failed", "orphaned"]
 const COUNTED_JOB_STATUSES = BACKGROUND_JOB_COUNT_BUCKETS.slice(1)
+const MAX_JOB_TIMEOUT_MS = 2_147_483_647
+const JOB_TIMEOUT_VALIDATION_MESSAGE = `background job timeoutMs must be a finite non-positive number or an integer between 1 and ${MAX_JOB_TIMEOUT_MS}`
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 
 /**
@@ -496,7 +499,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       maxRetries: preparedJob.maxRetries,
       queue: preparedJob.queue,
       scheduledAtMs: options.scheduledAtMs === undefined ? null : preparedJob.scheduledAtMs,
-      scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled"
+      scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled",
+      ...(preparedJob.timeoutMs === null ? {} : {timeoutMs: preparedJob.timeoutMs})
     })
 
     return createHash("sha256").update(serialized).digest("hex")
@@ -1324,8 +1328,33 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       jobName,
       maxRetries: this._normalizeMaxRetries(options?.maxRetries),
       queue,
-      scheduledAtMs: this._normalizeScheduledAtMs(options?.scheduledAtMs, createdAtMs)
+      scheduledAtMs: this._normalizeScheduledAtMs(options?.scheduledAtMs, createdAtMs),
+      timeoutMs: this._normalizeJobTimeoutMs(options)
     }
+  }
+
+  /**
+   * Normalizes a per-job timeout while preserving omitted (worker fallback)
+   * separately from explicitly disabled.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {number | null} - Positive timeout, zero for disabled, or null when omitted.
+   */
+  _normalizeJobTimeoutMs(options) {
+    if (options?.timeoutMs === undefined) return null
+
+    const timeoutMs = options.timeoutMs
+
+    if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs)) {
+      throw VelociousError.safe(JOB_TIMEOUT_VALIDATION_MESSAGE)
+    }
+
+    if (timeoutMs <= 0) return 0
+
+    if (!Number.isInteger(timeoutMs) || timeoutMs > MAX_JOB_TIMEOUT_MS) {
+      throw VelociousError.safe(JOB_TIMEOUT_VALIDATION_MESSAGE)
+    }
+
+    return timeoutMs
   }
 
   /**
@@ -1363,6 +1392,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         schedule_key: scheduleKey,
         concurrency_key: concurrency?.concurrencyKey || null,
         max_concurrency: concurrency?.maxConcurrency || null,
+        timeout_ms: preparedJob.timeoutMs,
         handoff_id: null
       }
     })
@@ -1588,6 +1618,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     table.text("last_error", {null: true})
     table.string("concurrency_key", {null: true, index: true})
     table.integer("max_concurrency", {null: true})
+    table.bigint("timeout_ms", {null: true})
 
     await db.createTable(table)
   }
@@ -1680,6 +1711,35 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     await this._ensureQueueColumn(db)
     await this._ensureScheduleKeyColumn(db)
+    await this._ensureJobTimeoutColumn(db)
+  }
+
+  /**
+   * Idempotently adds the per-job wall-clock timeout to existing job tables.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureJobTimeoutColumn(db) {
+    const lockName = `${MIGRATION_SCOPE}:timeout_ms_column`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs timeout schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const table = await db.getTableByNameOrFail(JOBS_TABLE)
+
+      if (!(await table.getColumnByName("timeout_ms"))) {
+        const tableData = new TableData(JOBS_TABLE)
+        tableData.bigint("timeout_ms", {null: true})
+
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+
+        db.clearSchemaCache()
+      }
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
   }
 
   /**
@@ -2081,7 +2141,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       workerId: row.worker_id ? String(row.worker_id) : null,
       lastError: row.last_error ? String(row.last_error) : null,
       concurrencyKey: row.concurrency_key ? String(row.concurrency_key) : null,
-      maxConcurrency: this._normalizeNumber(row.max_concurrency)
+      maxConcurrency: this._normalizeNumber(row.max_concurrency),
+      timeoutMs: this._normalizeNumber(row.timeout_ms)
     }
   }
 

@@ -423,6 +423,22 @@ cancelled otherwise — and a replacement child is spawned. Either way the slot 
 freed on exit, so the worker (including a draining one) can always reach zero
 in-flight jobs and exit.
 
+Set `options.timeoutMs` on an individual forked or pooled job when its safe
+runtime ceiling differs from the worker default. A positive per-job value takes
+precedence over `backgroundJobs.jobTimeoutMs`; a non-positive finite value
+disables the backstop for that job. Positive values
+must be integers no greater than `2_147_483_647` (Node's maximum supported timer);
+wrong types, non-finite values, fractions, and larger values are rejected before
+the job is persisted. Omitting `timeoutMs` keeps the worker-level setting as the
+fallback.
+
+```js
+await BuildJob.performLaterWithOptions({
+  args: [projectId],
+  options: {executionMode: "pooled", timeoutMs: 10 * 60 * 1000}
+})
+```
+
 ```js
 backgroundJobs: {
   // Kill and fail any forked runner still going after 90 minutes.
@@ -430,9 +446,8 @@ backgroundJobs: {
 }
 ```
 
-This is a coarse safety net, not per-job tuning. It applies to every forked
-runner on the worker, so set it **well above** the longest legitimate forked job
-(build runners, large imports) — pick a ceiling that only a stuck runner would
-ever cross. Omit it, or set `null`/`<= 0`, to disable (the default), which keeps
-the prior unbounded behavior. `"inline"` jobs are not covered: they share the
-worker's process and cannot be killed without killing the worker.
+The worker-level setting is a coarse default, so set it **well above** the
+longest legitimate forked or pooled job unless individual jobs supply tighter
+timeouts. Omit it, or set `null`/`<= 0`, to disable the default. `"inline"` jobs
+are not covered: they share the worker's process and cannot be killed without
+killing the worker.

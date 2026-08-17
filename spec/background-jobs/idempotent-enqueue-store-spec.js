@@ -1,7 +1,9 @@
 // @ts-check
 
+import {createHash} from "crypto"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+import stableJsonStringify from "../../src/utils/stable-json.js"
 
 /** @returns {BackgroundJobsStore} - Cleared background jobs store. */
 async function createStore() {
@@ -114,6 +116,42 @@ describe("Background jobs - idempotent enqueue store", {databaseCleaning: {trans
       .toThrow(/idempotency key.*different/i)
     await expect(async () => await store.enqueue({...base, options: {...base.options, maxConcurrency: 2}}))
       .toThrow(/idempotency key.*different/i)
+    await expect(async () => await store.enqueue({...base, options: {...base.options, timeoutMs: 15_000}}))
+      .toThrow(/idempotency key.*different/i)
+  })
+
+  it("keeps omitted timeoutMs compatible with existing idempotent replay identity", async () => {
+    if (!store) throw new Error("Expected store")
+    const request = {
+      args: ["upgrade-safe"],
+      jobName: "IdempotentTimeoutJob",
+      options: {executionMode: "pooled", idempotencyKey: "timeout:omitted"}
+    }
+    const jobId = await store.enqueue(request)
+    const legacyRequestDigest = createHash("sha256")
+      .update(stableJsonStringify({
+        args: request.args,
+        concurrency: null,
+        executionMode: "pooled",
+        format: "velocious-background-job-idempotency-v1",
+        jobName: request.jobName,
+        maxRetries: 10,
+        queue: "default",
+        scheduledAtMs: null,
+        scheduling: "immediate"
+      }))
+      .digest("hex")
+    const ownershipRows = await store._withDb(async (db) => await db
+      .newQuery()
+      .from("background_job_idempotency_keys")
+      .where({job_id: jobId})
+      .results())
+    const ownership = ownershipRows[0]
+
+    if (!ownership) throw new Error("Expected idempotency ownership")
+
+    expect(String(ownership.request_digest)).toEqual(legacyRequestDigest)
+    expect(await store.enqueue(request)).toEqual(jobId)
   })
 
   it("creates and restores durable ownership schema", async () => {

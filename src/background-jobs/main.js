@@ -1354,7 +1354,8 @@ export default class BackgroundJobsMain {
             workerId: worker.workerId,
             handedOffAtMs: handoff.handedOffAtMs,
             options: {
-              executionMode: job.executionMode
+              executionMode: job.executionMode,
+              ...(job.timeoutMs === null ? {} : {timeoutMs: job.timeoutMs})
             }
           }
         })

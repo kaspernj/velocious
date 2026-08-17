@@ -81,6 +81,16 @@ describe("Background jobs - worker forked job timeout", () => {
     expect(new BackgroundJobsWorker({jobTimeoutMs: 15})._resolveJobTimeoutMs()).toEqual(15)
   })
 
+  it("resolves per-job overrides before the worker timeout and keeps the worker timeout as fallback", () => {
+    const worker = new BackgroundJobsWorker({jobTimeoutMs: 250})
+
+    expect(worker._resolveJobTimeoutMs({timeoutMs: 15})).toEqual(15)
+    expect(worker._resolveJobTimeoutMs({timeoutMs: 0})).toEqual(null)
+    expect(worker._resolveJobTimeoutMs({timeoutMs: Infinity})).toEqual(null)
+    expect(worker._resolveJobTimeoutMs({})).toEqual(250)
+    expect(worker._resolveJobTimeoutMs()).toEqual(250)
+  })
+
   it("does not arm a timeout when jobTimeoutMs is not configured", async () => {
     const worker = new BackgroundJobsWorker({})
     const child = new FakeHungChild()
@@ -143,7 +153,7 @@ describe("Background jobs - worker pooled job timeout", () => {
   }
 
   it("terminates the child and reports a pooled job that overruns the timeout", async () => {
-    const worker = new BackgroundJobsWorker({jobTimeoutMs: 15, forkedChildSigkillGraceMs: 5})
+    const worker = new BackgroundJobsWorker({jobTimeoutMs: 60_000, forkedChildSigkillGraceMs: 5})
     /** @type {Array<{jobId: string, status: string, error?: ReturnType<typeof JSON.parse>}>} */
     const reports = []
     worker.statusReporter = /** @type {ReturnType<typeof JSON.parse>} */ ({reportWithRetry: async (/** @type {{jobId: string, status: string, error?: ReturnType<typeof JSON.parse>}} */ args) => { reports.push(args) }})
@@ -153,7 +163,7 @@ describe("Background jobs - worker pooled job timeout", () => {
 
     // A hung child never reports a job-outcome, so only the wall-clock backstop
     // can free the slot. It SIGTERMs, then SIGKILLs after the grace.
-    await worker._runPooledJob(/** @type {ReturnType<typeof JSON.parse>} */ ({id: "pooled-1", jobName: "HangingJob"}))
+    await worker._runPooledJob(/** @type {ReturnType<typeof JSON.parse>} */ ({id: "pooled-1", jobName: "HangingJob", options: {timeoutMs: 15}}))
 
     expect(child.killSignals).toEqual(["SIGTERM", "SIGKILL"])
     expect(reports.length).toEqual(1)

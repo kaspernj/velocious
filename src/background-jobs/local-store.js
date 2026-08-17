@@ -1124,6 +1124,7 @@ export default class LocalBackgroundJobsStore {
       scheduleKey: null,
       scheduledAtMs: this._numberOrNull(row.scheduled_at_ms),
       status: row.status ? String(row.status) : "queued",
+      timeoutMs: null,
       workerId: row.worker_id === null || row.worker_id === undefined ? null : String(row.worker_id)
     }
   }
