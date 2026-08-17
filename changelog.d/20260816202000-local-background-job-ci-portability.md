@@ -1,0 +1,1 @@
+Make local background-job concurrency ownership atomic across SQL drivers, keep schema index checks strict while recognizing driver-reported primary keys, coordinate shared test transactions before exposing their physical connections, and publish SQLite advisory-lock owner metadata atomically across processes.

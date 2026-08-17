@@ -37,8 +37,14 @@ class SchemaCacheTestDriver extends DatabaseDriverBase {
  */
 function buildConfiguration(databaseConfig) {
   const environmentHandler = new NodeEnvironmentHandler()
-
-  return /** @type {import("../../../src/configuration.js").default} */ (/** @type {unknown} */ ({
+  /** @type {import("../../../src/configuration-types.js").RouteResolverHookType[]} */
+  const routeResolverHooks = []
+  // Narrows this deliberately minimal driver-test boundary to the framework
+  // configuration contract after binding its owning environment handler.
+  const configuration = /** @type {import("../../../src/configuration.js").default} */ (/** @type {unknown} */ ({
+    addRouteResolverHook(hook) {
+      routeResolverHooks.push(hook)
+    },
     clearSchemaCachesForReuseKey() {
       // This stub configuration owns no pool registry, so cross-pool invalidation
       // is a no-op here; the pool clears its own connections directly.
@@ -55,10 +61,23 @@ function buildConfiguration(databaseConfig) {
     getQueryLoggingEnabled() {
       return false
     },
+    getRouteResolverHooks() {
+      return routeResolverHooks
+    },
+    getTimeZone() {
+      return undefined
+    },
+    getTimezoneOffsetMinutes() {
+      return new Date().getTimezoneOffset()
+    },
     resolveDatabaseConfiguration() {
       return databaseConfig
     }
   }))
+
+  environmentHandler.setConfiguration(configuration)
+
+  return configuration
 }
 
 describe("Database drivers - schema cache", {databaseCleaning: {truncate: false}}, () => {

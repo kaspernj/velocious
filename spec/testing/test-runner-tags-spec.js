@@ -144,6 +144,42 @@ describe("TestRunner tags", {databaseCleaning: {transaction: true}}, () => {
     expect(testRunner.getSuccessfulTests()).toBe(1)
   })
 
+  it("skips browser-only tests outside the browser runner", async () => {
+    const testRunner = buildTestRunner()
+    const counts = {browserOnly: 0, portable: 0}
+
+    const tests = {
+      args: {},
+      afterEaches: [],
+      afterAlls: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "browser-only test": {
+          args: {tags: ["browser-only"]},
+          function: async () => { counts.browserOnly++ }
+        },
+        "portable test": {
+          args: {},
+          function: async () => { counts.portable++ }
+        }
+      }
+    }
+
+    await testRunner.runTests({
+      afterEaches: [],
+      beforeEaches: [],
+      tests,
+      descriptions: [],
+      indentLevel: 0
+    })
+
+    expect(counts.browserOnly).toBe(0)
+    expect(counts.portable).toBe(1)
+    expect(testRunner.getSuccessfulTests()).toBe(1)
+  })
+
   it("tracks zero executed tests when tag filters skip everything", async () => {
     const testRunner = buildTestRunner({includeTags: ["fast"]})
     let runs = 0

@@ -1543,7 +1543,22 @@ export default class VelociousConfiguration {
         : 60 * 60 * 1000
     }
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobTimeoutMs, retention}
+    const jobClasses = this.getBackgroundJobClasses()
+
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobClasses, jobTimeoutMs, retention}
+  }
+
+  /**
+   * Returns statically registered portable background jobs.
+   * @returns {import("./configuration-types.js").BackgroundJobClass[]} - Configured job classes.
+   */
+  getBackgroundJobClasses() {
+    const jobClasses = this._backgroundJobs?.jobClasses
+
+    if (jobClasses === undefined) return []
+    if (!Array.isArray(jobClasses)) throw new TypeError("backgroundJobs.jobClasses must be an array")
+
+    return [...jobClasses]
   }
 
   /**

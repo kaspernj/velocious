@@ -10,14 +10,13 @@ import {outputPathFor, startBackgroundJobs, waitForJobCompleted, waitForOutputJs
 
 describe("Background jobs - custom adapter Node wake-up", {databaseCleaning: {truncate: true}}, () => {
   it("routes an explicit SQL adapter producer through main so an idle worker wakes", async () => {
-    await dummyConfiguration.closeBackgroundJobsAdapter()
-    dummyConfiguration.setBackgroundJobsConfig({
-      adapter: ({configuration}) => new SqlBackgroundJobsAdapter({configuration}),
-      dispatchStrategy: "beacon",
-      mode: "background"
+    const {main, store, worker} = await startBackgroundJobs({
+      backgroundJobsConfig: {
+        adapter: ({configuration}) => new SqlBackgroundJobsAdapter({configuration}),
+        dispatchStrategy: "beacon",
+        mode: "background"
+      }
     })
-
-    const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("custom-adapter-wake")
 
     try {

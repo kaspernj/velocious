@@ -256,6 +256,35 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+   * Publishes a fully initialized lock directory with one atomic rename.
+   * A losing candidate is removed in the same call, so concurrent acquisition
+   * cannot observe or delete another process's half-written owner metadata.
+   * @param {string} lockPath - Stable advisory-lock path.
+   * @returns {Promise<boolean>} - Whether this candidate became the lock owner.
+   */
+  async _publishAdvisoryLockDirectory(lockPath) {
+    const candidatePath = await fs.mkdtemp(`${lockPath}.pending-`)
+    let published = false
+
+    try {
+      await this._writeAdvisoryLockMetadata(candidatePath)
+
+      try {
+        await fs.rename(candidatePath, lockPath)
+        published = true
+        return true
+      } catch (error) {
+        const code = /** @type {Error & {code?: string}} */ (error)?.code
+
+        if (code === "EEXIST" || code === "ENOTEMPTY") return false
+        throw error
+      }
+    } finally {
+      if (!published) await fs.rm(candidatePath, {force: true, recursive: true})
+    }
+  }
+
+  /**
    * Runs acquire advisory lock file.
    * @param {string} name - Lock name.
    * @param {{timeoutMs?: number | null}} args - Timeout args.
@@ -272,28 +301,21 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
     // mkdir succeeds, the deadline elapses, or an unexpected error is
     // re-thrown.
     while (true) {
-      try {
-        await fs.mkdir(lockPath)
-        await this._writeAdvisoryLockMetadata(lockPath)
+      if (await this._publishAdvisoryLockDirectory(lockPath)) return true
 
-        return true
-      } catch (error) {
-        if (/** @type {Error & {code?: string}} */ (error)?.code !== "EEXIST") throw error
+      if (await this._isAdvisoryLockStale(lockPath)) {
+        await fs.rm(lockPath, {recursive: true, force: true})
+        continue
+      }
 
-        if (await this._isAdvisoryLockStale(lockPath)) {
-          await fs.rm(lockPath, {recursive: true, force: true})
-          continue
-        }
+      if (deadline !== null) {
+        const remaining = deadline - Date.now()
 
-        if (deadline !== null) {
-          const remaining = deadline - Date.now()
+        if (remaining <= 0) return false
 
-          if (remaining <= 0) return false
-
-          await wait(Math.min(pollIntervalMs, remaining))
-        } else {
-          await wait(pollIntervalMs)
-        }
+        await wait(Math.min(pollIntervalMs, remaining))
+      } else {
+        await wait(pollIntervalMs)
       }
     }
   }
@@ -308,31 +330,14 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
 
     const lockPath = this._advisoryLockPath(name)
 
-    try {
-      await fs.mkdir(lockPath)
-      await this._writeAdvisoryLockMetadata(lockPath)
+    if (await this._publishAdvisoryLockDirectory(lockPath)) return true
 
-      return true
-    } catch (error) {
-      if (/** @type {Error & {code?: string}} */ (error)?.code !== "EEXIST") throw error
-
-      if (await this._isAdvisoryLockStale(lockPath)) {
-        await fs.rm(lockPath, {recursive: true, force: true})
-
-        try {
-          await fs.mkdir(lockPath)
-          await this._writeAdvisoryLockMetadata(lockPath)
-
-          return true
-        } catch (retryError) {
-          if (/** @type {Error & {code?: string}} */ (retryError)?.code === "EEXIST") return false
-
-          throw retryError
-        }
-      }
-
-      return false
+    if (await this._isAdvisoryLockStale(lockPath)) {
+      await fs.rm(lockPath, {recursive: true, force: true})
+      return await this._publishAdvisoryLockDirectory(lockPath)
     }
+
+    return false
   }
 
   /**

@@ -10,6 +10,19 @@ import normalizeBackgroundJobError from "./normalize-error.js"
 import {coordinateSharedTransactionConnection} from "../testing/shared-transaction-connection-coordinator.js"
 import stableJsonStringify from "../utils/stable-json.js"
 import {
+  BACKGROUND_JOB_EXECUTION_MODES,
+  DEFAULT_BACKGROUND_JOB_EXECUTION_MODE,
+  DEFAULT_BACKGROUND_JOB_QUEUE,
+  QUEUE_CONCURRENCY_KEY_PREFIX,
+  normalizeBackgroundJobConcurrency,
+  normalizeBackgroundJobExecutionMode,
+  normalizeBackgroundJobMaxRetries,
+  normalizeBackgroundJobQueue,
+  normalizeBackgroundJobScheduledAtMs,
+  rescheduledBackgroundJobAtMs,
+  retryDelayMs
+} from "./job-semantics.js"
+import {
   MAIL_DELIVERY_OPERATIONS_TABLE,
   mailDeliveryOperationForJob,
   mailDeliveryOperationKey
@@ -53,24 +66,9 @@ const COUNTS_REVISION_KEY = "counts"
 export const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts"
 export const BACKGROUND_JOB_COUNT_BUCKETS = ["all", "queued", "handed_off", "completed", "failed", "orphaned"]
 const COUNTED_JOB_STATUSES = BACKGROUND_JOB_COUNT_BUCKETS.slice(1)
-const DEFAULT_MAX_RETRIES = 10
 const MAX_JOB_TIMEOUT_MS = 2_147_483_647
 const JOB_TIMEOUT_VALIDATION_MESSAGE = `background job timeoutMs must be a finite non-positive number or an integer between 1 and ${MAX_JOB_TIMEOUT_MS}`
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
-/**
- * Execution modes.
- * @type {import("./types.js").BackgroundJobExecutionMode[]} */
-const EXECUTION_MODES = ["inline", "forked", "pooled", "spawned"]
-/**
- * Execution mode for a new enqueue that names neither `executionMode` nor the
- * legacy `forked` flag. Pooled routes the job to a warm, reused local runner
- * process — the same isolation as forked without paying a fresh process per job.
- * @type {import("./types.js").BackgroundJobExecutionMode} */
-const DEFAULT_EXECUTION_MODE = "pooled"
-const DEFAULT_QUEUE = "default"
-// Queue-derived durable concurrency keys are namespaced so they can't collide
-// with explicit caller-supplied concurrencyKeys.
-const QUEUE_CONCURRENCY_KEY_PREFIX = "queue:"
 
 /**
  * Columns the dashboard is allowed to sort job listings by, mapped to their
@@ -787,7 +785,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       .map(([queue, priority]) => `WHEN ${db.quote(queue)} THEN ${priority}`)
       .join(" ")
 
-    return `CASE COALESCE(${queueColumn}, ${db.quote(DEFAULT_QUEUE)}) ${whens} ELSE 0 END`
+    return `CASE COALESCE(${queueColumn}, ${db.quote(DEFAULT_BACKGROUND_JOB_QUEUE)}) ${whens} ELSE 0 END`
   }
 
   /**
@@ -1306,13 +1304,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {number} - Delay in milliseconds.
    */
   getRetryDelayMs(retryCount) {
-    const scheduleSeconds = [10, 60, 600, 3600]
-
-    if (retryCount <= scheduleSeconds.length) {
-      return scheduleSeconds[retryCount - 1] * 1000
-    }
-
-    return (retryCount - 3) * 60 * 60 * 1000
+    return retryDelayMs(retryCount)
   }
 
   /**
@@ -1412,11 +1404,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {number} - Normalized max retries.
    */
   _normalizeMaxRetries(maxRetries) {
-    if (typeof maxRetries === "number" && Number.isFinite(maxRetries) && maxRetries >= 0) {
-      return Math.floor(maxRetries)
-    }
-
-    return DEFAULT_MAX_RETRIES
+    return normalizeBackgroundJobMaxRetries(maxRetries)
   }
 
   /**
@@ -1426,10 +1414,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {number} - Dispatch timestamp.
    */
   _normalizeScheduledAtMs(scheduledAtMs, defaultScheduledAtMs) {
-    if (scheduledAtMs === undefined) return defaultScheduledAtMs
-    if (Number.isSafeInteger(scheduledAtMs) && scheduledAtMs >= 0) return scheduledAtMs
-
-    throw VelociousError.safe("background job scheduledAtMs must be a non-negative safe integer")
+    return normalizeBackgroundJobScheduledAtMs(scheduledAtMs, defaultScheduledAtMs)
   }
 
   /**
@@ -1438,14 +1423,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {number} - Future eligibility timestamp.
    */
   _rescheduledAtMs(delayMs) {
-    this._validateRescheduleDelayMs(delayMs)
-
-    const scheduledAtMs = Date.now() + delayMs
-    if (!Number.isSafeInteger(scheduledAtMs)) {
-      throw VelociousError.safe("background job reschedule scheduledAtMs must be a safe integer")
-    }
-
-    return scheduledAtMs
+    return rescheduledBackgroundJobAtMs(delayMs, Date.now())
   }
 
   /**
@@ -1454,9 +1432,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {void}
    */
   _validateRescheduleDelayMs(delayMs) {
-    if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
-      throw VelociousError.safe("background job reschedule delayMs must be a non-negative safe integer")
-    }
+    rescheduledBackgroundJobAtMs(delayMs, 0)
   }
 
   /**
@@ -2143,14 +2119,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     // `execution_mode` is the single source of truth for a job's runtime and is
     // written on every enqueue; the drop-forked migration backfills any pre-existing
     // rows before the legacy `forked` column is removed.
-    const executionMode = row.execution_mode ? this._normalizeExecutionModeName(String(row.execution_mode)) : DEFAULT_EXECUTION_MODE
+    const executionMode = row.execution_mode ? this._normalizeExecutionModeName(String(row.execution_mode)) : DEFAULT_BACKGROUND_JOB_EXECUTION_MODE
 
     return {
       id: String(row.id),
       jobName: String(row.job_name),
       args: this._parseArgs(row.args_json),
       executionMode,
-      queue: row.queue ? String(row.queue) : DEFAULT_QUEUE,
+      queue: row.queue ? String(row.queue) : DEFAULT_BACKGROUND_JOB_QUEUE,
       scheduleKey: row.schedule_key ? String(row.schedule_key) : null,
       status: row.status ? String(row.status) : "queued",
       attempts: this._normalizeNumber(row.attempts),
@@ -2171,34 +2147,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
-   * Validates concurrency options.
-   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
-   * @returns {{concurrencyKey: string, maxConcurrency: number} | null} - Normalized configuration.
-   */
-  _normalizeConcurrencyOptions(options) {
-    const key = options?.concurrencyKey
-    const cap = options?.maxConcurrency
-    if (key === undefined && cap === undefined) return null
-    if (typeof key !== "string" || key.length === 0 || !Number.isInteger(cap) || Number(cap) <= 0) {
-      throw new Error("background job concurrencyKey and maxConcurrency must be paired; concurrencyKey must be non-empty and maxConcurrency must be a positive integer")
-    }
-    if (key.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX)) {
-      throw new Error(`background job concurrencyKey must not start with the reserved "${QUEUE_CONCURRENCY_KEY_PREFIX}" prefix, which is reserved for queue-derived concurrency caps`)
-    }
-    return {concurrencyKey: key, maxConcurrency: Number(cap)}
-  }
-
-  /**
    * Normalizes a job's queue name, defaulting to "default".
    * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
    * @returns {string} - Queue name.
    */
   _normalizeQueue(options) {
-    const queue = options?.queue
-
-    if (typeof queue === "string" && queue.trim().length > 0) return queue.trim()
-
-    return DEFAULT_QUEUE
+    return normalizeBackgroundJobQueue(options)
   }
 
   /**
@@ -2212,15 +2166,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {{concurrencyKey: string, maxConcurrency: number, queueDerived: boolean} | null} - Resolved concurrency.
    */
   _resolveConcurrency(options, queue) {
-    const explicit = this._normalizeConcurrencyOptions(options)
-
-    if (explicit) return {...explicit, queueDerived: false}
-
-    const cap = this._queueMaxConcurrency(queue)
-
-    if (cap === null) return null
-
-    return {concurrencyKey: `${QUEUE_CONCURRENCY_KEY_PREFIX}${queue}`, maxConcurrency: cap, queueDerived: true}
+    return normalizeBackgroundJobConcurrency({
+      options: options || {},
+      queue,
+      queues: this.configuration.getBackgroundJobsConfig().queues
+    })
   }
 
   /**
@@ -2728,21 +2678,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
    */
   _normalizeExecutionMode(options) {
-    const executionMode = options?.executionMode
-
-    if (executionMode) {
-      return this._normalizeExecutionModeName(executionMode)
-    }
-
-    // The `forked` option alias was removed. Reject it loudly instead of silently
-    // defaulting to pooled, which would turn an explicitly inline (`forked: false`)
-    // or one-shot forked (`forked: true`) job into a pooled child-runner job — a
-    // silent semantic change for any not-yet-migrated caller.
-    if (options && "forked" in options) {
-      throw new Error("The background job `forked` option was removed; pass `executionMode` (\"inline\", \"forked\", \"pooled\", or \"spawned\") instead")
-    }
-
-    return DEFAULT_EXECUTION_MODE
+    return normalizeBackgroundJobExecutionMode(options || {}, DEFAULT_BACKGROUND_JOB_EXECUTION_MODE)
   }
 
   /**
@@ -2751,11 +2687,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
    */
   _normalizeExecutionModeName(executionMode) {
-    for (const mode of EXECUTION_MODES) {
-      if (mode === executionMode) return mode
-    }
-
-    throw new Error(`Invalid background job executionMode: ${executionMode}`)
+    return normalizeBackgroundJobExecutionMode(
+      {executionMode: /** @type {import("./types.js").BackgroundJobExecutionMode} */ (executionMode)},
+      DEFAULT_BACKGROUND_JOB_EXECUTION_MODE,
+      BACKGROUND_JOB_EXECUTION_MODES
+    )
   }
 
   /**

@@ -20,9 +20,11 @@ describe("Background jobs - public browser bundle", {databaseCleaning: {transact
       stdin: {
         contents: `
           import VelociousJob from "./src/background-jobs/platform-job.js"
+          import LocalBackgroundJobsAdapter from "./src/background-jobs/local-adapter.js"
           import Configuration from "./src/configuration.js"
           import BrowserEnvironmentHandler from "./src/environment-handlers/browser.js"
           globalThis.VelociousJob = VelociousJob
+          globalThis.LocalBackgroundJobsAdapter = LocalBackgroundJobsAdapter
           globalThis.VelociousConfiguration = Configuration
           globalThis.VelociousBrowserEnvironmentHandler = BrowserEnvironmentHandler
         `,
@@ -46,6 +48,10 @@ describe("Background jobs - public browser bundle", {databaseCleaning: {transact
       "environment-handlers/node.js"
     ]) {
       expect(inputs.some((filePath) => filePath.includes(nodeOnlyPath))).toBeFalse()
+    }
+
+    for (const input of inputs) {
+      expect(result.metafile.inputs[input].imports.some((entry) => entry.path.startsWith("node:"))).toBeFalse()
     }
   })
 })
