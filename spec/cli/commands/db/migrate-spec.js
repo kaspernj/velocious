@@ -216,7 +216,9 @@ describe("Cli - Commands - db:migrate", () => {
           "users",
           "uuid_acts_as_list_items",
           "uuid_interactions",
-          "uuid_items"
+          "uuid_items",
+          "velocious_local_background_job_concurrency",
+          "velocious_local_background_jobs"
         ]
       )
 
@@ -271,7 +273,9 @@ describe("Cli - Commands - db:migrate", () => {
           "users",
           "uuid_acts_as_list_items",
           "uuid_interactions",
-          "uuid_items"
+          "uuid_items",
+          "velocious_local_background_job_concurrency",
+          "velocious_local_background_jobs"
         ]
       )
 
