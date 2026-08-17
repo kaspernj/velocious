@@ -204,6 +204,19 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   getType() { return "pgsql" }
 
   /**
+   * Whether this driver supports combining operations into one bulk `ALTER`.
+   * @returns {boolean} - Whether bulk alter is supported.
+   */
+  supportsBulkAlter() { return true }
+
+  /**
+   * Whether the bulk `ALTER` can also carry `ADD INDEX` clauses. PostgreSQL's
+   * `ALTER TABLE` cannot express index creation, so indexes stay standalone.
+   * @returns {boolean} - Whether indexes can be added inside a bulk alter.
+   */
+  supportsBulkAlterIndexes() { return false }
+
+  /**
    * Runs query actual.
    * @param {string} sql - SQL string.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.

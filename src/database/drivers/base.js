@@ -909,6 +909,25 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Whether this driver can combine unrelated alter-table operations into a
+   * single `ALTER TABLE` statement (Rails' `supports_bulk_alter`).
+   * @returns {boolean} - Whether bulk alter is supported.
+   */
+  supportsBulkAlter() {
+    return false
+  }
+
+  /**
+   * Whether a bulk `ALTER TABLE` statement can also carry `ADD INDEX` clauses.
+   * Only drivers that support this keep index adds inside the combined batch;
+   * the rest execute each index as its own statement.
+   * @returns {boolean} - Whether indexes can be added inside a bulk alter.
+   */
+  supportsBulkAlterIndexes() {
+    return false
+  }
+
+  /**
    * Runs insert.
    * @param {InsertSqlArgsType} args - Options object.
    * @returns {Promise<void>} - Resolves when complete.
