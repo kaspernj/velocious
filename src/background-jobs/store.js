@@ -54,6 +54,8 @@ export const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts"
 export const BACKGROUND_JOB_COUNT_BUCKETS = ["all", "queued", "handed_off", "completed", "failed", "orphaned"]
 const COUNTED_JOB_STATUSES = BACKGROUND_JOB_COUNT_BUCKETS.slice(1)
 const DEFAULT_MAX_RETRIES = 10
+const MAX_JOB_TIMEOUT_MS = 2_147_483_647
+const JOB_TIMEOUT_VALIDATION_MESSAGE = `background job timeoutMs must be a finite non-positive number or an integer between 1 and ${MAX_JOB_TIMEOUT_MS}`
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
 /**
  * Execution modes.
@@ -500,7 +502,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       queue: preparedJob.queue,
       scheduledAtMs: options.scheduledAtMs === undefined ? null : preparedJob.scheduledAtMs,
       scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled",
-      timeoutMs: preparedJob.timeoutMs
+      ...(preparedJob.timeoutMs === null ? {} : {timeoutMs: preparedJob.timeoutMs})
     })
 
     return createHash("sha256").update(serialized).digest("hex")
@@ -1348,9 +1350,19 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   _normalizeJobTimeoutMs(options) {
     if (options?.timeoutMs === undefined) return null
 
-    if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) return 0
+    const timeoutMs = options.timeoutMs
 
-    return options.timeoutMs
+    if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs)) {
+      throw VelociousError.safe(JOB_TIMEOUT_VALIDATION_MESSAGE)
+    }
+
+    if (timeoutMs <= 0) return 0
+
+    if (!Number.isInteger(timeoutMs) || timeoutMs > MAX_JOB_TIMEOUT_MS) {
+      throw VelociousError.safe(JOB_TIMEOUT_VALIDATION_MESSAGE)
+    }
+
+    return timeoutMs
   }
 
   /**

@@ -114,6 +114,20 @@ describe("Background jobs - idempotent enqueue store", {databaseCleaning: {trans
       .toThrow(/idempotency key.*different/i)
     await expect(async () => await store.enqueue({...base, options: {...base.options, maxConcurrency: 2}}))
       .toThrow(/idempotency key.*different/i)
+    await expect(async () => await store.enqueue({...base, options: {...base.options, timeoutMs: 15_000}}))
+      .toThrow(/idempotency key.*different/i)
+  })
+
+  it("keeps omitted timeoutMs compatible with existing idempotent replay identity", async () => {
+    if (!store) throw new Error("Expected store")
+    const request = {
+      args: ["upgrade-safe"],
+      jobName: "IdempotentTimeoutJob",
+      options: {executionMode: "pooled", idempotencyKey: "timeout:omitted"}
+    }
+    const jobId = await store.enqueue(request)
+
+    expect(await store.enqueue(request)).toEqual(jobId)
   })
 
   it("creates and restores durable ownership schema", async () => {

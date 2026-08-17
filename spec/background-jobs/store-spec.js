@@ -1021,6 +1021,31 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {scheduledAtMs: Number.POSITIVE_INFINITY}})).toThrow(/scheduledAtMs/)
   })
 
+  it("persists supported timeoutMs values and normalizes finite non-positive values to disabled", async () => {
+    const store = await createClearedStore()
+    const enabledId = await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: 15_000}})
+    const zeroId = await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: 0}})
+    const negativeId = await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: -1.5}})
+    const fallbackId = await store.enqueue({jobName: "TestJob", args: [], options: {}})
+
+    expect((await getJobOrFail({jobId: enabledId, store})).timeoutMs).toEqual(15_000)
+    expect((await getJobOrFail({jobId: zeroId, store})).timeoutMs).toEqual(0)
+    expect((await getJobOrFail({jobId: negativeId, store})).timeoutMs).toEqual(0)
+    expect((await getJobOrFail({jobId: fallbackId, store})).timeoutMs).toEqual(null)
+  })
+
+  it("rejects timeoutMs values that cannot be persisted and scheduled as Node timers", async () => {
+    const store = await createClearedStore()
+    const expectedError = /timeoutMs must be a finite non-positive number or an integer between 1 and 2147483647/
+
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: Number.NaN}})).toThrow(expectedError)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: Number.POSITIVE_INFINITY}})).toThrow(expectedError)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: 1.5}})).toThrow(expectedError)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: {timeoutMs: 2_147_483_648}})).toThrow(expectedError)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: JSON.parse('{"timeoutMs":"15000"}')})).toThrow(expectedError)
+    await expect(async () => await store.enqueue({jobName: "TestJob", args: [], options: JSON.parse('{"timeoutMs":null}')})).toThrow(expectedError)
+  })
+
   it("returns null from nextScheduledJob when no future-scheduled jobs exist", async () => {
     const store = await createClearedStore()
 

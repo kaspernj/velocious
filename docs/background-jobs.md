@@ -421,9 +421,12 @@ in-flight jobs and exit.
 
 Set `options.timeoutMs` on an individual forked or pooled job when its safe
 runtime ceiling differs from the worker default. A positive per-job value takes
-precedence over `backgroundJobs.jobTimeoutMs`; `0`, a negative value, or a
-non-finite value disables the backstop for that job. Omitting `timeoutMs` keeps
-the worker-level setting as the fallback.
+precedence over `backgroundJobs.jobTimeoutMs`; a non-positive finite value
+disables the backstop for that job. Positive values
+must be integers no greater than `2_147_483_647` (Node's maximum supported timer);
+wrong types, non-finite values, fractions, and larger values are rejected before
+the job is persisted. Omitting `timeoutMs` keeps the worker-level setting as the
+fallback.
 
 ```js
 await BuildJob.performLaterWithOptions({
