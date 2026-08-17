@@ -3,7 +3,7 @@
 import BackgroundJobsScheduler from "../../src/background-jobs/scheduler.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
-describe("Background jobs - scheduler overlapping intervals", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - scheduler overlapping intervals", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("keeps one enqueue in flight when another interval tick fires", async () => {
     const originalSetInterval = globalThis.setInterval
     const originalSetTimeout = globalThis.setTimeout
@@ -71,5 +71,25 @@ describe("Background jobs - scheduler overlapping intervals", {databaseCleaning:
       globalThis.clearInterval = originalClearInterval
       globalThis.clearTimeout = originalClearTimeout
     }
+  })
+
+  it("allows the next interval tick after an enqueue failure", async () => {
+    const scheduler = new BackgroundJobsScheduler({
+      configuration: {
+        async getScheduledBackgroundJobsConfig() {
+          return {jobs: {}}
+        }
+      },
+      enqueueJob: async () => {
+        throw new Error("controlled enqueue failure")
+      }
+    })
+    const jobConfiguration = {class: TestJob, every: 1}
+
+    await scheduler.runScheduledJob({jobConfiguration, jobKey: "scheduledTestJob"})
+    expect(scheduler.pendingEnqueuesByJobKey.has("scheduledTestJob")).toBeFalse()
+
+    await scheduler.runScheduledJob({jobConfiguration, jobKey: "scheduledTestJob"})
+    expect(scheduler.pendingEnqueuesByJobKey.has("scheduledTestJob")).toBeFalse()
   })
 })
