@@ -682,13 +682,16 @@ export default class TestRunner {
   }
 
   /**
-   * Checks whether a prepared broker coordinates every selected physical connection.
+   * Checks whether a prepared broker coordinates exactly the selected physical connections.
    * @param {SharedTransactionBrokerRegistration | undefined} registration - Prepared coordinator.
    * @param {Record<string, import("../database/drivers/base.js").default>} connections - Selected connections.
-   * @returns {boolean} - Whether every selected connection is already coordinated.
+   * @returns {boolean} - Whether the identifier set and physical connections match exactly.
    */
   sharedTransactionBrokerMatchesConnections(registration, connections) {
-    if (!registration || Object.keys(connections).length === 0) return false
+    const identifiers = Object.keys(connections)
+
+    if (!registration || identifiers.length === 0) return false
+    if (Object.keys(registration.broker.connections).length !== identifiers.length) return false
 
     for (const [identifier, connection] of Object.entries(connections)) {
       if (registration.broker.connections[identifier] !== connection) return false

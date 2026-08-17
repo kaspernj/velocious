@@ -29,6 +29,27 @@ class BrokerLifecycleConnection extends DatabaseDriverBase {
   async _queryActual() { return [] }
 }
 
+/** @returns {Configuration} - Minimal broker lifecycle configuration. */
+function brokerLifecycleConfiguration() {
+  return new Configuration({
+    database: {test: {}},
+    directory: process.cwd(),
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
+}
+
+class ReplacingConnectionTestRunner extends TestRunner {
+  /** @type {Record<string, DatabaseDriverBase>} */
+  currentConnections = {}
+
+  sharedTransactionConnections() { return this.currentConnections }
+}
+
 describe("TestRunner shared transaction broker registration", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("registers multiple active non-tenant databases and explicitly excludes tenant-only connections", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-shared-transaction-registration")
@@ -68,24 +89,7 @@ describe("TestRunner shared transaction broker registration", {databaseCleaning:
   })
 
   it("replaces a pre-hook broker when the active transaction uses a new physical connection", async () => {
-    const configuration = new Configuration({
-      database: {test: {}},
-      directory: process.cwd(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"]
-    })
-
-    class ReplacingConnectionTestRunner extends TestRunner {
-      /** @type {Record<string, DatabaseDriverBase>} */
-      currentConnections = {}
-
-      sharedTransactionConnections() { return this.currentConnections }
-    }
-
+    const configuration = brokerLifecycleConfiguration()
     const firstConnection = new BrokerLifecycleConnection({}, configuration)
     const secondConnection = new BrokerLifecycleConnection({}, configuration)
     const testRunner = new ReplacingConnectionTestRunner({configuration, testFiles: []})
@@ -100,6 +104,28 @@ describe("TestRunner shared transaction broker registration", {databaseCleaning:
 
       expect(registration?.broker.connections.default).toBe(secondConnection)
       expect(preparation?.broker.accepting).toBe(false)
+    } finally {
+      await testRunner.stopSharedTransactionBroker(registration || preparation)
+    }
+  })
+
+  it("replaces a pre-hook broker when the active identifier set becomes a strict subset", async () => {
+    const configuration = brokerLifecycleConfiguration()
+    const defaultConnection = new BrokerLifecycleConnection({}, configuration)
+    const auditConnection = new BrokerLifecycleConnection({}, configuration)
+    const testRunner = new ReplacingConnectionTestRunner({configuration, testFiles: []})
+    testRunner.currentConnections = {audit: auditConnection, default: defaultConnection}
+    const preparation = await testRunner.prepareSharedTransactionBroker()
+    let registration
+
+    try {
+      defaultConnection.transactionActive = true
+      testRunner.currentConnections = {default: defaultConnection}
+      registration = await testRunner.startSharedTransactionBroker(preparation)
+
+      expect(registration?.broker === preparation?.broker).toEqual(false)
+      expect(preparation?.broker.accepting).toBe(false)
+      expect(Object.keys(registration?.broker.connections || {})).toEqual(["default"])
     } finally {
       await testRunner.stopSharedTransactionBroker(registration || preparation)
     }
