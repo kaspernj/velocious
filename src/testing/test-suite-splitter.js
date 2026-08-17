@@ -2,6 +2,7 @@
 
 import path from "path"
 import restArgsError from "../utils/rest-args-error.js"
+import { canonicalTimingManifestPath } from "./timing-manifest.js"
 
 /**
  * SplitterFileEntry type.
@@ -95,14 +96,13 @@ export default class TestSuiteSplitter {
    * @returns {number} - Weight value.
    */
   computeWeight(filePath) {
-    const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
-    const projectRelativePath = this.normalizeRelativePath(path.join(path.basename(this._baseDirectory), relativePath))
-    const duration = this._timingManifest[relativePath] ?? this._timingManifest[projectRelativePath]
+    const duration = this.timingManifestDuration(filePath)
 
-    if (duration !== undefined) {
+    if (duration !== undefined && duration > 0) {
       return duration
     }
 
+    const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
     let weight = DEFAULT_WEIGHT
 
     // Extract the type directory from the relative path.
@@ -139,8 +139,12 @@ export default class TestSuiteSplitter {
     }
 
     for (const [filePath, duration] of Object.entries(timingManifest)) {
-      if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+      if (typeof duration !== "number" || !Number.isFinite(duration) || duration < 0) continue
+
+      try {
         normalized[this.normalizeRelativePath(filePath)] = duration
+      } catch (error) {
+        if (!(error instanceof Error)) throw error
       }
     }
 
@@ -153,9 +157,61 @@ export default class TestSuiteSplitter {
    * @returns {string} - Normalized relative test path.
    */
   normalizeRelativePath(filePath) {
-    return filePath
-      .replaceAll("\\", "/")
-      .replace(/^\.\//, "")
+    return canonicalTimingManifestPath(filePath)
+  }
+
+  /**
+   * Returns the first manifest entry matching a discovered test file.
+   * @param {string} filePath - Absolute test file path.
+   * @returns {number | undefined} - Recorded duration, including zero.
+   */
+  timingManifestDuration(filePath) {
+    for (const manifestPath of this.timingManifestPaths(filePath)) {
+      if (Object.hasOwn(this._timingManifest, manifestPath)) return this._timingManifest[manifestPath]
+    }
+
+    return undefined
+  }
+
+  /**
+   * Returns compatible manifest keys for one discovered file.
+   * @param {string} filePath - Absolute test file path.
+   * @returns {string[]} - Canonical keys in matching priority order.
+   */
+  timingManifestPaths(filePath) {
+    const relativePath = this.normalizeRelativePath(path.relative(this._baseDirectory, filePath))
+    const projectRelativePath = this.normalizeRelativePath(path.join(path.basename(this._baseDirectory), relativePath))
+
+    return relativePath === projectRelativePath ? [relativePath] : [relativePath, projectRelativePath]
+  }
+
+  /**
+   * Summarizes timing-history coverage for the complete discovered suite.
+   * @returns {{heuristicFiles: number, measuredFiles: number, staleEntries: number}} - Compact coverage counts.
+   */
+  getTimingManifestCoverage() {
+    const matchedManifestPaths = new Set()
+    let measuredFiles = 0
+
+    for (const filePath of this._testFiles) {
+      let matchedDuration
+
+      for (const manifestPath of this.timingManifestPaths(filePath)) {
+        if (!Object.hasOwn(this._timingManifest, manifestPath)) continue
+
+        matchedManifestPaths.add(manifestPath)
+        matchedDuration = this._timingManifest[manifestPath]
+        break
+      }
+
+      if (matchedDuration !== undefined && matchedDuration > 0) measuredFiles++
+    }
+
+    return {
+      heuristicFiles: this._testFiles.length - measuredFiles,
+      measuredFiles,
+      staleEntries: Object.keys(this._timingManifest).length - matchedManifestPaths.size
+    }
   }
 
   /**

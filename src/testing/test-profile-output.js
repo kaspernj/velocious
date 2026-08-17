@@ -3,6 +3,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { roundProfileDuration } from "./test-profiler.js"
+import { validateTimingManifest } from "./timing-manifest.js"
 
 const FORBIDDEN_PROFILE_FIELDS = new Set([
   "bind",
@@ -156,18 +157,32 @@ async function atomicWrite(outputPath, content) {
 export function timingManifestFromProfile(profile) {
   /** @type {Record<string, number>} */
   const manifest = {}
+  const validatedManifest = validateTimingManifest(profile.timingManifest || {}, {source: "Test profile timing manifest"})
 
-  for (const filePath of Object.keys(profile.timingManifest || {}).sort()) {
-    const durationMs = profile.timingManifest[filePath]
-
-    if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 0) {
-      throw new Error(`Invalid timing manifest duration for ${filePath}`)
-    }
-
+  for (const [filePath, durationMs] of Object.entries(validatedManifest)) {
     manifest[filePath] = roundProfileDuration(durationMs)
   }
 
   return manifest
+}
+
+/**
+ * Atomically writes a canonical splitter-compatible timing manifest.
+ * @param {object} args - Output arguments.
+ * @param {string} args.outputPath - Final output path.
+ * @param {Record<string, number>} args.timingManifest - Validated or candidate timing manifest.
+ * @returns {Promise<void>} - Resolves after atomic replacement.
+ */
+export async function writeTimingManifest({outputPath, timingManifest}) {
+  const normalized = validateTimingManifest(timingManifest)
+  /** @type {Record<string, number>} */
+  const rounded = {}
+
+  for (const [filePath, durationMs] of Object.entries(normalized)) {
+    rounded[filePath] = roundProfileDuration(durationMs)
+  }
+
+  await atomicWrite(outputPath, `${JSON.stringify(rounded, null, 2)}\n`)
 }
 
 /**
@@ -189,7 +204,7 @@ export async function writeTestProfileOutputs({profile, profileJsonPath, timingM
   }
 
   if (timingManifestOutputPath) {
-    await atomicWrite(timingManifestOutputPath, `${JSON.stringify(timingManifest, null, 2)}\n`)
+    await writeTimingManifest({outputPath: timingManifestOutputPath, timingManifest})
   }
 }
 

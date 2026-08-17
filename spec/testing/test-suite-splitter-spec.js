@@ -258,6 +258,30 @@ describe("TestSuiteSplitter", {databaseCleaning: {transaction: true}}, () => {
     ])
   })
 
+  it("reports compact measured heuristic and stale timing coverage", () => {
+    const splitter = new TestSuiteSplitter({
+      groups: 1,
+      groupNumber: 1,
+      testFiles: [
+        "/project/spec/models/measured-spec.js",
+        "/project/spec/system/zero-spec.js",
+        "/project/spec/controller/missing-spec.js"
+      ],
+      baseDirectory: "/project",
+      timingManifest: {
+        "spec/models/measured-spec.js": 12,
+        "spec/system/zero-spec.js": 0,
+        "spec/stale/removed-spec.js": 99
+      }
+    })
+
+    expect(splitter.getTimingManifestCoverage()).toEqual({
+      heuristicFiles: 2,
+      measuredFiles: 1,
+      staleEntries: 1
+    })
+  })
+
   it("falls back per file for malformed unknown and unusable timing entries", () => {
     const testFiles = [
       "/project/spec/system/zero-spec.js",

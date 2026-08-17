@@ -125,7 +125,7 @@ reusable file weights, enable the opt-in [test profiler](test-profiling.md).
 ## Duration-aware parallel sharding
 Pass `--timing-manifest=<path>` together with `--groups` and `--group-number` to
 weight discovered test files by recorded wall-clock duration. The JSON object maps
-normalized project-relative test paths to positive finite numbers:
+normalized relative test paths to finite non-negative numbers:
 
 ```json
 {
@@ -135,13 +135,21 @@ normalized project-relative test paths to positive finite numbers:
 ```
 
 Forward slashes are the portable manifest format; leading `./` and backslashes are
-normalized when reading keys. A valid duration takes precedence over the static
-directory/browser heuristic for that file. Missing paths, unknown paths, non-number,
-non-positive, or non-finite durations fall back per file. Missing, unreadable, or
-malformed JSON manifests also leave the existing deterministic heuristic intact.
-Generate a compatible sorted manifest from a representative run with
-`--timing-manifest-output <path>`; see [test profiling](test-profiling.md#timing-manifest-ownership)
-for file ownership and retry/hook accounting.
+normalized when reading keys; redundant separators and `.` segments are
+collapsed. Empty, absolute, drive-qualified, escaping `..`, colliding normalized
+paths, and invalid durations are rejected. An explicitly supplied manifest must
+be readable, valid JSON, and a plain object; corruption fails the command instead
+of silently disabling timing. Positive durations take precedence over the static
+directory/browser heuristic. Zero durations and missing/new paths use the
+heuristic, while stale keys are ignored. An empty object is valid. Velocious prints
+one compact measured/heuristic/stale coverage line when consuming timing history.
+
+Generate a compatible sorted manifest from one representative unsharded run with
+`--timing-manifest-output <path>`. For parallel profiling, write one rich
+`--profile-json` document per shard and merge the complete set with
+`velocious test:timing-manifest:merge`; see
+[test profiling](test-profiling.md#merging-parallel-profiles) for the strict
+completeness contract and path semantics.
 
 ## Avoiding fixed sleeps
 Never `await wait(<fixed ms>)` to let something async settle — it is both slow and

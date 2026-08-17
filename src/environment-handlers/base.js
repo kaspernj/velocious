@@ -407,6 +407,15 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * Runs cli commands test timing manifest merge.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsTestTimingManifestMerge(_command) {
+    throw new Error("cliCommandsTestTimingManifestMerge not implemented")
+  }
+
+  /**
    * Runs cli commands background jobs main.
    * @param {import("../cli/base-command.js").default} _command - Command.
    * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.

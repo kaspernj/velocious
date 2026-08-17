@@ -10,6 +10,11 @@ import { formatTestProfileSummary, writeTestProfileOutputs } from "../../../../t
 import TestRunner from "../../../../testing/test-runner.js"
 import TestSuiteSplitter from "../../../../testing/test-suite-splitter.js"
 import { normalizeExamplePatterns, parseFilters } from "../../../../testing/test-filter-parser.js"
+import {
+  canonicalTimingManifestPath,
+  timingManifestFileSetHash,
+  validateTimingManifest
+} from "../../../../testing/timing-manifest.js"
 import { prepareSourcePeerPackage } from "../../source-peer-package.js"
 
 export default class VelociousCliCommandsTest extends BaseCommand {
@@ -96,6 +101,20 @@ export default class VelociousCliCommandsTest extends BaseCommand {
     try {
       const discoverTestFiles = async () => {
         let discoveredTestFiles = await testFilesFinder.findTestFiles()
+        const lineFilters = testFilesFinder.getLineFiltersByFile()
+
+        if (profiler) {
+          const discoveredFilePaths = discoveredTestFiles.map((filePath) => {
+            return canonicalTimingManifestPath(path.relative(directory, filePath))
+          })
+
+          profiler.setSelection({
+            discoveredFileCount: discoveredTestFiles.length,
+            hasLineFilters: Object.keys(lineFilters).length > 0,
+            pathBase: process.env.VELOCIOUS_TEST_DIR ? "test-directory" : "configuration-directory",
+            testFileSetHash: timingManifestFileSetHash(discoveredFilePaths)
+          })
+        }
 
         if (groups !== undefined || groupNumber !== undefined) {
           if (groups === undefined || groupNumber === undefined) {
@@ -110,6 +129,15 @@ export default class VelociousCliCommandsTest extends BaseCommand {
             baseDirectory: directory,
             timingManifest
           })
+
+          if (profileOptions.timingManifestPath) {
+            const coverage = splitter.getTimingManifestCoverage()
+
+            console.log(picocolors.cyan(
+              `Timing manifest coverage: measured=${coverage.measuredFiles} ` +
+              `heuristic=${coverage.heuristicFiles} stale=${coverage.staleEntries}`
+            ))
+          }
 
           discoveredTestFiles = splitter.getGroupFiles()
           console.log(picocolors.cyan(`Running group ${groupNumber} of ${groups} (${discoveredTestFiles.length} files)`))
@@ -277,20 +305,30 @@ export function resolveTestProfileOptions({cwd, profile, profileJsonPath, timing
 }
 
 /**
- * Loads an optional JSON timing manifest. Unreadable or malformed input intentionally falls back to heuristics.
+ * Loads and validates an explicitly supplied plain JSON timing manifest.
  * @param {string | undefined} timingManifestPath - Timing manifest path.
- * @returns {Promise<ReturnType<typeof JSON.parse> | undefined>} - Parsed manifest when readable and valid JSON.
+ * @returns {Promise<Record<string, number> | undefined>} - Canonical manifest, or undefined when not requested.
  */
 export async function loadTimingManifest(timingManifestPath) {
   if (!timingManifestPath) return undefined
 
-  try {
-    return JSON.parse(await fs.readFile(timingManifestPath, "utf8"))
-  } catch (error) {
-    if (error instanceof Error) return undefined
+  let content
 
-    throw error
+  try {
+    content = await fs.readFile(timingManifestPath, "utf8")
+  } catch (error) {
+    throw new Error(`Failed to read timing manifest: ${timingManifestPath}`, {cause: error})
   }
+
+  let parsed
+
+  try {
+    parsed = JSON.parse(content)
+  } catch (error) {
+    throw new Error(`Failed to parse timing manifest: ${timingManifestPath}`, {cause: error})
+  }
+
+  return validateTimingManifest(parsed, {source: `Timing manifest ${timingManifestPath}`})
 }
 
 /**

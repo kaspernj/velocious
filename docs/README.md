@@ -28,7 +28,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/sqlite-web-persistence.md`: SQLite web persistence backend auto-selection: OPFS, IndexedDB, and legacy-byte migration.
 - `docs/tenant-databases.md`: Tenant-only database identifiers and tenant lifecycle commands.
 - `docs/tenant-selected-database-generation.md`: Explicit, immutable tenant database selection for base-model and structure generation.
-- `docs/test-profiling.md`: Opt-in test profiling, rich JSON/privacy guarantees, custom activity spans, and timing-manifest generation.
+- `docs/test-profiling.md`: Opt-in test profiling, rich JSON/privacy guarantees, custom activity spans, timing-manifest generation, and strict shard aggregation.
 - `docs/frontend-model-resources.md`: Resource recipe requirements for generated frontend models.
 - `docs/translations.md`: Translated record attributes, `currentTranslation`, and translated frontend-model sorting.
 - `docs/routing-hooks-and-autoroutes.md`: Route hook support and frontend-model autoroute behavior.
