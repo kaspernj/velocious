@@ -52,6 +52,8 @@ const EXPECTED_JOB_COLUMNS = [
   "max_concurrency"
 ]
 const EXPECTED_CONCURRENCY_COLUMNS = ["concurrency_key", "max_concurrency", "active_count"]
+/** @type {WeakMap<import("../configuration.js").default, Map<string, Promise<void>>>} */
+const deduplicatedEnqueueChains = new WeakMap()
 
 /**
  * Creates the production clock used by local dispatch.
@@ -377,40 +379,99 @@ export default class LocalBackgroundJobsStore {
     await this.ensureReady()
 
     const preparedJob = this._prepareJob({args, jobName, options})
+    const mutate = async (holdUntil = (/** @type {Promise<void>} */ _completion) => {}) => await this._withDb(async (connection) => {
+      if (connection.insideTransaction()) holdUntil(connection.transactionCompletion())
 
-    return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
-      let jobId = preparedJob.jobId
+      return await this._mutate(connection, async (db) => {
+        let jobId = preparedJob.jobId
 
-      if (preparedJob.concurrency) await this._ensureConcurrency(db, preparedJob.concurrency)
+        if (preparedJob.concurrency) await this._ensureConcurrency(db, preparedJob.concurrency)
 
-      if (options.deduplicateWhileQueued) {
-        const existing = await db
-          .newQuery()
-          .from(LOCAL_BACKGROUND_JOBS_TABLE)
-          .select("id")
-          .where({
-            args_digest: preparedJob.argsDigest,
-            args_json: preparedJob.argsJson,
-            job_name: preparedJob.jobName,
-            queue: preparedJob.queue,
-            status: "queued"
-          })
-          .where(`scheduled_at_ms <= ${db.quote(preparedJob.scheduledAtMs)}`)
-          .order("scheduled_at_ms ASC")
-          .order("created_at_ms ASC")
-          .limit(1)
-          .results()
+        if (options.deduplicateWhileQueued) {
+          const existing = await db
+            .newQuery()
+            .from(LOCAL_BACKGROUND_JOBS_TABLE)
+            .select("id")
+            .where({
+              args_digest: preparedJob.argsDigest,
+              args_json: preparedJob.argsJson,
+              job_name: preparedJob.jobName,
+              queue: preparedJob.queue,
+              status: "queued"
+            })
+            .where(`scheduled_at_ms <= ${db.quote(preparedJob.scheduledAtMs)}`)
+            .order("scheduled_at_ms ASC")
+            .order("created_at_ms ASC")
+            .limit(1)
+            .results()
 
-        const existingRow = /** @type {{id: string | number} | undefined} */ (existing[0])
+          const existingRow = /** @type {{id: string | number} | undefined} */ (existing[0])
 
-        if (existingRow) jobId = String(existingRow.id)
+          if (existingRow) jobId = String(existingRow.id)
+        }
+
+        if (jobId === preparedJob.jobId) await this._insertPreparedJob(db, preparedJob)
+        if (this.onCommittedEnqueue) await db.afterCommit(this.onCommittedEnqueue)
+
+        return jobId
+      })
+    })
+
+    if (options.deduplicateWhileQueued) return await this._serializeDeduplicatedEnqueue(preparedJob, mutate)
+    return await mutate()
+  }
+
+  /**
+   * Serializes matching in-process deduplication checks through commit while
+   * leaving unrelated job identities independent.
+   * @template T
+   * @param {import("./types.js").PreparedLocalBackgroundJob} preparedJob - Prepared job identity.
+   * @param {(holdUntil: (completion: Promise<void>) => void) => Promise<T>} callback - Deduplication mutation.
+   * @returns {Promise<T>} - Mutation result.
+   */
+  async _serializeDeduplicatedEnqueue(preparedJob, callback) {
+    let chains = deduplicatedEnqueueChains.get(this.configuration)
+
+    if (!chains) {
+      chains = new Map()
+      deduplicatedEnqueueChains.set(this.configuration, chains)
+    }
+
+    const key = sha256Hex(JSON.stringify([
+      this.getDatabaseIdentifier(),
+      preparedJob.jobName,
+      preparedJob.argsDigest,
+      preparedJob.queue
+    ]))
+    const previous = chains.get(key) || Promise.resolve()
+    let release = () => {}
+    const running = new Promise((resolve) => { release = () => resolve(undefined) })
+    const chain = previous.then(() => running)
+    /** @type {Promise<void> | undefined} */
+    let completion
+    const finish = () => {
+      release()
+      if (chains.get(key) === chain) chains.delete(key)
+      if (chains.size === 0) deduplicatedEnqueueChains.delete(this.configuration)
+    }
+
+    chains.set(key, chain)
+    await previous
+
+    try {
+      const result = await callback((transactionCompletion) => { completion = transactionCompletion })
+
+      if (completion) {
+        completion.then(finish, finish)
+      } else {
+        finish()
       }
 
-      if (jobId === preparedJob.jobId) await this._insertPreparedJob(db, preparedJob)
-      if (this.onCommittedEnqueue) await db.afterCommit(this.onCommittedEnqueue)
-
-      return jobId
-    }))
+      return result
+    } catch (error) {
+      finish()
+      throw error
+    }
   }
 
   /**

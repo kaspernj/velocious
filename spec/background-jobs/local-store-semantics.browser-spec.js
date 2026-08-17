@@ -65,4 +65,34 @@ describe("Local background jobs store - queue semantics", {tags: ["dummy"], data
     expect((await store.getJob(jobId))?.concurrencyKey).toEqual(null)
     expect((await store.getJob(jobId))?.maxConcurrency).toEqual(null)
   })
+
+  it("serializes one deduplication identity without blocking unrelated jobs", async () => {
+    const store = new LocalBackgroundJobsStore({configuration: Configuration.current()})
+    const matchingJob = store._prepareJob({args: [1], jobName: "UploadJob", options: {queue: "uploads"}})
+    const unrelatedJob = store._prepareJob({args: [2], jobName: "UploadJob", options: {queue: "uploads"}})
+    let releaseFirst = () => {}
+    let markFirstEntered = () => {}
+    const firstEntered = new Promise((resolve) => { markFirstEntered = resolve })
+    /** @type {Promise<void>} */
+    const holdFirst = new Promise((resolve) => { releaseFirst = resolve })
+    let matchingEntered = false
+    let unrelatedEntered = false
+    const first = store._serializeDeduplicatedEnqueue(matchingJob, async (holdUntil) => {
+      markFirstEntered()
+      holdUntil(holdFirst)
+    })
+
+    await firstEntered
+    await first
+
+    const matching = store._serializeDeduplicatedEnqueue(matchingJob, async () => { matchingEntered = true })
+    const unrelated = store._serializeDeduplicatedEnqueue(unrelatedJob, async () => { unrelatedEntered = true })
+
+    await unrelated
+    expect(unrelatedEntered).toEqual(true)
+    expect(matchingEntered).toEqual(false)
+    releaseFirst()
+    await matching
+    expect(matchingEntered).toEqual(true)
+  })
 })
