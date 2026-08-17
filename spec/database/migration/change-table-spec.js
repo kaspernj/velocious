@@ -131,6 +131,20 @@ describe("database - migration - changeTable", {databaseCleaning: {transaction: 
     expect(driver.alterCalls[0].getIndexes()).toHaveLength(2)
   })
 
+  it("flushes a recorded index batch before a later column to preserve declaration order", async () => {
+    const {driver, migration} = buildMigration({type: "mysql"})
+
+    await migration.changeTable("tasks", {bulk: true}, (table) => {
+      table.index(["title"], {name: "index_tasks_on_title"})
+      table.string("title")
+    })
+
+    expect(driver.queries).toEqual([
+      "ALTER TABLE `tasks` ADD INDEX `index_tasks_on_title` (`title`)",
+      "ALTER TABLE `tasks` ADD COLUMN `title` VARCHAR(255)"
+    ])
+  })
+
   it("emits no SQL for an empty callback", async () => {
     const callbackOnly = buildMigration({type: "mysql"})
 

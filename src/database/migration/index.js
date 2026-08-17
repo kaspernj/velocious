@@ -780,10 +780,18 @@ export default class VelociousDatabaseMigration {
         case "addColumn": {
           if (!operation.columnType) throw new Error("No column type given")
 
+          // Flush an already-recorded index batch first so the emitted SQL keeps
+          // the recorded declaration order (index before column).
+          if (batch.getIndexes().length > 0) await flushBatch()
+
           batch.addColumn(new TableColumn(operation.columnName, Object.assign({isNewColumn: true, type: operation.columnType}, operation.args)))
           break
         }
         case "removeColumn":
+          // Flush an already-recorded index batch first so the emitted SQL keeps
+          // the recorded declaration order (index before column).
+          if (batch.getIndexes().length > 0) await flushBatch()
+
           batch.addColumn(new TableColumn(operation.columnName, {dropColumn: true}))
           break
         case "addIndex":
