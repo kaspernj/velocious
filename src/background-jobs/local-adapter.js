@@ -107,7 +107,7 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
 
   /**
    * Claims one queued local job.
-   * @param {{jobId: string, workerId?: string}} args - Claim request.
+   * @param {import("./types.js").BackgroundJobHandoffRequest} args - Claim request. A supplied handoff id is persisted exactly.
    * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Handoff.
    */
   async markHandedOff(args) { return await this.store.markHandedOff(args) }

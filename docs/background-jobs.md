@@ -90,6 +90,19 @@ Methods that accept worker reports must preserve the existing lease-fencing and
 at-least-once semantics. `health()` returns `{ready: boolean}`; the mounted health
 endpoint reports `503` when an adapter explicitly reports `ready: false`.
 
+`background-jobs-main` calls
+`markHandedOff({jobId, handoffId, workerId})` with a caller-generated
+`handoffId`. A custom adapter must atomically persist that exact id when it wins
+the queued-to-`handed_off` transition and return it in the
+`BackgroundJobHandoff`. This lets the main safely call
+`markReturnedToQueue({jobId, handoffId})` when the claim throws after an
+ambiguous commit: the return either releases that exact lease or does nothing if
+the claim never committed or a newer lease now owns the job. The built-in SQL
+and local adapters still generate an id when legacy direct callers omit it, but
+a custom adapter used by the main must honor a supplied id. Upgrade that adapter
+implementation together with the Velocious main; the worker wire protocol is
+unchanged.
+
 The built-in adapter is available at
 `velocious/build/src/background-jobs/sql-adapter.js`. It subclasses the existing
 `BackgroundJobsStore`, so existing direct store imports and every current SQL
@@ -257,6 +270,16 @@ Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`)
 ## Worker Disconnect Recovery
 
 Each durable worker handoff has a unique lease id. If a worker socket disconnects unexpectedly, `background-jobs-main` immediately returns only the jobs handed to that exact socket to the queue and makes them available to another connected worker. Two connections that advertise the same worker id remain isolated from each other.
+
+The main chooses the lease id before persistence. If `markHandedOff` throws, it
+conditionally returns only that id, including when the database committed but
+the acknowledgement was lost. A failed recovery read/return stays in the main's
+recovery ledger and is retried through the dispatch error-retry path; a later
+lease is never selected by timestamp or worker id and therefore cannot be
+requeued by the stale recovery. Because no job reached the selected worker, its
+consumed admission is restored only while that exact socket remains connected
+and non-draining. A readiness advertisement received during persistence is
+authoritative, so pooled capacity is not double-credited.
 
 Disconnect recovery provides at-least-once delivery: a disconnected worker may already have started external side effects before the replacement attempt begins. Completion and failure reports carry the lease id and update the database only while that exact handoff is still active, so a late report from the disconnected attempt cannot complete or fail a newer attempt.
 
