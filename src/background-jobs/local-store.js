@@ -693,10 +693,10 @@ export default class LocalBackgroundJobsStore {
 
   /**
    * Atomically reserves concurrency and claims one queued job.
-   * @param {{jobId: string, workerId?: string}} args - Claim request.
+   * @param {import("./types.js").BackgroundJobHandoffRequest} args - Claim request. A supplied handoff id is persisted exactly.
    * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Fenced claim.
    */
-  async markHandedOff({jobId, workerId}) {
+  async markHandedOff({jobId, handoffId = new UUID(4).format(), workerId}) {
     await this.ensureReady()
 
     return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
@@ -706,7 +706,6 @@ export default class LocalBackgroundJobsStore {
       if (job.concurrencyKey && !(await this._reserveConcurrency(db, job.concurrencyKey))) return null
 
       const handedOffAtMs = this.clock.now()
-      const handoffId = new UUID(4).format()
       const affectedRows = await this._updateAffectedRows(db, {
         conditions: {id: jobId, status: "queued"},
         data: {handed_off_at_ms: handedOffAtMs, handoff_id: handoffId, status: "handed_off", worker_id: workerId || "local"},

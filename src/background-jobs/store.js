@@ -916,10 +916,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * Runs mark handed off.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
+   * @param {string} [args.handoffId] - Caller-selected exact lease id. Generated for legacy direct callers when omitted.
    * @param {string} [args.workerId] - Worker id.
    * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Claimed handoff lease, or null when no longer queued.
    */
-  async markHandedOff({jobId, workerId}) {
+  async markHandedOff({jobId, handoffId = randomUUID(), workerId}) {
     await this.ensureReady()
 
     const handedOffAtMs = Date.now()
@@ -928,8 +929,6 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       const queuedJob = await this._getJobRowById(db, jobId)
       if (!queuedJob || queuedJob.status !== "queued") return null
       if (queuedJob.concurrencyKey && !(await this._reserveConcurrency(db, queuedJob.concurrencyKey))) return null
-      const handoffId = randomUUID()
-
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {

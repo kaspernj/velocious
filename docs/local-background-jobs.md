@@ -51,6 +51,11 @@ The local store provides the same applicable queue contract as Node:
 - `rescheduleIn(delayMs)` on the same row without consuming a retry;
 - fenced handoff acknowledgements so a stale completion cannot update reclaimed work.
 
+The local store accepts an optional caller-selected `handoffId` and persists it
+exactly in the durable claim. Direct callers that omit it retain the legacy
+generated-id behavior; callers coordinating an ambiguous claim should retain
+and fence the supplied id.
+
 Queue-cap reconciliation, deduplication, insertion, capacity reservation, claims, acknowledgements, and capacity release are transactional. A local enqueue performed inside an application transaction registers its dispatcher wake with `afterCommit`: committed work becomes visible before execution, while rollback removes the row and discards the wake.
 
 Job failures emit `background-job-failed` and its `all-error` mirror for both retrying and terminal attempts. Unexpected readiness, dispatch, storage, timer, or acknowledgement failures emit `framework-error` and `all-error`; they are not silently logged and dropped.
@@ -75,6 +80,6 @@ The following remain separate work:
 - no Cloudflare backend;
 - no custom IndexedDB ORM or new SQLite WASM dependency;
 - no local `idempotencyKey`, stable schedule replacement/cancellation, server dashboard schema, retention scheduler, or mail-delivery ownership;
-- no change to Node SQL/TCP/main/worker behavior.
+- no local adapter implementation of Node SQL/TCP/main/worker coordination.
 
 See [Background Jobs](background-jobs.md) for the shared job API and Node operational model, [SQLite web persistence](sqlite-web-persistence.md) for browser durability, and [Expo and Metro compatibility](expo-metro-compatibility.md) for native/web bundle resolution.

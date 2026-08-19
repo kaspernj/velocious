@@ -44,6 +44,12 @@
  * @property {number} handedOffAtMs - Time handed to a worker in ms.
  */
 /**
+ * @typedef {object} BackgroundJobHandoffRequest
+ * @property {string} jobId - Job to claim.
+ * @property {string} [handoffId] - Exact caller-selected lease id. Adapters must persist and return this id when supplied; built-in adapters generate one when omitted for legacy direct callers.
+ * @property {string} [workerId] - Worker claiming the job.
+ */
+/**
  * @typedef {object} BackgroundJobOptions
  * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Node defaults to `"pooled"` (a warm, reused local runner process). Browser/Expo local dispatch defaults to and only accepts `"inline"`. `"forked"` runs a Node job in a fresh `child_process.fork()` child, and `"spawned"` in a detached CLI runner.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
