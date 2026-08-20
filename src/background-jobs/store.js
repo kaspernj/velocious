@@ -46,6 +46,7 @@ import {
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
+const SCHEMA_RECOVERY_PENDING_VERSION = "schema-recovery-pending"
 const EXECUTION_MODE_BACKFILL_MIGRATION_VERSION = "20260607131010"
 // Drops the redundant legacy `forked` boolean column and rewrites pooled rows to
 // persist `execution_mode = "pooled"` directly (retiring the pooled-as-forked
@@ -1526,13 +1527,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureMigrationsTable(db)
 
     const alreadyApplied = await this._hasMigration(db)
+    const schemaRecoveryPending = await this._hasMigration(db, SCHEMA_RECOVERY_PENDING_VERSION)
+    const jobsTableExists = await db.tableExists(JOBS_TABLE)
 
     // Even when the migration row is present, the jobs table itself can have
     // been dropped underneath us by a transaction rollback in another caller
     // (DDL is transactional on SQLite/MSSQL). Verify the table physically
     // exists and recreate it when missing rather than trusting the migration
     // row alone, otherwise later callers fail with "no such table".
-    if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
+    if (alreadyApplied && jobsTableExists && !schemaRecoveryPending) {
       await this._ensureJobsTableColumns(db)
       await this._ensureIdempotencyKeysTable(db)
       await this._ensureMailDeliveryOperationsTable(db)
@@ -1541,6 +1544,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._ensureCountRevisionTable(db)
 
       return
+    }
+
+    if (alreadyApplied && !schemaRecoveryPending) {
+      await this._recordMigration(db, SCHEMA_RECOVERY_PENDING_VERSION)
     }
 
     await this._applyMigrations(db)
@@ -1555,6 +1562,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       // The recreated jobs table is empty, but the surviving concurrency table
       // can still count handoffs that disappeared with the dropped jobs table.
       await this._reconcileConcurrency(db)
+      await db.delete({
+        tableName: MIGRATIONS_TABLE,
+        conditions: {key: this._migrationKey(SCHEMA_RECOVERY_PENDING_VERSION)}
+      })
 
       return
     }

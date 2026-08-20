@@ -144,6 +144,24 @@ class FlakyCountRebuildStore extends BackgroundJobsStore {
   }
 }
 
+/** A store that rejects its first post-recreation count reconciliation. */
+class RejectFirstRecoveryReconciliationStore extends BackgroundJobsStore {
+  /** @param {object} args - Options forwarded to the store constructor. */
+  constructor(args) {
+    super(args)
+    this.reconciliationFailureThrown = false
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<void>} - Resolves when reconciled. */
+  async _reconcileConcurrency(db) {
+    if (this.reconciliationFailureThrown) return await super._reconcileConcurrency(db)
+    if (!(await db.tableExists("background_jobs"))) throw new Error("Expected the repaired jobs table to be visible")
+
+    this.reconciliationFailureThrown = true
+    throw new Error("Simulated recovery reconciliation failure")
+  }
+}
+
 /** @returns {import("../../src/background-jobs/types.js").BackgroundJobRow} - Active concurrency-limited job. */
 function activeConcurrencyJob() {
   return {
@@ -507,7 +525,7 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(await readActiveCount({store, concurrencyKey})).toEqual(23)
   })
 
-  it("resets surviving concurrency counts when schema repair recreates the jobs table", async () => {
+  it("retries the concurrency-count reset after schema repair fails", async () => {
     const store = await createClearedStore()
     const concurrencyKey = "recreated-jobs-table"
 
@@ -521,24 +539,32 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
 
     if (!handoff) throw new Error("Expected the job to be handed off")
+    expect(await store._withDb(async (db) => await store._hasMigration(db))).toEqual(true)
 
     await store._withDb(async (db) => {
       await db.dropTable("background_jobs", {cascade: true, ifExists: true})
       db.clearSchemaCache()
     })
 
+    expect(await store._withDb(async (db) => await store._hasMigration(db))).toEqual(true)
     expect(await readActiveCount({store, concurrencyKey})).toEqual(1)
 
-    await store.ensureReady()
+    const repairStore = new RejectFirstRecoveryReconciliationStore({configuration: dummyConfiguration})
 
-    expect(await readActiveCount({store, concurrencyKey})).toEqual(0)
+    await expect(async () => await repairStore.ensureReady()).toThrow("Simulated recovery reconciliation failure")
+    expect(repairStore.reconciliationFailureThrown).toEqual(true)
+    expect(await readActiveCount({store: repairStore, concurrencyKey})).toEqual(1)
 
-    const replacementJobId = await store.enqueue({
+    await repairStore.ensureReady()
+
+    expect(await readActiveCount({store: repairStore, concurrencyKey})).toEqual(0)
+
+    const replacementJobId = await repairStore.enqueue({
       jobName: "TestJob",
       args: [],
       options: {concurrencyKey, maxConcurrency: 1}
     })
-    const replacementJob = await store.nextAvailableJob({executionMode: "pooled"})
+    const replacementJob = await repairStore.nextAvailableJob({executionMode: "pooled"})
 
     expect(replacementJob?.id).toEqual(replacementJobId)
   })
