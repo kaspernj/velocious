@@ -20,7 +20,7 @@ const cliPath = path.join(repositoryDirectory, "bin", "velocious.js")
  * @returns {Promise<{code: number, stderr: string, stdout: string}>} - Child result.
  */
 async function runCli(args, {testDirectory} = {}) {
-  const environment = {...process.env, MSSQL_SA_PASSWORD: "test-password", VELOCIOUS_DISABLE_MSSQL: "1"}
+  const environment = {...process.env, MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "test-password", VELOCIOUS_DISABLE_MSSQL: "1"}
 
   if (testDirectory) {
     environment.VELOCIOUS_TEST_DIR = testDirectory
