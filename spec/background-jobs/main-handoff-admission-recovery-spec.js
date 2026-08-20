@@ -112,7 +112,7 @@ class ControllableWorkerSocket extends JsonSocket {
 async function startRecoveryMain() {
   const adapter = new HandoffRecoveryTestAdapter({configuration: dummyConfiguration})
   const {main} = await startBackgroundJobsMain({
-    backgroundJobsConfig: {adapter, pollIntervalMs: 60000, retention: {completedTtlMs: null, failedTtlMs: null}}
+    backgroundJobsConfig: {adapter, pollIntervalMs: 60000}
   })
 
   return {adapter, main}

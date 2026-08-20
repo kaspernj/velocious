@@ -1,9 +1,36 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
-import {withBackgroundJobs} from "../helpers/background-jobs-helper.js"
+import {startBackgroundJobsMain, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 
 describe("Background jobs test helper lifecycle", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
+  it("restores the default background jobs configuration between owned mains", async () => {
+    const first = await startBackgroundJobsMain({
+      backgroundJobsConfig: {
+        dispatchStrategy: "polling",
+        pollIntervalMs: 60_000,
+        retention: {completedTtlMs: 1000, failedTtlMs: null, sweepIntervalMs: 60_000}
+      }
+    })
+
+    await first.main.stop()
+
+    const second = await startBackgroundJobsMain()
+
+    try {
+      expect(second.main.dispatchStrategy).toEqual("beacon")
+      expect(second.main.pollIntervalMs).toEqual(1000)
+      expect(second.main.retention).toEqual({
+        batchSize: 1000,
+        completedTtlMs: 7 * 24 * 60 * 60 * 1000,
+        failedTtlMs: 30 * 24 * 60 * 60 * 1000,
+        sweepIntervalMs: 60 * 60 * 1000
+      })
+    } finally {
+      await second.main.stop()
+    }
+  })
+
   it("stops the worker and main before propagating an owning test failure", async () => {
     const ownerError = new Error("planned owning test failure")
     let releaseWorkerStop

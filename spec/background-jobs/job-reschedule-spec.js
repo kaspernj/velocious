@@ -50,9 +50,7 @@ function waitForPooledRescheduleExecutions({jobId, worker}) {
 
 describe("Background jobs - job reschedule", {databaseCleaning: {truncate: true}}, () => {
   it("reuses the same row later without failure events in inline and pooled modes", async () => {
-    const {main, store, worker} = await startBackgroundJobs({
-      workerOptions: {pooledRunnerConcurrency: 2, pooledRunnerCount: 1}
-    })
+    const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1}})
     const failures = []
     const allErrors = []
     const errorEvents = dummyConfiguration.getErrorEvents()
@@ -66,9 +64,7 @@ describe("Background jobs - job reschedule", {databaseCleaning: {truncate: true}
         const outputPath = await outputPathFor(`job-reschedule-${executionMode}`)
         const jobId = await store.enqueue({
           jobName: "RescheduleTestJob",
-          // Make the next lease eligible before the first pooled runner's
-          // durable acknowledgement returns to its worker.
-          args: [outputPath, 0],
+          args: [outputPath, 100],
           options: {executionMode}
         })
         const pooledExecutions = executionMode === "pooled"

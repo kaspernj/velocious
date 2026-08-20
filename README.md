@@ -2489,8 +2489,6 @@ delay and never returns: it stops the current `perform`, releases its worker and
 concurrency slots, and makes the same job eligible again after the delay. This is
 normal control flow, not failure retry: attempts and failure metadata remain
 unchanged, retries are not consumed, and failure/error events are not emitted.
-Pooled workers serialize repeated leases for that same durable row through the
-prior terminal-acknowledgement boundary; other job IDs remain concurrent.
 See [Rescheduling a running job](docs/background-jobs.md#rescheduling-a-running-job).
 
 Use a durable stable key when the same logical one-off schedule must be moved or cancelled without retaining its transient job id:

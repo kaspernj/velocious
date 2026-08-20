@@ -10,6 +10,8 @@ import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
+const defaultBackgroundJobsConfig = dummyConfiguration.getBackgroundJobsConfig()
+
 /**
  * Clears only framework background-job persistence.
  * @returns {Promise<BackgroundJobsStore>} - Cleared background jobs store.
@@ -119,7 +121,14 @@ export async function withBackgroundJobs(callback, args) {
  */
 export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop = false} = {}) {
   await dummyConfiguration.closeBackgroundJobsAdapter()
-  dummyConfiguration.setBackgroundJobsConfig({adapter: undefined, ...backgroundJobsConfig})
+  dummyConfiguration.setBackgroundJobsConfig({
+    ...defaultBackgroundJobsConfig,
+    adapter: undefined,
+    jobClasses: [...defaultBackgroundJobsConfig.jobClasses],
+    queues: {...defaultBackgroundJobsConfig.queues},
+    retention: {...defaultBackgroundJobsConfig.retention},
+    ...backgroundJobsConfig
+  })
 
   const store = await clearBackgroundJobs()
 
