@@ -1,0 +1,1 @@
+Fix pooled background-job workers waiting for slow child-failure reports before advertising freed runner capacity. Initialized child exits now wake queued dispatch immediately while every in-flight failure report remains tracked for durable retry and graceful shutdown; children that fail before startup handshake do not trigger a respawn loop.
