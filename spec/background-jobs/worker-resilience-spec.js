@@ -177,6 +177,70 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     expect(resolved).toEqual(true)
   })
 
+  it("re-announces pooled capacity before a slow child-failure report settles", async () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 1})
+    /** @type {Array<string>} */
+    const events = []
+    /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} */
+    const sent = []
+    worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {unknown} */ ({
+      send: (message) => {
+        events.push("ready")
+        sent.push(message)
+      }
+    }))
+    /** @type {() => void} */
+    let releaseReport = () => {}
+    worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {unknown} */ ({
+      reportWithRetry: async () => {
+        events.push("report")
+        await new Promise((resolve) => { releaseReport = resolve })
+      }
+    }))
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({}))
+    worker.pooledChildren.add(child)
+    worker.pooledChildStates.set(child, {
+      createdAtMs: Date.now(), jobsRun: 1, started: true, lastDispatchSeq: 0, retiring: false,
+      inflight: new Map([["failed-job", {payload: {id: "failed-job", jobName: "TestJob"}, resolve: () => {}}]])
+    })
+
+    const failure = worker._handlePooledChildFailure({child, error: new Error("runner crashed")})
+    await Promise.resolve()
+
+    expect(events).toEqual(["report", "ready"])
+    expect(sent.length).toEqual(1)
+    expect(sent[0]?.type).toEqual("ready")
+    expect(sent[0]?.acceptsPooled).toEqual(true)
+    expect(sent[0]?.availablePooledSlots).toEqual(1)
+
+    releaseReport()
+    await failure
+  })
+
+  it("revokes stale pooled credits when a child dies before startup", async () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 1})
+    /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} */
+    const sent = []
+    worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {unknown} */ ({send: (message) => sent.push(message)}))
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ ({}))
+    worker.pooledChildren.add(child)
+    worker.pooledChildStates.set(child, {
+      createdAtMs: Date.now(), jobsRun: 0, started: false, lastDispatchSeq: 0, retiring: false,
+      inflight: new Map()
+    })
+
+    await worker._handlePooledChildFailure({child, error: new Error("runner failed during startup")})
+
+    expect(sent).toEqual([{
+      type: "ready",
+      acceptsForked: true,
+      acceptsInline: true,
+      acceptsPooled: false,
+      availablePooledSlots: 0,
+      acceptsSpawned: true
+    }])
+  })
+
   it("does not fallback-report an acknowledged failed pooled outcome", () => {
     const worker = new BackgroundJobsWorker({pooledRunnerCount: 1})
     let killed = false

@@ -141,3 +141,4 @@ function handleMessage(message) {
 process.on("message", (message) => handleMessage(message))
 process.once("disconnect", () => void shutdownRunner(0))
 for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => void shutdownRunner(1))
+if (process.send) process.send({type: "ready"})

@@ -194,8 +194,10 @@ export default class BackgroundJobsWorker {
     this.inflightPooledJobs = new Set()
     /** @type {Set<import("node:child_process").ChildProcess>} */
     this.pooledChildren = new Set()
-    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
+    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, pooledJob?: Promise<void>, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, started?: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
     this.pooledChildStates = new Map()
+    /** @type {WeakSet<Promise<void>>} */
+    this._pooledStartupFailureJobs = new WeakSet()
     // Monotonic dispatch counter for round-robin child selection: each dispatch stamps
     // the chosen child, and selection prefers the child dispatched least recently.
     this._pooledDispatchSeq = 0
@@ -600,16 +602,16 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Tells main we're ready for the next job — but only if we haven't been
-   * asked to drain. Once we've sent `draining` we don't want to take more
-   * work.
+   * Advertises current worker capacity unless the worker is draining.
+   * @param {object} [options] - Advertisement options.
+   * @param {boolean} [options.revokePooledAdmission] - Revoke pooled credits while preserving other execution modes.
    * @returns {void}
    */
-  _sendReadyIfRunning() {
+  _sendReadyIfRunning({revokePooledAdmission = false} = {}) {
     if (this.shouldStop) return
     if (!this.jsonSocket) return
 
-    const readyMessage = this._readyMessage()
+    const readyMessage = this._readyMessage({revokePooledAdmission})
 
     if (!readyMessage) return
     this.jsonSocket.send(readyMessage)
@@ -617,21 +619,24 @@ export default class BackgroundJobsWorker {
 
   /**
    * Runs ready message.
+   * @param {object} [options] - Advertisement options.
+   * @param {boolean} [options.revokePooledAdmission] - Revoke pooled credits while preserving other execution modes.
    * @returns {import("./types.js").BackgroundJobSocketMessage | null} - Ready message or null when the worker has no capacity.
    */
-  _readyMessage() {
+  _readyMessage({revokePooledAdmission = false} = {}) {
     const acceptsProcessJob = this.inflightProcessJobs.size < this.maxConcurrentForkedJobs
     const acceptsInline = this.inflightInlineJobs.size < this.maxConcurrentInlineJobs
-    const acceptsPooled = this._availablePooledSlots() > 0
+    const availablePooledSlots = revokePooledAdmission ? 0 : this._availablePooledSlots()
+    const acceptsPooled = availablePooledSlots > 0
 
-    if (!acceptsProcessJob && !acceptsInline && !acceptsPooled) return null
+    if (!revokePooledAdmission && !acceptsProcessJob && !acceptsInline && !acceptsPooled) return null
 
     return {
       type: "ready",
       acceptsForked: acceptsProcessJob,
       acceptsInline,
       acceptsPooled,
-      availablePooledSlots: this._availablePooledSlots(),
+      availablePooledSlots,
       acceptsSpawned: acceptsProcessJob
     }
   }
@@ -646,7 +651,7 @@ export default class BackgroundJobsWorker {
     let inflight
     inflight = pooledJob.finally(() => {
       this.inflightPooledJobs.delete(inflight)
-      if (!this.shouldStop) this._sendReadyIfRunning()
+      if (!this.shouldStop && !this._pooledStartupFailureJobs.has(pooledJob)) this._sendReadyIfRunning()
     })
     this.inflightPooledJobs.add(inflight)
   }
@@ -689,16 +694,22 @@ export default class BackgroundJobsWorker {
     // Stamp the round-robin cursor so the next dispatch prefers a different child.
     state.lastDispatchSeq = ++this._pooledDispatchSeq
 
-    return new Promise((resolve) => {
-      const timeoutTimer = this._armPooledJobTimeout({child, payload})
+    /**
+     * Resolves the pooled job promise.
+     * @type {(value: void) => void}
+     */
+    let resolvePooledJob = () => {}
+    const pooledJob = new Promise((resolve) => { resolvePooledJob = resolve })
+    const timeoutTimer = this._armPooledJobTimeout({child, payload})
 
-      state.inflight.set(payload.id, {payload, resolve, timeoutTimer})
-      try {
-        child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
-      } catch (error) {
-        void this._handlePooledChildFailure({child, error})
-      }
-    })
+    state.inflight.set(payload.id, {payload, resolve: resolvePooledJob, pooledJob, timeoutTimer})
+    try {
+      child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
+    } catch (error) {
+      void this._handlePooledChildFailure({child, error})
+    }
+
+    return pooledJob
   }
 
   /**
@@ -769,7 +780,8 @@ export default class BackgroundJobsWorker {
    * (SIGTERM, then SIGKILL after the grace) — a hung JS job cannot be cancelled
    * any other way. The non-clean exit flows through `_handlePooledChildFailure`,
    * which reports every in-flight job on the child failed (so they requeue) and
-   * drops it from tracking; capacity is refilled on the next dispatch.
+   * drops it from tracking; the failure path immediately re-advertises the
+   * resulting capacity once the runner has completed startup.
    * @param {object} args - Options.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
    * @param {string} args.jobId - Job id that overran.
@@ -810,7 +822,7 @@ export default class BackgroundJobsWorker {
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
-    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false})
+    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false, started: false})
     child.on("message", (message) => this._handlePooledChildMessage({child, message}))
     child.once("exit", (code, signal) => this._handlePooledChildFailure({child, error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)}))
     child.once("error", (error) => this._handlePooledChildFailure({child, error}))
@@ -829,7 +841,12 @@ export default class BackgroundJobsWorker {
     if (!message || typeof message !== "object") return
     const record = /** @type {{type?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
     const state = this.pooledChildStates.get(child)
+    if (record.type === "ready") {
+      if (state) state.started = true
+      return
+    }
     if (record.type !== "job-outcome" || !state || state.settling || typeof record.jobId !== "string") return
+    state.started = true
     const entry = state.inflight.get(record.jobId)
     if (!entry) return
 
@@ -907,9 +924,11 @@ export default class BackgroundJobsWorker {
   /**
    * Removes an exited/unhealthy pooled child and reports every job that was
    * in-flight on it as failed — a process-level crash's blast radius is the
-   * child's whole in-flight set. Capacity is refilled lazily on the next
-   * dispatch (a spawnable slot is still advertised), avoiding a tight respawn
-   * loop when a child crashes on startup.
+   * child's whole in-flight set. Once the child has completed startup, its
+   * freed capacity is advertised immediately; the replacement itself is still
+   * spawned lazily by the next dispatch. A child that exits before its startup
+   * handshake does not re-announce, avoiding a tight respawn loop on startup
+   * failure.
    * @param {object} args - Failure details.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
    * @param {ReturnType<typeof JSON.parse>} args.error - Failure.
@@ -934,7 +953,7 @@ export default class BackgroundJobsWorker {
     if (state) state.inflight.clear()
     this.pooledChildStates.delete(child)
 
-    await Promise.allSettled(entries.map(async (entry) => {
+    const failureReports = entries.map(async (entry) => {
       await this._reportJobResult({
         jobId: entry.payload.id,
         status: "failed",
@@ -944,7 +963,26 @@ export default class BackgroundJobsWorker {
         workerId: entry.payload.workerId || this.workerId
       })
       if (entry.resolve) entry.resolve(undefined)
-    }))
+    })
+
+    // Start every fallback report before announcing capacity so the main cannot
+    // observe a replacement slot before the failed jobs' reports are in flight.
+    // The report promises remain tracked below; a slow retry must not hold the
+    // newly freed runner capacity hostage.
+    if (state && state.started !== false) {
+      this._sendReadyIfRunning()
+    } else if (state) {
+      for (const entry of entries) {
+        if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
+      }
+      // A previous ready message may still have unconsumed pooled credits at the
+      // main. Revoke them authoritatively without suppressing valid inline or
+      // process-runner readiness; otherwise queued jobs can trigger a startup
+      // crash loop using the stale credits.
+      this._sendReadyIfRunning({revokePooledAdmission: true})
+    }
+
+    await Promise.allSettled(failureReports)
   }
 
   /**
