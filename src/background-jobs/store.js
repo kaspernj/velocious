@@ -186,6 +186,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async reconcileQueueConcurrency() {
     if (this._queueConcurrencyReconciled) return
 
+    const databaseIdentifier = this.getDatabaseIdentifier()
+    const startedAtMs = Date.now()
+
+    await this.logger.info(() => [
+      "Starting background jobs queue-concurrency startup reconciliation",
+      {databaseIdentifier}
+    ])
     await this.ensureReady()
 
     await this._withDb(async (db) => {
@@ -206,6 +213,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         await db.releaseAdvisoryLock(lockName)
       }
     })
+
+    await this.logger.info(() => [
+      "Completed background jobs queue-concurrency startup reconciliation",
+      {databaseIdentifier, durationMs: Date.now() - startedAtMs}
+    ])
   }
 
   /**
@@ -1527,7 +1539,6 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._ensureScheduleKeysTable(db)
       await this._ensureConcurrencyTable(db)
       await this._ensureCountRevisionTable(db)
-      await this._reconcileConcurrency(db)
 
       return
     }
@@ -1539,7 +1550,6 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureScheduleKeysTable(db)
     await this._ensureConcurrencyTable(db)
     await this._ensureCountRevisionTable(db)
-    await this._reconcileConcurrency(db)
 
     if (alreadyApplied) return
 

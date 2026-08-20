@@ -45,6 +45,21 @@ async function readActiveCount({store, concurrencyKey}) {
 
 /**
  * @param {object} args - Options.
+ * @param {number} args.activeCount - Persisted active count.
+ * @param {BackgroundJobsStore} args.store - Background jobs store.
+ * @param {string} args.concurrencyKey - Concurrency key.
+ * @returns {Promise<void>} - Resolves after updating the count.
+ */
+async function writeActiveCount({store, concurrencyKey, activeCount}) {
+  await store._withDb(async (db) => await db.update({
+    tableName: "background_job_concurrency",
+    data: {active_count: activeCount},
+    conditions: {concurrency_key: concurrencyKey}
+  }))
+}
+
+/**
+ * @param {object} args - Options.
  * @param {number} args.maxRetries - Job max retries.
  * @param {BackgroundJobsStore} args.store - Background jobs store.
  * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow>} - Orphaned job row.
@@ -460,6 +475,36 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }
+  })
+
+  it("rebuilds concurrency counts only through explicit startup reconciliation", async () => {
+    const store = await createClearedStore()
+    const concurrencyKey = "startup-reconciliation"
+    const jobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey, maxConcurrency: 2}
+    })
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    await writeActiveCount({store, concurrencyKey, activeCount: 17})
+
+    await store.ensureReady()
+    await store.ensureReady()
+    await store.ensureSchema()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(17)
+
+    await store.reconcileQueueConcurrency()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(1)
+
+    await writeActiveCount({store, concurrencyKey, activeCount: 23})
+    await store.reconcileQueueConcurrency()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(23)
   })
 
   it("reconciles queue caps against the persisted backlog on startup", async () => {

@@ -1,0 +1,1 @@
+Background-job routine schema and connection readiness no longer rebuild global concurrency counts on every check. The broad count-reconciliation UPDATE now runs only through the explicit, advisory-locked `background-jobs-main` startup lifecycle, which logs its database identifier and duration while preserving schema repair and startup count recovery.
