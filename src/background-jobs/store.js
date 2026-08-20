@@ -46,6 +46,7 @@ import {
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
+const SCHEMA_RECOVERY_PENDING_VERSION = "schema-recovery-pending"
 const EXECUTION_MODE_BACKFILL_MIGRATION_VERSION = "20260607131010"
 // Drops the redundant legacy `forked` boolean column and rewrites pooled rows to
 // persist `execution_mode = "pooled"` directly (retiring the pooled-as-forked
@@ -186,6 +187,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async reconcileQueueConcurrency() {
     if (this._queueConcurrencyReconciled) return
 
+    const databaseIdentifier = this.getDatabaseIdentifier()
+    const startedAtMs = Date.now()
+
+    await this.logger.info(() => [
+      "Starting background jobs queue-concurrency startup reconciliation",
+      {databaseIdentifier}
+    ])
     await this.ensureReady()
 
     await this._withDb(async (db) => {
@@ -206,6 +214,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         await db.releaseAdvisoryLock(lockName)
       }
     })
+
+    await this.logger.info(() => [
+      "Completed background jobs queue-concurrency startup reconciliation",
+      {databaseIdentifier, durationMs: Date.now() - startedAtMs}
+    ])
   }
 
   /**
@@ -1514,22 +1527,27 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureMigrationsTable(db)
 
     const alreadyApplied = await this._hasMigration(db)
+    const schemaRecoveryPending = await this._hasMigration(db, SCHEMA_RECOVERY_PENDING_VERSION)
+    const jobsTableExists = await db.tableExists(JOBS_TABLE)
 
     // Even when the migration row is present, the jobs table itself can have
     // been dropped underneath us by a transaction rollback in another caller
     // (DDL is transactional on SQLite/MSSQL). Verify the table physically
     // exists and recreate it when missing rather than trusting the migration
     // row alone, otherwise later callers fail with "no such table".
-    if (alreadyApplied && await db.tableExists(JOBS_TABLE)) {
+    if (alreadyApplied && jobsTableExists && !schemaRecoveryPending) {
       await this._ensureJobsTableColumns(db)
       await this._ensureIdempotencyKeysTable(db)
       await this._ensureMailDeliveryOperationsTable(db)
       await this._ensureScheduleKeysTable(db)
       await this._ensureConcurrencyTable(db)
       await this._ensureCountRevisionTable(db)
-      await this._reconcileConcurrency(db)
 
       return
+    }
+
+    if (alreadyApplied && !schemaRecoveryPending) {
+      await this._recordMigration(db, SCHEMA_RECOVERY_PENDING_VERSION)
     }
 
     await this._applyMigrations(db)
@@ -1539,9 +1557,18 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureScheduleKeysTable(db)
     await this._ensureConcurrencyTable(db)
     await this._ensureCountRevisionTable(db)
-    await this._reconcileConcurrency(db)
 
-    if (alreadyApplied) return
+    if (alreadyApplied) {
+      // The recreated jobs table is empty, but the surviving concurrency table
+      // can still count handoffs that disappeared with the dropped jobs table.
+      await this._reconcileConcurrency(db)
+      await db.delete({
+        tableName: MIGRATIONS_TABLE,
+        conditions: {key: this._migrationKey(SCHEMA_RECOVERY_PENDING_VERSION)}
+      })
+
+      return
+    }
 
     await this._recordMigration(db, MIGRATION_VERSION)
   }
@@ -2578,7 +2605,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
-   * Rebuilds durable counts from active handoffs after startup.
+   * Rebuilds durable counts from active handoffs.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when reconciled.
    */

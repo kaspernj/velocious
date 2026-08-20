@@ -45,6 +45,21 @@ async function readActiveCount({store, concurrencyKey}) {
 
 /**
  * @param {object} args - Options.
+ * @param {number} args.activeCount - Persisted active count.
+ * @param {BackgroundJobsStore} args.store - Background jobs store.
+ * @param {string} args.concurrencyKey - Concurrency key.
+ * @returns {Promise<void>} - Resolves after updating the count.
+ */
+async function writeActiveCount({store, concurrencyKey, activeCount}) {
+  await store._withDb(async (db) => await db.update({
+    tableName: "background_job_concurrency",
+    data: {active_count: activeCount},
+    conditions: {concurrency_key: concurrencyKey}
+  }))
+}
+
+/**
+ * @param {object} args - Options.
  * @param {number} args.maxRetries - Job max retries.
  * @param {BackgroundJobsStore} args.store - Background jobs store.
  * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow>} - Orphaned job row.
@@ -126,6 +141,24 @@ class FlakyCountRebuildStore extends BackgroundJobsStore {
     }
 
     await super._reconcileConcurrency(db)
+  }
+}
+
+/** A store that rejects its first post-recreation count reconciliation. */
+class RejectFirstRecoveryReconciliationStore extends BackgroundJobsStore {
+  /** @param {object} args - Options forwarded to the store constructor. */
+  constructor(args) {
+    super(args)
+    this.reconciliationFailureThrown = false
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<void>} - Resolves when reconciled. */
+  async _reconcileConcurrency(db) {
+    if (this.reconciliationFailureThrown) return await super._reconcileConcurrency(db)
+    if (!(await db.tableExists("background_jobs"))) throw new Error("Expected the repaired jobs table to be visible")
+
+    this.reconciliationFailureThrown = true
+    throw new Error("Simulated recovery reconciliation failure")
   }
 }
 
@@ -460,6 +493,80 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }
+  })
+
+  it("rebuilds concurrency counts only through explicit startup reconciliation", async () => {
+    const store = await createClearedStore()
+    const concurrencyKey = "startup-reconciliation"
+    const jobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey, maxConcurrency: 2}
+    })
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    await writeActiveCount({store, concurrencyKey, activeCount: 17})
+
+    await store.ensureReady()
+    await store.ensureReady()
+    await store.ensureSchema()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(17)
+
+    await store.reconcileQueueConcurrency()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(1)
+
+    await writeActiveCount({store, concurrencyKey, activeCount: 23})
+    await store.reconcileQueueConcurrency()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(23)
+  })
+
+  it("retries the concurrency-count reset after schema repair fails", async () => {
+    const store = await createClearedStore()
+    const concurrencyKey = "recreated-jobs-table"
+
+    await store.reconcileQueueConcurrency()
+
+    const jobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey, maxConcurrency: 1}
+    })
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+    expect(await store._withDb(async (db) => await store._hasMigration(db))).toEqual(true)
+
+    await store._withDb(async (db) => {
+      await db.dropTable("background_jobs", {cascade: true, ifExists: true})
+      db.clearSchemaCache()
+    })
+
+    expect(await store._withDb(async (db) => await store._hasMigration(db))).toEqual(true)
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(1)
+
+    const repairStore = new RejectFirstRecoveryReconciliationStore({configuration: dummyConfiguration})
+
+    await expect(async () => await repairStore.ensureReady()).toThrow("Simulated recovery reconciliation failure")
+    expect(repairStore.reconciliationFailureThrown).toEqual(true)
+    expect(await readActiveCount({store: repairStore, concurrencyKey})).toEqual(1)
+
+    await repairStore.ensureReady()
+
+    expect(await readActiveCount({store: repairStore, concurrencyKey})).toEqual(0)
+
+    const replacementJobId = await repairStore.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey, maxConcurrency: 1}
+    })
+    const replacementJob = await repairStore.nextAvailableJob({executionMode: "pooled"})
+
+    expect(replacementJob?.id).toEqual(replacementJobId)
   })
 
   it("reconciles queue caps against the persisted backlog on startup", async () => {
