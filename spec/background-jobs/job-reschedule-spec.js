@@ -64,7 +64,9 @@ describe("Background jobs - job reschedule", {databaseCleaning: {truncate: true}
         const outputPath = await outputPathFor(`job-reschedule-${executionMode}`)
         const jobId = await store.enqueue({
           jobName: "RescheduleTestJob",
-          args: [outputPath, 100],
+          // Make the next lease eligible before the first pooled runner's
+          // durable acknowledgement returns to its worker.
+          args: [outputPath, 0],
           options: {executionMode}
         })
         const pooledExecutions = executionMode === "pooled"

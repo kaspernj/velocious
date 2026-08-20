@@ -192,6 +192,8 @@ export default class BackgroundJobsWorker {
     this.inflightProcessChildren = new Set()
     /** @type {Set<Promise<void>>} */
     this.inflightPooledJobs = new Set()
+    /** @type {Map<string, Array<import("./types.js").BackgroundJobPayload & {id: string}>>} */
+    this.pooledJobQueues = new Map()
     /** @type {Set<import("node:child_process").ChildProcess>} */
     this.pooledChildren = new Set()
     /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, pooledJob?: Promise<void>, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, started?: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
@@ -443,7 +445,7 @@ export default class BackgroundJobsWorker {
     const executionMode = this._executionModeForPayload(identifiedPayload)
 
     if (executionMode === "pooled") {
-      this._trackPooledJob(this._runPooledJob(identifiedPayload))
+      this._queuePooledJob(identifiedPayload)
       return
     }
 
@@ -654,6 +656,45 @@ export default class BackgroundJobsWorker {
       if (!this.shouldStop && !this._pooledStartupFailureJobs.has(pooledJob)) this._sendReadyIfRunning()
     })
     this.inflightPooledJobs.add(inflight)
+  }
+
+  /**
+   * Serializes repeated leases for one durable row while preserving pooled
+   * concurrency across different job ids.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Pooled job payload.
+   * @returns {void}
+   */
+  _queuePooledJob(payload) {
+    const existingQueue = this.pooledJobQueues.get(payload.id)
+
+    if (existingQueue) {
+      existingQueue.push(payload)
+      return
+    }
+
+    this.pooledJobQueues.set(payload.id, [payload])
+    this._trackPooledJob(this._runPooledJobQueue(payload.id))
+  }
+
+  /**
+   * Drains every admitted lease for one durable job id in arrival order.
+   * @param {string} jobId - Durable job id.
+   * @returns {Promise<void>} - Resolves after the per-id queue drains.
+   */
+  async _runPooledJobQueue(jobId) {
+    const queue = this.pooledJobQueues.get(jobId)
+    if (!queue) throw new Error(`Pooled job queue missing for job: ${jobId}`)
+
+    try {
+      while (queue.length > 0) {
+        const payload = queue.shift()
+        if (!payload) throw new Error(`Pooled job queue contained an empty payload for job: ${jobId}`)
+
+        await this._runPooledJob(payload)
+      }
+    } finally {
+      this.pooledJobQueues.delete(jobId)
+    }
   }
 
   /**
