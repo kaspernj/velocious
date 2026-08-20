@@ -1,5 +1,6 @@
 // @ts-check
 
+import { randomUUID } from "crypto"
 import net from "net"
 import JsonSocket from "./json-socket.js"
 import BackgroundJobsScheduler from "./scheduler.js"
@@ -44,7 +45,7 @@ const WORKER_EXECUTION_MODE_CAPABILITIES = [
   // pre-pooled worker — which never sends the field — out of the pooled-capable
   // set, so the main never dispatches a pooled job to a worker that cannot run
   // one. This is the conservative half of the extended readiness protocol.
-  {executionMode: "pooled", accepts: (worker) => worker.acceptsPooledJobs === true},
+  {executionMode: "pooled", accepts: (worker) => worker.acceptsPooledJobs === true && (!worker.usesPooledCapacityCredits || worker.availablePooledSlots > 0)},
   {executionMode: "spawned", accepts: (worker) => worker.acceptsSpawnedJobs !== false}
 ]
 const WORKER_EXECUTION_MODE_CAPABILITIES_BY_MODE = new Map(
@@ -92,6 +93,12 @@ export default class BackgroundJobsMain {
      * Active durable handoffs keyed by the exact worker socket that received them.
      * @type {Map<JsonSocket, Map<string, string>>} */
     this.workerHandoffs = new Map()
+    /**
+     * Exact caller-generated leases whose claim outcome was ambiguous or whose
+     * pre-dispatch release has not yet been acknowledged. Retained until a
+     * fenced return succeeds (including an exact no-op).
+     * @type {Map<string, string>} */
+    this.pendingHandoffRecoveries = new Map()
     /**
      * Handoff-adoption queries started by worker hello messages. Shutdown must
      * wait for these before closing the configuration's database pools.
@@ -667,11 +674,17 @@ export default class BackgroundJobsMain {
    * @returns {void}
    */
   _handleWorkerReady({jsonSocket, message}) {
+    jsonSocket.readinessVersion += 1
     jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
     jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
     jsonSocket.acceptsPooledJobs = message.acceptsPooled === true
+    const availablePooledSlots = message.availablePooledSlots
+    jsonSocket.usesPooledCapacityCredits = Number.isInteger(availablePooledSlots)
+    jsonSocket.availablePooledSlots = Number.isInteger(availablePooledSlots) && availablePooledSlots !== undefined && availablePooledSlots > 0
+      ? availablePooledSlots
+      : 0
     jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
-    if (jsonSocket.supportsHandoffIdReporting) {
+    if (jsonSocket.supportsHandoffIdReporting && !jsonSocket.isDraining) {
       this.readyWorkers.add(jsonSocket)
     } else {
       this.readyWorkers.delete(jsonSocket)
@@ -689,6 +702,7 @@ export default class BackgroundJobsMain {
     // The worker is shutting down gracefully. Stop dispatching new jobs
     // to it but keep the connection in `workers` so any in-flight job
     // it's still draining can report its result.
+    jsonSocket.isDraining = true
     this.readyWorkers.delete(jsonSocket)
   }
 
@@ -1225,6 +1239,8 @@ export default class BackgroundJobsMain {
    * Runs clear error retry timer.
    * @returns {void} */
   _clearErrorRetryTimer() {
+    if (this.pendingHandoffRecoveries.size > 0) return
+
     for (const worker of this.workerHandoffs.keys()) {
       if (!this.workers.has(worker)) return
     }
@@ -1291,11 +1307,19 @@ export default class BackgroundJobsMain {
   }
 
   /**
-   * Retries failed disconnected-socket releases before draining queued work.
+   * Retries failed pre-dispatch and disconnected-socket releases before
+   * draining queued work.
    * @returns {Promise<void>} - Resolves after retry work.
    */
   async _retryAfterError() {
     if (this._stopped) return
+
+    try {
+      await this._retryPendingHandoffRecoveries()
+    } catch {
+      this._scheduleErrorRetry()
+      return
+    }
 
     try {
       for (const worker of this.workerHandoffs.keys()) {
@@ -1323,24 +1347,46 @@ export default class BackgroundJobsMain {
       const worker = this.readyWorkerForJob(job)
       if (!worker) return
 
-      this.readyWorkers.delete(worker)
+      const admission = this._consumeWorkerAdmission({job, worker})
+      const requestedHandoffId = randomUUID()
+      let handoff
 
-      const handoff = await this.store.markHandedOff({jobId: job.id, workerId: worker.workerId})
+      try {
+        handoff = await this.store.markHandedOff({handoffId: requestedHandoffId, jobId: job.id, workerId: worker.workerId})
+      } catch (error) {
+        this._rememberHandoffRecovery({handoffId: requestedHandoffId, jobId: job.id})
+        this._restoreWorkerAdmission({...admission, worker})
+
+        try {
+          await this._recoverHandoff({handoffId: requestedHandoffId, jobId: job.id})
+        } catch (recoveryError) {
+          this._reportHandoffRecoveryError({error: recoveryError, handoffId: requestedHandoffId, jobId: job.id})
+        }
+
+        throw error
+      }
 
       if (!handoff) {
-        if (this.workers.has(worker)) this.readyWorkers.add(worker)
+        this._restoreWorkerAdmission({...admission, worker})
         continue
       }
 
       const handoffs = this.workerHandoffs.get(worker)
 
-      if (!handoffs || !this.workers.has(worker)) {
-        await this.store.markReturnedToQueue({handoffId: handoff.handoffId, jobId: job.id})
+      if (!handoffs || !this.workers.has(worker) || worker.isDraining) {
+        this._rememberHandoffRecovery({handoffId: handoff.handoffId, jobId: job.id})
+        try {
+          await this._recoverHandoff({handoffId: handoff.handoffId, jobId: job.id})
+        } catch (recoveryError) {
+          this._reportHandoffRecoveryError({error: recoveryError, handoffId: handoff.handoffId, jobId: job.id})
+          throw recoveryError
+        }
         this._notifyEnqueued()
         this._redrainQueued = true
         continue
       }
 
+      this._finalizeWorkerAdmission({...admission, job, worker})
       handoffs.set(job.id, handoff.handoffId)
 
       try {
@@ -1354,7 +1400,8 @@ export default class BackgroundJobsMain {
             workerId: worker.workerId,
             handedOffAtMs: handoff.handedOffAtMs,
             options: {
-              executionMode: job.executionMode
+              executionMode: job.executionMode,
+              ...(job.timeoutMs === null ? {} : {timeoutMs: job.timeoutMs})
             }
           }
         })
@@ -1368,6 +1415,125 @@ export default class BackgroundJobsMain {
         await this._handleWorkerSocketClosed(worker, {queueRedrain: true})
       }
     }
+  }
+
+  /**
+   * Consumes one advertised worker admission while persistence is in flight.
+   * @param {object} args - Admission details.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Selected job.
+   * @param {JsonSocket} args.worker - Selected worker socket.
+   * @returns {{pooledCreditConsumed: boolean, readinessVersion: number}} - Reversible admission debit.
+   */
+  _consumeWorkerAdmission({job, worker}) {
+    let pooledCreditConsumed = false
+
+    this.readyWorkers.delete(worker)
+
+    if (job.executionMode === "pooled" && worker.usesPooledCapacityCredits && worker.availablePooledSlots > 0) {
+      pooledCreditConsumed = true
+      worker.availablePooledSlots -= 1
+      if (worker.availablePooledSlots > 0) this.readyWorkers.add(worker)
+    }
+
+    return {pooledCreditConsumed, readinessVersion: worker.readinessVersion}
+  }
+
+  /**
+   * Restores an admission that never reached a worker. A newer readiness
+   * advertisement is already authoritative, so its pooled count is not changed.
+   * @param {object} args - Admission details.
+   * @param {boolean} args.pooledCreditConsumed - Whether a pooled credit was debited.
+   * @param {number} args.readinessVersion - Readiness generation at debit time.
+   * @param {JsonSocket} args.worker - Selected worker socket.
+   * @returns {void}
+   */
+  _restoreWorkerAdmission({pooledCreditConsumed, readinessVersion, worker}) {
+    if (this._stopped || !this.workers.has(worker) || worker.isDraining) return
+
+    if (pooledCreditConsumed && worker.readinessVersion === readinessVersion) {
+      worker.availablePooledSlots += 1
+    }
+
+    if (worker.supportsHandoffIdReporting) this.readyWorkers.add(worker)
+  }
+
+  /**
+   * Applies a successful pooled admission to a readiness advertisement that
+   * arrived while persistence was in flight and replaced the earlier debit.
+   * @param {object} args - Admission details.
+   * @param {import("./types.js").BackgroundJobRow} args.job - Selected job.
+   * @param {boolean} args.pooledCreditConsumed - Whether a pooled credit was debited.
+   * @param {number} args.readinessVersion - Readiness generation at debit time.
+   * @param {JsonSocket} args.worker - Selected worker socket.
+   * @returns {void}
+   */
+  _finalizeWorkerAdmission({job, pooledCreditConsumed, readinessVersion, worker}) {
+    if (!pooledCreditConsumed || job.executionMode !== "pooled") return
+    if (worker.readinessVersion === readinessVersion || !worker.usesPooledCapacityCredits) return
+    if (worker.availablePooledSlots <= 0) return
+
+    worker.availablePooledSlots -= 1
+    if (worker.availablePooledSlots === 0) this.readyWorkers.delete(worker)
+  }
+
+  /**
+   * Retains an exact lease for idempotent pre-dispatch recovery.
+   * @param {{handoffId: string, jobId: string}} args - Exact recovery fence.
+   * @returns {void}
+   */
+  _rememberHandoffRecovery({handoffId, jobId}) {
+    this.pendingHandoffRecoveries.set(handoffId, jobId)
+  }
+
+  /**
+   * Returns one exact lease and forgets it only after the adapter acknowledges
+   * the fenced transition or confirms it was already absent.
+   * @param {{handoffId: string, jobId: string}} args - Exact recovery fence.
+   * @returns {Promise<void>} - Resolves after durable recovery settles.
+   */
+  async _recoverHandoff({handoffId, jobId}) {
+    await this.store.markReturnedToQueue({handoffId, jobId})
+
+    if (this.pendingHandoffRecoveries.get(handoffId) === jobId) {
+      this.pendingHandoffRecoveries.delete(handoffId)
+    }
+  }
+
+  /**
+   * Replays retained exact-ID recoveries through the dispatcher's existing
+   * transient-error retry lifecycle.
+   * @returns {Promise<void>} - Resolves after every retained recovery settles.
+   */
+  async _retryPendingHandoffRecoveries() {
+    for (const [handoffId, jobId] of [...this.pendingHandoffRecoveries]) {
+      try {
+        await this._recoverHandoff({handoffId, jobId})
+      } catch (error) {
+        this._reportHandoffRecoveryError({error, handoffId, jobId})
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Surfaces a failed exact-ID recovery without dropping its retry ledger entry.
+   * @param {object} args - Recovery failure.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Adapter failure.
+   * @param {string} args.handoffId - Exact lease fence.
+   * @param {string} args.jobId - Job id.
+   * @returns {void}
+   */
+  _reportHandoffRecoveryError({error, handoffId, jobId}) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {
+      context: {handoffId, jobId, stage: "background-job-handoff-admission-recovery"},
+      error: normalizedError
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Failed to recover an ambiguous background job handoff:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -1488,11 +1654,11 @@ export default class BackgroundJobsMain {
         // an application event handler that throws below cannot strand them
         // queued until the next external enqueue/reconnect.
         this._notifyEnqueued()
-        await this._drain()
         // Emit an event per orphaned job so applications can react to a dead
         // worker's specific job (e.g. targeted recovery) instead of only polling
-        // for its aftermath. Isolate each so one throwing handler can't suppress
-        // the events for the rest.
+        // for its aftermath. Emit before awaiting the drain so a blocked
+        // dispatcher cannot delay application recovery. Isolate each so one
+        // throwing handler can't suppress the events for the rest.
         for (const job of orphanedJobs) {
           try {
             this._emitBackgroundJobOrphaned({job})
@@ -1500,6 +1666,7 @@ export default class BackgroundJobsMain {
             this.logger.error(() => ["A background-job-orphaned event handler threw:", error])
           }
         }
+        await this._drain()
       }
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])

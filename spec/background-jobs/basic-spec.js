@@ -264,7 +264,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     await main.stop()
   })
 
-  it("returns scheduledAtMs validation errors to enqueue callers", async () => {
+  it("returns enqueue option validation errors to callers", async () => {
     const {main} = await startBackgroundJobsMain()
     const errorEvents = dummyConfiguration.getErrorEvents()
     let frameworkErrorCount = 0
@@ -274,23 +274,38 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
 
     dummyConfiguration.setBackgroundJobsConfig({host: "127.0.0.1", port: main.getPort()})
 
-    /** @type {Error | undefined} */
-    let enqueueError
+    /** @type {string[]} */
+    const enqueueErrors = []
+    const invalidRequests = [
+      {options: {scheduledAtMs: -1}},
+      {options: {timeoutMs: 1.5}},
+      {options: {timeoutMs: 2_147_483_648}},
+      {options: JSON.parse('{"timeoutMs":"15000"}')}
+    ]
 
     errorEvents.on("framework-error", onFrameworkError)
 
     try {
-      await TestJob.performLaterWithOptions({args: [], options: {scheduledAtMs: -1}})
-    } catch (error) {
-      if (!(error instanceof Error)) throw error
+      for (const request of invalidRequests) {
+        try {
+          await TestJob.performLaterWithOptions({args: [], options: request.options})
+        } catch (error) {
+          if (!(error instanceof Error)) throw error
 
-      enqueueError = error
+          enqueueErrors.push(error.message)
+        }
+      }
     } finally {
       errorEvents.off("framework-error", onFrameworkError)
       await main.stop()
     }
 
-    expect(enqueueError?.message).toEqual("background job scheduledAtMs must be a non-negative safe integer")
+    expect(enqueueErrors).toEqual([
+      "background job scheduledAtMs must be a non-negative safe integer",
+      "background job timeoutMs must be a finite non-positive number or an integer between 1 and 2147483647",
+      "background job timeoutMs must be a finite non-positive number or an integer between 1 and 2147483647",
+      "background job timeoutMs must be a finite non-positive number or an integer between 1 and 2147483647"
+    ])
     expect(frameworkErrorCount).toEqual(0)
   })
 

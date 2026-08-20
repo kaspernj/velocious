@@ -90,6 +90,19 @@ Methods that accept worker reports must preserve the existing lease-fencing and
 at-least-once semantics. `health()` returns `{ready: boolean}`; the mounted health
 endpoint reports `503` when an adapter explicitly reports `ready: false`.
 
+`background-jobs-main` calls
+`markHandedOff({jobId, handoffId, workerId})` with a caller-generated
+`handoffId`. A custom adapter must atomically persist that exact id when it wins
+the queued-to-`handed_off` transition and return it in the
+`BackgroundJobHandoff`. This lets the main safely call
+`markReturnedToQueue({jobId, handoffId})` when the claim throws after an
+ambiguous commit: the return either releases that exact lease or does nothing if
+the claim never committed or a newer lease now owns the job. The built-in SQL
+and local adapters still generate an id when legacy direct callers omit it, but
+a custom adapter used by the main must honor a supplied id. Upgrade that adapter
+implementation together with the Velocious main; the worker wire protocol is
+unchanged.
+
 The built-in adapter is available at
 `velocious/build/src/background-jobs/sql-adapter.js`. It subclasses the existing
 `BackgroundJobsStore`, so existing direct store imports and every current SQL
@@ -117,7 +130,7 @@ the child marked model-ready. This preserves configured pooled concurrency while
 preventing synchronous queries such as `Model.where(...)` from observing partial
 record metadata.
 
-Set `backgroundJobs.pooledRunnerCount` (default `4`) to bound the per-worker pool. Set `backgroundJobs.pooledRunnerConcurrency` (default `1`) to run several jobs on each child at once: total per-worker pooled capacity is `pooledRunnerCount × pooledRunnerConcurrency`. `1` keeps each child serial; raise it for I/O-bound jobs so a bounded set of isolated processes handles high concurrency (like the inline lane) without one process per concurrent job. A single job's unexpected failure is reported for reclamation without taking down the child or its concurrent siblings; only a process-level crash fails the whole in-flight set. `pooledRunnerCount`, `pooledRunnerConcurrency`, and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. Invalid values fall back to their defaults. A runner is retired after an acknowledged terminal report when it reaches `pooledRunnerMaxJobs` (default `100`), child-measured `pooledRunnerMaxRssBytes` (default `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` from child creation (default `3600000`, or one hour). Retirement never interrupts in-flight jobs: the child stops receiving new work, its replacement is spawned immediately (1-for-1, so capacity does not wait for the drain), and the retiring child is terminated only once its in-flight set drains. Exited, unacknowledged, or unhealthy runners are replaced lazily on the next dispatch. A pooled slot remains occupied until the main/DB accepts or rejects the terminal report or the parent fallback report settles, preventing reuse while terminal state is unresolved. Graceful worker shutdown stops advertising capacity, drains current pooled jobs and reports, and then terminates every idle child within the existing shutdown bounds.
+Set `backgroundJobs.pooledRunnerCount` (default `4`) to bound the per-worker pool. Set `backgroundJobs.pooledRunnerConcurrency` (default `1`) to run several jobs on each child at once: total per-worker pooled capacity is `pooledRunnerCount × pooledRunnerConcurrency`. `1` keeps each child serial; raise it for I/O-bound jobs so a bounded set of isolated processes handles high concurrency (like the inline lane) without one process per concurrent job. A single job's unexpected failure is reported for reclamation without taking down the child or its concurrent siblings; only a process-level crash fails the whole in-flight set. `pooledRunnerCount`, `pooledRunnerConcurrency`, and `pooledRunnerMaxJobs` must be finite positive integers; the RSS and lifetime limits must be finite positive numbers. Invalid values fall back to their defaults. A runner is retired after an acknowledged terminal report when it reaches `pooledRunnerMaxJobs` (default `100`), child-measured `pooledRunnerMaxRssBytes` (default `536870912`, or 512 MiB), or `pooledRunnerMaxLifetimeMs` from child creation (default `3600000`, or one hour). Retirement never interrupts in-flight jobs: the child stops receiving new work, its replacement is spawned immediately (1-for-1, so capacity does not wait for the drain), and the retiring child is terminated only once its in-flight set drains. Exited, unacknowledged, or unhealthy runners immediately re-advertise their freed capacity after startup, while the replacement is still spawned lazily by the next dispatch; a runner that exits before its startup handshake does not re-advertise, preventing a startup respawn loop. Failure reports remain tracked and are drained during graceful shutdown, but a slow fallback report no longer blocks reuse of the freed runner capacity. Graceful worker shutdown stops advertising capacity, drains current pooled jobs and reports, and then terminates every idle child within the existing shutdown bounds.
 
 Set the runtime explicitly with `executionMode` — `"pooled"` (default), `"inline"`, `"forked"`, or `"spawned"`. There is no `forked` option; a store upgrade migrates any legacy `forked`-flagged rows to their `execution_mode` and drops the column.
 
@@ -258,6 +271,16 @@ Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`)
 
 Each durable worker handoff has a unique lease id. If a worker socket disconnects unexpectedly, `background-jobs-main` immediately returns only the jobs handed to that exact socket to the queue and makes them available to another connected worker. Two connections that advertise the same worker id remain isolated from each other.
 
+The main chooses the lease id before persistence. If `markHandedOff` throws, it
+conditionally returns only that id, including when the database committed but
+the acknowledgement was lost. A failed recovery read/return stays in the main's
+recovery ledger and is retried through the dispatch error-retry path; a later
+lease is never selected by timestamp or worker id and therefore cannot be
+requeued by the stale recovery. Because no job reached the selected worker, its
+consumed admission is restored only while that exact socket remains connected
+and non-draining. A readiness advertisement received during persistence is
+authoritative, so pooled capacity is not double-credited.
+
 Disconnect recovery provides at-least-once delivery: a disconnected worker may already have started external side effects before the replacement attempt begins. Completion and failure reports carry the lease id and update the database only while that exact handoff is still active, so a late report from the disconnected attempt cannot complete or fail a newer attempt.
 
 Graceful draining is unchanged. A worker that announces `draining` keeps its socket open while its in-flight jobs finish, and those jobs are not reclaimed unless that socket is subsequently lost before their reports are accepted.
@@ -272,7 +295,7 @@ Disconnect recovery above depends on the worker's control socket firing a `close
 
 - **Heartbeats.** A worker advertises `supportsHeartbeat` in its hello and then sends a periodic `heartbeat` (default every 15s); the sockets also enable TCP keepalive. The main records the last time it saw any message from each worker and, on a periodic sweep, drops a heartbeat-capable worker that has been silent longer than `workerStaleTimeoutMs` (default 60s) — releasing its leases so its jobs run elsewhere and it stops receiving new work. A worker that does **not** advertise heartbeat support (for example an older release mid rolling deploy) is exempt from stale eviction and is only reclaimed through the `close`-based path, so its in-flight leases are never released while it is still running them.
 - **Decoupled, durable reporting.** Freeing a worker's job slot never waits on reporting the result to the main. When a job (inline or forked) finishes, its slot is released immediately and the completion/failure report is sent in the background and retried durably until it lands. A transient main/DB outage therefore can neither leak worker slots (which previously drove the worker to stop accepting jobs) nor lose a terminal report and re-run already-completed work. A graceful `stop()` drains in-flight reports before closing the socket.
-- **Readiness re-announcement.** The main removes a worker from its ready set on each dispatch and only re-adds it when the worker sends a fresh `ready`. A worker therefore re-announces free capacity on *every* completion that leaves it below its cap, not only on the single at-cap→below-cap edge — so a missed re-signal can no longer strand a worker out of the ready set and silently freeze dispatch (a failure mode that surfaced under bursty high-concurrency load). Because each re-announce corresponds to a genuinely freed slot, it never advertises capacity that a still-in-flight handoff will consume (which a timer-based re-announce would).
+- **Readiness re-announcement.** Pooled workers advertise an exact available-slot count, which the main consumes once per durable handoff so a single readiness message can fill the configured concurrent pool without waiting for an earlier job to finish. The worker refreshes that count on every completion and immediately after an initialized child exits, even while its failure reports retry. Forked, spawned, and inline readiness remains edge-driven: the main removes a worker from its ready set on dispatch and the worker re-announces every freed slot. These advertisements correspond only to real capacity, so no polling timer or speculative handoff is required.
 
 Heartbeat interval, stale timeout, and sweep interval are overridable via the worker/main constructors for tests and tuning.
 
@@ -341,7 +364,7 @@ The mirrored `all-error` payload includes the same `error` and `context` plus `e
 
 ### Orphaned jobs
 
-`background-jobs-main` also emits a `background-job-orphaned` error event (mirrored to `all-error` as `errorType: "background-job-orphaned"`) for each job its time-based orphan sweep reclaims — a job whose worker died mid-run and stopped reporting, so it was stuck `handed_off` past the orphan timeout. Unlike `background-job-failed`, which fires on a worker's failure report, this fires from the main process's sweep, so an application can react to the specific job a dead worker left behind — enqueue a targeted recovery for the work it was doing — instead of only polling for the aftermath.
+`background-jobs-main` also emits a `background-job-orphaned` error event (mirrored to `all-error` as `errorType: "background-job-orphaned"`) for each job its time-based orphan sweep reclaims — a job whose worker died mid-run and stopped reporting, so it was stuck `handed_off` past the orphan timeout. Unlike `background-job-failed`, which fires on a worker's failure report, this fires from the main process's sweep, so an application can react to the specific job a dead worker left behind — enqueue a targeted recovery for the work it was doing — instead of only polling for the aftermath. The sweep emits these events before waiting for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery handlers.
 
 ```js
 configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) => {
@@ -423,6 +446,22 @@ cancelled otherwise — and a replacement child is spawned. Either way the slot 
 freed on exit, so the worker (including a draining one) can always reach zero
 in-flight jobs and exit.
 
+Set `options.timeoutMs` on an individual forked or pooled job when its safe
+runtime ceiling differs from the worker default. A positive per-job value takes
+precedence over `backgroundJobs.jobTimeoutMs`; a non-positive finite value
+disables the backstop for that job. Positive values
+must be integers no greater than `2_147_483_647` (Node's maximum supported timer);
+wrong types, non-finite values, fractions, and larger values are rejected before
+the job is persisted. Omitting `timeoutMs` keeps the worker-level setting as the
+fallback.
+
+```js
+await BuildJob.performLaterWithOptions({
+  args: [projectId],
+  options: {executionMode: "pooled", timeoutMs: 10 * 60 * 1000}
+})
+```
+
 ```js
 backgroundJobs: {
   // Kill and fail any forked runner still going after 90 minutes.
@@ -430,9 +469,8 @@ backgroundJobs: {
 }
 ```
 
-This is a coarse safety net, not per-job tuning. It applies to every forked
-runner on the worker, so set it **well above** the longest legitimate forked job
-(build runners, large imports) — pick a ceiling that only a stuck runner would
-ever cross. Omit it, or set `null`/`<= 0`, to disable (the default), which keeps
-the prior unbounded behavior. `"inline"` jobs are not covered: they share the
-worker's process and cannot be killed without killing the worker.
+The worker-level setting is a coarse default, so set it **well above** the
+longest legitimate forked or pooled job unless individual jobs supply tighter
+timeouts. Omit it, or set `null`/`<= 0`, to disable the default. `"inline"` jobs
+are not covered: they share the worker's process and cannot be killed without
+killing the worker.

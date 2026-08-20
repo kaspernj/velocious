@@ -28,6 +28,14 @@ export default class JsonSocket extends EventEmitter {
     this.acceptsForkedJobs = true
     /** @type {boolean} */
     this.acceptsPooledJobs = false
+    /** Number of pooled handoffs this readiness advertisement can accept. */
+    this.availablePooledSlots = 0
+    /** Whether the worker/main pair uses consumable pooled-capacity credits. */
+    this.usesPooledCapacityCredits = false
+    /** Whether this worker has permanently stopped accepting new handoffs. */
+    this.isDraining = false
+    /** Monotonic generation of the worker's latest readiness advertisement. */
+    this.readinessVersion = 0
     /**
      * Narrows the runtime value to the documented type.
      * @type {boolean} */

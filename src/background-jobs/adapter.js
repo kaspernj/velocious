@@ -83,7 +83,9 @@ export default class BackgroundJobsAdapter {
 
   /**
    * Starts a job by claiming its durable handoff.
-   * @param {{jobId: string, workerId?: string}} _args - Handoff request.
+   * When `handoffId` is supplied, the adapter must persist and return that exact
+   * id so the caller can fence an ambiguous commit acknowledgement.
+   * @param {import("./types.js").BackgroundJobHandoffRequest} _args - Handoff request.
    * @returns {Promise<import("./types.js").BackgroundJobHandoff | null>} - Claimed handoff.
    */
   async markHandedOff(_args) { throw new Error("BackgroundJobsAdapter#markHandedOff is not implemented") }

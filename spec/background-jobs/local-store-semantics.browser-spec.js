@@ -4,6 +4,15 @@ import LocalBackgroundJobsStore, {LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE} from "
 import Configuration from "../../src/configuration.js"
 
 describe("Local background jobs store - queue semantics", {tags: ["dummy"], databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("persists an exact caller-selected handoff id", async () => {
+    const store = new LocalBackgroundJobsStore({configuration: Configuration.current()})
+    const jobId = await store.enqueue({jobName: "UploadJob", args: [], options: {executionMode: "inline"}})
+    const handoff = await store.markHandedOff({handoffId: "caller-selected-local-handoff", jobId})
+
+    expect(handoff?.handoffId).toEqual("caller-selected-local-handoff")
+    expect((await store.getJob(jobId))?.handoffId).toEqual("caller-selected-local-handoff")
+  })
+
   it("atomically enforces queue caps, queued deduplication, claims, and fenced acknowledgements", async () => {
     const configuration = Configuration.current()
 

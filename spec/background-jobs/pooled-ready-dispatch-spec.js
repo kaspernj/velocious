@@ -1,0 +1,104 @@
+// @ts-check
+
+import timeout from "awaitery/build/timeout.js"
+import wait from "awaitery/build/wait.js"
+import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.js"
+import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
+import TestJob from "../dummy/src/jobs/test-job.js"
+import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/background-jobs-helper.js"
+
+/** @type {Awaited<ReturnType<typeof startBackgroundJobs>> | undefined} */
+let backgroundJobs
+
+describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
+  beforeAll(async () => {
+    backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerConcurrency: 5, pooledRunnerCount: 1}})
+  })
+
+  afterAll(async () => {
+    if (!backgroundJobs) return
+    await backgroundJobs.worker.stop({timeoutMs: 3000})
+    await backgroundJobs.main.stop()
+  })
+
+  it("fills every advertised pooled slot without waiting for an earlier job to finish", async () => {
+    if (!backgroundJobs) throw new Error("Expected background jobs to be started")
+    const jobIds = []
+
+    for (let index = 0; index < 5; index += 1) {
+      const outputPath = await outputPathFor(`pooled-ready-dispatch-${index}`)
+      jobIds.push(await SlowTestJob.performLaterWithOptions({
+        args: [`job-${index}`, outputPath, 2000],
+        options: {executionMode: "pooled"}
+      }))
+    }
+
+    await timeout({timeout: 1000}, async () => {
+      while (true) {
+        const jobs = await Promise.all(jobIds.map(async (jobId) => await backgroundJobs.store.getJob(jobId)))
+        if (jobs.every((job) => job?.status === "handed_off")) break
+        await wait(0.01)
+      }
+    })
+
+    expect(backgroundJobs.worker.pooledChildStates.values().next().value?.inflight.size).toEqual(5)
+    await timeout({timeout: 3000}, async () => {
+      while (backgroundJobs.worker.inflightPooledJobs.size > 0) await wait(0.01)
+    })
+  })
+
+  it("admits already-queued work after a pooled child exits while its failure report is slow", async () => {
+    if (!backgroundJobs) throw new Error("Expected background jobs to be started")
+    const firstId = await SlowTestJob.performLaterWithOptions({
+      args: ["crashed", await outputPathFor("pooled-ready-crash-first"), 10_000],
+      options: {executionMode: "pooled", maxRetries: 0}
+    })
+    await backgroundJobs.main._drain()
+
+    await timeout({timeout: 2000}, async () => {
+      while (backgroundJobs.worker.inflightPooledJobs.size === 0) await wait(0.01)
+    })
+
+    const child = [...backgroundJobs.worker.pooledChildren][0]
+    if (!child) throw new Error("Expected a pooled child")
+    await timeout({timeout: 2000}, async () => {
+      while (backgroundJobs.worker.pooledChildStates.get(child)?.started !== true) await wait(0.01)
+    })
+
+    const secondOutputPath = await outputPathFor("pooled-ready-crash-second")
+    await TestJob.performLaterWithOptions({
+      args: ["admitted", secondOutputPath],
+      options: {executionMode: "pooled"}
+    })
+    await backgroundJobs.main._drain()
+
+    /** @type {() => void} */
+    let releaseFailureReport = () => {}
+    let failureReportStarted = false
+    const originalReporter = backgroundJobs.worker.statusReporter
+    if (!originalReporter) throw new Error("Expected a worker status reporter")
+    backgroundJobs.worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {unknown} */ ({
+      reportWithRetry: async (args) => {
+        if (args.status !== "failed") return await originalReporter.reportWithRetry(args)
+
+        failureReportStarted = true
+        await new Promise((resolve) => { releaseFailureReport = resolve })
+        return await originalReporter.reportWithRetry(args)
+      }
+    }))
+
+    child.kill("SIGKILL")
+
+    await timeout({timeout: 2000}, async () => {
+      while (!failureReportStarted) await wait(0.01)
+    })
+    await waitForOutputJson({outputPath: secondOutputPath})
+
+    expect((await backgroundJobs.store.getJob(firstId))?.status).toEqual("handed_off")
+
+    releaseFailureReport()
+    await timeout({timeout: 2000}, async () => {
+      while ((await backgroundJobs.store.getJob(firstId))?.status === "handed_off") await wait(0.01)
+    })
+  })
+})
