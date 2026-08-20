@@ -602,16 +602,16 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Tells main we're ready for the next job — but only if we haven't been
-   * asked to drain. Once we've sent `draining` we don't want to take more
-   * work.
+   * Advertises current worker capacity unless the worker is draining.
+   * @param {object} [options] - Advertisement options.
+   * @param {boolean} [options.revokePooledAdmission] - Revoke pooled credits while preserving other execution modes.
    * @returns {void}
    */
-  _sendReadyIfRunning() {
+  _sendReadyIfRunning({revokePooledAdmission = false} = {}) {
     if (this.shouldStop) return
     if (!this.jsonSocket) return
 
-    const readyMessage = this._readyMessage()
+    const readyMessage = this._readyMessage({revokePooledAdmission})
 
     if (!readyMessage) return
     this.jsonSocket.send(readyMessage)
@@ -619,21 +619,24 @@ export default class BackgroundJobsWorker {
 
   /**
    * Runs ready message.
+   * @param {object} [options] - Advertisement options.
+   * @param {boolean} [options.revokePooledAdmission] - Revoke pooled credits while preserving other execution modes.
    * @returns {import("./types.js").BackgroundJobSocketMessage | null} - Ready message or null when the worker has no capacity.
    */
-  _readyMessage() {
+  _readyMessage({revokePooledAdmission = false} = {}) {
     const acceptsProcessJob = this.inflightProcessJobs.size < this.maxConcurrentForkedJobs
     const acceptsInline = this.inflightInlineJobs.size < this.maxConcurrentInlineJobs
-    const acceptsPooled = this._availablePooledSlots() > 0
+    const availablePooledSlots = revokePooledAdmission ? 0 : this._availablePooledSlots()
+    const acceptsPooled = availablePooledSlots > 0
 
-    if (!acceptsProcessJob && !acceptsInline && !acceptsPooled) return null
+    if (!revokePooledAdmission && !acceptsProcessJob && !acceptsInline && !acceptsPooled) return null
 
     return {
       type: "ready",
       acceptsForked: acceptsProcessJob,
       acceptsInline,
       acceptsPooled,
-      availablePooledSlots: this._availablePooledSlots(),
+      availablePooledSlots,
       acceptsSpawned: acceptsProcessJob
     }
   }
@@ -972,6 +975,11 @@ export default class BackgroundJobsWorker {
       for (const entry of entries) {
         if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
       }
+      // A previous ready message may still have unconsumed pooled credits at the
+      // main. Revoke them authoritatively without suppressing valid inline or
+      // process-runner readiness; otherwise queued jobs can trigger a startup
+      // crash loop using the stale credits.
+      this._sendReadyIfRunning({revokePooledAdmission: true})
     }
 
     await Promise.allSettled(failureReports)

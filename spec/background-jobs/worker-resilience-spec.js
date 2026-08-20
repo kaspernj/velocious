@@ -217,7 +217,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
     await failure
   })
 
-  it("does not re-announce capacity when a pooled child dies before startup", async () => {
+  it("revokes stale pooled credits when a child dies before startup", async () => {
     const worker = new BackgroundJobsWorker({pooledRunnerCount: 1})
     /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} */
     const sent = []
@@ -231,7 +231,14 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
 
     await worker._handlePooledChildFailure({child, error: new Error("runner failed during startup")})
 
-    expect(sent).toEqual([])
+    expect(sent).toEqual([{
+      type: "ready",
+      acceptsForked: true,
+      acceptsInline: true,
+      acceptsPooled: false,
+      availablePooledSlots: 0,
+      acceptsSpawned: true
+    }])
   })
 
   it("does not fallback-report an acknowledged failed pooled outcome", () => {
