@@ -7,7 +7,7 @@
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
-* Migrations for schema changes and UTC datetime storage (see [docs/database-migrations.md](docs/database-migrations.md))
+* Migrations for schema changes and UTC datetime storage, including recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md) and [docs/change-table.md](docs/change-table.md))
 * Tenant-selected base-model and structure generation with one immutable, fail-closed physical database context; tenant-only model metadata initializes only after that context is active (see [docs/tenant-selected-database-generation.md](docs/tenant-selected-database-generation.md))
 * Read-only tenant migration deploy preflight with stable JSON output and fail-closed ledger reads (see [docs/tenant-migration-deploy-preflight.md](docs/tenant-migration-deploy-preflight.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))

@@ -75,6 +75,10 @@ await this.removeIndex("tasks", "index_tasks_slug_unique")
 
 Use the columns form for indexes created by `addIndex(...)` without an explicit name so SQLite and the other drivers drop their own generated names correctly.
 
+## Changing Tables with changeTable
+
+`await migration.changeTable(tableName, {bulk}, callback)` applies several column, index, and reference changes to one table from a single recorded callback. Compatible operations combine into one bulk `ALTER TABLE` on MySQL, MariaDB, and PostgreSQL; SQLite and SQL Server execute the recorded operations sequentially against the real schema, so the same source reaches the same schema everywhere. Use `table.remove("column_a", "column_b")` and `table.removeIndex("index_name")` for reversals. See [change-table.md](change-table.md) for the full recorder API and batch semantics.
+
 ## Removing References and Foreign Keys
 
 `await migration.removeReference(tableName, referenceName, args)` reverses an `addReference(...)` change. It awaits each step: removes foreign keys on the reference column, removes the exact generated single-column non-primary index (whether unique or non-unique), then removes the column. It does not remove composite or unrelated indexes. The two-argument form remains valid; `columnName` and `indexName` override the derived column and generated index when needed.

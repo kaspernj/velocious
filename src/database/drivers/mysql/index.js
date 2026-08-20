@@ -346,6 +346,18 @@ export default class VelociousDatabaseDriversMysql extends Base{
   getType() { return "mysql" }
 
   /**
+   * Whether this driver supports combining operations into one bulk `ALTER`.
+   * @returns {boolean} - Whether bulk alter is supported.
+   */
+  supportsBulkAlter() { return true }
+
+  /**
+   * Whether the bulk `ALTER` can also carry `ADD INDEX` clauses.
+   * @returns {boolean} - Whether indexes can be added inside a bulk alter.
+   */
+  supportsBulkAlterIndexes() { return true }
+
+  /**
    * Runs retryable database error.
    * @param {Error} error - Error instance.
    * @returns {import("../base.js").RetryableDatabaseErrorResult} - Retry info.

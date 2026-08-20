@@ -26,13 +26,25 @@ export default class VelociousDatabaseConnectionDriversMysqlSqlAlterTable extend
     const indexes = this.tableData.getIndexes()
 
     if (indexes.length === 0) return sqls
-    if (sqls.length !== 1) throw new Error("Expected one MySQL ALTER TABLE statement when adding indexes")
+    if (sqls.length > 1) throw new Error("Expected one MySQL ALTER TABLE statement when adding indexes")
 
     const options = this.getOptions()
     let sql = sqls[0]
+    let needsIndexSeparator = true
+
+    if (sql === undefined) {
+      sql = `ALTER TABLE ${options.quoteTableName(this.tableData.getName())} `
+      needsIndexSeparator = false
+    }
 
     for (const index of indexes) {
-      sql += ", ADD"
+      if (needsIndexSeparator) {
+        sql += ", "
+      } else {
+        needsIndexSeparator = true
+      }
+
+      sql += "ADD"
 
       if (index.getUnique()) sql += " UNIQUE"
 

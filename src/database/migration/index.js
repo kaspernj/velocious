@@ -1,18 +1,6 @@
 // @ts-check
 
 /**
- * AddColumnArgsType type.
- * @typedef {object} AddColumnArgsType
- * @property {ReturnType<typeof JSON.parse>} [default] - Default value for the column.
- * @property {object} [foreignKey] - Foreign key definition for the column.
- * @property {boolean | {unique: boolean}} [index] - Whether to add an index (optionally unique).
- * @property {number} [limit] - Alias for maxLength (varchar length limit) on string-like columns.
- * @property {number} [maxLength] - Maximum length for string-like columns (e.g. varchar length).
- * @property {boolean} [null] - Whether the column allows null values.
- * @property {boolean} [primaryKey] - Whether the column is a primary key.
- * @property {boolean} [unique] - Whether the column enforces uniqueness.
- */
-/**
  * CreateTableIdArgsType type.
  * @typedef {object} CreateTableIdArgsType
  * @property {ReturnType<typeof JSON.parse>} [default] - Default value for the ID column.
@@ -39,8 +27,11 @@
 import { convertLegacyDateValueToUtcStorage } from "../datetime-storage.js"
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
+import ChangeTable from "./change-table.js"
 import CreateIndexBase from "../query/create-index-base.js"
+import TableColumn from "../table-data/table-column.js"
 import TableData from "../table-data/index.js"
+import TableIndex from "../table-data/table-index.js"
 class NotImplementedError extends Error {}
 
 export {NotImplementedError}
@@ -118,7 +109,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    * @param {string} columnType - Column type.
-   * @param {AddColumnArgsType} [args] - Options object.
+   * @param {import("../table-data/table-column.js").TableColumnArgsType} [args] - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async addColumn(tableName, columnName, columnType, args) {
@@ -684,6 +675,199 @@ export default class VelociousDatabaseMigration {
 
     for (const sql of sqls) {
       await this._db.query(sql)
+    }
+  }
+
+  /**
+   * ChangeTableArgsType type.
+   * @typedef {object} ChangeTableArgsType
+   * @property {boolean} [bulk] - Combine compatible contiguous DDL into single
+   *   ALTER TABLE statements on drivers that support bulk alters (MySQL/MariaDB
+   *   and PostgreSQL). `bulk` controls DDL grouping only, not transactional
+   *   atomicity; unchanged drivers execute the recorded commands sequentially.
+   */
+
+  /**
+   * ChangeTableCallbackType type.
+   * @typedef {(table: import("./change-table.js").default) => void | Promise<void>} ChangeTableCallbackType
+   */
+
+  /**
+   * Changes a table using a Rails-style table-scoped recorder.
+   * @overload
+   * @param {string} tableName - Table name.
+   * @param {ChangeTableCallbackType} callback - Callback function.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  /**
+   * Changes a table with explicit options.
+   * @overload
+   * @param {string} tableName - Table name.
+   * @param {ChangeTableArgsType} args - Options object.
+   * @param {ChangeTableCallbackType} callback - Callback function.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  /**
+   * Runs change table.
+   * @param {string} tableName - Table name.
+   * @param {ChangeTableArgsType | ChangeTableCallbackType} arg1 - Arg1.
+   * @param {ChangeTableCallbackType | undefined} [arg2] - Arg2.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async changeTable(tableName, arg1, arg2) {
+    let args = /** @type {ChangeTableArgsType} */ ({})
+    let callback
+
+    if (typeof arg1 == "function") {
+      callback = arg1
+    } else {
+      args = arg1 || {}
+      callback = arg2
+    }
+
+    if (typeof callback != "function") throw new Error("No callback given")
+
+    const {bulk = false, ...restArgs} = args
+
+    restArgsError(restArgs)
+
+    const table = new ChangeTable({tableName})
+
+    await callback(table)
+
+    await this._executeChangeTableOperations(tableName, table.getOperations(), {bulk})
+  }
+
+  /**
+   * Executes recorded changeTable operations. With `bulk` enabled on a
+   * supporting driver, compatible contiguous column operations accumulate into
+   * a single TableData flushed through `alterTableSQLs`; incompatible commands
+   * flush the batch first and run through the existing migration helpers.
+   * @param {string} tableName - Table name.
+   * @param {import("./change-table.js").ChangeTableOperationType[]} operations - Recorded operations.
+   * @param {object} args - Options object.
+   * @param {boolean} args.bulk - Whether to enable bulk command grouping.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _executeChangeTableOperations(tableName, operations, {bulk}) {
+    const driver = this.getDriver()
+    const bulkSupported = bulk && driver.supportsBulkAlter()
+
+    if (!bulkSupported) {
+      for (const operation of operations) {
+        await this._executeChangeTableOperation(tableName, operation)
+      }
+
+      return
+    }
+
+    let batch = new TableData(tableName)
+
+    const flushBatch = async () => {
+      if (batch.getColumns().length == 0 && batch.getIndexes().length == 0) return
+
+      const sqls = await driver.alterTableSQLs(batch)
+
+      for (const sql of sqls) {
+        await driver.query(sql)
+      }
+
+      batch = new TableData(tableName)
+    }
+
+    for (const operation of operations) {
+      switch (operation.type) {
+        case "addColumn": {
+          if (!operation.columnType) throw new Error("No column type given")
+
+          // Flush an already-recorded index batch first so the emitted SQL keeps
+          // the recorded declaration order (index before column).
+          if (batch.getIndexes().length > 0) await flushBatch()
+
+          batch.addColumn(new TableColumn(operation.columnName, Object.assign({isNewColumn: true, type: operation.columnType}, operation.args)))
+          break
+        }
+        case "removeColumn":
+          // Flush an already-recorded index batch first so the emitted SQL keeps
+          // the recorded declaration order (index before column).
+          if (batch.getIndexes().length > 0) await flushBatch()
+
+          batch.addColumn(new TableColumn(operation.columnName, {dropColumn: true}))
+          break
+        case "addIndex":
+          // Drivers without `supportsBulkAlterIndexes` (PostgreSQL) keep indexes
+          // standalone because their ALTER TABLE does not carry CREATE INDEX
+          // clauses. An ifNotExists index is never combined because the combined
+          // bulk form cannot express that guard.
+          if (!driver.supportsBulkAlterIndexes() || operation.args?.ifNotExists) {
+            await flushBatch()
+            await this._executeChangeTableOperation(tableName, operation)
+          } else {
+            batch.addIndex(this._changeTableTableIndex(tableName, operation))
+          }
+          break
+        default:
+          await flushBatch()
+          await this._executeChangeTableOperation(tableName, operation)
+      }
+    }
+
+    await flushBatch()
+  }
+
+  /**
+   * Builds a TableIndex for a batch from a recorded addIndex operation,
+   * resolving the default addIndex name eagerly so a combined MySQL ALTER
+   * never silently names the index differently.
+   * @param {string} tableName - Table name.
+   * @param {import("./change-table.js").ChangeTableAddIndexOperationType} operation - Recorded operation.
+   * @returns {TableIndex} - The table index.
+   */
+  _changeTableTableIndex(tableName, operation) {
+    const {args, columns} = operation
+    // An ifNotExists index never reaches batching (it is flushed standalone),
+    // so the combined ALTER cannot carry that guard.
+    const {name, ...restIndexArgs} = args || {}
+    const indexName = name || new CreateIndexBase({columns, driver: this.getDriver(), tableName}).generateIndexName()
+
+    return new TableIndex(columns, Object.assign({}, restIndexArgs, {name: indexName}))
+  }
+
+  /**
+   * Executes a single recorded changeTable operation through the existing
+   * migration helper with the same semantics as a direct helper call.
+   * @param {string} tableName - Table name.
+   * @param {import("./change-table.js").ChangeTableOperationType} operation - Recorded operation.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _executeChangeTableOperation(tableName, operation) {
+    switch (operation.type) {
+      case "addColumn":
+        await this.addColumn(tableName, operation.columnName, operation.columnType, operation.args)
+        break
+      case "removeColumn":
+        await this.removeColumn(tableName, operation.columnName)
+        break
+      case "addIndex":
+        await this.addIndex(tableName, operation.columns, operation.args)
+        break
+      case "removeIndex":
+        await this.removeIndex(tableName, operation.nameOrColumns, operation.args)
+        break
+      case "addReference":
+        await this.addReference(tableName, operation.referenceName, operation.args || {})
+        break
+      case "removeReference":
+        await this.removeReference(tableName, operation.referenceName, operation.args)
+        break
+      case "renameColumn":
+        await this.renameColumn(tableName, operation.oldColumnName, operation.newColumnName)
+        break
+      case "changeColumnNull":
+        await this.changeColumnNull(tableName, operation.columnName, operation.nullable)
+        break
+      default:
+        throw new Error("Unknown change table operation")
     }
   }
 
