@@ -507,6 +507,42 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(await readActiveCount({store, concurrencyKey})).toEqual(23)
   })
 
+  it("resets surviving concurrency counts when schema repair recreates the jobs table", async () => {
+    const store = await createClearedStore()
+    const concurrencyKey = "recreated-jobs-table"
+
+    await store.reconcileQueueConcurrency()
+
+    const jobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey, maxConcurrency: 1}
+    })
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    await store._withDb(async (db) => {
+      await db.dropTable("background_jobs", {cascade: true, ifExists: true})
+      db.clearSchemaCache()
+    })
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(1)
+
+    await store.ensureReady()
+
+    expect(await readActiveCount({store, concurrencyKey})).toEqual(0)
+
+    const replacementJobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey, maxConcurrency: 1}
+    })
+    const replacementJob = await store.nextAvailableJob({executionMode: "pooled"})
+
+    expect(replacementJob?.id).toEqual(replacementJobId)
+  })
+
   it("reconciles queue caps against the persisted backlog on startup", async () => {
     dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     const store = await createClearedStore()

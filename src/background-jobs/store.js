@@ -1551,7 +1551,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureConcurrencyTable(db)
     await this._ensureCountRevisionTable(db)
 
-    if (alreadyApplied) return
+    if (alreadyApplied) {
+      // The recreated jobs table is empty, but the surviving concurrency table
+      // can still count handoffs that disappeared with the dropped jobs table.
+      await this._reconcileConcurrency(db)
+
+      return
+    }
 
     await this._recordMigration(db, MIGRATION_VERSION)
   }
@@ -2588,7 +2594,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
-   * Rebuilds durable counts from active handoffs after startup.
+   * Rebuilds durable counts from active handoffs.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when reconciled.
    */
