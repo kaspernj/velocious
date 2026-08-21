@@ -1,16 +1,21 @@
 // @ts-check
 
+import timeout from "awaitery/build/timeout.js"
 import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
+
+const DEFAULT_ENQUEUE_TIMEOUT_MS = 5000
 
 export default class BackgroundJobsClient {
   /**
    * Runs constructor.
    * @param {object} [args] - Options.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
+   * @param {number} [args.enqueueTimeoutMs] - Maximum time to wait for an enqueue acknowledgement in milliseconds (default: 5000).
    */
-  constructor({configuration} = {}) {
+  constructor({configuration, enqueueTimeoutMs = DEFAULT_ENQUEUE_TIMEOUT_MS} = {}) {
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
+    this.enqueueTimeoutMs = enqueueTimeoutMs
   }
 
   /**
@@ -35,7 +40,11 @@ export default class BackgroundJobsClient {
   async enqueue({jobName, args, options}) {
     const request = await this._request()
 
-    return await request.run({
+    return await timeout({
+      errorMessage: `Background job enqueue acknowledgement timed out after ${this.enqueueTimeoutMs}ms`,
+      timeout: this.enqueueTimeoutMs
+    }, async ({control}) => await request.run({
+      signal: control.signal,
       onConnect: (jsonSocket) => {
         jsonSocket.send({
           type: "enqueue",
@@ -54,7 +63,7 @@ export default class BackgroundJobsClient {
           reject(new Error(message.error || "Failed to enqueue job"))
         }
       }
-    })
+    }))
   }
 
   /**
