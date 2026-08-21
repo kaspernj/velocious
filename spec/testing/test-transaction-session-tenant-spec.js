@@ -13,6 +13,53 @@ function nextChildMessage(child) {
 }
 
 describe("Test transaction session tenant enrollment", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("finishes an admitted in-process join but rejects a direct join after revoke", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-revoked-in-process-session")
+    await seedTenantValue(configuration, "projectTenant", "alpha", "committed")
+    const session = await TestTransactionSession.begin({configuration})
+    await session.enrollDatabase({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
+    const joinMessage = session.joinMessage()
+    /** @type {(value?: void) => void} */
+    let releaseAdmitted = () => {}
+    const admittedGate = new Promise((resolve) => { releaseAdmitted = resolve })
+    /** @type {(value?: void) => void} */
+    let resolveAdmitted = () => {}
+    const admitted = new Promise((resolve) => { resolveAdmitted = resolve })
+
+    try {
+      const admittedWork = TestTransactionSession.join(joinMessage, async () => {
+        return await configuration.runWithTenant({slug: "alpha"}, async () => {
+          return await configuration.getDatabasePool("projectTenant").runWithTestSharedConnection(async () => {
+            resolveAdmitted()
+            await admittedGate
+            return await configuration.ensureConnections({databaseIdentifiers: ["projectTenant"]}, async (dbs) => {
+              await dbs.projectTenant.query("UPDATE tenant_values SET value = 'admitted'")
+            })
+          })
+        })
+      })
+      await admitted
+      session.revoke()
+      await expect(() => TestTransactionSession.join(joinMessage, async () => {
+        return await configuration.runWithTenant({slug: "alpha"}, async () => {
+          return await configuration.getDatabasePool("projectTenant").runWithTestSharedConnection(async () => {
+            return await configuration.ensureConnections({databaseIdentifiers: ["projectTenant"]}, async (dbs) => {
+              return await dbs.projectTenant.query("UPDATE tenant_values SET value = 'late'")
+            })
+          })
+        })
+      })).toThrow(/revoked|unavailable/i)
+      releaseAdmitted()
+      await admittedWork
+      await session.rollback()
+      expect(await readTenantValue(configuration, "projectTenant", "alpha")).toEqual("committed")
+    } finally {
+      releaseAdmitted()
+      await session.cleanup()
+      await cleanup()
+    }
+  })
+
   it("selects overlapping session connections from the live join context", async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-overlapping-test-transaction-sessions")
     await seedTenantValue(configuration, "projectTenant", "alpha", "committed")

@@ -287,10 +287,11 @@ export default class SharedTransactionBroker extends EventEmitter {
 
     state.queue = previous.then(async () => {
       try {
-        if (!this.accepting || socket.readyState !== socket.OPEN) throw new Error("Shared transaction broker root transaction session closed before lease acquisition")
+        if (socket.readyState !== socket.OPEN) throw new Error("Shared transaction broker root transaction session closed before lease acquisition")
         const result = await callback()
         state.lease = {operations: Promise.resolve(), release, savePointName, socket}
         resolveStarted(result)
+        if (!this.accepting) await this.scheduleSessionCleanup(socket)
         await held
       } catch (error) {
         state.rootSessions.delete(socket)

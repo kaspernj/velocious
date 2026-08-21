@@ -59,10 +59,28 @@ export default class TestTransactionSession {
     const identity = `${enrollment.databaseIdentifier}\0${enrollment.reuseKey}`
     const existing = this.enrollments.get(identity)
     if (existing) {
-      if (existing.connection !== enrollment.connection) throw new Error(`Test transaction physical identity already enrolled: ${enrollment.databaseIdentifier}`)
+      if (existing.connection !== enrollment.connection) await enrollment.release()
       return
     }
-    await enrollment.connection.startTransaction()
+    try {
+      await enrollment.connection.startTransaction()
+    } catch (error) {
+      /** @type {Error | undefined} */
+      let releaseFailure
+      try {
+        await enrollment.release()
+      } catch (releaseError) {
+        releaseFailure = this.normalizeError(releaseError)
+      }
+      if (releaseFailure) {
+        throw new AggregateError(
+          [this.normalizeError(error), releaseFailure],
+          "Test transaction enrollment start and release failed",
+          {cause: error}
+        )
+      }
+      throw error
+    }
     try {
       broker.enrollConnection(enrollment)
       this.enrollments.set(identity, enrollment)
@@ -107,8 +125,11 @@ export default class TestTransactionSession {
     const registration = pool.registerTestSharedConnectionProvider({
       matches: () => sharedTransactionBrokerContextMatches(sessionIdentity),
       provider: () => {
+        if (!broker.accepting) throw new Error("Test transaction session capability has been revoked")
         const reuseKey = pool.getConfigurationReuseKey()
-        return /** @type {import("../database/drivers/base.js").default | undefined} */ (this.enrollments.get(`${databaseIdentifier}\0${reuseKey}`)?.connection)
+        const connection = this.enrollments.get(`${databaseIdentifier}\0${reuseKey}`)?.connection
+        if (!connection) throw new Error(`Test transaction physical identity is not enrolled: ${databaseIdentifier}`)
+        return connection
       }
     })
     if (registration) this.sharedConnectionRegistrations.set(databaseIdentifier, {pool, registration})
