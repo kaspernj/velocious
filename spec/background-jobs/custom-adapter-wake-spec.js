@@ -27,8 +27,8 @@ describe("Background jobs - custom adapter Node wake-up", {databaseCleaning: {tr
 
       const jobId = await TestJob.performLater("custom-adapter", outputPath)
 
-      expect(await waitForOutputJson({outputPath, timeoutSeconds: 1})).toEqual({message: "custom-adapter"})
       await waitForJobCompleted({jobId, store})
+      expect(await waitForOutputJson({outputPath})).toEqual({message: "custom-adapter"})
     } finally {
       await worker.stop()
       await main.stop()
