@@ -176,6 +176,16 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Registers a test shared connection selected by the caller's live async context.
+   * Base pools that do not track async context ignore it.
+   * @param {{matches: () => boolean, provider: () => import("../drivers/base.js").default | undefined}} _args - Context selector and connection provider.
+   * @returns {TestSharedConnectionRegistration | undefined} - Opaque scoped registration handle.
+   */
+  registerTestSharedConnectionProvider(_args) {
+    return undefined
+  }
+
+  /**
    * Clears the shared connection or provider set for in-process test requests. No-op by default.
    * When a registration is provided, clears only if it is still the active registration.
    * @param {TestSharedConnectionRegistration} [_registration] - Opaque handle returned when the shared value was set.

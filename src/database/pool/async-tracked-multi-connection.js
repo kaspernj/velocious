@@ -56,6 +56,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   _testSharedConnectionRegistration = undefined
 
   /**
+   * Concurrent providers selected by live async join context.
+   * @type {Map<import("./base.js").TestSharedConnectionRegistration, {matches: () => boolean, provider: () => import("../drivers/base.js").default | undefined}>}
+   */
+  _testSharedConnectionProviders = new Map()
+
+  /**
    * Connections.
    * @type {import("../drivers/base.js").default[]} */
   connections = []
@@ -1081,11 +1087,23 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Registers a provider selected by the current live async join context.
+   * @param {{matches: () => boolean, provider: () => import("../drivers/base.js").default | undefined}} args - Context selector and provider.
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque scoped registration handle.
+   */
+  registerTestSharedConnectionProvider(args) {
+    const registration = {owner: Symbol("test-shared-connection-context-provider")}
+    this._testSharedConnectionProviders.set(registration, args)
+    return registration
+  }
+
+  /**
    * Clears the current shared connection registration. A supplied stale registration
    * cannot clear a provider installed by a newer lifecycle.
    * @param {import("./base.js").TestSharedConnectionRegistration} [registration] - Opaque registration handle to clear conditionally.
    * @returns {void} */
   clearTestSharedConnection(registration) {
+    if (registration && this._testSharedConnectionProviders.delete(registration)) return
     if (registration && registration !== this._testSharedConnectionRegistration) return
 
     this._testSharedConnection = undefined
@@ -1116,6 +1134,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
    */
   testSharedConnection() {
+    for (const {matches, provider} of this._testSharedConnectionProviders.values()) {
+      if (matches()) return provider()
+    }
     return this._testSharedConnectionProvider
       ? this._testSharedConnectionProvider()
       : this._testSharedConnection

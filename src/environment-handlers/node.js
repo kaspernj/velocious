@@ -40,7 +40,7 @@ import InitializerFromRequireContext from "../database/initializer-from-require-
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
 import AttachmentPathSource from "./node/attachment-path-source.js"
-import { createSharedTransactionProxyDriver, sharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
+import { automaticSharedTransactionBrokerOmits, createSharedTransactionProxyDriver, sharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
 /**
  * Defines this typedef.
@@ -95,6 +95,8 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {typeof import("../database/pool/base.js").default} - Pool type for this context.
    */
   resolveTestSharedTransactionPoolType({configuredPoolType, databaseIdentifier}) {
+    const databaseConfiguration = this.getConfiguration().getDatabaseIdentifier(databaseIdentifier)
+    if (databaseConfiguration.tenantOnly && automaticSharedTransactionBrokerOmits(databaseIdentifier)) return configuredPoolType
     if (!sharedTransactionBrokerConfig(databaseIdentifier)) return configuredPoolType
 
     return AsyncTrackedMultiConnectionPool
@@ -106,6 +108,7 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    * @returns {Promise<import("../database/drivers/base.js").default | undefined>} - Optional proxy.
    */
   async createTestSharedTransactionConnection({DriverClass, config, configuration, databaseIdentifier, reuseKey}) {
+    if (config.tenantOnly && automaticSharedTransactionBrokerOmits(databaseIdentifier)) return undefined
     const brokerConfig = sharedTransactionBrokerConfig(databaseIdentifier)
     if (!brokerConfig) return undefined
     return createSharedTransactionProxyDriver(DriverClass, config, configuration, databaseIdentifier, {

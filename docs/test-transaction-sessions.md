@@ -26,7 +26,9 @@ An already-running backend joins each request or job with `TestTransactionSessio
 
 The random capability is session-scoped, revoked before rollback, and intentionally omitted from debug snapshots. Never put the message or capability in job arguments or rows, logs, environment files, generated sources, fixtures, snapshots, or durable records. Transport it only in a live control message.
 
-Enrollment is lazy and exact: logical database identifier plus the pool's physical configuration reuse key. Different tenants enroll as different connections. Joined tenant-only pools create broker proxies, but SQL is accepted only after the owner enrolls that exact identity; an unknown tenant fails closed instead of opening an untracked real connection. Enrollment also installs a scoped dynamic provider for in-process request/Scoundrel dispatch.
+Enrollment is lazy and exact: logical database identifier plus the pool's physical configuration reuse key. Different tenants enroll as different connections. Joined tenant-only pools create broker proxies, but SQL is accepted only after the owner enrolls that exact identity; an unknown tenant fails closed instead of opening an untracked real connection. Enrollment also installs a provider selected by the live async join context for in-process request/Scoundrel dispatch, so overlapping sessions on one configuration retain independent physical connections and cleanup ownership.
+
+The test runner's legacy automatic transaction mode remains narrower: tenant-only identifiers omitted from its published broker coordinates continue to use independent real connections. That compatibility fallback applies only to valid automatic child configuration. An explicit `TestTransactionSession` join uses dynamic identity enforcement and never falls back for an unknown or unenrolled tenant.
 
 `cleanup()` is the idempotent shorthand for revoke, drain/transport close, rollback, and release. Shutdown rejects new work first, drains admitted FIFO work, closes child sessions, then rolls back every enrollment. Repeated cleanup or rollback does not release connections twice, and cleanup failures are aggregated rather than swallowed.
 

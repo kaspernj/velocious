@@ -181,7 +181,6 @@ export default class SharedTransactionBroker extends EventEmitter {
       if (!Array.isArray(args)) throw new TypeError("Shared transaction broker arguments must be an array")
       this.emit("work-queued", {connection, databaseIdentifier: request.databaseIdentifier, method: request.method})
       const result = await this.runConnectionRequest({connection, method: request.method, savePointName: typeof args[0] === "string" ? args[0] : undefined, socket}, async () => {
-        if (!this.accepting) throw new Error("Shared transaction broker capability has been revoked")
         if (request.method === "rootTransactionRollback") {
           await this.rollbackRootSavePoint(connection, /** @type {string} */ (args[0]))
           return undefined

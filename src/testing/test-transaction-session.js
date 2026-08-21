@@ -1,7 +1,7 @@
 // @ts-check
 
 import SharedTransactionBroker from "./shared-transaction-broker.js"
-import { runWithSharedTransactionBrokerConfig } from "./shared-transaction-proxy-driver.js"
+import { runWithSharedTransactionBrokerConfig, sharedTransactionBrokerContextMatches } from "./shared-transaction-proxy-driver.js"
 
 /** @typedef {{connection: import("../database/drivers/base.js").default, databaseIdentifier: string, release: () => Promise<void>, reuseKey: string}} Enrollment */
 
@@ -102,9 +102,14 @@ export default class TestTransactionSession {
    */
   installSharedConnectionProvider(databaseIdentifier, pool) {
     if (this.sharedConnectionRegistrations.has(databaseIdentifier)) return
-    const registration = pool.setTestSharedConnectionProvider(() => {
-      const reuseKey = pool.getConfigurationReuseKey()
-      return /** @type {import("../database/drivers/base.js").default | undefined} */ (this.enrollments.get(`${databaseIdentifier}\0${reuseKey}`)?.connection)
+    const broker = this.requiredBroker()
+    const sessionIdentity = {address: broker.address(), capability: broker.capability()}
+    const registration = pool.registerTestSharedConnectionProvider({
+      matches: () => sharedTransactionBrokerContextMatches(sessionIdentity),
+      provider: () => {
+        const reuseKey = pool.getConfigurationReuseKey()
+        return /** @type {import("../database/drivers/base.js").default | undefined} */ (this.enrollments.get(`${databaseIdentifier}\0${reuseKey}`)?.connection)
+      }
     })
     if (registration) this.sharedConnectionRegistrations.set(databaseIdentifier, {pool, registration})
   }
