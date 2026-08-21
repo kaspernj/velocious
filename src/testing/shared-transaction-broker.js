@@ -467,9 +467,9 @@ export default class SharedTransactionBroker extends EventEmitter {
    */
   async closeTransport() {
     this.revoke()
-    await this.drain()
     const closingSessions = Array.from(this.sessions)
     await Promise.all(closingSessions.map(async (socket) => await this.scheduleSessionCleanup(socket)))
+    await this.drain()
     for (const socket of closingSessions) socket.close(1001, "Shared transaction broker closed")
     await new Promise((resolve) => this.websocketServer.close(() => resolve(undefined)))
     await new Promise((resolve) => this.httpServer.close(() => resolve(undefined)))
