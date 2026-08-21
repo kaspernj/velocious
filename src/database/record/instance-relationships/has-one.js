@@ -66,6 +66,12 @@ export default class VelociousDatabaseRecordHasOneInstanceRelationship extends B
 
     whereArgs[foreignKey] = primaryModelID
 
+    if (this.getRelationship().getPolymorphic()) {
+      const typeColumn = this.getRelationship().getPolymorphicTypeColumn()
+
+      whereArgs[typeColumn] = this.getModel().getModelClass().getModelName()
+    }
+
     let query = this.getModel().queryForModel(TargetModelClass).where(whereArgs)
 
     query = this.applyScope(query)

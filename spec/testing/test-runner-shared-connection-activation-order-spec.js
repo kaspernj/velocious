@@ -157,4 +157,64 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
 
     expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test", "clear", "stop", "afterEach"])
   })
+
+  it("drains pending broadcasts before revoking shared access and transaction cleanup", async () => {
+    const order = []
+
+    class ObservedConfiguration extends Configuration {
+      async awaitPendingBroadcasts() { order.push("awaitPendingBroadcasts") }
+    }
+
+    const configuration = new ObservedConfiguration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+
+    class ObservedTestRunner extends TestRunner {
+      activateTestSharedConnections() {
+        order.push("activate")
+        return []
+      }
+
+      clearTestSharedConnections() { order.push("clear") }
+
+      async prepareSharedTransactionBroker() {
+        order.push("coordinate")
+        return undefined
+      }
+
+      async startSharedTransactionBroker() {
+        order.push("publish")
+        return undefined
+      }
+
+      async stopSharedTransactionBroker() { order.push("stop") }
+    }
+
+    const testRunner = new ObservedTestRunner({configuration, testFiles: []})
+    const tests = {
+      args: {},
+      afterAlls: [],
+      afterEaches: [{callback: async () => { order.push("afterEach") }}],
+      beforeAlls: [],
+      beforeEaches: [{callback: async () => { order.push("beforeEach") }}],
+      subs: {},
+      tests: {
+        "coordinates pending broadcast cleanup": {
+          args: {databaseCleaning: {transaction: true}},
+          function: async () => { order.push("test") }
+        }
+      }
+    }
+
+    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+
+    expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test", "awaitPendingBroadcasts", "clear", "stop", "afterEach"])
+  })
 })

@@ -1307,26 +1307,33 @@ export default class TestRunner {
                     })
                   } finally {
                     try {
-                      if (testSharedConnectionsActive) {
-                        this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                        testSharedConnectionRegistrations = []
-                        testSharedConnectionsActive = false
-                      }
+                      // Framework-owned post-commit broadcasts are intentionally
+                      // detached; drain them before test cleanup so their DB
+                      // checkouts cannot leak into the next test's lifecycle.
+                      await this.getConfiguration().awaitPendingBroadcasts()
                     } finally {
                       try {
-                        await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
-                        sharedTransactionBrokerRegistration = undefined
-                        sharedTransactionBrokerPreparation = undefined
+                        if (testSharedConnectionsActive) {
+                          this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                          testSharedConnectionRegistrations = []
+                          testSharedConnectionsActive = false
+                        }
                       } finally {
-                        for (const afterEachData of newAfterEaches) {
-                          await this.runProfileSpan({
-                            phase: "afterEach",
-                            declarationIndex: afterEachData.declarationIndex,
-                            declarationScopeId: afterEachData.declarationScopeId,
-                            filePath: afterEachData.ownerFilePath
-                          }, async () => {
-                            await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                          })
+                        try {
+                          await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
+                          sharedTransactionBrokerRegistration = undefined
+                          sharedTransactionBrokerPreparation = undefined
+                        } finally {
+                          for (const afterEachData of newAfterEaches) {
+                            await this.runProfileSpan({
+                              phase: "afterEach",
+                              declarationIndex: afterEachData.declarationIndex,
+                              declarationScopeId: afterEachData.declarationScopeId,
+                              filePath: afterEachData.ownerFilePath
+                            }, async () => {
+                              await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                            })
+                          }
                         }
                       }
                     }
