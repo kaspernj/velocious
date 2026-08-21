@@ -1,4 +1,5 @@
 import Project from "../../dummy/src/models/project.js"
+import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - destroy", {tags: ["dummy"]}, () => {
@@ -44,6 +45,15 @@ describe("Record - destroy", {tags: ["dummy"]}, () => {
     const translationsAfter = await TranslationClass.where({projectId: project.id()}).toArray()
 
     expect(translationsAfter.length).toEqual(0)
+  })
+
+  it("destroys a dependent has-one record", async () => {
+    const project = await Project.create()
+    const projectDetail = await ProjectDetail.create({projectId: project.id()})
+
+    await project.destroy()
+
+    expect(await ProjectDetail.findBy({id: projectDetail.id()})).toEqual(undefined)
   })
 
   it("blocks destroy when dependent restrict records exist", async () => {
