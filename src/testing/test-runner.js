@@ -123,6 +123,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * TransactionalTenantRegistration type.
  * @typedef {object} TransactionalTenantRegistration
  * @property {import("../database/drivers/base.js").default} connection - Attempt-owned physical connection.
+ * @property {Promise<void> | undefined} [cleanupPromise] - Single cleanup operation shared by emergency and eventual lifecycle cleanup.
  * @property {import("../database/pool/base.js").default} pool - Owning logical pool.
  * @property {import("../database/pool/base.js").TestSharedConnectionRegistration} sharedRegistration - Physical-key shared registration.
  */
@@ -692,20 +693,30 @@ export default class TestRunner {
     for (const registration of registrations) {
       registration.pool.clearTestSharedConnection(registration.sharedRegistration)
     }
-    const errors = []
-    for (const registration of registrations.reverse()) {
-      try {
-        await registration.connection.rollbackTransaction()
-      } catch (error) {
-        errors.push(error)
-      } finally {
+    const cleanupResults = await Promise.allSettled([...registrations].reverse().map((registration) => {
+      registration.cleanupPromise ??= (async () => {
+        const errors = []
         try {
-          await registration.pool.checkin(registration.connection)
+          await registration.connection.rollbackTransaction()
         } catch (error) {
           errors.push(error)
+        } finally {
+          try {
+            await registration.pool.checkin(registration.connection)
+          } catch (error) {
+            errors.push(error)
+          }
         }
-      }
-    }
+        if (errors.length === 1) throw errors[0]
+        if (errors.length > 1) throw new AggregateError(errors, "Failed to clean up a transactional tenant test connection")
+      })()
+
+      return registration.cleanupPromise
+    }))
+    const errors = cleanupResults
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason)
+
     if (errors.length === 1) throw errors[0]
     if (errors.length > 1) throw new AggregateError(errors, "Failed to clean up transactional tenant test connections")
   }
@@ -1399,8 +1410,6 @@ export default class TestRunner {
                           sharedTransactionBrokerPreparation = undefined
                         } finally {
                           try {
-                            await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
-                          } finally {
                             for (const afterEachData of newAfterEaches) {
                               await this.runProfileSpan({
                                 phase: "afterEach",
@@ -1411,6 +1420,8 @@ export default class TestRunner {
                                 await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
                               })
                             }
+                          } finally {
+                            await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
                           }
                         }
                       }
@@ -1479,6 +1490,7 @@ export default class TestRunner {
               await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
               sharedTransactionBrokerRegistration = undefined
               sharedTransactionBrokerPreparation = undefined
+              await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
             }
 
             willRetry = retriesUsed < retryCount

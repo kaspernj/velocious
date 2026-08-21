@@ -83,7 +83,10 @@ Repeated tenant scopes and compatible same-process request paths reuse that conn
 only when both parts of the identity match. Two physical tenant databases under one
 identifier therefore remain isolated, while an unregistered tenant continues through
 ordinary pool checkout. Attempt cleanup revokes the shared registration before rollback
-and release, including failed setup, failed tests, and retries.
+and release, including failed setup, failed tests, retries, and lifecycles that remain
+hung beyond timeout grace. The registration stays active through `afterEach`, so hooks
+can inspect or tear down the test body's uncommitted tenant rows on the same connection;
+rollback and release occur after those hooks finish.
 
 Transactional background-job tests use the same isolation for real child runtimes.
 While a test transaction is active, forked, pooled, and spawned runners route their

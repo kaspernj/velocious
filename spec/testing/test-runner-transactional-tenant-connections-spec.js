@@ -3,7 +3,7 @@
 import {createTenantTestConfiguration} from "../helpers/tenant-test-helpers.js"
 import Current from "../../src/current.js"
 import DatabaseRecord from "../../src/database/record/index.js"
-import {describe, expect, it} from "../../src/testing/test.js"
+import {configureTests, describe, expect, it, testConfig} from "../../src/testing/test.js"
 import Tenant from "../../src/tenants/tenant.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
@@ -158,6 +158,154 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
         })
       })
     } finally {
+      await cleanup()
+    }
+  })
+
+  it("keeps the registered tenant transaction active through afterEach", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("test-runner-transactional-tenant-after-each")
+    const afterEachConnections = []
+    let bodyConnection
+    let afterEachAttempt = 0
+
+    try {
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await configuration.ensureConnections(async (dbs) => {
+          await dbs.projectTenant.query("CREATE TABLE attempt_rows(value varchar(255) NOT NULL)")
+        })
+      })
+
+      const runner = new TestRunner({configuration, testFiles: []})
+      const tests = {
+        args: {},
+        afterAlls: [],
+        afterEaches: [{
+          callback: async () => {
+            afterEachAttempt++
+            await configuration.runWithTenant({slug: "alpha"}, async () => {
+              await configuration.ensureConnections(async (dbs) => {
+                afterEachConnections.push(dbs.projectTenant)
+                expect(dbs.projectTenant.insideTransaction()).toBe(true)
+                if (afterEachAttempt === 1) {
+                  expect(await dbs.projectTenant.query("SELECT value FROM attempt_rows")).toEqual([{value: "test-body"}])
+                }
+              })
+            })
+          }
+        }],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "writes for afterEach inspection": {
+            args: {databaseCleaning: {transaction: true}},
+            function: async (testArgs) => {
+              await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
+              await configuration.runWithTenant({slug: "alpha"}, async () => {
+                await configuration.ensureConnections(async (dbs) => {
+                  bodyConnection = dbs.projectTenant
+                  await dbs.projectTenant.query("INSERT INTO attempt_rows(value) VALUES ('test-body')")
+                })
+              })
+            }
+          },
+          "starts without the prior attempt row": {
+            args: {databaseCleaning: {transaction: true}},
+            function: async (testArgs) => {
+              await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
+              await configuration.runWithTenant({slug: "alpha"}, async () => {
+                await configuration.ensureConnections(async (dbs) => {
+                  expect(await dbs.projectTenant.query("SELECT value FROM attempt_rows")).toEqual([])
+                })
+              })
+            }
+          }
+        }
+      }
+
+      await runner.runTests({afterEaches: [], beforeEaches: [], descriptions: [], indentLevel: 0, tests})
+
+      expect(runner._failedTests).toBe(0)
+      expect(afterEachConnections[0]).toBe(bodyConnection)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("emergency-cleans a transactional tenant whose timed-out lifecycle remains pending", async () => {
+    const previousTimeoutSeconds = testConfig.defaultTimeoutSeconds
+    const {cleanup, configuration} = await createTenantTestConfiguration("test-runner-transactional-tenant-timeout")
+    const pool = configuration.getDatabasePool("projectTenant")
+    let resumeTimedOutBody = () => {}
+    let markTimedOutAfterEachComplete = () => {}
+    const timedOutBodySignal = new Promise((resolve) => {
+      resumeTimedOutBody = resolve
+    })
+    const timedOutAfterEachComplete = new Promise((resolve) => {
+      markTimedOutAfterEachComplete = resolve
+    })
+    let timedOutBodyResumed = false
+
+    try {
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await configuration.ensureConnections(async (dbs) => {
+          await dbs.projectTenant.query("CREATE TABLE attempt_rows(value varchar(255) NOT NULL)")
+        })
+      })
+      configureTests({defaultTimeoutSeconds: 1})
+
+      const runner = new TestRunner({configuration, testFiles: []})
+      const tests = {
+        args: {},
+        afterAlls: [],
+        afterEaches: [{
+          callback: async () => {
+            if (timedOutBodyResumed) markTimedOutAfterEachComplete()
+          }
+        }],
+        beforeAlls: [],
+        beforeEaches: [],
+        subs: {},
+        tests: {
+          "times out while holding an uncommitted tenant row": {
+            args: {databaseCleaning: {transaction: true}, timeoutSeconds: 0.01},
+            function: async (testArgs) => {
+              await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
+              await configuration.runWithTenant({slug: "alpha"}, async () => {
+                await configuration.ensureConnections(async (dbs) => {
+                  await dbs.projectTenant.query("INSERT INTO attempt_rows(value) VALUES ('timed-out')")
+                })
+              })
+              await timedOutBodySignal
+            }
+          },
+          "does not inherit the timed-out tenant registration": {
+            args: {databaseCleaning: {transaction: true}},
+            function: async (testArgs) => {
+              expect(pool.testSharedConnection()).toBeUndefined()
+              expect(pool.getDebugSnapshot().inUseCount).toBe(0)
+              await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
+              await configuration.runWithTenant({slug: "alpha"}, async () => {
+                await configuration.ensureConnections(async (dbs) => {
+                  expect(await dbs.projectTenant.query("SELECT value FROM attempt_rows")).toEqual([])
+                })
+              })
+            }
+          }
+        }
+      }
+
+      await runner.runTests({afterEaches: [], beforeEaches: [], descriptions: [], indentLevel: 0, tests})
+      timedOutBodyResumed = true
+      resumeTimedOutBody()
+      await timedOutAfterEachComplete
+
+      expect(pool.testSharedConnection()).toBeUndefined()
+      expect(pool.getDebugSnapshot().inUseCount).toBe(0)
+      expect(runner._failedTests).toBe(1)
+    } finally {
+      resumeTimedOutBody()
+      configureTests({defaultTimeoutSeconds: previousTimeoutSeconds})
       await cleanup()
     }
   })
