@@ -1,4 +1,6 @@
+import Interaction from "../../dummy/src/models/interaction.js"
 import Project from "../../dummy/src/models/project.js"
+import ProjectDetail from "../../dummy/src/models/project-detail.js"
 import Task from "../../dummy/src/models/task.js"
 
 describe("Record - destroy", {tags: ["dummy"]}, () => {
@@ -44,6 +46,36 @@ describe("Record - destroy", {tags: ["dummy"]}, () => {
     const translationsAfter = await TranslationClass.where({projectId: project.id()}).toArray()
 
     expect(translationsAfter.length).toEqual(0)
+  })
+
+  it("destroys a dependent has-one record", async () => {
+    const project = await Project.create()
+    const projectDetail = await ProjectDetail.create({projectId: project.id()})
+
+    await project.destroy()
+
+    expect(await ProjectDetail.findBy({id: projectDetail.id()})).toEqual(undefined)
+  })
+
+  it("does not destroy another owner's polymorphic has-one record with the same foreign key", async () => {
+    const project = await Project.create()
+    const taskOwner = await Project.create()
+    const task = await Task.create({id: project.id(), name: "Shared id task", project: taskOwner})
+
+    expect(task.id()).toEqual(project.id())
+
+    const taskInteraction = await Interaction.create({
+      kind: "Task interaction",
+      subjectId: task.id(),
+      subjectType: "Task"
+    })
+    const foundProject = await Project.find(project.id())
+    const loadedInteraction = await foundProject.getRelationshipByName("primaryInteraction").load()
+
+    expect(loadedInteraction).toEqual(undefined)
+    await foundProject.destroy()
+
+    expect(await Interaction.findBy({id: taskInteraction.id()})).toBeDefined()
   })
 
   it("blocks destroy when dependent restrict records exist", async () => {

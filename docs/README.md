@@ -33,7 +33,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/translations.md`: Translated record attributes, `currentTranslation`, and translated frontend-model sorting.
 - `docs/routing-hooks-and-autoroutes.md`: Route hook support and frontend-model autoroute behavior.
 - `docs/authorization-and-current.md`: Ability usage, `Current`, and `accessible`/`accessibleBy` behavior.
-- `docs/relationships.md`: Relationship types, through (many-to-many) relationships, and preloading behavior.
+- `docs/relationships.md`: Relationship types, dependent destroy/restrict behavior, through (many-to-many) relationships, and preloading behavior.
 - `docs/testing-guidelines.md`: Browser/system test guidance, database cleanup batching, and why end-to-end coverage is preferred.
 
 ## Working Agreement

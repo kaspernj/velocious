@@ -63,13 +63,16 @@ The `dependent` option controls what happens to associated records when the pare
 
 ```js
 User.hasMany("authenticationTokens", {dependent: "destroy"})
+Project.hasOne("projectDetail", {dependent: "destroy"})
 Project.hasMany("tasks", {dependent: "restrict"})
 ```
 
 | Value | Behavior |
 |---|---|
-| `"destroy"` | Loads and destroys all dependent records before destroying the parent |
+| `"destroy"` | Loads and destroys dependent records before destroying the parent |
 | `"restrict"` | Blocks destroy with an error when any dependent records exist (uses a COUNT query, does not load records) |
+
+For `hasMany`, `dependent: "destroy"` destroys every loaded child. For `hasOne`, it destroys at most one matching child. An absent `hasOne` association is treated as empty: no child is destroyed, and the parent destroy continues. Polymorphic `hasOne` dependencies match both the foreign key and the polymorphic type column, so another model with the same numeric ID is not treated as the child.
 
 The restrict error message follows the pattern `"Cannot delete record because dependent <relationship> exist"`.
 

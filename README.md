@@ -1144,6 +1144,17 @@ const groups = invoices[0].invoiceGroupsLoaded()
 
 The intermediate relationship (e.g. `invoiceGroupLinks`) must be defined as a separate `hasMany` on the same model. The `foreignKey` option on the through relationship specifies the column on the target table that points to the intermediate table (defaults to the conventional foreign key).
 
+## Dependent relationships
+
+`dependent` controls what happens to child records when a parent is destroyed:
+
+```js
+Project.hasMany("tasks", {dependent: "restrict"})
+Project.hasOne("projectDetail", {dependent: "destroy"})
+```
+
+`dependent: "destroy"` loads and destroys children before deleting the parent. For `hasOne`, Velocious destroys at most one matching child; when no matching child exists, the parent destroy continues without error. Polymorphic `hasOne` dependencies match both the foreign key and type column so another model with the same ID is not destroyed. `dependent: "restrict"` blocks the parent destroy when dependent rows exist.
+
 ## Relationship scopes
 
 You can pass a scope callback to `hasMany`, `hasOne`, or `belongsTo` to add custom filters. The callback receives the query and is also bound as `this`:

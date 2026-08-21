@@ -3992,6 +3992,20 @@ class VelociousDatabaseRecord {
         } else {
           throw new Error(`Unexpected loaded type: ${typeof loadedModels}`)
         }
+      } else if (instanceRelationship.getType() == "hasOne") {
+        if (!instanceRelationship.isLoaded()) {
+          await instanceRelationship.load()
+        }
+
+        const loadedModel = instanceRelationship.loaded()
+
+        if (loadedModel instanceof VelociousDatabaseRecord) {
+          models = [loadedModel]
+        } else if (loadedModel === undefined) {
+          models = []
+        } else {
+          throw new Error(`Unexpected loaded type: ${typeof loadedModel}`)
+        }
       } else {
         throw new Error(`Unhandled relationship type: ${instanceRelationship.getType()}`)
       }
