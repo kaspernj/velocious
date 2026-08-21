@@ -1,7 +1,33 @@
 // @ts-check
 
-/** @type {WeakMap<object, {coordinator: (callback: () => Promise<unknown>) => Promise<unknown>, owner: symbol}>} */
+/** @typedef {{coordinator: (callback: () => Promise<unknown>) => Promise<unknown>, ownedQueue: Promise<void>, owner: symbol}} CoordinatorRegistration */
+
+/** @type {WeakMap<object, CoordinatorRegistration>} */
 const coordinators = new WeakMap()
+
+/**
+ * Serializes sibling work that inherited one coordinator owner without re-entering the broker queue.
+ * @template T
+ * @param {CoordinatorRegistration} registration - Physical connection registration.
+ * @param {() => Promise<T>} callback - Owned operation.
+ * @returns {Promise<T>} - Operation result.
+ */
+async function coordinateOwnedSharedTransactionConnection(registration, callback) {
+  const previous = registration.ownedQueue
+  /**
+   * Releases the next owned sibling operation.
+   * @type {() => void}
+   */
+  let release = () => {}
+
+  registration.ownedQueue = new Promise((resolve) => { release = resolve })
+  await previous
+  try {
+    return await callback()
+  } finally {
+    release()
+  }
+}
 
 /**
  * Registers test-only serialization owned by the active broker.
@@ -12,7 +38,7 @@ const coordinators = new WeakMap()
 export function setSharedTransactionCoordinator(connection, coordinator) {
   const owner = Symbol("shared-transaction-coordinator")
 
-  coordinators.set(connection, {coordinator, owner})
+  coordinators.set(connection, {coordinator, ownedQueue: Promise.resolve(), owner})
   return owner
 }
 
@@ -43,7 +69,7 @@ export async function coordinateSharedTransactionConnection(connection, callback
   const environmentHandler = connection.configuration.getEnvironmentHandler()
 
   if (environmentHandler.getSharedTransactionCoordinatorOwner(connection) === registration.owner) {
-    return await callback()
+    return await coordinateOwnedSharedTransactionConnection(registration, callback)
   }
 
   return /** @type {T} */ (await registration.coordinator(async () => {
