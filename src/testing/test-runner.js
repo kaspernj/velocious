@@ -717,7 +717,7 @@ export default class TestRunner {
       try {
         await this.cleanupTransactionalTenants([registration], {discard: registration.discardOnCleanup === true})
       } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], "Failed to register and clean up a transactional tenant test connection")
+        throw new AggregateError([error, cleanupError], "Failed to register and clean up a transactional tenant test connection", {cause: cleanupError})
       }
       throw error
     }
