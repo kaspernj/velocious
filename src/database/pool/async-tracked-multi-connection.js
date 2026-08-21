@@ -253,6 +253,30 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Permanently removes and closes a checked-out connection.
+   * @param {import("../drivers/base.js").default} connection - Connection that must not return to the pool.
+   */
+  async discard(connection) {
+    const id = connection.getIdSeq()
+    const errors = []
+
+    this.untrackConnectionInUse(connection, id)
+    try {
+      await this.closeConnection(connection)
+    } catch (error) {
+      errors.push(error)
+    }
+    try {
+      await this.drainPendingCheckouts()
+    } catch (error) {
+      errors.push(error)
+    }
+
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to discard a database connection")
+  }
+
+  /**
    * Runs close checked out connection after checkin failure.
    * @param {import("../drivers/base.js").default} connection - Connection that failed check-in cleanup.
    * @param {number | undefined} id - Connection checkout id.

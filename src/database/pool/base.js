@@ -127,6 +127,16 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Permanently discards an attempt-owned checked-out connection.
+   * @abstract
+   * @param {import("../drivers/base.js").default} _connection - Connection that must not return to the pool.
+   * @returns {Promise<void>} - Resolves after the connection is closed and removed from pool ownership.
+   */
+  discard(_connection) {
+    throw new Error("'discard' not implemented")
+  }
+
+  /**
    * Runs checkout.
    * @abstract
    * @param {ConnectionCheckoutOptions} [_options] - Checkout options.

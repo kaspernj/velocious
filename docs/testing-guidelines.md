@@ -86,7 +86,9 @@ ordinary pool checkout. Attempt cleanup revokes the shared registration before r
 and release, including failed setup, failed tests, retries, and lifecycles that remain
 hung beyond timeout grace. The registration stays active through `afterEach`, so hooks
 can inspect or tear down the test body's uncommitted tenant rows on the same connection;
-rollback and release occur after those hooks finish.
+rollback and release occur after those hooks finish. When work remains abandoned after
+timeout grace, its connection is rolled back and discarded instead of returned to the
+pool, so resumed stale callbacks fail closed and cannot race a successor attempt.
 
 Transactional background-job tests use the same isolation for real child runtimes.
 While a test transaction is active, forked, pooled, and spawned runners route their

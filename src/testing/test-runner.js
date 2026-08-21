@@ -124,6 +124,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @typedef {object} TransactionalTenantRegistration
  * @property {import("../database/drivers/base.js").default} connection - Attempt-owned physical connection.
  * @property {Promise<void> | undefined} [cleanupPromise] - Single cleanup operation shared by emergency and eventual lifecycle cleanup.
+ * @property {boolean | undefined} [discardOnCleanup] - Whether timeout emergency cleanup must quarantine this connection.
  * @property {import("../database/pool/base.js").default} pool - Owning logical pool.
  * @property {import("../database/pool/base.js").TestSharedConnectionRegistration} sharedRegistration - Physical-key shared registration.
  */
@@ -687,9 +688,13 @@ export default class TestRunner {
   /**
    * Revokes attempt registrations before rolling back and releasing their connections.
    * @param {TransactionalTenantRegistration[]} registrations - Attempt registrations.
+   * @param {{discard?: boolean}} [options] - Whether connections must be discarded instead of returned to the pool.
    * @returns {Promise<void>}
    */
-  async cleanupTransactionalTenants(registrations) {
+  async cleanupTransactionalTenants(registrations, {discard = false} = {}) {
+    if (discard) {
+      for (const registration of registrations) registration.discardOnCleanup = true
+    }
     for (const registration of registrations) {
       registration.pool.clearTestSharedConnection(registration.sharedRegistration)
     }
@@ -702,7 +707,11 @@ export default class TestRunner {
           errors.push(error)
         } finally {
           try {
-            await registration.pool.checkin(registration.connection)
+            if (registration.discardOnCleanup) {
+              await registration.pool.discard(registration.connection)
+            } else {
+              await registration.pool.checkin(registration.connection)
+            }
           } catch (error) {
             errors.push(error)
           }
@@ -1490,7 +1499,7 @@ export default class TestRunner {
               await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
               sharedTransactionBrokerRegistration = undefined
               sharedTransactionBrokerPreparation = undefined
-              await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
+              await this.cleanupTransactionalTenants(transactionalTenantRegistrations, {discard: true})
             }
 
             willRetry = retriesUsed < retryCount

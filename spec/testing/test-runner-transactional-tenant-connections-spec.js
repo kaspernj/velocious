@@ -237,14 +237,16 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
     const {cleanup, configuration} = await createTenantTestConfiguration("test-runner-transactional-tenant-timeout")
     const pool = configuration.getDatabasePool("projectTenant")
     let resumeTimedOutBody = () => {}
-    let markTimedOutAfterEachComplete = () => {}
+    let markStaleQueryComplete = () => {}
     const timedOutBodySignal = new Promise((resolve) => {
       resumeTimedOutBody = resolve
     })
-    const timedOutAfterEachComplete = new Promise((resolve) => {
-      markTimedOutAfterEachComplete = resolve
+    const staleQueryComplete = new Promise((resolve) => {
+      markStaleQueryComplete = resolve
     })
-    let timedOutBodyResumed = false
+    let staleQueryError
+    let timedOutConnection
+    let successorConnection
 
     try {
       await configuration.runWithTenant({slug: "alpha"}, async () => {
@@ -258,11 +260,7 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
       const tests = {
         args: {},
         afterAlls: [],
-        afterEaches: [{
-          callback: async () => {
-            if (timedOutBodyResumed) markTimedOutAfterEachComplete()
-          }
-        }],
+        afterEaches: [],
         beforeAlls: [],
         beforeEaches: [],
         subs: {},
@@ -273,10 +271,18 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
               await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
               await configuration.runWithTenant({slug: "alpha"}, async () => {
                 await configuration.ensureConnections(async (dbs) => {
+                  timedOutConnection = dbs.projectTenant
                   await dbs.projectTenant.query("INSERT INTO attempt_rows(value) VALUES ('timed-out')")
+                  await timedOutBodySignal
+                  try {
+                    await dbs.projectTenant.query("INSERT INTO attempt_rows(value) VALUES ('stale-resumed')")
+                  } catch (error) {
+                    staleQueryError = error
+                  } finally {
+                    markStaleQueryComplete()
+                  }
                 })
               })
-              await timedOutBodySignal
             }
           },
           "does not inherit the timed-out tenant registration": {
@@ -287,6 +293,12 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
               await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
               await configuration.runWithTenant({slug: "alpha"}, async () => {
                 await configuration.ensureConnections(async (dbs) => {
+                  successorConnection = dbs.projectTenant
+                  expect(await dbs.projectTenant.query("SELECT value FROM attempt_rows")).toEqual([])
+                  resumeTimedOutBody()
+                  await staleQueryComplete
+                  expect(successorConnection).not.toBe(timedOutConnection)
+                  expect(staleQueryError).toBeDefined()
                   expect(await dbs.projectTenant.query("SELECT value FROM attempt_rows")).toEqual([])
                 })
               })
@@ -296,9 +308,8 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
       }
 
       await runner.runTests({afterEaches: [], beforeEaches: [], descriptions: [], indentLevel: 0, tests})
-      timedOutBodyResumed = true
       resumeTimedOutBody()
-      await timedOutAfterEachComplete
+      await staleQueryComplete
 
       expect(pool.testSharedConnection()).toBeUndefined()
       expect(pool.getDebugSnapshot().inUseCount).toBe(0)

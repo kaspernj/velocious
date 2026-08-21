@@ -81,6 +81,24 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
+   * Permanently removes and closes a checked-out connection.
+   * @param {import("../drivers/base.js").default} connection - Connection that must not return to the pool.
+   */
+  async discard(connection) {
+    const entry = this.entryForConnection(connection)
+
+    if (entry) {
+      this.activeCheckoutCount -= entry.activeCheckoutCount
+      entry.activeCheckoutCount = 0
+      entry.checkoutNames = []
+      await this.removeAndCloseEntry(entry)
+      return
+    }
+
+    await connection.close()
+  }
+
+  /**
    * Checks out the ambient configuration and retains it as the single mutable
    * browser fallback connection.
    * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
