@@ -176,6 +176,16 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Registers a test connection for one resolved physical database configuration.
+   * @param {import("../drivers/base.js").default} _connection - Attempt-owned connection.
+   * @param {string} _reuseKey - Resolved physical configuration identity.
+   * @returns {TestSharedConnectionRegistration | undefined} - Opaque registration handle when supported.
+   */
+  setTestSharedConnectionForConfiguration(_connection, _reuseKey) {
+    return undefined
+  }
+
+  /**
    * Clears the shared connection or provider set for in-process test requests. No-op by default.
    * When a registration is provided, clears only if it is still the active registration.
    * @param {TestSharedConnectionRegistration} [_registration] - Opaque handle returned when the shared value was set.
@@ -393,6 +403,18 @@ class VelociousDatabasePoolBase {
     }
 
     return connection
+  }
+
+  /**
+   * Checks out a connection for an already-resolved physical configuration.
+   * Multi-configuration pools override this for explicit tenant registrations.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} _databaseConfiguration - Captured configuration.
+   * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
+   * @param {{retain: boolean}} [_args] - Pool-specific retention behavior.
+   * @returns {Promise<import("../drivers/base.js").default>} - Checked-out connection.
+   */
+  async checkoutForConfiguration(_databaseConfiguration, _options, _args) {
+    throw new Error("Database pool does not support captured configuration checkout")
   }
 
   /**

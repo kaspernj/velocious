@@ -55,6 +55,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   _testSharedConnectionRegistration = undefined
 
+  /** Attempt-owned shared connections keyed by resolved physical configuration. */
+  _testSharedConnectionsByReuseKey = new Map()
+
   /**
    * Connections.
    * @type {import("../drivers/base.js").default[]} */
@@ -885,6 +888,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!actualCallback) throw new Error("withConnection requires a callback")
 
+    const testSharedConnection = this.testSharedConnection()
+    if (testSharedConnection && this.connectionMatchesCurrentConfiguration(testSharedConnection)) {
+      return await this.asyncLocalStorage.run(testSharedConnection.getIdSeq(), async () => {
+        return await actualCallback(testSharedConnection)
+      })
+    }
+
     const connection = await this.checkout(options)
     const id = connection.getIdSeq()
 
@@ -1080,11 +1090,34 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Registers an attempt-owned connection for exactly one physical configuration.
+   * @param {import("../drivers/base.js").default} connection - Attempt-owned connection.
+   * @param {string} reuseKey - Resolved physical configuration identity.
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque registration handle.
+   */
+  setTestSharedConnectionForConfiguration(connection, reuseKey) {
+    const registration = {owner: Symbol("test-shared-physical-connection")}
+
+    this._testSharedConnectionsByReuseKey.set(reuseKey, {connection, registration})
+    return registration
+  }
+
+  /**
    * Clears the current shared connection registration. A supplied stale registration
    * cannot clear a provider installed by a newer lifecycle.
    * @param {import("./base.js").TestSharedConnectionRegistration} [registration] - Opaque registration handle to clear conditionally.
    * @returns {void} */
   clearTestSharedConnection(registration) {
+    if (registration) {
+      for (const [reuseKey, entry] of this._testSharedConnectionsByReuseKey) {
+        if (entry.registration !== registration) continue
+        this._testSharedConnectionsByReuseKey.delete(reuseKey)
+        return
+      }
+    } else {
+      this._testSharedConnectionsByReuseKey.clear()
+    }
+
     if (registration && registration !== this._testSharedConnectionRegistration) return
 
     this._testSharedConnection = undefined
@@ -1115,6 +1148,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
    */
   testSharedConnection() {
+    const reuseKey = this.getConfigurationReuseKey()
+    const physicalRegistration = this._testSharedConnectionsByReuseKey.get(reuseKey)
+
+    if (physicalRegistration) return physicalRegistration.connection
+
     return this._testSharedConnectionProvider
       ? this._testSharedConnectionProvider()
       : this._testSharedConnection

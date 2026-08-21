@@ -39,6 +39,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @property {string[] | string} [tags] - Tags for filtering.
  * @property {number} [timeoutSeconds] - Timeout in seconds for the test.
  * @property {string} [type] - Test type identifier.
+ * @property {(args: {databaseIdentifier: string, tenant: object}) => Promise<void>} [registerTransactionalTenant] - Registers one resolved tenant database transaction for this attempt.
  */
 /**
  * TestData type.
@@ -117,6 +118,13 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @property {SharedTransactionBroker} broker - Attempt broker and connection coordinator.
  * @property {boolean} environmentPublished - Whether child-process coordinates were published.
  * @property {string | undefined} previousEnvironment - Environment value to restore after publication.
+ */
+/**
+ * TransactionalTenantRegistration type.
+ * @typedef {object} TransactionalTenantRegistration
+ * @property {import("../database/drivers/base.js").default} connection - Attempt-owned physical connection.
+ * @property {import("../database/pool/base.js").default} pool - Owning logical pool.
+ * @property {import("../database/pool/base.js").TestSharedConnectionRegistration} sharedRegistration - Physical-key shared registration.
  */
 
 /**
@@ -639,6 +647,67 @@ export default class TestRunner {
     for (const identifier of configuration.getDatabaseIdentifiers()) {
       configuration.getDatabasePool(identifier).clearTestSharedConnection()
     }
+  }
+
+  /**
+   * Checks out and registers one physical tenant transaction for the current attempt.
+   * @param {{databaseIdentifier: string, tenant: object}} args - Logical identifier and tenant descriptor.
+   * @param {TransactionalTenantRegistration[]} registrations - Current attempt registrations.
+   * @returns {Promise<void>}
+   */
+  async registerTransactionalTenant({databaseIdentifier, tenant, ...restArgs}, registrations) {
+    restArgsError(restArgs)
+    if (!databaseIdentifier) throw new Error("registerTransactionalTenant requires a databaseIdentifier")
+    if (!tenant) throw new Error("registerTransactionalTenant requires a tenant")
+
+    const configuration = this.getConfiguration()
+    const pool = configuration.getDatabasePool(databaseIdentifier)
+    const databaseConfiguration = configuration.resolveDatabaseConfiguration(databaseIdentifier, tenant)
+    if (!databaseConfiguration.tenantOnly) {
+      throw new Error(`registerTransactionalTenant requires a tenantOnly database: ${databaseIdentifier}`)
+    }
+    const reuseKey = pool.getConfigurationReuseKey(databaseConfiguration)
+    if (registrations.some((registration) => {
+      return registration.pool === pool && pool.getConnectionConfigurationReuseKey(registration.connection) === reuseKey
+    })) return
+
+    const connection = await pool.checkoutForConfiguration(databaseConfiguration, {name: "Transactional tenant test registration"})
+    try {
+      await connection.startTransaction()
+      const sharedRegistration = pool.setTestSharedConnectionForConfiguration(connection, reuseKey)
+      if (!sharedRegistration) throw new Error(`Database pool does not support transactional tenant test connections: ${databaseIdentifier}`)
+      registrations.push({connection, pool, sharedRegistration})
+    } catch (error) {
+      await pool.checkin(connection)
+      throw error
+    }
+  }
+
+  /**
+   * Revokes attempt registrations before rolling back and releasing their connections.
+   * @param {TransactionalTenantRegistration[]} registrations - Attempt registrations.
+   * @returns {Promise<void>}
+   */
+  async cleanupTransactionalTenants(registrations) {
+    for (const registration of registrations) {
+      registration.pool.clearTestSharedConnection(registration.sharedRegistration)
+    }
+    const errors = []
+    for (const registration of registrations.reverse()) {
+      try {
+        await registration.connection.rollbackTransaction()
+      } catch (error) {
+        errors.push(error)
+      } finally {
+        try {
+          await registration.pool.checkin(registration.connection)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+    }
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to clean up transactional tenant test connections")
   }
 
   /**
@@ -1232,6 +1301,11 @@ export default class TestRunner {
           let sharedTransactionBrokerRegistration
           /** @type {SharedTransactionBrokerRegistration | undefined} */
           let sharedTransactionBrokerPreparation
+          /** @type {TransactionalTenantRegistration[]} */
+          const transactionalTenantRegistrations = []
+          testArgs.registerTransactionalTenant = async (args) => {
+            await this.registerTransactionalTenant(args, transactionalTenantRegistrations)
+          }
           const stopConsoleCapture = this.startConsoleCapture({
             passthrough: testConfig.consoleOutput === "live"
           })
@@ -1324,15 +1398,19 @@ export default class TestRunner {
                           sharedTransactionBrokerRegistration = undefined
                           sharedTransactionBrokerPreparation = undefined
                         } finally {
-                          for (const afterEachData of newAfterEaches) {
-                            await this.runProfileSpan({
-                              phase: "afterEach",
-                              declarationIndex: afterEachData.declarationIndex,
-                              declarationScopeId: afterEachData.declarationScopeId,
-                              filePath: afterEachData.ownerFilePath
-                            }, async () => {
-                              await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                            })
+                          try {
+                            await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
+                          } finally {
+                            for (const afterEachData of newAfterEaches) {
+                              await this.runProfileSpan({
+                                phase: "afterEach",
+                                declarationIndex: afterEachData.declarationIndex,
+                                declarationScopeId: afterEachData.declarationScopeId,
+                                filePath: afterEachData.ownerFilePath
+                              }, async () => {
+                                await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                              })
+                            }
                           }
                         }
                       }

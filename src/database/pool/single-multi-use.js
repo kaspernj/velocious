@@ -93,11 +93,11 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   /**
    * Checks out an explicitly captured physical configuration.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} databaseConfiguration - Captured configuration.
-   * @param {import("./base.js").ConnectionCheckoutOptions} options - Checkout options.
-   * @param {{retain: boolean}} args - Whether this becomes the ambient retained connection.
+   * @param {import("./base.js").ConnectionCheckoutOptions} [options] - Checkout options.
+   * @param {{retain: boolean}} [args] - Whether this becomes the ambient retained connection.
    * @returns {Promise<import("../drivers/base.js").default>} - Checked-out connection.
    */
-  async checkoutForConfiguration(databaseConfiguration, options, {retain}) {
+  async checkoutForConfiguration(databaseConfiguration, options = {}, {retain} = {retain: false}) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
     let entry = this.connectionEntries.get(reuseKey)
 
