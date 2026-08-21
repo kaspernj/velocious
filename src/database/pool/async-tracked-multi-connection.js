@@ -173,15 +173,16 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Spawns and times a physical connection without retaining its configuration.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Resolved database configuration.
+   * @param {string} [reuseKey] - Exact resolved physical identity.
    * @returns {Promise<import("../drivers/base.js").default>} - Connected driver.
    */
-  async spawnConnectionWithConfiguration(config) {
+  async spawnConnectionWithConfiguration(config, reuseKey) {
     const startedAt = this.nowMs()
     const profileContext = currentTestProfileContext(this.configuration)
     let failed = true
 
     try {
-      const connection = await super.spawnConnectionWithConfiguration(config)
+      const connection = await super.spawnConnectionWithConfiguration(config, reuseKey)
 
       failed = false
       const liveConnectionCount = this.liveConnectionCount() - this.connectionsBeingSpawned + 1
@@ -517,7 +518,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     try {
       const environmentHandler = this.configuration.getEnvironmentHandler()
       const connection = await environmentHandler.runWithTestProfileContext(profileContext, async () => {
-        return await this.spawnConnectionWithConfiguration(databaseConfig)
+        return await this.spawnConnectionWithConfiguration(databaseConfig, this.getConfigurationReuseKey(databaseConfig))
       })
 
       this.stampConnectionForConfigurationReuseKey(connection, reuseKey)

@@ -6,11 +6,12 @@ import { decodeBrokerValue, encodeBrokerValue } from "./shared-transaction-codec
 export default class SharedTransactionBrokerClient {
   /**
    * Creates a broker client.
-   * @param {{address: string, capability: string, databaseIdentifier: string}} args - Broker coordinates.
+   * @param {{address: string, capability: string, databaseIdentifier: string, reuseKey?: string}} args - Broker coordinates.
    */
-  constructor({address, capability, databaseIdentifier}) {
+  constructor({address, capability, databaseIdentifier, reuseKey}) {
     this.capability = capability
     this.databaseIdentifier = databaseIdentifier
+    this.reuseKey = reuseKey
     this.nextRequestId = 1
     /** @type {Map<number, {reject: (error: Error) => void, resolve: (value: ReturnType<typeof decodeBrokerValue>) => void}>} */
     this.pending = new Map()
@@ -46,6 +47,7 @@ export default class SharedTransactionBrokerClient {
       requestId,
       capability: this.capability,
       databaseIdentifier: this.databaseIdentifier,
+      reuseKey: this.reuseKey,
       method,
       args: encodeBrokerValue(args)
     }), (error) => {

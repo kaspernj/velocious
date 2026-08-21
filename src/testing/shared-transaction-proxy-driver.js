@@ -1,4 +1,4 @@
-/** @typedef {{address?: string, capability?: string, databaseIdentifiers?: string[], expected: boolean}} SharedTransactionBrokerJobConfig */
+/** @typedef {{address?: string, allowDynamicIdentities?: boolean, capability?: string, databaseIdentifiers?: string[], expected: boolean}} SharedTransactionBrokerJobConfig */
 
 // @ts-check
 
@@ -49,7 +49,7 @@ function pgEscapeLiteral(value) {
  * Parses the test-runner-owned child transport configuration when this logical
  * database is registered for the active attempt.
  * @param {string} databaseIdentifier - Logical database identifier.
- * @returns {{address: string, capability: string} | undefined} - Broker coordinates.
+ * @returns {{address: string, allowDynamicIdentities?: boolean, capability: string} | undefined} - Broker coordinates.
  */
 export function sharedTransactionBrokerConfig(databaseIdentifier) {
   const contextualConfig = pooledJobBrokerConfig.getStore()
@@ -66,7 +66,7 @@ export function sharedTransactionBrokerConfig(databaseIdentifier) {
  * Validates dispatch-time broker configuration and fails closed when expected.
  * @param {SharedTransactionBrokerJobConfig} config - Candidate configuration.
  * @param {string} databaseIdentifier - Logical database identifier.
- * @returns {{address: string, capability: string} | undefined} - Broker coordinates.
+ * @returns {{address: string, allowDynamicIdentities?: boolean, capability: string} | undefined} - Broker coordinates.
  */
 function validatedBrokerConfig(config, databaseIdentifier) {
   if (config.expected && (!config.address || !config.capability || !config.databaseIdentifiers)) {
@@ -76,11 +76,11 @@ function validatedBrokerConfig(config, databaseIdentifier) {
   if (typeof config.address !== "string" || typeof config.capability !== "string" || !Array.isArray(config.databaseIdentifiers)) {
     throw new Error("Invalid shared transaction broker child configuration")
   }
-  if (!config.databaseIdentifiers.includes(databaseIdentifier)) {
+  if (!config.allowDynamicIdentities && !config.databaseIdentifiers.includes(databaseIdentifier)) {
     throw new Error(`Transactional pooled job expected broker database identifier: ${databaseIdentifier}`)
   }
 
-  return {address: config.address, capability: config.capability}
+  return {address: config.address, allowDynamicIdentities: config.allowDynamicIdentities, capability: config.capability}
 }
 
 /**
@@ -90,7 +90,7 @@ function validatedBrokerConfig(config, databaseIdentifier) {
  * @param {import("../configuration-types.js").DatabaseConfigurationType} config - Database configuration.
  * @param {import("../configuration.js").default} configuration - Child configuration.
  * @param {string} databaseIdentifier - Logical identifier.
- * @param {{address: string, capability: string}} brokerConfig - Broker coordinates.
+ * @param {{address: string, capability: string, reuseKey?: string}} brokerConfig - Broker coordinates.
  * @returns {import("../database/drivers/base.js").default} - Unconnected physical proxy.
  */
 export function createSharedTransactionProxyDriver(DriverClass, config, configuration, databaseIdentifier, brokerConfig) {

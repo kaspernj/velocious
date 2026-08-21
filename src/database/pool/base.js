@@ -337,7 +337,7 @@ class VelociousDatabasePoolBase {
    */
   async spawnConnectionForConfiguration(databaseConfiguration) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
-    const connection = await this.spawnConnectionWithConfiguration(databaseConfiguration)
+    const connection = await this.spawnConnectionWithConfiguration(databaseConfiguration, reuseKey)
 
     this.stampConnectionForConfigurationReuseKey(connection, reuseKey)
 
@@ -368,21 +368,21 @@ class VelociousDatabasePoolBase {
   /**
    * Runs spawn connection with configuration.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
+   * @param {string} [reuseKey] - Exact resolved physical identity.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection with configuration.
    */
-  async spawnConnectionWithConfiguration(config) {
+  async spawnConnectionWithConfiguration(config, reuseKey) {
     const DriverClass = config.driver || this.driverClass
 
     if (!DriverClass) throw new Error("No driver class set in database pool or in given config")
 
-    const sharedConnection = config.tenantOnly
-      ? undefined
-      : await this.configuration.getEnvironmentHandler().createTestSharedTransactionConnection({
-        DriverClass,
-        config,
-        configuration: this.configuration,
-        databaseIdentifier: this.identifier
-      })
+    const sharedConnection = await this.configuration.getEnvironmentHandler().createTestSharedTransactionConnection({
+      DriverClass,
+      config,
+      configuration: this.configuration,
+      databaseIdentifier: this.identifier,
+      reuseKey
+    })
     const connection = sharedConnection || new DriverClass(config, this.configuration)
 
     try {

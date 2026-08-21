@@ -99,7 +99,7 @@ preserving root-savepoint leases.
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
 child/request work continues to use independent physical connections. Tenant-only
-connections are also intentionally excluded from the initial broker mode.
+connections are excluded from the automatic initial broker set. Backend-owned harnesses can lazily enroll exact tenant identities with [test transaction sessions](test-transaction-sessions.md); unknown identities fail closed.
 
 ## Coverage focus for frontend models
 - Command URL mapping behavior

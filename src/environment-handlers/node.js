@@ -102,13 +102,16 @@ export default class VelociousEnvironmentHandlerNode extends Base{
 
   /**
    * Creates a test-only child proxy when TestRunner supplied an active broker.
-   * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string}} args - Connection details.
+   * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string, reuseKey?: string}} args - Connection details.
    * @returns {Promise<import("../database/drivers/base.js").default | undefined>} - Optional proxy.
    */
-  async createTestSharedTransactionConnection({DriverClass, config, configuration, databaseIdentifier}) {
+  async createTestSharedTransactionConnection({DriverClass, config, configuration, databaseIdentifier, reuseKey}) {
     const brokerConfig = sharedTransactionBrokerConfig(databaseIdentifier)
     if (!brokerConfig) return undefined
-    return createSharedTransactionProxyDriver(DriverClass, config, configuration, databaseIdentifier, brokerConfig)
+    return createSharedTransactionProxyDriver(DriverClass, config, configuration, databaseIdentifier, {
+      ...brokerConfig,
+      reuseKey: brokerConfig.allowDynamicIdentities ? reuseKey : undefined
+    })
   }
 
   /**
