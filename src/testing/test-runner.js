@@ -122,11 +122,14 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
 /**
  * TransactionalTenantRegistration type.
  * @typedef {object} TransactionalTenantRegistration
- * @property {import("../database/drivers/base.js").default} connection - Attempt-owned physical connection.
+ * @property {Promise<{connection: import("../database/drivers/base.js").default | undefined, error: Error | undefined}> | undefined} [checkoutPromise] - Attempt-owned physical checkout outcome.
+ * @property {import("../database/drivers/base.js").default | undefined} connection - Attempt-owned physical connection once checkout resolves.
  * @property {Promise<void> | undefined} [cleanupPromise] - Single cleanup operation shared by emergency and eventual lifecycle cleanup.
  * @property {boolean | undefined} [discardOnCleanup] - Whether timeout emergency cleanup must quarantine this connection.
  * @property {import("../database/pool/base.js").default} pool - Owning logical pool.
- * @property {import("../database/pool/base.js").TestSharedConnectionRegistration} sharedRegistration - Physical-key shared registration.
+ * @property {boolean} revoked - Whether this attempt may still publish the physical registration.
+ * @property {string} reuseKey - Resolved physical configuration identity.
+ * @property {import("../database/pool/base.js").TestSharedConnectionRegistration | undefined} sharedRegistration - Physical-key shared registration once published.
  */
 
 /**
@@ -669,18 +672,53 @@ export default class TestRunner {
       throw new Error(`registerTransactionalTenant requires a tenantOnly database: ${databaseIdentifier}`)
     }
     const reuseKey = pool.getConfigurationReuseKey(databaseConfiguration)
-    if (registrations.some((registration) => {
-      return registration.pool === pool && pool.getConnectionConfigurationReuseKey(registration.connection) === reuseKey
-    })) return
+    if (registrations.some((registration) => registration.pool === pool && registration.reuseKey === reuseKey)) return
 
-    const connection = await pool.checkoutForConfiguration(databaseConfiguration, {name: "Transactional tenant test registration"})
+    /** @type {TransactionalTenantRegistration} */
+    const registration = {
+      connection: undefined,
+      pool,
+      reuseKey,
+      revoked: false,
+      sharedRegistration: undefined
+    }
+
+    registrations.push(registration)
+    registration.checkoutPromise = pool
+      .checkoutForConfiguration(databaseConfiguration, {name: "Transactional tenant test registration"})
+      .then(
+        (connection) => ({connection, error: undefined}),
+        (error) => ({
+          connection: undefined,
+          error: error instanceof Error ? error : new Error("Transactional tenant connection checkout failed", {cause: error})
+        })
+      )
+
     try {
-      await connection.startTransaction()
-      const sharedRegistration = pool.setTestSharedConnectionForConfiguration(connection, reuseKey)
+      const checkoutOutcome = await registration.checkoutPromise
+
+      if (checkoutOutcome.error) throw checkoutOutcome.error
+      if (!checkoutOutcome.connection) throw new Error("Transactional tenant connection checkout returned no connection")
+      registration.connection = checkoutOutcome.connection
+      if (registration.revoked) throw new Error("Transactional tenant test registration attempt is no longer active")
+
+      await registration.connection.startTransaction()
+      if (registration.revoked) throw new Error("Transactional tenant test registration attempt is no longer active")
+
+      const sharedRegistration = pool.setTestSharedConnectionForConfiguration(registration.connection, reuseKey)
       if (!sharedRegistration) throw new Error(`Database pool does not support transactional tenant test connections: ${databaseIdentifier}`)
-      registrations.push({connection, pool, sharedRegistration})
+      registration.sharedRegistration = sharedRegistration
+      if (registration.revoked) {
+        pool.clearTestSharedConnection(sharedRegistration)
+        throw new Error("Transactional tenant test registration attempt is no longer active")
+      }
     } catch (error) {
-      await pool.checkin(connection)
+      registration.revoked = true
+      try {
+        await this.cleanupTransactionalTenants([registration], {discard: registration.discardOnCleanup === true})
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], "Failed to register and clean up a transactional tenant test connection")
+      }
       throw error
     }
   }
@@ -692,33 +730,13 @@ export default class TestRunner {
    * @returns {Promise<void>}
    */
   async cleanupTransactionalTenants(registrations, {discard = false} = {}) {
-    if (discard) {
-      for (const registration of registrations) registration.discardOnCleanup = true
-    }
     for (const registration of registrations) {
-      registration.pool.clearTestSharedConnection(registration.sharedRegistration)
+      registration.revoked = true
+      if (discard) registration.discardOnCleanup = true
+      if (registration.sharedRegistration) registration.pool.clearTestSharedConnection(registration.sharedRegistration)
     }
     const cleanupResults = await Promise.allSettled([...registrations].reverse().map((registration) => {
-      registration.cleanupPromise ??= (async () => {
-        const errors = []
-        try {
-          await registration.connection.rollbackTransaction()
-        } catch (error) {
-          errors.push(error)
-        } finally {
-          try {
-            if (registration.discardOnCleanup) {
-              await registration.pool.discard(registration.connection)
-            } else {
-              await registration.pool.checkin(registration.connection)
-            }
-          } catch (error) {
-            errors.push(error)
-          }
-        }
-        if (errors.length === 1) throw errors[0]
-        if (errors.length > 1) throw new AggregateError(errors, "Failed to clean up a transactional tenant test connection")
-      })()
+      registration.cleanupPromise ??= this.cleanupTransactionalTenantRegistration(registration)
 
       return registration.cleanupPromise
     }))
@@ -728,6 +746,44 @@ export default class TestRunner {
 
     if (errors.length === 1) throw errors[0]
     if (errors.length > 1) throw new AggregateError(errors, "Failed to clean up transactional tenant test connections")
+  }
+
+  /**
+   * Cleans one attempt registration exactly once, including a checkout that was still pending at revocation.
+   * @param {TransactionalTenantRegistration} registration - Attempt-owned registration.
+   * @returns {Promise<void>} - Resolves after rollback and release or quarantine.
+   */
+  async cleanupTransactionalTenantRegistration(registration) {
+    let connection = registration.connection
+
+    if (!connection && registration.checkoutPromise) {
+      const checkoutOutcome = await registration.checkoutPromise
+
+      if (checkoutOutcome.error) return
+      connection = checkoutOutcome.connection
+      registration.connection = connection
+    }
+    if (!connection) return
+
+    const errors = []
+
+    try {
+      if (connection.insideTransaction()) await connection.rollbackTransaction()
+    } catch (error) {
+      errors.push(error)
+    } finally {
+      try {
+        if (registration.discardOnCleanup) {
+          await registration.pool.discard(connection)
+        } else {
+          await registration.pool.checkin(connection)
+        }
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to clean up a transactional tenant test connection")
   }
 
   /**
@@ -1100,6 +1156,29 @@ export default class TestRunner {
     })
 
     console.error(picocolors.red(`\n[test-runner] ${kind} during the test run — this would otherwise terminate the process silently and surface only as a crashed/retried shard with zero reported failures.${attribution}`))
+    console.error(error)
+  }
+
+  /**
+   * Records a rollback/discard failure that settled after timeout cleanup moved on.
+   * @param {unknown} reason - Detached cleanup rejection.
+   * @returns {void}
+   */
+  recordTransactionalTenantCleanupFailure(reason) {
+    const error = reason instanceof Error ? reason : new Error(`Transactional tenant cleanup failed: ${String(reason)}`)
+    const near = this._lastTestContext
+    const attribution = near ? `, near test: ${near.fullDescription} (${near.filePath}:${near.line})` : ""
+
+    this._failedTests = (this._failedTests || 0) + 1
+    this._failedTestDetails.push({
+      fullDescription: `<transactional tenant emergency cleanup failure${attribution}>`,
+      filePath: near ? near.filePath : "<test runner>",
+      line: near ? near.line : 0,
+      error,
+      consoleOutput: undefined
+    })
+
+    console.error(picocolors.red(`\n[test-runner] transactional tenant emergency cleanup failed after the bounded timeout grace.${attribution}`))
     console.error(error)
   }
 
@@ -1499,7 +1578,18 @@ export default class TestRunner {
               await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
               sharedTransactionBrokerRegistration = undefined
               sharedTransactionBrokerPreparation = undefined
-              await this.cleanupTransactionalTenants(transactionalTenantRegistrations, {discard: true})
+              const emergencyCleanup = this.cleanupTransactionalTenants(transactionalTenantRegistrations, {discard: true})
+              const emergencyCleanupSettled = await awaitSettledOrGrace(emergencyCleanup, timeoutMs ?? 60000)
+
+              if (emergencyCleanupSettled) {
+                await emergencyCleanup
+              } else {
+                // The timed-out attempt must not block the runner indefinitely, but a
+                // later rollback/discard failure still becomes a visible test failure.
+                void emergencyCleanup.catch((cleanupError) => {
+                  this.recordTransactionalTenantCleanupFailure(cleanupError)
+                })
+              }
             }
 
             willRetry = retriesUsed < retryCount

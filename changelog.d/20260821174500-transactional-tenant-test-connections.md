@@ -1,1 +1,1 @@
-Add attempt-scoped transactional tenant connection registration for tests, keyed by logical database identifier and resolved physical tenant configuration, retained through `afterEach` and safely discarded during timed-out lifecycle cleanup.
+Add attempt-scoped transactional tenant connection registration for tests, keyed by logical database identifier and resolved physical tenant configuration, retained through `afterEach`, supported by async-tracked and single-multi-use pools, and safely revoked with bounded discard cleanup during timed-out lifecycle setup or execution.

@@ -912,7 +912,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!actualCallback) throw new Error("withConnection requires a callback")
 
-    const testSharedConnection = this.testSharedConnection()
+    const testSharedConnection = this.activeTestSharedConnection()
     if (testSharedConnection && this.connectionMatchesCurrentConfiguration(testSharedConnection)) {
       return await this.asyncLocalStorage.run(testSharedConnection.getIdSeq(), async () => {
         return await actualCallback(testSharedConnection)
@@ -1160,11 +1160,26 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {T} - Callback result.
    */
   runWithTestSharedConnection(callback) {
-    const connection = this.testSharedConnection()
+    const connection = this.activeTestSharedConnection()
 
     if (!connection) return callback()
 
     return this.asyncLocalStorage.run(connection.getIdSeq(), callback)
+  }
+
+  /**
+   * Resolves a test-shared connection only while its checkout ID is still owned by this pool.
+   * Fallback-only registrations have no checkout ID and must enter the normal checkout path.
+   * @returns {import("../drivers/base.js").default | undefined} - Active shared connection.
+   */
+  activeTestSharedConnection() {
+    const connection = this.testSharedConnection()
+    const id = connection?.getIdSeq()
+
+    if (typeof id !== "number") return
+    if (this.connectionsInUse[id] !== connection) return
+
+    return connection
   }
 
   /**

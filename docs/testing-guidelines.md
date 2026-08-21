@@ -87,8 +87,12 @@ and release, including failed setup, failed tests, retries, and lifecycles that 
 hung beyond timeout grace. The registration stays active through `afterEach`, so hooks
 can inspect or tear down the test body's uncommitted tenant rows on the same connection;
 rollback and release occur after those hooks finish. When work remains abandoned after
-timeout grace, its connection is rolled back and discarded instead of returned to the
-pool, so resumed stale callbacks fail closed and cannot race a successor attempt.
+timeout grace, attempt ownership is revoked even if checkout or transaction startup is
+still pending, and that detached setup cannot publish over a successor registration. Its
+connection is rolled back and discarded instead of returned to the pool, so resumed stale
+callbacks fail closed and cannot race a successor attempt. Emergency cleanup observes the
+same bounded grace as the lifecycle; a stalled driver cleanup remains quarantined in the
+background, and any eventual cleanup error is reported as a test-runner failure.
 
 Transactional background-job tests use the same isolation for real child runtimes.
 While a test transaction is active, forked, pooled, and spawned runners route their

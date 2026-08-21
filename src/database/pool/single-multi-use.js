@@ -45,6 +45,8 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   /** @type {Set<() => boolean>} */
   capacityWaiters = new Set()
   closeGeneration = 0
+  /** @type {Map<string, {connection: import("../drivers/base.js").default, registration: import("./base.js").TestSharedConnectionRegistration}>} */
+  testSharedConnectionsByReuseKey = new Map()
 
   /**
    * Checks a connection back into its keyed physical entry.
@@ -478,6 +480,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
 
     this.connectionEntries.clear()
     this.connectionEntrySpawnPromises.clear()
+    this.testSharedConnectionsByReuseKey.clear()
     this.connection = undefined
     this.activeCheckoutCount = 0
 
@@ -495,13 +498,53 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
   }
 
   /**
+   * Registers an attempt-owned connection for exactly one physical configuration.
+   * @param {import("../drivers/base.js").default} connection - Attempt-owned connection.
+   * @param {string} reuseKey - Resolved physical configuration identity.
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque registration handle.
+   */
+  setTestSharedConnectionForConfiguration(connection, reuseKey) {
+    const registration = {owner: Symbol("test-shared-physical-connection")}
+
+    this.testSharedConnectionsByReuseKey.set(reuseKey, {connection, registration})
+    return registration
+  }
+
+  /**
+   * Clears an attempt-owned shared physical connection without revoking a newer owner.
+   * @param {import("./base.js").TestSharedConnectionRegistration} [registration] - Registration to clear conditionally.
+   */
+  clearTestSharedConnection(registration) {
+    if (!registration) {
+      this.testSharedConnectionsByReuseKey.clear()
+      return
+    }
+
+    for (const [reuseKey, entry] of this.testSharedConnectionsByReuseKey) {
+      if (entry.registration !== registration) continue
+      this.testSharedConnectionsByReuseKey.delete(reuseKey)
+      return
+    }
+  }
+
+  /**
+   * Resolves the attempt-owned connection for the current physical configuration.
+   * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
+   */
+  testSharedConnection() {
+    const reuseKey = this.getConfigurationReuseKey()
+
+    return this.testSharedConnectionsByReuseKey.get(reuseKey)?.connection
+  }
+
+  /**
    * Returns the current context fallback connection when it is not suppressed.
    * @returns {import("../drivers/base.js").default | undefined} - Current fallback connection.
    */
   getCurrentContextConnection() {
     if (this.suppressedConnectionContextCount > 0) return undefined
 
-    return this.connection
+    return this.testSharedConnection() || this.connection
   }
 
   /**
