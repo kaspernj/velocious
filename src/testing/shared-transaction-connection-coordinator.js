@@ -69,6 +69,7 @@ async function drainOwnedSharedTransactionConnections(registration) {
  * @returns {Promise<T>} - Operation result.
  */
 async function coordinateRootSharedTransactionConnection(connection, registration, callback) {
+  await drainOwnedSharedTransactionConnections(registration)
   const rootOwner = Symbol("shared-transaction-root-operation")
   const environmentHandler = connection.configuration.getEnvironmentHandler()
 

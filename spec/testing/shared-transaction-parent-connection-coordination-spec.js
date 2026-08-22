@@ -207,6 +207,43 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     }
   })
 
+  it("chains replacement broker work behind the retained connection queue", async () => {
+    const connection = new SingleRequestDriver()
+    const firstBroker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseDelayedQuery = () => {}
+    const delayedQueryGate = new Promise((resolve) => { releaseDelayedQuery = resolve })
+    /** @type {Promise<[]>} */
+    let delayedQuery = Promise.resolve([])
+
+    await coordinateSharedTransactionConnection(connection, async () => {
+      delayedQuery = delayedQueryGate.then(async () => await connection.query("SELECT child", {logQuery: false}))
+    })
+    await firstBroker.close()
+    releaseDelayedQuery()
+    await connection.childStarted
+
+    const replacementBroker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const replacementQuery = connection.query("SELECT parent", {logQuery: false})
+
+    try {
+      void replacementQuery.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(connection.queries).toEqual(["SELECT child"])
+
+      connection.releaseChild()
+      await Promise.all([delayedQuery, replacementQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled([delayedQuery, replacementQuery])
+      await replacementBroker.close()
+    }
+  })
+
   it("allows nested owner coordination to re-enter without deadlocking", async () => {
     const connection = new SingleRequestDriver()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})
