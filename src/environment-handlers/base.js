@@ -31,7 +31,7 @@ export default class VelociousEnvironmentHandlerBase {
   /**
    * Node test runtimes may replace a physical child connection with a broker
    * proxy. Other environments never participate in this test-only protocol.
-   * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string}} _args - Connection details.
+   * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string, reuseKey?: string}} _args - Connection details.
    * @returns {Promise<import("../database/drivers/base.js").default | undefined>} - Optional proxy.
    */
   async createTestSharedTransactionConnection(_args) { return undefined }

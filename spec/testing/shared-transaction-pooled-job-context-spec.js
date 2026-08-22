@@ -8,8 +8,31 @@ import {
   runWithSharedTransactionBrokerConfig,
   sharedTransactionBrokerConfig
 } from "../../src/testing/shared-transaction-proxy-driver.js"
+import { createTenantTestConfiguration } from "../helpers/tenant-test-helpers.js"
 
 describe("Shared transaction pooled job context", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("keeps omitted tenant-only databases independent in automatic child mode", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-automatic-tenant-child")
+    const automaticBroker = {
+      address: "ws://127.0.0.1:1001",
+      capability: "automatic",
+      databaseIdentifiers: ["default"],
+      expected: true
+    }
+
+    try {
+      await runWithSharedTransactionBrokerConfig(automaticBroker, async () => {
+        await configuration.runWithTenant({slug: "alpha"}, async () => {
+          await configuration.ensureConnections({databaseIdentifiers: ["projectTenant"]}, async (dbs) => {
+            expect(await dbs.projectTenant.query("SELECT 1 AS value")).toEqual([{value: 1}])
+          })
+        })
+      })
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("selects broker coordinates per sequential job instead of retaining the child bootstrap environment", async () => {
     const first = {address: "ws://127.0.0.1:1001", capability: "first", databaseIdentifiers: ["default"], expected: true}
     const second = {address: "ws://127.0.0.1:1002", capability: "second", databaseIdentifiers: ["default"], expected: true}

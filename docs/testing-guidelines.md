@@ -125,12 +125,16 @@ enqueue, handoff, and terminal job rows on the same parent-owned transaction on
 async-tracked database pools instead of checking out an independently committed
 connection. Parent store callbacks and child broker calls also share the broker's
 per-physical-connection queue, preventing overlapping driver requests while
-preserving root-savepoint leases.
+preserving root-savepoint leases. Inherited sibling work is drained before its broker
+queue entry is released. A delayed callback whose inherited owner has already ended
+must re-enter that queue, while a nested call inside active owned work remains
+re-entrant; this keeps one-request transaction drivers such as MS-SQL serialized
+without coupling independent physical connections.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
 child/request work continues to use independent physical connections. Tenant-only
-connections are also intentionally excluded from the initial broker mode.
+connections are excluded from the automatic initial broker set. Backend-owned harnesses can lazily enroll exact tenant identities with [test transaction sessions](test-transaction-sessions.md); unknown identities fail closed.
 
 ## Coverage focus for frontend models
 - Command URL mapping behavior
@@ -197,8 +201,10 @@ signal or condition instead:
 - **Event-driven (a discrete signal):** `waitForEvent(emitter, eventName, {timeoutMs,
   filter})` from `velocious/build/src/testing/test.js` resolves the instant the event
   fires (optionally only when `filter` matches the emitted arguments) and rejects on
-  timeout. It always removes its listener. Use it for a background job finishing, a
-  model lifecycle event, a websocket message, etc.
+  timeout. It always removes its listener. The stable Velocious import remains the
+  facade shown above; the generic primitive comes from `@velocious/testing`, while
+  Velocious continues to own the keyed testing DSL and framework runner. Use it for a
+  background job finishing, a model lifecycle event, a websocket message, etc.
 - **Condition polling (no discrete event):** awaitery's `waitFor(callback, {timeout,
   wait})` retries `callback` until it stops throwing (default 5s timeout, 50ms
   interval). Use it when there is no event to hook, e.g. `await waitFor(() =>

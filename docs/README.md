@@ -29,6 +29,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/tenant-databases.md`: Tenant-only database identifiers and tenant lifecycle commands.
 - `docs/tenant-selected-database-generation.md`: Explicit, immutable tenant database selection for base-model and structure generation.
 - `docs/test-profiling.md`: Opt-in test profiling, rich JSON/privacy guarantees, custom activity spans, timing-manifest generation, and strict shard aggregation.
+- `docs/test-transaction-sessions.md`: Backend-owned shared rollback sessions for live external services, workers, and exact tenant physical identities.
 - `docs/frontend-model-resources.md`: Resource recipe requirements for generated frontend models.
 - `docs/translations.md`: Translated record attributes, `currentTranslation`, and translated frontend-model sorting.
 - `docs/routing-hooks-and-autoroutes.md`: Route hook support and frontend-model autoroute behavior.

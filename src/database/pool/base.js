@@ -186,6 +186,16 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Registers a test shared connection selected by the caller's live async context.
+   * Base pools that do not track async context ignore it.
+   * @param {{matches: () => boolean, provider: () => import("../drivers/base.js").default | undefined}} _args - Context selector and connection provider.
+   * @returns {TestSharedConnectionRegistration | undefined} - Opaque scoped registration handle.
+   */
+  registerTestSharedConnectionProvider(_args) {
+    return undefined
+  }
+
+  /**
    * Registers a test connection for one resolved physical database configuration.
    * @param {import("../drivers/base.js").default} _connection - Attempt-owned connection.
    * @param {string} _reuseKey - Resolved physical configuration identity.
@@ -357,7 +367,7 @@ class VelociousDatabasePoolBase {
    */
   async spawnConnectionForConfiguration(databaseConfiguration) {
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
-    const connection = await this.spawnConnectionWithConfiguration(databaseConfiguration)
+    const connection = await this.spawnConnectionWithConfiguration(databaseConfiguration, reuseKey)
 
     this.stampConnectionForConfigurationReuseKey(connection, reuseKey)
 
@@ -388,21 +398,21 @@ class VelociousDatabasePoolBase {
   /**
    * Runs spawn connection with configuration.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Configuration object.
+   * @param {string} [reuseKey] - Exact resolved physical identity.
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the spawn connection with configuration.
    */
-  async spawnConnectionWithConfiguration(config) {
+  async spawnConnectionWithConfiguration(config, reuseKey) {
     const DriverClass = config.driver || this.driverClass
 
     if (!DriverClass) throw new Error("No driver class set in database pool or in given config")
 
-    const sharedConnection = config.tenantOnly
-      ? undefined
-      : await this.configuration.getEnvironmentHandler().createTestSharedTransactionConnection({
-        DriverClass,
-        config,
-        configuration: this.configuration,
-        databaseIdentifier: this.identifier
-      })
+    const sharedConnection = await this.configuration.getEnvironmentHandler().createTestSharedTransactionConnection({
+      DriverClass,
+      config,
+      configuration: this.configuration,
+      databaseIdentifier: this.identifier,
+      reuseKey
+    })
     const connection = sharedConnection || new DriverClass(config, this.configuration)
 
     try {
