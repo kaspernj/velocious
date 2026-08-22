@@ -100,6 +100,38 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     }
   })
 
+  it("keeps later parent work behind detached inherited query work", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]> | undefined} */
+    let detachedQuery
+    /** @type {Promise<[]> | undefined} */
+    let parentQuery
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        detachedQuery = connection.query("SELECT child", {logQuery: false})
+        await connection.childStarted
+      })
+
+      parentQuery = connection.query("SELECT parent", {logQuery: false})
+      void parentQuery.catch(() => undefined)
+
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(connection.queries).toEqual(["SELECT child"])
+      connection.releaseChild()
+      await Promise.all([detachedQuery, parentQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled(detachedQuery ? [detachedQuery] : [])
+      await Promise.allSettled(parentQuery ? [parentQuery] : [])
+      await broker.close()
+    }
+  })
+
   it("keeps sibling coordination parallel across distinct physical connections", async () => {
     const firstConnection = new SingleRequestDriver()
     const secondConnection = new SingleRequestDriver()

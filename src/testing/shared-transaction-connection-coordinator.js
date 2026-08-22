@@ -64,15 +64,20 @@ export async function coordinateSharedTransactionConnection(connection, callback
   const registration = coordinators.get(connection)
 
   if (!registration) return await callback()
-  if (operationOwner === registration.owner) return await callback()
-
   const environmentHandler = connection.configuration.getEnvironmentHandler()
+  const inheritedOwner = environmentHandler.getSharedTransactionCoordinatorOwner(connection)
 
-  if (environmentHandler.getSharedTransactionCoordinatorOwner(connection) === registration.owner) {
+  if (inheritedOwner === registration.owner && operationOwner === registration.owner) return await callback()
+  if (inheritedOwner === registration.owner) {
     return await coordinateOwnedSharedTransactionConnection(registration, callback)
+  }
+  if (operationOwner === registration.owner) {
+    await registration.ownedQueue
+    return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, registration.owner, callback)
   }
 
   return /** @type {T} */ (await registration.coordinator(async () => {
+    await registration.ownedQueue
     return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, registration.owner, callback)
   }))
 }
