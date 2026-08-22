@@ -1,5 +1,6 @@
 // @ts-check
 
+/** @typedef {import("../table-data/table-column.js").TableColumnArgsType} AddColumnArgsType */
 /**
  * CreateTableIdArgsType type.
  * @typedef {object} CreateTableIdArgsType
@@ -109,7 +110,7 @@ export default class VelociousDatabaseMigration {
    * @param {string} tableName - Table name.
    * @param {string} columnName - Column name.
    * @param {string} columnType - Column type.
-   * @param {import("../table-data/table-column.js").TableColumnArgsType} [args] - Options object.
+   * @param {AddColumnArgsType} [args] - Options object.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async addColumn(tableName, columnName, columnType, args) {

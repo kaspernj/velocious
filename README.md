@@ -2520,6 +2520,8 @@ Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest iden
 
 Use `options: {idempotencyKey}` when producer replay must converge on the original durable job across every state and even after terminal-job pruning. Ownership is scoped to the resolved job class name, resolved queue, and key; reusing that scope with changed canonical arguments or behavior-affecting options fails. This is distinct from queued-only deduplication, and ownership rows are intentionally retained until a future explicit reconciliation/deletion policy. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
 
+The Node producer rejects and destroys its one-shot socket when the main closes before acknowledging or when an enqueue acknowledgement stalls for 5 seconds. Because the main may already have committed the job, this is an ambiguous outcome: replay with the same durable `idempotencyKey` to recover the original job id without creating a duplicate. Direct `BackgroundJobsClient` users can set a different bounded `enqueueTimeoutMs` constructor option. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
+
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.
 
 Inline jobs share the worker process and run concurrently up to `maxConcurrentInlineJobs`, so a single slow inline job no longer blocks the queue. A single worker can also override the configured cap explicitly:

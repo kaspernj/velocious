@@ -89,6 +89,10 @@ export default class BackgroundJobsSocketRequest {
         finish({}, () => reject(error))
       })
 
+      jsonSocket.on("close", () => {
+        finish({destroy: true}, () => reject(new Error("Background jobs socket closed before the request was acknowledged")))
+      })
+
       /**
        * Handles the socket response message.
        * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message.

@@ -240,6 +240,17 @@ const jobId = await PublishEventJob.performLaterWithOptions({
 
 The durable ownership scope is the tuple of resolved job class name, resolved queue, and caller key. The first enqueue atomically creates the ownership row and job row. Concurrent first enqueues converge through the database's unique ownership key. An exact replay returns the original job id while the job is queued, running, completed, failed, cancelled, or orphaned, and continues returning that id after terminal-job retention prunes the job row.
 
+The Node TCP producer waits at most 5 seconds for the main process's `enqueued`
+acknowledgement. A connection error, a peer that ends or closes before the
+acknowledgement, or a stalled acknowledgement rejects the producer call and
+tears down its one-shot socket. Persistence may already have committed when the
+acknowledgement is lost, so this rejection is deliberately an ambiguous outcome,
+not proof that no job exists. Replay the same request with the same
+`idempotencyKey`: durable ownership returns the already-persisted job id instead
+of creating a second job. Replaying an enqueue without a durable idempotency key
+can create another job. Direct users of the Node `BackgroundJobsClient` may pass
+`enqueueTimeoutMs` to its constructor to use a different bounded deadline.
+
 The owned request includes the serialized arguments and behavior-affecting enqueue options: resolved queue, execution mode, retry cap, resolved concurrency configuration, and immediate-versus-scheduled timing. Reusing the same scope with a different canonical request fails with a safe `background-job-idempotency-conflict` error. Generated job ids and the wall-clock timestamp of an immediate enqueue are not request identity. `deduplicateWhileQueued` is also not identity: it remains the separate, transient queued-row optimization described above.
 
 Idempotency ownership rows are intentionally not pruned in this release, and ordinary terminal-job retention never deletes them. Operators should treat keys as permanent until Velocious gains a separate, explicit reconciliation and deletion policy; deleting ownership without proving that its external operation can no longer be replayed can recreate duplicate work.
