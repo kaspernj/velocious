@@ -72,12 +72,14 @@ export async function coordinateSharedTransactionConnection(connection, callback
     return await coordinateOwnedSharedTransactionConnection(registration, callback)
   }
   if (operationOwner === registration.owner) {
-    await registration.ownedQueue
-    return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, registration.owner, callback)
+    return await coordinateOwnedSharedTransactionConnection(registration, async () => {
+      return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, registration.owner, callback)
+    })
   }
 
   return /** @type {T} */ (await registration.coordinator(async () => {
-    await registration.ownedQueue
-    return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, registration.owner, callback)
+    return await coordinateOwnedSharedTransactionConnection(registration, async () => {
+      return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, registration.owner, callback)
+    })
   }))
 }

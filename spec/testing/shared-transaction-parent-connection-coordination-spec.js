@@ -4,7 +4,6 @@ import BaseDriver from "../../src/database/drivers/base.js"
 import Configuration from "../../src/configuration.js"
 import SharedTransactionBroker from "../../src/testing/shared-transaction-broker.js"
 import SharedTransactionBrokerClient from "../../src/testing/shared-transaction-broker-client.js"
-import { coordinateSharedTransactionConnection } from "../../src/testing/shared-transaction-connection-coordinator.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 class SingleRequestDriver extends BaseDriver {
@@ -14,14 +13,21 @@ class SingleRequestDriver extends BaseDriver {
   queries = []
   /** @type {() => void} */
   releaseChild = () => {}
+  /** @type {() => void} */
+  releaseParent = () => {}
   /** @type {Promise<void>} */
   childStarted
+  /** @type {Promise<void>} */
+  parentStarted
   /** @type {() => void} */
   resolveChildStarted = () => {}
+  /** @type {() => void} */
+  resolveParentStarted = () => {}
 
   constructor() {
     super({}, Configuration.current())
     this.childStarted = new Promise((resolve) => { this.resolveChildStarted = resolve })
+    this.parentStarted = new Promise((resolve) => { this.resolveParentStarted = resolve })
   }
 
   /**
@@ -39,12 +45,34 @@ class SingleRequestDriver extends BaseDriver {
         this.resolveChildStarted()
         await new Promise((resolve) => { this.releaseChild = resolve })
       }
+      if (sql == "SELECT blocking parent") {
+        this.resolveParentStarted()
+        await new Promise((resolve) => { this.releaseParent = resolve })
+      }
 
       return []
     } finally {
       this.activeRequests--
     }
   }
+}
+
+/**
+ * Runs a callback in the async context inherited by broker-owned detached work.
+ * @template T
+ * @param {SharedTransactionBroker} broker - Active broker.
+ * @param {SingleRequestDriver} connection - Registered physical connection.
+ * @param {() => T} callback - Inherited work.
+ * @returns {T} - Callback result.
+ */
+function runWithBrokerOwner(broker, connection, callback) {
+  const owner = broker.connectionCoordinatorOwners.get(connection)
+
+  if (!owner) throw new Error("Expected the broker to own the physical connection")
+
+  return connection.configuration
+    .getEnvironmentHandler()
+    .runWithSharedTransactionCoordinatorOwner(connection, owner, callback)
 }
 
 describe("Shared transaction parent connection coordination", {databaseCleaning: {transaction: false, truncate: false}}, () => {
@@ -81,7 +109,7 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     let siblingQueries = []
 
     try {
-      await coordinateSharedTransactionConnection(connection, async () => {
+      await runWithBrokerOwner(broker, connection, async () => {
         siblingQueries = [
           connection.query("SELECT child", {logQuery: false}),
           connection.query("SELECT parent", {logQuery: false})
@@ -109,7 +137,7 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     let parentQuery
 
     try {
-      await coordinateSharedTransactionConnection(connection, async () => {
+      await runWithBrokerOwner(broker, connection, async () => {
         detachedQuery = connection.query("SELECT child", {logQuery: false})
         await connection.childStarted
       })
@@ -128,6 +156,52 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
       connection.releaseChild()
       await Promise.allSettled(detachedQuery ? [detachedQuery] : [])
       await Promise.allSettled(parentQuery ? [parentQuery] : [])
+      await broker.close()
+    }
+  })
+
+  it("atomically queues parent work before later inherited work", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let queueLaterInherited = () => {}
+    const queueLaterInheritedSignal = new Promise((resolve) => { queueLaterInherited = resolve })
+    /** @type {Promise<[]> | undefined} */
+    let activeInheritedQuery
+    /** @type {Promise<[]> | undefined} */
+    let parentQuery
+    /** @type {Promise<[]> | undefined} */
+    let laterInheritedQuery
+
+    try {
+      await runWithBrokerOwner(broker, connection, async () => {
+        activeInheritedQuery = connection.query("SELECT child", {logQuery: false})
+        laterInheritedQuery = queueLaterInheritedSignal.then(async () => {
+          return await connection.query("SELECT inherited", {logQuery: false})
+        })
+        await connection.childStarted
+      })
+
+      parentQuery = connection.query("SELECT blocking parent", {logQuery: false})
+      void parentQuery.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      queueLaterInherited()
+      void laterInheritedQuery.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+      connection.releaseChild()
+      await connection.parentStarted
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(connection.queries).toEqual(["SELECT child", "SELECT blocking parent"])
+      connection.releaseParent()
+      await Promise.all([activeInheritedQuery, parentQuery, laterInheritedQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT blocking parent", "SELECT inherited"])
+    } finally {
+      connection.releaseChild()
+      connection.releaseParent()
+      await Promise.allSettled([activeInheritedQuery, parentQuery, laterInheritedQuery].filter((promise) => promise !== undefined))
       await broker.close()
     }
   })
