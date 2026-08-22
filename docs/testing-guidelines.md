@@ -125,7 +125,11 @@ enqueue, handoff, and terminal job rows on the same parent-owned transaction on
 async-tracked database pools instead of checking out an independently committed
 connection. Parent store callbacks and child broker calls also share the broker's
 per-physical-connection queue, preventing overlapping driver requests while
-preserving root-savepoint leases.
+preserving root-savepoint leases. Inherited sibling work is drained before its broker
+queue entry is released. A delayed callback whose inherited owner has already ended
+must re-enter that queue, while a nested call inside active owned work remains
+re-entrant; this keeps one-request transaction drivers such as MS-SQL serialized
+without coupling independent physical connections.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
