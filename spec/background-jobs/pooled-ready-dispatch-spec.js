@@ -23,25 +23,40 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
 
   it("fills every advertised pooled slot without waiting for an earlier job to finish", async () => {
     if (!backgroundJobs) throw new Error("Expected background jobs to be started")
+    const workerSocket = backgroundJobs.worker.jsonSocket?.socket
+    if (!workerSocket) throw new Error("Expected background jobs worker socket")
     const jobIds = []
 
-    for (let index = 0; index < 5; index += 1) {
-      const outputPath = await outputPathFor(`pooled-ready-dispatch-${index}`)
-      jobIds.push(await SlowTestJob.performLaterWithOptions({
-        args: [`job-${index}`, outputPath, 2000],
-        options: {executionMode: "pooled"}
-      }))
+    // A durable handoff precedes socket delivery, so hold delivery until every
+    // advertised credit is consumed instead of treating store state as receipt.
+    workerSocket.pause()
+
+    try {
+      for (let index = 0; index < 5; index += 1) {
+        const outputPath = await outputPathFor(`pooled-ready-dispatch-${index}`)
+        jobIds.push(await SlowTestJob.performLaterWithOptions({
+          args: [`job-${index}`, outputPath, 2000],
+          options: {executionMode: "pooled"}
+        }))
+      }
+
+      await timeout({timeout: 1000}, async () => {
+        while (true) {
+          const jobs = await Promise.all(jobIds.map(async (jobId) => await backgroundJobs.store.getJob(jobId)))
+          if (jobs.every((job) => job?.status === "handed_off")) break
+          await wait(0.01)
+        }
+      })
+
+      expect(backgroundJobs.worker.pooledChildStates.size).toEqual(0)
+    } finally {
+      workerSocket.resume()
     }
 
     await timeout({timeout: 1000}, async () => {
-      while (true) {
-        const jobs = await Promise.all(jobIds.map(async (jobId) => await backgroundJobs.store.getJob(jobId)))
-        if (jobs.every((job) => job?.status === "handed_off")) break
-        await wait(0.01)
-      }
+      while (backgroundJobs.worker.pooledChildStates.values().next().value?.inflight.size !== 5) await wait(0.01)
     })
 
-    expect(backgroundJobs.worker.pooledChildStates.values().next().value?.inflight.size).toEqual(5)
     await timeout({timeout: 3000}, async () => {
       while (backgroundJobs.worker.inflightPooledJobs.size > 0) await wait(0.01)
     })
