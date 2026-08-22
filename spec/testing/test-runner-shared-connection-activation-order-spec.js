@@ -1,9 +1,75 @@
 // @ts-check
 
+import Application from "../../src/application.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+import RequestClient from "../../src/testing/request-client.js"
 import TestRunner from "../../src/testing/test-runner.js"
+
+/**
+ * Runs one observed lifecycle that should prepare transaction coordination before its hook.
+ * @param {{databaseCleaning: {transaction: boolean, truncate?: boolean}, type?: "request"}} testArgs - Lifecycle options.
+ * @returns {Promise<string[]>} - Observed lifecycle order.
+ */
+async function transactionCoordinationOrder(testArgs) {
+  const configuration = new Configuration({
+    database: {test: {}},
+    directory: process.cwd(),
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]},
+    locales: ["en"]
+  })
+  const order = []
+
+  class ObservedTestRunner extends TestRunner {
+    async application() {
+      return new Application({configuration, type: "test-runner-observation"})
+    }
+
+    async requestClient() {
+      return new RequestClient()
+    }
+
+    activateTestSharedConnections() {
+      order.push("activate")
+      return []
+    }
+
+    async prepareSharedTransactionBroker() {
+      order.push("coordinate")
+      return undefined
+    }
+
+    async startSharedTransactionBroker() {
+      order.push("publish")
+      return undefined
+    }
+  }
+
+  const testRunner = new ObservedTestRunner({configuration, testFiles: []})
+  const tests = {
+    args: {},
+    afterAlls: [],
+    afterEaches: [],
+    beforeAlls: [],
+    beforeEaches: [{callback: async () => { order.push("beforeEach") }}],
+    subs: {},
+    tests: {
+      "coordinates before the hook": {
+        args: testArgs,
+        function: async () => { order.push("test") }
+      }
+    }
+  }
+
+  await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+
+  return order
+}
 
 describe("TestRunner shared connection activation order", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("activates dynamic providers before non-request beforeEach hooks", async () => {
@@ -53,52 +119,16 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
   })
 
   it("installs transaction coordination before a transaction-opening hook exposes the shared connection", async () => {
-    const configuration = new Configuration({
-      database: {test: {}},
-      directory: process.cwd(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"]
+    const order = await transactionCoordinationOrder({databaseCleaning: {transaction: true}})
+
+    expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test"])
+  })
+
+  it("installs request coordination before a hook can open a manual transaction", async () => {
+    const order = await transactionCoordinationOrder({
+      databaseCleaning: {transaction: false, truncate: false},
+      type: "request"
     })
-    const order = []
-
-    class ObservedTestRunner extends TestRunner {
-      activateTestSharedConnections() {
-        order.push("activate")
-        return []
-      }
-
-      async prepareSharedTransactionBroker() {
-        order.push("coordinate")
-        return undefined
-      }
-
-      async startSharedTransactionBroker() {
-        order.push("publish")
-        return undefined
-      }
-    }
-
-    const testRunner = new ObservedTestRunner({configuration, testFiles: []})
-    const tests = {
-      args: {},
-      afterAlls: [],
-      afterEaches: [],
-      beforeAlls: [],
-      beforeEaches: [{callback: async () => { order.push("beforeEach") }}],
-      subs: {},
-      tests: {
-        "coordinates a transaction test": {
-          args: {databaseCleaning: {transaction: true}},
-          function: async () => { order.push("test") }
-        }
-      }
-    }
-
-    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
 
     expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test"])
   })

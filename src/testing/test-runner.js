@@ -1436,7 +1436,7 @@ export default class TestRunner {
                 testSharedConnectionsActive = true
 
                 try {
-                  if (testArgs.databaseCleaning?.transaction === true) {
+                  if (testArgs.databaseCleaning?.transaction === true || testArgs.type == "request") {
                     sharedTransactionBrokerPreparation = await this.prepareSharedTransactionBroker()
                   }
 
