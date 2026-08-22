@@ -127,6 +127,16 @@ class VelociousDatabasePoolBase {
   }
 
   /**
+   * Permanently discards an attempt-owned checked-out connection.
+   * @abstract
+   * @param {import("../drivers/base.js").default} _connection - Connection that must not return to the pool.
+   * @returns {Promise<void>} - Resolves after the connection is closed and removed from pool ownership.
+   */
+  discard(_connection) {
+    throw new Error("'discard' not implemented")
+  }
+
+  /**
    * Runs checkout.
    * @abstract
    * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
@@ -172,6 +182,16 @@ class VelociousDatabasePoolBase {
    * @returns {TestSharedConnectionRegistration | undefined} - Opaque registration handle when supported.
    */
   setTestSharedConnectionProvider(_provider) {
+    return undefined
+  }
+
+  /**
+   * Registers a test connection for one resolved physical database configuration.
+   * @param {import("../drivers/base.js").default} _connection - Attempt-owned connection.
+   * @param {string} _reuseKey - Resolved physical configuration identity.
+   * @returns {TestSharedConnectionRegistration | undefined} - Opaque registration handle when supported.
+   */
+  setTestSharedConnectionForConfiguration(_connection, _reuseKey) {
     return undefined
   }
 
@@ -393,6 +413,18 @@ class VelociousDatabasePoolBase {
     }
 
     return connection
+  }
+
+  /**
+   * Checks out a connection for an already-resolved physical configuration.
+   * Multi-configuration pools override this for explicit tenant registrations.
+   * @param {import("../../configuration-types.js").DatabaseConfigurationType} _databaseConfiguration - Captured configuration.
+   * @param {ConnectionCheckoutOptions} [_options] - Checkout options.
+   * @param {{retain: boolean}} [_args] - Pool-specific retention behavior.
+   * @returns {Promise<import("../drivers/base.js").default>} - Checked-out connection.
+   */
+  async checkoutForConfiguration(_databaseConfiguration, _options, _args) {
+    throw new Error("Database pool does not support captured configuration checkout")
   }
 
   /**

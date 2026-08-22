@@ -55,6 +55,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   _testSharedConnectionRegistration = undefined
 
+  /** Attempt-owned shared connections keyed by resolved physical configuration. */
+  _testSharedConnectionsByReuseKey = new Map()
+
   /**
    * Connections.
    * @type {import("../drivers/base.js").default[]} */
@@ -247,6 +250,30 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     this.connections.push(connection)
     await this.drainPendingCheckouts()
     if (this.connections.includes(connection)) await this.handleCheckedInIdleConnection()
+  }
+
+  /**
+   * Permanently removes and closes a checked-out connection.
+   * @param {import("../drivers/base.js").default} connection - Connection that must not return to the pool.
+   */
+  async discard(connection) {
+    const id = connection.getIdSeq()
+    const errors = []
+
+    this.untrackConnectionInUse(connection, id)
+    try {
+      await this.closeConnection(connection)
+    } catch (error) {
+      errors.push(error)
+    }
+    try {
+      await this.drainPendingCheckouts()
+    } catch (error) {
+      errors.push(error)
+    }
+
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Failed to discard a database connection")
   }
 
   /**
@@ -885,6 +912,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!actualCallback) throw new Error("withConnection requires a callback")
 
+    const testSharedConnection = this.activeTestSharedConnection()
+    if (testSharedConnection && this.connectionMatchesCurrentConfiguration(testSharedConnection)) {
+      return await this.asyncLocalStorage.run(testSharedConnection.getIdSeq(), async () => {
+        return await actualCallback(testSharedConnection)
+      })
+    }
+
     const connection = await this.checkout(options)
     const id = connection.getIdSeq()
 
@@ -1080,11 +1114,34 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Registers an attempt-owned connection for exactly one physical configuration.
+   * @param {import("../drivers/base.js").default} connection - Attempt-owned connection.
+   * @param {string} reuseKey - Resolved physical configuration identity.
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque registration handle.
+   */
+  setTestSharedConnectionForConfiguration(connection, reuseKey) {
+    const registration = {owner: Symbol("test-shared-physical-connection")}
+
+    this._testSharedConnectionsByReuseKey.set(reuseKey, {connection, registration})
+    return registration
+  }
+
+  /**
    * Clears the current shared connection registration. A supplied stale registration
    * cannot clear a provider installed by a newer lifecycle.
    * @param {import("./base.js").TestSharedConnectionRegistration} [registration] - Opaque registration handle to clear conditionally.
    * @returns {void} */
   clearTestSharedConnection(registration) {
+    if (registration) {
+      for (const [reuseKey, entry] of this._testSharedConnectionsByReuseKey) {
+        if (entry.registration !== registration) continue
+        this._testSharedConnectionsByReuseKey.delete(reuseKey)
+        return
+      }
+    } else {
+      this._testSharedConnectionsByReuseKey.clear()
+    }
+
     if (registration && registration !== this._testSharedConnectionRegistration) return
 
     this._testSharedConnection = undefined
@@ -1103,7 +1160,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {T} - Callback result.
    */
   runWithTestSharedConnection(callback) {
-    const connection = this.testSharedConnection()
+    const connection = this.activeTestSharedConnection()
 
     if (!connection) return callback()
 
@@ -1111,10 +1168,30 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Resolves a test-shared connection only while its checkout ID is still owned by this pool.
+   * Fallback-only registrations have no checkout ID and must enter the normal checkout path.
+   * @returns {import("../drivers/base.js").default | undefined} - Active shared connection.
+   */
+  activeTestSharedConnection() {
+    const connection = this.testSharedConnection()
+    const id = connection?.getIdSeq()
+
+    if (typeof id !== "number") return
+    if (this.connectionsInUse[id] !== connection) return
+
+    return connection
+  }
+
+  /**
    * Resolves the connection currently eligible for in-process test request sharing.
    * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
    */
   testSharedConnection() {
+    const reuseKey = this.getConfigurationReuseKey()
+    const physicalRegistration = this._testSharedConnectionsByReuseKey.get(reuseKey)
+
+    if (physicalRegistration) return physicalRegistration.connection
+
     return this._testSharedConnectionProvider
       ? this._testSharedConnectionProvider()
       : this._testSharedConnection

@@ -63,6 +63,37 @@ lets concurrency and locking tests opt out of transaction cleanup and exercise
 production-style connection behavior. Shared connection state is scoped to the test
 lifecycle and cleared around tests.
 
+Tenant-only databases remain independently pooled unless a test explicitly registers a
+resolved tenant for its current attempt:
+
+```js
+it("rolls back tenant work", {databaseCleaning: {transaction: true}}, async ({registerTransactionalTenant}) => {
+  const tenant = {slug: "example"}
+
+  await registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant})
+  await Tenant.with(tenant, async () => {
+    await TenantRecord.create({name: "discarded after this attempt"})
+  })
+})
+```
+
+Registration captures the database identifier and the tenant resolver's physical
+configuration key, checks out an attempt-owned connection, and opens its transaction.
+Repeated tenant scopes and compatible same-process request paths reuse that connection
+only when both parts of the identity match. Two physical tenant databases under one
+identifier therefore remain isolated, while an unregistered tenant continues through
+ordinary pool checkout. Attempt cleanup revokes the shared registration before rollback
+and release, including failed setup, failed tests, retries, and lifecycles that remain
+hung beyond timeout grace. The registration stays active through `afterEach`, so hooks
+can inspect or tear down the test body's uncommitted tenant rows on the same connection;
+rollback and release occur after those hooks finish. When work remains abandoned after
+timeout grace, attempt ownership is revoked even if checkout or transaction startup is
+still pending, and that detached setup cannot publish over a successor registration. Its
+connection is rolled back and discarded instead of returned to the pool, so resumed stale
+callbacks fail closed and cannot race a successor attempt. Emergency cleanup observes the
+same bounded grace as the lifecycle; a stalled driver cleanup remains quarantined in the
+background, and any eventual cleanup error is reported as a test-runner failure.
+
 Transactional background-job tests use the same isolation for real child runtimes.
 While a test transaction is active, forked, pooled, and spawned runners route their
 physical database operations through a capability-scoped loopback broker owned by
