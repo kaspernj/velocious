@@ -259,7 +259,7 @@ npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
 See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
 activity spans, schema, and privacy guarantees.
 
-Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`.
+Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. The stable Velocious import remains `velocious/build/src/testing/test.js`; its generic `waitForEvent` primitive comes from `@velocious/testing`, while the keyed testing DSL and framework runner remain owned by Velocious.
 
 ```js
 import {waitForEvent} from "velocious/build/src/testing/test.js"

@@ -7,7 +7,7 @@ import { fork } from "child_process"
 import { fileURLToPath, pathToFileURL } from "url"
 
 import JsonSocket from "../../src/background-jobs/json-socket.js"
-import waitForEvent from "../../src/testing/wait-for-event.js"
+import { waitForEvent } from "../../src/testing/test.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 const POOLED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("../../src/background-jobs/pooled-runner-child.js", import.meta.url))

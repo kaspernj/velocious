@@ -197,8 +197,10 @@ signal or condition instead:
 - **Event-driven (a discrete signal):** `waitForEvent(emitter, eventName, {timeoutMs,
   filter})` from `velocious/build/src/testing/test.js` resolves the instant the event
   fires (optionally only when `filter` matches the emitted arguments) and rejects on
-  timeout. It always removes its listener. Use it for a background job finishing, a
-  model lifecycle event, a websocket message, etc.
+  timeout. It always removes its listener. The stable Velocious import remains the
+  facade shown above; the generic primitive comes from `@velocious/testing`, while
+  Velocious continues to own the keyed testing DSL and framework runner. Use it for a
+  background job finishing, a model lifecycle event, a websocket message, etc.
 - **Condition polling (no discrete event):** awaitery's `waitFor(callback, {timeout,
   wait})` retries `callback` until it stops throwing (default 5s timeout, 50ms
   interval). Use it when there is no event to hook, e.g. `await waitFor(() =>

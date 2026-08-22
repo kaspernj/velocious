@@ -2,9 +2,9 @@
 
 import path from "path"
 import {fileURLToPath} from "url"
+import { waitForEvent } from "@velocious/testing"
 import EventEmitter from "../utils/event-emitter.js"
 import Expect from "./expect.js"
-import waitForEvent from "./wait-for-event.js"
 import {arrayContaining, objectContaining} from "./expect-utils.js"
 
 /**
