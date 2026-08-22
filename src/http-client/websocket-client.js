@@ -56,6 +56,21 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
   }
 
   /**
+   * Closes the WebSocket as a normal shutdown so the server permanently
+   * releases resumable session state.
+   * @returns {Promise<void>} - Resolves once closed.
+   */
+  async close() {
+    this.autoReconnect = false
+
+    if (this.socket?.readyState === this.socket.OPEN) {
+      this.socket.close(1000)
+    }
+
+    await super.close()
+  }
+
+  /**
    * Stops reconnect, drains work that already passed SnapReq's reconnect guard,
    * and clears state changed by a stale attempt while it settled.
    * @returns {Promise<void>} - Resolves once no reconnect can resurrect a socket.

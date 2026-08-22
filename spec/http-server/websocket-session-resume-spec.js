@@ -80,6 +80,25 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
     })
   })
 
+  it("does not retain channel subscriptions after a graceful client close", async () => {
+    await Dummy.run(async () => {
+      const client = new WebsocketClient()
+
+      await client.connect()
+      const subscription = client.subscribeChannel("Counter", {params: {allow: true, topic: "graceful-close"}})
+
+      await subscription.ready
+
+      const sessionId = client._sessionId
+
+      expect(typeof sessionId).toBe("string")
+      await client.close()
+
+      expect(dummyConfiguration._pausedWebsocketSessions.has(/** @type {string} */ (sessionId))).toBe(false)
+      expect(Array.from(dummyConfiguration._websocketSessions).some((session) => session.sessionId === sessionId)).toBe(false)
+    })
+  })
+
   it("flushes server-queued frames after session resume", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient({autoReconnect: true, reconnectDelays: [200]})
