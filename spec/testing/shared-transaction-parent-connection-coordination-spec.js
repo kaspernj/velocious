@@ -4,6 +4,7 @@ import BaseDriver from "../../src/database/drivers/base.js"
 import Configuration from "../../src/configuration.js"
 import SharedTransactionBroker from "../../src/testing/shared-transaction-broker.js"
 import SharedTransactionBrokerClient from "../../src/testing/shared-transaction-broker-client.js"
+import { coordinateSharedTransactionConnection } from "../../src/testing/shared-transaction-connection-coordinator.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 class SingleRequestDriver extends BaseDriver {
@@ -69,6 +70,54 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     } finally {
       connection.releaseChild()
       await child.close()
+      await broker.close()
+    }
+  })
+
+  it("serializes concurrent sibling queries that inherit one coordinator owner", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]>[]} */
+    let siblingQueries = []
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        siblingQueries = [
+          connection.query("SELECT child", {logQuery: false}),
+          connection.query("SELECT parent", {logQuery: false})
+        ]
+        await connection.childStarted
+        connection.releaseChild()
+        await Promise.all(siblingQueries)
+      })
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled(siblingQueries)
+      await broker.close()
+    }
+  })
+
+  it("keeps sibling coordination parallel across distinct physical connections", async () => {
+    const firstConnection = new SingleRequestDriver()
+    const secondConnection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {first: firstConnection, second: secondConnection}})
+    const queries = [
+      firstConnection.query("SELECT child", {logQuery: false}),
+      secondConnection.query("SELECT child", {logQuery: false})
+    ]
+
+    try {
+      await Promise.all([firstConnection.childStarted, secondConnection.childStarted])
+
+      expect(firstConnection.activeRequests).toEqual(1)
+      expect(secondConnection.activeRequests).toEqual(1)
+    } finally {
+      firstConnection.releaseChild()
+      secondConnection.releaseChild()
+      await Promise.allSettled(queries)
       await broker.close()
     }
   })
