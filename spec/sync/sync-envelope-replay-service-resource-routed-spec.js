@@ -519,7 +519,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     const result = await service.replay({
       syncs: [buildSync({
         baseVersion,
-        data: {body: "Default stale body", taskId: firstTask.id()},
+        data: {body: "Default stale body", task_id: firstTask.id()},
         id: "25d6e7f8-1111-4222-8333-444455556666",
         resourceId: String(comment.id()),
         resourceType: "Comment"
@@ -529,8 +529,10 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
     expect(result.syncs[0].syncState).toEqual("conflict")
     expect(conflict.suggestedResolution).toEqual("keep_server")
+    expect(conflict.affectedFields).toEqual(["body", "task_id"])
     expect(conflict.serverModel.body).toEqual("Default server body")
     expect(conflict.serverModel.taskId).toEqual(secondTask.id())
+    expect(conflict.serverModel.task_id).toEqual(undefined)
     expect(conflict.serverModel.id).toEqual(comment.id())
     expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
     expect(Object.keys(conflict.serverModel).sort()).toEqual(["body", "id", "taskId", "updatedAt"])
@@ -587,7 +589,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
     expect(conflict.serverModel.updatedAt).toEqual(conflict.serverVersion)
   })
 
-  it("preserves Date-typed conflict serverModel through durable mutation-log readback into a generated accessor", async () => {
+  it("applies canonical conflict serverModel attributes through durable readback into generated accessors", async () => {
     const outputDir = `${dummyDirectory()}/src/frontend-models`
     await fs.rm(outputDir, {force: true, recursive: true})
 
@@ -617,32 +619,52 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
 
       const {default: GeneratedTask} = await import(`${outputDir}/task.js`)
 
-      class DateConflictTaskResource extends FrontendModelBaseResource {
-        static ModelClass = Task
+      class AliasedPrimaryTask extends Task {
+        /** @returns {string} - Database-column primary key. */
+        static primaryKey() {
+          return "TaskID"
+        }
+
+        /** @param {string} name - Attribute or column name. @returns {string | null} - Canonical attribute name. */
+        static resolveAttributeName(name) {
+          if (name === "TaskID") return "id"
+
+          return super.resolveAttributeName(name)
+        }
+      }
+
+      class CanonicalConflictTaskResource extends FrontendModelBaseResource {
+        static ModelClass = AliasedPrimaryTask
 
         /** @type {string[]} */
-        static attributes = ["name", "createdAt"]
+        static attributes = ["name", "createdAt", "projectId"]
 
         /** @type {string[]} */
-        static writableAttributes = ["name", "createdAt"]
+        static writableAttributes = ["name", "createdAt", "projectId"]
+
+        /** @param {{mutation: import("../../src/sync/sync-envelope-replay-service.js").SyncReplayMutation}} args - Lookup args. @returns {Promise<Task | null>} - Existing task. */
+        async findSyncRecord({mutation}) {
+          return await Task.findBy({id: mutation.resourceId})
+        }
       }
 
       const project = await Project.create({name: "Durable conflict projection project"})
+      const serverProject = await Project.create({name: "Durable authoritative project"})
       const task = await Task.create({name: "Durable original", createdAt: "2026-07-01T09:00:00.000Z", projectId: project.id()})
       const baseVersion = task.updatedAt().toISOString()
 
-      task.assign({name: "Durable authoritative", updatedAt: "2026-07-04T10:00:00.000Z"})
+      task.assign({name: "Durable authoritative", projectId: serverProject.id(), updatedAt: "2026-07-04T10:00:00.000Z"})
       await task.save()
 
       const service = buildService({
-        conflictStrategy: {strategy: "serverWins", versionAttribute: "updatedAt"},
-        resourceTypeOverrides: {Task: DateConflictTaskResource},
+        conflictStrategy: {strategy: "serverWins", versionAttribute: "updated_at"},
+        resourceTypeOverrides: {Task: CanonicalConflictTaskResource},
         syncModel: SyncEntry
       })
       const result = await service.replay({
         syncs: [buildSync({
           baseVersion,
-          data: {name: "Stale name", createdAt: "2026-07-02T09:00:00.000Z"},
+          data: {name: "Stale name", createdAt: "2026-07-02T09:00:00.000Z", project_id: project.id()},
           id: "45d7e8f9-2222-4333-8444-555566667777",
           resourceId: String(task.id()),
           resourceType: "Task"
@@ -660,7 +682,7 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
         mutation: {
           actorDeviceId: "device-1",
           actorUserId: "user-1",
-          attributes: {name: "Stale name", createdAt: "2026-07-02T09:00:00.000Z"},
+          attributes: {name: "Stale name", createdAt: "2026-07-02T09:00:00.000Z", project_id: project.id()},
           baseVersion,
           clientMutationId: "mutation-1",
           model: "Task",
@@ -675,16 +697,32 @@ describe("sync envelope replay service - resource routed", {databaseCleaning: {t
       const persisted = (await mutationLog.records())[0]
 
       expect(persisted.status).toEqual("conflict")
+      expect(persisted.syncResult?.conflict?.affectedFields).toEqual(["name", "createdAt", "project_id"])
+      expect(persisted.syncResult?.conflict?.localMutation.attributes.project_id).toEqual(project.id())
+      expect(persisted.syncResult?.conflict?.localMutation.attributes.projectId).toEqual(undefined)
+      expect(persisted.syncResult?.conflict?.suggestedResolution).toEqual("keep_server")
+      expect(persisted.syncResult?.conflict?.versionAttribute).toEqual("updated_at")
       expect(persisted.syncResult?.conflict?.serverModel.createdAt).toBeInstanceOf(Date)
+      expect(persisted.syncResult?.conflict?.serverModel.id).toEqual(task.id())
+      expect(persisted.syncResult?.conflict?.serverModel.TaskID).toEqual(undefined)
+      expect(persisted.syncResult?.conflict?.serverModel.projectId).toEqual(serverProject.id())
+      expect(persisted.syncResult?.conflict?.serverModel.project_id).toEqual(undefined)
+      expect(persisted.syncResult?.conflict?.serverModel.updatedAt).toEqual(persisted.syncResult?.conflict?.serverVersion)
+      expect(persisted.syncResult?.conflict?.serverModel.updated_at).toEqual(undefined)
 
-      // Durable readback passed into the real CLI-generated model must surface
-      // the authoritative Date from its generated createdAt() accessor.
-      const generatedTask = GeneratedTask.instantiateFromResponse(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (persisted.syncResult?.conflict?.serverModel))
+      // Applying keep_server to a real CLI-generated model must update its
+      // canonical accessors, even when the original mutation used an alias.
+      const generatedTask = GeneratedTask.instantiateFromResponse({id: task.id(), name: "Stale name", projectId: project.id(), updatedAt: baseVersion})
+
+      generatedTask.assignAttributes(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (persisted.syncResult?.conflict?.serverModel))
 
       expect(generatedTask.createdAt()).toBeInstanceOf(Date)
       expect(generatedTask.createdAt().toISOString()).toEqual("2026-07-01T09:00:00.000Z")
       expect(generatedTask.createdAt().toISOString()).toEqual(task.createdAt().toISOString())
+      expect(generatedTask.id()).toEqual(task.id())
       expect(generatedTask.name()).toEqual("Durable authoritative")
+      expect(generatedTask.projectId()).toEqual(serverProject.id())
+      expect(generatedTask.updatedAt()).toEqual(persisted.syncResult?.conflict?.serverVersion)
     } finally {
       await fs.rm(outputDir, {force: true, recursive: true})
     }
