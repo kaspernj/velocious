@@ -125,7 +125,16 @@ enqueue, handoff, and terminal job rows on the same parent-owned transaction on
 async-tracked database pools instead of checking out an independently committed
 connection. Parent store callbacks and child broker calls also share the broker's
 per-physical-connection queue, preventing overlapping driver requests while
-preserving root-savepoint leases.
+preserving root-savepoint leases. Inherited sibling work is drained before its broker
+queue entry is released. A delayed callback whose inherited owner has already ended
+must re-enter that queue. Each nested owned call receives a child FIFO that drains
+before its parent is released, so nested sibling queries remain serialized without
+deadlocking awaited nesting or coupling independent physical connections. The
+connection-local queue remains attached to a physical connection after broker revocation,
+so an inherited callback that wakes during later pool reuse cannot bypass serialization
+after the transport and capability have been cleaned up. Detached delivery boundaries clear inherited
+coordinator ownership along with their connection contexts, so asynchronous replay
+persistence is serialized as independent work rather than mistaken for a nested call.
 
 Request tests prepare that parent-side coordination before `beforeEach`, including
 when automatic transaction cleanup is disabled. A hook can therefore open a manual
@@ -204,8 +213,10 @@ signal or condition instead:
 - **Event-driven (a discrete signal):** `waitForEvent(emitter, eventName, {timeoutMs,
   filter})` from `velocious/build/src/testing/test.js` resolves the instant the event
   fires (optionally only when `filter` matches the emitted arguments) and rejects on
-  timeout. It always removes its listener. Use it for a background job finishing, a
-  model lifecycle event, a websocket message, etc.
+  timeout. It always removes its listener. The stable Velocious import remains the
+  facade shown above; the generic primitive comes from `@velocious/testing`, while
+  Velocious continues to own the keyed testing DSL and framework runner. Use it for a
+  background job finishing, a model lifecycle event, a websocket message, etc.
 - **Condition polling (no discrete event):** awaitery's `waitFor(callback, {timeout,
   wait})` retries `callback` until it stops throwing (default 5s timeout, 50ms
   interval). Use it when there is no event to hook, e.g. `await waitFor(() =>

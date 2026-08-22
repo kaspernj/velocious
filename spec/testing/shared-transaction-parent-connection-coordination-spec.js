@@ -14,6 +14,8 @@ class SingleRequestDriver extends BaseDriver {
   queries = []
   /** @type {() => void} */
   releaseChild = () => {}
+  /** @type {() => void} */
+  onChildStarted = () => {}
   /** @type {Promise<void>} */
   childStarted
   /** @type {() => void} */
@@ -36,6 +38,7 @@ class SingleRequestDriver extends BaseDriver {
     try {
       if (this.activeRequests > 1) throw new Error("Can't acquire connection for the request. There is another request in progress.")
       if (sql == "SELECT child") {
+        this.onChildStarted()
         this.resolveChildStarted()
         await new Promise((resolve) => { this.releaseChild = resolve })
       }
@@ -89,6 +92,242 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
         await connection.childStarted
         connection.releaseChild()
         await Promise.all(siblingQueries)
+      })
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled(siblingQueries)
+      await broker.close()
+    }
+  })
+
+  it("keeps a broker queue entry until its inherited query settles", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]> | undefined} */
+    let inheritedQuery
+    let rootSettled = false
+    /** @type {() => void} */
+    let resolveRootCallbackReturned = () => {}
+    const rootCallbackReturned = new Promise((resolve) => { resolveRootCallbackReturned = resolve })
+
+    const root = coordinateSharedTransactionConnection(connection, async () => {
+      inheritedQuery = connection.query("SELECT child", {logQuery: false})
+      await connection.childStarted
+      resolveRootCallbackReturned()
+    }).then(() => { rootSettled = true })
+
+    try {
+      await rootCallbackReturned
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(rootSettled).toEqual(false)
+
+      connection.releaseChild()
+      await root
+      await inheritedQuery
+
+      expect(connection.maxActiveRequests).toEqual(1)
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled([root, inheritedQuery || Promise.resolve([])])
+      await broker.close()
+    }
+  })
+
+  it("routes delayed inherited work behind later broker traffic", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const child = new SharedTransactionBrokerClient({
+      address: broker.address(),
+      capability: broker.capability(),
+      databaseIdentifier: "default"
+    })
+    /** @type {() => void} */
+    let releaseDelayedQuery = () => {}
+    const delayedQueryGate = new Promise((resolve) => { releaseDelayedQuery = resolve })
+    /** @type {Promise<[]>} */
+    let delayedQuery = Promise.resolve([])
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        delayedQuery = delayedQueryGate.then(async () => await connection.query("SELECT parent", {logQuery: false}))
+      })
+
+      const brokerQuery = child.call("_queryActual", ["SELECT child"])
+
+      await connection.childStarted
+      releaseDelayedQuery()
+      queueMicrotask(connection.releaseChild)
+      await Promise.all([brokerQuery, delayedQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      releaseDelayedQuery()
+      connection.releaseChild()
+      await Promise.allSettled([delayedQuery])
+      await child.close()
+      await broker.close()
+    }
+  })
+
+  it("keeps delayed inherited work serialized after broker cleanup", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseDelayedQuery = () => {}
+    const delayedQueryGate = new Promise((resolve) => { releaseDelayedQuery = resolve })
+    /** @type {Promise<[]>} */
+    let delayedQuery = Promise.resolve([])
+
+    await coordinateSharedTransactionConnection(connection, async () => {
+      delayedQuery = delayedQueryGate.then(async () => await connection.query("SELECT parent", {logQuery: false}))
+    })
+    await broker.close()
+
+    const currentQuery = connection.query("SELECT child", {logQuery: false})
+
+    try {
+      await connection.childStarted
+      releaseDelayedQuery()
+      void delayedQuery.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(connection.queries).toEqual(["SELECT child"])
+
+      connection.releaseChild()
+      await Promise.all([currentQuery, delayedQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      releaseDelayedQuery()
+      connection.releaseChild()
+      await Promise.allSettled([currentQuery, delayedQuery])
+    }
+  })
+
+  it("chains replacement broker work behind the retained connection queue", async () => {
+    const connection = new SingleRequestDriver()
+    const firstBroker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseDelayedQuery = () => {}
+    const delayedQueryGate = new Promise((resolve) => { releaseDelayedQuery = resolve })
+    /** @type {Promise<[]>} */
+    let delayedQuery = Promise.resolve([])
+
+    await coordinateSharedTransactionConnection(connection, async () => {
+      delayedQuery = delayedQueryGate.then(async () => await connection.query("SELECT child", {logQuery: false}))
+    })
+    await firstBroker.close()
+    releaseDelayedQuery()
+    await connection.childStarted
+
+    const replacementBroker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const replacementQuery = connection.query("SELECT parent", {logQuery: false})
+
+    try {
+      void replacementQuery.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(connection.queries).toEqual(["SELECT child"])
+
+      connection.releaseChild()
+      await Promise.all([delayedQuery, replacementQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled([delayedQuery, replacementQuery])
+      await replacementBroker.close()
+    }
+  })
+
+  it("serializes detached connection-context work inherited by an owned query", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]>} */
+    let childQuery = Promise.resolve([])
+    /** @type {Promise<[]>} */
+    let detachedQuery = Promise.resolve([])
+    /** @type {string[]} */
+    let queriesBeforeRelease = []
+    /** @type {() => void} */
+    let resolveQueriesObserved = () => {}
+    const queriesObserved = new Promise((resolve) => { resolveQueriesObserved = resolve })
+
+    connection.onChildStarted = () => {
+      connection.configuration.withoutCurrentConnectionContexts(() => {
+        detachedQuery = Promise.resolve().then(async () => await connection.query("SELECT parent", {logQuery: false}))
+        void detachedQuery.catch(() => undefined)
+      })
+      setImmediate(() => {
+        queriesBeforeRelease = [...connection.queries]
+        connection.releaseChild()
+        resolveQueriesObserved()
+      })
+    }
+
+    const root = coordinateSharedTransactionConnection(connection, async () => {
+      childQuery = connection.query("SELECT child", {logQuery: false})
+      await connection.childStarted
+    })
+
+    try {
+      await queriesObserved
+      await Promise.all([root, childQuery, detachedQuery])
+
+      expect(queriesBeforeRelease).toEqual(["SELECT child"])
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled([root, childQuery, detachedQuery])
+      await broker.close()
+    }
+  })
+
+  it("allows nested owner coordination to re-enter without deadlocking", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    let nestedRan = false
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        await coordinateSharedTransactionConnection(connection, async () => {
+          await coordinateSharedTransactionConnection(connection, async () => {
+            nestedRan = true
+          })
+        })
+      })
+
+      expect(nestedRan).toEqual(true)
+    } finally {
+      await broker.close()
+    }
+  })
+
+  it("serializes sibling queries launched by nested owned coordination", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]>[]} */
+    let siblingQueries = []
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        await coordinateSharedTransactionConnection(connection, async () => {
+          siblingQueries = [
+            connection.query("SELECT child", {logQuery: false}),
+            connection.query("SELECT parent", {logQuery: false})
+          ]
+          await connection.childStarted
+          connection.releaseChild()
+          await Promise.all(siblingQueries)
+        })
       })
 
       expect(connection.maxActiveRequests).toEqual(1)

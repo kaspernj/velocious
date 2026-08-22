@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.619",
+  "version": "1.0.621",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -64,6 +64,7 @@
   "description": "",
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
+    "@velocious/testing": "0.0.0",
     "awaitery": "^1.0.19",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",

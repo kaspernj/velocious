@@ -6,11 +6,13 @@ import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
+import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
 import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
+import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 
 class QueuedOrphanStore extends BackgroundJobsStore {
@@ -192,31 +194,28 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
     // the worker process via async I/O concurrency rather than
     // serializing one another.
     const {main, worker} = await startBackgroundJobs({workerOptions: {maxConcurrentInlineJobs: 4}})
-    const outPath1 = await outputPathFor("parallel1")
-    const outPath2 = await outputPathFor("parallel2")
-    const outPath3 = await outputPathFor("parallel3")
-    const startedAt = Date.now()
+    const barrier = await createBackgroundJobsSocketBarrier(3)
 
-    await DelayedJob.performLaterWithOptions({args: ["a", outPath1], options: {executionMode: "inline"}})
-    await DelayedJob.performLaterWithOptions({args: ["b", outPath2], options: {executionMode: "inline"}})
-    await DelayedJob.performLaterWithOptions({args: ["c", outPath3], options: {executionMode: "inline"}})
+    try {
+      for (let index = 0; index < 3; index += 1) {
+        await SocketBarrierTestJob.performLaterWithOptions({
+          args: [barrier.port],
+          options: {executionMode: "inline"}
+        })
+      }
 
-    await Promise.all([
-      waitForOutputJson({outputPath: outPath1, timeoutSeconds: 4}),
-      waitForOutputJson({outputPath: outPath2, timeoutSeconds: 4}),
-      waitForOutputJson({outputPath: outPath3, timeoutSeconds: 4})
-    ])
+      await barrier.waiting
 
-    const elapsedMs = Date.now() - startedAt
+      expect(worker.inflightInlineJobs.size).toEqual(3)
+      const inflightJobs = [...worker.inflightInlineJobs]
 
-    // DelayedJob waits 0.5s. Sequential floor would be ~1.5s; parallel
-    // should clock around 0.5s plus framework overhead. 1100ms is
-    // comfortably below the sequential floor and high enough to
-    // tolerate CI noise.
-    expect(elapsedMs < 1100).toEqual(true)
-
-    await worker.stop()
-    await main.stop()
+      barrier.release()
+      await Promise.all(inflightJobs)
+    } finally {
+      await barrier.close()
+      await worker.stop()
+      await main.stop()
+    }
   })
 
   it("emits background-job-failed after an accepted job failure report", async () => {

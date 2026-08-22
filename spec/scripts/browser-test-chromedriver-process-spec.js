@@ -30,9 +30,9 @@ describe("browser test ChromeDriver process", {databaseCleaning: {transaction: f
     const previousChildStoppedPath = process.env.FAKE_CHROMEDRIVER_CHILD_STOPPED_PATH
     const childScript = [
       "const fs = require('node:fs')",
-      "const net = require('node:net')",
       "process.once('SIGTERM', () => { fs.writeFileSync(process.env.FAKE_CHROMEDRIVER_CHILD_STOPPED_PATH, 'stopped'); process.exit(0) })",
-      "net.createServer().listen(0, '127.0.0.1', () => process.send('ready'))"
+      "process.on('message', () => {})",
+      "process.send('ready')"
     ].join(";")
     const driverScript = [
       "#!/usr/bin/env node",

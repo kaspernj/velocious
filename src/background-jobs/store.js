@@ -7,7 +7,7 @@ import TableData from "../database/table-data/index.js"
 import VelociousError from "../velocious-error.js"
 import BackgroundJobRecord from "./job-record.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
-import {coordinateSharedTransactionConnection} from "../testing/shared-transaction-connection-coordinator.js"
+import { coordinateSharedTransactionConnection } from "../testing/shared-transaction-connection-coordinator.js"
 import stableJsonStringify from "../utils/stable-json.js"
 import {
   BACKGROUND_JOB_EXECUTION_MODES,

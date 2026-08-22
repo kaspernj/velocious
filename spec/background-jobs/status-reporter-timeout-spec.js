@@ -4,7 +4,7 @@ import net from "net"
 import { TimeoutError } from "awaitery/build/timeout.js"
 import BackgroundJobsStatusReporter from "../../src/background-jobs/status-reporter.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import waitForEvent from "../../src/testing/wait-for-event.js"
+import { waitForEvent } from "../../src/testing/test.js"
 
 describe("BackgroundJobsStatusReporter timeout", () => {
   it("times out a stalled report and forcibly destroys (rather than gracefully closing) the pending socket", async () => {
