@@ -1,6 +1,7 @@
 // @ts-check
 
-/** @typedef {{coordinator: (callback: () => Promise<unknown>) => Promise<unknown>, ownedQueue: Promise<void>, owner: symbol, reentrantOwners: Set<symbol>, rootOwners: Set<symbol>}} CoordinatorRegistration */
+/** @typedef {{ownedQueue: Promise<void>}} CoordinatorOwnerScope */
+/** @typedef {{coordinator: (callback: () => Promise<unknown>) => Promise<unknown>, owner: symbol, ownerScopes: Map<symbol, CoordinatorOwnerScope>}} CoordinatorRegistration */
 
 /** @type {WeakMap<object, CoordinatorRegistration>} */
 const coordinators = new WeakMap()
@@ -10,43 +11,46 @@ const coordinators = new WeakMap()
  * @template T
  * @param {import("../database/drivers/base.js").default} connection - Parent physical connection.
  * @param {CoordinatorRegistration} registration - Physical connection registration.
+ * @param {CoordinatorOwnerScope} ownerScope - Queue inherited from the current owner.
  * @param {() => Promise<T>} callback - Owned operation.
  * @returns {Promise<T>} - Operation result.
  */
-async function coordinateOwnedSharedTransactionConnection(connection, registration, callback) {
-  const previous = registration.ownedQueue
+async function coordinateOwnedSharedTransactionConnection(connection, registration, ownerScope, callback) {
+  const previous = ownerScope.ownedQueue
   /**
    * Releases the next owned sibling operation.
    * @type {() => void}
    */
   let release = () => {}
 
-  registration.ownedQueue = new Promise((resolve) => { release = resolve })
+  ownerScope.ownedQueue = new Promise((resolve) => { release = resolve })
   await previous
   const operationOwner = Symbol("shared-transaction-owned-operation")
   const environmentHandler = connection.configuration.getEnvironmentHandler()
+  const operationScope = {ownedQueue: Promise.resolve()}
 
-  registration.reentrantOwners.add(operationOwner)
+  registration.ownerScopes.set(operationOwner, operationScope)
   try {
     return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, operationOwner, callback)
   } finally {
-    registration.reentrantOwners.delete(operationOwner)
+    await drainOwnedSharedTransactionConnections(operationScope)
+    registration.ownerScopes.delete(operationOwner)
     release()
   }
 }
 
 /**
  * Drains all inherited operations admitted before the root owner is revoked.
- * @param {CoordinatorRegistration} registration - Physical connection registration.
+ * @param {CoordinatorOwnerScope} ownerScope - Owner scope to drain.
  * @returns {Promise<void>} - Resolves when the owned queue stops advancing.
  */
-async function drainOwnedSharedTransactionConnections(registration) {
+async function drainOwnedSharedTransactionConnections(ownerScope) {
   let tail
 
   do {
-    tail = registration.ownedQueue
+    tail = ownerScope.ownedQueue
     await tail
-  } while (tail !== registration.ownedQueue)
+  } while (tail !== ownerScope.ownedQueue)
 }
 
 /**
@@ -60,13 +64,14 @@ async function drainOwnedSharedTransactionConnections(registration) {
 async function coordinateRootSharedTransactionConnection(connection, registration, callback) {
   const rootOwner = Symbol("shared-transaction-root-operation")
   const environmentHandler = connection.configuration.getEnvironmentHandler()
+  const rootScope = {ownedQueue: Promise.resolve()}
 
-  registration.rootOwners.add(rootOwner)
+  registration.ownerScopes.set(rootOwner, rootScope)
   try {
     return await environmentHandler.runWithSharedTransactionCoordinatorOwner(connection, rootOwner, callback)
   } finally {
-    await drainOwnedSharedTransactionConnections(registration)
-    registration.rootOwners.delete(rootOwner)
+    await drainOwnedSharedTransactionConnections(rootScope)
+    registration.ownerScopes.delete(rootOwner)
   }
 }
 
@@ -81,10 +86,8 @@ export function setSharedTransactionCoordinator(connection, coordinator) {
 
   coordinators.set(connection, {
     coordinator,
-    ownedQueue: Promise.resolve(),
     owner,
-    reentrantOwners: new Set(),
-    rootOwners: new Set()
+    ownerScopes: new Map()
   })
   return owner
 }
@@ -114,10 +117,10 @@ export async function coordinateSharedTransactionConnection(connection, callback
 
   const environmentHandler = connection.configuration.getEnvironmentHandler()
   const currentOwner = environmentHandler.getSharedTransactionCoordinatorOwner(connection)
+  const currentOwnerScope = currentOwner ? registration.ownerScopes.get(currentOwner) : undefined
 
-  if (currentOwner && registration.reentrantOwners.has(currentOwner)) return await callback()
-  if (currentOwner && registration.rootOwners.has(currentOwner)) {
-    return await coordinateOwnedSharedTransactionConnection(connection, registration, callback)
+  if (currentOwnerScope) {
+    return await coordinateOwnedSharedTransactionConnection(connection, registration, currentOwnerScope, callback)
   }
   if (operationOwner === registration.owner) {
     return await coordinateRootSharedTransactionConnection(connection, registration, callback)

@@ -127,9 +127,9 @@ connection. Parent store callbacks and child broker calls also share the broker'
 per-physical-connection queue, preventing overlapping driver requests while
 preserving root-savepoint leases. Inherited sibling work is drained before its broker
 queue entry is released. A delayed callback whose inherited owner has already ended
-must re-enter that queue, while a nested call inside active owned work remains
-re-entrant; this keeps one-request transaction drivers such as MS-SQL serialized
-without coupling independent physical connections.
+must re-enter that queue. Each nested owned call receives a child FIFO that drains
+before its parent is released, so nested sibling queries remain serialized without
+deadlocking awaited nesting or coupling independent physical connections.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
