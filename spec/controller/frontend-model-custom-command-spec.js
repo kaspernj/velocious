@@ -6,6 +6,7 @@ import Controller from "../../src/controller.js"
 import dummyDirectory from "../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelController from "../../src/frontend-model-controller.js"
+import {captureFrontendModelRemoteRequestContext} from "../../src/frontend-models/remote-request-context.js"
 import Request from "../../src/http-server/client/request.js"
 import Response from "../../src/http-server/client/response.js"
 
@@ -84,7 +85,8 @@ describe("Controller frontend model custom commands", () => {
 
     const response = await controller.frontendApiCustomCommandPayload({
       customPath: "/custom-frontend-models/tasks/123/ping",
-      payload: {name: "John"}
+      payload: {name: "John"},
+      requestContext: captureFrontendModelRemoteRequestContext(undefined)
     })
 
     expect(response.status).toEqual("success")

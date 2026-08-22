@@ -4,10 +4,10 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
 import {resetFrontendModelTransport} from "../helpers/frontend-model-test-helpers.js"
 
-/** @returns {{autoReconnect: boolean, subscriptions: Array<Record<string, ReturnType<typeof JSON.parse>>>, subscribeChannel: (channel: string, options: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>}} Recording websocket client. */
-function buildWebsocketClient() {
+/** @param {{autoReconnect?: boolean}} [args] - Client controls. @returns {{autoReconnect: boolean, subscriptions: Array<Record<string, ReturnType<typeof JSON.parse>>>, subscribeChannel: (channel: string, options: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>}} Recording websocket client. */
+function buildWebsocketClient({autoReconnect = true} = {}) {
   const client = {
-    autoReconnect: true,
+    autoReconnect,
     subscriptions: /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ ([]),
     subscribeChannel: (channel, options) => {
       const subscription = {
@@ -77,6 +77,35 @@ describe("frontend-model websocket remote request context", () => {
 
       unsubscribeAlpha()
       unsubscribeBeta()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("releases an empty context bucket after the websocket closes without reconnect", async () => {
+    class ClosedRealtimeTask extends FrontendModelBase {
+      /** @returns {{attributes: string[], primaryKey: string}} Resource configuration. */
+      static resourceConfig() { return {attributes: ["id"], primaryKey: "id"} }
+    }
+
+    const websocketClient = buildWebsocketClient({autoReconnect: false})
+    // -0 and 0 share a serialized context key, so the next handle reveals whether the old bucket was reused.
+    let activeContext = {routingEpoch: -0}
+
+    FrontendModelBase.configureTransport({requestContext: () => activeContext, websocketClient})
+
+    try {
+      const unsubscribe = await ClosedRealtimeTask.onCreate(() => {})
+
+      websocketClient.subscriptions[0].options.onClose()
+      unsubscribe()
+      activeContext = {routingEpoch: 0}
+
+      const unsubscribeReplacement = await ClosedRealtimeTask.onCreate(() => {})
+
+      expect(websocketClient.subscriptions.length).toEqual(2)
+      expect(Object.is(websocketClient.subscriptions[1].options.params.routingEpoch, -0)).toBe(false)
+      unsubscribeReplacement()
     } finally {
       resetFrontendModelTransport()
     }

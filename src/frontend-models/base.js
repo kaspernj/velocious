@@ -1690,12 +1690,13 @@ class FrontendModelEventSubscription {
       || this.instanceListeners.size > 0
 
     if (hasAnyListener) return
-    if (!this.channelHandle) return
 
-    try {
-      this.channelHandle.close()
-    } catch (error) {
-      console.error(error)
+    if (this.channelHandle) {
+      try {
+        this.channelHandle.close()
+      } catch (error) {
+        console.error(error)
+      }
     }
 
     this.channelHandle = null
