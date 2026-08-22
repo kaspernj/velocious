@@ -3,6 +3,8 @@
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.js"
+import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
+import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/background-jobs-helper.js"
@@ -23,28 +25,30 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
 
   it("fills every advertised pooled slot without waiting for an earlier job to finish", async () => {
     if (!backgroundJobs) throw new Error("Expected background jobs to be started")
+    const barrier = await createBackgroundJobsSocketBarrier(5)
     const jobIds = []
 
-    for (let index = 0; index < 5; index += 1) {
-      const outputPath = await outputPathFor(`pooled-ready-dispatch-${index}`)
-      jobIds.push(await SlowTestJob.performLaterWithOptions({
-        args: [`job-${index}`, outputPath, 2000],
-        options: {executionMode: "pooled"}
-      }))
-    }
-
-    await timeout({timeout: 1000}, async () => {
-      while (true) {
-        const jobs = await Promise.all(jobIds.map(async (jobId) => await backgroundJobs.store.getJob(jobId)))
-        if (jobs.every((job) => job?.status === "handed_off")) break
-        await wait(0.01)
+    try {
+      for (let index = 0; index < 5; index += 1) {
+        jobIds.push(await SocketBarrierTestJob.performLaterWithOptions({
+          args: [barrier.port],
+          options: {executionMode: "pooled"}
+        }))
       }
-    })
 
-    expect(backgroundJobs.worker.pooledChildStates.values().next().value?.inflight.size).toEqual(5)
-    await timeout({timeout: 3000}, async () => {
-      while (backgroundJobs.worker.inflightPooledJobs.size > 0) await wait(0.01)
-    })
+      await barrier.waiting
+
+      const jobs = await Promise.all(jobIds.map(async (jobId) => await backgroundJobs.store.getJob(jobId)))
+
+      expect(jobs.every((job) => job?.status === "handed_off")).toEqual(true)
+      expect(backgroundJobs.worker.pooledChildStates.values().next().value?.inflight.size).toEqual(5)
+      const inflightJobs = [...backgroundJobs.worker.inflightPooledJobs]
+
+      barrier.release()
+      await Promise.all(inflightJobs)
+    } finally {
+      await barrier.close()
+    }
   })
 
   it("admits already-queued work after a pooled child exits while its failure report is slow", async () => {

@@ -311,6 +311,34 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     }
   })
 
+  it("serializes sibling queries launched by nested owned coordination", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]>[]} */
+    let siblingQueries = []
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        await coordinateSharedTransactionConnection(connection, async () => {
+          siblingQueries = [
+            connection.query("SELECT child", {logQuery: false}),
+            connection.query("SELECT parent", {logQuery: false})
+          ]
+          await connection.childStarted
+          connection.releaseChild()
+          await Promise.all(siblingQueries)
+        })
+      })
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled(siblingQueries)
+      await broker.close()
+    }
+  })
+
   it("keeps sibling coordination parallel across distinct physical connections", async () => {
     const firstConnection = new SingleRequestDriver()
     const secondConnection = new SingleRequestDriver()

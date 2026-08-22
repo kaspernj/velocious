@@ -127,12 +127,12 @@ connection. Parent store callbacks and child broker calls also share the broker'
 per-physical-connection queue, preventing overlapping driver requests while
 preserving root-savepoint leases. Inherited sibling work is drained before its broker
 queue entry is released. A delayed callback whose inherited owner has already ended
-must re-enter that queue, while a nested call inside active owned work remains
-re-entrant; this keeps one-request transaction drivers such as MS-SQL serialized
-without coupling independent physical connections. The connection-local queue remains
-attached to a physical connection after broker revocation, so an inherited callback
-that wakes during later pool reuse cannot bypass serialization after the transport and
-capability have been cleaned up. Detached delivery boundaries clear inherited
+must re-enter that queue. Each nested owned call receives a child FIFO that drains
+before its parent is released, so nested sibling queries remain serialized without
+deadlocking awaited nesting or coupling independent physical connections. The
+connection-local queue remains attached to a physical connection after broker revocation,
+so an inherited callback that wakes during later pool reuse cannot bypass serialization
+after the transport and capability have been cleaned up. Detached delivery boundaries clear inherited
 coordinator ownership along with their connection contexts, so asynchronous replay
 persistence is serialized as independent work rather than mistaken for a nested call.
 
