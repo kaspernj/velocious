@@ -132,7 +132,9 @@ re-entrant; this keeps one-request transaction drivers such as MS-SQL serialized
 without coupling independent physical connections. The connection-local queue remains
 attached to a physical connection after broker revocation, so an inherited callback
 that wakes during later pool reuse cannot bypass serialization after the transport and
-capability have been cleaned up.
+capability have been cleaned up. Detached delivery boundaries clear inherited
+coordinator ownership along with their connection contexts, so asynchronous replay
+persistence is serialized as independent work rather than mistaken for a nested call.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so

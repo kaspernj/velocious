@@ -155,6 +155,18 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * Runs work without inherited shared-transaction coordinator ownership.
+   * @template T
+   * @param {() => T} callback - Detached work.
+   * @returns {T} - Callback result.
+   */
+  runWithoutSharedTransactionCoordinatorOwners(callback) {
+    if (!this._sharedTransactionCoordinatorAsyncLocalStorage) return callback()
+
+    return this._sharedTransactionCoordinatorAsyncLocalStorage.run(new Map(), callback)
+  }
+
+  /**
    * Runs work with async-safe test profile attribution.
    * @template T
    * @param {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} context - Captured profile context, or an explicit absence of attribution.

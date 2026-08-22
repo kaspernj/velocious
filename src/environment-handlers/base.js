@@ -55,6 +55,14 @@ export default class VelociousEnvironmentHandlerBase {
   runWithSharedTransactionCoordinatorOwner(_connection, _owner, callback) { return callback() }
 
   /**
+   * Runs work without inherited shared-transaction coordinator ownership.
+   * @template T
+   * @param {() => T} callback - Detached work.
+   * @returns {T} - Callback result.
+   */
+  runWithoutSharedTransactionCoordinatorOwners(callback) { return callback() }
+
+  /**
    * Runs work with test-profile attribution. Runtimes without async-context
    * storage execute the callback without installing ambient attribution.
    * @template T
