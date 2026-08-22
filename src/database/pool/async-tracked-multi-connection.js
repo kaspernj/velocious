@@ -59,6 +59,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   _testSharedConnectionsByReuseKey = new Map()
 
   /**
+   * Concurrent providers selected by live async join context.
+   * @type {Map<import("./base.js").TestSharedConnectionRegistration, {matches: () => boolean, provider: () => import("../drivers/base.js").default | undefined}>}
+   */
+  _testSharedConnectionProviders = new Map()
+
+  /**
    * Connections.
    * @type {import("../drivers/base.js").default[]} */
   connections = []
@@ -176,15 +182,16 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Spawns and times a physical connection without retaining its configuration.
    * @param {import("../../configuration-types.js").DatabaseConfigurationType} config - Resolved database configuration.
+   * @param {string} [reuseKey] - Exact resolved physical identity.
    * @returns {Promise<import("../drivers/base.js").default>} - Connected driver.
    */
-  async spawnConnectionWithConfiguration(config) {
+  async spawnConnectionWithConfiguration(config, reuseKey) {
     const startedAt = this.nowMs()
     const profileContext = currentTestProfileContext(this.configuration)
     let failed = true
 
     try {
-      const connection = await super.spawnConnectionWithConfiguration(config)
+      const connection = await super.spawnConnectionWithConfiguration(config, reuseKey)
 
       failed = false
       const liveConnectionCount = this.liveConnectionCount() - this.connectionsBeingSpawned + 1
@@ -544,7 +551,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     try {
       const environmentHandler = this.configuration.getEnvironmentHandler()
       const connection = await environmentHandler.runWithTestProfileContext(profileContext, async () => {
-        return await this.spawnConnectionWithConfiguration(databaseConfig)
+        return await this.spawnConnectionWithConfiguration(databaseConfig, this.getConfigurationReuseKey(databaseConfig))
       })
 
       this.stampConnectionForConfigurationReuseKey(connection, reuseKey)
@@ -1114,6 +1121,17 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Registers a provider selected by the current live async join context.
+   * @param {{matches: () => boolean, provider: () => import("../drivers/base.js").default | undefined}} args - Context selector and provider.
+   * @returns {import("./base.js").TestSharedConnectionRegistration} - Opaque scoped registration handle.
+   */
+  registerTestSharedConnectionProvider(args) {
+    const registration = {owner: Symbol("test-shared-connection-context-provider")}
+    this._testSharedConnectionProviders.set(registration, args)
+    return registration
+  }
+
+  /**
    * Registers an attempt-owned connection for exactly one physical configuration.
    * @param {import("../drivers/base.js").default} connection - Attempt-owned connection.
    * @param {string} reuseKey - Resolved physical configuration identity.
@@ -1132,6 +1150,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @param {import("./base.js").TestSharedConnectionRegistration} [registration] - Opaque registration handle to clear conditionally.
    * @returns {void} */
   clearTestSharedConnection(registration) {
+    if (registration && this._testSharedConnectionProviders.delete(registration)) return
     if (registration) {
       for (const [reuseKey, entry] of this._testSharedConnectionsByReuseKey) {
         if (entry.registration !== registration) continue
@@ -1141,7 +1160,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     } else {
       this._testSharedConnectionsByReuseKey.clear()
     }
-
     if (registration && registration !== this._testSharedConnectionRegistration) return
 
     this._testSharedConnection = undefined
@@ -1187,11 +1205,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {import("../drivers/base.js").default | undefined} - Shared connection.
    */
   testSharedConnection() {
+    for (const {matches, provider} of this._testSharedConnectionProviders.values()) {
+      if (matches()) return provider()
+    }
     const reuseKey = this.getConfigurationReuseKey()
     const physicalRegistration = this._testSharedConnectionsByReuseKey.get(reuseKey)
 
     if (physicalRegistration) return physicalRegistration.connection
-
     return this._testSharedConnectionProvider
       ? this._testSharedConnectionProvider()
       : this._testSharedConnection

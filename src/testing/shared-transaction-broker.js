@@ -80,15 +80,9 @@ export default class SharedTransactionBroker extends EventEmitter {
     /** @type {Map<object, symbol>} */
     this.connectionCoordinatorOwners = new Map()
     for (const connection of new Set(Object.values(connections))) {
-      /**
-       * Serializes parent operations with child broker traffic.
-       * @param {() => Promise<unknown>} callback - Parent operation.
-       * @returns {Promise<unknown>} - Operation result.
-       */
-      const coordinator = async (callback) => await this.serialize(this.connectionState(connection), callback)
-      this.connectionCoordinators.set(connection, coordinator)
-      this.connectionCoordinatorOwners.set(connection, setSharedTransactionCoordinator(connection, coordinator))
+      this.installConnectionCoordinator(connection)
     }
+    this.physicalConnections = new Map()
     this.httpServer = createServer()
     this.websocketServer = new WebSocketServer({server: this.httpServer, maxPayload: 16 * 1024 * 1024})
     this.websocketServer.on("connection", (socket) => {
@@ -99,6 +93,37 @@ export default class SharedTransactionBroker extends EventEmitter {
       })
       socket.on("message", (data) => void this.handleRequest(socket, `${data}`))
     })
+  }
+
+  /**
+   * Installs serialization ownership for a newly enrolled physical connection.
+   * @param {object} connection - Parent-owned physical connection.
+   * @returns {void}
+   */
+  installConnectionCoordinator(connection) {
+    if (this.connectionCoordinators.has(connection)) return
+    /**
+     * Serializes parent operations with child broker traffic.
+     * @param {() => Promise<unknown>} callback - Parent operation.
+     * @returns {Promise<unknown>} - Operation result.
+     */
+    const coordinator = async (callback) => await this.serialize(this.connectionState(connection), callback)
+    this.connectionCoordinators.set(connection, coordinator)
+    this.connectionCoordinatorOwners.set(connection, setSharedTransactionCoordinator(connection, coordinator))
+  }
+
+  /**
+   * Enrolls one exact physical database identity in this capability's rollback set.
+   * @param {{connection: object, databaseIdentifier: string, reuseKey: string}} args - Physical connection identity.
+   * @returns {void}
+   */
+  enrollConnection({connection, databaseIdentifier, reuseKey}) {
+    if (!this.accepting) throw new Error("Shared transaction broker capability has been revoked")
+    const identity = `${databaseIdentifier}\0${reuseKey}`
+    const existing = this.physicalConnections.get(identity)
+    if (existing && existing !== connection) throw new Error(`Shared transaction physical connection identity is already enrolled: ${databaseIdentifier}`)
+    this.installConnectionCoordinator(connection)
+    this.physicalConnections.set(identity, connection)
   }
 
   /**
@@ -140,18 +165,22 @@ export default class SharedTransactionBroker extends EventEmitter {
   async handleRequest(socket, serialized) {
     let requestId = 0
     try {
-      const request = /** @type {{requestId: number, capability: string, databaseIdentifier: string, method: string, args: import("./shared-transaction-codec.js").EncodedBrokerValue}} */ (JSON.parse(serialized))
+      const request = /** @type {{requestId: number, capability: string, databaseIdentifier: string, reuseKey?: string, method: string, args: import("./shared-transaction-codec.js").EncodedBrokerValue}} */ (JSON.parse(serialized))
       requestId = request.requestId
       if (!this.accepting) throw new Error("Shared transaction broker capability has been revoked")
       if (!capabilityMatches(request.capability, this.secret)) throw new Error("Unknown shared transaction broker capability")
-      const connection = this.connections[request.databaseIdentifier]
-      if (!connection) throw new Error(`Unknown shared transaction database identifier: ${request.databaseIdentifier}`)
+      const connection = request.reuseKey
+        ? this.physicalConnections.get(`${request.databaseIdentifier}\0${request.reuseKey}`)
+        : this.connections[request.databaseIdentifier]
+      if (!connection) {
+        if (request.reuseKey) throw new Error(`Unenrolled physical connection identity: ${request.databaseIdentifier}`)
+        throw new Error(`Unknown shared transaction database identifier: ${request.databaseIdentifier}`)
+      }
       if (!ALLOWED_METHODS.has(request.method)) throw new Error(`Unsupported shared transaction broker method: ${request.method}`)
       const args = decodeBrokerValue(request.args)
       if (!Array.isArray(args)) throw new TypeError("Shared transaction broker arguments must be an array")
       this.emit("work-queued", {connection, databaseIdentifier: request.databaseIdentifier, method: request.method})
       const result = await this.runConnectionRequest({connection, method: request.method, savePointName: typeof args[0] === "string" ? args[0] : undefined, socket}, async () => {
-        if (!this.accepting) throw new Error("Shared transaction broker capability has been revoked")
         if (request.method === "rootTransactionRollback") {
           await this.rollbackRootSavePoint(connection, /** @type {string} */ (args[0]))
           return undefined
@@ -258,10 +287,11 @@ export default class SharedTransactionBroker extends EventEmitter {
 
     state.queue = previous.then(async () => {
       try {
-        if (!this.accepting || socket.readyState !== socket.OPEN) throw new Error("Shared transaction broker root transaction session closed before lease acquisition")
+        if (socket.readyState !== socket.OPEN) throw new Error("Shared transaction broker root transaction session closed before lease acquisition")
         const result = await callback()
         state.lease = {operations: Promise.resolve(), release, savePointName, socket}
         resolveStarted(result)
+        if (!this.accepting) await this.scheduleSessionCleanup(socket)
         await held
       } catch (error) {
         state.rootSessions.delete(socket)
@@ -418,17 +448,29 @@ export default class SharedTransactionBroker extends EventEmitter {
     return await this.closePromise
   }
 
+  /** Revokes admission without interrupting already accepted work. */
+  revoke() {
+    if (!this.accepting) return
+    this.accepting = false
+    this.secret = randomBytes(32).toString("base64url")
+  }
+
+  /** Drains all work accepted before capability revocation. */
+  async drain() {
+    if (this.accepting) throw new Error("Shared transaction broker must be revoked before drain")
+    await Promise.all(Array.from(this.connectionStates.values()).map((state) => state.queue))
+  }
+
   /**
    * Performs deterministic transport shutdown and reports cleanup failures last.
    * @returns {Promise<void>} - Resolves after shutdown or rejects with cleanup errors.
    */
   async closeTransport() {
-    this.accepting = false
-    this.secret = randomBytes(32).toString("base64url")
+    this.revoke()
     const closingSessions = Array.from(this.sessions)
     await Promise.all(closingSessions.map(async (socket) => await this.scheduleSessionCleanup(socket)))
+    await this.drain()
     for (const socket of closingSessions) socket.close(1001, "Shared transaction broker closed")
-    await Promise.allSettled(Array.from(this.connectionStates.values()).map((state) => state.queue))
     await new Promise((resolve) => this.websocketServer.close(() => resolve(undefined)))
     await new Promise((resolve) => this.httpServer.close(() => resolve(undefined)))
     await Promise.all(Array.from(this.sessionCleanup.values()))

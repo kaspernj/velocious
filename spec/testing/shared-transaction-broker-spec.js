@@ -48,6 +48,65 @@ class FakeConnection {
 }
 
 describe("Shared transaction broker protocol", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("completes a queued root lease admitted before revoke and cleans every holder once", async () => {
+    const connection = new FakeConnection()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const first = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+    const second = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+    const late = new SharedTransactionBrokerClient({address: broker.address(), capability: broker.capability(), databaseIdentifier: "default"})
+
+    await first.call("rootTransactionStart", ["first"])
+    const secondQueued = waitForEvent(broker, "work-queued", {filter: (event) => event.method === "rootTransactionStart"})
+    const secondStart = second.call("rootTransactionStart", ["second"])
+    await secondQueued
+    broker.revoke()
+    await expect(() => late.call("query", ["late"])).toThrow(/revoked|capability/i)
+    const close = broker.close()
+    await secondStart
+    await close
+
+    expect(connection.calls).toEqual([
+      "start:first",
+      "rollback:first",
+      "release:first",
+      "start:second",
+      "rollback:second",
+      "release:second"
+    ])
+    expect(broker.httpServer.listening).toEqual(false)
+    expect(broker.sessions.size).toEqual(0)
+    await first.close()
+    await second.close()
+    await late.close()
+  })
+
+  it("routes enrolled physical identities and rejects unenrolled tenant identities", async () => {
+    const defaultConnection = new FakeConnection()
+    const tenantConnection = new FakeConnection()
+    const broker = await SharedTransactionBroker.start({connections: {default: defaultConnection}})
+    const defaultClient = new SharedTransactionBrokerClient({
+      address: broker.address(), capability: broker.capability(), databaseIdentifier: "default", reuseKey: "default-physical"
+    })
+    const tenantClient = new SharedTransactionBrokerClient({
+      address: broker.address(), capability: broker.capability(), databaseIdentifier: "projectTenant", reuseKey: "tenant-alpha"
+    })
+
+    try {
+      broker.enrollConnection({connection: defaultConnection, databaseIdentifier: "default", reuseKey: "default-physical"})
+      await defaultClient.call("query", ["default write"])
+      await expect(() => tenantClient.call("query", ["untracked write"])).toThrow(/unenrolled physical connection identity/i)
+      broker.enrollConnection({connection: tenantConnection, databaseIdentifier: "projectTenant", reuseKey: "tenant-alpha"})
+      await tenantClient.call("query", ["tenant write"])
+
+      expect(defaultConnection.calls).toEqual(["default write"])
+      expect(tenantConnection.calls).toEqual(["tenant write"])
+    } finally {
+      await defaultClient.close()
+      await tenantClient.close()
+      await broker.close()
+    }
+  })
+
   it("rejects unknown capabilities and database identifiers without executing SQL", async () => {
     const connection = new FakeConnection()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})

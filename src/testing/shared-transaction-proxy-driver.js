@@ -1,4 +1,4 @@
-/** @typedef {{address?: string, capability?: string, databaseIdentifiers?: string[], expected: boolean}} SharedTransactionBrokerJobConfig */
+/** @typedef {{address?: string, allowDynamicIdentities?: boolean, capability?: string, databaseIdentifiers?: string[], expected: boolean}} SharedTransactionBrokerJobConfig */
 
 // @ts-check
 
@@ -12,6 +12,19 @@ export const BACKGROUND_JOB_CHILD_ENV = "VELOCIOUS_BACKGROUND_JOB_CHILD"
 const pooledJobBrokerConfig = new AsyncLocalStorage()
 
 /**
+ * Returns the active live broker configuration without validating one database route.
+ * @returns {SharedTransactionBrokerJobConfig | undefined} - Active live or child configuration.
+ */
+function activeSharedTransactionBrokerConfig() {
+  const contextualConfig = pooledJobBrokerConfig.getStore()
+  if (contextualConfig) return contextualConfig
+  if (process.env[BACKGROUND_JOB_CHILD_ENV] !== "1") return undefined
+  const serialized = process.env[SHARED_TRANSACTION_BROKER_ENV]
+  if (!serialized) return undefined
+  return JSON.parse(Buffer.from(serialized, "base64url").toString("utf8"))
+}
+
+/**
  * Runs one pooled job with dispatch-time broker configuration.
  * @template T
  * @param {SharedTransactionBrokerJobConfig} config - Per-job broker mode and coordinates.
@@ -20,6 +33,34 @@ const pooledJobBrokerConfig = new AsyncLocalStorage()
  */
 export function runWithSharedTransactionBrokerConfig(config, callback) {
   return pooledJobBrokerConfig.run(config, callback)
+}
+
+/**
+ * Checks whether the current live join selects one exact session capability.
+ * @param {{address: string, capability: string}} identity - Session control-message identity.
+ * @returns {boolean} - Whether this async context belongs to that session.
+ */
+export function sharedTransactionBrokerContextMatches(identity) {
+  const config = pooledJobBrokerConfig.getStore()
+  return config?.expected === true && config.address === identity.address && config.capability === identity.capability
+}
+
+/**
+ * Preserves legacy real tenant connections omitted by automatic TestRunner mode.
+ * Explicit dynamic sessions never permit this fallback.
+ * @param {string} databaseIdentifier - Logical database identifier.
+ * @returns {boolean} - Whether an omitted automatic route stays independent.
+ */
+export function automaticSharedTransactionBrokerOmits(databaseIdentifier) {
+  const config = activeSharedTransactionBrokerConfig()
+  return Boolean(
+    config?.expected === true &&
+    !config.allowDynamicIdentities &&
+    typeof config.address === "string" &&
+    typeof config.capability === "string" &&
+    Array.isArray(config.databaseIdentifiers) &&
+    !config.databaseIdentifiers.includes(databaseIdentifier)
+  )
 }
 
 /**
@@ -49,24 +90,19 @@ function pgEscapeLiteral(value) {
  * Parses the test-runner-owned child transport configuration when this logical
  * database is registered for the active attempt.
  * @param {string} databaseIdentifier - Logical database identifier.
- * @returns {{address: string, capability: string} | undefined} - Broker coordinates.
+ * @returns {{address: string, allowDynamicIdentities?: boolean, capability: string} | undefined} - Broker coordinates.
  */
 export function sharedTransactionBrokerConfig(databaseIdentifier) {
-  const contextualConfig = pooledJobBrokerConfig.getStore()
-  if (contextualConfig) return validatedBrokerConfig(contextualConfig, databaseIdentifier)
-  if (process.env[BACKGROUND_JOB_CHILD_ENV] !== "1") return undefined
-
-  const serialized = process.env[SHARED_TRANSACTION_BROKER_ENV]
-  if (!serialized) return undefined
-
-  return validatedBrokerConfig(JSON.parse(Buffer.from(serialized, "base64url").toString("utf8")), databaseIdentifier)
+  const config = activeSharedTransactionBrokerConfig()
+  if (!config) return undefined
+  return validatedBrokerConfig(config, databaseIdentifier)
 }
 
 /**
  * Validates dispatch-time broker configuration and fails closed when expected.
  * @param {SharedTransactionBrokerJobConfig} config - Candidate configuration.
  * @param {string} databaseIdentifier - Logical database identifier.
- * @returns {{address: string, capability: string} | undefined} - Broker coordinates.
+ * @returns {{address: string, allowDynamicIdentities?: boolean, capability: string} | undefined} - Broker coordinates.
  */
 function validatedBrokerConfig(config, databaseIdentifier) {
   if (config.expected && (!config.address || !config.capability || !config.databaseIdentifiers)) {
@@ -76,10 +112,13 @@ function validatedBrokerConfig(config, databaseIdentifier) {
   if (typeof config.address !== "string" || typeof config.capability !== "string" || !Array.isArray(config.databaseIdentifiers)) {
     throw new Error("Invalid shared transaction broker child configuration")
   }
-  if (!config.databaseIdentifiers.includes(databaseIdentifier)) {
+  if (!config.allowDynamicIdentities && !config.databaseIdentifiers.includes(databaseIdentifier)) {
     throw new Error(`Transactional pooled job expected broker database identifier: ${databaseIdentifier}`)
   }
 
+  if (config.allowDynamicIdentities) {
+    return {address: config.address, allowDynamicIdentities: true, capability: config.capability}
+  }
   return {address: config.address, capability: config.capability}
 }
 
@@ -90,7 +129,7 @@ function validatedBrokerConfig(config, databaseIdentifier) {
  * @param {import("../configuration-types.js").DatabaseConfigurationType} config - Database configuration.
  * @param {import("../configuration.js").default} configuration - Child configuration.
  * @param {string} databaseIdentifier - Logical identifier.
- * @param {{address: string, capability: string}} brokerConfig - Broker coordinates.
+ * @param {{address: string, capability: string, reuseKey?: string}} brokerConfig - Broker coordinates.
  * @returns {import("../database/drivers/base.js").default} - Unconnected physical proxy.
  */
 export function createSharedTransactionProxyDriver(DriverClass, config, configuration, databaseIdentifier, brokerConfig) {
