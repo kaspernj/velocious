@@ -90,6 +90,7 @@
  * @typedef {object} SyncClientOptions
  * @property {import("../configuration.js").default} [configuration] - Configuration owning the registered models, the `sync.client` block, and the scope-store database. Defaults to the current configuration.
  * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
+ * @property {import("../remote-request-context.js").RemoteRequestContext} [requestContext] - Immutable scalar context captured for this client and sent with every pull, replay, and realtime subscription.
  * @property {import("./sync-scope-store.js").default} [scopeStore] - Scope store override (tests).
  * @property {ReturnType<typeof JSON.parse>} [syncModel] - Pending-sync model override. Defaults to the registered "Sync" model.
  * @property {string} [databaseIdentifier] - Tenant database identifier; required with tenantHandle.
@@ -109,6 +110,7 @@
  * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
  * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
  * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
+ * @property {import("../remote-request-context.js").RemoteRequestContext} requestContext - Immutable scalar context captured for this client.
  * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.
  * @property {ReturnType<typeof JSON.parse>} syncModel - Local pending-sync model class.
  * @property {string} [databaseIdentifier] - Tenant-scoped database identifier.

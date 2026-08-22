@@ -13,9 +13,9 @@
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Optional Rampway-owned durable deployment control plane mounted through the standard routes DSL on Velocious 1.0.577 or newer (see [docs/rampway-integration.md](docs/rampway-integration.md))
 * Controllers and views for HTTP endpoints
-* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md) and [docs/websocket-channels.md](docs/websocket-channels.md))
+* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses, immutable per-operation remote request context, and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/websocket-channels.md](docs/websocket-channels.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see the [shared-resource sync developer guide](docs/shared-resource-sync-guide.md) and [offline sync architecture](docs/offline-sync.md))
-* Declarative client sync scopes with per-scope cursors, automatic mutation tracking, opt-in durable base-version conflict replay, realtime delivery, and immutable-handle project clients whose queues, scopes, cursors, receipts, conflicts, pulls, and reconnect catch-up stay in one physical tenant database (see [docs/sync-client.md](docs/sync-client.md) and [docs/offline-sync.md](docs/offline-sync.md))
+* Declarative client sync scopes with per-scope cursors, automatic mutation tracking, opt-in durable base-version conflict replay, realtime delivery, and immutable-handle project clients whose local database state plus remote pull/replay/realtime request context stay tenant-bound through reconnect (see [docs/sync-client.md](docs/sync-client.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/offline-sync.md](docs/offline-sync.md))
 * Reactive `useLiveQuery(Model.where(...))` queries for default databases plus immutable-handle tenant live-query sources whose committed events and refreshes stay on the captured physical tenant (see [docs/live-queries.md](docs/live-queries.md))
 * Server-side sync envelope replay orchestration for app-owned sync receivers, including allowlisted authoritative values for conflict resolution (see [docs/sync-envelope-replay-service.md](docs/sync-envelope-replay-service.md))
 * Self-sustaining sync feeds: upstream imports triggered by the changes pull itself, with framework-owned coalescing and throttling (see [docs/sync-upstream-imports.md](docs/sync-upstream-imports.md))
@@ -797,6 +797,7 @@ When your frontend app calls a backend on another host/port (or under a path pre
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 
 FrontendModelBase.configureTransport({
+  requestContext: () => ({projectId: currentProject.id, routingEpoch: currentProject.routingEpoch}),
   url: "http://127.0.0.1:4501/frontend-models",
   timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone
 })
@@ -805,6 +806,7 @@ FrontendModelBase.configureTransport({
 Available transport options:
 
 - `url` (can also be a relative path like `"/frontend-models"` on web)
+- `requestContext` (a scalar plain object or synchronous function returning one) captures immutable remote tenant-routing params independently for each CRUD/custom command and event subscription. See [docs/remote-request-context.md](docs/remote-request-context.md).
 - `timeZone` (an IANA timezone string or a function returning one). Browser clients auto-detect this when it is not configured. Frontend-model datetime strings without an explicit timezone are interpreted in this request timezone and stored/queried as UTC instants.
 - `timeout` (milliseconds or a function returning milliseconds) bounds each request, while `signal` (an `AbortSignal` or a function returning one) supports caller cancellation. See [docs/frontend-models.md](docs/frontend-models.md#core-transport) for timeout and cancellation behavior.
 

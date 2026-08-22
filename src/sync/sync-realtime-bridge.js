@@ -1,6 +1,7 @@
 // @ts-check
 
 import recordChanges from "../database/record-changes.js"
+import {mergeRemoteRequestContext} from "../remote-request-context.js"
 
 import SyncApiClient from "./sync-api-client.js"
 import {VELOCIOUS_SYNC_CHANNEL} from "./sync-channel-name.js"
@@ -141,10 +142,15 @@ export default class SyncRealtimeBridge {
         }
 
         const resourceType = channelDescriptor.resourceType ?? null
+        const params = mergeRemoteRequestContext({
+          context: this.syncClient.config.requestContext,
+          label: "Sync client request context",
+          params: {...channelDescriptor.params, authenticationToken}
+        })
         const subscription = client.subscribeChannel(channelDescriptor.channel, {
           onMessage: (body) => this.enqueueApply({body, resourceType}),
           onResume: () => this.schedulePull(),
-          params: {...channelDescriptor.params, authenticationToken}
+          params
         })
 
         channels.push({channel: channelDescriptor.channel, resourceType, subscription})
