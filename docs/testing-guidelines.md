@@ -129,7 +129,10 @@ preserving root-savepoint leases. Inherited sibling work is drained before its b
 queue entry is released. A delayed callback whose inherited owner has already ended
 must re-enter that queue, while a nested call inside active owned work remains
 re-entrant; this keeps one-request transaction drivers such as MS-SQL serialized
-without coupling independent physical connections.
+without coupling independent physical connections. The connection-local queue remains
+attached to a physical connection after broker revocation, so an inherited callback
+that wakes during later pool reuse cannot bypass serialization after the transport and
+capability have been cleaned up.
 
 The broker is not enabled for tests that opt out of transaction cleanup. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so

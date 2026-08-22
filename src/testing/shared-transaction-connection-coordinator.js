@@ -4,6 +4,17 @@
 
 /** @type {WeakMap<object, CoordinatorRegistration>} */
 const coordinators = new WeakMap()
+/** @type {WeakMap<object, CoordinatorRegistration>} */
+const connectionRegistrations = new WeakMap()
+
+/**
+ * Runs work directly when only the connection-local queue remains registered.
+ * @param {() => Promise<unknown>} callback - Serialized operation.
+ * @returns {Promise<unknown>} - Operation result.
+ */
+async function inactiveCoordinator(callback) {
+  return await callback()
+}
 
 /**
  * Serializes sibling work that inherited one coordinator owner without re-entering the broker queue.
@@ -78,14 +89,17 @@ async function coordinateRootSharedTransactionConnection(connection, registratio
  */
 export function setSharedTransactionCoordinator(connection, coordinator) {
   const owner = Symbol("shared-transaction-coordinator")
+  let registration = connectionRegistrations.get(connection)
 
-  coordinators.set(connection, {
-    coordinator,
-    ownedQueue: Promise.resolve(),
-    owner,
-    reentrantOwners: new Set(),
-    rootOwners: new Set()
-  })
+  if (registration) {
+    registration.coordinator = coordinator
+    registration.owner = owner
+  } else {
+    registration = {coordinator, ownedQueue: Promise.resolve(), owner, reentrantOwners: new Set(), rootOwners: new Set()}
+    connectionRegistrations.set(connection, registration)
+  }
+
+  coordinators.set(connection, registration)
   return owner
 }
 
@@ -96,7 +110,12 @@ export function setSharedTransactionCoordinator(connection, coordinator) {
  * @returns {void}
  */
 export function clearSharedTransactionCoordinator(connection, coordinator) {
-  if (coordinators.get(connection)?.coordinator === coordinator) coordinators.delete(connection)
+  const registration = coordinators.get(connection)
+
+  if (registration?.coordinator === coordinator) {
+    coordinators.delete(connection)
+    registration.coordinator = inactiveCoordinator
+  }
 }
 
 /**
@@ -108,7 +127,8 @@ export function clearSharedTransactionCoordinator(connection, coordinator) {
  * @returns {Promise<T>} - Operation result.
  */
 export async function coordinateSharedTransactionConnection(connection, callback, operationOwner) {
-  const registration = coordinators.get(connection)
+  const activeRegistration = coordinators.get(connection)
+  const registration = activeRegistration || connectionRegistrations.get(connection)
 
   if (!registration) return await callback()
 
@@ -119,6 +139,7 @@ export async function coordinateSharedTransactionConnection(connection, callback
   if (currentOwner && registration.rootOwners.has(currentOwner)) {
     return await coordinateOwnedSharedTransactionConnection(connection, registration, callback)
   }
+  if (!activeRegistration) return await coordinateOwnedSharedTransactionConnection(connection, registration, callback)
   if (operationOwner === registration.owner) {
     return await coordinateRootSharedTransactionConnection(connection, registration, callback)
   }

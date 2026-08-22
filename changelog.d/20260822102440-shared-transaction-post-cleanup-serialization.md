@@ -1,0 +1,1 @@
+Fixed shared test-transaction descendants that wake after broker cleanup so they remain serialized with later users of the same physical connection instead of issuing overlapping requests on one MS-SQL transaction.

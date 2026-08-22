@@ -171,6 +171,42 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     }
   })
 
+  it("keeps delayed inherited work serialized after broker cleanup", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseDelayedQuery = () => {}
+    const delayedQueryGate = new Promise((resolve) => { releaseDelayedQuery = resolve })
+    /** @type {Promise<[]>} */
+    let delayedQuery = Promise.resolve([])
+
+    await coordinateSharedTransactionConnection(connection, async () => {
+      delayedQuery = delayedQueryGate.then(async () => await connection.query("SELECT parent", {logQuery: false}))
+    })
+    await broker.close()
+
+    const currentQuery = connection.query("SELECT child", {logQuery: false})
+
+    try {
+      await connection.childStarted
+      releaseDelayedQuery()
+      void delayedQuery.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(connection.queries).toEqual(["SELECT child"])
+
+      connection.releaseChild()
+      await Promise.all([currentQuery, delayedQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      releaseDelayedQuery()
+      connection.releaseChild()
+      await Promise.allSettled([currentQuery, delayedQuery])
+    }
+  })
+
   it("allows nested owner coordination to re-enter without deadlocking", async () => {
     const connection = new SingleRequestDriver()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})
