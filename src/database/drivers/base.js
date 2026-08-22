@@ -171,7 +171,7 @@ import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
 import { optionalPositiveInteger } from "typanic"
-import { coordinateSharedTransactionConnection } from "../../testing/shared-transaction-connection-coordinator.js"
+import {coordinateSharedTransactionConnection, runWithoutSharedTransactionCoordinatorOwner} from "../../testing/shared-transaction-connection-coordinator.js"
 import { currentTestProfileContext } from "../../testing/test-profile-context.js"
 import sha256Hex from "../../utils/sha256-hex.js"
 
@@ -2096,7 +2096,7 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const result = await this.configuration.getEnvironmentHandler().runWithoutSharedTransactionCoordinatorOwner(
+          const result = await runWithoutSharedTransactionCoordinatorOwner(
             this,
             async () => await this._queryActual(sql, options)
           )
