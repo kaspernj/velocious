@@ -2096,7 +2096,10 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const result = await this._queryActual(sql, options)
+          const result = await this.configuration.getEnvironmentHandler().runWithoutSharedTransactionCoordinatorOwner(
+            this,
+            async () => await this._queryActual(sql, options)
+          )
 
           failed = false
           return result

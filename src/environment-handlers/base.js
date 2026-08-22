@@ -55,6 +55,15 @@ export default class VelociousEnvironmentHandlerBase {
   runWithSharedTransactionCoordinatorOwner(_connection, _owner, callback) { return callback() }
 
   /**
+   * Runs work without inherited shared-transaction ownership for one connection.
+   * @template T
+   * @param {import("../database/drivers/base.js").default} _connection - Physical connection whose owner is cleared.
+   * @param {() => T} callback - Physical connection work.
+   * @returns {T} - Callback result.
+   */
+  runWithoutSharedTransactionCoordinatorOwner(_connection, callback) { return callback() }
+
+  /**
    * Runs work without inherited shared-transaction coordinator ownership.
    * @template T
    * @param {() => T} callback - Detached work.
