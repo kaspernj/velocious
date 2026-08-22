@@ -1,0 +1,1 @@
+Emit canonical model attribute names in routed conflict `serverModel` snapshots when offline mutations use permitted database-column aliases, while preserving submitted keys in conflict metadata so `keep_server` updates generated frontend-model accessors.

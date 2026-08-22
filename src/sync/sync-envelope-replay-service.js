@@ -798,18 +798,24 @@ export default class SyncEnvelopeReplayService {
     if (!existingRecord || mutation.syncType === "create") return null
     if (mutation.baseVersion === undefined || mutation.baseVersion === null) return null
 
+    const ModelClass = resource.modelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const primaryKeyAttribute = ModelClass.resolveAttributeName(primaryKey)
     const versionAttribute = this.conflictStrategy.versionAttribute
-    const serverVersion = normalizeConflictValue(existingRecord.readAttribute(versionAttribute))
+    const versionAttributeName = ModelClass.resolveAttributeName(versionAttribute)
+
+    if (!primaryKeyAttribute) throw new Error(`Couldn't resolve primary key attribute: ${primaryKey}`)
+    if (!versionAttributeName) throw new Error(`Couldn't resolve version attribute: ${versionAttribute}`)
+
+    const serverVersion = normalizeConflictValue(existingRecord.readAttribute(versionAttributeName))
 
     if (stableJsonStringify(serverVersion) === stableJsonStringify(mutation.baseVersion)) return null
 
-    const ModelClass = resource.modelClass()
-    const primaryKey = ModelClass.primaryKey()
     const serializedAffectedAttributes = await this.serializedRoutedConflictAttributes({attributes, existingRecord, resource})
     const serverAttributes = {
       ...serializedAffectedAttributes,
-      [primaryKey]: existingRecord.readAttribute(primaryKey),
-      [versionAttribute]: serverVersion
+      [primaryKeyAttribute]: existingRecord.readAttribute(primaryKeyAttribute),
+      [versionAttributeName]: serverVersion
     }
 
     const serverRecord = {
@@ -842,8 +848,9 @@ export default class SyncEnvelopeReplayService {
    * attribute contract. Writable-but-hidden fields are omitted, while custom
    * `<attribute>Attribute(model)` serializers and model accessors remain the
    * source of frontend-visible values (Date values are kept raw so the normal
-   * frontend-model transport serializer can emit its date marker). The full
-   * model attribute hash is never exposed.
+   * frontend-model transport serializer can emit its date marker). Projected
+   * keys use canonical model attribute names even when the mutation used a
+   * database-column alias. The full model attribute hash is never exposed.
    * @param {object} args - Projection args.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Permitted affected mutation attributes.
    * @param {import("../database/record/index.js").default} args.existingRecord - Authorized server record.
@@ -886,7 +893,7 @@ export default class SyncEnvelopeReplayService {
       const resourceAttribute = resource.resourceMethod(`${attributeName}Attribute`)
 
       if (resourceAttribute) {
-        serializedAttributes[affectedField] = await resourceAttribute.method.call(resourceAttribute.resource, existingRecord)
+        serializedAttributes[attributeName] = await resourceAttribute.method.call(resourceAttribute.resource, existingRecord)
         continue
       }
 
@@ -894,9 +901,9 @@ export default class SyncEnvelopeReplayService {
       const attributeMethod = recordMethods[attributeName]
 
       if (typeof attributeMethod === "function") {
-        serializedAttributes[affectedField] = await attributeMethod.call(existingRecord)
+        serializedAttributes[attributeName] = await attributeMethod.call(existingRecord)
       } else {
-        serializedAttributes[affectedField] = existingRecord.readAttribute(attributeName)
+        serializedAttributes[attributeName] = existingRecord.readAttribute(attributeName)
       }
     }
 
