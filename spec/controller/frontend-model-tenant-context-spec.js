@@ -141,4 +141,50 @@ describe("Controller frontend model tenant context", {databaseCleaning: {transac
     expect(response.responses[0].response.status).toEqual("success")
     expect(response.responses[0].response.tenantSlug).toEqual("alpha")
   })
+
+  it("resolves independent remote request contexts for entries in one batch", async () => {
+    const response = await runFrontendApi(serializeFrontendModelTransportValue({
+      requests: [
+        {
+          commandType: "index",
+          model: "Task",
+          payload: {},
+          requestContext: {project_slug: "alpha"},
+          requestId: "request-alpha"
+        },
+        {
+          commandType: "index",
+          model: "Task",
+          payload: {},
+          requestContext: {project_slug: "beta"},
+          requestId: "request-beta"
+        }
+      ]
+    }))
+
+    expect(response.responses.map(({response: entryResponse}) => entryResponse.tenantSlug)).toEqual(["alpha", "beta"])
+  })
+
+  it("fails closed for malformed remote request context and reserved collisions", async () => {
+    const response = await runFrontendApi(serializeFrontendModelTransportValue({
+      requests: [
+        {
+          commandType: "index",
+          model: "Task",
+          payload: {},
+          requestContext: [],
+          requestId: "malformed"
+        },
+        {
+          commandType: "index",
+          model: "Task",
+          payload: {where: {}},
+          requestContext: {where: "shadowed"},
+          requestId: "collision"
+        }
+      ]
+    }))
+
+    expect(response.responses.map(({response: entryResponse}) => entryResponse.status)).toEqual(["error", "error"])
+  })
 })

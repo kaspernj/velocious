@@ -16,6 +16,7 @@ import {requestDetails} from "./error-reporting/request-details.js"
 import RoutesResolver from "./routes/resolver.js"
 import {ValidationError} from "./database/record/index.js"
 import RecordNotFoundError from "./database/record/record-not-found-error.js"
+import {captureFrontendModelRemoteRequestContext, mergeFrontendModelRemoteRequestContext} from "./frontend-models/remote-request-context.js"
 import { normalizeDateStringForWrite } from "./database/datetime-storage.js"
 import VelociousError from "./velocious-error.js"
 import isDate from "./utils/is-date.js"
@@ -4360,13 +4361,17 @@ export default class FrontendModelController extends Controller {
       }
 
       try {
+        const requestContext = captureFrontendModelRemoteRequestContext(requestEntry?.requestContext)
         let responsePayload
 
         if (isBuiltInCommand) {
-          const commandParams = {
-            ...(payload && typeof payload === "object" ? payload : {}),
-            model
-          }
+          const commandParams = mergeFrontendModelRemoteRequestContext(
+            requestContext,
+            {
+              ...(payload && typeof payload === "object" ? payload : {}),
+              model
+            }
+          )
 
           responsePayload = await this.withFrontendModelParams(commandParams, async () => {
             return await this.withFrontendModelRequestContext(commandParams, this.response(), async () => {
@@ -4376,7 +4381,8 @@ export default class FrontendModelController extends Controller {
         } else {
           responsePayload = await this.frontendApiCustomCommandPayload({
             customPath,
-            payload
+            payload,
+            requestContext
           })
         }
 
@@ -4415,9 +4421,10 @@ export default class FrontendModelController extends Controller {
    * @param {object} args - Arguments.
    * @param {string} args.customPath - Custom backend route path.
    * @param {ReturnType<typeof JSON.parse>} args.payload - Request payload.
+   * @param {import("./remote-request-context.js").RemoteRequestContext} args.requestContext - Captured remote request context.
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Parsed JSON response payload.
    */
-  async frontendApiCustomCommandPayload({customPath, payload}) {
+  async frontendApiCustomCommandPayload({customPath, payload, requestContext}) {
     const configuration = this.getConfiguration()
     const response = new Response({configuration})
     const resolver = new RoutesResolver({
@@ -4449,10 +4456,13 @@ export default class FrontendModelController extends Controller {
     const viewPath = routeHookMatch?.viewPath || `${configuration.getDirectory()}/src/routes/${controller}`
     resolver.routeHookControllerClass = routeHookMatch?.controllerClass
     const controllerClass = await resolver.resolveControllerClass({controllerPath})
-    const controllerParams = {
-      ...((payload && typeof payload === "object") ? payload : {}),
-      ...resolver.params
-    }
+    const controllerParams = mergeFrontendModelRemoteRequestContext(
+      requestContext,
+      {
+        ...((payload && typeof payload === "object") ? payload : {}),
+        ...resolver.params
+      }
+    )
     const controllerInstance = new controllerClass({
       action,
       configuration,

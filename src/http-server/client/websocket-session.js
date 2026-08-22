@@ -39,6 +39,7 @@ const WEBSOCKET_OPCODE_CLOSE = 0x8
 const WEBSOCKET_OPCODE_PING = 0x9
 const WEBSOCKET_OPCODE_PONG = 0xA
 
+const WEBSOCKET_CLOSE_NORMAL = 1000
 const WEBSOCKET_CLOSE_POLICY_VIOLATION = 1008
 const WEBSOCKET_INBOUND_BACKLOG_CLOSE_REASON = "Inbound message backlog exceeded"
 const WEBSOCKET_MAX_CLOSE_REASON_BYTES = 123
@@ -785,8 +786,10 @@ export default class VelociousHttpServerClientWebsocketSession {
       }
 
       if (opcode === WEBSOCKET_OPCODE_CLOSE) {
+        const allowResume = payload.length < 2 || payload.readUInt16BE(0) !== WEBSOCKET_CLOSE_NORMAL
+
         this.sendGoodbye(this.client)
-        this._handleClose()
+        this._handleClose({allowResume})
         continue
       }
 

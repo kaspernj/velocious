@@ -254,6 +254,7 @@ await syncClient().unsubscribeRealtime()
 - **localOrigin** drops own-device messages: a pushed `echoOrigin` matching the resolved local origin is ignored.
 - **pullOnReconnect** (default true): when subscriptions become ready or resume after a connection drop, a coalesced single `pull()` closes the offline gap. The gap-closing pull only fires after every subscription is server-acknowledged (`waitForReady`), so no change can land between the pull and the subscriptions going live; pushes arriving before acknowledgement still apply. Low-level reconnect/backoff stays in the websocket client.
 - `subscribeRealtime(context)` is idempotent and single-flighted, and resolves once every channel subscription is acknowledged — call `unsubscribeRealtime()` first to change the context. Unsubscribing while a subscribe is still in flight cancels that attempt: the bridge tears down anything it created and stays unsubscribed. `realtimeStatus()` reports `{state, channels: [{channel, resourceType, ready}]}`. `waitForRealtimeApplied()` awaits pending applies and any scheduled pull (tests, shutdown flows).
+- A tenant-owned client can pass immutable `requestContext` in its `SyncClient.fromConfiguration(configuration, options)` options. Velocious captures it at construction and attaches it to pulls, replays, subscriptions, reconnect catch-up, and resubscription without consulting mutable global state. See [remote request context](remote-request-context.md).
 
 ### Shared connection (one socket for everything)
 

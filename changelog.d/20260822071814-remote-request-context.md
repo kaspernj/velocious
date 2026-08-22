@@ -1,0 +1,1 @@
+Add immutable per-client/per-operation remote request context to sync and frontend-model HTTP/WebSocket transport, including per-entry batch isolation, reconnect convergence, and fail-closed validation.

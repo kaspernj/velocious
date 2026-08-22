@@ -136,7 +136,14 @@ after the transport and capability have been cleaned up. Detached delivery bound
 coordinator ownership along with their connection contexts, so asynchronous replay
 persistence is serialized as independent work rather than mistaken for a nested call.
 
-The broker is not enabled for tests that opt out of transaction cleanup. Keep
+Request tests prepare that parent-side coordination before `beforeEach`, including
+when automatic transaction cleanup is disabled. A hook can therefore open a manual
+transaction and issue an in-process request without overlapping driver operations;
+if no transaction is active after the hooks, the prepared broker closes without
+publishing child coordinates.
+
+The broker is not published for tests that opt out of transaction cleanup and do not
+open a manual transaction. Keep
 `{transaction: false, truncate: true}` on true concurrency and locking coverage so
 child/request work continues to use independent physical connections. Tenant-only
 connections are excluded from the automatic initial broker set. Backend-owned harnesses can lazily enroll exact tenant identities with [test transaction sessions](test-transaction-sessions.md); unknown identities fail closed.

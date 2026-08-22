@@ -12,6 +12,8 @@ import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportV
 import runWithTransportDeadline from "./transport-deadline.js"
 import {REQUEST_TIME_ZONE_HEADER, validateTimeZone} from "../time-zone.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
+import {remoteRequestContextKey} from "../remote-request-context.js"
+import {captureFrontendModelRemoteRequestContext, mergeFrontendModelRemoteRequestContext} from "./remote-request-context.js"
 import {bufferOutgoingEvent, clearBufferedOutgoingEvents, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 import {defineModelScope} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
@@ -132,6 +134,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * @property {string | (() => string | undefined | null)} [websocketUrl] - Optional websocket URL. When set, Velocious creates and manages its own websocket client internally. Subscriptions use the websocket; CRUD uses HTTP and falls back gracefully. Example: `"ws://localhost:3006/websocket"`.
  * @property {{post: (path: string, body?: ReturnType<typeof JSON.parse>, options?: {headers?: Record<string, string>, signal?: AbortSignal}) => Promise<{json: () => ReturnType<typeof JSON.parse>}>, subscribe: (channel: string, options: {params?: Record<string, ReturnType<typeof JSON.parse>>}, callback: (payload: ReturnType<typeof JSON.parse>) => void) => (() => void), subscribeAndWait?: (channel: string, options: {params?: Record<string, ReturnType<typeof JSON.parse>>}, callback: (payload: ReturnType<typeof JSON.parse>) => void) => Promise<(() => void)>}} [websocketClient] - Optional websocket client for shared frontend-model API requests and subscriptions. Its `post` receives the bounded-deadline `signal` and should forward it into the underlying transport so the deadline can abort the live request and its response-body read.
  * @property {Record<string, string> | (() => Record<string, string>)} [requestHeaders] - Extra HTTP/WS headers to attach to every frontend-model API request. Pass a function to compute them at request time (for example to include the current locale).
+ * @property {import("../remote-request-context.js").RemoteRequestContext | (() => import("../remote-request-context.js").RemoteRequestContext | undefined | null)} [requestContext] - Immutable scalar context captured independently when each operation or event subscription starts and sent for remote tenant/ability resolution.
  * @property {number | (() => number | undefined | null)} [timeout] - Bounded deadline in milliseconds covering connection, response headers, and response-body consumption for each frontend-model API request. On expiry the live fetch/adapter request is aborted (built on awaitery's `timeout`) and awaitery's `TimeoutError` is thrown, so callers can classify a timeout via `error instanceof TimeoutError`. Pass a function to resolve it per request. Falsy/absent means no deadline.
  * @property {AbortSignal | (() => AbortSignal | undefined | null)} [signal] - Optional caller/session AbortSignal composed with the deadline. Aborting it cancels the live request (for example on session shutdown or offline transition); the resulting abort error stays distinguishable from a timeout. Pass a function to resolve the current signal per request.
  * @property {{get: () => string | null | undefined | Promise<string | null | undefined>, set: (sessionId: string) => void | Promise<void>, clear: () => void | Promise<void>}} [sessionStore] - Optional sessionId persistence hook forwarded to the internal `VelociousWebsocketClient` so WS sessions can be resumed across page reloads / app restarts.
@@ -157,8 +160,9 @@ const QUERY_DATA_KEY = "__queryData"
 const ABILITIES_KEY = "__abilities"
 /**
  * Pending shared frontend model requests.
- * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ReturnType<typeof JSON.parse>>, requestId: string, resolve: (response: Record<string, ReturnType<typeof JSON.parse>>) => void, reject: (error: ReturnType<typeof JSON.parse>) => void, resourcePath?: string | null}>} */
+ * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ReturnType<typeof JSON.parse>>, requestContext: import("../remote-request-context.js").RemoteRequestContext, requestId: string, resolve: (response: Record<string, ReturnType<typeof JSON.parse>>) => void, reject: (error: ReturnType<typeof JSON.parse>) => void, resourcePath?: string | null}>} */
 let pendingSharedFrontendModelRequests = []
+
 let sharedFrontendModelRequestId = 0
 let sharedFrontendModelFlushScheduled = false
 let activeFrontendModelTransportRequestCount = 0
@@ -1450,9 +1454,11 @@ class FrontendModelEventSubscription {
   /**
    * Runs constructor.
    * @param {FrontendModelClass} ModelClass - Frontend model class for this subscription bucket.
+   * @param {import("../remote-request-context.js").RemoteRequestContext} requestContext - Captured subscription context.
    */
-  constructor(ModelClass) {
+  constructor(ModelClass, requestContext) {
     this.ModelClass = ModelClass
+    this.requestContext = requestContext
     /**
      * Narrows the runtime value to the documented type.
      * @type {Set<FrontendModelModelEventCallbackEntry>} */
@@ -1530,11 +1536,14 @@ class FrontendModelEventSubscription {
         }
       : {}
 
-    return {
-      model: this.ModelClass.getModelName(),
-      ...eventFilterParams,
-      ...projectionPayload
-    }
+    return mergeFrontendModelRemoteRequestContext(
+      this.requestContext,
+      {
+        model: this.ModelClass.getModelName(),
+        ...eventFilterParams,
+        ...projectionPayload
+      }
+    )
   }
 
   /**
@@ -1681,39 +1690,77 @@ class FrontendModelEventSubscription {
       || this.instanceListeners.size > 0
 
     if (hasAnyListener) return
-    if (!this.channelHandle) return
 
-    try {
-      this.channelHandle.close()
-    } catch (error) {
-      console.error(error)
+    if (this.channelHandle) {
+      try {
+        this.channelHandle.close()
+      } catch (error) {
+        console.error(error)
+      }
     }
 
     this.channelHandle = null
     this.readyPromise = null
     this.subscriptionParamsKey = null
+    releaseFrontendModelEventSubscription(this)
   }
 }
 
 /**
  * Frontend model event subscriptions.
- * @type {WeakMap<FrontendModelClass, FrontendModelEventSubscription>} */
+ * @type {WeakMap<FrontendModelClass, Map<string, FrontendModelEventSubscription>>} */
 const frontendModelEventSubscriptions = new WeakMap()
 
 /**
  * Runs ensure frontend model event subscription.
  * @param {FrontendModelClass} ModelClass - Model class.
+ * @param {import("../remote-request-context.js").RemoteRequestContext} requestContext - Captured subscription context.
  * @returns {FrontendModelEventSubscription} - Per-class subscription helper.
  */
-function ensureFrontendModelEventSubscription(ModelClass) {
-  let sub = frontendModelEventSubscriptions.get(ModelClass)
+function ensureFrontendModelEventSubscription(ModelClass, requestContext) {
+  let subscriptions = frontendModelEventSubscriptions.get(ModelClass)
+
+  if (!subscriptions) {
+    subscriptions = new Map()
+    frontendModelEventSubscriptions.set(ModelClass, subscriptions)
+  }
+
+  const contextKey = remoteRequestContextKey(requestContext)
+  let sub = subscriptions.get(contextKey)
 
   if (!sub) {
-    sub = new FrontendModelEventSubscription(ModelClass)
-    frontendModelEventSubscriptions.set(ModelClass, sub)
+    sub = new FrontendModelEventSubscription(ModelClass, requestContext)
+    subscriptions.set(contextKey, sub)
   }
 
   return sub
+}
+
+/**
+ * Removes an empty context bucket so switching through many tenants does not retain every snapshot.
+ * @param {FrontendModelEventSubscription} subscription - Empty subscription bucket.
+ * @returns {void}
+ */
+function releaseFrontendModelEventSubscription(subscription) {
+  const subscriptions = frontendModelEventSubscriptions.get(subscription.ModelClass)
+  const contextKey = remoteRequestContextKey(subscription.requestContext)
+
+  if (subscriptions?.get(contextKey) !== subscription) return
+
+  subscriptions.delete(contextKey)
+  if (subscriptions.size === 0) frontendModelEventSubscriptions.delete(subscription.ModelClass)
+}
+
+/**
+ * Captures the current frontend-model transport context for one operation.
+ * @returns {import("../remote-request-context.js").RemoteRequestContext} Frozen context snapshot.
+ */
+function frontendModelRequestContext() {
+  const configuredContext = typeof frontendModelTransportConfig.requestContext === "function"
+    ? frontendModelTransportConfig.requestContext()
+    : frontendModelTransportConfig.requestContext
+
+  return captureFrontendModelRemoteRequestContext(configuredContext)
 }
 
 /**
@@ -2007,6 +2054,7 @@ async function flushPendingSharedFrontendModelRequests() {
           customPath: request.customPath,
           model: request.modelClass.getModelName(),
           payload: request.payload,
+          ...(Object.keys(request.requestContext).length > 0 ? {requestContext: request.requestContext} : {}),
           requestId: request.requestId
         }
       }
@@ -2015,6 +2063,7 @@ async function flushPendingSharedFrontendModelRequests() {
         commandType: request.commandType,
         model: request.modelClass.getModelName(),
         payload: request.payload,
+        ...(Object.keys(request.requestContext).length > 0 ? {requestContext: request.requestContext} : {}),
         requestId: request.requestId
       }
     })
@@ -3016,6 +3065,10 @@ export default class FrontendModelBase {
       frontendModelTransportConfig.requestHeaders = config.requestHeaders
     }
 
+    if (Object.prototype.hasOwnProperty.call(config, "requestContext")) {
+      frontendModelTransportConfig.requestContext = config.requestContext
+    }
+
     if (Object.prototype.hasOwnProperty.call(config, "timeout")) {
       frontendModelTransportConfig.timeout = config.timeout
     }
@@ -3286,9 +3339,14 @@ export default class FrontendModelBase {
       throw new Error("subscribeWebsocketChannel requires configureTransport({websocketUrl})")
     }
 
-    const {signal, timeoutMs, ...channelOptions} = options
+    const {params, signal, timeoutMs, ...channelOptions} = options
+    const requestContext = frontendModelRequestContext()
+    const scopedParams = mergeFrontendModelRemoteRequestContext(requestContext, params === undefined ? {} : params)
     const startupControls = frontendModelWebsocketStartupControls({signal, timeoutMs})
-    const handle = client.subscribeChannel(channelType, {...channelOptions, ...startupControls})
+    const scopedParamsOption = params === undefined && Object.keys(requestContext).length === 0
+      ? {}
+      : {params: scopedParams}
+    const handle = client.subscribeChannel(channelType, {...channelOptions, ...scopedParamsOption, ...startupControls})
 
     if (typeof client.connect === "function") {
       void client.connect(startupControls).catch(() => handle.close())
@@ -3649,7 +3707,7 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onCreate(callback, options = {}) {
-    const sub = ensureFrontendModelEventSubscription(this)
+    const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
     const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
 
     sub.classCreateCallbacks.add(entry)
@@ -3669,7 +3727,7 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onUpdate(callback, options = {}) {
-    const sub = ensureFrontendModelEventSubscription(this)
+    const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
     const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
 
     sub.classUpdateCallbacks.add(entry)
@@ -3691,7 +3749,7 @@ export default class FrontendModelBase {
   static async onDestroy(callback, options = {}) {
     assertNoDestroyEventFilter(this, options)
 
-    const sub = ensureFrontendModelEventSubscription(this)
+    const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
     const entry = {callback}
 
     sub.classDestroyCallbacks.add(entry)
@@ -3715,7 +3773,7 @@ export default class FrontendModelBase {
   async onUpdate(callback, options = {}) {
     const self = /** @type {ReturnType<typeof JSON.parse>} */ (this)
     const ModelClass = frontendModelClassFor(this)
-    const sub = ensureFrontendModelEventSubscription(ModelClass)
+    const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelRequestContext())
     const id = String(self.id())
     const entry = {callback, ...frontendModelEventOptionsPayload(ModelClass, options)}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
@@ -3748,7 +3806,7 @@ export default class FrontendModelBase {
 
     assertNoDestroyEventFilter(ModelClass, options)
 
-    const sub = ensureFrontendModelEventSubscription(ModelClass)
+    const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelRequestContext())
     const id = String(self.id())
     const entry = {callback}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
@@ -4596,6 +4654,8 @@ export default class FrontendModelBase {
     const commandName = this.commandName(commandType)
     const timeZone = frontendModelTransportTimeZone()
     const serializedPayload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
+    const requestContext = frontendModelRequestContext()
+    const requestPayload = mergeFrontendModelRemoteRequestContext(requestContext, serializedPayload)
     const resourcePath = this.resourcePath()
     const containsAttachmentUpload = frontendModelPayloadContainsAttachmentUpload(serializedPayload)
     const useSharedTransport = !containsAttachmentUpload
@@ -4608,6 +4668,7 @@ export default class FrontendModelBase {
           commandType,
           modelClass: this,
           payload: serializedPayload,
+          requestContext,
           reject,
           requestId: `${++sharedFrontendModelRequestId}`,
           resolve,
@@ -4635,7 +4696,7 @@ export default class FrontendModelBase {
       },
       async (signal) => {
         const directResponse = await fetch(url, {
-          body: JSON.stringify(serializedPayload),
+          body: JSON.stringify(requestPayload),
           credentials: "include",
           headers: frontendModelRequestHeaders(timeZone),
           method: "POST",
@@ -4675,6 +4736,9 @@ export default class FrontendModelBase {
     const {commandName, commandType, memberId = null, payload, resourcePath} = args
     const timeZone = frontendModelTransportTimeZone()
     const serializedPayload = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (serializeFrontendModelTransportValue(payload, {timeZone}))
+    const requestContext = frontendModelRequestContext()
+
+    mergeFrontendModelRemoteRequestContext(requestContext, serializedPayload)
     const customPath = frontendModelCustomCommandPath({
       commandName,
       memberId,
@@ -4688,6 +4752,7 @@ export default class FrontendModelBase {
         customPath,
         modelClass: this,
         payload: serializedPayload,
+        requestContext,
         reject,
         requestId: `${++sharedFrontendModelRequestId}`,
         resolve
