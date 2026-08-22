@@ -3475,7 +3475,7 @@ export default class VelociousConfiguration {
    * @returns {T} - Callback result.
    */
   withoutCurrentConnectionContexts(callback) {
-    let runCallback = callback
+    let runCallback = () => this.getEnvironmentHandler().runWithoutSharedTransactionCoordinatorOwners(callback)
 
     for (const pool of Object.values(this.databasePools)) {
       if (!pool) continue
