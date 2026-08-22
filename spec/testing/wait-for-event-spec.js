@@ -1,8 +1,7 @@
 // @ts-check
 
 import EventEmitter from "../../src/utils/event-emitter.js"
-import waitForEvent from "../../src/testing/wait-for-event.js"
-import {describe, expect, it} from "../../src/testing/test.js"
+import { describe, expect, it, waitForEvent } from "../../src/testing/test.js"
 
 describe("waitForEvent", () => {
   it("resolves with the emitted value the moment the event fires", async () => {

@@ -100,6 +100,97 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     }
   })
 
+  it("keeps a broker queue entry until its inherited query settles", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]> | undefined} */
+    let inheritedQuery
+    let rootSettled = false
+    /** @type {() => void} */
+    let resolveRootCallbackReturned = () => {}
+    const rootCallbackReturned = new Promise((resolve) => { resolveRootCallbackReturned = resolve })
+
+    const root = coordinateSharedTransactionConnection(connection, async () => {
+      inheritedQuery = connection.query("SELECT child", {logQuery: false})
+      await connection.childStarted
+      resolveRootCallbackReturned()
+    }).then(() => { rootSettled = true })
+
+    try {
+      await rootCallbackReturned
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(rootSettled).toEqual(false)
+
+      connection.releaseChild()
+      await root
+      await inheritedQuery
+
+      expect(connection.maxActiveRequests).toEqual(1)
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled([root, inheritedQuery || Promise.resolve([])])
+      await broker.close()
+    }
+  })
+
+  it("routes delayed inherited work behind later broker traffic", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const child = new SharedTransactionBrokerClient({
+      address: broker.address(),
+      capability: broker.capability(),
+      databaseIdentifier: "default"
+    })
+    /** @type {() => void} */
+    let releaseDelayedQuery = () => {}
+    const delayedQueryGate = new Promise((resolve) => { releaseDelayedQuery = resolve })
+    /** @type {Promise<[]>} */
+    let delayedQuery = Promise.resolve([])
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        delayedQuery = delayedQueryGate.then(async () => await connection.query("SELECT parent", {logQuery: false}))
+      })
+
+      const brokerQuery = child.call("_queryActual", ["SELECT child"])
+
+      await connection.childStarted
+      releaseDelayedQuery()
+      queueMicrotask(connection.releaseChild)
+      await Promise.all([brokerQuery, delayedQuery])
+
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      releaseDelayedQuery()
+      connection.releaseChild()
+      await Promise.allSettled([delayedQuery])
+      await child.close()
+      await broker.close()
+    }
+  })
+
+  it("allows nested owner coordination to re-enter without deadlocking", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    let nestedRan = false
+
+    try {
+      await coordinateSharedTransactionConnection(connection, async () => {
+        await coordinateSharedTransactionConnection(connection, async () => {
+          await coordinateSharedTransactionConnection(connection, async () => {
+            nestedRan = true
+          })
+        })
+      })
+
+      expect(nestedRan).toEqual(true)
+    } finally {
+      await broker.close()
+    }
+  })
+
   it("keeps sibling coordination parallel across distinct physical connections", async () => {
     const firstConnection = new SingleRequestDriver()
     const secondConnection = new SingleRequestDriver()

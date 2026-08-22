@@ -10,7 +10,7 @@ import Configuration from "../../src/configuration.js"
 import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
-import waitForEvent from "../../src/testing/wait-for-event.js"
+import { waitForEvent } from "../../src/testing/test.js"
 
 const CHILD_PATH = fileURLToPath(new URL("../helpers/idempotent-enqueue-sqlite-child.js", import.meta.url))
 

@@ -6,7 +6,7 @@ import BackgroundJobsClient from "../../src/background-jobs/client.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
 import {clearBackgroundJobs, startBackgroundJobsMain} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import waitForEvent from "../../src/testing/wait-for-event.js"
+import { waitForEvent } from "../../src/testing/test.js"
 
 /**
  * @typedef {object} TcpServerHarness
