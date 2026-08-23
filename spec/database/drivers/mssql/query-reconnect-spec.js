@@ -99,4 +99,62 @@ describe("Database - drivers - mssql query reconnect", {databaseCleaning: {trans
       mssql.Request = originalRequest
     }
   })
+
+  it("serializes a replay query behind transaction rollback on the same session", async () => {
+    const originalRequest = mssql.Request
+    let activeRequests = 0
+    /** @type {() => void} */
+    let releaseRollback = () => {}
+    const rollbackGate = new Promise((resolve) => { releaseRollback = resolve })
+    /** @type {() => void} */
+    let resolveRollbackStarted = () => {}
+    const rollbackStarted = new Promise((resolve) => { resolveRollbackStarted = resolve })
+
+    class FakeRequest {
+      async query() {
+        if (activeRequests > 0) throw new Error("Requests can only be made in the LoggedIn state, not the SentClientRequest state")
+
+        return {recordsets: [[]]}
+      }
+    }
+
+    mssql.Request = FakeRequest
+
+    try {
+      const configuration = /** @type {any} */ ({
+        debug: false,
+        getCurrentRequestTiming: () => undefined,
+        getQueryLoggingEnabled: () => false
+      })
+      const driver = new MssqlDriver({sqlConfig: {}}, configuration)
+      driver.connection = {connected: true}
+      driver._currentTransaction = {
+        async rollback() {
+          activeRequests++
+          resolveRollbackStarted()
+
+          try {
+            await rollbackGate
+          } finally {
+            activeRequests--
+          }
+        }
+      }
+      driver._transactionsCount = 1
+
+      const rollback = driver.rollbackTransaction()
+
+      await rollbackStarted
+
+      const replayQuery = driver.query("SELECT * FROM websocket_replay_channels")
+
+      setImmediate(releaseRollback)
+      await Promise.all([rollback, replayQuery])
+
+      expect(activeRequests).toEqual(0)
+    } finally {
+      releaseRollback()
+      mssql.Request = originalRequest
+    }
+  })
 })

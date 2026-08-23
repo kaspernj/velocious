@@ -7,8 +7,6 @@
 const coordinators = new WeakMap()
 /** @type {WeakMap<object, CoordinatorRegistration>} */
 const connectionRegistrations = new WeakMap()
-/** @type {WeakMap<object, Promise<void>>} */
-const physicalQueryQueues = new WeakMap()
 
 /**
  * Runs work directly when only the connection-local queue remains registered.
@@ -169,26 +167,9 @@ export async function coordinateSharedTransactionConnection(connection, callback
  * @returns {Promise<T>} - Callback result.
  */
 export async function runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
-  const previous = physicalQueryQueues.get(connection) || Promise.resolve()
-  /**
-   * Releases the next physical query.
-   * @type {() => void}
-   */
-  let release = () => {}
-  /** @type {Promise<void>} */
-  const current = new Promise((resolve) => { release = () => resolve() })
+  if (!connectionRegistrations.has(connection)) return await callback()
 
-  physicalQueryQueues.set(connection, current)
-  await previous
+  const environmentHandler = connection.configuration.getEnvironmentHandler()
 
-  try {
-    if (!connectionRegistrations.has(connection)) return await callback()
-
-    const environmentHandler = connection.configuration.getEnvironmentHandler()
-
-    return await environmentHandler.runWithoutSharedTransactionCoordinatorOwner(connection, callback)
-  } finally {
-    release()
-    if (physicalQueryQueues.get(connection) === current) physicalQueryQueues.delete(connection)
-  }
+  return await environmentHandler.runWithoutSharedTransactionCoordinatorOwner(connection, callback)
 }

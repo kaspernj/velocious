@@ -558,52 +558,58 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   async _startTransactionAction() {
-    if (this._currentTransaction) throw new Error("A transaction is already running")
-    if (!this.connection) await this.connect()
+    await this._runPhysicalConnectionRequest(async () => {
+      if (this._currentTransaction) throw new Error("A transaction is already running")
+      if (!this.connection) await this.connect()
 
-    this._currentTransaction = new mssql.Transaction(this.connection)
+      this._currentTransaction = new mssql.Transaction(this.connection)
 
-    try {
-      await this._currentTransaction.begin()
-    } catch (error) {
-      this._currentTransaction = null
-      throw error
-    }
+      try {
+        await this._currentTransaction.begin()
+      } catch (error) {
+        this._currentTransaction = null
+        throw error
+      }
+    })
   }
 
   async _commitTransactionAction() {
-    if (!this._currentTransaction) throw new Error("A transaction isn't running")
+    await this._runPhysicalConnectionRequest(async () => {
+      if (!this._currentTransaction) throw new Error("A transaction isn't running")
 
-    await this._currentTransaction.commit()
-    this._currentTransaction = null
+      await this._currentTransaction.commit()
+      this._currentTransaction = null
+    })
   }
 
   async _rollbackTransactionAction() {
-    if (!this._currentTransaction) {
-      this.logger.debug("A transaction isn't running - ignoring because that can happen if something else has failed in the db")
-      return
-    }
+    await this._runPhysicalConnectionRequest(async () => {
+      if (!this._currentTransaction) {
+        this.logger.debug("A transaction isn't running - ignoring because that can happen if something else has failed in the db")
+        return
+      }
 
-    try {
-      await this._currentTransaction.rollback()
-    } catch (transactionRollbackError) {
-      // When SQL Server has already aborted the transaction (e.g., a
-      // stale concurrent request triggered XACT_ABORT), the
-      // mssql.Transaction.rollback() call fails because the
-      // Transaction object is dead.  Issue a raw ROLLBACK on the
-      // underlying connection to clear SQL Server's session-level
-      // aborted-transaction state so the connection is usable for the
-      // next BEGIN TRANSACTION.
-      this.logger.warn("Transaction.rollback() failed, clearing session state with raw ROLLBACK", {
-        error: transactionRollbackError instanceof Error ? transactionRollbackError.message : transactionRollbackError
-      })
+      try {
+        await this._currentTransaction.rollback()
+      } catch (transactionRollbackError) {
+        // When SQL Server has already aborted the transaction (e.g., a
+        // stale concurrent request triggered XACT_ABORT), the
+        // mssql.Transaction.rollback() call fails because the
+        // Transaction object is dead.  Issue a raw ROLLBACK on the
+        // underlying connection to clear SQL Server's session-level
+        // aborted-transaction state so the connection is usable for the
+        // next BEGIN TRANSACTION.
+        this.logger.warn("Transaction.rollback() failed, clearing session state with raw ROLLBACK", {
+          error: transactionRollbackError instanceof Error ? transactionRollbackError.message : transactionRollbackError
+        })
 
-      const request = new mssql.Request(this.connection)
+        const request = new mssql.Request(this.connection)
 
-      await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
-    } finally {
-      this._currentTransaction = null
-    }
+        await request.query("IF @@TRANCOUNT > 0 ROLLBACK")
+      } finally {
+        this._currentTransaction = null
+      }
+    })
   }
 
   /**

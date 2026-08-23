@@ -341,7 +341,20 @@ export default class VelociousDatabaseDriversBase {
     this._transactionCompletionPromise = Promise.resolve()
     this._resolveTransactionCompletion = undefined
     this._transactionsActionsMutex = new Mutex()
+    this._physicalConnectionMutex = new Mutex()
     this._schemaCache = new Map()
+  }
+
+  /**
+   * Serializes access to one physical database session.
+   * @template T
+   * @param {() => Promise<T>} callback - Physical driver operation.
+   * @returns {Promise<T>} - Operation result.
+   */
+  async _runPhysicalConnectionRequest(callback) {
+    return await this._physicalConnectionMutex.sync(async () => {
+      return await runWithoutSharedTransactionCoordinatorOwner(this, callback)
+    })
   }
 
   /**
@@ -2014,8 +2027,7 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const affectedRows = await runWithoutSharedTransactionCoordinatorOwner(
-            this,
+          const affectedRows = await this._runPhysicalConnectionRequest(
             async () => await this._affectedRowsActual(sql)
           )
 
@@ -2099,8 +2111,7 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const result = await runWithoutSharedTransactionCoordinatorOwner(
-            this,
+          const result = await this._runPhysicalConnectionRequest(
             async () => await this._queryActual(sql, options)
           )
 
