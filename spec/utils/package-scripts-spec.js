@@ -54,13 +54,17 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     expect(scripts.prepack).toEqual("npm run build")
   })
 
-  it("ships the SQLite driver packages as runtime dependencies", async () => {
+  it("declares the SQLite driver packages as optional peer dependencies", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory(), "package.json"), "utf8"))
 
-    expect(typeof packageJson.dependencies.sqlite).toEqual("string")
-    expect(typeof packageJson.dependencies.sqlite3).toEqual("string")
-    expect(packageJson.devDependencies.sqlite).toEqual(undefined)
-    expect(packageJson.devDependencies.sqlite3).toEqual(undefined)
+    expect(packageJson.dependencies.sqlite).toEqual(undefined)
+    expect(packageJson.dependencies.sqlite3).toEqual(undefined)
+    expect(typeof packageJson.devDependencies.sqlite).toEqual("string")
+    expect(typeof packageJson.devDependencies.sqlite3).toEqual("string")
+    expect(packageJson.peerDependencies.sqlite).toEqual(packageJson.devDependencies.sqlite)
+    expect(packageJson.peerDependencies.sqlite3).toEqual(packageJson.devDependencies.sqlite3)
+    expect(packageJson.peerDependenciesMeta.sqlite.optional).toEqual(true)
+    expect(packageJson.peerDependenciesMeta.sqlite3.optional).toEqual(true)
   })
 
   it("emits a valid SQLite base driver declaration", {timeoutSeconds: 180}, async () => {
@@ -132,7 +136,6 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
       await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "index.js"))
       await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "index.d.ts"))
       await fs.access(path.join(consumerDirectory, "node_modules", "velocious", "build", "bin", "velocious.js"))
-      await execFileAsync(process.execPath, ["--input-type=module", "--eval", 'await import("velocious/build/src/database/drivers/sqlite/index.js")'], {cwd: consumerDirectory})
     } finally {
       await fs.rm(temporaryDirectory, {recursive: true, force: true})
     }

@@ -87,18 +87,24 @@
     "snapreq": "^0.0.12",
     "sql-escape-string": "^1.1.0",
     "sql.js": "^1.12.0",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
     "strftime": "^0.10.2",
     "typanic": "^1.0.9",
     "ws": "^8.21.3"
   },
   "peerDependencies": {
     "react": ">=18",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
     "smtp-connection": "^4.0.2"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "sqlite": {
+      "optional": true
+    },
+    "sqlite3": {
       "optional": true
     }
   },
@@ -133,6 +139,8 @@
     "react-dom": "^19.2.0",
     "release-patch": "^1.0.0",
     "selenium-webdriver": "^4.39.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
     "system-testing": "^1.0.108",
     "tedious": "^20.0.0",
     "typescript": "^7.0.2",
