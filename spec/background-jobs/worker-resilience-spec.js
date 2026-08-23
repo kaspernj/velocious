@@ -5,6 +5,33 @@ import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
 import {startBackgroundJobsMain} from "../helpers/background-jobs-helper.js"
 
+class ControlledPooledWorker extends BackgroundJobsWorker {
+  constructor() {
+    super({pooledRunnerConcurrency: 2, pooledRunnerCount: 1})
+    /** @type {string[]} */
+    this.startedJobIds = []
+    /** @type {Map<string, Array<() => void>>} */
+    this.jobReleases = new Map()
+  }
+
+  /** @param {import("../../src/background-jobs/types.js").BackgroundJobPayload & {id: string}} payload - Pooled payload. @returns {Promise<void>} - Controlled execution. */
+  _runPooledJob(payload) {
+    this.startedJobIds.push(payload.id)
+    return new Promise((resolve) => {
+      const releases = this.jobReleases.get(payload.id) || []
+      releases.push(resolve)
+      this.jobReleases.set(payload.id, releases)
+    })
+  }
+
+  /** @param {string} jobId - Job id. */
+  releaseNext(jobId) {
+    const release = this.jobReleases.get(jobId)?.shift()
+    if (!release) throw new Error(`No controlled pooled execution for job: ${jobId}`)
+    release()
+  }
+}
+
 /**
  * A control socket the main can track without a real connection. `close()` calls
  * `socket.end()`, which is a no-op on an unconnected socket.
@@ -66,6 +93,29 @@ async function startConfiguredWorker(workerOptions) {
 }
 
 describe("Background jobs - worker resilience", {databaseCleaning: {truncate: true}}, () => {
+  it("serializes pooled leases by durable job id while different ids retain concurrency", async () => {
+    const worker = new ControlledPooledWorker()
+    const payload = {id: "same-id", jobName: "TestJob", args: [], options: {executionMode: "pooled"}}
+
+    await worker._handleJob(payload)
+    await worker._handleJob({...payload, handoffId: "replacement-handoff"})
+    await worker._handleJob({...payload, id: "other-id"})
+
+    expect(worker.startedJobIds).toEqual(["same-id", "other-id"])
+
+    worker.releaseNext("same-id")
+    await Promise.resolve()
+    expect(worker.startedJobIds).toEqual(["same-id", "other-id", "same-id"])
+
+    worker.releaseNext("same-id")
+    worker.releaseNext("other-id")
+    await Promise.allSettled([...worker.inflightPooledJobs])
+
+    expect(worker.inflightPooledJobs.size).toEqual(0)
+    expect(worker.pooledJobQueues.size).toEqual(0)
+    expect(worker.pooledJobQueueTrackers.size).toEqual(0)
+  })
+
   it("defaults pooled runner lifecycle bounds", () => {
     const worker = new BackgroundJobsWorker({})
 

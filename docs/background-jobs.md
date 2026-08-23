@@ -169,6 +169,11 @@ programming error and therefore follows normal job failure and retry behavior.
 Independent enqueues remain independent: rescheduling does not insert, merge, or
 delete rows, and `deduplicateWhileQueued` keeps its existing enqueue-time rules.
 
+When pooled capacity admits the rescheduled row before the prior terminal
+acknowledgement reaches its worker, the worker serializes both leases by durable
+job ID. The next run starts only after the prior acknowledgement settles, while
+different job IDs can still use the pool concurrently.
+
 ## Database connection scopes
 
 By default, a job receives the existing Velocious behavior: every active configured database is checked out for the duration of `perform`. Jobs that need a known subset should declare it on the job class:
