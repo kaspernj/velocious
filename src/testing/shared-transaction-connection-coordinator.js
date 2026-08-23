@@ -7,6 +7,8 @@
 const coordinators = new WeakMap()
 /** @type {WeakMap<object, CoordinatorRegistration>} */
 const connectionRegistrations = new WeakMap()
+/** @type {WeakMap<object, Promise<void>>} */
+const physicalQueryQueues = new WeakMap()
 
 /**
  * Runs work directly when only the connection-local queue remains registered.
@@ -163,13 +165,30 @@ export async function coordinateSharedTransactionConnection(connection, callback
  * Unregistered connections have no coordinator ownership to clear.
  * @template T
  * @param {import("../database/drivers/base.js").default} connection - Physical connection.
- * @param {() => T} callback - Physical query work.
- * @returns {T} - Callback result.
+ * @param {() => Promise<T>} callback - Physical query work.
+ * @returns {Promise<T>} - Callback result.
  */
-export function runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
-  if (!connectionRegistrations.has(connection)) return callback()
+export async function runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
+  const previous = physicalQueryQueues.get(connection) || Promise.resolve()
+  /**
+   * Releases the next physical query.
+   * @type {() => void}
+   */
+  let release = () => {}
+  /** @type {Promise<void>} */
+  const current = new Promise((resolve) => { release = () => resolve() })
 
-  const environmentHandler = connection.configuration.getEnvironmentHandler()
+  physicalQueryQueues.set(connection, current)
+  await previous
 
-  return environmentHandler.runWithoutSharedTransactionCoordinatorOwner(connection, callback)
+  try {
+    if (!connectionRegistrations.has(connection)) return await callback()
+
+    const environmentHandler = connection.configuration.getEnvironmentHandler()
+
+    return await environmentHandler.runWithoutSharedTransactionCoordinatorOwner(connection, callback)
+  } finally {
+    release()
+    if (physicalQueryQueues.get(connection) === current) physicalQueryQueues.delete(connection)
+  }
 }

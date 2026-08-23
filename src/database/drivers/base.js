@@ -2014,7 +2014,10 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const affectedRows = await this._affectedRowsActual(sql)
+          const affectedRows = await runWithoutSharedTransactionCoordinatorOwner(
+            this,
+            async () => await this._affectedRowsActual(sql)
+          )
 
           failed = false
           return affectedRows
