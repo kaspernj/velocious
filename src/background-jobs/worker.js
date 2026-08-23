@@ -655,7 +655,7 @@ export default class BackgroundJobsWorker {
     let inflight
     inflight = pooledJob.finally(() => {
       this.inflightPooledJobs.delete(inflight)
-      if (!this.shouldStop && !this._pooledStartupFailureJobs.has(pooledJob)) this._sendReadyIfRunning()
+      if (!this.shouldStop && !this._pooledStartupFailureJobs.has(pooledJob) && !this._pooledStartupFailureJobs.has(inflight)) this._sendReadyIfRunning()
     })
     this.inflightPooledJobs.add(inflight)
     return inflight
@@ -713,6 +713,7 @@ export default class BackgroundJobsWorker {
   _availablePooledSlots() {
     let openInExisting = 0
     let nonRetiringChildren = 0
+    let queuedReservations = 0
 
     for (const child of this.pooledChildren) {
       const state = this.pooledChildStates.get(child)
@@ -721,9 +722,11 @@ export default class BackgroundJobsWorker {
       openInExisting += this.pooledRunnerConcurrency - state.inflight.size
     }
 
+    for (const queue of this.pooledJobQueues.values()) queuedReservations += queue.length
+
     const spawnableChildren = Math.max(0, this.pooledRunnerCount - nonRetiringChildren)
 
-    return openInExisting + spawnableChildren * this.pooledRunnerConcurrency
+    return Math.max(0, openInExisting + spawnableChildren * this.pooledRunnerConcurrency - queuedReservations)
   }
 
   /**
@@ -1022,6 +1025,8 @@ export default class BackgroundJobsWorker {
     } else if (state) {
       for (const entry of entries) {
         if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
+        const queueTracker = this.pooledJobQueueTrackers.get(entry.payload.id)
+        if (queueTracker) this._pooledStartupFailureJobs.add(queueTracker)
       }
       // A previous ready message may still have unconsumed pooled credits at the
       // main. Revoke them authoritatively without suppressing valid inline or
