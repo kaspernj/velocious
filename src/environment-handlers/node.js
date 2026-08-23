@@ -155,6 +155,22 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
+   * Runs work without inherited shared-transaction ownership for one connection.
+   * @template T
+   * @param {import("../database/drivers/base.js").default} connection - Physical connection whose owner is cleared.
+   * @param {() => T} callback - Physical connection work.
+   * @returns {T} - Callback result.
+   */
+  runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
+    if (!this._sharedTransactionCoordinatorAsyncLocalStorage) return callback()
+
+    const owners = new Map(this._sharedTransactionCoordinatorAsyncLocalStorage.getStore())
+
+    owners.delete(connection)
+    return this._sharedTransactionCoordinatorAsyncLocalStorage.run(owners, callback)
+  }
+
+  /**
    * Runs work without inherited shared-transaction coordinator ownership.
    * @template T
    * @param {() => T} callback - Detached work.

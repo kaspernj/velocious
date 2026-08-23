@@ -1,0 +1,1 @@
+Prevent detached database work from inheriting an active physical query's shared-transaction owner, and serialize local physical requests so concurrent callers cannot overlap on single-request drivers such as MSSQL.

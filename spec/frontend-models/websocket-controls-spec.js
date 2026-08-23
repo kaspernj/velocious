@@ -63,6 +63,8 @@ function buildControlledClient({connectDelayMs = 0, readyDelayMs = 0, initiallyO
 class ControlledWebSocket {
   static autoOpen = true
   static autoRespondToRequests = true
+  /** @type {Array<number | undefined>} */
+  static closeCodes = []
   static deferNextClose = false
   static deferSessionResume = false
   /** @type {ControlledWebSocket[]} */
@@ -124,8 +126,10 @@ class ControlledWebSocket {
     for (const callback of this.listeners.get(type) || []) callback(event)
   }
 
-  /** @returns {void} */
-  close() {
+  /** @param {number} [code] - WebSocket close status. @returns {void} */
+  close(code) {
+    ControlledWebSocket.closeCodes.push(code)
+
     if (this.readyState === this.CLOSED) return
 
     const finishClose = () => {
@@ -192,6 +196,27 @@ class ControlledWebSocket {
 }
 
 describe("frontend-models - WebSocket controls", () => {
+  it("settles concurrent graceful closes with one normal close frame", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.closeCodes = []
+    ControlledWebSocket.instances = []
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+
+    const client = new VelociousWebsocketClient({url: "ws://example.test/websocket"})
+
+    try {
+      await client.connect()
+      await Promise.all([client.close(), client.close()])
+
+      expect(ControlledWebSocket.closeCodes).toEqual([1000])
+      expect(client.isOpen()).toBe(false)
+    } finally {
+      globalThis.WebSocket = OriginalWebSocket
+    }
+  })
+
   it("composes configured controls into direct connect and preserves the session abort reason", async () => {
     const OriginalWebSocket = globalThis.WebSocket
     const controller = new AbortController()

@@ -157,3 +157,19 @@ export async function coordinateSharedTransactionConnection(connection, callback
     return await coordinateRootSharedTransactionConnection(connection, registration, callback)
   }))
 }
+
+/**
+ * Runs physical query work without inheriting this connection's coordinator owner.
+ * Unregistered connections have no coordinator ownership to clear.
+ * @template T
+ * @param {import("../database/drivers/base.js").default} connection - Physical connection.
+ * @param {() => Promise<T>} callback - Physical query work.
+ * @returns {Promise<T>} - Callback result.
+ */
+export async function runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
+  if (!connectionRegistrations.has(connection)) return await callback()
+
+  const environmentHandler = connection.configuration.getEnvironmentHandler()
+
+  return await environmentHandler.runWithoutSharedTransactionCoordinatorOwner(connection, callback)
+}

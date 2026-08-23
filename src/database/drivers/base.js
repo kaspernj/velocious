@@ -171,7 +171,7 @@ import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
 import { optionalPositiveInteger } from "typanic"
-import { coordinateSharedTransactionConnection } from "../../testing/shared-transaction-connection-coordinator.js"
+import {coordinateSharedTransactionConnection, runWithoutSharedTransactionCoordinatorOwner} from "../../testing/shared-transaction-connection-coordinator.js"
 import { currentTestProfileContext } from "../../testing/test-profile-context.js"
 import sha256Hex from "../../utils/sha256-hex.js"
 
@@ -341,7 +341,20 @@ export default class VelociousDatabaseDriversBase {
     this._transactionCompletionPromise = Promise.resolve()
     this._resolveTransactionCompletion = undefined
     this._transactionsActionsMutex = new Mutex()
+    this._physicalConnectionMutex = new Mutex()
     this._schemaCache = new Map()
+  }
+
+  /**
+   * Serializes access to one physical database session.
+   * @template T
+   * @param {() => Promise<T>} callback - Physical driver operation.
+   * @returns {Promise<T>} - Operation result.
+   */
+  async _runPhysicalConnectionRequest(callback) {
+    return await this._physicalConnectionMutex.sync(async () => {
+      return await runWithoutSharedTransactionCoordinatorOwner(this, callback)
+    })
   }
 
   /**
@@ -2014,7 +2027,9 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const affectedRows = await this._affectedRowsActual(sql)
+          const affectedRows = await this._runPhysicalConnectionRequest(
+            async () => await this._affectedRowsActual(sql)
+          )
 
           failed = false
           return affectedRows
@@ -2096,7 +2111,9 @@ export default class VelociousDatabaseDriversBase {
         let failed = true
 
         try {
-          const result = await this._queryActual(sql, options)
+          const result = await this._runPhysicalConnectionRequest(
+            async () => await this._queryActual(sql, options)
+          )
 
           failed = false
           return result

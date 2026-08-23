@@ -3,6 +3,7 @@
 import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
 import Logger from "../logger.js"
+import {captureRemoteRequestContext, mergeRemoteRequestContext} from "../remote-request-context.js"
 import restArgsError from "../utils/rest-args-error.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
@@ -27,6 +28,20 @@ const DEFAULT_TRACKED_OPERATIONS = ["create", "update"]
 
 /** Attribute names treated as client-local sync bookkeeping when deriving localOnlyAttributes. */
 const LOCAL_BOOKKEEPING_ATTRIBUTE_NAMES = ["createdAt", "updatedAt", "lastSyncChangeAt"]
+
+const SYNC_REQUEST_RESERVED_KEYS = [
+  "afterId",
+  "afterServerSequence",
+  "afterUpdatedAt",
+  "authenticationToken",
+  "limit",
+  "scope",
+  "syncs",
+  "upstreamRefresh",
+  "upToId",
+  "upToServerSequence",
+  "upToUpdatedAt"
+]
 
 /** @type {WeakMap<Configuration, SyncClient>} */
 const syncClientsByConfiguration = new WeakMap()
@@ -56,11 +71,15 @@ export default class SyncClient {
    * @param {import("./sync-client-types.js").SyncClientOptions} [options] - Optional overrides.
    */
   constructor(options = {}) {
-    const {configuration = Configuration.current(), databaseIdentifier, legacyCursor, scopeStore, syncModel, tenantHandle, ...restOptions} = options
+    const {configuration = Configuration.current(), databaseIdentifier, legacyCursor, requestContext, scopeStore, syncModel, tenantHandle, ...restOptions} = options
 
     restArgsError(restOptions)
 
     const clientConfiguration = configuration.getSyncConfiguration().client
+    const capturedRequestContext = captureRemoteRequestContext(requestContext, {
+      label: "Sync client request context",
+      reservedKeys: SYNC_REQUEST_RESERVED_KEYS
+    })
 
     if (!clientConfiguration) {
       throw new Error("SyncClient requires a sync.client configuration block: new Configuration({sync: {client: {authenticationToken, transport}}})")
@@ -121,9 +140,10 @@ export default class SyncClient {
       isOnline: clientConfiguration.isOnline,
       legacyCursor,
       onError: clientConfiguration.onError,
-      postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, transport: clientConfiguration.transport}),
-      postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, transport: clientConfiguration.transport}),
+      postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, requestContext: capturedRequestContext, transport: clientConfiguration.transport}),
+      postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, requestContext: capturedRequestContext, transport: clientConfiguration.transport}),
       realtime: clientConfiguration.realtime,
+      requestContext: capturedRequestContext,
       resources,
       syncModel: resolvedSyncModel,
       tenantHandle,
@@ -1267,12 +1287,17 @@ function normalizedTrack(track) {
 
 /**
  * Builds a framework-owned sync endpoint POSTer over the configured transport.
- * @param {{path: string, transport: import("../configuration-types.js").VelociousSyncClientTransport}} args - Poster args.
+ * @param {{path: string, requestContext: import("../remote-request-context.js").RemoteRequestContext, transport: import("../configuration-types.js").VelociousSyncClientTransport}} args - Poster args.
  * @returns {(payload: Record<string, ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>} Sync endpoint POSTer.
  */
-function transportPoster({path, transport}) {
+function transportPoster({path, requestContext, transport}) {
   return async (payload) => {
-    const response = await transport.post(path, payload)
+    const requestPayload = mergeRemoteRequestContext({
+      context: requestContext,
+      label: "Sync client request context",
+      params: payload
+    })
+    const response = await transport.post(path, requestPayload)
 
     if (!response || typeof response.json !== "function") {
       throw new Error(`sync.client transport.post must resolve to a response with a json() method for ${path} (like the frontend-model websocket client)`)

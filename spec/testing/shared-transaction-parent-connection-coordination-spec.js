@@ -291,6 +291,48 @@ describe("Shared transaction parent connection coordination", {databaseCleaning:
     }
   })
 
+  it("serializes detached database work launched by an active physical query", async () => {
+    const connection = new SingleRequestDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {Promise<[]>} */
+    let childQuery = Promise.resolve([])
+    /** @type {Promise<[]>} */
+    let detachedQuery = Promise.resolve([])
+    /** @type {string[]} */
+    let queriesBeforeRelease = []
+    /** @type {() => void} */
+    let resolveQueriesObserved = () => {}
+    const queriesObserved = new Promise((resolve) => { resolveQueriesObserved = resolve })
+
+    connection.onChildStarted = () => {
+      detachedQuery = Promise.resolve().then(async () => await connection.query("SELECT parent", {logQuery: false}))
+      void detachedQuery.catch(() => undefined)
+      setImmediate(() => {
+        queriesBeforeRelease = [...connection.queries]
+        connection.releaseChild()
+        resolveQueriesObserved()
+      })
+    }
+
+    const root = coordinateSharedTransactionConnection(connection, async () => {
+      childQuery = connection.query("SELECT child", {logQuery: false})
+      await connection.childStarted
+    })
+
+    try {
+      await queriesObserved
+      await Promise.all([root, childQuery, detachedQuery])
+
+      expect(queriesBeforeRelease).toEqual(["SELECT child"])
+      expect(connection.maxActiveRequests).toEqual(1)
+      expect(connection.queries).toEqual(["SELECT child", "SELECT parent"])
+    } finally {
+      connection.releaseChild()
+      await Promise.allSettled([root, childQuery, detachedQuery])
+      await broker.close()
+    }
+  })
+
   it("allows nested owner coordination to re-enter without deadlocking", async () => {
     const connection = new SingleRequestDriver()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})

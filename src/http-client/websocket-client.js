@@ -26,6 +26,8 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
     this.reconnectGeneration = 0
     /** @type {Set<Promise<void>>} */
     this.runningReconnectTasks = new Set()
+    /** @type {Promise<void> | null} */
+    this.gracefulClosePromise = null
   }
 
   /**
@@ -52,6 +54,36 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
       await reconnectTask
     } finally {
       this.runningReconnectTasks.delete(reconnectTask)
+    }
+  }
+
+  /**
+   * Closes the WebSocket as a normal shutdown so the server permanently
+   * releases resumable session state.
+   * @returns {Promise<void>} - Resolves once closed.
+   */
+  async close() {
+    if (this.gracefulClosePromise) return await this.gracefulClosePromise
+
+    this.autoReconnect = false
+    const socket = this.socket
+    const closePromise = (async () => {
+      if (socket && socket.readyState === socket.OPEN) {
+        await new Promise((resolve) => {
+          socket.addEventListener("close", () => resolve(undefined), {once: true})
+          socket.close(1000)
+        })
+      }
+
+      await super.close()
+    })()
+
+    this.gracefulClosePromise = closePromise
+
+    try {
+      await closePromise
+    } finally {
+      if (this.gracefulClosePromise === closePromise) this.gracefulClosePromise = null
     }
   }
 
