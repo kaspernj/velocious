@@ -5,6 +5,33 @@ import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
 import {startBackgroundJobsMain} from "../helpers/background-jobs-helper.js"
 
+class ControlledPooledWorker extends BackgroundJobsWorker {
+  constructor() {
+    super({pooledRunnerConcurrency: 2, pooledRunnerCount: 1})
+    /** @type {string[]} */
+    this.startedJobIds = []
+    /** @type {Map<string, Array<() => void>>} */
+    this.jobReleases = new Map()
+  }
+
+  /** @param {import("../../src/background-jobs/types.js").BackgroundJobPayload & {id: string}} payload - Pooled payload. @returns {Promise<void>} - Controlled execution. */
+  _runPooledJob(payload) {
+    this.startedJobIds.push(payload.id)
+    return new Promise((resolve) => {
+      const releases = this.jobReleases.get(payload.id) || []
+      releases.push(resolve)
+      this.jobReleases.set(payload.id, releases)
+    })
+  }
+
+  /** @param {string} jobId - Job id. */
+  releaseNext(jobId) {
+    const release = this.jobReleases.get(jobId)?.shift()
+    if (!release) throw new Error(`No controlled pooled execution for job: ${jobId}`)
+    release()
+  }
+}
+
 /**
  * A control socket the main can track without a real connection. `close()` calls
  * `socket.end()`, which is a no-op on an unconnected socket.
@@ -66,6 +93,29 @@ async function startConfiguredWorker(workerOptions) {
 }
 
 describe("Background jobs - worker resilience", {databaseCleaning: {truncate: true}}, () => {
+  it("serializes pooled leases by durable job id while different ids retain concurrency", async () => {
+    const worker = new ControlledPooledWorker()
+    const payload = {id: "same-id", jobName: "TestJob", args: [], options: {executionMode: "pooled"}}
+
+    await worker._handleJob(payload)
+    await worker._handleJob({...payload, handoffId: "replacement-handoff"})
+    await worker._handleJob({...payload, id: "other-id"})
+
+    expect(worker.startedJobIds).toEqual(["same-id", "other-id"])
+
+    worker.releaseNext("same-id")
+    await Promise.resolve()
+    expect(worker.startedJobIds).toEqual(["same-id", "other-id", "same-id"])
+
+    worker.releaseNext("same-id")
+    worker.releaseNext("other-id")
+    await Promise.allSettled([...worker.inflightPooledJobs])
+
+    expect(worker.inflightPooledJobs.size).toEqual(0)
+    expect(worker.pooledJobQueues.size).toEqual(0)
+    expect(worker.pooledJobQueueTrackers.size).toEqual(0)
+  })
+
   it("defaults pooled runner lifecycle bounds", () => {
     const worker = new BackgroundJobsWorker({})
 
@@ -239,6 +289,77 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
       availablePooledSlots: 0,
       acceptsSpawned: true
     }])
+  })
+
+  it("keeps pooled readiness revoked after a queued job runner fails during startup", async () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 1})
+    /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} */
+    const sent = []
+    worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: (message) => sent.push(message)}))
+    worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({reportWithRetry: async () => {}}))
+    const child = /** @type {import("node:child_process").ChildProcess} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: () => {}}))
+    worker.pooledChildren.add(child)
+    worker.pooledChildStates.set(child, {
+      createdAtMs: Date.now(), jobsRun: 0, started: false, lastDispatchSeq: 0, retiring: false,
+      inflight: new Map()
+    })
+
+    worker._queuePooledJob({id: "startup-failure", jobName: "TestJob"})
+    await worker._handlePooledChildFailure({child, error: new Error("runner failed during startup")})
+    await Promise.allSettled([...worker.inflightPooledJobs])
+
+    expect(sent).toEqual([{
+      type: "ready",
+      acceptsForked: true,
+      acceptsInline: true,
+      acceptsPooled: false,
+      availablePooledSlots: 0,
+      acceptsSpawned: true
+    }])
+  })
+
+  it("reserves pooled capacity for an admitted same-id lease across child crash fallback", async () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 1})
+    worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({
+      reportWithRetry: async () => {}
+    }))
+    let createdChildren = 0
+    worker.configuration = /** @type {import("../../src/configuration.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({
+      getBackgroundJobsConfig: () => ({})
+    }))
+    worker._createPooledChild = () => {
+      createdChildren += 1
+      const replacement = /** @type {import("node:child_process").ChildProcess} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: () => {}}))
+      worker.pooledChildren.add(replacement)
+      worker.pooledChildStates.set(replacement, {
+        createdAtMs: Date.now(), jobsRun: 0, started: true, lastDispatchSeq: 0, retiring: false,
+        inflight: new Map()
+      })
+      return replacement
+    }
+    const crashedChild = /** @type {import("node:child_process").ChildProcess} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: () => {}}))
+    worker.pooledChildren.add(crashedChild)
+    worker.pooledChildStates.set(crashedChild, {
+      createdAtMs: Date.now(), jobsRun: 0, started: true, lastDispatchSeq: 0, retiring: false,
+      inflight: new Map()
+    })
+    /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} */
+    const sent = []
+    worker.jsonSocket = /** @type {JsonSocket} */ (/** @type {ReturnType<typeof JSON.parse>} */ ({send: (message) => sent.push(message)}))
+
+    worker._queuePooledJob({id: "same-id", jobName: "TestJob"})
+    worker._queuePooledJob({id: "same-id", jobName: "TestJob"})
+    const failure = worker._handlePooledChildFailure({child: crashedChild, error: new Error("initialized runner crashed")})
+
+    expect(worker._availablePooledSlots()).toEqual(0)
+    expect(sent[0]?.type === "ready" && sent[0].acceptsPooled).toEqual(false)
+    expect(sent[0]?.type === "ready" && sent[0].availablePooledSlots).toEqual(0)
+    expect(createdChildren).toEqual(0)
+
+    await failure
+    await Promise.resolve()
+    expect(worker.pooledChildren.size).toEqual(1)
+    expect(createdChildren).toEqual(1)
   })
 
   it("does not fallback-report an acknowledged failed pooled outcome", () => {
