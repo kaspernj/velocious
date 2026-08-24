@@ -19,10 +19,12 @@ async function waitForConnect(events) {
   await waitFor(() => events.includes("connect"))
 }
 
-async function expectSessionGoneAfterReconnect(client, events) {
-  await waitForConnect(events)
-  client.socket?.close()
-  await waitFor(() => events.some((e) => e === "close:session_gone"), 5000)
+async function waitForFreshSession(client, events, rejectedSessionId) {
+  await waitFor(() => {
+    const connectCount = events.filter((event) => event === "connect").length
+
+    return connectCount === 2 && typeof client._sessionId === "string" && client._sessionId !== rejectedSessionId
+  }, 5000)
 }
 
 async function withReconnectingClient(callback, reconnectDelays = [50]) {
@@ -143,18 +145,72 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
     })
   })
 
-  it("tells the client session-gone + destroys live handles when no paused session exists", async () => {
+  it("promotes a fresh session and re-establishes live handles when the requested session is gone", async () => {
     await withReconnectingClient(async (client) => {
       /** @type {string[]} */
-      const events = []
-      openTrackedEchoConnection(client, events)
+      const connectionEvents = []
+      /** @type {any[]} */
+      const connectionMessages = []
+      const connection = openTrackedEchoConnection(client, connectionEvents, {
+        params: {name: "fresh-session"},
+        onMessage: (body) => connectionMessages.push(body),
+        onResume: () => connectionEvents.push("resume")
+      })
+      /** @type {string[]} */
+      const channelEvents = []
+      /** @type {any[]} */
+      const channelMessages = []
+      const subscription = client.subscribeChannel("Counter", {
+        params: {allow: true, topic: "fresh-session"},
+        onMessage: (body) => channelMessages.push(body),
+        onResume: () => channelEvents.push("resume"),
+        onClose: (reason) => channelEvents.push(`close:${reason}`)
+      })
+
+      /** @type {string[]} */
+      const closedConnectionEvents = []
+      const closedConnection = openTrackedEchoConnection(client, closedConnectionEvents)
+      /** @type {any[]} */
+      const closedChannelMessages = []
+      const closedSubscription = client.subscribeChannel("Counter", {
+        params: {allow: true, topic: "fresh-session"},
+        onMessage: (body) => closedChannelMessages.push(body)
+      })
+
+      await Promise.all([connection.ready, subscription.ready, closedConnection.ready, closedSubscription.ready])
+      await waitFor(() => channelMessages.length === 1 && closedChannelMessages.length === 1)
+
+      closedConnection.close()
+      closedSubscription.close()
 
       // Set a bogus sessionId; on reconnect the server won't find it.
-      client._sessionId = "bogus-sess-id"
+      const rejectedSessionId = "bogus-sess-id"
 
-      await expectSessionGoneAfterReconnect(client, events)
-      expect(events).toContain("close:session_gone")
-      expect(client._sessionId).toBe(null)
+      client._sessionId = rejectedSessionId
+      client.socket?.close()
+
+      await waitForFreshSession(client, connectionEvents, rejectedSessionId)
+      await subscription.waitForReady({timeoutMs: 5000})
+      await waitFor(() => channelMessages.length === 2)
+
+      expect(connectionEvents).toEqual(["connect", "connect"])
+      expect(channelEvents).toEqual([])
+      expect(connection.isConnected()).toBe(true)
+      expect(connection.isClosed()).toBe(false)
+      expect(subscription.isReady()).toBe(true)
+      expect(subscription.isSubscribed()).toBe(true)
+      expect(subscription.isClosed()).toBe(false)
+      expect(closedConnectionEvents).toEqual(["connect", "close:client_close"])
+      expect(closedConnection.isClosed()).toBe(true)
+      expect(closedSubscription.isClosed()).toBe(true)
+
+      connection.sendMessage({after: "fresh-session"})
+      dummyConfiguration.broadcastToChannel("Counter", {topic: "fresh-session"}, {after: "fresh-session"})
+
+      await waitFor(() => connectionMessages.some((message) => message?.echo?.after === "fresh-session"))
+      await waitFor(() => channelMessages.some((message) => message?.after === "fresh-session"))
+
+      expect(closedChannelMessages).toEqual([{welcome: "fresh-session"}])
     })
   })
 
@@ -262,7 +318,7 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
     })
   })
 
-  it("rejects resume with session-gone when the identity resolver reports a different user", async () => {
+  it("destroys an identity-mismatched paused session and re-establishes live handles on a fresh session", async () => {
     /** @type {{identity: string | null}} */
     const authState = {identity: "alice"}
 
@@ -274,10 +330,13 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
 
         try {
           await client.connect()
+          const rejectedSessionId = client._sessionId
+
+          expect(typeof rejectedSessionId).toBe("string")
 
           /** @type {string[]} */
           const events = []
-          openTrackedEchoConnection(client, events, {
+          const connection = openTrackedEchoConnection(client, events, {
             onResume: () => events.push("resume"),
           })
 
@@ -303,11 +362,32 @@ describe("WebsocketSession resumption (Phase 2)", {databaseCleaning: {transactio
           // reconnect fires.
           authState.identity = "bob"
 
-          // Reconnect will send session-resume with the stored id.
-          // Server should reject and send session-gone, which tears
-          // down live handles with reason `session_gone`.
-          await waitFor(() => events.includes("close:session_gone"), 5000)
+          // Reconnect sends session-resume with the stored id. The
+          // server rejects it, while the client promotes the fresh
+          // session and re-opens the still-live connection handle.
+          await waitForFreshSession(client, events, /** @type {string} */ (rejectedSessionId))
+
+          expect(events).toEqual(["connect", "connect"])
           expect(events).not.toContain("resume")
+          expect(connection.isConnected()).toBe(true)
+          expect(connection.isClosed()).toBe(false)
+          expect(dummyConfiguration._pausedWebsocketSessions.has(/** @type {string} */ (rejectedSessionId))).toBe(false)
+          expect(Array.from(dummyConfiguration._websocketSessions).some((session) => session.sessionId === rejectedSessionId)).toBe(false)
+
+          // Even the original identity cannot reclaim the invalidated
+          // session after the mismatch destroyed it.
+          authState.identity = "alice"
+          const oldIdentityClient = new WebsocketClient()
+
+          try {
+            oldIdentityClient._sessionId = /** @type {string} */ (rejectedSessionId)
+            await oldIdentityClient.connect()
+
+            expect(typeof oldIdentityClient._sessionId).toBe("string")
+            expect(oldIdentityClient._sessionId).not.toEqual(rejectedSessionId)
+          } finally {
+            await oldIdentityClient.close()
+          }
         } finally {
           await client.close()
         }
