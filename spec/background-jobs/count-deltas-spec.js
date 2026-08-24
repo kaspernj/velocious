@@ -61,9 +61,9 @@ function buildConcurrentPruneStore({events, ids, revision, selectBarrier}) {
       return await callback(db)
     }
 
-    /** @param {ReturnType<typeof JSON.parse>} _db - Database. @param {Function} callback - Transaction callback. @returns {Promise<ReturnType<typeof JSON.parse>>} Callback result. */
-    async _serializedCountMutation(_db, callback) {
-      return await callback()
+    /** @param {(db: import("../../src/database/drivers/base.js").default) => Promise<ReturnType<typeof JSON.parse>>} callback - Transaction callback. @returns {Promise<ReturnType<typeof JSON.parse>>} Callback result. */
+    async _serializedCountMutation(callback) {
+      return await callback(db)
     }
 
     /** @param {ReturnType<typeof JSON.parse>} _db - Database. @param {Record<string, number>} deltas - Deltas. @returns {Promise<void>} Resolves after recording. */
