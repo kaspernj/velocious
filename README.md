@@ -2028,7 +2028,7 @@ await client.close()
 
 For long-lived Node clients, the constructor also accepts opt-in liveness options (all default off, so browser/Expo usage is unchanged): `webSocketImplementation` (inject Node's `ws`, since the global/undici WebSocket exposes neither protocol ping nor an unref-able socket), `heartbeatIntervalMs` (a ping heartbeat that drops a socket whose peer stops ponging, so a client notices a vanished server), and `unref` (unref the underlying socket so an idle connection can't keep the process alive on its own). See [docs/websocket-channels.md](docs/websocket-channels.md).
 
-`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops remain resumable. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
+`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops first attempt to resume that state. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
 
 ## Subscribe to events
 
