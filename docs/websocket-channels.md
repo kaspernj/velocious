@@ -142,6 +142,7 @@ Client behavior:
 
 - `canSubscribe()` → `subscribed()` is the order on the server. `channel-subscribed` is sent AFTER `subscribed()` resolves.
 - Client's `subscription.ready` resolves after `channel-subscribed` arrives.
-- `subscription.waitForReady()` is the higher-level helper for app code. It resolves after the initial subscribe, then resets on disconnect and resolves again after `session-resumed`.
+- `subscription.waitForReady()` is the higher-level helper for app code. It resolves after the initial subscribe, then resets on disconnect. A successful `session-resumed` retains the existing server-side connection and channel instances and resolves readiness again without creating replacement instances.
+- A rejected resume is fresh-session recovery, not a successful resume. When the server responds with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live [one-to-one connection handles](websocket-connections.md), and re-subscribes still-live channel handles. The same public handles remain usable, and channel readiness resolves again after the fresh server acknowledges the replacement subscription. Handles explicitly closed before or during reconnect stay closed and are not reopened or re-subscribed.
 - `unsubscribed()` fires exactly once: on client-initiated `channel-unsubscribe` OR on session teardown (socket drop, Phase 2 covers grace-period resumption).
-- No persistent event log, no replay, no cross-reconnect survival in Phase 1B. Publish-and-forget; subscribers who missed events while disconnected don't see them.
+- There is no persistent event log or replay. Live handles can survive or recover across reconnect as described above, but subscribers do not receive messages they missed while disconnected.
