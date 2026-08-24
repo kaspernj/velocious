@@ -60,6 +60,16 @@ npx velocious init
 
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
 
+# Node SQLite driver
+
+Projects using `velocious/build/src/database/drivers/sqlite/index.js` must install its optional peer dependencies:
+
+```bash
+npm install sqlite sqlite3
+```
+
+Projects that do not use the Node SQLite driver do not need these packages. Browser and Expo SQLite drivers use their platform-specific dependencies instead.
+
 # Operation-scoped transactions
 
 Use `configuration.withTransaction` for an atomic unit of model work on one database:

@@ -93,10 +93,18 @@
   },
   "peerDependencies": {
     "react": ">=18",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
     "smtp-connection": "^4.0.2"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "sqlite": {
+      "optional": true
+    },
+    "sqlite3": {
       "optional": true
     }
   },

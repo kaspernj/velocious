@@ -54,6 +54,19 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     expect(scripts.prepack).toEqual("npm run build")
   })
 
+  it("declares the SQLite driver packages as optional peer dependencies", async () => {
+    const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory(), "package.json"), "utf8"))
+
+    expect(packageJson.dependencies.sqlite).toEqual(undefined)
+    expect(packageJson.dependencies.sqlite3).toEqual(undefined)
+    expect(typeof packageJson.devDependencies.sqlite).toEqual("string")
+    expect(typeof packageJson.devDependencies.sqlite3).toEqual("string")
+    expect(packageJson.peerDependencies.sqlite).toEqual(packageJson.devDependencies.sqlite)
+    expect(packageJson.peerDependencies.sqlite3).toEqual(packageJson.devDependencies.sqlite3)
+    expect(packageJson.peerDependenciesMeta.sqlite.optional).toEqual(true)
+    expect(packageJson.peerDependenciesMeta.sqlite3.optional).toEqual(true)
+  })
+
   it("emits a valid SQLite base driver declaration", {timeoutSeconds: 180}, async () => {
     const npmExecutable = process.env.npm_execpath
 
